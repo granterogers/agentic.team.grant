@@ -75,6 +75,7 @@ export const lists = (p) => {
   }
   const out = [...named.values()].filter((l) => l.tasks.length > 0)
   if (loose.length > 0) out.push({ id: '', name: 'Not in a list', tasks: loose, loose: true })
+  for (const l of out) l.tasks.sort(stableOrder)
   return out
 }
 
@@ -111,7 +112,55 @@ export const task = (t) => ({
     makes one layer up, restated here because every write below needs it.
   */
   writeable: typeof t.id === 'string' && t.id !== '',
+  /*
+    WHEN IT JOINED THE PROJECT, and the only key here a tick cannot move.
+    0579 put it in the payload for exactly this. `stableOrder` below is the
+    reason it is carried rather than derived.
+  */
+  created: t.created ?? null,
 })
+
+/*
+  ONE ORDER FOR A PROJECT'S TASKS, AND NOTHING ABOUT DONE-NESS IN IT.
+
+  §7: "Currently ticking a To-do can move it. Do not do that." It did, and the
+  cause was not the page's: `app.studio_tasks` orders by state, so completing
+  a task sent it to the end of its list -- and with the miniature folded to six
+  rows it simply vanished and everything below slid up.
+
+  So the surfaces sort for themselves, here, once. The key is dated work first
+  in date order, then everything else in the order Grant added it, and an id
+  only to break a genuine tie. `created` is what makes that possible; an id
+  alone would be a coin flip wearing an ORDER BY, which this repository has
+  already paid for once.
+
+  Two callers, one comparator, deliberately: a row list built twice is a list
+  that will disagree, and the miniature and the expanded view are two views of
+  one project's work rather than two implementations of it.
+*/
+/*
+  The two shapes this comparator sees carry the date under different names and
+  one of them also has a RENDERED date under `due` -- "Due 24 September", which
+  sorts alphabetically and would put October before September. So take the
+  first value that actually looks like a date, and never the words.
+*/
+const dateOf = (t) => {
+  for (const v of [t?.due_on, t?.due]) {
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10)
+  }
+  return null
+}
+
+export const stableOrder = (a, b) => {
+  const dueA = dateOf(a)
+  const dueB = dateOf(b)
+  if ((dueA === null) !== (dueB === null)) return dueA === null ? 1 : -1
+  if (dueA !== null && dueB !== null && dueA !== dueB) return dueA < dueB ? -1 : 1
+  const madeA = String(a?.created ?? '')
+  const madeB = String(b?.created ?? '')
+  if (madeA !== madeB) return madeA < madeB ? -1 : 1
+  return String(a?.ref ?? a?.id ?? '') < String(b?.ref ?? b?.id ?? '') ? -1 : 1
+}
 
 export const STAGES = ['todo', 'doing', 'blocked', 'done']
 

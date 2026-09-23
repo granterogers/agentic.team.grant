@@ -146,6 +146,12 @@ export const listsOf = (p) => {
   const out = [...byId.values()].filter((l) => l.items.length > 0)
   if (loose.length > 0) out.push({ name: 'Not in a list', id: '', items: loose, loose: true })
   /*
+    The same comparator the expanded list uses, so a tick cannot move a row in
+    one view and leave it where it was in the other. Done-ness is not in it --
+    that is the whole of §7.
+  */
+  for (const l of out) l.items.sort(todos.stableOrder)
+  /*
     LISTS WITH OPEN WORK FIRST.
     Module order is the order Grant built the project in, which put a list of
     two struck-through completed tasks at the top of the first viewport - so
@@ -295,8 +301,27 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
     ${shown
       .map((g) => {
         const done = g.items.filter(isDone).length
-        const open = g.items.filter((t) => !isDone(t))
-        const first = [...open, ...g.items.filter(isDone)].slice(0, per)
+        /*
+          COMPLETING SOMETHING DOES NOT MOVE IT.
+
+          §7: "Currently ticking a To-do can move it. Do not do that.
+          Completion should update visual state, update canonical backend
+          state, update counts -- but retain the task's position."
+
+          This line used to read [...open, ...done], which put every completed
+          row at the end of its list. So ticking the third of five sent it to
+          the bottom, and with the pane showing a few rows it left the pane
+          altogether and everything below slid up: the tick read as a delete.
+          The office's own ordering does the same thing one layer down, which
+          is why `stableOrder` exists and why 0579 put `created` in the payload
+          for it to sort by.
+
+          The EXPANDED list still gathers completed work under a Done heading.
+          That is not the same behaviour by accident: Grant asked for it on 23
+          September, in the same breath as asking that finished work stay
+          visible, and a full-height list has room to say both things.
+        */
+        const first = g.items.slice(0, per)
         return `<section class="bclist">
           <header class="bclisthead">
             <h4>${esc(g.name)}</h4>

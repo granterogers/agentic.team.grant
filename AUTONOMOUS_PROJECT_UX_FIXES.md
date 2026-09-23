@@ -732,3 +732,50 @@ asking rather than by filling the field, which closes §47.
 - **The office token is ten characters.** A check asserting more than twenty went
   red against a working product. Validate the test before believing the finding —
   the fourth time this run.
+
+## 23 September — §§6, 7 and 39
+
+**Ticking a to-do moved it, and the cause was in two places at once.**
+
+The office orders `studio_tasks` by state, so completing a task sends it to the
+end of its list — and the miniature's renderer then did the same thing again,
+`[...open, ...done]`. With the pane showing a few rows the ticked task left the
+pane altogether and everything below slid up, so the tick read as a **delete**.
+
+Fixed at both ends, because either alone leaves the class open: 0579 puts
+`created_at` in the payload — the one key a tick cannot move, where an id is a
+coin flip wearing an ORDER BY — and `todos.stableOrder` sorts by it, from ONE
+comparator both the miniature and the expanded list call. The renderer's
+open-then-done line is gone.
+
+The expanded list still gathers completed work under a **Done** heading. That is
+not an inconsistency: Grant asked for it on 23 September in the same breath as
+asking that finished work stay visible, and a full-height list has room to say
+both things. §7's heading is *MINIMIZED TO-DOS*.
+
+Alignment (§6) measured right all along: every title starts at the same offset
+at 1440 and at 390, and every row is the same height. It is asserted permanently
+now rather than left to luck.
+
+**#340 is closed.** 0578 adds the `public.hq_pulse` wrapper the gateway needed;
+`?section=pulse` answered **502 on every page load** because PostgREST only
+exposes `public`. `verify:basecamp-live` now watches **every** gateway answer
+the browser receives, named by section, and that watcher was proved able to fail
+by forcing one response to 502 in a signed-in page.
+
+**Three new traps, every one of which produced a confident wrong finding first:**
+
+- **A rectangle is not visibility.** `verify:basecamp-keyboard` walked controls
+  inside a shut `<details>`, could not focus them, and reported them as having
+  no focus ring. Chromium keeps the geometry of a closed disclosure.
+- **A focus style that TRANSITIONS reads as absent at the instant of focus.**
+  `.bcinput` answers focus with a box-shadow over 120ms, so the computed style
+  in the same tick is the value it is transitioning from — fully transparent. I
+  was one edit from "fixing" a focus ring that was already there.
+- **A sabotage that changes nothing is not a passing control.** Twice more: a
+  MutationObserver that ran before the element existed, and a route interception
+  aimed at a section the signed-OUT page never requests. Both printed what they
+  had actually done first, which is the only reason either was caught.
+
+*Gate:* `npm run basecamp:gate` **342 green, exit 0**; lint, typecheck and
+`check:secrets` clean.

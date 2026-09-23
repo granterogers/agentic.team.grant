@@ -81,21 +81,42 @@ check('the h1 comes before any h2', headings.indexOf('H1') === 0, headings.slice
   the stylesheet. A rule that exists and is overridden is the same as no rule,
   and only the browser knows which won.
 */
-const noRing = (await page.evaluate(
-  inPage(`const out = []
+/*
+  AND READ IT AFTER THE TRANSITION, not at the instant of focus.
+
+  `.bcinput` answers focus with a box-shadow and transitions it, so reading the
+  computed style in the same tick returns the value it is transitioning FROM --
+  fully transparent. That reports a control with a perfectly good focus ring as
+  having none, which is the kind of finding somebody eventually switches a
+  check off over. Two frames plus a beat is enough for a 120ms transition.
+*/
+const noRing = (await page.evaluate(`(async () => {
+     const settle = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 220)))
+     const out = []
      for (const el of document.querySelectorAll('button, a[href], input, summary')) {
        const r = el.getBoundingClientRect()
        if (r.width === 0 || r.height === 0) continue
+       /*
+         A RECTANGLE IS NOT VISIBILITY. A control inside a shut <details>
+         measures its full size in Chromium, because a closed disclosure is
+         content-visibility: hidden and that keeps the geometry -- so this
+         walked controls nobody can see, could not focus them, and reported
+         them as having no focus ring.
+       */
+       if (el.checkVisibility !== undefined &&
+           !el.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true })) continue
        el.focus()
+       await settle()
        const cs = getComputedStyle(el)
        const ring = cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0
-       const shadow = cs.boxShadow !== 'none' && cs.boxShadow !== ''
+       const shadow = cs.boxShadow !== 'none' && cs.boxShadow !== '' &&
+         !/\\/\\s*0\\s*\\)/.test(cs.boxShadow)
        if (!ring && !shadow) {
          out.push(el.tagName.toLowerCase() + ' "' + (el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 30) + '"')
        }
      }
-     return out`),
-)) as string[]
+     return out
+   })()`)) as string[]
 check('every visible interactive element shows focus', noRing.length === 0, noRing.join('; '))
 
 /* --- §15: icon-only and preview controls have accessible names --------- */

@@ -87,6 +87,26 @@ check(
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
 const page = await ctx.newPage()
+
+/*
+  EVERY GATEWAY ANSWER THIS PAGE GETS, WATCHED.
+
+  #340: `hq-api?section=pulse` answered 502 on every single page load, for the
+  life of the deployment, because `app.hq_pulse` had no `public` wrapper and
+  PostgREST only exposes `public`. Two suites were green over it — one called
+  the function in SQL, the other checked a hardcoded list the section was not
+  on — and only a browser at the real deployed origin ever saw it. So the
+  browser is what watches now: every response, by section, with the failures
+  named rather than counted.
+*/
+const gatewayFailures: string[] = []
+page.on('response', (response) => {
+  const url = response.url()
+  if (!url.includes('/functions/v1/hq-api')) return
+  if (response.status() < 400) return
+  const section = new URL(url).searchParams.get('section') ?? '(action)'
+  gatewayFailures.push(`${section}: http ${String(response.status())}`)
+})
 const thrown: string[] = []
 page.on('pageerror', (e) => {
   thrown.push(e.message)
@@ -610,6 +630,17 @@ const gone = (await page.evaluate(inPage(`return localStorage.getItem('hq.token'
   | string
   | null
 check('the office token can be removed from this browser again', gone === null)
+
+/*
+  #340, from the seat that found it. A 502 on a section the page asks for on
+  every load is invisible to a server-side probe with the right token, and
+  invisible to a suite that calls the function in SQL.
+*/
+check(
+  'every section the page asked the gateway for came back',
+  gatewayFailures.length === 0,
+  gatewayFailures.join(' | '),
+)
 
 check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
 

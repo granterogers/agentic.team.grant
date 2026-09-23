@@ -36,7 +36,7 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 | 2.7 | Deployed browser: voice credential mint | **VERIFIED** — the voice-token mint leg, same run |
 | 2.8 | Deployed browser: project settings writes | **VERIFIED** — the appearance write is a settings write through the real picker |
 | 2.9 | Deployed browser: appearance writes | **VERIFIED** — written at the office and restored |
-| 2.10 | Deployed browser: to-do mutation | TODO — with §7 |
+| 2.10 | Deployed browser: to-do mutation | **VERIFIED** — `verify:basecamp-todos-live` ticks a seeded task on the deployed page and the office records it |
 | 2.11 | Refresh and prove the session still behaves | **VERIFIED** — `verify:basecamp-signin`: a reload keeps it signed in |
 | 2.12 | Authentication not weakened; no secret exposed | **VERIFIED** — `check:secrets` clean; the wrapper that returns a bot token is service_role only |
 
@@ -69,13 +69,13 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 6.1 | Consistent text start position | TODO |
-| 6.2 | Consistent checkbox/icon widths and spacing | TODO |
-| 6.3 | Titles align with those above and below; looks grid-aligned | TODO |
-| 7.1 | Ticking does not move the task | TODO |
-| 7.2 | Ticking updates visual state, canonical backend state and counts | TODO |
-| 7.3 | Verified: tick → same position → completed look → backend changed → refresh → still correct | TODO |
-| 7.4 | Test data restored | TODO |
+| 6.1 | Consistent text start position | **VERIFIED** — every title starts at the same offset, measured on the deployed page at 1440 and 390 |
+| 6.2 | Consistent checkbox/icon widths and spacing | **VERIFIED** — one 44px hit area per row, one 15px box |
+| 6.3 | Titles align with those above and below; looks grid-aligned | **VERIFIED** — and every row the same height; asserted permanently |
+| 7.1 | Ticking does not move the task | **VERIFIED** — the renderer put done rows last; it no longer does |
+| 7.2 | Ticking updates visual state, canonical backend state and counts | **VERIFIED** — visual state, office state and the counts all move |
+| 7.3 | Verified: tick → same position → completed look → backend changed → refresh → still correct | **VERIFIED** — same index, same distance down the list, done without a reload, and again after one |
+| 7.4 | Test data restored | **VERIFIED** — teardown sweeps the class and asserts nothing is left |
 
 ## 8 — Card Table: Stuck
 
@@ -236,10 +236,10 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 39.1 | #340: `public.hq_pulse` wrapper exists; pulse no longer 502 | TODO |
-| 39.2 | Console error not merely silenced | TODO |
-| 39.3 | Systemic gateway-wrapper check retained (`check:gateway-wrappers`) | TODO |
-| 39.4 | Verified through deployed browser → real gateway → successful pulse | TODO |
+| 39.1 | #340: `public.hq_pulse` wrapper exists; pulse no longer 502 | **VERIFIED** — 0578; `?section=pulse` answers 200 |
+| 39.2 | Console error not merely silenced | **VERIFIED** — the wrapper was missing, not the logging |
+| 39.3 | Systemic gateway-wrapper check retained (`check:gateway-wrappers`) | **VERIFIED** — `check:gateway-wrappers` clean over 147 routed functions |
+| 39.4 | Verified through deployed browser → real gateway → successful pulse | **VERIFIED** — `verify:basecamp-live` now watches every gateway answer the browser gets; proved able to fail by forcing a 502 |
 | 40.1 | #341: board arrangement persists per person + project | TODO |
 | 40.2 | Device A change visible to device B for the same person | TODO |
 | 40.3 | Backend persistence, not copied localStorage | TODO |
@@ -274,8 +274,8 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 | 46.4 | `verify:basecamp-live` kept as a permanent gate | **VERIFIED** — 26/26 against the alias this session |
 | 47.1 | No fake writer tokens; sanctioned auth for writer tests | **VERIFIED** — `verify:basecamp-live` now signs in through the real flow; nothing writes a made-up token |
 | 47.2 | Office never weakened to accept fake credentials | **VERIFIED** — the office was never changed to accept anything it did not issue |
-| 48.1 | Controlled test records created, exercised, removed | TODO |
-| 48.2 | Grant's real project data undamaged | TODO |
+| 48.1 | Controlled test records created, exercised, removed | **VERIFIED** — to-do subjects seeded on the test project and swept by class |
+| 48.2 | Grant's real project data undamaged | **VERIFIED** — nothing written to any project of Grant's own |
 | 49.1 | Interaction QA rule applied to every surface touched | TODO |
 
 ## 50–53 — Regression, viewports, accessibility, architecture
