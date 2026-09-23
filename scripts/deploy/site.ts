@@ -90,7 +90,12 @@ const made = await tryHard('create the deployment', async () => {
     headers: { ...AUTH, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: NAME,
-      target: 'production',
+      /*
+        TRIAL INTEGRATION ONLY: no target, so Vercel gives this its own URL and
+        the stable alias keeps serving whatever was there. A trial build must
+        not become the thing people open.
+      */
+      ...(process.env.PREVIEW_ONLY === '1' ? {} : { target: 'production' }),
       // No framework and no build step: these are the files, served as they are.
       projectSettings: { framework: null },
       files,
