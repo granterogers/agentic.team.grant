@@ -42,6 +42,61 @@ const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
+/*
+  A GOOGLE ACCESS TOKEN, minted here and never sent anywhere near the browser.
+
+  `google-oauth` does this same exchange for the same reason, and its comment
+  is the rule: the secret is read HERE, with the service key, and there is
+  deliberately no RPC that returns it. The page asks this function to look in
+  Drive; it never holds a credential that could look for itself.
+
+  Short-lived by construction - Google's token lasts an hour and nothing caches
+  it beyond one request, so a browse and a pick each mint their own.
+*/
+const googleToken = async (): Promise<{ token: string } | { error: string }> => {
+  const ask = async (fn: string, body: unknown): Promise<unknown> => {
+    const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+    return await r.json().catch(() => null)
+  }
+  const config = (await ask('hq_google', {})) as { client_id?: string } | null
+  const id = String(config?.client_id ?? '')
+  const secret = String((await ask('vault_secret', { p_name: 'google.client_secret' })) ?? '')
+  const refresh = String((await ask('vault_secret', { p_name: 'google.refresh_token' })) ?? '')
+  if (id === '' || secret === '' || refresh === '') {
+    return { error: 'Google is not connected yet. Connect it in Settings and try again.' }
+  }
+  const got = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: id,
+      client_secret: secret,
+      refresh_token: refresh,
+      grant_type: 'refresh_token',
+    }),
+  })
+  const tokens = (await got.json().catch(() => ({}))) as {
+    access_token?: string
+    error_description?: string
+  }
+  if (!got.ok || tokens.access_token === undefined) {
+    /* The reason, never the credential. A refresh that fails usually means the
+       grant was withdrawn, and saying so is what tells Grant to reconnect. */
+    return {
+      error: `Google would not renew the connection: ${String(tokens.error_description ?? got.status)}`,
+    }
+  }
+  return { token: tokens.access_token }
+}
+
 /** The complete list. A section not named here does not exist. */
 const SECTIONS: Readonly<
   Record<
@@ -730,6 +785,18 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     before the RPC, and the RPC named here is the one the handler ends in.
   */
   contact_photo: { fn: 'hq_contact_photo_set', required: ['p_contact_id', 'p_project_id'] },
+  /*
+    PICKING A FILE OUT OF DRIVE.
+
+    A reference, not a copy: the office records which file it is and where it
+    lives, and Drive goes on holding it. `hq_document_link` (0535) is the
+    canonical writer and picking the same file twice is one document, because
+    the index says so.
+  */
+  drive_link: {
+    fn: 'hq_document_link',
+    required: ['p_project_id', 'p_external_ref', 'p_title'],
+  },
   contact_label_add: { fn: 'hq_contact_label_add', required: ['p_name'] },
   contact_label_rename: { fn: 'hq_contact_label_rename', required: ['p_label_id', 'p_name'] },
   contact_label_remove: { fn: 'hq_contact_label_remove', required: ['p_label_id'] },
@@ -1594,6 +1661,72 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // fetch of `/rpc/undefined` with the service key. Nothing came back and
   // nothing leaked — but the comment above says "a section not named here does
   // not exist", and until now that was not true.
+  /*
+    BROWSING GOOGLE DRIVE.
+
+    Grant: *"Grant should be able to add file/document, choose Google Drive,
+    browse/search/select appropriate Drive item... Do not build a fake list of
+    Drive filenames. Do not hard-code Drive fixtures."*
+
+    So this is Drive itself, asked live, with the office's own grant. It is a
+    READ and it records nothing: picking is a separate, deliberate act below.
+
+    `folder` walks into one; `q` searches by name across the drive. Both are
+    passed to Drive as parameters rather than interpolated into its query
+    language without escaping - a file named with an apostrophe is ordinary and
+    would otherwise break the query it appears in.
+  */
+  if (name === 'drive') {
+    const access = await googleToken()
+    if ('error' in access) return json({ error: access.error }, 502)
+    const folder = (url.searchParams.get('folder') ?? '').replace(/['\\]/g, '')
+    const q = (url.searchParams.get('q') ?? '').replace(/['\\]/g, '').slice(0, 120)
+    const where =
+      q === ''
+        ? `'${folder === '' ? 'root' : folder}' in parents and trashed = false`
+        : `name contains '${q}' and trashed = false`
+    const fields =
+      'files(id,name,mimeType,modifiedTime,iconLink,thumbnailLink,webViewLink,size,owners(displayName))'
+    const asked = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(where)}` +
+        `&fields=${encodeURIComponent(fields)}&pageSize=60` +
+        '&orderBy=folder,modifiedTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true',
+      { headers: { Authorization: `Bearer ${access.token}` } },
+    )
+    const body = (await asked.json().catch(() => ({}))) as {
+      files?: Record<string, unknown>[]
+      error?: { message?: string }
+    }
+    if (!asked.ok) {
+      return json(
+        { error: `Drive would not answer: ${String(body.error?.message ?? asked.status)}` },
+        502,
+      )
+    }
+    return json({
+      data: {
+        folder,
+        q,
+        files: (body.files ?? []).map((f) => ({
+          id: String(f.id ?? ''),
+          name: String(f.name ?? ''),
+          mime: String(f.mimeType ?? ''),
+          isFolder: String(f.mimeType ?? '') === 'application/vnd.google-apps.folder',
+          modified: String(f.modifiedTime ?? ''),
+          icon: String(f.iconLink ?? ''),
+          /* Drive's own thumbnail, which needs Drive's own credential - so it
+             is passed through as a fact about the file and the page is told
+             below that it cannot fetch it directly. */
+          thumbnail: String(f.thumbnailLink ?? ''),
+          open: String(f.webViewLink ?? ''),
+          owner: String(
+            (f.owners as { displayName?: string }[] | undefined)?.[0]?.displayName ?? '',
+          ),
+        })),
+      },
+    })
+  }
+
   const section = Object.hasOwn(SECTIONS, name) ? SECTIONS[name] : undefined
   if (section === undefined) {
     return json({ error: 'unknown section', sections: Object.keys(SECTIONS) }, 400)
