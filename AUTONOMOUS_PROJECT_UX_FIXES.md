@@ -55,10 +55,10 @@ repairing the completion defect requires it.
 - [x] **VERIFIED** No layout movement, and the status line covers no control
 
 ### 4. To-dos
-- [ ] **TODO** Completing a to-do must not make it disappear
-- [ ] **TODO** Completed items stay visible with a clear done state
-- [ ] **TODO** The completion click target is reliable and whole
-- [ ] **TODO** State persists across reload
+- [x] **VERIFIED** Completing a to-do no longer makes it disappear
+- [x] **VERIFIED** Completed items stay in place, struck through, ticked, dimmed
+- [x] **VERIFIED** Every completion target is 44px and nothing lies over it
+- [x] **VERIFIED** State persists across reload (asserted as the tick, not as wording)
 
 ### 5. Contacts
 - [ ] **TODO** Full-screen contact scrolls without jumping back to the top
@@ -169,6 +169,28 @@ word.
 `scripts/verify/basecamp-chat.ts` (new), `scripts/verify/chat-live.ts` (new).
 
 ## Verification log
+
+**4. To-dos — VERIFIED.**
+- **The cause:** a completed task was moved into a `<details class="bcdone">`
+  drawer that is CLOSED by default. Ticking something therefore removed it from
+  where it was and left a summary line reading "1 completed task". That is
+  exactly "clicking a to-do makes it unexpectedly disappear".
+- Done work now stays where it is, after the open work, under a quiet "N done"
+  heading, struck through and dimmed with its box ticked.
+- **A second, latent defect found on the way:** the row asked
+  `t.state === 'done'` while the list split asked
+  `(t.state_raw ?? t.state) === 'done' || state_raw === 'cancelled'` — two
+  predicates for one question, so a row could sit under the done heading
+  without wearing the done state. One predicate now, used by both.
+- The completion target is 44x44 on desktop and phone, and its centre
+  hit-tests to itself.
+- `verify:basecamp-todos` 30/30, and the target check proved able to fail by
+  shrinking the hit area to 20px.
+- **Three false findings of my own, all caught before being believed:** the
+  hit test reported every target below the fold as "covered"
+  (`elementFromPoint` is null outside the viewport), then every row scrolled
+  out of its own pane as "covered" (clipped is not covered), and the
+  persistence check asserted the drawer's old wording rather than the tick.
 
 **3. Live voice — VERIFIED (except OpenAI itself).**
 - Same root cause as Chat: `call.js` reads the same `hq.token`, so with none its

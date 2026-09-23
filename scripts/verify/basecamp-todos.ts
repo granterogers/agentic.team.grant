@@ -136,21 +136,41 @@ check(
   that the tick landed, so it is checked too.
 */
 /*
-  THE DRAWER THAT HOLDS THIS TASK, not the first one on the page: there is one
-  per list, and `.first()` picked another list's - which reads exactly like
-  the row being missing.
+  IT STAYS ON THE PAGE.
+
+  Grant, 23 September: "Clicking/completing a to-do must not make it
+  unexpectedly disappear. Completed items should remain visible and clearly
+  display a completed/done state."
+
+  This suite used to assert the OPPOSITE - that a ticked task moved into a
+  collapsed drawer - which is precisely the behaviour reported as the defect.
+  The drawer is gone: done work sits after the open work, marked done.
 */
-const drawer = page
-  .locator('[data-bc-expanded="tasks"] details.bcdone')
-  .filter({ has: page.locator(`[data-bc-tick="${firstKey}"]`) })
-  .first()
+const ticked = page.locator(`[data-bc-expanded="tasks"] [data-bc-tick="${firstKey}"]`).first()
 check(
-  "a completed task moves into its list's completed drawer, which says how many",
-  (await drawer.count()) === 1 && /completed task/.test(await drawer.innerText()),
-  (await drawer.count()) === 0 ? 'no drawer holds it' : await drawer.innerText(),
+  'a completed task is still on the page, not hidden in a drawer',
+  (await ticked.count()) === 1 && (await ticked.isVisible()),
+  'the row disappeared from view when it was ticked',
 )
-await drawer.locator('summary').click()
-await page.waitForTimeout(250)
+check(
+  'and it visibly says it is done',
+  (await page.evaluate(
+    inPage(`const box = document.querySelector('[data-bc-expanded="tasks"] [data-bc-tick="${firstKey}"]')
+       if (box === null) return false
+       const row = box.closest('.bcitem')
+       const title = row === null ? null : row.querySelector('.bcitemtitle')
+       return box.checked === true &&
+         row !== null && row.className.includes('bcitem--done') &&
+         title !== null && getComputedStyle(title).textDecorationLine.includes('line-through')`),
+  )) === true,
+  'a done row did not carry the done state',
+)
+check(
+  'and nothing hides completed work behind a summary any more',
+  (await page.locator('details.bcdone').count()) === 0,
+)
+
+/* No drawer to open any more: the row is right there. */
 await page.locator(`[data-bc-expanded="tasks"] [data-bc-tick="${firstKey}"]`).first().uncheck()
 await page.waitForTimeout(600)
 const back = (await page.evaluate(
@@ -320,11 +340,111 @@ await page.goto(url(`${slug}/tasks`), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.bcmain')
 await page.waitForTimeout(500)
 const listNow = await page.locator('.bcmain').innerText()
+/*
+  THE PROPERTY, not the drawer's old summary line.
+
+  This asserted that the page said "completed task" - the wording of the
+  collapsed drawer that used to swallow finished work. The drawer is gone, so
+  the assertion had to change; what it should have been asking all along is
+  whether the task is STILL TICKED after a reload, which is what persistence
+  means and what Grant asked to see verified.
+*/
+const stillDone = (await page.evaluate(
+  inPage(`const rows = [...document.querySelectorAll('.bcitem')]
+     const row = rows.find((el) => (el.textContent ?? '').includes(${JSON.stringify(recordTitle)}))
+     if (row === undefined) return 'the task is not on the page at all'
+     const box = row.querySelector('input[type=checkbox]')
+     if (box === null) return 'the row has no checkbox'
+     return box.checked ? 'done' : 'open'`),
+)) as string
 check(
   `marking "${recordTitle}" done from its record is still true after a reload`,
-  listNow.includes('completed task'),
-  listNow.replace(/\n/g, ' / ').slice(0, 160),
+  stillDone === 'done',
+  `${stillDone}; the list read: ${listNow.replace(/\n/g, ' / ').slice(0, 120)}`,
 )
+
+/*
+ * --- THE COMPLETION TARGET -----------------------------------------------
+ *
+ * Grant: "Investigate the current click target/interaction because completion
+ * currently behaves inconsistently. Make the entire intended completion
+ * control reliable."
+ *
+ * So it is measured: every tick is a 44px target whose centre hit-tests to
+ * ITSELF - which is the half that catches something invisible lying over it,
+ * and the half a size check alone cannot see.
+ */
+for (const [where, path] of [
+  ['the to-dos surface', `${slug}/tasks`],
+  ['the project home miniature', slug],
+] as [string, string][]) {
+  await page.goto(url(path), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcitem, [data-mod="tasks"]')
+  await page.waitForTimeout(500)
+  /*
+    HIT-TESTED ONLY WHERE A HIT TEST MEANS ANYTHING.
+
+    `elementFromPoint` answers null for a coordinate outside the viewport, so
+    the first version of this reported every target below the fold as
+    "covered" - five of eleven, which looked exactly like the defect it was
+    hunting. The size is measured for all of them; the covering test is for the
+    ones actually on screen, and the count it managed is reported so a run that
+    could only test one cannot pass quietly.
+  */
+  const targets = (await page.evaluate(
+    inPage(`const out = []
+       for (const hit of document.querySelectorAll('.bctickhit')) {
+         const r = hit.getBoundingClientRect()
+         if (r.width < 2) continue
+         /*
+           VISIBLE MEANS INSIDE ITS OWN PANE TOO.
+
+           A miniature lives in a scroll container, so a row scrolled out of it
+           is still inside the VIEWPORT rect while being clipped - and the
+           point then hit-tests to whatever module is drawn there, which the
+           first version of this reported as six covered targets. Clipped is
+           not covered.
+         */
+         let clip = hit.parentElement
+         while (clip !== null && clip !== document.body) {
+           const cs = getComputedStyle(clip)
+           if (/(auto|scroll|hidden)/.test(cs.overflowY + cs.overflow)) break
+           clip = clip.parentElement
+         }
+         const within = clip === null || clip === document.body
+           ? true
+           : (() => {
+               const c = clip.getBoundingClientRect()
+               return r.top >= c.top - 1 && r.bottom <= c.bottom + 1
+             })()
+         const onScreen = within && r.top >= 0 && r.bottom <= window.innerHeight
+         const at = onScreen
+           ? document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+           : null
+         out.push({
+           w: Math.round(r.width),
+           h: Math.round(r.height),
+           onScreen,
+           own: onScreen && at !== null && at.closest('.bctickhit') === hit,
+         })
+       }
+       return out`),
+  )) as { w: number; h: number; onScreen: boolean; own: boolean }[]
+  const reachable = targets.filter((t) => t.onScreen)
+  check(
+    `${where}: every completion target is at least 44px`,
+    targets.length > 0 && targets.every((t) => t.w >= 44 && t.h >= 44),
+    targets
+      .filter((t) => t.w < 44 || t.h < 44)
+      .map((t) => `${String(t.w)}x${String(t.h)}`)
+      .join(', ') || `${String(targets.length)} target(s)`,
+  )
+  check(
+    `${where}: and nothing is lying over any of them`,
+    reachable.length > 0 && reachable.every((t) => t.own),
+    `${String(reachable.filter((t) => !t.own).length)} of ${String(reachable.length)} on-screen target(s) covered`,
+  )
+}
 
 check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
 

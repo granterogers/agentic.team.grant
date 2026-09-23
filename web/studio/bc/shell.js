@@ -736,10 +736,14 @@ const taskAddForm = (listId) => {
   </form>`
 }
 
+/** Whether a to-do is finished with, however the office happens to say so. */
+const done_ = (t) =>
+  (t.state_raw ?? t.state) === 'done' || (t.state_raw ?? '') === 'cancelled'
+
 const taskList = (p, g, whole = false) => {
   const all = p.tasks ?? []
-  const open = g.items.filter((t) => (t.state_raw ?? t.state) !== 'done' && (t.state_raw ?? '') !== 'cancelled')
-  const done = g.items.filter((t) => (t.state_raw ?? t.state) === 'done' || t.state_raw === 'cancelled')
+  const open = g.items.filter((t) => !done_(t))
+  const done = g.items.filter((t) => done_(t))
   const k = g.id === '' ? 'loose' : g.id
   return `<section class="bctasklist" data-bc-tasklist="${esc(k)}">
     <header class="bctasklisthead">
@@ -776,15 +780,32 @@ const taskList = (p, g, whole = false) => {
             ? `<p class="bcpmeta">Everything in this list is done.</p>`
             : ''
       }
+      <!--
+        COMPLETED WORK STAYS ON THE PAGE.
+
+        Grant, 23 September: "Clicking/completing a to-do must not make it
+        unexpectedly disappear. Completed items should remain visible and
+        clearly display a completed/done state."
+
+        It used to go into a collapsed drawer, so ticking something made it
+        vanish from where it was and reappear only if you went looking for a
+        summary line called "1 completed task". That is the defect: the tick
+        LOOKED like it had deleted the row.
+
+        Done work now sits where it always was, after the open work, under a
+        quiet heading and wearing the done state - struck through, dimmed, its
+        box ticked. The heading is drawn only when there IS some, so an
+        untouched list carries no furniture.
+      -->
       ${
         done.length === 0
           ? ''
-          : `<details class="bcdone">
-              <summary class="bcmore">${esc(
-                done.length === 1 ? '1 completed task' : `${done.length} completed tasks`,
-              )}</summary>
+          : `<p class="bcdonehead">${esc(
+              done.length === 1 ? '1 done' : `${done.length} done`,
+            )}</p>
+            <div class="bcdonelist">
               ${done.map((t) => taskRow(t, all.indexOf(t), g.name)).join('')}
-            </details>`
+            </div>`
       }
     </div>
   </section>`
@@ -946,7 +967,16 @@ const repeatsList = (note, listName) => {
   the whole meta line on something already known.
 */
 const taskRow = (t, i = 0, listName = '') => {
-  const isDone = t.state === 'done'
+  /*
+    THE SAME PREDICATE THE LIST SPLITS ON.
+
+    This said `t.state === 'done'` while the split above says
+    `(t.state_raw ?? t.state) === 'done' || state_raw === 'cancelled'` - two
+    ways of asking one question, and a row that satisfied one and not the other
+    would sit under the done heading without wearing the done state. One
+    answer, used by both.
+  */
+  const isDone = done_(t)
   const id = t.id ?? ''
   const key = taskKey(t)
   return `<div class="bcitem${isDone ? ' bcitem--done' : ''}" data-bc-task="${esc(key)}">

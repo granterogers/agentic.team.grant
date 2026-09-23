@@ -2491,3 +2491,37 @@
   it stands down as soon as the panel exists.
 */
 [data-experience='basecamp'] .bchead:has(.bclive) .bccallsay { display: none; }
+
+/* ---------------------------------------------------------------------- *
+ * DONE WORK, STILL ON THE PAGE.
+ *
+ * It used to disappear into a collapsed drawer the moment it was ticked, which
+ * is what "completing a to-do makes it vanish" was. It stays where it is now,
+ * after the open work, quieter but plainly there and plainly finished.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcdonehead {
+  margin: var(--bc-3) 0 var(--bc-1);
+  font: 600 12px/1 var(--bc-font);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcdonelist .bcitem { opacity: .72; }
+[data-experience='basecamp'] .bcdonelist .bcitem:hover,
+[data-experience='basecamp'] .bcdonelist .bcitem:focus-within { opacity: 1; }
+/*
+  THE TICK IS A THUMB-SIZED TARGET.
+  Grant: "make the entire intended completion control reliable". The label is
+  the hit area and the box sits in the middle of it, so pressing anywhere near
+  the tick ticks it rather than missing between the box and the title.
+*/
+[data-experience='basecamp'] .bctickhit {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -6px 0 -6px -6px;
+  cursor: pointer;
+  border-radius: var(--bc-r-control);
+}
+[data-experience='basecamp'] .bctickhit:hover { background: var(--bc-hover); }
