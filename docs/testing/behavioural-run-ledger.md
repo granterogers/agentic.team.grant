@@ -1944,6 +1944,46 @@ signature's comment before believing a pure-function result.**
 
 Clean-pass count after pass 39: **3 of 5.**
 
+## Pass 40 — teaching and standing rules: CLEAN
+
+**Territory:** what the office REMEMBERS between turns — the rules Grant gives
+it, how they reach the prompt, and how they are withdrawn. CLAUDE.md records
+four defects here, including the one he complained about twice.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked:**
+
+1. **`check:standing` is green, and the set is sane.** Two live rules, both
+    plainly his: *"always give your information in the form of clear bullet
+    points"* and *"always paste the image URLs into the reply"*. The nonsense
+    rule the office once stored from *"Okay, never mind about that."* is gone.
+    The check also reports that **each reaches the prompt as what it is**,
+    which is the label fix — an order of his arriving under *"these are beliefs
+    from past work, weigh them"* is what made him say *"You're still not
+    respecting my request"*.
+2. **`readTeaching` is 7 of 7.** Genuine standing instructions store. *"Okay,
+    never mind about that."* and *"Never mind."* do NOT — the lexical marker
+    matching `never` inside a fixed phrase whose meaning is the opposite. And
+    *"Can you suggest when we should decide the venue?"* does not, so the
+    complement-clause defect that filed an eight-clause work request as a
+    global procedure called *"Shoulding decide"* stays fixed.
+3. **The retraction argument swap cannot recur.** `app.retract_lesson(p_lesson_id,
+    p_why, p_by)` had its two text arguments passed the wrong way round, putting
+    the AUTHOR in the reason column on every retraction the office ever wrote —
+    permanently, because `public.lessons` refuses UPDATE. Both call sites in
+    `remember.ts` now pass them NAMED, which is the only fix that makes the
+    class impossible rather than the instance correct.
+4. **The scoped-lookup fix is in place.** `widerInForce` and its *"Withdrawn
+    everywhere"* path exist, so a global rule is no longer invisible from
+    inside a project — which mattered because Grant works mostly on Telegram,
+    where a project is usually in scope, and the office would deny holding a
+    rule that was in the very prompt composing the denial.
+
+**Gates:** check:standing green; nothing else changed.
+
+Clean-pass count after pass 40: **4 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
