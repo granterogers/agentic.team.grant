@@ -3765,6 +3765,26 @@ Each of these cost real time. They are here so they cost it once.
   listing the nouns: a list is wrong the first time the office grows an
   `action_type` nobody wrote down.
 
+
+- **A SWEEP AT THE END CANNOT PROTECT A SURFACE THAT READS CONTINUOUSLY.**
+  `verify:notice` writes a signature its positive control needs the reader to
+  SURFACE — carrying a real job id, because #45 says a control the filter would
+  reject proves nothing — and swept it afterwards, with a crash handler and a
+  comment recording that such a row had once reached Grant's briefing. It
+  happened again: his 04:00 briefing on 23 September named
+  `noticeproof.mu6wxsku`. A sweep only NARROWS the window and a duty fires
+  inside it. Write and assert inside ONE transaction that never commits — the
+  reader sees its own transaction's writes, so the control is just as strong and
+  the window is zero.
+- **"I cannot check this" is not "this is real" — and the writer and the reader
+  had the same hole.** `app.recurring_failures` guarded with
+  `f.last_job_id is null OR not app.harness_job(...)`, and `app.failure_seen`
+  with `if p_job_id is not null and app.harness_job(...)`, so a signature with
+  no job was neither refused going in nor filtered coming out and was reported
+  to Grant as a recurring failure of his. 0304's asymmetry with the sign
+  reversed. Before excluding the unattributable, check who writes it: the only
+  product caller is `worker.ts` and it always passes the job.
+
 ---
 
 ## Visual standard

@@ -479,15 +479,65 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
   process.on('unhandledRejection', onCrash)
   process.on('uncaughtException', onCrash)
 
-  for (let i = 0; i < 3; i++) {
-    await db.execute(`
-      select app.failure_seen(${lit(realKind)}, 'noticeproof', ${lit(subject)},
-                              ${lit(String(real.id))}::uuid)`)
-  }
-  const surfaced = await all(`
-    select 1 from app.recurring_failures(3, 14) f
-     where f.job_kind = ${lit(realKind)} and f.subject = ${lit(subject)}`)
-  ok('and a REAL repeated failure still surfaces', surfaced.length === 1)
+  /*
+    WRITTEN AND READ INSIDE ONE TRANSACTION THAT NEVER COMMITS (#357).
+
+    This control has to write a signature the reader will SURFACE -- that is
+    the whole point of it, and #45 is why it carries a real job id rather than
+    a fixture one. Which means that for as long as those rows exist, they are
+    indistinguishable from one of Grant's own recurring failures.
+
+    The sweep below is not enough, and the briefing proved it: at 04:00 on 23
+    September his morning briefing said "noticeproof.mu6wxsku and
+    noticeproof.mu6ww50g have each failed three times since 18 Sep". A sweep
+    that runs at the END of a suite cannot protect a surface that reads
+    CONTINUOUSLY -- it only narrows the window, and a duty firing inside that
+    window is exactly what happened. The suite's own comment above already
+    records a row having been swept out of his briefing once.
+
+    A transaction closes the window to zero: the rows exist only for the
+    statement that asserts on them, and `app.recurring_failures` sees its own
+    transaction's writes, so the control is just as strong. The block ends by
+    raising, which is what discards them -- there is no commit to forget.
+  */
+  const surfacedOutcome = await db
+    .execute(`
+      do $notice$
+      begin
+        begin
+          perform app.failure_seen(${lit(realKind)}, 'noticeproof',
+                                   ${lit(subject)}, ${lit(String(real.id))}::uuid);
+          perform app.failure_seen(${lit(realKind)}, 'noticeproof',
+                                   ${lit(subject)}, ${lit(String(real.id))}::uuid);
+          perform app.failure_seen(${lit(realKind)}, 'noticeproof',
+                                   ${lit(subject)}, ${lit(String(real.id))}::uuid);
+
+          if (select count(*) from app.recurring_failures(3, 14) f
+               where f.job_kind = ${lit(realKind)}
+                 and f.subject = ${lit(subject)}) = 1 then
+            raise exception 'SURFACED';
+          end if;
+          raise exception 'DID_NOT_SURFACE';
+        end;
+      end
+      $notice$;`)
+    .then(() => 'no exception, which this block never produces')
+    .catch((e: unknown) => String((e as Error).message))
+
+  ok(
+    'and a REAL repeated failure still surfaces',
+    surfacedOutcome.includes('SURFACED') && !surfacedOutcome.includes('DID_NOT_SURFACE'),
+    surfacedOutcome.slice(0, 90),
+  )
+
+  // And it left nothing behind for a duty to find, which is the half the
+  // briefing caught. Asserted rather than assumed: a teardown that matches
+  // nothing looks exactly like one that worked.
+  ok(
+    'and the control left no signature a duty could report as his',
+    (await all(`select 1 from public.failure_signatures where subject = ${lit(subject)}`))
+      .length === 0,
+  )
 
   /*
     And the other half of 0568, which is what actually reached him: a

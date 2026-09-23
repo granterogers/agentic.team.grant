@@ -593,5 +593,6 @@
   "0584_a_duty_may_not_say_the_same_thing_every_hour.sql": "8faa7b2e95ebe16345e4f949711a1ba3797fc9501e712c46f9125104aeedf75a",
   "0585_two_projects_saying_the_same_thing_are_two_facts.sql": "e2e1bdf46e6027c7698f21d4177dc288518cc400e9e4d0847f19f5482bf2729c",
   "0586_his_activity_feed_was_mostly_test_traffic.sql": "fa7b980c433e7fb0db427d2c2ab7a45181c3f0a3506b73a01e34776f68c2dab5",
-  "0587_an_autonomy_not_a_autonomy.sql": "0ffe8dc405093c9a186b392ab19dc473244e6cb1527c142c4b2b65969872e8a3"
+  "0587_an_autonomy_not_a_autonomy.sql": "0ffe8dc405093c9a186b392ab19dc473244e6cb1527c142c4b2b65969872e8a3",
+  "0588_a_failure_nobody_can_attribute_is_not_his.sql": "df4fe60dfca01e53792c28a7929bfbbf071a7a91b3ebd45241409459c2a2d311"
 }

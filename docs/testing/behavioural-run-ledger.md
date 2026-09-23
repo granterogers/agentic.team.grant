@@ -1509,6 +1509,59 @@ check:templates, check:callers, check:consumed, check:leaks — all green.
 
 Clean-pass count after pass 30: **0 of 5** — reset by a systemic product defect.
 
+## Pass 31 — a suite's control rows in his morning briefing
+
+**Territory:** the morning briefing, what he reads daily.
+
+**Classification: one HARNESS DEFECT and two LOCAL PRODUCT DEFECTS.** Filed as
+[#357](https://github.com/granterogers/agentic.team.grant/issues/357), fixed in
+0588 and in `scripts/verify/notice.ts`. Recorded at that size rather than
+inflated — none of the three is systemic.
+
+**What his briefing said**, verbatim from `public.outputs` at 09-23 04:00:
+*"noticeproof.mu6wxsku and noticeproof.mu6ww50g have each failed three times
+since 18 Sep."* Those are `verify:notice`'s positive-control rows, and they are
+**correct by design**: #45 means the control must carry a REAL job id or the
+reader it tests would filter it and prove nothing. For as long as they exist
+they are indistinguishable from one of his own failures.
+
+**1. A sweep at the end cannot protect a surface that reads continuously.** The
+suite already swept on crash, and its own comment records a row having been
+swept out of his briefing once before. A sweep only NARROWS the window; the
+04:00 duty fired inside it. Now written and asserted inside one transaction that
+never commits — `recurring_failures` sees its own transaction's writes, so the
+control is exactly as strong and the window is zero. 36/36, and it asserts it
+left nothing behind.
+
+**2. `recurring_failures` treated "cannot check" as "real".**
+`where (f.last_job_id is null or not app.harness_job(...))` — the `is null`
+branch reports a signature nobody can attribute as his. 0304's asymmetry with
+the sign reversed, and `app.failure_seen` has the identical hole on the writing
+side, so such a row is neither refused going in nor filtered coming out. Driven
+inside a rollback BEFORE the fix was written.
+
+**3. The briefing counts with the weak predicate.**
+`app.morning_briefing_facts` uses `not j.is_fixture` where the canonical one is
+`app.harness_job` — 0355's rule, and a fourth reader nobody carried it across
+to. Peak overcount over ten days: 11 of 373, about 3%.
+
+**Checked and cleared:** *"54 items are waiting on you"* looked like a
+regression of the fixed `needs_me` defect and is not — the view returns 4 now.
+The 50 were a suite's blockers, live at 04:00 and torn down since: the same
+window as finding 1, on a different table.
+
+**Also cleared this pass:** `office.notion_sync`'s 30 failures are all from 18
+September, the day it was fixed, and nothing has failed anywhere in five days.
+I misread a `max(created_at)` over all runs as a last-failure date and said it
+was still failing today — corrected before it went anywhere.
+
+**Gates:** lint, typecheck, test, check:migrations, check:secrets,
+check:templates, check:callers, check:consumed, check:leaks, verify:notice
+(36/36) — all green.
+
+Clean-pass count after pass 31: **0 of 5** — a harness defect that reached a
+real surface is a meaningful finding, so it does not count as clean.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
