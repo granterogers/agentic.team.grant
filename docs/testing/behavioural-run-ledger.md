@@ -2214,6 +2214,49 @@ instruction is to confirm first.
 
 Clean-pass count after pass 44: **3 of 5.**
 
+## Pass 45 — the evaluator: CLEAN
+
+**Territory:** the instrument the office is measured WITH. CLAUDE.md records
+four separate defects in it, and a broken judge is worse than no judge because
+its verdicts carry a decimal point.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked:**
+
+1. **The corpus is PAIRED, 10 good and 10 poor, all active.** That is the
+    structural fix: a corpus of failures alone cannot detect a judge that marks
+    everything poor, because such a judge scores perfectly on it. `context` is
+    populated on 15 of the 20 — the column that exists so the grader can know
+    what the text cannot show.
+2. **The judge model is pinned** — `cohere/north-mini-code:free` — after three
+    mixtures gave three answers.
+3. **`temperature: 0`**, because pinning the model and leaving the sampling
+    free was only half of it.
+4. **`maxTokens: 16_000`.** The recorded failure was a judge spending its
+    budget on reasoning and returning no content, which lands as "the judge's
+    answer could not be read" and quietly changes the denominator.
+5. **The margin is printed WITH the number**, not buried in a comment — so
+    nobody tunes a prompt against a coin.
+6. **UNSCOREABLE is a third outcome**, so a position-bias reversal is the
+    instrument abstaining rather than being resolved by a tie-break.
+
+**The honest limitation:** I did not re-run `npm run eval`. Its last recorded
+run is 14 September (19 cases, 16 agreed, mean 2.95), and re-running it spends
+model calls to reproduce a measurement already on record — which is the
+manufactured work the standing rule forbids. **This pass verifies the
+instrument's construction, not its current score.** A fresh score is worth
+taking when something changes that could move it.
+
+**Also, unchanged and still blocked:** `npm run migrate` now reports TWO
+applied-but-missing migrations from the concurrent branch (0580 and 0581, whose
+name collides with mine), so 0589 remains committed and unapplied. Their head is
+still at 0579.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 45: **4 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
