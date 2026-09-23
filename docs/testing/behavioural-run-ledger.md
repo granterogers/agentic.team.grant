@@ -263,6 +263,40 @@ surprise classified, nothing left behind.
 
 Clean-pass count after pass 5: **1 of 5.**
 
+### Pass 6 — the duties, and what the office sends unprompted
+
+Territory: the work the office starts by itself. It is most of the queue by
+volume (951 `drive.watch`, 355 `tasks.remind` in seven days) and had not been
+touched by passes 0–5, which were all about turns Grant starts.
+
+**NOT CLEAN — a false record in the standing brief, and a whole class with no
+witness** (#333). No live PRODUCT defect: the duties are healthy, nothing is
+failing, and `tasks.remind` delivering nothing across 355 runs is correct,
+because no live task carries a due date or a reminder time.
+
+- **`CLAUDE.md` said Grant was spared the #477 burst. He was not.**
+  `public.deliveries` holds 756 rows for `office.provision_channels`, `sent`,
+  telegram, `target_ref 1386648496` — his real chat — 746 of them on 17
+  September. Ruled out as a stub because the message references share a
+  contiguous sequence with `google.read_mail` and `tasks.remind` deliveries to
+  the same chat on neighbouring days. Corrected in place with the evidence.
+- **Nothing watched the class.** 0477 bounded that one enqueuer;
+  `check:leaks` only asks about harness traffic and `app.office_health()` only
+  reports failures, stalls and waiting work — a duty that runs perfectly and
+  sends perfectly is none of those. `npm run check:chatter` is the witness, in
+  the gate, ceiling 100 a day per kind against a busiest honest duty-day of 48,
+  replies printed but never bounded, and it carries its own positive control
+  drawn from the incident rather than a synthetic row.
+
+Clean-pass count after pass 6: **0 of 5** — reset, because the pass found
+something meaningful.
+
+### The diminishing-returns question, answered from this ledger
+
+Findings per pass: 2, 3, 3, 1, 1, 0, 2. The yield has not fallen away, and the
+single finding in pass 3 was the largest of the run. Continuing is justified by
+the evidence rather than by appetite.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
