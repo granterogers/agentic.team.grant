@@ -3162,6 +3162,51 @@ Each of these cost real time. They are here so they cost it once.
   subject the way the filter matches, so it corrects the attribution AFTER the
   assertion rather than before it — and it must correct all of it.
 
+- **A lexical marker matched inside a fixed phrase whose meaning is the
+  opposite, and the result sat in every prompt for eight days.** `STANDING` in
+  `teaching.ts` contains the bare word `never`, so *"Okay, never mind about
+  that."* was stored as a standing instruction at 0.95 confidence,
+  `learned_by grant`. `dimensionOf` returns null for it, so `withdrawsARule`
+  returns null too, so neither the retraction branch nor the nothing-to-drop
+  branch in `remember()` could fire. `remember()`'s own comment names that
+  exact sentence as something a fix prevented — the fix was elsewhere and the
+  sentence would have been stored again today. Same shape as `\mdelete\M`
+  unable to see inside `delete_everything`. Three parts, because any one alone
+  leaves it open: the code, a check in the gate over the rules the office
+  actually holds, and the row RETIRED rather than deleted.
+- **Fixing the writer does not fix what is already stored, and nothing was
+  looking.** `check:leaks` asks whether HARNESS lessons reach a real prompt
+  and had no opinion about whether a REAL one makes sense. A rule the office
+  would not accept today is one nobody meant to give it, whatever route it
+  took in — so `npm run check:standing` reads the live set and fails on any,
+  with a control that refuses to pass on an empty set. Ask what a table
+  actually HOLDS: three live rules, and one of them was nonsense.
+- **A scoped lookup makes the office deny what it is holding.** `believed` in
+  `remember()` is scoped to the level the turn is at — deliberately, so a
+  project rule cannot retire a global one — so from inside a project, a global
+  rule is invisible and withdrawing it answered *"I do not have a standing
+  rule about that"* about a rule in the prompt that composed the sentence.
+  #320's invariant family, and Grant works mostly on Telegram where a project
+  is usually in scope. Naming the rule is honest whatever he meant; RETIRING
+  it needs him to have said everywhere, because "stop doing that" inside one
+  project is genuinely ambiguous and guessing the wide reading undoes a rule
+  for every other project.
+- **Three arguments were enough to be passed the wrong way round for the life
+  of the feature.** `app.retract_lesson(p_lesson_id, p_why, p_by)` writes
+  `body = p_why` and `learned_by = p_by`; `remember()` passed the author
+  second, so every retraction the office has ever written holds the AUTHOR in
+  the reason column and the REASON in the author column. `lessons.is_fixture`
+  is GENERATED from `learned_by`, so a suite's retraction carried reason text
+  there and was attributed as Grant's — 41 global and 34 project rows reading
+  as real traffic. Found because a hand-run retraction was refused by
+  `lessons_body_check`: the constraint caught what no test did. CLAUDE.md's
+  named-arguments rule says "the moment a signature passes about four"; it is
+  **three** when two of them are text.
+- **`public.lessons` refuses UPDATE, so a swapped column is permanent.** The
+  honest response is not to find a way round the trigger: 0567 records the
+  fact in the column comments, where somebody writing a query against those
+  rows will see it. A ledger you can correct is not a ledger.
+
 ---
 
 ## Visual standard

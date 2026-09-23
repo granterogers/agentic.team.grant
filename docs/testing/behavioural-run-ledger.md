@@ -117,6 +117,56 @@ control. EXPECTED BEHAVIOUR and INSTRUMENT respectively.
 
 Clean-pass count after pass 1: **0 of 5.**
 
+### Pass 2 — the preference lifecycle: scope, withdrawal, attribution (v785 → v786)
+
+Territory: what the office has LEARNED and how it can be told to stop —
+materially different from passes 0 and 1, which were about work in flight.
+
+**NOT CLEAN — three systemic PRODUCT defects, all fixed.**
+
+1. **A cancellation had been a standing rule in every prompt for eight days**
+   (#330). `STANDING` in `teaching.ts` contains the bare word `never`, so
+   *"Okay, never mind about that."* was stored at 0.95 confidence,
+   `learned_by grant`. `remember()`'s own comment names that exact sentence as
+   something a fix prevented; the fix was elsewhere and it would have been
+   stored again today. Fixed in three places: the code, a new gate check
+   (`check:standing`), and the row itself, retired through
+   `app.retract_lesson`.
+2. **The office denied holding a rule that was in the prompt it answered
+   from** (#320's invariant family). From inside a project, a global or staff
+   rule is invisible to the withdrawal lookup, so taking one back answered
+   *"I do not have a standing rule about that."* It now names the rule and the
+   words that take it off, and `EVERYWHERE` is the narrow authorisation.
+3. **Every retraction recorded the author as the reason and the reason as the
+   author** (#331). `remember()` passed `app.retract_lesson`'s two text
+   arguments the wrong way round. `lessons.is_fixture` is GENERATED from
+   `learned_by`, so harness retractions were attributed as Grant's — 41 global
+   and 34 project rows reading as real traffic. Named arguments now;
+   `public.lessons` refuses UPDATE, so 0567 records the fact in column
+   comments rather than pretending the rows can be fixed.
+
+Evidence: `npm run check:standing` and `npm run verify:withdraw`, both in the
+gate. The standing-rule fix is verified on the deployed worker by a live turn:
+*"Okay, never mind about that."* now stores nothing and the office answers
+*"There was nothing still running on that, so there is nothing to stop."*
+
+Sabotage: five, each printed as landed and each turning the intended checks
+red.
+
+Also classified, and **not** a defect: a preference stated while a project is
+in scope is stored project-scoped regardless of how universally he phrased it.
+The say-back tells him — *"for this project"* — which is ADR-0017's rule
+working, so it is EXPECTED BEHAVIOUR with an honest correction path.
+
+Three harness mistakes in this pass, all caught before they became findings: a
+withdrawal sentence naming no dimension the office knows; a teardown guessing
+a `retired_at` column on a ledger that records retirement as a row; and a
+multi-edit script that asserted and wrote nothing. A `git checkout` on an
+uncommitted file also threw away one edit, which is the first trap in
+CLAUDE.md.
+
+Clean-pass count after pass 2: **0 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
