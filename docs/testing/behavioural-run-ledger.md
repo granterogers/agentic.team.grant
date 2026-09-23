@@ -1309,6 +1309,80 @@ check:secrets, check:templates, check:callers, check:consumed — all green.
 
 Clean-pass count after pass 27: **0 of 5** — reset by a systemic product defect.
 
+## Pass 28 — a suite labelled in the second segment was real traffic
+
+**Territory:** the voice call path, which no earlier pass had touched.
+
+**Classification: SYSTEMIC PRODUCT DEFECT — containment.** Filed as
+[#354](https://github.com/granterogers/agentic.team.grant/issues/354), fixed in
+0582, escapes acknowledged in 0583.
+
+**How it surfaced.** Measuring voice traffic before reading any code: 50
+non-harness jobs, all `voice:grant`, and the ten most recent all saying *"what
+projects have we got"* — which is a suite, not a man. Their dedupe keys were
+`voice:turn:verify-basecamp-live-<ts>.<id>`.
+
+**The defect.** 0574 — mine, three passes ago — taught `app.harness_job` to read
+the inbound command's dedupe key and wrote its own test for it:
+`split_part(c.dedupe_key, ':', 1) = 'verify'`. That reads the FIRST segment. A
+voice turn's key is `<channel>:turn:<who>`, so the label sits in the third.
+
+**What it cost.** 14 jobs, 8 → 23 September, every one reading as Grant's own
+voice note to every witness the office has, **answered and delivered**: 20
+messages reached a real destination — `telegram 1386648496`, his chat, and real
+Slack channels — after 0523 was supposed to make that structurally impossible.
+
+**The shape that made it invisible, and the part worth keeping.** `check:leaks`
+reported `new escapes since containment fix: 0` throughout, because the guard
+(`app.claim_delivery`) and its witness (`check:leaks`) **both ask
+`app.harness_job`**. They agreed with each other and were both wrong. A witness
+that inherits the blind spot of the thing it watches cannot report it — which is
+a worse failure than either half being broken alone.
+
+The other signals were not wrong, which is why none of them helped:
+`jobs.is_fixture` is GENERATED from `requested_by`, and `enqueue_inbound`
+composes that as `<origin_channel>:<subject>` — the subject is "grant".
+`jobs.synthetic` is false and **correct**: the traffic genuinely came through the
+production door, because a suite calling the real voice webhook *is* a
+production request. The label in the dedupe key was the only discriminator.
+
+**The fix is to stop having two vocabularies.** `app.harness_label` already
+existed and already anchored on both `^verify-` and `:verify-`, for exactly this
+reason; 0574 wrote a second, narrower test beside it instead of calling it. 0582
+deletes the bespoke test and calls the shared predicate.
+
+**The expensive direction, and the control for it.** `app.harness_job` EXCLUDES
+rows from the readers Grant looks at, so a predicate that is too generous
+**hides his real work** — the opposite of 0304's asymmetry. Both migrations
+assert in both directions, and the guard was driven on a real escaping job
+inside a rollback: `state=suppressed`, while a genuinely real job still returns
+`claimed`. Both drives left nothing behind.
+
+**Escapes acknowledged, not hidden.** The 20 went into `public.known_escapes`
+against #354 with the reason. `public.deliveries` is untouched, the two
+preserved #298 rows are untouched, and 0583's own control refuses to pass if the
+known count ever FALLS — because the one outcome this must never produce is
+evidence removed rather than recorded. The witness now says *22 known, 0 new*
+rather than staying red by design, which is how a gate teaches people to skip it.
+
+**Permanent regression:** `check:leaks` now asserts the two predicates AGREE — a
+command carrying a harness label may not belong to a job that reads as real.
+Two independent statements of one fact, so a disagreement means something, and
+unlike a count it survives the next suite. **Proved by substituting 0574's exact
+predicate back in:** 39 jobs, red, naming a real escaping key; green on restore.
+The first attempt at that sabotage did not apply — two occurrences, assertion
+refused — and `exit=0` meant nothing until the proof line caught it.
+
+**A note on provenance.** The escaping traffic is the concurrent session's
+`verify-basecamp-live` suite on `claude/basecamp-team-hq`. The detector gap is
+this branch's, and `app.claim_delivery` suppresses rather than raises, so the
+fix cannot fail their jobs — their messages simply stop reaching Grant.
+
+**Gates:** lint, typecheck, test, check:migrations, check:secrets,
+check:templates, check:callers, check:consumed, check:leaks — all green.
+
+Clean-pass count after pass 28: **0 of 5** — reset by a systemic product defect.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

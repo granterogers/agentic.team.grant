@@ -3678,6 +3678,42 @@ Each of these cost real time. They are here so they cost it once.
   what the last two of those five errors actually were.
 
 
+
+- **A WITNESS THAT ASKS THE SAME PREDICATE AS THE GUARD CANNOT REPORT THE
+  GUARD'S BLIND SPOT — they agree, and they are both wrong.**
+  `app.claim_delivery` refuses a harness job a production destination and
+  `check:leaks` reports when one gets through; BOTH ask `app.harness_job`. 0574
+  taught that predicate to read the inbound command's dedupe key with
+  `split_part(key, ':', 1) = 'verify'` — the FIRST segment — and a voice turn's
+  key is `<channel>:turn:<who>`. A suite driving the live voice webhook produced
+  `voice:turn:verify-basecamp-live-…`, sat in the third segment, and **14 jobs
+  were answered as Grant's own voice notes and delivered 20 messages to his real
+  Telegram and Slack**, while `check:leaks` said *"new escapes: 0"* for
+  seventeen days. The other signals were all CORRECT and none helped:
+  `is_fixture` is generated from `requested_by`, which is
+  `<origin_channel>:<subject>` and so `voice:grant`; and `synthetic` is false
+  because a suite calling the real webhook genuinely IS a production request.
+  Assert that two independent predicates AGREE, never that one of them is happy.
+- **`app.harness_label` already existed and 0574 wrote a narrower test beside
+  it.** It anchors on both `^verify-` and `:verify-` for exactly this reason.
+  Two vocabularies for one idea is what 0311 was spent undoing; when you need to
+  ask "is this harness", call the predicate rather than writing a third way of
+  asking.
+- **`app.harness_job` EXCLUDES rows from the readers Grant looks at, so a
+  predicate that is too GENEROUS hides his real work.** That is the reverse of
+  0304's asymmetry and the expensive direction here: a missed harness job costs
+  a contaminated measurement, a false positive costs him a real answer. Anchor
+  on the separator, and drive BOTH directions — a real call sid, a real Telegram
+  key and a real Slack key must all still be claimable. The guard was proved on
+  a real escaping job inside a rollback (`suppressed`) beside a real one
+  (`claimed`).
+- **When evidence must live in a table a gate reads, acknowledge it — never
+  delete it, and give the acknowledgement a control that refuses a FALL.**
+  0583 put the 20 escapes in `known_escapes` so the witness can say *"22 known,
+  0 new"*, and raises if the known count ever drops, because the one outcome
+  that must never be produced is evidence removed rather than recorded. A gate
+  red by design is one somebody starts skipping.
+
 ---
 
 ## Visual standard

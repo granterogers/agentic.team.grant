@@ -795,6 +795,57 @@ for (const k of known) {
   )
 }
 
+/*
+  AND THE WITNESS MUST NOT SHARE THE GUARD'S BLIND SPOT (#354).
+
+  `app.claim_delivery` refuses a harness job a production destination, and this
+  check reports when one got through. BOTH ask `app.harness_job`, so a job that
+  predicate cannot recognise is invisible to the guard AND to the report — they
+  agree with each other and are both wrong, which is the one failure shape a
+  witness cannot survive.
+
+  That is exactly what happened. 0574 read the inbound command's dedupe key with
+  `split_part(key, ':', 1) = 'verify'`, which sees the FIRST segment only, and a
+  voice turn's key is `voice:turn:<who>`. A suite driving the live voice webhook
+  produced `voice:turn:verify-basecamp-live-...`, sat in the third segment, and
+  14 jobs answered as Grant's own voice notes and delivered 20 messages to his
+  real Telegram and Slack while this check reported "new escapes: 0".
+
+  So the property is asserted directly, against the OTHER predicate: a command
+  carrying a harness label may not belong to a job that reads as real traffic.
+  Two independent statements of the same fact, which is what makes a
+  disagreement mean something — and unlike a count, it survives the next suite.
+*/
+const disagreeRows = (
+  await db.execute(`
+    select count(*)::int as n,
+           coalesce(max(left(c.dedupe_key, 70)), '') as sample
+      from public.jobs j
+      join public.inbound_commands c
+        on c.command_id = (j.pinned_config ->> 'command_id')::uuid
+     where app.harness_label(c.dedupe_key)
+       and not app.harness_job(j.job_id)
+  `)
+).rows as { n: number; sample: string }[]
+const disagree = disagreeRows[0] ?? { n: 0, sample: '' }
+
+if (disagree.n > 0) {
+  console.error(
+    [
+      ``,
+      `check:leaks FAILED — ${String(disagree.n)} job(s) carry a harness label and read as REAL traffic.`,
+      `  e.g. ${disagree.sample}`,
+      ``,
+      'app.harness_label says harness and app.harness_job says real, so the',
+      'containment guard cannot see them either — it asks app.harness_job. This is',
+      '#354: the two predicates must not disagree, or a suite delivers to his phone',
+      'and this check reports clean. Teach app.harness_job the signal, do not',
+      'narrow app.harness_label.',
+    ].join('\n'),
+  )
+  process.exit(1)
+}
+
 if (fresh.length > 0) {
   console.error(
     [

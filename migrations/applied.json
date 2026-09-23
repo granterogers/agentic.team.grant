@@ -587,5 +587,7 @@
   "0578_the_pulse_had_no_public_wrapper.sql": "28098d0af9046a699b9100a2ab7091c3e5381380f71f9cd033b5cddfeacfbb2a",
   "0579_a_tick_is_not_a_reason_to_move.sql": "4dfeafd8c2a28c8cf5a6fe1034d5bd215869940f2b5f099df858abd7d2a6a84b",
   "0580_a_reaction_slack_never_reads.sql": "5e1591cc97c07e3ac62f1e8eb9322f4d290ccf8b8a2edea3e793db7d869055a5",
-  "0581_a_thumbs_up_teaches_nothing.sql": "910beda89b173f5d31cdcee39fe37c969b89e7d4f82d233c03880a77fa459fbe"
+  "0581_a_thumbs_up_teaches_nothing.sql": "910beda89b173f5d31cdcee39fe37c969b89e7d4f82d233c03880a77fa459fbe",
+  "0582_a_suite_that_labels_itself_in_the_second_segment.sql": "7f7b77aacb3f6ec11d70e123196369f724c4f628078e8cf21a0a405beeb07421",
+  "0583_acknowledging_what_the_guard_could_not_see.sql": "7d85e961ef293e88afd896dc83b0a401e045f72d05aa67961affacd82bd0ab14"
 }
