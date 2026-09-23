@@ -358,6 +358,98 @@ const FORBIDDEN = ['chat', 'sources']
   await ctx.close()
 }
 
+/* --- the header says what is happening, not what the project is called -- */
+
+/*
+  Grant, 23 September: remove the redundant project title area, the purpose
+  sentence and the redundant Tasks summary, and let the workspace begin higher.
+
+  Asserted as PROPERTIES and measured with the prototype strip discounted,
+  because a page with a token does not carry one and measuring it would make
+  every number here 61px worse than a person's. A pixel budget rather than an
+  exact figure: what matters is that the first content is near the top, not
+  that it is at 205.
+*/
+for (const [name, vp, touch, budget] of [
+  ['desktop', { width: 1600, height: 1000 }, false, 230],
+  ['phone', { width: 390, height: 844 }, true, 240],
+] as const) {
+  const hctx = await browser.newContext({ viewport: vp, hasTouch: touch, isMobile: touch })
+  const hp = await hctx.newPage()
+  await hp.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
+  await hp.waitForSelector('[data-bc-go^="/basecamp/p/"]', { timeout: 20000 })
+  const hslug = (await hp.evaluate(
+    inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+       return el === null ? '' : (el.dataset.bcGo ?? '')`),
+  )) as string
+  await hp.goto(url(hslug), { waitUntil: 'domcontentloaded' })
+  await hp.waitForSelector('.bcpanes', { timeout: 20000 })
+  await hp.waitForTimeout(700)
+
+  const seen = (await hp.evaluate(
+    inPage(`const strip = document.querySelector('.bcnotlive')
+       const panes = document.querySelector('.bcpanes')
+       const head = document.querySelector('.bchead')
+       const name = (window.__shots.projects.find((x) => location.pathname.endsWith(x.slug))?.name ?? '')
+       const purpose = (window.__shots.projects.find((x) => location.pathname.endsWith(x.slug))?.purpose ?? '')
+       const headText = head === null ? '' : (head.textContent ?? '').replace(/\\s+/g, ' ')
+       const mark = document.querySelector('.bcjumpmark .bcprojmark')
+       const chip = document.querySelector('.bcjump')
+       return {
+         top: panes === null ? -1 : Math.round(panes.getBoundingClientRect().top)
+           - (strip === null ? 0 : Math.round(strip.getBoundingClientRect().height)),
+         headH: head === null ? -1 : Math.round(head.getBoundingClientRect().height),
+         namesTheProject: name !== '' && headText.includes(name),
+         saysThePurpose: purpose !== '' && headText.includes(purpose),
+         counts: /\\d+ open task|nothing open/.test(headText),
+         needsYou: /needs? you/.test(headText),
+         markH: mark === null ? -1 : Math.round(mark.getBoundingClientRect().height),
+         chipH: chip === null ? -1 : Math.round(chip.getBoundingClientRect().height),
+         nameStrong: (() => {
+           const el = document.querySelector('.bcjumpname')
+           return el === null ? '' : getComputedStyle(el).fontWeight
+         })(),
+       }`),
+  )) as {
+    top: number
+    headH: number
+    namesTheProject: boolean
+    saysThePurpose: boolean
+    counts: boolean
+    needsYou: boolean
+    markH: number
+    chipH: number
+    nameStrong: string
+  }
+
+  check(
+    `${name}: the workspace begins near the top, not below a stack of headings`,
+    seen.top > 0 && seen.top <= budget,
+    `first panel at ${String(seen.top)}px, budget ${String(budget)}`,
+  )
+  check(`${name}: the project is not named twice on its own page`, !seen.namesTheProject)
+  check(`${name}: the purpose sentence is not restated above the board`, !seen.saysThePurpose)
+  check(`${name}: the task counts are not repeated above the To-dos panel`, !seen.counts)
+  /*
+    AND THE TWO THINGS THAT MUST SURVIVE THE REMOVAL. Deleting a header is easy
+    and deleting a capability with it is the defect: the team's waiting work is
+    said nowhere else, and the project's chosen mark had no other home on this
+    page.
+  */
+  check(`${name}: the team's waiting work is still said`, seen.needsYou, JSON.stringify(seen))
+  check(
+    `${name}: the project's mark came with its name rather than being deleted`,
+    seen.markH > 0 && seen.markH <= seen.chipH,
+    `mark ${String(seen.markH)}px in a ${String(seen.chipH)}px chip`,
+  )
+  check(
+    `${name}: and the project's name still reads as the name`,
+    Number(seen.nameStrong) >= 600,
+    `font-weight ${seen.nameStrong}`,
+  )
+  await hctx.close()
+}
+
 await browser.close()
 server.close()
 

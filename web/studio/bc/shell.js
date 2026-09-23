@@ -304,7 +304,20 @@ const topRow = () => {
           ? 'Jump to a project, tool or record'
           : `You are in ${here.name}. Jump to a project, tool or record`,
       )}">
-      <span>${esc(here === null ? 'Jump to…' : here.name)}</span><kbd>Shift J</kbd>
+      <!--
+        THE PROJECT'S MARK RIDES WITH ITS NAME.
+
+        The project head used to carry an h1 with the mark beside it, and the
+        top bar named the project again 173px below. The h1 is gone (#10) and
+        the mark came up here rather than being deleted: the colour, the mark
+        or the picture somebody chose in How this project looks is the
+        project's identity, and the only place it appeared on this page was
+        that title. It is a decoration beside a name the button already
+        announces, so it is hidden from the accessible name rather than
+        repeated into it.
+      -->
+      ${here === null ? '' : `<span class="bcjumpmark" aria-hidden="true">${compose.projectMark(here, 18)}</span>`}
+      <span class="bcjumpname">${esc(here === null ? 'Jump to…' : here.name)}</span><kbd>Shift J</kbd>
     </button>
     <div class="bcright">
       <button type="button" class="bcbtn" data-bc-attention
@@ -880,6 +893,16 @@ const tasksSurface = (whole) => {
         ${button('New list', { 'data-bc-addlist': '1' })}
       </span>
     </div>
+    <!--
+      LATE, STUCK AND OPEN, BESIDE THE TO-DOS THEY COUNT.
+
+      They used to sit in the project header, directly above a To-dos panel
+      listing the same work - the redundancy Grant asked to have removed. They
+      are filters as well as counts, so removing them would have removed the
+      only way to narrow this list; they are here instead, where the to-dos
+      are, which is also where the narrowing they perform makes sense.
+    -->
+    ${bcMini.taskCounts(whole)}
     ${filterBar(whole)}
     <p class="bcpmeta bcprose bcgap-l">
       What this project has committed to, in its lists. Your own list is under

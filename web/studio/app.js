@@ -10560,7 +10560,7 @@ function drawShell() {
     const open = PROJECTS.find((x) => x.slug === state.project)
     if (open !== undefined) {
       void projectSettings.need(open, render)
-      projectSettings.wire(root, open, people, render)
+      projectSettings.wire(root, open, people, render, () => { lookSheet(open) })
     }
   }
 
@@ -13364,7 +13364,7 @@ const bcContext = {
   },
   projectSettingsBody: (p) => projectSettings.section(p, state.setpane, people),
   wireProjectSettings: (root, p) => {
-    projectSettings.wire(root, p, people, render)
+    projectSettings.wire(root, p, people, render, () => { lookSheet(p) })
   },
   setPane: (id) => {
     state.setpane = id

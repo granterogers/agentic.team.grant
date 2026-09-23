@@ -88,16 +88,18 @@ repairing the completion defect requires it.
 - [x] **VERIFIED** Real files of five types in the prototype: PDF, PNG, CSV, WAV, ZIP
 
 ### 9. Project appearance
-- [ ] **TODO** Project colour / accent
-- [ ] **TODO** Project image / cover where appropriate
-- [ ] **TODO** Project icon
-- [ ] **TODO** Per-project, not global; persists
+- [x] **VERIFIED** Colour: six, chosen per project, drawn on the project head
+- [x] **VERIFIED** Picture: your own image, and a way back to the generated art
+- [x] **VERIFIED** Mark: 451 icons, searchable, by domain
+- [x] **VERIFIED** Per-project, not global — two projects hold two looks at once
+- [x] **VERIFIED** Persists: `hq_project_look` writes and clears all three, proved against the office
+- [x] **VERIFIED** Reachable from Project Settings as well as the three-dot menu
 
 ### 10. Header space
-- [ ] **TODO** Remove the redundant legacy project title area
-- [ ] **TODO** Remove "6 modules built from interview corpus"
-- [ ] **TODO** Remove the redundant Tasks summary in the same upper area
-- [ ] **TODO** The workspace begins higher on the screen
+- [x] **VERIFIED** The legacy project title area is gone; the mark moved to the top bar with the name
+- [x] **VERIFIED** The purpose sentence is gone from the project home
+- [x] **VERIFIED** The task counts left the header for the to-dos surface, still as filters
+- [x] **VERIFIED** The board begins at 205px rather than 283px (desktop) and 217px rather than 281px (phone)
 
 ## Discoveries, decisions, files changed
 
@@ -172,6 +174,78 @@ word.
 `scripts/verify/basecamp-chat.ts` (new), `scripts/verify/chat-live.ts` (new).
 
 ## Verification log
+
+**10. Header space — VERIFIED.**
+- **Measured, not estimated.** Signed in, discounting the prototype strip a
+  page with a token does not carry: the board began **283px** down the desktop
+  and **281px** down a 844px phone. It begins at **205px** and **217px**. The
+  header itself went from 151px to 73px, and 185px to 121px on the phone.
+- Three things were stacked above the board and each repeated something
+  already on screen. **The title**: the top bar's project chip names the
+  project and is how you move between projects, so the page said the name
+  twice, 173px apart. **The purpose**: a project-level fact restated at the top
+  of every visit to the project's own home. **The task counts**: directly above
+  a To-dos panel listing those same to-dos.
+- **Nothing was merely deleted.** The project MARK moved up into the top bar
+  beside the name, because a chosen colour, mark or picture is the project's
+  identity and that title was its only appearance on this page — deleting it
+  would have undone item 9 in the same commit. The task counts are FILTERS as
+  well as counts, so they moved to the to-dos surface, where the to-dos are and
+  where narrowing by them makes sense.
+- **And one thing in that row was not redundant:** *"1 thing needs you"* is the
+  team's finished work waiting to be read, not a to-do count, and nothing else
+  on the home says it. `stateLine` was split into `needsYouLine` and
+  `taskCounts` rather than deleted, so the header keeps the one and the to-dos
+  surface gains the other.
+- **Two defects I introduced and measured my way out of.** The mark rendered
+  at **46px inside a 40px chip**, overflowing it — `.bcprojmark` is sized for
+  the h1 it used to sit in. And it became `:first-child`, so the two rules
+  written for the project NAME landed on the mark: the name lost its strong ink
+  and its ellipsis. Both found by probing the computed box rather than by
+  reading the capture; the name is `.bcjumpname` now, because a positional
+  selector breaks the moment something is put in front of it.
+- **A third, found in the phone capture:** the Card Table's counts took 226 of
+  336px and squeezed its title to 44px, breaking it across three lines as
+  `CARD TABL / E` and making the header 72px instead of 24px. The title holds
+  its width now and the counts give way — a panel's name is the fixed point of
+  its header.
+- **And my CSS lost twice before it won**, which is this repository's oldest
+  trap: every rule in this experience is prefixed `[data-experience='basecamp']`,
+  so an unprefixed rule ties on specificity and loses on file order.
+
+**9. Project appearance — VERIFIED.**
+- **Almost all of it already existed and none of it was verified.** `lookSheet`
+  holds six colours, 451 searchable marks and an image upload; it writes
+  `app.hq_project_look`; the project head already draws `icon`, `iconHue` and
+  `image`; and one of Grant's real projects already carries a mark and a colour
+  chosen through it. So the work here was to prove the chain rather than build
+  a second picker — which would have been two pickers writing three columns.
+- **The one real defect: it had exactly one door.** The screen actually called
+  *Project Settings* offered Export, Archive and a signpost to somewhere else,
+  and said nothing about how the project looks. Somebody who went there to
+  change the colour did not find it. A control nobody can find is a control
+  they do not have — this experience already made that argument about the
+  three-dot button itself. Project Settings now opens **the same picker**, not
+  another one: one implementation, two doors, which is what the contact labels
+  in that file already do.
+- `verify:basecamp-look`, new, 20/20 — and two legs that are different claims:
+  the page (the control is reachable from both doors, the picker is about THIS
+  project by name, and the head draws the colour, the mark and the picture,
+  falling back to the letter), and the office (`hq_project_look` stores a mark,
+  a colour and a picture and clears them again, **inside a transaction that is
+  rolled back**, because the subjects are Grant's real projects and a suite may
+  not repaint them — the call is wrapped, not the assertion).
+- **Controls:** removing the head's read of the chosen mark turns two checks
+  red; removing the three-dot menu item turns the reachability check red;
+  removing the Project Settings block turns two more red. Each sabotage printed
+  a count first.
+- **One wrong finding of my own, caught before it was believed.** The
+  per-project check used `page.goto` between the two projects, which reloads
+  and takes the seeded store with it — so it read each project's ORIGINAL
+  colour and reported a working product as broken. It navigates through the
+  studio's own router now, which is what pressing the project switcher does.
+- `smoke` 0, `verify:wired` 0 (78 control attributes across 21 screens, no dead
+  controls — the new button is looked up), lint 0, typecheck 0.
 
 **8. Docs & Files thumbnails — VERIFIED.**
 - **The cause, and it was one cause.** `app.studio_documents` maps every

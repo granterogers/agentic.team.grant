@@ -46,12 +46,20 @@ page.on('pageerror', (e) => {
 
 const slug = await (async (): Promise<string> => {
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForTimeout(400)
+  /*
+    WAIT FOR THE LINK, NOT FOR A DURATION. A fixed pause was enough when this
+    suite ran alone and not when it ran after eleven others: the slug came back
+    empty, the next navigation went to a route with no project in it, and the
+    suite died waiting for a control that route does not have - which reads as
+    a product defect and was a stopwatch.
+  */
+  await page.waitForSelector('[data-bc-go^="/basecamp/p/"]', { timeout: 20000 })
   return (await page.evaluate(
     inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
        return el === null ? '' : (el.dataset.bcGo ?? '')`),
   )) as string
 })()
+check('the home page names a project to open', slug !== '', slug)
 
 /*
   THE VIEW PREFERENCE PERSISTS - correctly, because somebody who chose the

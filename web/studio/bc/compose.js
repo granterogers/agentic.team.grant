@@ -51,7 +51,7 @@ import {
   docsMini,
   mineAndTeam,
   sourcesMini,
-  stateLine,
+  needsYouLine,
   timelineMini,
   todosMini,
 } from './miniatures.js'
@@ -197,13 +197,13 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
   accent rule under the head. Nothing else changes colour: a project is
   recognised by its badge, not by repainting the product.
 */
-const projectMark = (p) => {
+export const projectMark = (p, size = 26) => {
   if (typeof p.image === 'string' && p.image.startsWith('data:image/')) {
     return `<img class="bcprojmark bcprojmark--img" src="${esc(p.image)}" alt="">`
   }
   const key = p.icon ?? ''
   if (icons.known(key)) {
-    return `<span class="bcprojmark ${esc(p.iconHue ?? p.hue ?? '')}">${icons.svg(key, 26)}</span>`
+    return `<span class="bcprojmark ${esc(p.iconHue ?? p.hue ?? '')}">${icons.svg(key, size)}</span>`
   }
   /* No icon chosen: the initial, in the project's hue, rather than nothing. */
   return `<span class="bcprojmark bcprojmark--letter ${esc(p.iconHue ?? p.hue ?? '')}">${esc(
@@ -231,14 +231,41 @@ export const setPageMenuOpen = (want) => {
   menuOpen = want === true
 }
 
+/*
+  THE HEADER SAYS WHAT IS HAPPENING, NOT WHAT THE PROJECT IS CALLED.
+
+  Grant, 23 September: remove the redundant legacy project title area, the
+  purpose sentence and the redundant Tasks summary, and let the workspace begin
+  higher on the screen. Three things were stacked above the board and each was
+  a repetition of something already on screen:
+
+   - THE TITLE. The top bar's project chip names the project and is how you
+     move between projects, so the page said "Legacy Coaching Course" twice,
+     173 pixels apart. The MARK moved up there with the name rather than being
+     deleted, because the colour, mark and picture somebody chose are the
+     project's identity and deleting the only place they appear on this page
+     would have undone the appearance controls.
+   - THE PURPOSE. A project-level fact, restated at the top of every visit to
+     the project's own home.
+   - THE TASK COUNTS. Directly above a To-dos panel listing those to-dos. They
+     are filters as well as counts, so they moved to the to-dos surface rather
+     than being removed: a control deleted is a capability lost, and this
+     office has paid for that often enough.
+
+  What stays is the team's work waiting to be read, which is not a to-do count
+  and is said nowhere else, and the two communication actions.
+
+  Measured, signed in, with the prototype strip discounted because a page with
+  a token does not carry one: the board began 283px down the desktop and 281px
+  down a 844px phone, and begins at 205px and 217px. The header itself went
+  from 151px to 73px, and from 185px to 121px on the phone, where the chip and
+  the two communication actions legitimately wrap onto two lines - three
+  controls of 44px do not fit across 390px beside a sentence.
+*/
 const head = (p) => {
   return `<header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}" data-bc-livehost>
-    <div class="bcheadtop">
-      <h1 class="bcprojtitle">${projectMark(p)}<span>${esc(p.name)}</span></h1>
-    </div>
-    ${p.purpose ? `<p class="bcheadwhy">${esc(p.purpose)}</p>` : ''}
     <div class="bcheadrow">
-      ${stateLine(p)}
+      ${needsYouLine(p)}
       <span class="bcheadacts">
         <!--
           CHAT WITH TEAM, and it is a TOGGLE. Grant: "Clicking it should open

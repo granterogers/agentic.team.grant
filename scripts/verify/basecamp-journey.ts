@@ -592,10 +592,35 @@ await open('/basecamp/p/journey-subject')
   against the product. The property that holds for every project is that the
   head answers the question the page exists to answer.
 */
+/*
+  AND THE FOURTH RETARGET, for the reason the comment above predicts.
+
+  Grant, 23 September: the Tasks summary in the project header repeated the
+  To-dos panel directly beneath it, so the counts moved to the to-dos surface
+  where they are also the filters. The head no longer says "1 open task" and
+  should not. What this section has always MEANT - that the home answers the
+  question the page exists to answer, without navigating - is unchanged, so it
+  is asserted where the answer now is: beside the to-dos.
+
+  The team's waiting work stayed in the head, because it is not a to-do count
+  and nothing else says it - but this journey's own project has none, so
+  asserting it here would be asserting against the fixture. `basecamp-home`
+  asserts that half against a project that has some.
+*/
 const headLine = await page.locator('.bchead').first().innerText()
+const todoPanel = await page
+  .locator('.bcpanes [data-mod="tasks"]')
+  .first()
+  .innerText()
+  .catch(() => '')
 check(
-  'the home head still summarises the project, with the team panel gone',
-  /on track|needs you|late|stuck|open task/i.test(headLine),
+  'the home still summarises the work, beside the to-dos rather than above them',
+  /\d/.test(todoPanel) && /yours|team|\d+\s*\/\s*\d+/i.test(todoPanel),
+  todoPanel.replace(/\n/g, ' / ').slice(0, 160),
+)
+check(
+  'and the head no longer repeats those counts above the panel',
+  !/open task|nothing open/i.test(headLine),
   headLine.replace(/\n/g, ' / ').slice(0, 160),
 )
 check(

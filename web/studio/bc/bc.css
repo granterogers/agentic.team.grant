@@ -111,7 +111,14 @@
   as context first and a control second: the name takes the body ink while
   the generic placeholder stays muted.
 */
-.bcjump--in > span:first-child {
+/*
+  NAMED, NOT POSITIONAL. This was `> span:first-child`, which meant the project
+  name right up until the project's MARK was put in front of it - and then it
+  meant the mark: the name lost its strong ink and its ellipsis, and the mark
+  was handed `text-overflow` and `font-weight`. A selector that depends on
+  nothing else being added is a selector that breaks when something is.
+*/
+.bcjump--in > .bcjumpname {
   color: var(--bc-text-strong);
   font-weight: 600;
   overflow: hidden;
@@ -119,6 +126,7 @@
   white-space: nowrap;
 }
 .bcjump--in { max-width: 340px; }
+
 
 .bcjump kbd {
   margin-left: auto;
@@ -769,7 +777,7 @@
   */
   .bcjump { min-width: 0; max-width: 100%; }
   .bcjump--in { max-width: none; }
-  .bcjump > span:first-child {
+  .bcjump > .bcjumpname {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -825,7 +833,14 @@
   as context first and a control second: the name takes the body ink while
   the generic placeholder stays muted.
 */
-.bcjump--in > span:first-child {
+/*
+  NAMED, NOT POSITIONAL. This was `> span:first-child`, which meant the project
+  name right up until the project's MARK was put in front of it - and then it
+  meant the mark: the name lost its strong ink and its ellipsis, and the mark
+  was handed `text-overflow` and `font-weight`. A selector that depends on
+  nothing else being added is a selector that breaks when something is.
+*/
+.bcjump--in > .bcjumpname {
   color: var(--bc-text-strong);
   font-weight: 600;
   overflow: hidden;
@@ -834,8 +849,9 @@
 }
 .bcjump--in { max-width: 340px; }
 
+
 .bcjump kbd { display: none; }
-  .bcjump > span:first-child {
+  .bcjump > .bcjumpname {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

@@ -587,6 +587,32 @@ function projectPane(p) {
         <span class="t-meta" data-said></span>
       </div>
 
+      <!--
+        HOW IT LOOKS, WHERE SOMEBODY WOULD LOOK FOR IT.
+
+        The picker has always existed and has only ever had ONE door: an item
+        in the three-dot menu. This is the screen called Project Settings, and
+        it said nothing about the colour, the mark or the picture - so a person
+        who came here to change how their project looks found Export, Archive
+        and a signpost to somewhere else. A control nobody can find is a
+        control they do not have, which is the argument this experience already
+        made about the three-dot button itself.
+
+        The same picker, not a second one. One implementation, two doors, which
+        is what the contact labels above already do and for the same reason.
+      -->
+      <div class="setblock">
+        <span class="t-label">How it looks</span>
+        <p class="t-meta">The colour, the mark and the picture on
+          ${esc(p.name)} — everywhere it appears. It belongs to this project
+          alone; every other project keeps its own.</p>
+        ${
+          canWrite()
+            ? `<button class="btn" data-open-look="${esc(p.slug)}">How ${esc(p.name)} looks</button>`
+            : `<span class="t-meta">Read-only — no token in this browser.</span>`
+        }
+      </div>
+
       <div class="setblock">
         <span class="t-label">Elsewhere</span>
         <p class="t-meta">What this project reads from is in <b>Sources</b>, beside the
@@ -659,7 +685,18 @@ function download(name, payload) {
  * archiving will report. A page that patched one row would be right about that
  * row and wrong about the rest.
  */
-export function wire(root, p, people, redraw) {
+export function wire(root, p, people, redraw, openLook) {
+  /*
+    The picker is built in `app.js`, where the sheet and its 451 marks live, so
+    it is handed in rather than imported - importing it here would make this
+    module depend on the page that renders it.
+  */
+  for (const b of root.querySelectorAll('[data-open-look]')) {
+    b.addEventListener('click', () => {
+      openLook?.(b.dataset.openLook ?? '')
+    })
+  }
+
   const again = async () => {
     forget(p)
     await need(p, redraw)

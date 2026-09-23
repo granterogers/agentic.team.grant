@@ -1144,24 +1144,40 @@ const countChip = (kind, label, tone) =>
   `<button type="button" class="bcstatus bcstatus--${esc(tone)} bcstatus--press"
     data-bc-filter="${esc(kind)}"><span class="bcdot" aria-hidden="true"></span>${esc(label)}</button>`
 
-export const stateLine = (p) => {
+/*
+  TWO LINES, BECAUSE THEY ANSWER TWO QUESTIONS AND ONLY ONE OF THEM WAS
+  REDUNDANT.
+
+  Grant, 23 September: remove the redundant Tasks summary from the project
+  header. The header carried "1 late · 1 stuck · 8 open tasks" directly above a
+  To-dos panel listing those same to-dos, which is the redundancy - and in the
+  same row sat "1 thing needs you", which is the TEAM's finished work waiting
+  to be read. That is not a to-do count and nothing else on the home says it,
+  so deleting the row wholesale would have removed the one thing in it that was
+  not a repetition.
+
+  So they are separated. The counts move to the to-dos surface, where the
+  to-dos are and where narrowing by them makes sense; the team's work stays in
+  the header, where it is the only mention of it.
+*/
+
+/** The team's finished work, waiting to be read. Not a to-do count. */
+export const needsYouLine = (p) => {
+  const waiting = p.waiting ?? []
+  if (waiting.length === 0) return ''
+  return `<div class="bcstate">
+    <button type="button" class="bcstatus bcstatus--waiting bcstatus--press" data-bc-waiting="1"><span class="bcdot" aria-hidden="true"></span>${esc(
+      waiting.length === 1 ? '1 thing needs you' : `${waiting.length} things need you`,
+    )}</button>
+  </div>`
+}
+
+/** Late, stuck and open - each a filter, beside the to-dos they narrow. */
+export const taskCounts = (p) => {
   const late = filtered(p, 'late')
   const stuck = filtered(p, 'stuck')
   const open = filtered(p, 'open')
-  const waiting = p.waiting ?? []
   const bits = []
-  /*
-    "Needs you" is the team's finished work waiting to be read, which lives on
-    the team surface rather than in the to-dos - so it opens that. The others
-    are to-dos and open the to-dos.
-  */
-  if (waiting.length > 0) {
-    bits.push(
-      `<button type="button" class="bcstatus bcstatus--waiting bcstatus--press" data-bc-waiting="1"><span class="bcdot" aria-hidden="true"></span>${esc(
-        waiting.length === 1 ? '1 thing needs you' : `${waiting.length} things need you`,
-      )}</button>`,
-    )
-  }
   if (late.length > 0) bits.push(countChip('late', late.length === 1 ? '1 late' : `${late.length} late`, 'blocked'))
   if (stuck.length > 0) bits.push(countChip('stuck', stuck.length === 1 ? '1 stuck' : `${stuck.length} stuck`, 'blocked'))
   if (bits.length === 0 && open.length > 0) bits.push(status('On track', 'done'))

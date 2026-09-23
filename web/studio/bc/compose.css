@@ -63,26 +63,13 @@
 
 /* ------------------------------------------------------------- the head -- */
 
-[data-experience='basecamp'] .bchead { margin: 0 0 28px; }
-[data-experience='basecamp'] .bcheadtop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-[data-experience='basecamp'] .bchead h1 {
-  margin: 0;
-  font-size: 30px;
-  line-height: 1.15;
-  letter-spacing: -0.015em;
-  color: var(--bc-text-strong);
-}
-[data-experience='basecamp'] .bcheadwhy {
-  margin: 8px 0 0;
-  max-width: 62ch;
-  color: var(--bc-text-muted);
-}
+/*
+  NO TITLE, NO PURPOSE. Both left the header (#10) and their rules left with
+  them, along with `.bcprojtitle`, the flex row that held the mark beside the
+  h1. CSS for an element nothing renders is not harmless: it is a description
+  of a screen that no longer exists, and the next person reads it as one.
+*/
+[data-experience='basecamp'] .bchead { margin: 0 0 20px; }
 [data-experience='basecamp'] .bcstate {
   display: flex;
   align-items: center;
@@ -119,6 +106,21 @@
   thing Grant asked to be rid of.
 */
 [data-experience='basecamp'] .bcmodtitle { color: var(--bc-text-muted); }
+/*
+  THE TITLE DOES NOT SHRINK; THE COUNTS DO.
+
+  Both are flex children, so both shrank - and on a 390px phone the Card
+  Table's counts ("5 not started, 2 in progress, 1 stuck, 2 done") took 226 of
+  336 pixels and squeezed the title to 44, which broke it across three lines as
+  CARD TABL / E. A panel whose name is broken mid-word does not read as a name
+  at all, and the header went from 24px tall to 72.
+
+  The name is the fixed point of a header and the summary beside it is the part
+  that can lose room, so the title keeps its width and the counts wrap under
+  themselves. Measured, not read: `npm run probe` on `.bcmodtitle`.
+*/
+[data-experience='basecamp'] .bcmodtitle { flex: 0 0 auto; white-space: nowrap; }
+[data-experience='basecamp'] .bcmodmeta { min-width: 0; text-align: right; }
 [data-experience='basecamp'] .bcmodhead:hover .bcmodtitle { color: var(--bc-text-strong); }
 [data-experience='basecamp'] .bcmodhead h2 a { color: var(--bc-text-muted); text-decoration: none; }
 [data-experience='basecamp'] .bcmodhead h2 a:hover,
@@ -2320,8 +2322,6 @@
   [data-experience='basecamp'] .bcstate::-webkit-scrollbar { display: none; }
   [data-experience='basecamp'] .bcstatus--press,
   [data-experience='basecamp'] .bcstatecount--press { flex: none; }
-  [data-experience='basecamp'] .bchead h1 { font-size: 26px; }
-  [data-experience='basecamp'] .bcheadwhy { margin: 4px 0 0; }
 }
 
 /* The date a to-do has not got, on the row that has not got it. */
@@ -2382,12 +2382,6 @@
   than redefining six colours a second time. A project with no hue falls back
   to the experience's accent, so the mark is never colourless.
 */
-[data-experience='basecamp'] .bcprojtitle {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
 [data-experience='basecamp'] .bcprojmark {
   display: grid;
   place-items: center;
@@ -2408,6 +2402,31 @@
   background: none;
   box-shadow: none;
 }
+
+/*
+  THE MARK, AT CHIP SIZE.
+
+  `.bcprojmark` is 46px because it sat beside an h1; dropped into the top bar's
+  40px chip it overflowed the control by six pixels in both directions. The
+  first version of this rule lived in `bc.css` and lost - every rule in this
+  experience is prefixed `[data-experience='basecamp']`, so an unprefixed
+  `.bcjumpmark .bcprojmark` ties on specificity and loses on file order.
+  It goes after the rule it overrides, with the same prefix, which is the third
+  time this file has learned that.
+*/
+[data-experience='basecamp'] .bcjumpmark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: calc(var(--bc-2) * -1);
+}
+[data-experience='basecamp'] .bcjumpmark .bcprojmark {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+[data-experience='basecamp'] .bcjumpmark .bcprojmark svg { width: 15px; height: 15px; }
 [data-experience='basecamp'] .bchead {
   border-bottom: 1px solid color-mix(in srgb, var(--bc-text-muted) 16%, transparent);
   padding-bottom: 14px;
