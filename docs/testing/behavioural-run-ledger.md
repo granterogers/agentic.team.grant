@@ -1809,6 +1809,54 @@ non-regressive. 0584's dedupe keeps working for every code-composed duty and
 
 Clean-pass count after pass 36: **0 of 5** — reset by a systemic product defect.
 
+## Pass 37 — mail and calendar: CLEAN
+
+**Territory:** what the Google duties do when they SUCCEED. Pass 29 covered
+their failure announcements; nothing had asked whether the mail they cache 24
+times a day is usable.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked:**
+
+1. **The duties are healthy and correctly silent.** 143 runs over three days,
+    143 outputs, **0 announcements** — the body is a code-composed status
+    (*"Mail refreshed: 15 messages."*) and he is not told about it. That is the
+    right behaviour and it is what #355's fix is protecting.
+2. **The cache is real.** 279 messages, 43 carrying bodies under ADR-0038, 185
+    live, newest today.
+3. **`mail_search` works.** Asked for *paypal* it returns three genuine
+    messages with full bodies and excerpts. The office can answer a question
+    about his correspondence.
+4. **`mail_for_project` and `mail_awaiting` return nothing, and that is
+    correct.** ADR-0037 associates mail by CONTACT or by SUBJECT. Both tiers
+    genuinely have nothing to match: the only contacts are archived debris, and
+    **0 of 279 subjects** contain an alias of any active project. His mail is
+    PayPal, Skroutz, Railway and a training newsletter — commercial post, not
+    project post. CLAUDE.md's recorded finding that the contact tier has never
+    fired on real data still stands, and it is a fact about his inbox rather
+    than a defect in the derivation.
+5. **No format defect underneath that.** `from_address` holds clean bare
+    addresses (`servicio@paypal.es`), so the empty contact match is an absence
+    of contacts, not a join failing on display names — which was the way this
+    could have been a real bug.
+6. **The contact debris is contained.** Five contacts named *"Acceptance
+    contact … (corrected)"* were written to a REAL active project today by the
+    concurrent session's acceptance suite. All five are ARCHIVED, and
+    `app.studio_contacts` filters `archived_at is null`, so his surface shows
+    none of them. The teardown archived rather than deleted, which is the right
+    shape.
+
+**Three of my own queries were wrong before the product was wrong once**, which
+is now the pattern of every clean pass: I counted a scalar-returning function's
+rows and read "1 thread awaiting"; I selected from `public.mail_awaiting` as a
+TABLE when it is a function; and I guessed a column name on `mail_messages`.
+None of the three was a product fault.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 37: **1 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
