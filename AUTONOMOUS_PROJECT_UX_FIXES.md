@@ -243,6 +243,30 @@ product can paint a first page today, and the drawn page is the correct answer.
 Item 8's face derivation matters for files uploaded from here on; it changes
 nothing about what he sees today. The suite says this rather than failing.
 
+*Two integration legs that the unlock closed, on top of that.*
+
+**The chat path from the real deployed origin.** `verify:chat-live` already
+proved the endpoint from Node; what Node cannot prove is that the deployed page
+can reach it, because a script sends no `Origin`. The same request now runs
+from inside the page: it answers over CORS, the answer is a real sentence, it
+**names a project that is really in the database**, and `did === 'answered'` is
+asserted — so the office answered from its own state and **the suite can never
+leave work in Grant's queue**.
+
+**How a project looks, written through the real picker.** Item 9's last gap:
+everything had been verified against the prototype and against the office
+separately, and a PRESS had never changed a real row. It does now — a colour
+chosen in the picker on the deployed page, polled at the OFFICE rather than
+trusted from the optimistic redraw, and then **put back exactly as it was**
+through the sanctioned writer, with the restore asserted and confirmed
+independently afterwards. The subject is `ai-team-hq-test`, by name; his live
+project was not touched.
+
+`verify:basecamp-live` is **25/25**. It is deliberately NOT in `basecamp:gate`:
+it needs a current deploy, the vault and the network, and a gate that depends
+on a deploy being fresh is a gate that goes red for the wrong reason. It runs
+after a deploy.
+
 **Still pending, deliberately: the physical live-voice test.** A real
 microphone, a real spoken exchange, on a real device. Everything up to it is
 now verified — the credential is minted for the real origin — but nobody has

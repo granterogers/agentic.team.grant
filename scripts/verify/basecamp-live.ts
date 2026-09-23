@@ -373,7 +373,134 @@ check(
 )
 await other.close()
 
-/* --- 7. and the token can be taken back out of the browser -------------- */
+/* --- 7. the chat path, from the real deployed origin --------------------- */
+
+/*
+  `verify:chat-live` already proves this endpoint over the network from Node.
+  What Node cannot prove is that the DEPLOYED PAGE can reach it: a fetch from a
+  script sends no Origin, and CORS is the failure this repository has paid for
+  twice. So the same request is made from inside the page.
+
+  NOTHING IS ENQUEUED. The office answers this kind of question from its own
+  state and says so in `did` - the check asserts that, so a run of this suite
+  can never leave work in Grant's queue, and the session id names the harness.
+*/
+const turn = (await page.evaluate(
+  inPage(`return fetch('https://${ref}.supabase.co/functions/v1/voice/turn', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         Authorization: 'Bearer ' + (localStorage.getItem('hq.token') || ''),
+       },
+       body: JSON.stringify({ said: 'what projects have we got', session: 'verify-basecamp-live-' + Date.now() }),
+     })
+       .then(async (r) => {
+         const j = await r.json().catch(() => ({}))
+         return { status: r.status, did: String(j.did || ''), spoke: String(j.speak || '') }
+       })
+       .catch((e) => ({ status: 0, did: 'threw', spoke: String(e).slice(0, 90) }))`),
+)) as { status: number; did: string; spoke: string }
+
+check(
+  'the office answers the deployed page over CORS',
+  turn.status === 200,
+  `http ${String(turn.status)} — ${turn.spoke.slice(0, 90)}`,
+)
+check('and the answer is a real sentence', turn.spoke.length > 20, turn.spoke.slice(0, 120))
+check(
+  'and it answered from its own state rather than starting work',
+  turn.did === 'answered',
+  turn.did,
+)
+check(
+  'and it names a project that is really in the database',
+  realProjects.some((n) => turn.spoke.includes(n)),
+  `said: ${turn.spoke.slice(0, 140)}`,
+)
+
+/* --- 8. how a project looks, written through the real picker ------------- */
+
+/*
+  ITEM 9'S LAST GAP. Everything else about the appearance controls was verified
+  against the prototype and against the office separately; what was never shown
+  is a PRESS in the real picker changing the real row, because a browser here
+  could not reach the office.
+
+  THE SUBJECT IS THE TEST PROJECT, by name, and it is put back exactly as it
+  was - read first, restored through the sanctioned writer afterwards, and the
+  restore is asserted. Changing how one of Grant's projects looks and leaving
+  it changed would be a suite redecorating his office.
+*/
+const SUBJECT = 'ai-team-hq-test'
+const lookOf = async (): Promise<{ icon: string | null; hue: string | null }> => {
+  const row = (
+    await db.execute(
+      `select icon, icon_hue from public.projects where slug = ${JSON.stringify(SUBJECT).replace(/"/g, "'")}`,
+    )
+  ).rows[0] as { icon: string | null; icon_hue: string | null } | undefined
+  return { icon: row?.icon ?? null, hue: row?.icon_hue ?? null }
+}
+
+const was = await lookOf()
+check(`the test project ${SUBJECT} is there to write to`, true, JSON.stringify(was))
+
+await page.goto(`${SITE}/basecamp/p/${SUBJECT}`, { waitUntil: 'domcontentloaded', timeout: 40000 })
+await page.waitForSelector('.bcpanes, .bcmain', { timeout: 30000 })
+await page.waitForTimeout(2000)
+await page.locator('[data-bc-pagemenu]').first().click()
+await page.waitForTimeout(400)
+await page.locator('[data-bc-look]').first().click()
+await page.waitForSelector('#viewer [data-look-hue]', { timeout: 20000 })
+await page.waitForTimeout(600)
+
+const offered = (await page.evaluate(
+  inPage(
+    `return [...document.querySelectorAll('#viewer [data-look-hue]')].map((b) => b.dataset.lookHue)`,
+  ),
+)) as string[]
+const pick = offered.find((h) => h !== was.hue) ?? ''
+check(
+  'the picker offers a colour this project is not already wearing',
+  pick !== '',
+  offered.join(','),
+)
+
+if (pick !== '') {
+  await page.locator(`#viewer [data-look-hue="${pick}"]`).first().click()
+  /*
+    Poll the OFFICE, not the page. The page redraws optimistically - CLAUDE.md
+    records a press that looked applied while the write never completed - so
+    the row is what decides.
+  */
+  let stored: string | null = null
+  for (let i = 0; i < 20; i += 1) {
+    await page.waitForTimeout(1000)
+    stored = (await lookOf()).hue
+    if (stored === pick) break
+  }
+  check(
+    'pressing a colour in the real picker writes it to the office',
+    stored === pick,
+    `asked for ${pick}, the row says ${String(stored)}`,
+  )
+
+  /* And it is back exactly as it was, through the sanctioned writer. */
+  if (was.hue === null) {
+    await db.execute(`select app.hq_project_look('${SUBJECT}', null, null, null, array['hue'])`)
+  } else {
+    await db.execute(
+      `select app.hq_project_look('${SUBJECT}', null, '${was.hue}', null, array[]::text[])`,
+    )
+  }
+  const now = await lookOf()
+  check(
+    'and the suite puts the project back exactly as it found it',
+    now.hue === was.hue && now.icon === was.icon,
+    `was ${JSON.stringify(was)}, now ${JSON.stringify(now)}`,
+  )
+}
+
+/* --- 9. and the token can be taken back out of the browser -------------- */
 
 await page.evaluate(inPage(`try { localStorage.removeItem('hq.token') } catch {} return true`))
 const gone = (await page.evaluate(inPage(`return localStorage.getItem('hq.token')`))) as
