@@ -276,11 +276,26 @@ check(
   wantsAnotherGo(asSent) === 'retry',
 )
 
+/*
+  A TURN THAT HAS NOT ANSWERED YET IS NOT A TURN THAT ANSWERED NOTHING.
+
+  The first version of this line printed "nothing further started" on a run
+  where the job was still running when the wait loop expired -- and one run
+  earlier the same turn had started a report. CLAUDE.md records exactly this
+  about the session runner, and the report line repeated it. There are three
+  outcomes here, not two.
+*/
+const settledThen = String(
+  (await one(`select state::text as s from public.jobs where job_id = ${lit(another.jobId)}::uuid`))
+    .s ?? '',
+)
 console.log(
   `\n  the authorised turn: ${
     authorised >= 1
       ? `${String(authorised)} further job(s) started`
-      : 'nothing further started — reported, not gated'
+      : ['complete', 'failed', 'cancelled'].includes(settledThen)
+        ? 'nothing further started — reported, not gated'
+        : `still ${settledThen} when the suite stopped waiting — no verdict`
   }`,
 )
 console.log(`  it said: ${another.body.slice(0, 200)}`)
