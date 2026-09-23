@@ -1562,6 +1562,53 @@ check:templates, check:callers, check:consumed, check:leaks, verify:notice
 Clean-pass count after pass 31: **0 of 5** — a harness defect that reached a
 real surface is a meaningful finding, so it does not count as clean.
 
+## Pass 32 — the knowledge path: CLEAN
+
+**Territory:** indexing and retrieval — whether a source Grant attaches becomes
+something the office can actually find, and whether an empty search is honest.
+Materially different from passes 27–31, which were all about what reaches him.
+
+**Classification: NO DEFECT FOUND.** Nothing was fixed and nothing was filed.
+
+**What was checked, all against canonical rows:**
+
+1. **Attachments produce documents.** notebooklm 4/4, notion 3/3. The one
+    `upload` attachment with no documents is the catch-all *"Direct messages and
+    uploads"* bucket on `Unnamed` — empty because nothing has been uploaded
+    there, not a gap.
+2. **Everything is indexed.** 93 documents across four active projects, every
+    one with a populated `search` vector.
+3. **Retrieval returns real material.** "transformative wellness" → 6,
+    "Q2 planning" → 2.
+4. **Negative control.** "banana submarine" → 0, and "hypertrophy" → 0 in a
+    project that does not hold it.
+5. **Project scope holds.** Every hit returned under a project filter belongs to
+    that project.
+6. **Mirrors do not double-count.** 0 rows carrying `mirrors_document_id`
+    returned beside their originals, which is 0169's rule still working.
+7. **#257's coverage note is right in both directions.** A fully-indexed
+    project reports `complete: true, blank: []`; the project with the unindexed
+    upload reports `complete: false, blank: ["upload"]`. The office can tell
+    "there is nothing" from "there is a source I cannot see into".
+
+**Two of my own hypotheses were wrong, and both were disproved by looking at
+rows rather than counts** — which is the reusable part of a clean pass:
+
+- **The briefing's "Hypertrophy" reference looked fabricated.** It appears in no
+   document and no open blocker keyed the way I first searched. It is real:
+   Grant said it himself (`inbound_commands.instruction`) and there is a
+   still-open blocker from 9 September asking him to confirm the entry's scope.
+   The briefing was correct. Searching the wrong columns nearly produced a
+   fabrication report about an accurate sentence.
+- **Scope isolation looked broken** — a phrase from project A returned 5 hits
+   under project B. Every one of those hits IS in project B: full-text search
+   matches individual terms, and "transformative" and "wellness" occur there.
+   The count looked like a leak and the rows showed a correct filter.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 32: **1 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
