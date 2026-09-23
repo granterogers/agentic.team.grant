@@ -3525,6 +3525,38 @@ Each of these cost real time. They are here so they cost it once.
   behaviour in both directions: guessing "harness" suppresses a message he is
   waiting for, and guessing "real" hides test traffic in his numbers.
 
+- **Only suite teardowns delete `public.inbound_commands`, and a job outlives
+  the row that proves whose turn it was.** No product path, no retention
+  sweep, no SQL function — every deleter is in `scripts/verify/` or
+  `scripts/poc/`. A job can never be deleted, so **68 of 206** turns counted as
+  real have no evidence of their origin, and `app.owed_a_word` cannot reply to
+  one either. Preserve the EVIDENCE at the moment it is destroyed: the BEFORE
+  DELETE trigger is the last instant the dedupe namespace is legible. The
+  inverse of 0310 — do not store a fact you can read, but when it is about to
+  become unreadable, storing it is all that is left.
+- **The database refused to let me stamp `jobs.synthetic`, and it was right.**
+  *"synthetic is decided when the work is created and cannot be changed (f ->
+  t). The defect this refuses is a suite rewriting its attribution around a
+  send."* When a safety rule refuses your fix, the fix is wrong: preserve
+  evidence, never a verdict, and keep the signal add-only.
+- **A negative control that cannot be built is a fact about the product, not a
+  gap in the test.** `app.stamp_synthetic_inbound` denies by default —
+  *"anything that did not come through a production door is synthetic,
+  whatever it calls itself"* — so every command a migration can insert is
+  already synthetic. The first drive failed with A REAL TURN WAS STAMPED,
+  which was the FIXTURE being wrong. Build the control that can exist and say
+  plainly which one could not.
+- **A migration whose drive block raises to undo its fixtures takes the DDL
+  with it**, applies nothing, and reports success on its own marker. A job
+  cannot be deleted, so leaving them is not the alternative. The tool is a
+  plpgsql SUBTRANSACTION: an inner `begin … exception when others` block rolls
+  back only itself, and re-raising anything that is not your marker keeps real
+  failures real.
+- **`measure` said "a gate stopped an answer of his" about 46 DUTY runs.** An
+  earlier pass of this programme published "54 real turns"; the truth is 7.
+  *"A gate stopped an answer"* and *"an answer OF HIS"* are different claims,
+  and an instrument that conflates them will be quoted as the second.
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the
