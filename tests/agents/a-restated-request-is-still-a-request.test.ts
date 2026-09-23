@@ -72,6 +72,11 @@ describe('and does not make a second one by mistake', () => {
       'Did you see the report from the accountants?',
       'The PDF looked fine to me.',
       'I asked for a coffee, not a meeting.',
+      // The #259 sentence, kept here as a standing negative: "Call it X" is
+      // the ANSWER to "what should I call it?", and a recogniser that claimed
+      // it would turn a task into a report.
+      'Call it Review the onboarding copy.',
+      'Add a task',
     ]) {
       expect(artifactRequest(said), said).toBeNull()
     }

@@ -2964,6 +2964,66 @@ Each of these cost real time. They are here so they cost it once.
   office.notion_sync}]` and one query found it. A release gate that only asks
   the suites is asking what somebody thought to write down.
 
+- **A capability the office HAS and no registry row claims is one every agent
+  is told it does NOT have.** 0298 added `delivered_by` because a row claimed
+  `web.search` with nothing behind it, and named the other direction in its own
+  comment without closing it. `capabilityBrief` builds every prompt from
+  `tool_permissions`, so eight executable handler kinds named by no row were
+  eight capabilities no agent knew about — `artifact.report` among them, after
+  139 PDFs. Asked to improve one it had just made, the office answered *"I
+  can't create a PDF directly in Telegram"* and offered a Notion page to export
+  by hand. **The model was not hallucinating; it was reading its brief.**
+  `check:capabilities` derives the kinds a CONVERSATION can start from
+  `instruction.ts` and fails on any that no enabled row delivers — the boundary
+  is derived rather than listed, so a kind added tomorrow is covered tomorrow.
+- **Measure how often a text detector FIRES against real traffic before
+  shipping it, never whether it looks right.** The first capability-claim
+  checker drew its vocabulary from `tool_permissions.verbs` — prose about how a
+  capability is used — and fired on **40 of 1292 real delivered answers, almost
+  every one wrong**: "I'll pull it in" read as a false offer of `github.write`
+  eight separate times. Four measured corrections got it to 5, all genuine:
+  terms from the description's FIRST SENTENCE (0368's shape-describing
+  paragraphs contribute "there" and "such"); an absence of RECORDS is not an
+  absence of CAPABILITY; a limit of KNOWLEDGE ("I can't confirm") is not one of
+  capability; and a denial needs a FIRST-PERSON subject, or "if the bought
+  solutions can't reach your Notion" is a finding about somebody else's
+  software. Folding `reach` in removed twelve more — `slack.post` is granted
+  and Slack is `token_expired`, so denying it is true.
+- **A grant is not a capability while the service behind it is down.** 0508
+  asked that question of the roster; it has to be asked of the world too.
+  "Capability temporarily unavailable" is already canonical in `reach`, and a
+  checker that reads `tool_permissions` alone calls a true sentence a lie.
+- **The office's own canonical refusal contains no modal, so every detector
+  keyed on one is blind to it.** `blocked_capability` in `outcome.ts` composes
+  *"I have not done this, and it is not something I can do"* — no can't, no
+  cannot, no unable. Found by DRIVING the live suite, not by reading it, which
+  is the whole argument for driving.
+- **`origin_ref` is `chat:message`, and `app.conversation_before` threads on
+  `split_part(origin_ref, ':', 1)`.** Two turns joined by a HYPHEN are two
+  conversations, so a follow-up arrives with no antecedent and the office
+  answers, correctly, *"this is the first thing you have said to me here"*. A
+  harness testing a follow-up must share the part before the colon.
+- **An obligation is not a job — counted the wrong way round, again.** A live
+  suite counted `artifact.report` children of the SECOND job and reported zero
+  on a run where the office had just delivered the report and said so.
+  `enqueue_child_once` attaches restated work to the obligation the first turn
+  opened. Count over the conversation, never under one job id; and while the
+  first attempt is still IN FLIGHT, #316 correctly refuses to duplicate it, so
+  a suite must SETTLE it before asking again.
+- **Gate the invariant, report the outcome.** Driven three times, the same
+  follow-up produced three different second turns — the report delivered, a
+  question about what "where" meant, and `blocked_needs_user`'s "I understood
+  what you want and could not carry it out". None denied the capability. Gating
+  on "work started" would fail one run in three, and #226 records what an
+  intermittent suite reads as. The deterministic half belongs in a unit test.
+- **Adding a capability to the registry changes EVERY prompt, and the brief has
+  33 characters of headroom.** Registering two capabilities took it from ~3700
+  to 4199 against the 4000 ceiling `verify:capability` asserts, and tightening
+  the verbs got it to 3967. A borderline unrelated behaviour moved in the same
+  run (`verify:mytasks` 88/89, in #259's "call it X" disambiguation, with the
+  recogniser ruled out by a negative control). A registry row is prompt
+  surface, not just data.
+
 ---
 
 ## Visual standard
