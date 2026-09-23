@@ -312,6 +312,7 @@
     "verify:basecamp-look": "tsx scripts/verify/basecamp-look.ts",
     "verify:basecamp-reconcile": "tsx scripts/verify/basecamp-reconcile.ts",
     "verify:basecamp-live": "tsx scripts/verify/basecamp-live.ts",
+    "verify:basecamp-signin": "tsx scripts/verify/basecamp-signin.ts",
     "verify:basecamp-cards": "tsx scripts/verify/basecamp-cards.ts",
     "verify:basecamp-todos": "tsx scripts/verify/basecamp-todos.ts",
     "verify:basecamp-board": "tsx scripts/verify/basecamp-board.ts",

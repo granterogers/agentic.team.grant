@@ -202,7 +202,13 @@ export function say(el, message, tone = '') {
  */
 export async function attempt(el, working, run, done = 'Saved.') {
   if (!canWrite()) {
-    say(el, 'Read-only — no token in this browser.', 'warn')
+    /*
+      The wording changed with the sign-in. "No token in this browser" named an
+      internal noun and offered nothing to do about it, which is the half of
+      Grant's complaint that survived removing the paste: a refusal that does
+      not say what would fix it reads as the office being broken.
+    */
+    say(el, 'Read-only — press Sign in at the top to change anything.', 'warn')
     return null
   }
   const was = el?.disabled ?? false

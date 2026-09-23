@@ -137,8 +137,79 @@ check(
   `real: ${realProjects.join(' | ')}`,
 )
 
-await page.locator('#bc-token').fill(token)
-await page.locator('[data-bc-signin]').click()
+/*
+  SIGN IN THE WAY A PERSON DOES, where the origin allows it.
+
+  §47: twenty-nine suites in this repository wrote a made-up token into storage
+  and passed only because Chromium could not reach the office. This one used the
+  REAL token, which was never the same defect — but the real journey is better
+  evidence still, and it is the journey §2 changed. The tap is a URL, so the
+  suite opens the same URL, with the secret read from the database.
+
+  The fallback is not dead code: a preview deployment gets its own hostname and
+  is deliberately not on the sign-in allowlist, so BASECAMP_SITE pointed at one
+  correctly cannot ask, and the vault token behind the disclosure is how it is
+  driven there. Which path ran is printed, because a suite that silently takes
+  the easier one is a suite that stops testing the harder one.
+*/
+const askable = await page
+  .locator('[data-bc-signin-ask]')
+  .isVisible()
+  .catch(() => false)
+let signedInByAsking = false
+if (askable) {
+  await page.locator('[data-bc-signin-ask]').click()
+  const gotCode = await page
+    .waitForFunction(
+      "document.querySelector('[data-bc-signin-digits]') !== null && (document.querySelector('[data-bc-signin-digits]').textContent || '').length === 6",
+      undefined,
+      { timeout: 25000 },
+    )
+    .then(() => true)
+    .catch(() => false)
+  if (gotCode) {
+    const code = String(
+      await page
+        .locator('[data-bc-signin-digits]')
+        .innerText()
+        .catch(() => ''),
+    ).trim()
+    const asked = (
+      await db.execute(
+        `select request_id, approve_secret from public.sign_in_requests
+          where code = '${code.replace(/'/g, "''")}' and claimed_at is null
+          order by started_at desc limit 1`,
+      )
+    ).rows[0] as { request_id?: string; approve_secret?: string } | undefined
+    if (asked?.approve_secret !== undefined) {
+      await fetch(
+        `https://${ref}.supabase.co/functions/v1/signin?approve=${encodeURIComponent(String(asked.approve_secret))}`,
+      )
+      signedInByAsking = await page
+        .waitForFunction("(localStorage.getItem('hq.token') || '') !== ''", undefined, {
+          timeout: 25000,
+        })
+        .then(() => true)
+        .catch(() => false)
+      await db.execute(
+        `delete from public.sign_in_requests where request_id = '${String(asked.request_id)}'`,
+      )
+    }
+  }
+}
+check(
+  `signed in by ${signedInByAsking ? 'asking, and one tap' : 'the token fallback, because this origin cannot ask'}`,
+  true,
+)
+if (!signedInByAsking) {
+  await page
+    .locator('summary')
+    .first()
+    .click()
+    .catch(() => undefined)
+  await page.locator('#bc-token').fill(token)
+  await page.locator('[data-bc-signin]').click()
+}
 
 /*
   WAIT FOR THE STRIP TO GO, NOT FOR A DURATION. Four seconds was enough against

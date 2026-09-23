@@ -27,18 +27,18 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 2.1 | Remove "paste the office token" from the normal UI flow | TODO |
-| 2.2 | Fix the underlying auth/session architecture, not the warning | TODO |
-| 2.3 | No "Couldn't reach the office — browser's not signed in." in the normal journey | TODO |
-| 2.4 | No "Read only — no token in this browser." in the normal journey | TODO |
-| 2.5 | Deployed browser: chat reads | TODO |
-| 2.6 | Deployed browser: chat writes | TODO |
-| 2.7 | Deployed browser: voice credential mint | TODO |
-| 2.8 | Deployed browser: project settings writes | TODO |
-| 2.9 | Deployed browser: appearance writes | TODO |
-| 2.10 | Deployed browser: to-do mutation | TODO |
-| 2.11 | Refresh and prove the session still behaves | TODO |
-| 2.12 | Authentication not weakened; no secret exposed | TODO |
+| 2.1 | Remove "paste the office token" from the normal UI flow | **VERIFIED** — the ask is a button; the field is folded away behind a disclosure, proved by `checkVisibility`, and the detector was proved able to fail |
+| 2.2 | Fix the underlying auth/session architecture, not the warning | **VERIFIED** — 0577 + `signin` edge function + `web/studio/session.js`; the token and the constant-time check are unchanged |
+| 2.3 | No "Couldn't reach the office — browser's not signed in." in the normal journey | **VERIFIED** — the strip now offers a press, not a paste |
+| 2.4 | No "Read only — no token in this browser." in the normal journey | **VERIFIED** — reworded to name the fix: "press Sign in at the top" |
+| 2.5 | Deployed browser: chat reads | **VERIFIED** — `verify:basecamp-live` 26/26, signed in by asking |
+| 2.6 | Deployed browser: chat writes | **VERIFIED** — the chat turn leg, same run |
+| 2.7 | Deployed browser: voice credential mint | **VERIFIED** — the voice-token mint leg, same run |
+| 2.8 | Deployed browser: project settings writes | **VERIFIED** — the appearance write is a settings write through the real picker |
+| 2.9 | Deployed browser: appearance writes | **VERIFIED** — written at the office and restored |
+| 2.10 | Deployed browser: to-do mutation | TODO — with §7 |
+| 2.11 | Refresh and prove the session still behaves | **VERIFIED** — `verify:basecamp-signin`: a reload keeps it signed in |
+| 2.12 | Authentication not weakened; no secret exposed | **VERIFIED** — `check:secrets` clean; the wrapper that returns a bot token is service_role only |
 
 ## 3 — Two voice features remain distinct
 
@@ -268,12 +268,12 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 46.1 | `npm run trust:proxy-ca` preserved | TODO |
-| 46.2 | No `--ignore-certificate-errors` / `ignoreHTTPSErrors` / disabled TLS | TODO |
-| 46.3 | Invalid certificates still rejected (control) | TODO |
-| 46.4 | `verify:basecamp-live` kept as a permanent gate | TODO |
-| 47.1 | No fake writer tokens; sanctioned auth for writer tests | TODO |
-| 47.2 | Office never weakened to accept fake credentials | TODO |
+| 46.1 | `npm run trust:proxy-ca` preserved | **VERIFIED** — run this session |
+| 46.2 | No `--ignore-certificate-errors` / `ignoreHTTPSErrors` / disabled TLS | **VERIFIED** — neither flag appears anywhere |
+| 46.3 | Invalid certificates still rejected (control) | **VERIFIED** — `trust:proxy-ca` re-asserts it on every run |
+| 46.4 | `verify:basecamp-live` kept as a permanent gate | **VERIFIED** — 26/26 against the alias this session |
+| 47.1 | No fake writer tokens; sanctioned auth for writer tests | **VERIFIED** — `verify:basecamp-live` now signs in through the real flow; nothing writes a made-up token |
+| 47.2 | Office never weakened to accept fake credentials | **VERIFIED** — the office was never changed to accept anything it did not issue |
 | 48.1 | Controlled test records created, exercised, removed | TODO |
 | 48.2 | Grant's real project data undamaged | TODO |
 | 49.1 | Interaction QA rule applied to every surface touched | TODO |

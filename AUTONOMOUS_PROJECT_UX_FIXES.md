@@ -674,3 +674,61 @@ spoken to it.
   believed: a stub that answered every read with an empty project list (which
   emptied the studio and looked like a missing Chat button), and a payload with
   no crew that left no current project.
+
+---
+
+## 23 September — §2, authentication
+
+**The sign-in is a press now, and the credential never passes through a person.**
+
+What was there: `npm run hq:token`, whose own message is the defect —
+*"Access token — paste it once, per device."* So Grant met a password field he
+never asked for, in front of Chat, Voice, Settings, appearance and every write.
+
+What replaced it, and what deliberately did not change. The credential is the
+same one bearer token, still compared in constant time at `hq-api`; rotating one
+vault row still rotates everything. The trust channel is the same Telegram chat
+`hq:token` already used. What changed is the last mile: the browser asks, the
+office puts the ask in front of Grant, he taps once, and the browser is handed
+the token it would have been given to carry. **Strictly less exposure** — nothing
+rendered, nothing in a chat log, nothing in a clipboard.
+
+A six-character code appears on the screen and in the message. It is not a
+second secret. The endpoint cannot authenticate an ask, so anybody reaching the
+page can start one, and the code is what lets Grant refuse a request that is not
+his.
+
+*Built:* `migrations/0577`, `supabase/functions/signin`, `scripts/deploy/signin.ts`,
+`web/studio/session.js`, the strip in `bc/shell.js` and its wiring in `bc/wire.js`.
+
+*Driven, not read.* The SQL was exercised through sixteen checks — begin, a claim
+before approval, an unknown secret, the tap, the claim, a second claim, a second
+tap, an expired request, and the constraint that claimed implies approved — then
+teardown asserted empty. `npm run verify:signin` drives the whole loop over the
+network **and uses what it collected against the real gateway**, because a suite
+made only of refusals passes against a system that refuses everything.
+
+*Both security detectors were proved able to fail.* The first sabotage landed on
+the approve guard rather than the claim guard — the harness prints the line it
+changed, which is the only reason that was caught — and retargeted, *"an
+unapproved request hands over nothing"* and *"the request is spent"* both go red.
+The broken copy ran under a throwaway slug and was deleted, so the endpoint
+people use was never the thing weakened.
+
+*Live, on the deployed page:* `npm run verify:basecamp-signin` **19/19** — open
+with an empty browser, press one button, read the code off the screen, open the
+same URL Telegram opens, and the page signs itself in, shows his real projects,
+and survives a reload. `verify:basecamp-live` **26/26**, and it now signs in by
+asking rather than by filling the field, which closes §47.
+
+**Two new traps, both of which produced a wrong finding first:**
+
+- **A box inside a closed `<details>` is not zero in Chromium.** The token field
+  measures 220x44 while folded away, because a shut disclosure is
+  `content-visibility: hidden` and that keeps the geometry. The obvious check
+  reported a hidden control as the thing being asked for.
+  `Element.checkVisibility` is the question actually being asked, and `innerText`
+  agrees with it where `textContent` does not.
+- **The office token is ten characters.** A check asserting more than twenty went
+  red against a working product. Validate the test before believing the finding —
+  the fourth time this run.
