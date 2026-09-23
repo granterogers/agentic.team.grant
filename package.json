@@ -309,7 +309,8 @@
     "verify:backups": "tsx scripts/verify/backups.ts",
     "verify:obligation": "tsx scripts/verify/obligation.ts",
     "delegation": "tsx scripts/delegation.ts",
-    "delegation:delta": "tsx scripts/delegation-delta.ts"
+    "delegation:delta": "tsx scripts/delegation-delta.ts",
+    "verify:another-go": "tsx scripts/verify/another-go.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

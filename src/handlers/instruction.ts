@@ -3680,7 +3680,31 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         The same guard, in the same shape, as `pullOut` two paragraphs below:
         whichever of the three claims the sentence first decides what he gets.
       */
-      const wantsFile = job.projectId === null || isBranch ? null : firstOf(artifactRequest)
+      /*
+        ASKING TO BE REMINDED TO MAKE SOMETHING IS NOT ASKING FOR IT NOW (#325).
+
+        "Remind me to write the one-pager for the venue change" fires BOTH
+        `artifactRequest` and `personalTaskRequest` on his own words -- and the
+        artifact reading is taken first, so the office produced a PDF and never
+        added the reminder. Performing it now is the one response that defeats
+        the request: he said when he wanted to do it, and it was not now.
+
+        The mood of a sentence is set by its main clause, which this repository
+        has already paid for three times -- a complement clause read as a
+        condition, a delegation's span read as three intents, "suggest when we
+        should decide" filed as a standing procedure. Here the making is the
+        OBJECT of the reminder.
+
+        Read from his words, because a deferral is his to make: the veto that
+        follows at `forGrant` reads `firstOfHis` and this read the clause
+        list, so the two could disagree about the same sentence. Narrow by
+        construction -- `personalTaskRequest` needs "remind me", "add a task
+        for me", "on my list" or "I must", none of which a bare "write me a
+        one-pager" carries.
+      */
+      const deferred = isBranch ? null : firstOfHis(personalTaskRequest)
+      const wantsFile =
+        job.projectId === null || isBranch || deferred !== null ? null : firstOf(artifactRequest)
 
       /*
         A request to READ A PAGE (#135, #16).
@@ -3844,10 +3868,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         gets "I will add that" now and the task some seconds later.
       */
       // A request for a FILE is not a to-do, and it is decided above.
-      const forGrant =
-        wantsFile !== null || isBranch || changesHis !== null
-          ? null
-          : firstOfHis(personalTaskRequest)
+      /*
+        ONE READING, TWO CALLERS. `deferred` is the same `firstOfHis` reading
+        the artifact veto above consults; assembling it twice is how the
+        command bar's renderer and its keyboard picker came to disagree.
+      */
+      const forGrant = wantsFile !== null || isBranch || changesHis !== null ? null : deferred
       const noted =
         forGrant === null
           ? null

@@ -66,10 +66,21 @@ describe('one clause is either a change or a new thing', () => {
     expect(withoutComments).toMatch(
       /const changesHis = isBranch \? null : firstOfHis\(personalTaskChange\)/,
     )
-    const forGrant = /const forGrant =([\s\S]*?)firstOfHis\(personalTaskRequest\)/.exec(
-      withoutComments,
-    )?.[1]
+    /*
+      Bounded by the statement, not by a reading that happens to follow it.
+      This sliced as far as `firstOfHis(personalTaskRequest)` and went red when
+      that reading moved above the artifact veto (#325) and the site started
+      reusing it — the slice-is-a-substring trap, from the open end.
+    */
+    const forGrant = /const forGrant =([^\n]*(?:\n(?!\s*const )[^\n]*)*)/.exec(withoutComments)?.[1]
     expect(forGrant).toContain('changesHis !== null')
+    /*
+      And the reading it falls through to is his own words, wherever it is
+      computed: `deferred` is `firstOfHis(personalTaskRequest)`.
+    */
+    expect(withoutComments).toMatch(
+      /const deferred = isBranch \? null : firstOfHis\(personalTaskRequest\)/,
+    )
     const asked = /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)\)/.exec(
       withoutComments,
     )?.[1]
