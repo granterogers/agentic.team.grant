@@ -2575,6 +2575,46 @@ assumption without grepping for the consumer.
 
 Clean-pass count after pass 51: **1 of 5.**
 
+## Pass 52 — the grounding class, swept: CLEAN
+
+**Territory:** *"a veto must be at least as grounded as the thing it vetoes"* —
+the family with **three** recorded instances (#313, #322, #327) and a fourth
+(#328) about the permitting direction. Swept as a class, the way pass 48 swept
+the pronoun class, rather than waiting for a fifth.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**The rule, as this repository has arrived at it:** a guard that SUPPRESSES may
+read the model's paraphrase, because catching more is the safe direction; a
+guard that PERMITS may not, because a paraphrase can authorise something he
+never asked for.
+
+**Both directions checked against every site:**
+
+1. **Seven `firstOfHis` call sites** — `personalTaskChange`, `asksWhoIsOnIt`,
+    `asksWhatTheyFound`, `callsItOff`, `personalTaskRequest`, `taskRequest`,
+    and a read fallback. The discipline is applied broadly, not in one place.
+2. **The one guard still reading `instruction` is deliberate and safe.**
+    `instruction.ts:2472` is
+    `asksWhoIsOnIt(resolved.from ?? instruction) !== null || asksWhoIsOnIt(instruction) !== null`
+    — a disjunction over BOTH. Its comment explains it cannot use `firstOfHis`
+    (that is built from `understood`, three hundred lines below, and this runs
+    first), and it SUPPRESSES: more matching means fewer specialists convened
+    twice. Catching either form is the cheap direction.
+3. **The permitting guard is grounded.** `wantsAnotherGo` — the only thing that
+    AUTHORISES duplication — reads `hisWords` at `:2254`, not the rewrite.
+    That is #328's rule, and it is the one place where a disjunction would have
+    been wrong.
+
+**No fourth instance.** The second negative class-sweep of the session, and the
+useful kind: the distinction between suppressing and permitting guards is
+applied consistently, so the rule is in the code rather than only in the
+ledger.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 52: **2 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
