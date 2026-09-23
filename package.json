@@ -358,7 +358,17 @@
     "basecamp:compose": "tsx scripts/verify/basecamp-compose-shots.ts",
     "verify:basecamp-home": "tsx scripts/verify/basecamp-home.ts",
     "review:build": "tsx scripts/review-build.ts",
-    "deploy:preview": "npm run review:build && tsx scripts/deploy/site.ts"
+    "deploy:preview": "npm run review:build && tsx scripts/deploy/site.ts",
+    "fresh:zero-state": "tsx scripts/fresh/zero-state.ts",
+    "fresh:baseline": "tsx scripts/fresh/baseline.ts",
+    "fresh:install": "tsx scripts/fresh/install.ts",
+    "fresh:doctor": "tsx scripts/fresh/doctor.ts",
+    "fresh:secret": "tsx scripts/fresh/secret.ts",
+    "fresh:configure": "tsx scripts/fresh/configure.ts",
+    "fresh:first-use": "tsx scripts/fresh/first-use.ts",
+    "fresh:accept": "tsx scripts/fresh/accept.ts",
+    "check:fresh": "tsx scripts/check-fresh.ts",
+    "fresh:docs": "tsx scripts/fresh/docs.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

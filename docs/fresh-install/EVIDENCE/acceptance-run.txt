@@ -1,0 +1,86 @@
+
+> ai-team-hq@0.1.0 fresh:accept
+> tsx scripts/fresh/accept.ts
+
+
+FRESH-INSTALL ACCEPTANCE
+
+  against fresh_alex_accept — a disposable local database, no account of any kind
+
+  PASS  A — Clean config discovery — nothing configured at all
+          · the doctor exits cleanly with nothing configured (exit 0)
+          · it never falls back to the project this repository was developed against
+          · it names exactly one next action
+          · and says whether that action is yours or the software’s
+          · a human step carries the URL to go to, per Grant’s standing instruction
+          · CONTROL: it does not report a complete install when nothing is installed
+
+  PASS  B — Minimum bootstrap — core prerequisites supplied, setup progresses
+          · install succeeds into an empty database (exit 0)
+          · and says so
+
+  PASS  C — Zero state — a blank database becomes a valid operational office
+          · all 536 migrations recorded (found 536)
+          · the roster is there — 8 staff
+          · the job state machine has its 46 legal transitions (without these an office accepts work and can never run it)
+          · app.office_health() answers
+          · the inbox project exists, so a first message has somewhere to land
+          · the tool registry is seeded — 23 entries
+
+  PASS  D — Interruption — an install that stops halfway leaves nothing behind
+          · an install that fails partway raises rather than reporting success
+          · and leaves NOTHING behind — the database is as empty as before it started
+          · so running it again simply works
+          · with no duplication — 536 recorded, not 1072
+
+  PASS  E — Wrong credential — a precise failure, and nothing leaked
+          · the doctor still reports rather than crashing
+          · the credential is never echoed back, not even when it is the thing that is wrong
+          · it says which credential is the problem
+          · and where to get a working one
+
+  PASS  F — Optional missing — core works with no Slack, Google, Notion or Telegram
+          · slack is genuinely absent (0 rows)
+          · google is genuinely absent (0 rows)
+          · notion is genuinely absent (0 rows)
+          · telegram is genuinely absent (0 rows)
+          · and the office still answers about its own health
+          · and the setup page still renders rather than failing on a missing integration
+
+  PASS  G — First real use — an instruction goes in and an answer comes back
+          · the office answered (exit 0)
+          · and the job reached "complete", not merely "settled"
+          · an output row exists for the instruction (1)
+          · a real member of staff was chosen to answer (quality-director)
+          HUMAN_BLOCKED: the model itself. A stand-in composed the sentence, because an OpenRouter key needs an account. Everything else on the path was the live code.
+
+  PASS  H — Second run — nothing duplicates
+          · installing over an existing office is refused
+          · and says so plainly
+          · and names what to do instead
+          · configure runs again happily
+          · and changes nothing the second time
+          · staff: 8 before, 8 after
+          · migrations: 536 before, 536 after
+          · config: 61 before, 61 after
+          · projects: 1 before, 1 after
+
+  PASS  I — Update — an installation behind a migration catches up safely
+          · exactly the one new migration was applied (1)
+          · and it was the new one, not something re-run
+          · everything already applied was skipped (536 of 536)
+          · the upgrade actually changed the database
+          · CONTROL: an applied migration whose file has changed stops the runner
+          · CONTROL: and it stops for the right reason (refusing to run: 1 integrity finding(s))
+
+  PASS  J — No contamination — nothing here belongs to anybody else
+          · Grant's Supabase project: 0 table(s) contain it
+          · Grant's Telegram chat: 0 table(s) contain it
+          · Grant's Slack user: 0 table(s) contain it
+          · a Telegram bot username: 0 table(s) contain it
+          · one of his project names: 0 table(s) contain it
+          · CONTROL: the scan finds a planted identifier (1)
+          · CONTROL: the harness refuses to operate on a database it did not create
+
+10 of 10 journeys pass, 54 assertions, 0 failing
+

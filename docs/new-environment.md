@@ -1,5 +1,24 @@
 # Starting a fresh session, cheaply
 
+> **HISTORICAL — this is not the setup guide.**
+>
+> It is about starting a fresh Claude Code DEVELOPMENT session against an office
+> that already exists — not about deploying an office for a new user. The four
+> commands it opens with assume credentials this repository's own environment has.
+>
+> **If you are setting up your own Agentic Team, read [`SETUP.md`](../SETUP.md).**
+> It is the one current starting point, it is generated from
+> `src/fresh/contract.ts` so it cannot drift from what the code actually
+> needs, and `npm run fresh:doctor` will tell you where you are in it at any
+> point.
+>
+> This page is kept because it records how THIS office was built, which is
+> worth having. It is not kept because it is current, and parts of it are not.
+
+---
+
+
+
 **Why this file exists.** Every session so far has spent its first several
 thousand tokens rediscovering the same facts: which credentials are alive, what
 the branch is, what is already proven. That work is deterministic, so it belongs
