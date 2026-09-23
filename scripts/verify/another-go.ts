@@ -135,6 +135,37 @@ await db.execute(`
 `)
 
 /*
+  A TEARDOWN THAT ONLY RUNS ON SUCCESS IS NOT A TEARDOWN.
+
+  Two aborted runs of a sibling suite left four ACTIVE fixture projects in
+  `public.projects` and the office listed them back in an answer. Armed HERE,
+  the moment there is something to sweep, rather than at the bottom where a
+  failure in the middle never reaches it.
+*/
+const sweep = async (): Promise<void> => {
+  await db
+    .execute(`delete from public.documents where project_id = ${lit(projectId)}::uuid`)
+    .catch(() => undefined)
+  await db
+    .execute(`delete from public.projects where project_id = ${lit(projectId)}::uuid`)
+    .catch(async () => {
+      await db
+        .execute(`update public.projects set status = 'archived'
+                   where project_id = ${lit(projectId)}::uuid`)
+        .catch(() => undefined)
+    })
+}
+const sweepOnFailure = (error: unknown): void => {
+  console.error(`\nthe suite failed -- sweeping anyway\n${String(error)}`)
+  // exitCode rather than exit, so the sweep is allowed to finish.
+  void sweep().finally(() => {
+    process.exitCode = 1
+  })
+}
+process.on('unhandledRejection', sweepOnFailure)
+process.on('uncaughtException', sweepOnFailure)
+
+/*
   One whole turn, through the real handler.
 
   `origin_ref` is `chat:message`, because `app.conversation_before` threads on
@@ -333,13 +364,7 @@ check(
   Number(strays.n) === 0 && produced >= 1,
 )
 
-await db
-  .execute(`delete from public.projects where project_id = ${lit(projectId)}::uuid`)
-  .catch(async () => {
-    await db.execute(`
-      update public.projects set status = 'archived'
-       where project_id = ${lit(projectId)}::uuid`)
-  })
+await sweep()
 const left = await one(`
   select count(*)::int as n from public.projects
    where project_id = ${lit(projectId)}::uuid and status <> 'archived'`)

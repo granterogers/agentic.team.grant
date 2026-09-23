@@ -68,6 +68,50 @@ await db.execute(`
   values (${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)}, 'A linked Google Notebook', 'source');
   update public.projects set status = 'active' where project_id = ${lit(projectId)}::uuid;`)
 
+/*
+  A TEARDOWN THAT ONLY RUNS ON SUCCESS IS NOT A TEARDOWN.
+
+  Two aborted runs of this suite left four ACTIVE fixture projects behind, and
+  the office listed them back in an answer -- correctly, because the project
+  spine shows a harness job the harness's own world. They were still four rows
+  nothing was going to remove, which is the pile CLAUDE.md records being
+  rebuilt by whoever quotes the rule about it.
+
+  Defined and armed HERE, the moment there is something to sweep, rather than
+  at the bottom where a failure in the middle never reaches it. Lessons are
+  RETIRED through the sanctioned path: public.lessons refuses DELETE, and a
+  retraction is a row rather than a column.
+*/
+const sweep = async (): Promise<void> => {
+  for (const row of (
+    await db.execute(`select lesson_id::text as id from public.lessons_live
+                       where learned_by = ${lit(BY)}`)
+  ).rows as { id: string }[]) {
+    await db
+      .execute(`select app.retract_lesson(${lit(row.id)}::uuid,
+                  'verify:withdraw teardown -- nothing this run stated outlives it.',
+                  ${lit(BY)}) as r`)
+      .catch(() => undefined)
+  }
+  await db
+    .execute(`delete from public.projects where project_id = ${lit(projectId)}::uuid`)
+    .catch(async () => {
+      await db
+        .execute(`update public.projects set status = 'archived'
+                   where project_id = ${lit(projectId)}::uuid`)
+        .catch(() => undefined)
+    })
+}
+const sweepOnFailure = (error: unknown): void => {
+  console.error(`\nthe suite failed -- sweeping anyway\n${String(error)}`)
+  // exitCode rather than exit, so the sweep is allowed to finish.
+  void sweep().finally(() => {
+    process.exitCode = 1
+  })
+}
+process.on('unhandledRejection', sweepOnFailure)
+process.on('uncaughtException', sweepOnFailure)
+
 const teach = (said: string) => {
   const t = readTeaching(said)
   if (t === null) throw new Error(`the harness's own sentence is not a teaching: ${said}`)
@@ -182,30 +226,11 @@ check(
 )
 
 console.log('\nand the suite leaves nothing behind')
-/*
-  Retired through the sanctioned path, never a DELETE and never a column:
-  `lessons` has no `retired_at` -- a retraction is a ROW that supersedes the
-  lesson, which is what `lessons_live` reads. The first draft guessed the
-  column and the teardown died after every assertion had passed.
-*/
-for (const row of (
-  await db.execute(`select lesson_id::text as id from public.lessons_live
-                     where learned_by = ${lit(BY)}`)
-).rows as { id: string }[]) {
-  await db.execute(`
-    select app.retract_lesson(${lit(row.id)}::uuid, ${lit(BY)},
-      'verify:withdraw teardown') as r`)
-}
+await sweep()
 const left = await one(`
   select count(*)::int as n from public.lessons_live where learned_by = ${lit(BY)}`)
 check('no rule of this run is still live', `${String(left.n)} live`, Number(left.n) === 0)
 
-await db
-  .execute(`delete from public.projects where project_id = ${lit(projectId)}::uuid`)
-  .catch(async () => {
-    await db.execute(`update public.projects set status = 'archived'
-                       where project_id = ${lit(projectId)}::uuid`)
-  })
 const stray = await one(`
   select count(*)::int as n from public.projects
    where project_id = ${lit(projectId)}::uuid and status <> 'archived'`)
