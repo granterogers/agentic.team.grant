@@ -61,10 +61,10 @@ repairing the completion defect requires it.
 - [x] **VERIFIED** State persists across reload (asserted as the tick, not as wording)
 
 ### 5. Contacts
-- [ ] **TODO** Full-screen contact scrolls without jumping back to the top
-- [ ] **TODO** Miniature entries show the contact photograph, with a fallback
-- [ ] **TODO** Clicking a miniature contact opens THAT contact
-- [ ] **TODO** Clicking the panel title maximises the whole Contacts view
+- [x] **VERIFIED** Full-screen contact scrolls and holds its position through a redraw
+- [x] **VERIFIED** Miniature entries show the photograph, initials where there is none
+- [x] **VERIFIED** Clicking a miniature contact opens THAT contact
+- [x] **VERIFIED** Clicking the panel title maximises the whole Contacts view
 
 ### 6. Panel resizing
 - [ ] **TODO** Widening one panel shrinks its neighbour rather than shoving it away
@@ -169,6 +169,31 @@ word.
 `scripts/verify/basecamp-chat.ts` (new), `scripts/verify/chat-live.ts` (new).
 
 ## Verification log
+
+**5. Contacts — VERIFIED. Three defects, three different causes.**
+
+1. **The scroll jump was two defects stacked.** With a contact open there were
+   EIGHT contact rows in the document — four in the dialog and four on the
+   surface still rendering behind it — so half the presses landed on a copy the
+   backdrop swallowed, and the wheel scrolled the PAGE rather than the dialog.
+   The surface behind is `inert` while a dialog is open and the page is locked,
+   so the wheel goes where the content is.
+   Then the real jump: `render()` replaces the shell, so the dialog that comes
+   back is a NEW element with `scrollTop` 0. The position is remembered on
+   every scroll and restored after the redraw — **and restoring it during
+   wiring silently did nothing**, because setting `scrollTop` on a box whose
+   content has not been laid out yet clamps to zero. One frame later it takes.
+2. **The miniature passed the row's INDEX** ("0", "1") while everything that
+   opens a contact looks one up by `contacts.keyOf`. The lookup found nobody
+   and the record fell back to the list — which is exactly "it merely maximises
+   the Contacts panel". One key now, from one place.
+3. **No face at all** in the miniature. A photograph where there is one,
+   initials on a tint where there is not.
+- `verify:basecamp-contacts` 31/31, and the scroll-memory check proved able to
+  fail by restoring zero instead of the remembered position.
+- **A defect I introduced and caught in the same minute:** marking the surface
+  inert UNCONDITIONALLY made the whole page unclickable whenever no dialog was
+  open. The suite reported it within seconds.
 
 **4. To-dos — VERIFIED.**
 - **The cause:** a completed task was moved into a `<details class="bcdone">`

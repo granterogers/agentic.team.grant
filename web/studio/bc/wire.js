@@ -60,7 +60,71 @@ export const mount = (c) => {
  * attached per render rather than delegated. That matches how the default
  * studio works and keeps the two comparable.
  */
+/*
+  WHERE THE DIALOG WAS SCROLLED TO.
+
+  Grant, 23 September: "Opening a contact full-screen and scrolling downward
+  currently causes the view to jump back toward the top."
+
+  It does, and this is why: `render()` replaces the shell's markup, so the
+  dialog that comes back is a NEW element whose `scrollTop` is 0. Nothing was
+  wrong with the scrolling - the thing being scrolled had been thrown away and
+  rebuilt, several times a minute, by redraws that have nothing to do with the
+  dialog.
+
+  So the position is REMEMBERED CONTINUOUSLY, on every scroll, and put back
+  after the redraw that replaced the node. CLAUDE.md's #197 is the same lesson
+  in a different costume: anything you need to know about "before" has to have
+  been recorded before.
+
+  Keyed by address, so opening a different contact starts at the top rather
+  than inheriting the last one's position.
+*/
+const dialogScroll = { at: '', top: 0 }
+
+const rememberDialogScroll = (root) => {
+  const box = root.querySelector('.bcexpbox')
+  if (box === null) {
+    /* No dialog: forget, so the next one opens at its own beginning. */
+    dialogScroll.at = ''
+    dialogScroll.top = 0
+    return
+  }
+  const here = globalThis.location?.pathname ?? ''
+  if (dialogScroll.at !== here) {
+    dialogScroll.at = here
+    dialogScroll.top = 0
+  } else if (dialogScroll.top > 0) {
+    /*
+      AFTER LAYOUT, not during wiring.
+
+      Setting `scrollTop` on a box whose content has not been laid out yet
+      silently CLAMPS TO ZERO - there is nothing to scroll past - so the first
+      version of this restored nothing and the dialog still jumped to the top.
+      One frame later the content is measured and the same assignment takes.
+
+      Applied immediately as well, so that when the content IS ready there is
+      no visible jump to the top and back.
+    */
+    const to = dialogScroll.top
+    box.scrollTop = to
+    globalThis.requestAnimationFrame?.(() => {
+      if (box.isConnected && box.scrollTop !== to) box.scrollTop = to
+    })
+  }
+  box.addEventListener(
+    'scroll',
+    () => {
+      dialogScroll.at = globalThis.location?.pathname ?? ''
+      dialogScroll.top = box.scrollTop
+    },
+    { passive: true },
+  )
+}
+
 export const wire = (root) => {
+  rememberDialogScroll(root)
+
   // Navigation inside the experience.
   for (const b of root.querySelectorAll('[data-bc-go]')) {
     b.addEventListener('click', (e) => {

@@ -36,6 +36,7 @@
   template.
 */
 
+import * as contacts from './contacts.js'
 import * as notes from './notestore.js'
 import { MARKS } from '../logos/marks.js'
 import * as when from '../when.js'
@@ -1023,6 +1024,37 @@ export const stateLine = (p) => {
  * who is this, and what happens next. The stage, the email and the phone
  * belong on the record, not on the home.
  */
+/*
+  A CONTACT'S FACE, where there is one.
+
+  Grant, 23 September: "Minimized/miniature contact entries should display the
+  contact's profile photograph/avatar when available. Maintain a sensible
+  fallback where no photograph exists."
+
+  The fallback is initials on a tint derived from the name, which is what the
+  full record already does - so a person looks like the same person in both
+  places, and a contact with no photograph still reads as somebody rather than
+  as a missing image.
+
+  `object-fit: cover` and a fixed box, because a photograph from a phone is
+  four thousand pixels of portrait and would otherwise decide the row's height.
+*/
+const initials_ = (name) =>
+  String(name ?? '')
+    .split(/\s+/)
+    .filter((w) => w !== '')
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('')
+
+const face_ = (c) => {
+  const photo = typeof c?.photo === 'string' && c.photo !== '' ? c.photo : ''
+  if (photo !== '') {
+    return `<img class="bcmateface" src="${esc(photo)}" alt="" loading="lazy" decoding="async">`
+  }
+  return `<span class="bcmateface bcmateface--none" aria-hidden="true">${esc(initials_(c?.name))}</span>`
+}
+
 export const contactsMini = (p, { items = 4 } = {}) => {
   const cs = p.contacts ?? []
   if (cs.length === 0) return `<p class="bcmpty">Nobody is recorded against this project yet.</p>`
@@ -1035,7 +1067,19 @@ export const contactsMini = (p, { items = 4 } = {}) => {
     ${cs
       .slice(0, items)
       .map(
-        (c, i) => `<button type="button" class="bcmate bcmate--press" data-bc-contact="${esc(String(i))}">
+        /*
+          THE CONTACT'S OWN KEY, not its position in the list.
+
+          This passed the INDEX - "0", "1" - while everything that opens a
+          contact looks one up by `contacts.keyOf`, which is the office id or
+          a name. So the lookup found nobody, the record fell back to the
+          list, and pressing a person in the miniature merely opened the
+          Contacts panel: exactly what Grant reported. One key, from one
+          place, used by the miniature and the full list alike.
+        */
+        (c, i) => `<button type="button" class="bcmate bcmate--press"
+          data-bc-contact="${esc(contacts.keyOf(c, i))}">
+          ${face_(c)}
           <span class="bcmatebody">
             <span class="bcmatename">${esc(c.name)}</span>
             <span class="bcmatedoing">${esc([c.role, c.org].filter(Boolean).join(' · '))}</span>

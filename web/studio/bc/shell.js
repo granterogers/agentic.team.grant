@@ -2527,6 +2527,38 @@ const EXPANDED_NAME = {
   activity: 'Latest activity',
 }
 
+/*
+  THE SURFACE BEHIND AN OPEN DIALOG IS INERT.
+
+  THE DEFECT THIS FIXES, measured rather than guessed: with a contact open
+  full screen there were EIGHT contact rows in the document - four in the
+  dialog and four on the page behind it, because the surface goes on rendering
+  its own list underneath. So half the time a press landed on the copy behind,
+  where the backdrop swallowed it; and the page behind was what scrolled,
+  which is why scrolling a long contact appeared to jump back to the top - the
+  dialog had not moved at all, the page had.
+
+  `inert` is the whole fix and it is one word: the subtree stops taking
+  pointer events, stops being focusable, and leaves the accessibility tree, so
+  a duplicate row behind a dialog can no longer be pressed, tabbed to or read
+  out. The scroll lock is the other half - with the page unable to scroll, the
+  wheel goes to the dialog, which is where the content the person is reading
+  actually is.
+*/
+const behind = (markup) => {
+  /*
+    ONLY WHILE A DIALOG IS ACTUALLY OPEN.
+
+    The first version marked this inert unconditionally, which made the WHOLE
+    PAGE unclickable whenever no dialog was up - every control on every project
+    surface, reported by the contacts suite within seconds as a press that
+    could not land. `inert` is exactly as absolute as it sounds.
+  */
+  const open = state().bcExpanded
+  const shut = open === null || open === undefined || open === ''
+  return shut ? markup : `<div class="bcunder" inert>${markup}</div>`
+}
+
 const expandedOverlay = (p) => {
   const id = state().bcExpanded
   if (id === null || id === undefined || id === '') return ''
@@ -2566,7 +2598,7 @@ const body = () => {
     */
     if (s.tab === 'overview') {
       const pick = compose.chosen()
-      if (pick !== 'grid') return `${compose.COMPOSITIONS[pick](p)}${expandedOverlay(p)}`
+      if (pick !== 'grid') return `${behind(compose.COMPOSITIONS[pick](p))}${expandedOverlay(p)}`
     }
     /*
       THE OVERLAY BELONGS TO EVERY PROJECT SURFACE, not only to the home.
@@ -2578,7 +2610,7 @@ const body = () => {
       exists on one route is a dialog every other route cannot open.
     */
     const render = SURFACE[s.tab] ?? overview
-    return `${render(p)}${expandedOverlay(p)}`
+    return `${behind(render(p))}${expandedOverlay(p)}`
   }
   return portfolio()
 }

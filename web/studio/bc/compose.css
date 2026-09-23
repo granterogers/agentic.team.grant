@@ -2525,3 +2525,45 @@
   border-radius: var(--bc-r-control);
 }
 [data-experience='basecamp'] .bctickhit:hover { background: var(--bc-hover); }
+
+/*
+  THE PAGE BEHIND A DIALOG DOES NOT SCROLL.
+
+  The other half of `inert`: with a contact open full screen, the wheel used to
+  scroll the SURFACE behind the dialog - so a long contact appeared to jump
+  back to the top when the dialog itself had never moved. Locking the page
+  sends the wheel where the content is.
+*/
+[data-experience='basecamp'] body:has(.bcexp),
+body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
+[data-experience='basecamp'] .bcunder[inert] { pointer-events: none; }
+
+/*
+  A CONTACT'S FACE IN THE MINIATURE.
+
+  A photograph where there is one, initials on a tint where there is not - so a
+  contact with no picture still reads as somebody rather than as a broken
+  image. Fixed box and `cover`, because a phone photograph is four thousand
+  pixels of portrait and would otherwise decide the row's height.
+*/
+[data-experience='basecamp'] .bcmateface {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bc-hover);
+  border: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcmateface--none {
+  display: grid;
+  place-items: center;
+  font: 650 12.5px/1 var(--bc-font);
+  color: var(--bc-text-muted);
+  letter-spacing: .02em;
+}
+[data-experience='basecamp'] .bcmate {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+}

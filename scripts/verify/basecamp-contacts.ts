@@ -217,6 +217,145 @@ check(
     'Add Contact',
 )
 
+/*
+ * --- WHAT GRANT REPORTED ON 23 SEPTEMBER ---------------------------------
+ *
+ * Three things, and each was real:
+ *
+ *   1. a contact opened full screen jumped back toward the top when scrolled;
+ *   2. the miniature showed no photograph;
+ *   3. pressing a person in the miniature merely maximised the Contacts panel
+ *      instead of opening that person.
+ */
+await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.bcpanes')
+await page.waitForTimeout(600)
+
+/* --- the miniature shows faces ------------------------------------------ */
+const faces = await page.locator('[data-mod="contacts"] .bcmateface').count()
+const rows = await page.locator('[data-mod="contacts"] [data-bc-contact]').count()
+check(
+  'every contact in the miniature has a face or initials',
+  rows > 0 && faces === rows,
+  `${String(faces)} face(s) for ${String(rows)} contact(s)`,
+)
+check(
+  'and a contact with no photograph falls back to initials rather than a broken image',
+  (
+    (await page.evaluate(
+      inPage(`const out = []
+       for (const el of document.querySelectorAll('[data-mod="contacts"] .bcmateface')) {
+         if (el.tagName === 'IMG') {
+           out.push(el.complete && el.naturalWidth > 0 ? 'photo' : 'broken')
+         } else {
+           out.push((el.textContent ?? '').trim() === '' ? 'empty' : 'initials')
+         }
+       }
+       return out`),
+    )) as string[]
+  ).every((f) => f === 'photo' || f === 'initials'),
+  JSON.stringify(
+    await page.evaluate(
+      inPage(`const out = []
+       for (const el of document.querySelectorAll('[data-mod="contacts"] .bcmateface')) out.push(el.tagName)
+       return out`),
+    ),
+  ),
+)
+
+/* --- pressing a person opens that person -------------------------------- */
+const wanted = (await page.locator('[data-mod="contacts"] .bcmatename').first().innerText()).trim()
+await page.locator('[data-mod="contacts"] [data-bc-contact]').first().click()
+await page.waitForTimeout(800)
+const record = await page.locator('[data-bc-expanded="contacts"]').innerText()
+check(
+  'pressing a contact in the miniature opens THAT contact, not just the panel',
+  record.includes(wanted) &&
+    (await page.locator('[data-bc-contactedit], [data-bc-ctfield]').count()) > 0,
+  `wanted ${wanted}; the dialog showed: ${record.replace(/\n+/g, ' / ').slice(0, 160)}`,
+)
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+
+/* --- and the header maximises the whole thing --------------------------- */
+await page.locator('[data-mod="contacts"] .bcmodhead').click()
+await page.waitForTimeout(700)
+check(
+  'while pressing the panel title maximises the whole Contacts view',
+  (await page.locator('[data-bc-expanded="contacts"]').count()) === 1 &&
+    (await page.locator('[data-bc-expanded="contacts"] [data-bc-contact]').count()) > 1,
+  'the header did not open the list',
+)
+
+/* --- a full-screen contact scrolls, and the page behind does not --------- *
+ *
+ * A SHORT WINDOW, so the record genuinely overflows its dialog. The first
+ * version of this scrolled a contact with eight pixels of room and then
+ * asserted it had moved 250 - which says nothing about a long contact, which
+ * is the case Grant reported. Making the viewport short is deterministic;
+ * waiting for a contact to be long enough is not.
+ */
+await page.setViewportSize({ width: 1200, height: 480 })
+await page.waitForTimeout(300)
+await page.locator('[data-bc-expanded="contacts"] [data-bc-contact]').first().click()
+await page.waitForTimeout(700)
+const scrolling = (await page.evaluate(
+  inPage(`const box = document.querySelector('.bcexpbox')
+     if (box === null) return { ok: false }
+     const before = Math.round(window.scrollY)
+     box.scrollTop = 250
+     return {
+       ok: true,
+       dialog: Math.round(box.scrollTop),
+       room: box.scrollHeight - box.clientHeight,
+       pageMovedBy: Math.round(window.scrollY) - before,
+       bodyLocked: getComputedStyle(document.body).overflow === 'hidden',
+       behindInert: document.querySelector('.bcunder')?.inert === true,
+     }`),
+)) as Record<string, unknown>
+check(
+  'a contact opened full screen scrolls inside its own dialog',
+  scrolling.dialog === 250,
+  JSON.stringify(scrolling),
+)
+check(
+  'and the page behind it cannot scroll, so nothing jumps back to the top',
+  scrolling.bodyLocked === true && scrolling.pageMovedBy === 0,
+  JSON.stringify(scrolling),
+)
+/*
+  THE DUPLICATE ROWS BEHIND THE DIALOG. With a contact open there were EIGHT
+  contact rows in the document - four in the dialog and four on the surface
+  behind - so half the presses landed on a copy the backdrop swallowed. They
+  are still rendered; what matters is that they are inert.
+*/
+check(
+  'and the surface behind is inert, so its duplicate rows cannot be pressed',
+  scrolling.behindInert === true,
+  JSON.stringify(scrolling),
+)
+/*
+  AND IT STAYS THERE THROUGH A REDRAW, which is the symptom in Grant's words:
+  "scrolling downward currently causes the view to jump back toward the top".
+
+  A beat first: setting `scrollTop` fires the scroll event asynchronously, and
+  redrawing in the same tick asks the page to remember something it has not
+  been told yet. A person scrolling with a wheel is never that fast; a test is.
+*/
+await page.waitForTimeout(250)
+await page.evaluate('window.__shots.render()')
+await page.waitForTimeout(500)
+const stillScrolled = (await page.evaluate(
+  inPage(`const box = document.querySelector('.bcexpbox')
+     return box === null ? -1 : Math.round(box.scrollTop)`),
+)) as number
+check(
+  'and the dialog stays where it was scrolled to, even when the shell redraws',
+  stillScrolled >= 60,
+  `scrollTop is ${String(stillScrolled)} after a redraw`,
+)
+await page.setViewportSize({ width: 1400, height: 950 })
+
 check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
 
 await browser.close()
