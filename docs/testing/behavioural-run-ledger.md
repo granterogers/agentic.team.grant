@@ -2450,6 +2450,46 @@ branch's two uncommitted migrations.
 
 Clean-pass count after pass 48: **1 of 5.**
 
+## Pass 49 — the capability-claim checker: CLEAN
+
+**Territory:** `capabilityLies`, probed for FALSE POSITIVES rather than misses.
+CLAUDE.md records it firing wrongly on **40 of 1,292 real answers** before four
+corrections, and a gate that refuses good answers is the expensive direction.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked, against the REAL capability index** (14 can, 9 cannot, 7
+services, 60 terms):
+
+1. **It catches the defect it exists for.** *"I can't create a PDF."* FIRES —
+    that is #320, the office denying a capability after 139 PDFs.
+2. **It is quiet on a TRUE denial.** *"I can't send an email for you."* —
+    `gmail.send` is deliberately off while the compose scope is granted.
+3. **All four recorded false-positive shapes stay quiet**: *"I'll pull it in"*
+    (not a claim), *"I have no record of that"* (an absence), *"I can't confirm
+    that"* (a limit of KNOWLEDGE, not capability), and a sentence about
+    somebody else's software.
+4. **And the interesting one.** *"I can't post to Slack."* is quiet although
+    `slack.post` is in `can` and enabled — which looked like a miss. It is
+    deliberate: `unreachable()` marks a granted tool unreachable when its
+    SERVICE is down, and `cap.reach` reports **Slack `reachable=false`** while
+    all six other services are true. A grant is not a capability while the
+    service behind it is down, so the denial is TRUE.
+
+**That last point independently confirms pass 36 from the other end.** Pass 36
+found Slack token rotation failing since 18 September by reading job outputs;
+this pass found Slack unreachable by reading the capability index. Two passes,
+two unrelated sources, same conclusion — which is worth more than either alone.
+
+**My fixture was wrong before the product was, for the fifth time this
+session.** Hand-built `Able` objects with empty `verbs` produced two confident
+"misses" that inverted the moment the real index was used. **Build a fixture
+from canonical state, or the thing under test is your fixture.**
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 49: **2 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
