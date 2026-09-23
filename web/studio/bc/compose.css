@@ -1407,7 +1407,22 @@
 }
 
 [data-experience='basecamp'] .bccomp--c .bcmod {
-  background: var(--v2-face);
+  /*
+    THE MODULE'S OWN LINE, IN THE RULE THAT OWNS THE PANEL'S FACE (§§9-10).
+
+    It was written as a separate `.bcmod` rule first and lost on specificity to
+    this one -- which is the trap CLAUDE.md records about the basecamp prefix,
+    in its other form: the prefix was there and the DEPTH of the selector was
+    not. Measuring the computed background is what found it; reading either
+    rule on its own says nothing about which wins.
+
+    So the accent is a background LAYER on the face, above the gradient. That
+    keeps one place responsible for what a panel looks like, costs no layout,
+    is clipped by the panel's own radius, and cannot escape the element.
+  */
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    var(--v2-face);
   border: var(--v2-edge);
   box-shadow: var(--v2-lift);
   transition:
@@ -1421,6 +1436,12 @@
 */
 [data-experience='basecamp'] .bccomp--c .bcmod:hover,
 [data-experience='basecamp'] .bccomp--c .bcmod:focus-within {
+  /* The line strengthens with the rest of the treatment, in its own hue, so
+     the green glow keeps its meaning and the module keeps its identity. */
+  --bc-mod-ink: color-mix(in srgb, var(--bc-mod) 90%, transparent);
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    var(--v2-face);
   border: var(--v2-edge-hover);
   box-shadow: var(--v2-glow);
 }
@@ -2666,3 +2687,58 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   padding-top: var(--bc-3);
   border-top: 1px solid var(--bc-border-subtle);
 }
+
+/* ---------------------------------------------------------------------- *
+ * ONE HEADING COLOUR, AND A LINE EACH (§§9-10).
+ *
+ * The titles were muted grey and every module looked like every other module.
+ * Now the heading carries the hierarchy -- warm, quiet, and the same on every
+ * panel so it reads as a system rather than as decoration -- and identity is a
+ * two-pixel rule at the top edge, in a hue per module.
+ *
+ * Restrained on purpose. The accent appears in one place, at two pixels,
+ * desaturated; everything else on the panel is unchanged, so the board still
+ * reads as one dark object and the green interaction language keeps its
+ * meaning. A module with no hue of its own falls back to a neutral rather
+ * than to nothing, because a missing custom property computes to an empty
+ * string and would leave the rule invisible.
+ * ---------------------------------------------------------------------- */
+/*
+  NO `overflow: hidden`, NO PSEUDO-ELEMENT AND NO NEW CONTAINING BLOCK.
+
+  The first draft had all three and each is a trap this repository has paid
+  for. Clipping a panel cuts the resize handle, the #108 fade and any menu
+  hanging off a header. Making a previously static panel `position: relative`
+  re-parents every absolutely positioned descendant -- the same defect as
+  wrapping an already-positioned element. And the draft's own comment claimed
+  an absolutely positioned `::before` resolves its inset against its OWN
+  element, which is simply untrue: it resolves against the nearest POSITIONED
+  ancestor, so with the panel unpositioned the rule would have been drawn
+  across something else entirely.
+
+  A background layer needs none of it. It is clipped by the panel's own
+  border-radius for free, it costs no layout, it establishes nothing, and it
+  cannot escape the element it is painted on.
+*/
+[data-experience='basecamp'] .bcmod {
+  --bc-mod: var(--bc-mod-other);
+  --bc-mod-ink: color-mix(in srgb, var(--bc-mod) 72%, transparent);
+}
+[data-experience='basecamp'] .bcmod[data-mod='tasks'] { --bc-mod: var(--bc-mod-tasks); }
+[data-experience='basecamp'] .bcmod[data-mod='board'] { --bc-mod: var(--bc-mod-board); }
+[data-experience='basecamp'] .bcmod[data-mod='documents'] { --bc-mod: var(--bc-mod-documents); }
+[data-experience='basecamp'] .bcmod[data-mod='schedule'] { --bc-mod: var(--bc-mod-schedule); }
+[data-experience='basecamp'] .bcmod[data-mod='contacts'] { --bc-mod: var(--bc-mod-contacts); }
+[data-experience='basecamp'] .bcmod[data-mod='activity'] { --bc-mod: var(--bc-mod-activity); }
+
+/* The line answers a hover by strengthening its own hue rather than by
+   becoming another colour, so the green interaction language keeps its
+   meaning and the module keeps its identity. */
+/*
+  THE HEADING. One colour for all of them, which is what makes it hierarchy
+  rather than decoration -- and the hover still strengthens, so the header
+  keeps saying it is pressable.
+*/
+[data-experience='basecamp'] .bcmodtitle { color: var(--bc-heading); }
+[data-experience='basecamp'] .bcmodhead:hover .bcmodtitle { color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcmodhead h2 a { color: var(--bc-heading); }

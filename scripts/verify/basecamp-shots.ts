@@ -155,11 +155,17 @@ for (const size of sizes) {
       with no capture is a screen nobody is watching, so the harness opens the
       menu the way a person does rather than the control being moved back.
     */
-    await shot('home-arrange', slug, async () => {
-      await page.locator('[data-bc-pagemenu]').first().click()
-      await page.waitForTimeout(200)
-      await page.locator('[data-bc-arrange]').first().click()
-      await page.waitForTimeout(300)
+    /*
+      PUTTING A MODULE BACK, which is a strip on the board now rather than a
+      panel behind a menu (§13). It is drawn only when something is actually
+      off the page, so the capture has to take one off first -- and a capture
+      that photographs the empty case would photograph nothing at all.
+    */
+    await shot('home-putback', slug, async () => {
+      await page.locator('[data-mod="documents"]').first().hover()
+      await page.waitForTimeout(150)
+      await page.locator('[data-bc-modoff="documents"]').first().click()
+      await page.waitForTimeout(400)
     })
     /*
       And the menu itself, which nothing had ever photographed: it is where

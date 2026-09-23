@@ -29,6 +29,33 @@
   --bc-accent: #6ab3fd;
   --bc-accent-ink: #0e1d24;
   --bc-section-accent: #fbbda8;
+
+  /* --- Module identity (§§9-10) ------------------------------------------
+   *
+   * Grant, 23 September: "Dashboard modules currently look too similar. Give
+   * individual modules subtle visual differentiation. Use restrained
+   * accents/tints. Do NOT create a rainbow dashboard." And: "Module headings
+   * do not all need to remain white... Yellow/gold is an acceptable
+   * direction."
+   *
+   * So there is ONE heading colour, warm and quiet, and a per-module accent
+   * that appears as a two-pixel rule at the top of the panel and nowhere else.
+   * The differentiation is in a line you notice only when you look for it; the
+   * hierarchy is in the heading, which you notice immediately. A dashboard
+   * where every module is a different colour is the thing he asked not to have.
+   *
+   * The hues are deliberately close together and all desaturated against the
+   * dark surface, so the board still reads as one object.
+   */
+  --bc-heading: #e8c88f;
+  --bc-mod-tasks: #7fb4d8;
+  --bc-mod-board: #9db98a;
+  --bc-mod-documents: #c9a978;
+  --bc-mod-schedule: #b49ad4;
+  --bc-mod-contacts: #d99b93;
+  --bc-mod-activity: #8fb8b0;
+  /* Anything the board grows later, until it is given one of its own. */
+  --bc-mod-other: #8d9aa2;
   --bc-border-subtle: rgb(225 229 232 / 0.1);
   --bc-border-control: rgb(225 229 232 / 0.15);
   --bc-border-popover: #475257;

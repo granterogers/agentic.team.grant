@@ -95,12 +95,12 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 9.1 | Subtle per-module differentiation (restrained accents/tints) | TODO |
-| 9.2 | No rainbow dashboard | TODO |
-| 9.3 | Dark/luxurious/depth/shadow/glow character preserved | TODO |
-| 9.4 | Green hover/glow/shadow interaction language kept | TODO |
-| 10.1 | Consistent module-heading accent (yellow/gold acceptable) | TODO |
-| 10.2 | Stronger hierarchy and module identity, good readability, not "everything yellow" | TODO |
+| 9.1 | Subtle per-module differentiation (restrained accents/tints) | **DONE** — a 3px rule at the top of each panel, one hue per module |
+| 9.2 | No rainbow dashboard | **DONE** — six desaturated hues, each in one place only; the board still reads as one dark object |
+| 9.3 | Dark/luxurious/depth/shadow/glow character preserved | **DONE** — the depth treatment is untouched; the accent is a layer on the same face |
+| 9.4 | Green hover/glow/shadow interaction language kept | **DONE** — the hover strengthens the module's own hue and leaves the green glow alone |
+| 10.1 | Consistent module-heading accent (yellow/gold acceptable) | **DONE** — one warm gold for every module heading |
+| 10.2 | Stronger hierarchy and module identity, good readability, not "everything yellow" | **DONE** — hierarchy without a rainbow; captures in `.out/basecamp/` |
 
 ## 11 — Contact photos
 
