@@ -2402,6 +2402,54 @@ rushed at the end of a long run.
 
 Clean-pass count after pass 47: **0 of 5.**
 
+## Pass 48 — the class swept, and the deferred proof landed: CLEAN
+
+**Territory:** acting on pass 47's own closing line — *"when you fix one of
+these, grep the neighbouring gates for the same pronoun assumption before the
+third instance arrives."* Done immediately rather than written down and left.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**1. The pronoun class is CLOSED across the gates.** Every pattern in
+`quality.ts` that names a grammatical subject was checked:
+
+- `deniesWhatItHolds` — fixed in #361.
+- `assertsRecordsUnseen` — fixed in #362.
+- **`claimsToHaveRead` never had the hole**: its pattern is
+   `(?:the\s+|our\s+|your\s+)?` before the source noun, so *"I checked YOUR
+   calendar"* was always caught. It is the gate that was written with the
+   second person in mind, which is why it is the one that did not need it.
+- `the db read shows` is the SYSTEM named as the actor of a read — a different
+   class, correctly `the`, and widening it would be wrong.
+
+**No third instance.** A negative result, and the useful kind: the class was
+swept the same hour its second instance appeared, rather than waiting for a
+third to make it obvious.
+
+**2. THE DEFERRED PROOF LANDED, at 22:59.** All session I recorded that
+`app.say_once` was verified in migrations and unit tests but had **no
+production evidence**, because no duty had announced since the deploy. The
+2-hourly `office.notion_sync` ran:
+
+    duty_said: office.notion_sync, repeats 0, said 22:59
+    deliveries: 22:59, slack, sent
+
+The deployed worker called the two-argument form on a real duty, it returned
+TRUE (nothing was stored before, so it speaks), the fingerprint was written,
+and the announcement went out. **The mechanism is confirmed end to end in
+production**, not merely in a migration's drive block — which is what I said
+this pass would need and would not claim until it had.
+
+Its known limitation is unchanged and now measurable from the same row: the
+next sync at ~00:59 will carry a REWORDED body, so the fingerprint will differ
+and it will speak again. That is exactly #360, and 0589 — which fixes it by
+keying on a topic — remains committed and blocked behind the concurrent
+branch's two uncommitted migrations.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 48: **1 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
