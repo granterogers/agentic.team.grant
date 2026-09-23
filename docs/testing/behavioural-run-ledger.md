@@ -2674,6 +2674,34 @@ one destroys work.
 
 Clean-pass count after pass 53: **0 of 5** — reset by a systemic product defect.
 
+## Pass 54 — the gate widenings, in production: CLEAN
+
+**Territory:** my own #361 and #362, deployed an hour apart. Both WIDEN
+coherence gates, and this file is emphatic that a gate refusing good answers is
+the expensive direction — *"a gate that fires wrongly is one somebody switches
+off"*. So the question is not whether they catch more, but whether they now
+refuse something true.
+
+**Classification: NO DEFECT FOUND.**
+
+- **0 failed, 15 complete** in the 35 minutes since the last deploy.
+- **One quality-gate refusal**, at 22:54, minutes after #361 went out — which
+   is exactly what a regression would look like. It is not one:
+   - the job **recovered**: `complete` on `attempt 2`, so the refusal went
+     through #185's retry loop, which is the mechanism working rather than
+     failing;
+   - and `app.harness_job` says **true** — it is the concurrent session's
+     `voice:grant` traffic, not one of Grant's turns.
+
+**Checking a refusal COUNT would have been worse than not checking.** "One
+refusal since the deploy" reads as a regression and is a healthy retry on
+somebody else's test traffic. The two facts that settle it — the attempt number
+and the attribution — are both one query away and neither is in the count.
+
+**Gates:** lint, typecheck, test green earlier this pass; nothing changed since.
+
+Clean-pass count after pass 54: **1 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
