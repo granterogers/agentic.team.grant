@@ -76,11 +76,55 @@ and an obligation answer; turn 2 produced one `artifact.report` child.
 
 Clean-pass count after pass 0: **0 of 5.**
 
+### Pass 1 — deliberate retries, repeats and cancellation (deployed v783 → v784)
+
+Territory: idempotency crossed with deliberate retries; repeating a request;
+the authorisation that permits duplication. Materially different from pass 0.
+
+**NOT CLEAN — three systemic PRODUCT defects, all fixed.**
+
+1. **The clause that authorises duplication read a paraphrase.**
+   `wantsAnotherGo` was reading the thread resolver's rewrite. Driven live,
+   both directions occur: a deliberate retry lost, and one manufactured.
+   Fourth instance of the grounding-asymmetry class, and the first where the
+   rule is asymmetric — a guard that PERMITS may not read a paraphrase at all.
+2. **A reminder to make something was read as a request to make it now**
+   (#325, closed). Both recognisers fire on his own words; the artifact
+   reading won and the reminder was never added.
+3. **A repeated request was narrated as deduplicated and started anyway.**
+   `alreadyOn` gated the roster hand-off and `planAndPursue` and not the three
+   branches that start work.
+
+Evidence: `scripts/poc/resolver-vs-retry.ts` (the live resolver against four
+elliptical retry fragments) and `npm run verify:another-go` (three real turns
+through the deployed worker; it found defect 3 on its first honest run).
+
+Sabotage: seven in total across the three fixes, each printed as landed and
+each turning the intended checks red.
+
+Measured frequency: zero occurrences of `again`, `remind` or an artifact
+deferral in Grant's 313 real messages, against a control finding `report` 5
+times and `task` 9 — so the filter works and these shapes have not yet arisen
+in a corpus this size. All three are features he asked for, and the
+consequence of each is silent: duplicated work, or work silently replaced by
+different work.
+
+Also classified, and **not** defects: eight real specialist answers finished
+after their parent and were never delivered — five `notebook.generate`, two
+`notebook.add_source` (mechanical steps the parent relays, `announce=false`)
+and two belonging to `verify:escapes`' deliberately real-looking positive
+control. EXPECTED BEHAVIOUR and INSTRUMENT respectively.
+
+Clean-pass count after pass 1: **0 of 5.**
+
 ## Outstanding investigations
 
-- **#325** — `wantsFile`'s veto reads the rewrite while `changesHis` reads his
-  words. Structural watch item from the same class as #322/#327; no collision
-  demonstrated yet.
+- ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
+  words and does not need the resolver at all.
+- **`verify:escapes` leaves two children attributed `telegram:grant`.** Its
+  teardown rewrites its parents and not the work they handed on, so two jobs
+  sit permanently in every "real traffic" query. Measurement contamination
+  rather than an escape — nothing was delivered.
 - **#326** — `check:migrations` passes while migrations are applied to the
   shared database but absent from this branch.
 - **#321** — `taskTitle` borrows `requestBody`'s object extraction as a title.

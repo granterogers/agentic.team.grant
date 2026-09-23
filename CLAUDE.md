@@ -3105,6 +3105,63 @@ Each of these cost real time. They are here so they cost it once.
   Anything a session concludes about project continuity is a conclusion about
   the dashboard path only.
 
+- **A guard that PERMITS may not read a paraphrase — the fourth instance of
+  the class, and the first where the grounding rule is asymmetric.**
+  `wantsAnotherGo` is the only thing in this office that turns off
+  `enqueue_child_once`, and it read `instruction`, which
+  `resolveAgainstThread` replaces eighty lines above the gate. Every pattern
+  in `again.ts` is anchored to a whole short sentence — the shape an
+  elliptical follow-up has, and exactly the shape the resolver expands. Driven
+  against the live resolver on a real thread, BOTH directions happen: *"try it
+  again"* became *"try the view on what the venue change does to the budget
+  again"*, which the recogniser declines because the referent is fifty
+  characters and `IT` caps at forty; and *"give it another go"* became *"Ask
+  them again."*, which authorises a duplicate he never asked for. #327 could
+  afford a disjunction because its guard SUPPRESSES; this one permits, so it
+  is `resolved.from ?? instruction` outright — always his own words, never the
+  paraphrase. And a decision like this is passed DOWN rather than re-derived:
+  `planAndPursue` took `goalAsHeSaidIt`, which is named for what it mostly is
+  and is the resolved text, correctly, because a plan needs the referent
+  expanded.
+- **"Remind me to write the one-pager" is a reminder, not a one-pager.**
+  `artifactRequest` and `personalTaskRequest` both fire on that sentence — on
+  his own words, no resolver involved — and the artifact reading was taken
+  first and vetoed the task outright, so the office produced the document and
+  never added the reminder. Performing it now is the one answer that defeats
+  the request: he had just said when he wanted to do it. The mood of a
+  sentence is set by its main clause and the making is the OBJECT of the
+  reminder — the fourth time this file has recorded that shape, after a
+  complement clause read as a condition, a delegation's span read as three
+  intents, and *"suggest when we should decide"* filed as a standing
+  procedure.
+- **The office offered him the choice and then took it for him, in the next
+  sentence.** Asked the same thing twice — #316's measured real shape, two
+  identical PDF requests three minutes apart — one reply said *"You asked me
+  that a moment ago and it came back … Say the word if you want it done again
+  from scratch"* and then *"Writing that up as a PDF"*. `alreadyOn`'s own
+  comment two thousand lines above already said *"do not start a second one"*,
+  and the three branches that START work had never been told. The structural
+  door cannot help: `jobs_one_live_per_idempotency_key` is partial on LIVE
+  jobs, deliberately, so once the first report completes a second is
+  permitted, and by the three-minute mark it has. A narration that describes a
+  decision nothing enforced is worse than no narration, because he believes it.
+- **A status question answered well is a status question that started no
+  work, and a harness asking one learns nothing about duplication.** The first
+  draft of `verify:another-go` asked *"a view on where this has got to"*; the
+  office answered it outright from the project's documents, so zero children
+  either way and both the negative control and the authorised turn were
+  vacuous. **Choose a subject the mechanism under test can actually act on** —
+  here the sentence #316 was measured on.
+- **The positive control of a containment suite is REAL-LOOKING by design, so
+  it is invisible to every witness that reads attribution.**
+  `verify:escapes` sends as `telegram:grant` on purpose — otherwise the
+  control proves nothing — and two of its children still carry that, which is
+  why a query for "real specialist answers that were never delivered" returned
+  them. It rewrites its own parents in teardown and the children were missed.
+  The rule is #45's, one level out: a suite testing a filter cannot name its
+  subject the way the filter matches, so it corrects the attribution AFTER the
+  assertion rather than before it — and it must correct all of it.
+
 ---
 
 ## Visual standard
