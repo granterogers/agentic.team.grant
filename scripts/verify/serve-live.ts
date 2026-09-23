@@ -13,7 +13,7 @@
  * distinction is kept in the report rather than blurred.
  */
 import { readFile } from 'node:fs/promises'
-import { type Server, createServer } from 'node:http'
+import { createServer, type Server } from 'node:http'
 import { extname, join } from 'node:path'
 import { rewrites } from './serve-studio.ts'
 
