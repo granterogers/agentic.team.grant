@@ -1984,6 +1984,52 @@ four defects here, including the one he complained about twice.
 
 Clean-pass count after pass 40: **4 of 5.**
 
+## Pass 41 — autonomy and the approval floor: CLEAN
+
+**Territory:** #15's safety boundary — whether a destructive action can ever
+proceed without asking him. The highest-consequence thing in the product and
+the last untested one.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked:**
+
+1. **The floor exists as a CHECK, not a sentence.**
+    `autonomy_policy_level_three_always_asks`:
+    `action_level < 3 OR verdict <> 'proceed'`. The policy matrix is data Grant
+    may edit, so the guarantee has to be a constraint or it is only a
+    convention.
+2. **Driven, not read.** Inserting `('act', 3, 'proceed')` inside a rollback is
+    **REFUSED** by that constraint. A level-3 action cannot be made to proceed
+    however the matrix is edited.
+3. **And the constraint is not simply refusing everything**, which is how this
+    test could have passed vacuously. The real matrix holds `proceed` at levels
+    0 (x4), 1 (x2) and 2 (x1) — and at level 3 holds only `ask` (x3) and
+    `refuse` (x1). Both directions, from live data.
+4. **`app.request_approval` always asks.** It returns a blocker id rather than
+    a verdict, so the destructive path cannot resolve to "go ahead" in code
+    either. It also refuses an unknown follow-on kind with an honest sentence
+    naming what it refused — *"office.instruction is not a kind an approval may
+    start"* — rather than failing obscurely.
+5. **Nothing left behind**: 0 rows carrying the drive's marker.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 41: **5 of 5.**
+
+---
+
+**THE STOPPING CRITERIA'S FIRST HALF IS MET.** Five consecutive qualifying
+clean passes, in five materially different territories: mail and calendar
+duties (37), the coherence gates (38), routing (39), teaching and standing
+rules (40), the approval floor (41). The required **final adversarial synthesis
+pass** follows, and any meaningful defect it finds resets the streak.
+
+**Stated honestly before that pass begins:** passes 38–41 drove predicates and
+constraints directly rather than end to end through live turns. That is a real
+limitation, deliberately chosen — a fresh live corpus is what the standing rule
+forbids manufacturing — and the synthesis pass should attack it.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
