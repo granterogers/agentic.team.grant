@@ -80,7 +80,7 @@ import {
   pageRequest,
   type RequestedKind,
 } from '../agents/actions.ts'
-import { wantsAnotherGo } from '../agents/again.ts'
+import { type AnotherGo, wantsAnotherGo } from '../agents/again.ts'
 import { alreadyPursuing } from '../agents/already.ts'
 import { callsItOff } from '../agents/calloff.ts'
 import {
@@ -214,6 +214,21 @@ export const planAndPursue = async (
   router: ProviderRouter,
   job: Job,
   request: string,
+  /*
+    WHETHER HE AUTHORISED ANOTHER ATTEMPT -- DECIDED UPSTREAM, FROM HIS WORDS.
+
+    `request` is `goalAsHeSaidIt`, which is named for what it is MOSTLY: the
+    resolved instruction, because a plan needs the referent expanded. That
+    makes it the wrong text to re-derive this from, and re-deriving it here is
+    how a model paraphrase could turn off `enqueue_child_once` -- the
+    structural guarantee that two messages 120ms apart cannot both start work.
+    The caller has already read his own pre-rewrite sentence; it passes the
+    answer rather than the text, so there is one decision and it cannot drift.
+
+    The default keeps the older behaviour for a caller that has no such
+    reading of its own.
+  */
+  deliberately: AnotherGo | null | undefined = undefined,
 ): Promise<string | null> => {
   const canDo = new Set(performable())
   const [granted, roster] = await Promise.all([
@@ -273,7 +288,7 @@ export const planAndPursue = async (
     while the office stays honest about what is running; a false positive
     spends the model twice and produces two answers to one question.
   */
-  const deliberate = wantsAnotherGo(request)
+  const deliberate = deliberately === undefined ? wantsAnotherGo(request) : deliberately
 
   /*
     THE REPHRASED CASE IS DECIDED ABOVE, ONCE.
@@ -2207,11 +2222,40 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         another independent attempt. It is deterministic because it is the
         only thing that AUTHORISES duplication.
       */
-      const askedForAnother = wantsAnotherGo(instruction)
+      /*
+        AND IT READS WHAT HE SAID, NOT WHAT THE RESOLVER MADE OF IT.
+
+        Fourth instance of the class #322 and #327 name. `instruction` was
+        replaced by `resolveAgainstThread` eighty lines up, and every pattern
+        in `again.ts` is anchored to a whole short sentence -- which is what
+        an elliptical follow-up is, and precisely what the resolver expands.
+        Driven against the live resolver on a real thread, both directions
+        happen:
+
+            he said : try it again
+            resolved: try the view on what the venue change does to the
+                      budget again
+            -> DECLINED (the referent is 50 characters; `IT` caps at 40)
+
+            he said : give it another go
+            resolved: Ask them again.
+            -> 'retry', which he never authorised
+
+        The first loses a deliberate retry and tells him it is already
+        running. The second is the expensive one this file warns about: a
+        paraphrase MANUFACTURING the only clause that authorises duplication.
+
+        `resolved.from` is his pre-rewrite text when there is one, and when
+        there is not, `instruction` is untouched -- so this is always his own
+        words, never the disjunction #327 could afford. A guard that PERMITS
+        may not read a paraphrase.
+      */
+      const hisWords = resolved.from ?? instruction
+      const askedForAnother = wantsAnotherGo(hisWords)
       const alreadyRunning =
         String(payload.handed_off_by ?? '') !== '' ||
         askedForAnother !== null ||
-        asksWhoIsOnIt(instruction) !== null
+        asksWhoIsOnIt(hisWords) !== null
           ? null
           : await deps.db
               .execute(`
@@ -4166,7 +4210,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const pursuing =
         actedAlready || isBranch || requests.length === 0
           ? null
-          : await planAndPursue(deps.db, deps.router, job, goalAsHeSaidIt).catch(
+          : await planAndPursue(deps.db, deps.router, job, goalAsHeSaidIt, askedForAnother).catch(
               async (error: unknown) => {
                 await deps.db
                   .execute(`

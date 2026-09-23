@@ -228,7 +228,15 @@ describe('the duplicate decision is made once, above everything that starts work
       name was referenced — the same substring trap #268 records, and the
       second time in this file.
     */
-    expect(withoutComments).toMatch(/const askedForAnother = wantsAnotherGo\(instruction\)/)
+    expect(withoutComments).toMatch(/const askedForAnother = wantsAnotherGo\(hisWords\)/)
+    /*
+      And `hisWords` is his own sentence rather than the resolution of it.
+      This assertion used to pin `wantsAnotherGo(instruction)` verbatim and
+      went red on the correct change that grounded it — the wording lock
+      CLAUDE.md records six times. What it means is that the authorisation is
+      wired to a real reading; what it said was which variable held it.
+    */
+    expect(withoutComments).toMatch(/const hisWords = resolved\.from \?\? instruction/)
   })
 
   it('and a branch job never suppresses itself', () => {

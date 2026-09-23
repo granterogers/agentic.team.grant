@@ -46,6 +46,26 @@ const TRY_AGAIN = new RegExp(
   'i',
 )
 
+/*
+  ANOTHER GO, ANOTHER CRACK, ANOTHER LOOK.
+
+  The same authorisation said without the word "again", which is how most
+  people ask for it out loud. `ANOTHER_PERSON` below already carries "have a
+  go at" -- but only where somebody ELSE is named, so "give it another go"
+  fell between the two and was read as no authorisation at all. Measured
+  against 428 real commands: neither form has occurred yet, so this is the
+  semantic class being covered rather than a sentence being patched.
+
+  Anchored to the whole message, exactly as strictly as `RETRY`, because a
+  false positive duplicates work.
+*/
+const ANOTHER_GO = new RegExp(
+  String.raw`^\s*(?:ok(?:ay)?[,\s]+|right[,\s]+|please[,\s]+)*(?:can you\s+|could you\s+|would you\s+)?` +
+    String.raw`(?:give|have)\s+(?:${IT}\s+)?another\s+(?:go|crack|attempt|pass|bash|stab)` +
+    String.raw`(?:\s+at\s+${IT})?[,.!\s]*(?:please)?\s*[.!?]?\s*$`,
+  'i',
+)
+
 const ANOTHER_PERSON = new RegExp(
   String.raw`\b(?:get|have|ask|put)\s+(?:somebody|someone|another(?: person| one)?|a second(?: person| pair of eyes)?)\s+` +
     String.raw`(?:else\s+)?(?:to\s+)?(?:look(?: at)?|take a look(?: at)?|go over|review|check|work on|have a go(?: at)?|on)\b`,
@@ -74,6 +94,6 @@ export function wantsAnotherGo(text: string): AnotherGo | null {
   if (said === '') return null
   if (NOT_AN_INSTRUCTION.test(said)) return null
   if (ANOTHER_PERSON.test(said) || INDEPENDENT.test(said)) return 'another_person'
-  if (RETRY.test(said) || TRY_AGAIN.test(said)) return 'retry'
+  if (RETRY.test(said) || TRY_AGAIN.test(said) || ANOTHER_GO.test(said)) return 'retry'
   return null
 }
