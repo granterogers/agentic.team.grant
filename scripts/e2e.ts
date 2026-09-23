@@ -509,6 +509,17 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   */
   ['check:standing', 'every standing rule in a real prompt is one the office would accept today'],
   /*
+    AND NOTHING IS TALKING AT HIM.
+
+    `office.provision_channels` sent 756 messages to Grant's real Telegram chat
+    on 16 and 17 September, 746 of them in one day. 0477 bounded that enqueuer
+    and nothing was watching the class: `check:leaks` asks whether HARNESS
+    traffic reached a real destination, and `app.office_health()` reports
+    failures, stalls and waiting work — a duty that runs perfectly and sends
+    perfectly is none of those.
+  */
+  ['check:chatter', 'no duty is sending Grant more than a hundred messages a day'],
+  /*
     AND A RULE HE CANNOT SEE FROM WHERE HE IS STANDING IS STILL ONE IT HOLDS.
 
     `believed` is scoped to the level the turn is at, so from inside a project

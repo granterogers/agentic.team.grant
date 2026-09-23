@@ -2675,8 +2675,27 @@ Each of these cost real time. They are here so they cost it once.
   hardest kind to see and the third instance in this file. 0477 bounds the
   sweep to one attempt a day per project and skips a project with an open
   blocker about it; the handler raises that blocker once, so the office asks
-  rather than repeating. Grant was spared 740 messages by an accident — the job
-  had no reply-to and no Slack destination — and luck is not a design.
+  rather than repeating.
+
+  **The claim that stood here — that Grant was spared those messages by an
+  accident, because the job had no reply-to and no Slack destination — is
+  FALSE, and it stood in this file for six days.** `public.deliveries` holds
+  756 rows for that kind with `state = 'sent'`, `channel = 'telegram'` and
+  `target_ref = 1386648496`, which is his real chat; 746 of them on 17
+  September alone. Their message references are a contiguous sequence shared
+  with `google.read_mail` and `tasks.remind` deliveries to the same chat on
+  neighbouring days, which is what rules out a stub. **He received them.** One
+  query settles a claim like this and the entry was written without it — this
+  file's own rule about a baselined reason, applied to this file.
+
+  And nothing was watching the CLASS. `check:leaks` asks whether HARNESS
+  traffic reached a real destination; `app.office_health()` reports failures,
+  stalls and waiting work, and a duty that runs perfectly and sends perfectly
+  is none of those. `npm run check:chatter` is that witness, in the gate, with
+  a ceiling of a hundred a day per kind — the busiest honest duty-day on record
+  is `google.read_mail` at 48 — and it carries its own positive control: the
+  September burst is permanently in `deliveries`, so the same predicate pointed
+  at that window must still find it, or the query has stopped working.
 
 - **#270 asked Grant for a scope his app has had since 5 September.** The
   Issue's premise was that `verify:slack` must leave one channel behind because

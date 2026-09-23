@@ -312,7 +312,8 @@
     "delegation:delta": "tsx scripts/delegation-delta.ts",
     "verify:another-go": "tsx scripts/verify/another-go.ts",
     "check:standing": "tsx scripts/check-standing.ts",
-    "verify:withdraw": "tsx scripts/verify/withdraw.ts"
+    "verify:withdraw": "tsx scripts/verify/withdraw.ts",
+    "check:chatter": "tsx scripts/check-chatter.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
