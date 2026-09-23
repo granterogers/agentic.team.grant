@@ -1857,6 +1857,44 @@ None of the three was a product fault.
 
 Clean-pass count after pass 37: **1 of 5.**
 
+## Pass 38 — the coherence gates: CLEAN
+
+**Territory:** the anti-fabrication core — the calendar's real data, and the
+four guards that decide whether an answer may claim anything. This is what the
+whole programme is about, and no pass this session had driven them directly.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked, all as pure functions so no traffic was created:**
+
+1. **The calendar holds real material** — 14 events, 6 upcoming, 9 September to
+    6 October. So the diary questions the gates guard are answerable at all.
+2. **`fabricatedWhen`: 8 of 8, both directions.** A time and a date present in
+    the grounding pass; an invented `3.19 PM` and a pair of invented slots are
+    refused. And the recorded false positive stays fixed: `£63.50 on a £40
+    plan` and `1.80 EUR` are money, not clock times, and neither fires. That
+    one matters more than the catches — a gate that refuses good answers is one
+    somebody switches off.
+3. **`established()` still refuses to launder.** Grant's words and a retrieved
+    document are provenance; **the office's own earlier prose is not**. That is
+    the exact mechanism by which three honest denials became two fabricated
+    calendar entries with clock times, and it holds.
+4. **The three claim gates: 6 of 6, both directions.** `claimsToHaveRead` fires
+    on *"I checked the calendar"* and not on *"I have nothing on that"*;
+    `claimsToHaveSent` fires on *"I posted a note"* and **not** on *"I will post
+    this once you confirm"*, because a plan is not a claim; `claimsGrantSaid`
+    fires on *"You told me"* and not on *"The price looks like"*.
+
+**The honest limitation:** these are unit-level drives of the predicates, not
+live turns. They prove the gates decide correctly on the sentences given to
+them; they do not prove the handler hands them the right grounding. That half is
+covered by the handler tests and by #237's corpus, and a fresh live corpus is
+exactly what the standing rule says NOT to manufacture.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 38: **2 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
