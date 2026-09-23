@@ -1609,6 +1609,49 @@ rows rather than counts** — which is the reusable part of a clean pass:
 
 Clean-pass count after pass 32: **1 of 5.**
 
+## Pass 33 — the undo path: CLEAN
+
+**Territory:** reversals — the highest-consequence thing the office offers, and
+never behaviourally tested. `check:undo` (pass 24) proves every offered reversal
+is one `app.hq_undo` KNOWS; it does not prove a press reverses anything.
+
+**Classification: NO MEANINGFUL DEFECT.** One latent observation filed as
+[#358](https://github.com/granterogers/agentic.team.grant/issues/358).
+
+**What was checked:**
+
+1. **Undo works end to end.** Driven inside a rollback on a real project:
+    `todo → done → app.hq_undo → todo`, `ok=t`, nothing left behind. This is
+    the thing no earlier pass had done.
+2. **"396 offered, 0 ever undone" is not a broken press.** Every row is
+    `expired`, and the descriptions are harness — `[todos-live-probe]`,
+    *"Conduct first five interviews marked todo"* x44. Near-zero real usage
+    makes the zero uninformative rather than damning.
+3. **The windows are coherent rather than an oversight.** Two minutes for a
+    direct gateway action, which is a click he just made; **120** minutes for
+    `tasks_extracted`, which the office initiates and reports. I suspected the
+    two-minute window made office-initiated undo unreachable — it does not,
+    because office-initiated undo is the 120-minute kind.
+4. **The swallowed `.catch(() => undefined)` on the offer has never fired.**
+    All 6 `complete` extraction jobs got an offer; all 6 `failed`/`cancelled`
+    correctly did not. Perfect correlation, so the silence is not hiding a
+    failure.
+5. **No harness leak to a surface he reads** — nothing reads
+    `undoable_actions` outside the undo functions themselves.
+
+**The one thing filed, and why it is not a defect:**
+`undoable_actions.job_id` has never held a value, because `app.undo_offer`
+takes no job parameter. Nothing is lost — the job is recorded one level down in
+the reversal payload, which is what `hq_undo` actually reverses with — and no
+reader attributes these rows. It is recorded because it is #357's exact shape
+waiting for a reader: 396 unattributable rows, most of them harness, and the
+obvious guard would be the bug #357 just fixed. Not built, because a fix
+nothing needs is manufactured work.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 33: **2 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
