@@ -1,0 +1,2608 @@
+/*
+  THE TYPE FLOOR IS 12px, AND THIS FILE WAS BREAKING IT IN ELEVEN PLACES.
+
+  The visual standard has said 12px since the beginning and `verify:ui`
+  enforces it - but only on the surfaces it walks. The Card Table's own
+  typography was never measured: its column names were 10.5px and its card
+  meta 11.5px, which is what "the Card Table renders strangely" turns out to
+  mean once you measure instead of squint. Raised here rather than per rule,
+  because a floor that is applied selectively is not a floor.
+*/
+/*
+  The tool miniatures and the two §21 compositions.
+
+  Its own file rather than another thousand lines in `bc.css`, because §26
+  forbids a second frontend monolith and because an experiment that can be
+  deleted in one file is an experiment that will actually be deleted when it
+  has answered its question.
+
+  Loaded AFTER bc.css, so its phone block at the end of this file wins on
+  source order. A media query adds no specificity and this repository has been
+  bitten twice by writing phone rules above the base rules they override.
+
+  Everything is scoped to the experiment. Nothing here can reach the default
+  Team HQ.
+*/
+
+/* ---------------------------------------------------------------- people -- */
+
+[data-experience='basecamp'] .bcface {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcface--md { width: 32px; height: 32px; font-size: 13px; }
+[data-experience='basecamp'] .bcface img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* The monogram sits underneath, so a face that never loads is still a person. */
+[data-experience='basecamp'] .bcfacemono { line-height: 1; }
+
+[data-experience='basecamp'] .bcpresence {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+[data-experience='basecamp'] .bcpresence .bcface { margin-left: -6px; box-shadow: 0 0 0 2px var(--bc-surface); }
+[data-experience='basecamp'] .bcpresence .bcface:first-child { margin-left: 0; }
+
+/* ------------------------------------------------------------- the head -- */
+
+/*
+  NO TITLE, NO PURPOSE. Both left the header (#10) and their rules left with
+  them, along with `.bcprojtitle`, the flex row that held the mark beside the
+  h1. CSS for an element nothing renders is not harmless: it is a description
+  of a screen that no longer exists, and the next person reads it as one.
+*/
+[data-experience='basecamp'] .bchead { margin: 0 0 20px; }
+[data-experience='basecamp'] .bcstate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+[data-experience='basecamp'] .bcstatecount { color: var(--bc-text-muted); font-size: 13px; }
+
+/* ----------------------------------------------------------- a module --- */
+
+[data-experience='basecamp'] .bcmod {
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-r-sheet);
+  padding: 16px 18px 18px;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcmodbody { min-width: 0; }
+[data-experience='basecamp'] .bctaskwho { display: inline-flex; flex: 0 0 auto; }
+[data-experience='basecamp'] .bcmodhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcmodhead h2 { margin: 0; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
+/*
+  The title is a heading rather than a link now: the whole header is the
+  press, so a second, smaller target inside it would be the pixel-precise
+  thing Grant asked to be rid of.
+*/
+[data-experience='basecamp'] .bcmodtitle { color: var(--bc-text-muted); }
+/*
+  THE TITLE DOES NOT SHRINK; THE COUNTS DO.
+
+  Both are flex children, so both shrank - and on a 390px phone the Card
+  Table's counts ("5 not started, 2 in progress, 1 stuck, 2 done") took 226 of
+  336 pixels and squeezed the title to 44, which broke it across three lines as
+  CARD TABL / E. A panel whose name is broken mid-word does not read as a name
+  at all, and the header went from 24px tall to 72.
+
+  The name is the fixed point of a header and the summary beside it is the part
+  that can lose room, so the title keeps its width and the counts wrap under
+  themselves. Measured, not read: `npm run probe` on `.bcmodtitle`.
+*/
+[data-experience='basecamp'] .bcmodtitle { flex: 0 0 auto; white-space: nowrap; }
+[data-experience='basecamp'] .bcmodmeta { min-width: 0; text-align: right; }
+[data-experience='basecamp'] .bcmodhead:hover .bcmodtitle { color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcmodhead h2 a { color: var(--bc-text-muted); text-decoration: none; }
+[data-experience='basecamp'] .bcmodhead h2 a:hover,
+[data-experience='basecamp'] .bcmodhead h2 a:focus-visible { color: var(--bc-accent); text-decoration: underline; }
+/*
+  THE HEADING LINK IS THE ONLY CONTROL IN A COMPOSITION, and it measured
+  18px high on a phone - so every one of them failed the 44px floor, on the
+  device where the floor exists. `bc.css` has a coarse-pointer rule and it
+  names the controls it knew about; a new control is not covered by it.
+
+  The target is padded rather than made taller, so the heading's position in
+  the module does not move: the row it sits in already has the height, and
+  what was missing was the link claiming it.
+*/
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcmodhead h2 a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding-right: 12px;
+    margin: -13px 0;
+  }
+  [data-experience='basecamp'] .bcmodhead { padding-bottom: 4px; }
+}
+
+[data-experience='basecamp'] .bcmpty { margin: 0; color: var(--bc-text-muted); font-size: 13px; }
+[data-experience='basecamp'] .bcmore { margin: 8px 0 0; color: var(--bc-text-muted); font-size: 12.5px; }
+
+/* --------------------------------------------------------- to-do lists -- */
+
+[data-experience='basecamp'] .bclists { display: grid; gap: 18px; }
+[data-experience='basecamp'] .bclisthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+[data-experience='basecamp'] .bclisthead h4 { margin: 0; font-size: 15px; color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bclistcount {
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bctasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+[data-experience='basecamp'] .bctask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bctick {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1.5px var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bctick--on {
+  background: var(--bc-accent);
+  box-shadow: none;
+  position: relative;
+}
+[data-experience='basecamp'] .bctick--on::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  width: 4px;
+  height: 7px;
+  border: 2px solid var(--bc-accent-ink);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(40deg);
+}
+[data-experience='basecamp'] .bctasktitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bctask--done .bctasktitle { color: var(--bc-text-muted); text-decoration: line-through; }
+[data-experience='basecamp'] .bctaskdue {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  color: var(--bc-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+[data-experience='basecamp'] .bctaskdue--late { color: var(--bc-section-accent); font-weight: 600; }
+
+/* --------------------------------------------------------- card table --- */
+
+[data-experience='basecamp'] .bccols {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+[data-experience='basecamp'] .bccol { min-width: 0; }
+[data-experience='basecamp'] .bccolhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bccolhead h4 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--bc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bccolcount { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bccol[data-stage='blocked'] .bccolhead { border-bottom-color: var(--bc-section-accent); }
+[data-experience='basecamp'] .bccol[data-stage='done'] .bccolhead { border-bottom-color: var(--bc-accent); }
+[data-experience='basecamp'] .bccard {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--bc-canvas);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 8px;
+  padding: 8px 9px;
+  margin-bottom: 6px;
+}
+[data-experience='basecamp'] .bccardtitle { flex: 1 1 auto; min-width: 0; font-size: 12.5px; line-height: 1.35; }
+[data-experience='basecamp'] .bccolempty { margin: 0; color: var(--bc-text-muted); }
+
+/* ------------------------------------------------------------ calendar -- */
+
+[data-experience='basecamp'] .bccalwrap {
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bccalmonth {
+  font-size: 12.5px;
+  color: var(--bc-text-muted);
+  margin-bottom: 8px;
+}
+[data-experience='basecamp'] .bccalgrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+[data-experience='basecamp'] .bccal-dow {
+  font-size: 10px;
+  color: var(--bc-text-muted);
+  text-align: center;
+  padding-bottom: 2px;
+}
+[data-experience='basecamp'] .bccal-day,
+[data-experience='basecamp'] .bccal-pad {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  font-size: 11px;
+  color: var(--bc-text-muted);
+  border-radius: 4px;
+}
+[data-experience='basecamp'] .bccal-day--has {
+  background: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+  font-weight: 600;
+}
+[data-experience='basecamp'] .bccal-day--today { box-shadow: inset 0 0 0 1.5px var(--bc-accent); color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcagenda { min-width: 0; }
+[data-experience='basecamp'] .bcagendaitem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--bc-border-subtle);
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcagendaitem:last-of-type { border-bottom: 0; }
+[data-experience='basecamp'] .bcagendadate {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  padding: 3px 0;
+  border-radius: 6px;
+  background: var(--bc-canvas);
+  box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcagendadd { font-size: 14px; font-weight: 600; line-height: 1; color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcagendamm { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcagendawhat {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/*
+  LATE, VISIBLY. A ring in the section accent is invisible at the size the
+  miniature draws this, so an overdue day was indistinguishable from any other
+  on the one pane whose subject is dates. The number carries the colour.
+*/
+[data-experience='basecamp'] .bcagendaitem--late .bcagendadate {
+  box-shadow: inset 0 0 0 1.5px var(--bc-section-accent);
+  background: color-mix(in srgb, var(--bc-section-accent) 18%, var(--bc-canvas));
+}
+[data-experience='basecamp'] .bcagendaitem--late .bcagendadd,
+[data-experience='basecamp'] .bcagendaitem--late .bcagendamm { color: var(--bc-section-accent); }
+[data-experience='basecamp'] .bccalnote { margin: 10px 0 0; font-size: 12px; color: var(--bc-text-muted); }
+
+/* ---------------------------------------------------------------- chat -- */
+
+[data-experience='basecamp'] .bcchat { display: grid; gap: 12px; }
+[data-experience='basecamp'] .bcsaid { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+[data-experience='basecamp'] .bcsaidbody { min-width: 0; }
+[data-experience='basecamp'] .bcsaidwho { font-weight: 600; color: var(--bc-text-strong); font-size: 13px; }
+[data-experience='basecamp'] .bcsaidwhen { margin-left: 8px; font-size: 12px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsaidtext { margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; max-width: 60ch; }
+
+/* -------------------------------------------------------------- people -- */
+
+[data-experience='basecamp'] .bccrew { display: grid; gap: 4px; }
+[data-experience='basecamp'] .bcmate {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 7px 0;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcmatebody { flex: 1 1 auto; min-width: 0; display: grid; }
+[data-experience='basecamp'] .bcmatename {
+  font-size: 13.5px;
+  color: var(--bc-text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcmatedoing {
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/*
+  A HANDED-BACK DOCUMENT IS NOT A COLLEAGUE.
+  The output row carried its author's face, so a one-pager appeared in a list
+  of people with a monogram beside it. A page glyph says thing where a face
+  says person, and the author stays in the meta line where they belong.
+*/
+[data-experience='basecamp'] .bcmadepage {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 32px;
+  border-radius: 2px;
+  background: var(--bc-text-strong);
+  opacity: 0.85;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+[data-experience='basecamp'] .bcmate--asks,
+[data-experience='basecamp'] .bcmate--made { border-top: 1px solid var(--bc-border-subtle); }
+
+/* ------------------------------------------------------------- sources -- */
+
+/*
+  A healthy connection has almost nothing to say, so a quiet row is quiet:
+  the name carries the ink and the rest is muted. Only a row that needs Grant
+  raises its voice, and it does so with the section accent rather than with
+  size, so the page does not shout at him about something that is fine.
+*/
+[data-experience='basecamp'] .bcsources { display: grid; gap: 2px; }
+[data-experience='basecamp'] .bcsource {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name when' 'what what';
+  gap: 1px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcsource:last-of-type { border-bottom: 0; }
+[data-experience='basecamp'] .bcsourcename {
+  grid-area: name;
+  font-size: 13.5px;
+  color: var(--bc-text-strong);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcsourcewhat {
+  grid-area: what;
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcsourcewhen { grid-area: when; font-size: 12px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsource--trouble .bcsourcewhen { color: var(--bc-section-accent); font-weight: 600; }
+
+/* ------------------------------------------------------------- a person -- */
+
+[data-experience='basecamp'] .bcnext {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------- what is elsewhere - */
+
+/*
+  Quiet on purpose. It exists so that a tool this experiment has not built is
+  still reachable, which is a different job from presenting the project - and
+  giving it the same weight as a tool would say the hand-off matters as much
+  as the work.
+*/
+[data-experience='basecamp'] .bcmod--quiet {
+  background: transparent;
+  border-color: transparent;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* ----------------------------------------------------------- documents -- */
+
+[data-experience='basecamp'] .bcdocs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 14px;
+}
+[data-experience='basecamp'] .bcdoc { margin: 0; min-width: 0; }
+/*
+  The "N more filed" line is a row of its own, not a grid cell. As a cell it
+  took a thumbnail's place - sitting beside the fourth document with a hole
+  where the fifth would be, which reads as a missing document rather than as a
+  count.
+*/
+[data-experience='basecamp'] .bcdocs > .bcmore { grid-column: 1 / -1; }
+[data-experience='basecamp'] .bcpage {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  aspect-ratio: 3 / 4;
+  padding: 10px 9px;
+  /*
+    PAPER, NOT A LIGHT SOURCE. `--bc-text-strong` as a fill made four
+    thumbnails the loudest thing on a dark page - brighter than the project
+    name, which is the one element §16 says must dominate. A document should
+    read as paper and paper in a dim room is not white.
+  */
+  background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+  overflow: hidden;
+}
+[data-experience='basecamp'] .bcpline { height: 3px; border-radius: 2px; background: var(--bc-canvas); opacity: 0.38; }
+[data-experience='basecamp'] .bcpline:first-child { height: 6px; opacity: 0.6; }
+[data-experience='basecamp'] .bcdoc figcaption { display: grid; gap: 2px; margin-top: 8px; }
+[data-experience='basecamp'] .bcdoctitle {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--bc-text-strong);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/*
+  ONE LINE. The meta wrapped - "Document 27,841" then "words" on its own line -
+  so one caption was three lines while its neighbours were two, and the extra
+  line sat under the next row's thumbnail. A title may take two lines because a
+  title is the content; a word count may not, because the wrap says nothing the
+  first line did not.
+*/
+[data-experience='basecamp'] .bcdocmeta {
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ timeline -- */
+
+[data-experience='basecamp'] .bctimeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+[data-experience='basecamp'] .bcday {
+  display: grid;
+  grid-template-columns: minmax(0, 88px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bcdaywhen {
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  padding-top: 3px;
+  text-align: right;
+}
+[data-experience='basecamp'] .bcdayitems {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 14px;
+  display: grid;
+  gap: 8px;
+  border-left: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcevent { display: flex; gap: 9px; align-items: center; min-width: 0; }
+[data-experience='basecamp'] .bceventwhat { font-size: 13px; line-height: 1.4; min-width: 0; }
+[data-experience='basecamp'] .bceventwhat b { color: var(--bc-text-strong); font-weight: 600; }
+[data-experience='basecamp'] .bcdot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--bc-border-subtle);
+}
+
+/* ==================================================== A — the briefing == */
+
+/*
+  The composition's own spacing, shared. Both arrangements are a vertical
+  stack at the top level; only what is IN the stack differs, so the gap
+  belongs to the base and not to each variant.
+*/
+/*
+  `bchome` is what a check asserts when it means "the project home rendered".
+  A gate that named `.bcgrid` was asserting the ARTEFACT, and this repository
+  has now paid four times for a check that goes red on a correct change
+  because it named the mechanism. It carries no appearance of its own on
+  purpose: the three homes style themselves.
+*/
+[data-experience='basecamp'] .bchome { min-width: 0; }
+[data-experience='basecamp'] .bccomp { display: grid; gap: 20px; }
+[data-experience='basecamp'] .bccomp .bchead { margin-bottom: 0; }
+/*
+  A's two-up row, scoped to A. It is the one thing about A's arrangement that
+  is not simply a stack, so it belongs to A rather than to the shared base -
+  and scoping it means the class cannot leak into B by being named there.
+*/
+[data-experience='basecamp'] .bccomp--a .bcpair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+/* =================================================== B — the workspace == */
+
+[data-experience='basecamp'] .bcwork {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 306px);
+  gap: 24px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bcworkmain { display: grid; gap: 18px; min-width: 0; }
+/*
+  NOT STICKY, and the claim was removed rather than the measurement
+  explained away. `position: sticky` was here with a comment saying presence
+  is never scrolled away; measured at scrollY 1400 the rail's top was -477,
+  because a sticky element TALLER than the viewport scrolls with the page
+  until its own bottom arrives. The rail is 1209px and the viewport is 900.
+  Making it pin would mean an inner scroll container in a rail, which is
+  #108's territory for the sake of a promise nobody asked for.
+
+  What was worth fixing is the dead space the claim was hiding: the rail ended
+  686px above the main column, so the lower right of the page was empty. The
+  material source list moved here from the main column - it is a project-level
+  fact, which is this rail's whole job - and the two columns now end within
+  about a hundred pixels of each other.
+*/
+[data-experience='basecamp'] .bcrail {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+/*
+  The rail's modules are quieter than the main column's. Presence is meant to
+  be there rather than looked at, and two equally loud columns is the
+  equal-weight failure again with one fewer column.
+*/
+[data-experience='basecamp'] .bcrail .bcmod { background: transparent; border-color: transparent; padding: 0 0 4px; }
+[data-experience='basecamp'] .bcrail .bcmodhead { border-bottom-color: var(--bc-border-subtle); }
+[data-experience='basecamp'] .bcrail .bcsaidtext { font-size: 12.5px; }
+[data-experience='basecamp'] .bcrail .bcday { grid-template-columns: minmax(0, 62px) minmax(0, 1fr); gap: 10px; }
+
+/* ======================================================================== *
+ * Narrower than a desktop. These are LAST on purpose: a media query adds no
+ * specificity, so the rules it overrides must come before it.
+ * ======================================================================== */
+
+@media (max-width: 1100px) {
+  [data-experience='basecamp'] .bcwork { grid-template-columns: minmax(0, 1fr); }
+  /*
+    B's rail becomes a two-up band rather than a third stacked column, so the
+    tablet does not simply become a very long phone.
+  */
+  [data-experience='basecamp'] .bcrail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-top: 6px;
+    border-top: 1px solid var(--bc-border-subtle);
+  }
+}
+
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bchead h1 { font-size: 23px; }
+  [data-experience='basecamp'] .bccomp--a .bcpair,
+  [data-experience='basecamp'] .bcrail { grid-template-columns: minmax(0, 1fr); }
+  [data-experience='basecamp'] .bccalwrap { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  /*
+    The month grid goes away on a phone and the dated agenda stays. §18 asks
+    for what is happening first; a 7x6 grid of small numbers is orientation,
+    not information, and it costs a third of the fold.
+  */
+  [data-experience='basecamp'] .bccal { display: none; }
+  /*
+    Two stage columns rather than four, so a card title has room to be read.
+    Four columns at 390px is 78px each, which is the clipped-content defect
+    arriving through a layout instead of a guard.
+  */
+  [data-experience='basecamp'] .bccols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  [data-experience='basecamp'] .bcday { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  [data-experience='basecamp'] .bcdaywhen { text-align: left; }
+  [data-experience='basecamp'] .bcdayitems { padding-left: 0; border-left: 0; }
+  [data-experience='basecamp'] .bcdocs { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; }
+  [data-experience='basecamp'] .bcmod { padding: 14px 14px 16px; }
+  /*
+    B's phone order is the experiment's other half. The rail's parts are
+    placed individually rather than travelling together - but WORK COMES
+    FIRST. Hoisting the roster above the to-dos cost 400px and put five rows
+    of who-exists in front of the first actionable thing on a 390px screen;
+    three of those rows say only that a colleague is on the project, which the
+    faces in the header already say. What genuinely needs Grant is in the
+    state line under the title, above everything.
+  */
+  [data-experience='basecamp'] .bccomp--b .bcwork { display: flex; flex-direction: column; }
+  [data-experience='basecamp'] .bccomp--b .bcrail { display: contents; }
+  [data-experience='basecamp'] .bccomp--b .bcworkmain { order: 0; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='crew'] { order: 1; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='chat'] { order: 2; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='contacts'] { order: 3; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='sources'] { order: 4; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='activity'] { order: 5; }
+}
+
+/* ======================================================================== *
+ * §6 — the full To-dos tool: a project's lists
+ *
+ * Lives here rather than in bc.css because it is part of the same correction:
+ * the tool grammar the reference slice did not have. `bc.css`'s phone block
+ * comes before this file, so a phone rule for these classes belongs at the
+ * very end of THIS file.
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bctasklist { margin: 0 0 34px; }
+[data-experience='basecamp'] .bctasklisthead {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bctasklisthead h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  color: var(--bc-text-strong);
+  min-width: 0;
+}
+/*
+  The count sits next to the name and the Add control goes to the far end, so
+  the list's identity and its progress read as one phrase and the action does
+  not come between them.
+*/
+[data-experience='basecamp'] .bctasklisthead .bcactions { margin-left: auto; }
+
+/*
+  THE TICK IS NOT A LIGHT SOURCE.
+
+  A native checkbox on a dark surface renders as a bright pale square, and ten
+  of them down a list were the most eye-catching thing on the page - the same
+  defect as the document thumbnails, and the same reason: §16 says the project
+  dominates, and a column of white boxes dominates instead.
+
+  It stays a real `input[type=checkbox]`, so it keeps the keyboard, the label
+  and the accessible state; only its appearance is taken over. The size is
+  left exactly as it is, because bc.css already grows it for a touch device
+  and a decorative change must not shrink a target.
+*/
+[data-experience='basecamp'] .bctasklist .bccheck {
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--bc-text-muted);
+  cursor: pointer;
+  position: relative;
+}
+[data-experience='basecamp'] .bctasklist .bccheck:disabled { cursor: default; opacity: 0.55; }
+[data-experience='basecamp'] .bctasklist .bccheck:checked {
+  background: var(--bc-accent);
+  box-shadow: none;
+}
+[data-experience='basecamp'] .bctasklist .bccheck:checked::after {
+  content: '';
+  position: absolute;
+  left: 34%;
+  top: 22%;
+  width: 26%;
+  height: 46%;
+  border: 2px solid var(--bc-accent-ink);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(40deg);
+}
+[data-experience='basecamp'] .bcitemwho { display: inline-flex; align-items: center; }
+
+/* ======================================================================== *
+ * §10 — the full Card Table
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcboard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bcbcol { min-width: 0; }
+[data-experience='basecamp'] .bcbcolhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcbcolhead h2 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--bc-text-muted);
+  min-width: 0;
+}
+/* Two of four stages had a colour here. All four have one at the end of this file. */
+[data-experience='basecamp'] .bcbcard {
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-r-row);
+  padding: 11px 12px 12px;
+  margin-bottom: 10px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcbcard .bcitemtitle { text-align: left; font-size: 13.5px; line-height: 1.35; }
+[data-experience='basecamp'] .bcbmeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcbwhere,
+[data-experience='basecamp'] .bcbdue {
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcbwhere {
+  background: var(--bc-canvas);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 999px;
+  padding: 2px 8px;
+  max-width: 100%;
+}
+/*
+  The Move control is present but quiet: it is how a card moves, and it is not
+  what a person reads the board for. The label is visible rather than an
+  aria-label, because §11.3 forbids placeholder-only labelling on anything
+  consequential and this changes a record.
+*/
+[data-experience='basecamp'] .bcbmove { display: grid; gap: 3px; }
+[data-experience='basecamp'] .bcbmove .bcinput { font-size: 12.5px; padding: 5px 7px; }
+/*
+  44px ON A TOUCH DEVICE. Measured at 42 after the phone rule tightened the
+  row - two pixels under the floor, which is exactly the size of finding that
+  never shows up in a screenshot and always shows up in somebody's thumb.
+*/
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcbmove .bcinput { min-height: 44px; }
+}
+
+/* ======================================================================== *
+ * §9 — the full Schedule
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcmonth {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  margin: 0 0 34px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcmonth:last-of-type { border-bottom: 0; }
+[data-experience='basecamp'] .bcmonth .bccal-day,
+[data-experience='basecamp'] .bcmonth .bccal-pad { font-size: 12.5px; }
+[data-experience='basecamp'] .bcmonth .bcagendaitem { padding: 9px 0; }
+[data-experience='basecamp'] .bcmonth .bcagendawhat { text-align: left; }
+[data-experience='basecamp'] .bcundated { margin-top: 8px; }
+[data-experience='basecamp'] .bcundated h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--bc-text-muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+
+/* ======================================================================== *
+ * Narrower than a desktop, for §9 and §10. LAST in the file, because a media
+ * query adds no specificity and the rules above are the ones being overridden.
+ * ======================================================================== */
+
+@media (max-width: 1100px) {
+  [data-experience='basecamp'] .bcboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-experience='basecamp'] .bcmonth { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+}
+
+@media (max-width: 760px) {
+  /*
+    ONE COLUMN, not two. Four stage columns at 390px is 78px each and a card
+    title has nowhere to go; two is 170px, which is still not a card. A board
+    on a phone is a board read one column at a time, and the column heading
+    carries its own count so the shape of the work is still legible.
+  */
+  [data-experience='basecamp'] .bcboard { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  /*
+    THE MOVE CONTROL STOPS SETTING THE CARD'S SIZE.
+
+    Stacked label over full-width select, a card was 165px of which most was
+    its own secondary control - so a phone screen held three cards and read as
+    a form rather than as a board. The label stays VISIBLE, because §11.3's
+    rule is about a label surviving a screenshot and this changes a record;
+    it just sits beside the control instead of above it.
+  */
+  [data-experience='basecamp'] .bcbmove {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+  [data-experience='basecamp'] .bcbmove .bclabel { white-space: nowrap; }
+  /*
+    The month grid goes, the dated agenda stays - the same decision as the
+    miniature's, for the same reason: a 7x6 grid of small numbers is
+    orientation rather than information, and it costs a third of the fold.
+  */
+  [data-experience='basecamp'] .bcmonth .bccal { display: none; }
+  [data-experience='basecamp'] .bcmonth { padding-bottom: 18px; margin-bottom: 22px; }
+}
+
+/* ======================================================================== *
+ * Touch targets on the tool surfaces
+ *
+ * The 44px floor was being met on the project home and missed on every tool
+ * behind it: a task title is the row's primary action and measured 18-24px
+ * tall, and the tick measured 28. Both are TEXT-SIZED elements inside a
+ * comfortable row, so the fix is hit area rather than size - padding with a
+ * matching negative margin, so nothing moves and the target grows.
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bctickhit {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bctickhit {
+    min-width: 44px;
+    min-height: 44px;
+    margin: -8px -11px;
+  }
+  /*
+    The breadcrumb is navigation and measured 21px tall, so the way BACK out
+    of a tool was the smallest target on the screen. Same treatment: the text
+    keeps its size, the target grows around it.
+  */
+  [data-experience='basecamp'] .bccrumb a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  /*
+    The two routes out of a pane - "View all N Docs & Files" and "Talk to the
+    team" - measured 15px and 21px tall. The measure caught them on the tablet
+    and phone legs the moment they were added, which is what it is for. Hit
+    area, not size: the text stays where it is.
+  */
+  [data-experience='basecamp'] .bcdocsall a,
+  [data-experience='basecamp'] .bclinky {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding-right: 8px;
+    margin: -12px 0;
+  }
+  [data-experience='basecamp'] .bcitemtitle,
+  [data-experience='basecamp'] .bcagendawhat {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    margin: -11px 0;
+  }
+}
+
+/* ======================================================================== *
+ * §7 — the full Chat
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcchat--full { display: grid; gap: 20px; margin-bottom: 28px; }
+[data-experience='basecamp'] .bcchat--full .bcsaidtext { font-size: 14.5px; }
+/*
+  The composer is a form, not a chat box pinned to the bottom of the screen.
+  A pinned composer would need a scroll container of its own, which is #108's
+  territory, and this conversation is read far more often than it is added to.
+*/
+[data-experience='basecamp'] .bcsay {
+  border-top: 1px solid var(--bc-border-subtle);
+  padding-top: 18px;
+}
+/*
+  The full source list is the same grammar with more room, so the rows breathe
+  rather than being restyled into a second appearance of one thing.
+*/
+[data-experience='basecamp'] .bcsources--full .bcsource { padding: 12px 0; }
+
+/* ======================================================================== *
+ * §21 — Docs & Files as visual objects
+ *
+ * The reference pane is three recognisable things side by side: a file-type
+ * tile, a rendered page and a cover. So a thumbnail here is sized to be
+ * RECOGNISED rather than merely present — a 3:4 page at ~150px is the smallest
+ * at which a rendered first page reads as a document rather than as texture.
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcdocs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 16px 14px;
+}
+[data-experience='basecamp'] .bcdocs > .bcmore { grid-column: 1 / -1; }
+[data-experience='basecamp'] .bcdoc { margin: 0; min-width: 0; }
+[data-experience='basecamp'] .bcdoc--openable { cursor: pointer; }
+
+[data-experience='basecamp'] .bcthumb {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  aspect-ratio: 3 / 4;
+  padding: 11px 10px;
+  background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+  overflow: hidden;
+  position: relative;
+}
+/* The real page, once pdf.js has decoded it, covers the drawing underneath. */
+[data-experience='basecamp'] .bcthumb .realpage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+[data-experience='basecamp'] .bcdoc--openable:hover .bcthumb,
+[data-experience='basecamp'] .bcdoc--openable:focus-within .bcthumb {
+  box-shadow: 0 2px 10px rgb(0 0 0 / 55%);
+  border-color: var(--bc-accent);
+}
+
+/*
+  A thing with no first page is a coloured object with its kind on it, which is
+  what the reference does for a spreadsheet. Drawing lines of text on an audio
+  file would be a picture of a document that does not exist.
+*/
+[data-experience='basecamp'] .bcthumb--object {
+  place-content: center;
+  padding: 10px;
+  background: var(--bc-surface-selected);
+  border-color: var(--bc-border-subtle);
+  box-shadow: none;
+}
+[data-experience='basecamp'] .bcobjword {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcthumb--a { background: color-mix(in srgb, var(--bc-accent) 26%, var(--bc-surface)); }
+[data-experience='basecamp'] .bcthumb--s { background: color-mix(in srgb, var(--bc-success, #4a8f6a) 30%, var(--bc-surface)); }
+[data-experience='basecamp'] .bcthumb--m,
+[data-experience='basecamp'] .bcthumb--p { background: color-mix(in srgb, var(--bc-section-accent) 24%, var(--bc-surface)); }
+/*
+  A picture, a recording of moving pictures, and a file of a kind this office
+  has not met. The last one is the DELIBERATE FALLBACK: it is quieter than the
+  four above it on purpose, because it is saying "there is a file here and its
+  first page cannot be shown", not naming a type it is confident about.
+*/
+[data-experience='basecamp'] .bcthumb--i,
+[data-experience='basecamp'] .bcthumb--v { background: color-mix(in srgb, var(--bc-accent) 16%, var(--bc-surface)); }
+[data-experience='basecamp'] .bcthumb--f { background: var(--bc-surface-selected); }
+
+[data-experience='basecamp'] .bcdoc figcaption { display: grid; gap: 2px; margin-top: 8px; }
+
+/* ======================================================================== *
+ * C — the board of tools, and the panel that changes it
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcheadrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+[data-experience='basecamp'] .bcheadrow .bcstate { margin-top: 0; }
+[data-experience='basecamp'] .bcheadacts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/*
+  Three columns, as the reference has. The panes are allowed to differ in
+  height and the tall ones say so, because forcing eight tools onto one
+  baseline is what made the first build read as a grid of cards.
+*/
+[data-experience='basecamp'] .bcpanes {
+  /*
+    TWELVE COLUMNS AND A FIXED ROW, which is what makes a module have a SIZE.
+
+    The previous grid was three equal columns of automatic height, and a pane
+    whose height comes from its content can never overflow - so it can never
+    scroll, and the only way to say "there is more" was the summary line Grant
+    asked to remove. Here the layout decides the height, the body scrolls, and
+    the resize handle has something to change.
+  */
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: var(--bc-row);
+  grid-template-rows: repeat(var(--bc-rows, 12), var(--bc-row));
+  gap: 18px;
+  align-items: stretch;
+}
+[data-experience='basecamp'] .bcpanes--moving { cursor: grabbing; user-select: none; }
+[data-experience='basecamp'] .bcmod--placed {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+[data-experience='basecamp'] .bcmod--placed .bcmodbody {
+  /*
+    THE PANE SCROLLS RATHER THAN SAYING "ONE MORE". Grant: "Modules containing
+    more data than their visible area should instead become internally
+    scrollable."
+  */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+[data-experience='basecamp'] .bcmod--dragging {
+  z-index: 3;
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.45);
+  transform: scale(1.012);
+}
+[data-experience='basecamp'] .bcmod--placed .bcmodhead {
+  cursor: grab;
+  border-radius: 10px;
+  margin: -4px -6px 8px;
+  padding: 4px 6px 8px;
+  transition: background 140ms ease;
+}
+[data-experience='basecamp'] .bcmod--placed .bcmodhead:hover {
+  background: color-mix(in srgb, var(--bc-accent) 9%, transparent);
+}
+[data-experience='basecamp'] .bcmod--placed .bcmodhead:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcmodctl {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+/*
+  Reserved, not conjured. `opacity: 0` hides pixels and not layout, and
+  CLAUDE.md records twice what appearing-on-hover controls do to a row's
+  height when they are in the flow. These are absolutely positioned and the
+  header reserves the room.
+*/
+[data-experience='basecamp'] .bcmod--placed .bcmodhead { padding-right: 34px; position: relative; }
+[data-experience='basecamp'] .bcmodctl { position: absolute; right: 4px; top: 2px; margin: 0; }
+[data-experience='basecamp'] .bcmod:hover .bcmodctl,
+[data-experience='basecamp'] .bcmod:focus-within .bcmodctl { opacity: 1; }
+[data-experience='basecamp'] .bcmodbtn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bc-text-muted);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcmodbtn:hover {
+  background: color-mix(in srgb, var(--bc-text) 12%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcresize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--bc-text-muted);
+  opacity: 0;
+  cursor: nwse-resize;
+  touch-action: none;
+  transition: opacity 140ms ease;
+}
+[data-experience='basecamp'] .bcmod:hover .bcresize,
+[data-experience='basecamp'] .bcmod:focus-within .bcresize { opacity: 0.8; }
+[data-experience='basecamp'] .bcresize:hover { opacity: 1; color: var(--bc-accent); }
+[data-experience='basecamp'] .bcresize:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+
+/*
+  THE SCROLLBAR, styled once for every scrolling surface in the experience.
+
+  Grant: "Implement attractive, unobtrusive, visually consistent scrollbars
+  across modules wherever overflow exists. The scrollbar treatment should fit
+  the premium visual direction of the new UI rather than looking like an
+  unstyled browser default."
+
+  Both syntaxes, because they are not equivalent: `scrollbar-color` is what
+  Firefox understands and `::-webkit-scrollbar` is what gives Chromium a
+  thumb that can be inset and rounded. Neither alone covers the product.
+*/
+[data-experience='basecamp'] .bcmodbody,
+[data-experience='basecamp'] .bcexpbody,
+[data-experience='basecamp'] .bcscroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--bc-text) 26%, transparent) transparent;
+}
+[data-experience='basecamp'] .bcmodbody::-webkit-scrollbar,
+[data-experience='basecamp'] .bcexpbody::-webkit-scrollbar,
+[data-experience='basecamp'] .bcscroll::-webkit-scrollbar { width: 10px; height: 10px; }
+[data-experience='basecamp'] .bcmodbody::-webkit-scrollbar-track,
+[data-experience='basecamp'] .bcexpbody::-webkit-scrollbar-track,
+[data-experience='basecamp'] .bcscroll::-webkit-scrollbar-track { background: transparent; }
+[data-experience='basecamp'] .bcmodbody::-webkit-scrollbar-thumb,
+[data-experience='basecamp'] .bcexpbody::-webkit-scrollbar-thumb,
+[data-experience='basecamp'] .bcscroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--bc-text) 22%, transparent);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+[data-experience='basecamp'] .bcmodbody:hover::-webkit-scrollbar-thumb,
+[data-experience='basecamp'] .bcexpbody:hover::-webkit-scrollbar-thumb,
+[data-experience='basecamp'] .bcscroll:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--bc-text) 38%, transparent);
+  background-clip: content-box;
+}
+
+[data-experience='basecamp'] .bccomp--c .bcmod { min-width: 0; }
+[data-experience='basecamp'] .bccomp--c .bcmodbody { font-size: 13.5px; }
+[data-experience='basecamp'] .bccomp--c .bcsaidtext { font-size: 13px; }
+[data-experience='basecamp'] .bccomp--c .bcdocs { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 12px 10px; }
+[data-experience='basecamp'] .bccomp--c .bccols { gap: 7px; }
+[data-experience='basecamp'] .bccomp--c .bccalwrap { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+[data-experience='basecamp'] .bccomp--c .bccal { display: none; }
+[data-experience='basecamp'] .bcsplit { margin: 0 0 12px; font-size: 12.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsplit b { color: var(--bc-text-strong); }
+
+[data-experience='basecamp'] .bcarrange {
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-accent);
+  border-radius: var(--bc-r-sheet);
+  padding: 16px 18px 18px;
+  margin-bottom: 20px;
+}
+[data-experience='basecamp'] .bcarrlist { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 2px; }
+[data-experience='basecamp'] .bcarrrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcarrrow:last-child { border-bottom: 0; }
+[data-experience='basecamp'] .bcarrname { flex: 1 1 auto; min-width: 0; }
+[data-experience='basecamp'] .bcarract { display: flex; gap: 6px; flex: 0 0 auto; }
+[data-experience='basecamp'] .bcarradd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+[data-experience='basecamp'] .bcarrnote { margin: 0 0 14px; font-size: 12.5px; color: var(--bc-text-muted); max-width: 70ch; }
+
+/*
+  §10's compressed board: tinted bars, the stage name on its side, the count
+  above it. The fill is how full that stage is relative to the fullest one, so
+  the shape of the work is legible before a single word is read.
+*/
+/* The fill sits behind the label, drawn from the bottom like a column. */
+
+/* Bigger document tiles in a third-width pane: two per row, captions readable. */
+/*
+  Three tiles in a row, as the reference has - which is also what keeps the
+  pane inside a 320px row. The caption is clamped to two lines so a long title
+  cannot be the thing that makes row two fall below the fold.
+*/
+[data-experience='basecamp'] .bccomp--c .bcdocs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 9px; }
+[data-experience='basecamp'] .bccomp--c .bcdocmeta { font-size: 11px; }
+
+/* The two views of the workspace, and the segmented control that picks one. */
+[data-experience='basecamp'] .bcseg { display: inline-flex; gap: 0; }
+[data-experience='basecamp'] .bcseg .bcbtn { border-radius: 0; }
+[data-experience='basecamp'] .bcseg .bcbtn:first-child { border-start-start-radius: var(--bc-r-control); border-end-start-radius: var(--bc-r-control); }
+[data-experience='basecamp'] .bcseg .bcbtn:last-child { border-start-end-radius: var(--bc-r-control); border-end-end-radius: var(--bc-r-control); }
+[data-experience='basecamp'] .bcseg .bcbtn[aria-pressed='true'] {
+  background: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcdocs--wall { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 22px 18px; }
+/* A small real page beside each row, so the list view is not a table of names. */
+[data-experience='basecamp'] .bcrowthumb {
+  width: 34px;
+  aspect-ratio: 3 / 4;
+  padding: 4px 3px;
+  gap: 2px;
+  border-radius: 2px;
+}
+[data-experience='basecamp'] .bcrowthumb .bcpline { height: 2px; }
+
+/* ======================================================================== *
+ * C on narrower screens. LAST in the file, because a media query adds no
+ * specificity and everything above is what it overrides.
+ * ======================================================================== */
+
+@media (max-width: 1100px) {
+  [data-experience='basecamp'] .bcpanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  /*
+    ONE COLUMN, AND DOCS AND FILES STAYS. Grant's instruction is explicit:
+    it is not optional merely because the viewport is narrow. So the panes
+    stack in a deliberate order rather than being dropped -
+
+      what needs you (the state line, in the head)
+      the work            To-dos
+      where it has got to Card Table
+      what is here        Docs and Files
+      when                Schedule
+      who and what said   Chat, the team
+      the rest            People, sources, activity
+
+    which is the order a person on a phone asks in. The DOM order already
+    matches, so this block only has to stop the grid, not reshuffle it - and an
+    order that lives in the markup is one a screen reader hears too.
+  */
+  [data-experience='basecamp'] .bcpanes { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  /*
+    Bigger tiles on a phone, not smaller. Three across a 358px column is 110px,
+    which is under the size at which a rendered page reads as a document - so
+    the pane would be present and useless, which is worse than absent. Two
+    across is 165px and legible.
+  */
+  [data-experience='basecamp'] .bccomp--c .bcdocs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+  [data-experience='basecamp'] .bcdocs--wall { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-experience='basecamp'] .bcheadacts { width: 100%; }
+  [data-experience='basecamp'] .bcarrrow { flex-wrap: wrap; }
+}
+/*
+  The route out of the Docs & Files pane. A real link rather than a grey count,
+  because §21 asks for an obvious way to all of them and a heading in 14px
+  uppercase is not obvious.
+*/
+[data-experience='basecamp'] .bcdocsall { grid-column: 1 / -1; margin-top: 4px; }
+[data-experience='basecamp'] .bcdocsall a { color: var(--bc-accent); text-decoration: none; }
+[data-experience='basecamp'] .bcdocsall a:hover,
+[data-experience='basecamp'] .bcdocsall a:focus-visible { text-decoration: underline; }
+[data-experience='basecamp'] .bcmodmeta {
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  white-space: nowrap;
+}
+/* A control that reads as a link, for a route out of a pane. */
+[data-experience='basecamp'] .bclinky {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--bc-accent);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bclinky:hover,
+[data-experience='basecamp'] .bclinky:focus-visible { text-decoration: underline; }
+/*
+  A little less padding on a board of eight panes than on a page of three.
+
+  Measured: with the standard padding, Schedule ended at 901px — one pixel
+  past the fold, which fails §21's requirement exactly as surely as a hundred
+  would. Four pixels off the top and bottom of each pane buys eight per row and
+  moves the density toward the reference rather than away from it. The type
+  sizes are untouched, because the instruction was explicit that shrinking
+  until it is illegible is not the answer.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod { padding: 13px 16px 14px; }
+[data-experience='basecamp'] .bccomp--c .bcmodhead { padding-bottom: 8px; margin-bottom: 10px; }
+
+/* ======================================================================== *
+ * PROJECT HOME v2 — the visual system
+ *
+ * Grant asked for stronger borders, a hover glow, tasteful gradients and more
+ * depth, and asked explicitly that they NOT be solved in isolation: *"they
+ * should form a consistent design system across the new interface."*
+ *
+ * So there are four tokens and everything below reads them. They are defined
+ * against the experience's own palette rather than as literal colours, so the
+ * light scheme and the dark scheme both get a treatment that belongs to them -
+ * a glow that is a fixed rgba is a glow that is wrong in one of the two.
+ * ======================================================================== */
+
+[data-experience='basecamp'] {
+  /* A border with weight. 1px hairlines read as a wireframe at this density. */
+  --v2-edge: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 30%, transparent);
+  --v2-edge-hover: 1.5px solid color-mix(in srgb, var(--bc-accent) 55%, transparent);
+  /*
+    Depth from a gradient that runs with the light rather than across it: a
+    surface a little lighter at the top reads as tilted towards you, which is
+    the whole of what "pop" means here.
+  */
+  --v2-face: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bc-text-strong) 5%, var(--bc-surface)) 0%,
+    var(--bc-surface) 42%,
+    color-mix(in srgb, var(--bc-canvas) 28%, var(--bc-surface)) 100%
+  );
+  --v2-lift: 0 1px 2px rgb(0 0 0 / 22%), 0 10px 26px -18px rgb(0 0 0 / 55%);
+  --v2-glow:
+    0 0 0 1px color-mix(in srgb, var(--bc-accent) 34%, transparent),
+    0 0 22px -4px color-mix(in srgb, var(--bc-accent) 42%, transparent),
+    0 2px 4px rgb(0 0 0 / 22%), 0 14px 32px -20px rgb(0 0 0 / 60%);
+}
+
+[data-experience='basecamp'] .bccomp--c .bcmod {
+  background: var(--v2-face);
+  border: var(--v2-edge);
+  box-shadow: var(--v2-lift);
+  transition:
+    box-shadow var(--bc-t-out, 160ms) ease,
+    border-color var(--bc-t-out, 160ms) ease,
+    transform var(--bc-t-out, 160ms) ease;
+}
+/*
+  The glow, on hover and on keyboard focus alike — a treatment that only
+  answers a pointer tells a keyboard user nothing about what is interactive.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod:hover,
+[data-experience='basecamp'] .bccomp--c .bcmod:focus-within {
+  border: var(--v2-edge-hover);
+  box-shadow: var(--v2-glow);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bccomp--c .bcmod { transition: none; }
+}
+
+/* The heading is a control now, and reads as the module's name, not a link. */
+[data-experience='basecamp'] .bcmodopen {
+  font: inherit;
+  color: var(--bc-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+[data-experience='basecamp'] .bcmodopen:hover,
+[data-experience='basecamp'] .bcmodopen:focus-visible { color: var(--bc-accent); }
+
+/*
+  Cards and thumbnails inside a module get the same edge, at lower weight.
+
+  This rule listed `.bcbar` as its third selector, and removing the dead bar
+  chart with a pattern took the DECLARATION BLOCK with it - leaving two
+  dangling selectors that merged into the next rule, so every card on the
+  card table became `position: fixed; inset: 0` and filled the viewport. The
+  capture found it in one run; nothing else could have, because the CSS still
+  parsed and the class check still passed.
+*/
+[data-experience='basecamp'] .bcbcard,
+[data-experience='basecamp'] .bcthumb {
+  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 22%, transparent);
+}
+
+/* --------------------------------------------------- the expanded view -- */
+
+[data-experience='basecamp'] .bcexp {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+[data-experience='basecamp'] .bcexpback {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bc-canvas) 78%, transparent);
+  backdrop-filter: blur(3px);
+  border: 0;
+}
+/*
+  The dialog is a surface in the same system: same gradient, same edge, a
+  heavier lift because it is nearer.
+*/
+[data-experience='basecamp'] .bcexpbox {
+  position: relative;
+  width: min(1040px, 100%);
+  max-height: min(86vh, 900px);
+  overflow: auto;
+  background: var(--v2-face);
+  border: var(--v2-edge);
+  border-radius: var(--bc-r-sheet);
+  box-shadow: 0 24px 70px -28px rgb(0 0 0 / 75%), 0 2px 6px rgb(0 0 0 / 30%);
+  padding: 26px 28px 30px;
+}
+/*
+  The breadcrumb belongs to an address, and inside a dialog there is no
+  address to walk back up — the X is the way out. Hidden rather than made
+  conditional in nine renderers, which would be nine places to forget.
+*/
+[data-experience='basecamp'] .bcexpbox .bccrumb { display: none; }
+[data-experience='basecamp'] .bcexpx {
+  position: absolute;
+  inset-block-start: 14px;
+  inset-inline-end: 14px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: var(--v2-edge);
+  background: var(--bc-surface);
+  color: var(--bc-text);
+  cursor: pointer;
+  z-index: 1;
+}
+[data-experience='basecamp'] .bcexpx:hover,
+[data-experience='basecamp'] .bcexpx:focus-visible {
+  border: var(--v2-edge-hover);
+  color: var(--bc-text-strong);
+}
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcexpx { width: 44px; height: 44px; }
+}
+
+/* ------------------------------------------------- the three-dot menu --- */
+
+[data-experience='basecamp'] .bcmenuwrap { position: relative; display: inline-flex; }
+[data-experience='basecamp'] .bcmenu {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 40;
+  min-width: 250px;
+  display: grid;
+  padding: 6px;
+  background: var(--bc-surface);
+  border: var(--v2-edge);
+  border-radius: var(--bc-r-menu);
+  box-shadow: var(--v2-lift);
+}
+[data-experience='basecamp'] .bcmenu button {
+  appearance: none;
+  background: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: var(--bc-text);
+  padding: 10px 12px;
+  min-height: 44px;
+  border-radius: calc(var(--bc-r-menu) - 4px);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcmenu button:hover,
+[data-experience='basecamp'] .bcmenu button:focus-visible {
+  background: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+}
+
+/* The icon controls in the head: the mic and the menu sit beside blue Chat. */
+[data-experience='basecamp'] .bcbtn.bcicon {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+}
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcbtn.bcicon { width: 44px; height: 44px; }
+}
+
+/* ---------------------------------------------------------------------- *
+ * THE PROJECT MENU SAYS WHAT IT IS.
+ *
+ * It was an unlabelled 38px icon described as "More about this page", and it
+ * was reported as having disappeared - which is what an unfindable control is.
+ * The word rides beside the dots from tablet width up; the phone keeps the
+ * icon alone because the row has no room, and the accessible name carries the
+ * meaning there.
+ * ---------------------------------------------------------------------- */
+/*
+  `.bcbtn.bcicon` in compose.css is two classes and this was one, so it lost
+  the cascade and the button stayed a 38px square with the word inside it and
+  nowhere to go. Matched at the same specificity, and `auto` has to beat a
+  fixed width in both directions.
+*/
+[data-experience='basecamp'] .bcbtn.bcpagemenu {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  height: auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+}
+[data-experience='basecamp'] .bcpagemenuword {
+  font: 600 14px/1 var(--bc-font);
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  /* The phone keeps the dots alone: the row is already carrying Chat with
+     Team and the microphone, and a third word wraps it. */
+  [data-experience='basecamp'] .bcpagemenuword { display: none; }
+  [data-experience='basecamp'] .bcbtn.bcpagemenu { padding: 0; width: 44px; }
+}
+
+[data-experience='basecamp'] .bcmic[aria-pressed='true'],
+[data-experience='basecamp'] .bcmic.is-live {
+  border: var(--v2-edge-hover);
+  color: var(--bc-accent);
+}
+[data-experience='basecamp'] .bcexpbody { min-width: 0; }
+/* Who, in words, where a monogram used to be. */
+[data-experience='basecamp'] .bctaskwho,
+[data-experience='basecamp'] .bcagendawho {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  white-space: nowrap;
+}
+/* A contact row that is a control, without looking like a button. */
+[data-experience='basecamp'] .bcmate--press {
+  width: 100%;
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 7px 8px;
+  margin-inline: -8px;
+}
+[data-experience='basecamp'] .bcmate--press:hover,
+[data-experience='basecamp'] .bcmate--press:focus-visible { background: var(--bc-surface-selected); }
+[data-experience='basecamp'] .bcmate--press .bcmatebody { display: grid; min-width: 0; }
+/* The tick in a miniature is the same tick as the tool's. */
+[data-experience='basecamp'] .bclists .bccheck {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--bc-text-muted);
+  cursor: pointer;
+  position: relative;
+  flex: 0 0 auto;
+}
+[data-experience='basecamp'] .bclists .bccheck:disabled { cursor: default; opacity: 0.5; }
+[data-experience='basecamp'] .bclists .bccheck:checked { background: var(--bc-accent); box-shadow: none; }
+[data-experience='basecamp'] .bclists .bccheck:checked::after {
+  content: '';
+  position: absolute;
+  left: 34%;
+  top: 22%;
+  width: 26%;
+  height: 46%;
+  border: 2px solid var(--bc-accent-ink);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(40deg);
+}
+
+/*
+  A RECORD'S OWN ACTIONS MUST CLEAR THE CLOSE BUTTON.
+
+  Inside an expanded view the breadcrumb is hidden, so a record's "Back to
+  Contacts" is the only way back to its list - and it was rendering straight
+  underneath the X in the same corner, half of it unreachable. The dialog's
+  chrome owns that corner; the record keeps the rest of the row.
+*/
+[data-experience='basecamp'] .bcexpbox .bcrecordhead { padding-right: 56px; }
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcexpbox .bcrecordhead { padding-right: 60px; }
+}
+
+/* Phone override, at the end of the file where source order makes it win. */
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcformrow { grid-template-columns: 1fr; }
+}
+
+/*
+  RESPONSIVE REARRANGEMENT, at the END of the stylesheet where source order
+  makes it win - and with `!important`, which is not a shortcut here: the
+  stored rectangle is an INLINE style, and nothing but !important outranks
+  one. A twelve-column arrangement made on a 1600px display is not an
+  arrangement on a 768px tablet; it is six 48px slivers, which is what the
+  board suite measured before this block existed.
+
+  The stored layout is untouched - only its presentation changes - so the
+  desktop arrangement is still there when the window is widened again.
+*/
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bcpanes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: minmax(0, auto);
+  }
+  [data-experience='basecamp'] .bcmod--placed {
+    grid-column: auto / span 1 !important;
+    grid-row: auto !important;
+    max-height: 460px;
+  }
+  [data-experience='basecamp'] .bcmod--placed .bcmodhead { cursor: default; }
+  [data-experience='basecamp'] .bcresize { display: none; }
+}
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpanes {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  [data-experience='basecamp'] .bcmod--placed { max-height: 62vh; }
+}
+
+/*
+  ON A TOUCH DEVICE THERE IS NO HOVER, so a control that appears on hover is a
+  control that never appears - and the one on the module header is how a
+  module is taken off the page. It is always visible below the desktop width,
+  and it meets the 44px floor there, which the measure enforces.
+*/
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bcmodctl { opacity: 1; right: 0; top: -4px; }
+  [data-experience='basecamp'] .bcmodbtn { width: 44px; height: 44px; }
+  [data-experience='basecamp'] .bcmod--placed .bcmodhead { padding-right: 48px; }
+}
+
+/*
+  THE CARD TABLE, IN MINIATURE AND IN FULL, WITH ITS COLOURS.
+
+  Grant: *"Make column/status differences immediately legible. Use tasteful
+  colour coding according to the card's current column/status."* One set of
+  stage colours, defined once and used by both views, because two would drift
+  - and they are hues of this experience's own palette rather than the
+  traffic-light set every dashboard uses.
+*/
+[data-experience='basecamp'] .bcminiboard,
+[data-experience='basecamp'] .bcboard {
+  --stage-todo: #7f8c99;
+  --stage-doing: #6ab3fd;
+  --stage-blocked: #ef8f6b;
+  --stage-done: #63c295;
+}
+[data-experience='basecamp'] [data-stage='todo'] { --stage: var(--stage-todo); }
+[data-experience='basecamp'] [data-stage='doing'] { --stage: var(--stage-doing); }
+[data-experience='basecamp'] [data-stage='blocked'] { --stage: var(--stage-blocked); }
+[data-experience='basecamp'] [data-stage='done'] { --stage: var(--stage-done); }
+
+[data-experience='basecamp'] .bcminiboard {
+  /*
+    AS MANY COLUMNS AS FIT, not four.
+
+    Four fixed columns in a third-width pane is 85px each, and the first
+    capture of it read "Prepare interview question / s" and "IN PROGRES / S" -
+    one or two characters a line, which is CLAUDE.md's oldest visual defect
+    arriving in a module I had just rebuilt. `auto-fit` with a real minimum
+    means the miniature is two columns in a narrow pane and four in a wide
+    one, which is what a resizable workspace needs anyway: the pane decides,
+    not a number written here.
+  */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bcminicol {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 8px 7px 9px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--stage) 8%, transparent);
+  border-top: 2px solid var(--stage);
+}
+[data-experience='basecamp'] .bcminicolhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+[data-experience='basecamp'] .bcminicolname {
+  font: 600 12px/1.3 var(--bc-font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--stage);
+}
+[data-experience='basecamp'] .bcminicoln {
+  font: 600 12px/1 var(--bc-font);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcminicard {
+  /* Two lines and then an ellipsis: a card is a title, not a paragraph. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-align: left;
+  font: 500 12px/1.35 var(--bc-font);
+  color: var(--bc-text);
+  background: var(--bc-surface-raised, rgba(255, 255, 255, 0.045));
+  border: 1px solid var(--bc-border-subtle);
+  border-left: 3px solid var(--stage);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+}
+[data-experience='basecamp'] .bcminicard:hover {
+  background: color-mix(in srgb, var(--stage) 14%, transparent);
+  border-color: var(--stage);
+  transform: translateY(-1px);
+}
+[data-experience='basecamp'] .bcminicard:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcminiempty {
+  margin: 0;
+  font: 12px/1 var(--bc-font);
+  color: var(--bc-text-muted);
+  opacity: 0.6;
+}
+
+/*
+  THE FULL CARD TABLE: colour by column, and what a drag looks like.
+
+  The two per-stage border rules further up this file named only `blocked` and
+  `done` and used the experience's accent for both - so "Not started" and "In
+  progress" were identical, which is the opposite of Grant's "make
+  column/status differences immediately legible". The stage variable set on
+  the board covers all four, in both views, from one place.
+*/
+[data-experience='basecamp'] .bcbcol {
+  border-radius: 12px;
+  padding: 10px 10px 4px;
+  background: color-mix(in srgb, var(--stage) 6%, transparent);
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+[data-experience='basecamp'] .bcbcolhead { border-bottom-color: var(--stage); }
+[data-experience='basecamp'] .bcbcolhead h2 { color: var(--stage); }
+[data-experience='basecamp'] .bcbcol--over {
+  background: color-mix(in srgb, var(--stage) 16%, transparent);
+  box-shadow: inset 0 0 0 2px var(--stage);
+}
+[data-experience='basecamp'] .bcbcard {
+  border-left: 3px solid var(--stage);
+  cursor: grab;
+  transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+[data-experience='basecamp'] .bcbcard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+}
+[data-experience='basecamp'] .bcbcard:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcbcard--dragging { opacity: 0.45; cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcbcard,
+  [data-experience='basecamp'] .bcbcol,
+  [data-experience='basecamp'] .bcminicard { transition: none; }
+}
+
+/*
+  The card's own move control, compact: on a board the CARD is the content and
+  a full labelled form field per card triples its height. The label is still
+  there for anything that reads the page aloud.
+*/
+[data-experience='basecamp'] .bcvh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+[data-experience='basecamp'] .bcbsel {
+  font-size: 12px;
+  padding: 5px 8px;
+  min-height: 32px;
+  color: var(--stage);
+  border-color: color-mix(in srgb, var(--stage) 40%, transparent);
+}
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bcbsel { min-height: 44px; font-size: 13px; }
+}
+
+/*
+  The gallery tile is a button now, so it needs to stop looking like one and
+  start looking like the tile it replaced - the press is the whole card.
+*/
+[data-experience='basecamp'] .bcdocpress {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcdocpress:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+[data-experience='basecamp'] .bcglyph {
+  width: 54%;
+  height: auto;
+  opacity: 0.8;
+}
+[data-experience='basecamp'] .bcthumb--object .bcglyph { color: currentColor; }
+/*
+  The recording, played where it was found. `width: 100%` because a native
+  audio element is 300px wide by default and sits in the corner of any
+  container wider than that, reading as a control somebody forgot to lay out.
+*/
+[data-experience='basecamp'] .bcplayer { margin: 0 0 var(--bc-5); }
+[data-experience='basecamp'] .bcplayer audio {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bc-text) 8%, transparent);
+}
+
+/*
+  The source's mark, in the row it belongs to.
+
+  The row is a two-column grid with named areas, so the mark gets its own
+  column and its own area rather than being wedged into the name's - which
+  would have made the name wrap around it on a narrow pane.
+*/
+[data-experience='basecamp'] .bcsource {
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  grid-template-areas: 'mark name when' '. what what';
+  align-items: center;
+}
+[data-experience='basecamp'] .bcsrcmark {
+  grid-area: mark;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+}
+[data-experience='basecamp'] .bcsrcmark svg { width: 100%; height: 100%; }
+[data-experience='basecamp'] .bcsrcmark--letter {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bc-accent) 22%, transparent);
+  color: var(--bc-text-strong);
+  font: 600 11px/1 var(--bc-font);
+}
+[data-experience='basecamp'] .bcsources--full .bcsource { align-items: center; }
+
+/*
+  A contact's face, and the row that changes it.
+
+  A monogram where there is no photograph: the initials of a name are a better
+  fallback than a grey circle, and they are the same treatment the chat uses
+  for the team - which is where Grant asked for faces to stay. A contact is
+  not an agent, so this is the only other place one appears.
+*/
+[data-experience='basecamp'] .bcface--photo {
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+[data-experience='basecamp'] .bcface--mono {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex: none;
+  background: color-mix(in srgb, var(--bc-accent) 24%, transparent);
+  color: var(--bc-text-strong);
+  font: 600 12px/1 var(--bc-font);
+  letter-spacing: 0.02em;
+}
+[data-experience='basecamp'] .bcpersonhead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcpersonhead .bcface--mono { width: 56px; height: 56px; font-size: 18px; }
+[data-experience='basecamp'] .bcimagerow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0 4px;
+}
+[data-experience='basecamp'] .bcimagerow .bcface--mono { width: 72px; height: 72px; font-size: 22px; }
+[data-experience='basecamp'] .bcimageacts { display: flex; gap: 8px; flex-wrap: wrap; }
+/*
+  A file input styled as a button. The input itself is hidden rather than
+  transparent-and-overlaid: a hidden input inside its own label is still
+  reachable by keyboard, still opens the picker on Enter, and cannot drift out
+  of alignment with the thing that looks like the control.
+*/
+[data-experience='basecamp'] .bcbtn--file { cursor: pointer; display: inline-flex; align-items: center; }
+[data-experience='basecamp'] .bcbtn--file:focus-within {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcsaidhere {
+  font-size: 13px;
+  color: var(--bc-text-muted);
+  align-self: center;
+}
+
+/*
+  A row the prototype is holding, marked as such wherever it is drawn. Quiet -
+  it is a provenance note rather than a warning - and permanent, because the
+  claim is about the row and not about the moment it was made.
+*/
+[data-experience='basecamp'] .bclocalmark {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 40%, transparent);
+  color: var(--bc-text-muted);
+  font: 500 12px/1.5 var(--bc-font);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/*
+  THE TWO COMMUNICATION CONTROLS, as siblings.
+
+  Grant: *"Make its button/icon sizing, hit area, spacing and visual weight
+  harmonious with the adjacent Chat with Team control. The two controls should
+  clearly look like sibling primary communication actions... while remaining
+  visually distinct enough that the user understands one is text chat and the
+  other is immediate voice conversation."*
+
+  Same height, same weight, different shape: a filled rectangle for words and
+  a filled circle for a voice. The microphone was a 32px ghost icon button
+  beside a 40px filled one, which read as a secondary action attached to the
+  primary rather than as the other half of a pair.
+*/
+[data-experience='basecamp'] .bcheadacts { align-items: center; gap: 10px; }
+[data-experience='basecamp'] .bcmic {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bc-accent) 16%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  color: var(--bc-text-strong);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+[data-experience='basecamp'] .bcmic:hover {
+  background: color-mix(in srgb, var(--bc-accent) 30%, transparent);
+  border-color: var(--bc-accent);
+  transform: translateY(-1px);
+}
+[data-experience='basecamp'] .bcmic:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 3px;
+}
+/* Connecting is its own state: several seconds long, and not yet a call. */
+[data-experience='basecamp'] .bcmic.connecting {
+  border-color: var(--bc-section-accent);
+  color: var(--bc-section-accent);
+  animation: bcpulse 1.4s ease-in-out infinite;
+}
+[data-experience='basecamp'] .bcmic.ringing {
+  background: var(--bc-section-accent);
+  border-color: var(--bc-section-accent);
+  color: #1b1207;
+}
+@keyframes bcpulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcmic.connecting { animation: none; }
+  [data-experience='basecamp'] .bcmic { transition: none; }
+}
+/*
+  WHAT THE CALL IS DOING, SAID WITHOUT MOVING ANYTHING.
+
+  Grant, 23 September: "Clicking the voice button must not move, resize or
+  reflow surrounding buttons/UI."
+
+  This was `flex-basis: 100%` inside the actions row, so the moment the call
+  said anything the line claimed a whole row of its own: Chat with Team slid
+  309px sideways and the project menu dropped onto a new line. Measured, not
+  guessed - the geometry of every control in that row was recorded before the
+  press and again while the call was up, and every one of them had moved.
+
+  Out of flow entirely now, anchored under the row it belongs to. It cannot
+  push anything because it occupies nothing, and it carries its own surface so
+  it stays readable over whatever is beneath it.
+*/
+[data-experience='basecamp'] .bcheadacts { position: relative; }
+[data-experience='basecamp'] .bccallsay {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: var(--bc-r-control);
+  background: var(--bc-surface);
+  box-shadow: var(--bc-shadow-surface);
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--bc-text-muted);
+  /* It reports; it is not a target. */
+  pointer-events: none;
+  z-index: 2;
+}
+[data-experience='basecamp'] .bccallsay[hidden] { display: none; }
+
+/*
+  AND THE CHAT BUTTON GROWS TO MEET IT. The pair was 32px of text beside a
+  44px circle - which is the same mismatch Grant reported, with the sign
+  reversed, and it would have shipped that way because the microphone was the
+  only half being measured. Both are 44px on the project head; elsewhere the
+  button keeps the size the rest of the experience uses.
+*/
+[data-experience='basecamp'] .bcheadacts .bcbtn {
+  min-height: 44px;
+  padding-inline: 18px;
+}
+
+/*
+  A COUNT THAT CAN BE PRESSED HAS TO LOOK LIKE IT.
+
+  The chips were spans and are buttons now; without this they would be
+  buttons that look exactly like the labels they were, which is a false
+  affordance in the opposite direction - the thing works and nobody tries it.
+*/
+/*
+  AND IT IS STILL A CHIP. The first version of this reset the border to
+  transparent, which took the chip's outline away and left three coloured
+  words floating in the head - the control gained an affordance and lost its
+  shape in the same edit. `border-color` only, so `.bcstatus`'s own border,
+  radius, padding and font all survive.
+*/
+[data-experience='basecamp'] .bcstatus--press,
+[data-experience='basecamp'] .bcstatecount--press {
+  appearance: none;
+  background: none;
+  font: 600 12px/18px var(--bc-font);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+[data-experience='basecamp'] .bcstatus--press:hover,
+[data-experience='basecamp'] .bcstatecount--press:hover {
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  transform: translateY(-1px);
+}
+[data-experience='basecamp'] .bcstatus--press:focus-visible,
+[data-experience='basecamp'] .bcstatecount--press:focus-visible,
+[data-experience='basecamp'] .bcsplitbtn:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcstatecount--press {
+  background: none;
+  color: var(--bc-text-muted);
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+/* Mine / The team's, as one segmented control in the module header. */
+[data-experience='basecamp'] .bcsplit2 {
+  display: inline-flex;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 999px;
+  overflow: hidden;
+}
+[data-experience='basecamp'] .bcsplitbtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--bc-text-muted);
+  font: 500 12px/1 var(--bc-font);
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+[data-experience='basecamp'] .bcsplitbtn:hover {
+  background: color-mix(in srgb, var(--bc-text) 10%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcsplitbtn--on {
+  background: var(--bc-accent);
+  color: var(--bc-accent-ink);
+}
+[data-experience='basecamp'] .bcfilterbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 var(--bc-4);
+}
+
+/*
+  THE SOURCE GALLERY Grant described: "rounded-square tile + correct
+  recognizable logo + service name + clear Add state."
+*/
+[data-experience='basecamp'] .bcsource--press {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  cursor: pointer;
+  transition: background 140ms ease;
+  border-radius: 10px;
+  padding-inline: 8px;
+  margin-inline: -8px;
+}
+[data-experience='basecamp'] .bcsource--press:hover {
+  background: color-mix(in srgb, var(--bc-text) 7%, transparent);
+}
+[data-experience='basecamp'] .bcsource--press:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcservices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+[data-experience='basecamp'] .bcservice {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  text-align: left;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 22%, transparent);
+  background: var(--bc-surface);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+[data-experience='basecamp'] .bcservice:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--bc-accent) 55%, transparent);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.3);
+}
+[data-experience='basecamp'] .bcservice:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 3px;
+}
+/* The rounded square the mark sits in, which is what makes a row of them read as a gallery. */
+[data-experience='basecamp'] .bcservicemark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  margin-bottom: 4px;
+}
+[data-experience='basecamp'] .bcservicename {
+  font: 600 15px/1.3 var(--bc-font);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcservicewhat {
+  font: 400 12.5px/1.45 var(--bc-font);
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcserviceadd {
+  margin-top: 6px;
+  font: 600 12px/1 var(--bc-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bc-accent);
+}
+
+/*
+  THE COUNTS ARE CONTROLS ON A PHONE TOO, so they meet the floor there.
+
+  They were spans, which no touch-target rule applies to; the moment they
+  became buttons the measure found six of them at 24 to 34 pixels tall. The
+  chip keeps its size on a desktop, where a pointer is a pixel, and grows on
+  a touch device, where it is a thumb - which is the same rule the module's
+  remove control already follows.
+*/
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bcstatus--press,
+  [data-experience='basecamp'] .bcstatecount--press {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  [data-experience='basecamp'] .bcsplitbtn { min-height: 44px; padding-inline: 14px; }
+}
+
+/*
+  AND THE HEAD GIVES BACK THE HEIGHT THE BIGGER CHIPS TOOK.
+
+  The touch floor is not negotiable and neither is the matrix's rule that the
+  first useful module starts inside the top 40% of a phone - so the space
+  comes from the gaps rather than from either. The chips scroll sideways in
+  one row instead of wrapping onto three, which is what a row of short labels
+  wants on a narrow screen anyway.
+*/
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bchead { margin-bottom: 16px; }
+  [data-experience='basecamp'] .bcheadrow { margin-top: 8px; gap: 8px; }
+  [data-experience='basecamp'] .bcstate {
+    margin-top: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+    width: 100%;
+  }
+  [data-experience='basecamp'] .bcstate::-webkit-scrollbar { display: none; }
+  [data-experience='basecamp'] .bcstatus--press,
+  [data-experience='basecamp'] .bcstatecount--press { flex: none; }
+}
+
+/* The date a to-do has not got, on the row that has not got it. */
+[data-experience='basecamp'] .bcundatedrow { align-items: center; }
+[data-experience='basecamp'] .bcdueinput {
+  min-height: 40px;
+  font-size: 13.5px;
+  padding: 7px 10px;
+  width: 168px;
+}
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bcdueinput { min-height: 44px; font-size: 16px; }
+}
+
+/*
+  The instant on an activity row: quiet, monospaced digits so a column of them
+  lines up, and never larger than the sentence it belongs to.
+*/
+[data-experience='basecamp'] .bceventbody { display: grid; gap: 2px; min-width: 0; }
+[data-experience='basecamp'] .bceventat {
+  font: 400 12px/1.4 var(--bc-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-muted);
+  opacity: 0.85;
+}
+[data-experience='basecamp'] .bceventwhat--press {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+[data-experience='basecamp'] .bceventwhat--press:hover {
+  border-bottom-color: color-mix(in srgb, var(--bc-accent) 60%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bceventwhat--press:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcduecell { display: flex; align-items: center; }
+
+/*
+  THE PROJECT'S IDENTITY, restrained on purpose.
+
+  Grant asked for projects to be immediately distinguishable AND for the
+  styling to stay restrained rather than recolouring the application. So the
+  hue reaches exactly two things: the mark, and a hairline under the head.
+  Everything else in the experience keeps its own palette, which is what stops
+  six projects looking like six different products.
+
+  The hue classes are the studio's own (p-rust, p-amber, p-moss, p-slate,
+  p-iris, p-plum) and they set `--hue` in tokens.css; this reads that rather
+  than redefining six colours a second time. A project with no hue falls back
+  to the experience's accent, so the mark is never colourless.
+*/
+[data-experience='basecamp'] .bcprojmark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 13px;
+  color: var(--hue, var(--bc-accent));
+  background: color-mix(in srgb, var(--hue, var(--bc-accent)) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue, var(--bc-accent)) 40%, transparent);
+}
+[data-experience='basecamp'] .bcprojmark svg { width: 26px; height: 26px; }
+[data-experience='basecamp'] .bcprojmark--letter {
+  font: 700 20px/1 var(--bc-font);
+}
+[data-experience='basecamp'] .bcprojmark--img {
+  object-fit: cover;
+  background: none;
+  box-shadow: none;
+}
+
+/*
+  THE MARK, AT CHIP SIZE.
+
+  `.bcprojmark` is 46px because it sat beside an h1; dropped into the top bar's
+  40px chip it overflowed the control by six pixels in both directions. The
+  first version of this rule lived in `bc.css` and lost - every rule in this
+  experience is prefixed `[data-experience='basecamp']`, so an unprefixed
+  `.bcjumpmark .bcprojmark` ties on specificity and loses on file order.
+  It goes after the rule it overrides, with the same prefix, which is the third
+  time this file has learned that.
+*/
+[data-experience='basecamp'] .bcjumpmark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: calc(var(--bc-2) * -1);
+}
+[data-experience='basecamp'] .bcjumpmark .bcprojmark {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+[data-experience='basecamp'] .bcjumpmark .bcprojmark svg { width: 15px; height: 15px; }
+[data-experience='basecamp'] .bchead {
+  border-bottom: 1px solid color-mix(in srgb, var(--bc-text-muted) 16%, transparent);
+  padding-bottom: 14px;
+}
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcprojmark { width: 36px; height: 36px; border-radius: 10px; }
+  [data-experience='basecamp'] .bcprojmark svg { width: 20px; height: 20px; }
+}
+
+/*
+  An activity row that opens what it names is a control, so it meets the touch
+  floor on a touch device. The hit area grows, not the type: the row is a
+  sentence and a sentence at 44px would be a heading.
+*/
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bceventwhat--press {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/* ---------------------------------------------------------------------- *
+ * SIGNING IN, in the strip that says you are not.
+ *
+ * localStorage is per origin, so a token entered on Team HQ does not exist on
+ * this hostname - and until now there was nowhere to enter one, which is why
+ * every office call came back unauthorized.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcsignin {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+[data-experience='basecamp'] .bcsignininput {
+  width: 220px;
+  /* 44px, not 40: the measure audit caught this on eight surfaces at once. */
+  min-height: 44px;
+  font-size: 16px; /* under 16px iOS zooms the page on focus */
+}
+[data-experience='basecamp'] .bcsigninsaid {
+  font: 500 13px/1.4 var(--bc-font);
+  color: var(--bc-danger);
+}
+@media (max-width: 720px) {
+  [data-experience='basecamp'] .bcsignin { margin-left: 0; width: 100%; }
+  [data-experience='basecamp'] .bcsignininput { flex: 1; width: auto; }
+}
+
+/* ---------------------------------------------------------------------- *
+ * THE MICROPHONE SAYS WHETHER IT IS ON, IN COLOUR.
+ *
+ * Grant, 23 September: "Inactive microphone/icon state = red. Active /
+ * listening / conversation state = green. State changes should happen without
+ * layout movement... Clicking the voice button must not move, resize or reflow
+ * surrounding buttons/UI."
+ *
+ * So the three states differ only in COLOUR - never in width, height, border
+ * width, padding or font. The border stays 1.5px in every state and the box
+ * stays 44x44, which is what keeps Chat with Team beside it from shifting by a
+ * pixel when the call starts. The pulse is opacity only, which composites
+ * without touching layout, and it is off for anybody who asked for stillness.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcmic {
+  background: color-mix(in srgb, var(--bc-danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--bc-danger) 55%, transparent);
+  color: var(--bc-danger);
+}
+[data-experience='basecamp'] .bcmic:hover {
+  background: color-mix(in srgb, var(--bc-danger) 26%, transparent);
+  border-color: var(--bc-danger);
+}
+/* Connecting is on its way to green and is not there yet. */
+[data-experience='basecamp'] .bcmic.connecting {
+  background: color-mix(in srgb, var(--bc-success) 14%, transparent);
+  border-color: color-mix(in srgb, var(--bc-success) 55%, transparent);
+  color: var(--bc-success);
+}
+[data-experience='basecamp'] .bcmic.ringing,
+[data-experience='basecamp'] .bcmic[aria-pressed='true'] {
+  background: var(--bc-success);
+  border-color: var(--bc-success);
+  /* Ink chosen against the fill rather than inherited, so the glyph stays
+     legible in both schemes. */
+  color: var(--bc-accent-ink);
+}
+
+/*
+  ONE PLACE SAYS WHAT THE CALL IS DOING.
+
+  Taking the head's status line out of flow stopped it pushing the controls
+  sideways and started it covering the live panel's Mute and End instead -
+  which is the way an absolutely positioned element goes wrong, and the check
+  found it in the same run.
+
+  While a conversation is up, the panel below reports everything: connecting,
+  listening, the team talking, muted. The head's line is for the moments there
+  is no panel yet - a refused microphone, a session that would not start - so
+  it stands down as soon as the panel exists.
+*/
+[data-experience='basecamp'] .bchead:has(.bclive) .bccallsay { display: none; }
+
+/* ---------------------------------------------------------------------- *
+ * DONE WORK, STILL ON THE PAGE.
+ *
+ * It used to disappear into a collapsed drawer the moment it was ticked, which
+ * is what "completing a to-do makes it vanish" was. It stays where it is now,
+ * after the open work, quieter but plainly there and plainly finished.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcdonehead {
+  margin: var(--bc-3) 0 var(--bc-1);
+  font: 600 12px/1 var(--bc-font);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcdonelist .bcitem { opacity: .72; }
+[data-experience='basecamp'] .bcdonelist .bcitem:hover,
+[data-experience='basecamp'] .bcdonelist .bcitem:focus-within { opacity: 1; }
+/*
+  THE TICK IS A THUMB-SIZED TARGET.
+  Grant: "make the entire intended completion control reliable". The label is
+  the hit area and the box sits in the middle of it, so pressing anywhere near
+  the tick ticks it rather than missing between the box and the title.
+*/
+[data-experience='basecamp'] .bctickhit {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -6px 0 -6px -6px;
+  cursor: pointer;
+  border-radius: var(--bc-r-control);
+}
+[data-experience='basecamp'] .bctickhit:hover { background: var(--bc-hover); }
+
+/*
+  THE PAGE BEHIND A DIALOG DOES NOT SCROLL.
+
+  The other half of `inert`: with a contact open full screen, the wheel used to
+  scroll the SURFACE behind the dialog - so a long contact appeared to jump
+  back to the top when the dialog itself had never moved. Locking the page
+  sends the wheel where the content is.
+*/
+[data-experience='basecamp'] body:has(.bcexp),
+body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
+[data-experience='basecamp'] .bcunder[inert] { pointer-events: none; }
+
+/*
+  A CONTACT'S FACE IN THE MINIATURE.
+
+  A photograph where there is one, initials on a tint where there is not - so a
+  contact with no picture still reads as somebody rather than as a broken
+  image. Fixed box and `cover`, because a phone photograph is four thousand
+  pixels of portrait and would otherwise decide the row's height.
+*/
+[data-experience='basecamp'] .bcmateface {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bc-hover);
+  border: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcmateface--none {
+  display: grid;
+  place-items: center;
+  font: 650 12.5px/1 var(--bc-font);
+  color: var(--bc-text-muted);
+  letter-spacing: .02em;
+}
+[data-experience='basecamp'] .bcmate {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+}

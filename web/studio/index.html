@@ -12,6 +12,26 @@
 <link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="/skins.css">
 <link rel="stylesheet" href="/studio.css">
+<!--
+  The experimental Basecamp-inspired Team HQ (basecamp_clone.md), reached only
+  at the /basecamp path prefix.
+
+  Loaded on every page and SCOPED to [data-experience="basecamp"] on the root
+  element, which app.js sets only on that branch. One link rather than an
+  injected stylesheet: a style sheet added at navigation time paints one frame
+  late, and the flash is on the experimental experience's first impression.
+  Last in the chain so its own scope wins inside itself, and scoped throughout
+  so it cannot reach the default studio at all.
+-->
+<link rel="stylesheet" href="/bc/tokens.css">
+<link rel="stylesheet" href="/bc/bc.css">
+<!--
+  The two composition experiments. Loaded after bc.css so its phone block
+  wins on source order; scoped to the experiment, so it cannot reach the
+  default Team HQ.
+-->
+<link rel="stylesheet" href="/bc/compose.css">
+<link rel="stylesheet" href="/bc/settings.css">
 </head>
 <body>
 <div id="root" class="shell"></div>

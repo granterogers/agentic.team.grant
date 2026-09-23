@@ -24,12 +24,28 @@ import { candidates } from '../../web/studio/command.js'
 
 const APP = await readFile('web/studio/app.js', 'utf8')
 
-/** The views `drawShell` actually has a branch for, read from the source. */
+/**
+ * The views `drawShell` actually has a branch for, read from the source.
+ *
+ * TO THE END OF THE FUNCTION, not a fixed number of characters.
+ *
+ * This was `+ 900`, and nine hundred characters was enough right up until
+ * something was added at the top of `drawShell` — at which point the window
+ * stopped reaching the ternary, `drawable()` returned only its own hardcoded
+ * fallback, and the assertion failed claiming the shell could draw nothing
+ * but the home board. A correct change, a red test, and a message pointing
+ * at the command bar rather than at the window that had gone stale.
+ *
+ * The property is "every view the bar offers is one the shell can draw". A
+ * character count is an artefact of how the function happened to be written
+ * on the day, and this file already argues that case about the rows.
+ */
 const drawable = (): Set<string> => {
-  const shell = APP.slice(
-    APP.indexOf('function drawShell()'),
-    APP.indexOf('function drawShell()') + 900,
-  )
+  const from = APP.indexOf('function drawShell()')
+  // The next top-level declaration is where this one ends. Every function in
+  // this file starts in column zero, so the newline is what makes it top level.
+  const next = APP.indexOf('\nfunction ', from + 1)
+  const shell = APP.slice(from, next === -1 ? APP.length : next)
   const found = new Set<string>()
   for (const m of shell.matchAll(/state\.view === '([a-z-]+)'/g)) found.add(m[1] as string)
   // The last ternary has no test: it is the fallback, and it is the home board.

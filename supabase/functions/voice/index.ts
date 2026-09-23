@@ -129,6 +129,121 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json({ found })
   }
 
+  /*
+    A VOICE NOTE: audio in, words out, and nothing else.
+
+    Grant, 23 September: *"press microphone, record a voice message, stop, send
+    or cancel, audio is transcribed, transcription becomes part of the normal
+    project conversation, agents can understand/respond to it exactly as if
+    Grant had typed the message."*
+
+    WHY THIS ENDPOINT RETURNS TEXT AND STOPS THERE. The same brief says: *"Do
+    not create a separate voice note conversation."* The studio's ordinary chat
+    already posts to `/turn` on this very function, so the shortest route to
+    "exactly as if he had typed it" is to hand the page the words and let it
+    take the path a typed message takes. Anything more here would be a second
+    conversational system, and the two would drift.
+
+    WHY THE TRANSCRIPTION HAPPENS HERE rather than in the browser.
+    `dictate.js` (#196) uses the browser's own recogniser, which produces text
+    and keeps no audio - right for dictating into a composer, wrong for a voice
+    message, where the recording is the thing. This uses the service the office
+    already has configured for Telegram voice notes, so there is one speech
+    service, one key, and one place it is configured.
+
+    The configuration is read PER CALL from `public.voice_transcriber()`, not
+    from this function's environment, so rotating the key does not need a
+    deploy of this function.
+
+    The request shape below duplicates `transcribeOverApi` in
+    `src/voice/inbound.ts`, because an edge function is a single file and
+    cannot import it. `tests/voice/note-endpoint.test.ts` reads both and
+    asserts they send the same fields to the same path, so the copy cannot
+    drift quietly.
+  */
+  if (url.pathname.endsWith('/note')) {
+    const heardForm = await request.formData().catch(() => null)
+    const audio = heardForm?.get('audio')
+    if (!(audio instanceof File)) return json({ error: 'no audio was sent' }, 400)
+    if (audio.size < 1024) return json({ error: 'that recording was too short to hear' }, 400)
+    /* 25 MB is the speech service's own ceiling; refusing here is a sentence
+       rather than a rejection the page has to interpret. */
+    if (audio.size > 25 * 1024 * 1024) {
+      return json({ error: 'that recording is too long to transcribe' }, 413)
+    }
+
+    const conf = (await rpc('voice_transcriber', {})) as {
+      mode?: string
+      base_url?: string
+      model?: string
+      key?: string
+    } | null
+    const mode = conf?.mode ?? 'none'
+    const baseUrl = conf?.base_url ?? ''
+    const model = conf?.model ?? ''
+    const key = conf?.key ?? ''
+    if (mode !== 'api' || baseUrl === '' || model === '' || key === '') {
+      /* Named, never printed: the reason says WHICH part is missing and no
+         part of it is the credential. */
+      return json({ error: 'the office has no speech service configured' }, 503)
+    }
+
+    const speech = new FormData()
+    /*
+      The name matters, not the bytes. The service accepts
+      [flac mp3 mp4 mpeg mpga m4a ogg opus wav webm] BY EXTENSION, and a
+      browser recording arrives as webm or mp4 depending on the browser - so
+      the extension is taken from the type the recorder actually used rather
+      than assumed. `src/voice/inbound.ts` learned this the expensive way with
+      Telegram's `.oga`.
+    */
+    const kind = String(audio.type || 'audio/webm').split(';')[0] ?? 'audio/webm'
+    const ext =
+      kind.includes('mp4') || kind.includes('m4a')
+        ? 'mp4'
+        : kind.includes('ogg') || kind.includes('opus')
+          ? 'ogg'
+          : kind.includes('wav')
+            ? 'wav'
+            : 'webm'
+    speech.append('file', new File([await audio.arrayBuffer()], `note.${ext}`, { type: kind }))
+    speech.append('model', model)
+    speech.append('response_format', 'json')
+    speech.append('language', 'en')
+    /*
+      A spelling hint, and only that. The page sends the project's name and the
+      team's names because "NotebookLM" is not a word a general speech model
+      expects. It biases spelling; it decides nothing, so §5 is intact.
+    */
+    const said = heardForm?.get('vocabulary')
+    const hint = typeof said === 'string' ? said.slice(0, 400) : ''
+    if (hint !== '') speech.append('prompt', hint)
+
+    const heardBack = await fetch(`${baseUrl.replace(/\/$/, '')}/audio/transcriptions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}` },
+      body: speech,
+    }).catch(() => null)
+    if (heardBack === null) return json({ error: 'the speech service could not be reached' }, 502)
+    const heardJson = (await heardBack.json().catch(() => ({}))) as {
+      text?: string
+      error?: { message?: string }
+    }
+    if (!heardBack.ok || heardJson.error !== undefined) {
+      return json(
+        {
+          error:
+            `the speech service refused (${String(heardBack.status)}): ` +
+            String(heardJson.error?.message ?? 'no reason given').slice(0, 200),
+        },
+        502,
+      )
+    }
+    const words = String(heardJson.text ?? '').trim()
+    if (words === '') return json({ error: 'nothing could be made out in that recording' }, 422)
+    return json({ heard: words })
+  }
+
   const body = (await request.json().catch(() => ({}))) as {
     said?: unknown
     also?: unknown

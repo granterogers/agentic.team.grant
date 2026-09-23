@@ -25,7 +25,7 @@
   button is bad; a lying button is worse.
 */
 
-import { CREW } from './data.js'
+import { CREW, PROJECTS } from './data.js'
 
 const KEY = 'studio.chat'
 
@@ -51,10 +51,34 @@ const office = new Map()
  * still in flight appended — a reply that has landed is in the office's copy
  * already, and showing both would double it.
  */
+/*
+  THE PROTOTYPE'S OWN CONVERSATION, in the shape the bubble renderer expects.
+
+  Grant, 22 September: *"The sidebar should expose useful chat history, rather
+  than behaving as though every interaction starts from nothing."* It did
+  start from nothing: the dock read this module and this module read the
+  browser's store, while the project's seeded conversation sat in data.js
+  where only the Chat SURFACE looked at it. Two readers of one fact, and the
+  quieter one was the sidebar.
+
+  Mapped here rather than at either caller, because a shape converted twice is
+  a shape that will be converted differently twice.
+*/
+const seeded = (slug) =>
+  (PROJECTS.find((p) => p.slug === slug)?.chat ?? []).map((m, i) => ({
+    id: `seed-${slug}-${String(i)}`,
+    from: m.who === 'grant' ? 'grant' : m.who,
+    text: m.text,
+    at: m.when ?? '',
+    when: m.when ?? '',
+    seeded: true,
+  }))
+
 export const thread = (slug) => {
   const theirs = office.get(slug)
-  if (theirs === undefined) return all()[slug] ?? []
-  return [...theirs, ...(all()[slug] ?? []).filter((m) => m.inflight === true)]
+  const mine = all()[slug] ?? []
+  if (theirs === undefined) return mine.length === 0 ? seeded(slug) : mine
+  return [...theirs, ...mine.filter((m) => m.inflight === true)]
 }
 
 /** Whether the office's own record is what is on screen for this project. */
@@ -228,6 +252,15 @@ const API = () =>
   window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
 const TURN = () => API().replace(/\/hq-api$/, '/voice')
 
+/**
+ * Where the voice surface lives, for anything that needs it besides a turn.
+ *
+ * Exported rather than re-derived by the caller: the basecamp voice note posts
+ * a recording to `/note` on this same function, and two derivations of one
+ * endpoint is the shape 0310 was spent undoing.
+ */
+export const endpoint = () => TURN()
+
 /** One session per visit, so the office can group the turns of a conversation. */
 const SESSION = `s${Math.random().toString(36).slice(2, 12)}`
 
@@ -373,6 +406,28 @@ export async function ask(slug, text, context, token, to, also, onState) {
       }),
     })
     const body = await r.json()
+    /*
+      A TOKEN THE OFFICE WILL NOT ACCEPT IS NOT A NETWORK PROBLEM.
+
+      This threw the server's own word - "unauthorized" - straight at the
+      person, which is both meaningless and unrecoverable: the stale token
+      stayed in the browser, so every following message failed the same way
+      with the same word.
+
+      `office.js` has always handled 401 properly, by clearing the token and
+      saying what to do about it. The conversation goes to a different
+      endpoint and had its own fetch, so it never learned. It says the same
+      thing now, and clears the same token, which puts the page back into the
+      signed-out state that offers a way in.
+    */
+    if (r.status === 401) {
+      try {
+        localStorage.removeItem('hq.token')
+      } catch {
+        /* Private window: nothing to clear, and the message still stands. */
+      }
+      throw new Error('This browser is not signed in to the office. Sign in and try again.')
+    }
     if (!r.ok) throw new Error(body.error ?? `the office returned ${r.status}`)
     reply = { text: body.speak, did: body.did }
   } catch (e) {

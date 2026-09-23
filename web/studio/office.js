@@ -146,8 +146,24 @@ export async function read(section, id, extra) {
     token.clear()
     throw new Error('That token was not accepted.')
   }
-  if (!r.ok) throw new Error(`The server returned ${r.status}`)
-  return (await r.json()).data
+  const answered = await r.json().catch(() => ({}))
+  /*
+    THE OFFICE'S OWN WORDS, when it gave any.
+
+    `act` has always repeated what the RPC said and this threw `The server
+    returned 502` over the top of it — so a section that failed for a reason a
+    person could act on ("Google is not connected yet. Connect it in Settings")
+    reached the page as a status code. Found by refusing a Drive listing three
+    different ways and watching all three arrive identical.
+
+    The status is still the fallback, because a gateway that fails without
+    saying anything is a real state and "502" is better than silence.
+  */
+  if (!r.ok) {
+    const said = typeof answered?.error === 'string' ? answered.error.trim() : ''
+    throw new Error(said === '' ? `The server returned ${r.status}` : said)
+  }
+  return answered.data
 }
 
 /**
