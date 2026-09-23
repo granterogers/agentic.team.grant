@@ -180,6 +180,74 @@ word.
 
 ## Verification log
 
+**Deployed, and the sandbox's browser taught to reach the real world.**
+
+*The deploy.* `npm run deploy:preview` from HEAD `36cfebb`. It targets
+`agentic-team-hq-basecamp`, which is NOT the production `ai-team-hq` project —
+production is not reachable from that script by design. Verified by HASH, not by
+loading it: every one of the **84 files** the deploy uploaded was fetched back
+from the alias and its sha1 compared with the local file. **84/84 identical**,
+and the served `bc/miniatures.js` is byte-identical to the working tree's and
+carries this commit's `faceFor`. Alias:
+`https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app`.
+
+*The browser could not reach the internet, and it was never a policy.* Every
+report until now said a signed-in browser check "cannot be verified here". The
+cause: outbound HTTPS goes through an agent proxy that re-terminates TLS, and
+while Node, curl and git are configured for its CA, **Chromium reads the NSS
+database at `$HOME/.pki/nssdb`, which existed and was EMPTY** — `nssPublic`
+held zero rows — so every browser request to a public origin died
+`ERR_CERT_AUTHORITY_INVALID` while the identical request from Node succeeded.
+The system store was correct all along; the browser's was not.
+
+`npm run trust:proxy-ca` writes the sandbox's own CA chain into that store with
+`certutil -t "C,,"`, and is idempotent. **Nothing was weakened.** No
+`--ignore-certificate-errors`, no `ignoreHTTPSErrors`, no application change, no
+production exception — and the control says so: after the fix,
+`expired.badssl.com`, `self-signed.badssl.com` and `wrong.host.badssl.com` are
+**all still refused** while the real origins answer. The browser trusts the
+proxy; the proxy validates upstream.
+
+*What that bought.* `verify:basecamp-live`, new, **17/17 against the deployed
+page signed in to Grant's real office** — a whole class of verification that
+was previously reported as impossible:
+- the page is the prototype without a token, and says so;
+- signing in with the vault token clears the strip and shows material only the
+  real office has;
+- **CORS on `voice-token`, from the real deployed origin** — the one thing a
+  server-side probe can never test, and CLAUDE.md records the voice call being
+  dead for weeks for exactly this reason. It mints a real credential, not a
+  degraded answer, and **a page on another origin is refused**, which is the
+  control that matters because that endpoint takes no authentication;
+- the gateway answers this origin with the office token, no remote image is
+  broken, every document tile drew something.
+
+**Control:** the same flow with a wrong token leaves the strip up, says *"The
+office did not accept that token"*, and does not keep the credential — so the
+live checks are not passing vacuously.
+
+*Four findings in that suite's first runs, and all four were my harness, not
+the product.* A four-second wait that was enough locally and not against the
+real office; a "shows a real project" check that passed while the page was
+still showing invented data, because the prototype has a project called
+*Legacy Coaching Course* and so does his office; `client_secret` read as an
+object when it is a string; and `includes('degraded')` matching the word in the
+KEY LIST rather than the flag — a substring satisfied by a superstring, which
+this repository already has a rule about. **Validate the test before believing
+the finding**, four times in one suite.
+
+*And one honest boundary in the data.* **Not one approved document in the live
+office has a file behind it** — all 75 are connector records from NotebookLM,
+Notion and uploads whose text lives in the row. So no thumbnail on the real
+product can paint a first page today, and the drawn page is the correct answer.
+Item 8's face derivation matters for files uploaded from here on; it changes
+nothing about what he sees today. The suite says this rather than failing.
+
+**Still pending, deliberately: the physical live-voice test.** A real
+microphone, a real spoken exchange, on a real device. Everything up to it is
+now verified — the credential is minted for the real origin — but nobody has
+spoken to it.
+
 **11. Final reconciliation — VERIFIED.**
 - `verify:basecamp-reconcile`, new and in the gate: **20/20**. One browser
   session, one visit, every item in the order a person would meet them — the

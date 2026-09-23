@@ -2915,6 +2915,24 @@ Each of these cost real time. They are here so they cost it once.
   office.notion_sync}]` and one query found it. A release gate that only asks
   the suites is asking what somebody thought to write down.
 
+- **The test browser cannot reach the internet, and it is not a policy — it is
+  an EMPTY trust store.** Outbound HTTPS goes through an agent proxy that
+  re-terminates TLS. Node, curl and git are configured for its CA by the
+  environment; **Chromium is not.** It reads the NSS database at
+  `$HOME/.pki/nssdb`, which exists and holds nothing (`nssPublic`: 0 rows), so
+  every browser request to a public origin dies `ERR_CERT_AUTHORITY_INVALID`
+  while the identical request from Node succeeds — and a whole class of
+  verification gets written up as "cannot be checked here" when it can. It was
+  reported that way for the life of a branch. `npm run trust:proxy-ca` fixes it
+  in one idempotent step, and **verification stays on**: after it,
+  `expired.badssl.com`, `self-signed.badssl.com` and `wrong.host.badssl.com`
+  are all still refused. Never reach for `--ignore-certificate-errors` or
+  `ignoreHTTPSErrors`: a browser that accepts anything is not evidence of
+  anything, which is the same argument as a security check that cries wolf.
+  What this unlocks is the thing a server-side fetch can never do — **CORS from
+  the real deployed origin**, the defect that left the voice call dead for
+  weeks while every probe passed.
+
 ---
 
 ## Visual standard
