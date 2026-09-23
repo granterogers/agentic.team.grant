@@ -257,7 +257,36 @@ export const taskTitle = (clause: string): string | null => {
   */
   const kept = readRetraction(clause)?.kept
   const said = kept !== undefined && kept.trim() !== '' ? kept : clause
-  let text = requestBody(TOPIC_FIRST.test(said) ? said.replace(TOPIC_FIRST, '') : said)
+  const withoutTopic = TOPIC_FIRST.test(said) ? said.replace(TOPIC_FIRST, '') : said
+  const framed = requestBody(withoutTopic)
+  /*
+    AND THE SURVIVOR OF A RETRACTION IS CONTENT, NOT A REQUEST.
+
+    `requestBody` takes the verb BY POSITION — deliberately, so it needs no
+    verb list, and its contract is that the clause opens with the asking verb:
+    "add a task to chase the roofer" loses "add". A retraction has already
+    removed everything up to the change of mind, so what survives opens with
+    the INSTRUCTION's own verb, and running `requestBody` over it ate that.
+
+    His real sentence, 20 September, by voice:
+
+      "For me and the um... No actually, you know what? Scan the entirety of
+       the Legacy Coaching Project and create appropriate tasks for me to
+       review"
+
+    The retraction fix correctly kept "Scan the entirety of…" and the title
+    then came out as *"the entirety of the Legacy Coaching Project and…"* —
+    a phrase with no verb, which is not a name for anything. Both halves were
+    right alone and only their composition was wrong, which CLAUDE.md records
+    as the hardest shape to see.
+
+    The discriminator is whether stripping the verb REVEALED a task frame. It
+    does for "no actually, add a task to chase the roofer" (leaving "a task
+    to…", which `OBJECT_NOUN` matches) and it does not for a bare imperative.
+    Gated on a retraction having happened at all, so the ordinary path is
+    untouched.
+  */
+  let text = said === clause || OBJECT_NOUN.test(framed) ? framed : withoutTopic
   text = text.replace(OBJECT_NOUN, '')
   text = text.replace(PLACEHOLDER_OBJECT, '')
   /*

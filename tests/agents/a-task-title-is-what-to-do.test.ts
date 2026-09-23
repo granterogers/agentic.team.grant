@@ -144,19 +144,49 @@ describe('a retracted false start is not part of the name', () => {
     expect(String(t)).not.toContain('you know what')
     expect(String(t)).toContain('the entire project')
     /*
-      The leading VERB does not survive, and that is a SEPARATE defect filed
-      on its own evidence: `requestBody` returns the OBJECT of a request and
-      `taskTitle` uses it as a TITLE, so "chase the caterers" titles a task
-      "the caterers". Real rows show it — `public.tasks` holds "all of Grant's
-      current tasks across all of Grant's projects" as a task name.
+      AND THE VERB SURVIVES, which it did not when this was first written.
 
-      This assertion used to read `toContain('scan the entire project')` and
-      passed for the wrong reason: the filler was the thing being stripped, so
-      the verb survived by accident. Removing the filler made the real
-      behaviour visible. Asserted as it IS, with the defect named, rather than
-      left as a green check over a title nobody would write.
+      The earlier version asserted `toBe('the entire project')` — deliberately
+      and honestly, naming the missing verb as a separate defect and refusing
+      to leave a green check over a title nobody would write. This file is
+      called *a task title is what to do*, and "the entire project" is not
+      something to do.
+
+      The cause was a composition rather than either half: `requestBody` takes
+      the verb BY POSITION, because its contract is that a request clause
+      opens with the asking verb ("add a task to…" loses "add"). A retraction
+      has already removed everything up to the change of mind, so its survivor
+      opens with the INSTRUCTION's verb — and running `requestBody` over it
+      ate that. `taskTitle` now only strips the verb from a retraction
+      survivor when doing so REVEALS a task frame.
     */
-    expect(String(t)).toBe('the entire project')
+    expect(String(t)).toBe('scan the entire project')
+  })
+
+  it('and still strips a real frame that follows the change of mind', () => {
+    /*
+      The control, and the reason the gate is not simply "never strip after a
+      retraction". A person who changes their mind and then asks properly gets
+      the frame taken off exactly as they would have without the change.
+    */
+    expect(taskTitle('Chase the plumber, no actually, add a task to chase the roofer')).toBe(
+      'chase the roofer',
+    )
+  })
+
+  it('keeps the verb of a bare instruction after a change of mind', () => {
+    expect(taskTitle('Chase the plumber, no actually, call Priya about the venue')).toBe(
+      'call Priya about the venue',
+    )
+  })
+
+  it('CONTROL: an ordinary request is untouched by any of this', () => {
+    // The gate is conditioned on a retraction having happened, so the path
+    // Grant uses most must be provably unchanged.
+    expect(taskTitle('Add a task to chase the roofer')).toBe('chase the roofer')
+    expect(taskTitle('Remind me to write the one-pager on Friday')).toBe(
+      'write the one-pager on Friday',
+    )
   })
 })
 

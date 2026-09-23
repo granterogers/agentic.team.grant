@@ -471,6 +471,65 @@ refused 257.
 
 Clean-pass count after pass 10: **0 of 5.**
 
+## Pass 11 — his tasks, and the reminder that has never reminded
+
+**NOT CLEAN.** One systemic product defect fixed (#321's retraction face);
+two filed on their own evidence ([#339](https://github.com/granterogers/agentic.team.grant/issues/339),
+and a comment on [#321](https://github.com/granterogers/agentic.team.grant/issues/321)).
+
+Territory: time, tasks and reminders — the highest-frequency duty that can
+message him.
+
+**The found-nothing question, asked first.** `tasks.remind` runs every fifteen
+minutes and has **never sent him anything**; every output says *"Nothing to
+remind you about."* That is the shape CLAUDE.md warns about — a check that has
+only ever reported zero is indistinguishable from one that cannot report
+anything. It is **truthful**: seven real open tasks and **not one carries a due
+date.** The duty is correct and the corpus is empty.
+
+**What the corpus contained instead.** One row, from a voice note on
+20 September:
+
+> *"For me and the um... No actually, you know what? Scan the entirety of the
+> Legacy Coaching Project and create appropriate tasks for me to review"*
+
+stored verbatim as a task title, false start and self-correction included, and
+read back to him as *"That is on your list — …, no date on it yet."*
+
+**Two defects in one row, and the first was already half-fixed.** `taskTitle`
+already carried a retraction fix citing this exact task — so I tested it rather
+than filing a duplicate, and it was **wrong on the sentence its own comment
+quotes**: the title came out *"the entirety of the Legacy Coaching Project
+and…"*, verb gone. Cause is a composition, not either half: `requestBody` takes
+the verb BY POSITION because its contract is that a request clause opens with
+the asking verb, and a retraction survivor opens with the instruction's own.
+Fixed at the seam, gated so the ordinary path is provably untouched.
+
+**The generalisation was tried and reverted.** #321 asks for the verb to
+survive everywhere. Using `OBJECT_NOUN` as the discriminator generally broke
+six tuned frames ("remind me to…", "put a to-do on to…"), so it was reverted
+and the finding recorded on #321 — the negative result is the useful part.
+
+**The second defect is the reading, not the title** (#339): he asked the office
+to GENERATE tasks and it RECORDED one. Zero children; the project was never
+scanned. Same family as the settled making-outranks-enumerating precedence.
+
+**Verification.** 29 unit checks on the title path, two sabotages both printed
+as landed and both red (always strip: 2 failed; never strip after a retraction:
+1 failed). Full suite 3,007. Deployed, then driven through the deployed
+gateway: `verify:mytasks` reached **75 ok**, including *"the framing is out of
+the title, so the list is scannable"*. It did not complete — it exceeded the
+ten-minute ceiling, which CLAUDE.md already records for this suite, and one
+unrelated check failed on the known live-worker/suite coupling. A timeout is
+not a result and is not reported as one.
+
+**A test expectation corrected, not deleted.** The prior assertion
+`toBe('the entire project')` was deliberate and honest — it characterised the
+defect and named #321 beside it — so it became `toBe('scan the entire
+project')` with the history kept.
+
+Clean-pass count after pass 11: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and

@@ -3354,6 +3354,41 @@ Each of these cost real time. They are here so they cost it once.
   duties are in `public.responsibilities`; read them from there rather than
   guessing at a prefix.
 
+- **`requestBody` takes the verb BY POSITION, so anything that hands it text
+  which is not a request clause loses that text's verb.** Its contract is
+  explicit in its own comment — a request opens with the asking verb, so "add
+  a task to chase the roofer" correctly loses "add". A RETRACTION survivor has
+  already had everything up to the change of mind removed, so it opens with
+  the INSTRUCTION's verb, and composing the two ate it: his real voice note
+  *"…No actually, you know what? Scan the entirety of the Legacy Coaching
+  Project…"* was titled *"the entirety of the Legacy Coaching Project and
+  create appropriate tasks for me to review"*. Both halves right alone and
+  only the seam wrong, which this file already calls the hardest shape to see.
+  **Before piping one extractor's output into another, check whether the
+  second one's PRECONDITION still holds.**
+- **A fix already in the code, with a comment citing the exact row, can still
+  be wrong on that row — so drive it before filing a duplicate.** `taskTitle`
+  carried a retraction fix whose comment quoted the very task title being
+  investigated. Testing it took one scratch script and showed it half-working.
+  Reading the comment and moving on would have left a live defect behind a
+  convincing citation, which is the baselined-reason lesson in a code comment.
+- **A generalisation that breaks tuned neighbours is a NEGATIVE RESULT worth
+  recording, not a failure to hide.** #321 asks for the title's verb to
+  survive everywhere; using `OBJECT_NOUN` as the discriminator generally broke
+  six frames ("remind me to…", "put a to-do on to…") because they reveal no
+  task noun after one verb is removed. Reverted to the narrow evidenced fix
+  and the finding written onto the issue, so whoever does the full job starts
+  one experiment ahead rather than repeating it.
+- **A duty that has only ever said "nothing to do" is either correct or
+  blind, and one query decides which.** `tasks.remind` runs every fifteen
+  minutes and has never sent him anything. It is CORRECT: seven real open
+  tasks and **not one has a due date**. Ask what the table HOLDS before
+  reporting a silent mechanism as broken — and the real finding is the other
+  way round, that nothing is putting dates on his tasks.
+- **A timeout is not a result.** `verify:mytasks` exceeded the ten-minute
+  ceiling again. What it reached (75 ok, including the check under test) is
+  reportable; "the suite failed" is not, and neither is "the suite passed".
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the
