@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a browser module with no types; ADR-0002, no build step.
-import { BOUNDS, COLS, DEFAULT, clamp, compact, squeeze } from '../../web/studio/bc/layout.js'
+import { BOUNDS, COLS, clamp, compact, DEFAULT, squeeze } from '../../web/studio/bc/layout.js'
 
 type Rect = { id: string; x: number; y: number; w: number; h: number }
 
@@ -146,6 +146,12 @@ describe('the layout engine', () => {
  * viable widths."
  */
 describe('squeezing a row rather than reflowing it', () => {
+  /*
+    The shape the layout functions deal in. `layout.js` is a browser module with
+    no types (ADR-0002, no build step), so the callbacks below need it written
+    out once rather than four times.
+  */
+  type Cell = { id: string; x: number; y: number; w: number; h: number }
   /* Two six-column panels side by side on one row. */
   const pair = () => [
     { id: 'tasks', x: 0, y: 0, w: 6, h: 5 },
@@ -153,22 +159,22 @@ describe('squeezing a row rather than reflowing it', () => {
   ]
 
   it('shrinks the neighbour to the right instead of pushing it down', () => {
-    const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
+    const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
     const after = squeeze(widened, 'tasks')
-    const board = after.find((m) => m.id === 'board')
+    const board = after.find((m: Cell) => m.id === 'board')
     expect(board).toMatchObject({ x: 8, y: 0, w: 4 })
   })
 
   it('and the neighbour stays on the same row', () => {
-    const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
+    const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
     const after = compact(squeeze(widened, 'tasks').map(clamp), 'tasks')
-    expect(after.find((m) => m.id === 'board')?.y).toBe(0)
+    expect(after.find((m: Cell) => m.id === 'board')?.y).toBe(0)
   })
 
   it('narrows a neighbour on the LEFT when the resized panel grows leftwards', () => {
-    const widened = pair().map((m) => (m.id === 'board' ? { ...m, x: 4, w: 8 } : m))
+    const widened = pair().map((m: Cell) => (m.id === 'board' ? { ...m, x: 4, w: 8 } : m))
     const after = squeeze(widened, 'board')
-    expect(after.find((m) => m.id === 'tasks')).toMatchObject({ x: 0, w: 4 })
+    expect(after.find((m: Cell) => m.id === 'tasks')).toMatchObject({ x: 0, w: 4 })
   })
 
   /*
@@ -178,14 +184,14 @@ describe('squeezing a row rather than reflowing it', () => {
   */
   it('moves a neighbour down only when it cannot fit at its minimum width', () => {
     const min = BOUNDS.board.minW
-    const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w: COLS - (min - 1) } : m))
+    const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w: COLS - (min - 1) } : m))
     const after = compact(squeeze(widened, 'tasks').map(clamp), 'tasks')
-    expect(after.find((m) => m.id === 'board')?.y).toBeGreaterThan(0)
+    expect(after.find((m: Cell) => m.id === 'board')?.y).toBeGreaterThan(0)
   })
 
   it('never lets a squeezed neighbour fall below its minimum width', () => {
     for (let w = 3; w <= COLS; w += 1) {
-      const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w } : m))
+      const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w } : m))
       for (const m of compact(squeeze(widened, 'tasks').map(clamp), 'tasks')) {
         expect(m.w).toBeGreaterThanOrEqual(BOUNDS[m.id].minW)
       }
@@ -194,7 +200,7 @@ describe('squeezing a row rather than reflowing it', () => {
 
   it('and never produces an overlap, whatever the width', () => {
     for (let w = 3; w <= COLS; w += 1) {
-      const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w } : m))
+      const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w } : m))
       const after = compact(squeeze(widened, 'tasks').map(clamp), 'tasks')
       for (const a of after) {
         for (const b of after) {
@@ -208,8 +214,8 @@ describe('squeezing a row rather than reflowing it', () => {
 
   it('leaves a module on another row alone', () => {
     const below = [...pair(), { id: 'documents', x: 0, y: 5, w: 6, h: 5 }]
-    const widened = below.map((m) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
+    const widened = below.map((m: Cell) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
     const after = squeeze(widened, 'tasks')
-    expect(after.find((m) => m.id === 'documents')).toMatchObject({ x: 0, y: 5, w: 6 })
+    expect(after.find((m: Cell) => m.id === 'documents')).toMatchObject({ x: 0, y: 5, w: 6 })
   })
 })
