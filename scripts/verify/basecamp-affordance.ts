@@ -147,7 +147,7 @@ const slug = await (async (): Promise<string> => {
   )) as string
 })()
 
-const ROUTES = [
+const ROUTES: [string, string][] = [
   ['the project home', slug],
   ['to-dos', `${slug}/tasks`],
   ['the card table', `${slug}/board`],
