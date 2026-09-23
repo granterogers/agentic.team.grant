@@ -258,9 +258,24 @@ for (const size of SIZES) {
         'phone: the fold measure matched nothing, which is not the same as a good score',
       )
     } else {
-      const pct = Math.round((fold.y / size.height) * 100)
+      /*
+        DISCOUNT THE PREVIEW-ONLY NOTICE, do not move the measure.
+
+        Without a token the shell carries the strip saying these are invented
+        projects; signed in, Grant does not have it, so its pixels are the
+        harness's and not the product's. CLAUDE.md settled this for the same
+        measure in `npm run space` - 75% became 54% became 45% as each wrong
+        thing came out - and the rule it landed on is this one: discount by
+        height, so a run with a token gives the same number.
+      */
+      const preview = (await page.evaluate(
+        inPage(`const el = document.querySelector('.bcnotlive')
+           return el === null ? 0 : Math.round(el.getBoundingClientRect().height)`),
+      )) as number
+      const pct = Math.round(((fold.y - preview) / size.height) * 100)
       console.log(
-        `  first module   "${fold.name}" at ${String(fold.y)}px = ${String(pct)}% of the viewport`,
+        `  first module   "${fold.name}" at ${String(fold.y)}px = ${String(pct)}% of the viewport` +
+          (preview === 0 ? '' : ` (after discounting ${String(preview)}px of preview-only notice)`),
       )
       if (pct >= 40) {
         problems.push(

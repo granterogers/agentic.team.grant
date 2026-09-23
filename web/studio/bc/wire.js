@@ -57,6 +57,28 @@ export const wire = (root) => {
   }
 
   /*
+    ASKING THE OFFICE AGAIN, from the strip that says it did not answer.
+
+    Drawn only in the two states where retrying can help, so this is never the
+    control that cannot do its job - and it says what it is doing while it
+    does it, because a button that looks unchanged for four seconds reads as a
+    button that did nothing.
+  */
+  for (const b of root.querySelectorAll('[data-bc-retry-office]')) {
+    b.addEventListener('click', async () => {
+      const was = b.textContent
+      b.disabled = true
+      b.textContent = 'Trying…'
+      try {
+        await ctx.refresh()
+      } finally {
+        b.disabled = false
+        b.textContent = was
+      }
+    })
+  }
+
+  /*
     Leaving the experience for the current Team HQ.
 
     A full page load rather than a router hop, deliberately: the two

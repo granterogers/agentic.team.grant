@@ -30,7 +30,7 @@
   template.
 */
 
-import { PROJECTS, source } from '../data.js'
+import { PROJECTS, SOURCE_STATE, source } from '../data.js'
 import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
 import { MARKS } from '../logos/marks.js'
@@ -2521,8 +2521,35 @@ const body = () => {
  * settings and document viewers, the drop layer - keep their lifecycle. That
  * is a structural requirement of this page, not a detail.
  */
+/*
+ * WHAT IS ON SCREEN, WHEN IT IS NOT THE OFFICE.
+ *
+ * Found by refusing every read with a token in the browser and looking at what
+ * came back: four contacts, with names, roles, towns and email addresses, and
+ * nothing anywhere saying they were invented. The default studio has said this
+ * since #119 and this experience never had; a signed-in person whose office had
+ * gone down would have read the prototype as their own records.
+ *
+ * ONE STRIP IN THE FRAME rather than a notice per surface: every surface in
+ * here draws from the same arrays, so the question "is this real" is answered
+ * once or it will be answered inconsistently. The retry is drawn only where
+ * retrying can help - there is nothing to try with on the prototype state, and
+ * a control that cannot do its job is a false affordance the gate would catch.
+ */
+const notLive = () => {
+  if (source.live === true) return ''
+  const s = SOURCE_STATE[source.state] ?? SOURCE_STATE.prototype
+  const canRetry = source.state === 'unreachable' || source.state === 'stale'
+  return `<div class="bcnotlive${s.tone === '' ? '' : ' bcnotlive--bad'}" role="status">
+    <b>${esc(s.label)}</b>
+    <span>${esc(s.say)}</span>
+    ${canRetry ? button('Try again', { 'data-bc-retry-office': '1' }) : ''}
+  </div>`
+}
+
 export const html = () =>
   `<a class="bcskip" href="#bcmain">Skip to main content</a>
   ${topRow()}
+  ${notLive()}
   <main class="bcmain" id="bcmain" tabindex="-1">${body()}</main>
   ${tray()}`

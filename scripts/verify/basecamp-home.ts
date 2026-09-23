@@ -82,12 +82,28 @@ const FORBIDDEN = ['chat', 'sources']
   )) as string
   const where = JSON.parse(boxes) as Record<string, { top: number; bottom: number }>
 
+  /*
+    THE PREVIEW-ONLY STRIP IS DISCOUNTED BY HEIGHT, not measured around.
+
+    Without a token the shell carries the notice saying these are invented
+    projects, and a signed-in Grant does not have it - so counting its pixels
+    against the fold would hold the product to a budget its user never spends.
+    CLAUDE.md settled this exact question for `npm run space`: discount by
+    height, so a run with a token gives the same number.
+  */
+  const chrome = (await page.evaluate(
+    inPage(`const el = document.querySelector('.bcnotlive')
+       return el === null ? 0 : Math.round(el.getBoundingClientRect().height)`),
+  )) as number
+  const fold = 900 + chrome
   for (const id of REQUIRED) {
     const b = where[id]
     check(
       `${id} is on the home and inside the first 1440x900 view`,
-      b !== undefined && b.bottom <= 900,
-      b === undefined ? 'the pane is not on the home at all' : `it runs to ${String(b.bottom)}px`,
+      b !== undefined && b.bottom <= fold,
+      b === undefined
+        ? 'the pane is not on the home at all'
+        : `it runs to ${String(b.bottom)}px, against a fold of ${String(fold)} (900 plus ${String(chrome)}px of preview-only notice)`,
     )
   }
   for (const id of FORBIDDEN) {

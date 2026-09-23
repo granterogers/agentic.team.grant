@@ -528,6 +528,38 @@ export const WAITING = { ...FALLBACK_WAITING }
   `live` stays a boolean and stays true only for the good case, so every
   existing reader keeps working.
 */
+/*
+  WHAT TO SAY WHEN WHAT IS ON SCREEN IS NOT THE OFFICE.
+
+  Beside `source` rather than beside the one page that happened to render it
+  first: two surfaces now tell somebody the same four things, and two copies of
+  a sentence about whether data is real is exactly the shape 0311 spent a
+  migration undoing. The page decides where the words go; this decides what
+  they are.
+*/
+export const SOURCE_STATE = {
+  prototype: {
+    label: 'Prototype data',
+    say: 'Showing the design on invented projects. Sign in to see your office.',
+    tone: '',
+  },
+  unreachable: {
+    label: 'The office did not answer',
+    say: 'Nothing on this page is your office. This is the prototype standing in.',
+    tone: 'bad',
+  },
+  stale: {
+    label: 'Out of date',
+    say: 'The office answered once and has stopped. What you can see was real then.',
+    tone: 'bad',
+  },
+  refused: {
+    label: 'Signed out',
+    say: 'That token was not accepted, so it has been cleared. Sign in again.',
+    tone: 'bad',
+  },
+}
+
 export const source = {
   live: false,
   at: null,

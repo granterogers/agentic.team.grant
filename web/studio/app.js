@@ -7,7 +7,18 @@
   is not, that is evidence for React and this file becomes the specification.
 */
 
-import { CREW, FROM_OFFICE, PROJECTS, WAITING, byId, crewBy, health, hydrate, source } from './data.js'
+import {
+  CREW,
+  FROM_OFFICE,
+  PROJECTS,
+  SOURCE_STATE,
+  WAITING,
+  byId,
+  crewBy,
+  health,
+  hydrate,
+  source,
+} from './data.js'
 import { act, attempt, canWrite, onWrite, read, say, sure, token, why } from './office.js'
 /*
   The experimental Basecamp-inspired Team HQ (basecamp_clone.md).
@@ -1384,35 +1395,12 @@ function paintSchemeButtons() {
   other direction -- real breakage mistaken for a normal prototype -- and it is
   how an outage goes unnoticed.
 */
-const MOCK_STATE = {
-  prototype: {
-    label: 'Prototype data',
-    say: 'Showing the design on invented projects. Sign in to see your office.',
-    tone: '',
-  },
-  unreachable: {
-    label: 'The office did not answer',
-    say: 'Nothing on this page is your office. This is the prototype standing in.',
-    tone: 'bad',
-  },
-  stale: {
-    label: 'Out of date',
-    say: 'The office answered once and has stopped. What you can see was real then.',
-    tone: 'bad',
-  },
-  refused: {
-    label: 'Signed out',
-    say: 'That token was not accepted, so it has been cleared. Sign in again.',
-    tone: 'bad',
-  },
-}
-
 function markMock(root) {
   const existing = $('.mockbar')
   if (existing) existing.remove()
   if (source.live) return
 
-  const state = MOCK_STATE[source.state] ?? MOCK_STATE.prototype
+  const state = SOURCE_STATE[source.state] ?? SOURCE_STATE.prototype
   const bar = document.createElement('div')
   bar.className = `mockbar${state.tone === '' ? '' : ' bad'}`
 

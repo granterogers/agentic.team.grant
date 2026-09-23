@@ -1222,3 +1222,55 @@
   on.
 */
 [data-experience='basecamp'] .bcfacts + .bcsubhead { margin-top: var(--bc-8); }
+
+/*
+  WHAT IS ON SCREEN, WHEN IT IS NOT THE OFFICE.
+
+  Full width under the top row, quiet for the ordinary prototype state and
+  insistent for the three that mean something is wrong - the same distinction
+  #119 drew for the default studio, in this experience's own tokens.
+
+  Its first draft named six tokens that do not exist in `tokens.css`, which is
+  not an error anywhere: the rule simply computes to nothing and the strip
+  renders unstyled. Every custom property below is one this file already uses.
+*/
+[data-experience="basecamp"] .bcnotlive {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-3);
+  flex-wrap: wrap;
+  padding: var(--bc-2) var(--bc-main-pad);
+  border-bottom: 1px solid var(--bc-border-subtle);
+  background: var(--bc-hover);
+  color: var(--bc-text-muted);
+  font: 500 13px/1.45 var(--bc-font);
+}
+[data-experience="basecamp"] .bcnotlive b {
+  color: var(--bc-text-strong);
+  font-weight: 650;
+}
+[data-experience="basecamp"] .bcnotlive--bad {
+  background: color-mix(in oklab, var(--bc-danger) 12%, var(--bc-surface));
+  border-bottom-color: color-mix(in oklab, var(--bc-danger) 40%, var(--bc-border-subtle));
+}
+[data-experience="basecamp"] .bcnotlive--bad b {
+  color: var(--bc-danger);
+}
+
+/*
+  THE NOT-LIVE STRIP, ON A PHONE.
+
+  At the END of this stylesheet, because a media query adds no specificity and
+  every phone rule written above a base rule in here has been silently
+  overridden at least twice. One line of chrome is worth far less of a 844px
+  screen than of a 900px one, so it loses its padding and its type drops a
+  size rather than wrapping to three lines.
+*/
+@media (max-width: 860px) {
+  [data-experience="basecamp"] .bcnotlive {
+    gap: var(--bc-2);
+    padding: var(--bc-1) var(--bc-main-pad);
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+}
