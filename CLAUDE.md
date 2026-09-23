@@ -3297,6 +3297,37 @@ Each of these cost real time. They are here so they cost it once.
   hand-drive that found this also left a real `drive.watch` signature in
   Grant's briefing until it was swept.
 
+- **A guard decided from a proxy while the real number sat one join away.**
+  `app.mail_coverage` computes `associated` — how many cached messages a
+  project actually matches — and the `MailCoverage` interface did not carry the
+  field, so `mailCoverageNote` asked `contacts > 0 || aliases > 0`: *could* this
+  project match, not *did* this search cover anything. All five of Grant's
+  active projects match **zero** of 274 cached messages and every one has at
+  least one alias, so the note was suppressed on **100% of real projects** — on
+  the exact turn the office is about to say something about his email having
+  established nothing. The same class as `learned_by` dropped from the
+  guidance query: **what a column knows is worth nothing if the code that
+  builds the prompt does not select it.** And the original guard's argument —
+  *a caveat on every turn is one nobody reads* — was right and was being
+  decided by the wrong number; keep the argument, change the input.
+- **A DEFAULT on a parameter is the same defect as a parameter no caller
+  passes, with a friendlier face.** `mailBlock(hits, coverage = null)` let
+  `handlers/artifact.ts` call it with one argument for the life of the
+  feature, so the path that WRITES A DOCUMENT was never told what the office
+  could not read. Removing the default turned one silent omission into a
+  compile error at every site — the handler and ten test calls — the moment it
+  was gone. Prefer required, and let tsc name the sites.
+- **`count(*)` over a set-returning JSON function counts the ARRAY.**
+  `select count(*) from app.mail_for_project(p, 50)` returns 1 for every
+  project, which reads as "each one matches a message" and is the opposite of
+  the truth. `jsonb_array_length` is the question. Third harness error in one
+  pass, and the one that would have inverted the finding.
+- **A coverage reading taken with a NULL project is not a reading about a
+  project.** `app.mail_coverage(null)` reports `aliases 0`; per project they
+  are one to three. Generalising the first to the second produced a confident
+  wrong diagnosis, and the correction is what produced the real one — which is
+  this file's most-used rule arriving from the other direction.
+
 ---
 
 ## Visual standard

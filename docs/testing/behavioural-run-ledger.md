@@ -339,6 +339,49 @@ left implied.
 
 Clean-pass count after pass 7: **0 of 5.**
 
+### Pass 8 — his correspondence (#335)
+
+Territory: mail — the most personal corpus the office holds, and untouched by
+passes 0–7. Entered the way pass 7 did: by reading what the office actually
+sent him, then by asking what it would SAY.
+
+**NOT CLEAN — two systemic PRODUCT defects on the same guard, both fixed.**
+
+1. **The number that decides coverage was dropped at the boundary.**
+   `app.mail_coverage` has always computed `associated` — how many messages a
+   project actually matches — and the `MailCoverage` interface did not carry
+   it, so the note decided from `contacts`/`aliases`: *could* it match, not
+   *did* the search cover anything. Live: all five active projects match ZERO
+   of 274 cached messages and every one has at least one alias, so the note
+   was suppressed on **100% of real projects**. Pass 3's class exactly — what a
+   column knows is worth nothing if the code that builds the prompt does not
+   select it.
+2. **The document path was never told anything.** `handlers/artifact.ts`
+   called `mailBlock(post)` with one argument for the life of the feature. The
+   class fix is the parameter's DEFAULT: removing it turned a silent omission
+   into a compile error at every site.
+
+The original guard's argument — *a caveat on every turn is one nobody reads* —
+is kept rather than overridden; it was being decided by the wrong number.
+
+Four harness or reading errors on the way, each caught before it became a
+finding: `count(*)` over a JSON array counted the array; a `mail_coverage(null)`
+reading generalised to every project (**the correction produced the real
+finding**); an invented `associated` field in a test fixture, caught by tsc; and
+a sabotage that printed `replaced: 0` because the signature had been
+reformatted onto one line — its green was the sabotage failing, not the check
+working.
+
+Also classified, and **not** defects: `google.read_mail` announced to him for a
+four-day window in September and has been quiet since, which is a deliberate
+past setting rather than a break — mail is still storing today; and its
+announce condition correctly never fired on "nothing new" (0 of 65).
+
+Noted, not fixed: *"Mail refreshed: 11 messages, and 3 ones no longer there"* —
+a grammar defect in a message he receives. LOCAL, low consequence.
+
+Clean-pass count after pass 8: **0 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
