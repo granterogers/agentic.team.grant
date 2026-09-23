@@ -40,21 +40,24 @@ const hit = (over: Partial<MailHit> = {}): MailHit => ({
 
 describe('the correspondence, as the model sees it', () => {
   it('says nothing when there is nothing', () => {
-    expect(mailBlock([])).toBe('')
+    expect(mailBlock([], null)).toBe('')
   })
 
   it('names the sender, the date and the subject', () => {
-    const block = mailBlock([hit()])
+    const block = mailBlock([hit()], null)
     expect(block).toContain('Thursday')
     expect(block).toContain('Priya Raman')
     expect(block).toContain('2026-09-14')
   })
 
   it('states WHY each message is here, differently for each tier', () => {
-    const both = mailBlock([
-      hit({ matched: 'Priya Raman', why: 'contact' }),
-      hit({ matched: 'Harbour Lighting Rebuild', messageId: 'def', why: 'named' }),
-    ])
+    const both = mailBlock(
+      [
+        hit({ matched: 'Priya Raman', why: 'contact' }),
+        hit({ matched: 'Harbour Lighting Rebuild', messageId: 'def', why: 'named' }),
+      ],
+      null,
+    )
     expect(both).toContain('is a contact on this project')
     expect(both).toContain('the subject names "Harbour Lighting Rebuild"')
   })
@@ -72,7 +75,7 @@ describe('the correspondence, as the model sees it', () => {
       were a lock on a sentence, and ADR-0038 changing the posture turned all
       three red over correct behaviour — the sixth instance CLAUDE.md records.
     */
-    const block = mailBlock([hit()])
+    const block = mailBlock([hit()], null)
     expect(block).toMatch(/may NOT say what/i)
     expect(block).toMatch(/preview/i)
     /*
@@ -94,9 +97,10 @@ describe('the correspondence, as the model sees it', () => {
       would forbid the feature he asked for — a rule that is right about six
       messages and applied to a seventh it is wrong about.
     */
-    const block = mailBlock([
-      hit({ body: 'We agreed the March date and the two-week onboarding.' }),
-    ])
+    const block = mailBlock(
+      [hit({ body: 'We agreed the March date and the two-week onboarding.' })],
+      null,
+    )
     expect(block).toContain('We agreed the March date')
     expect(block).toMatch(/what was agreed in it/i)
     // And with nothing in this block unread, the preview caveat is absent —
@@ -105,16 +109,22 @@ describe('the correspondence, as the model sees it', () => {
   })
 
   it('says both halves when the block holds both kinds', () => {
-    const block = mailBlock([
-      hit({ body: 'The signed contract is attached.', messageId: 'read-1' }),
-      hit({ messageId: 'preview-1' }),
-    ])
+    const block = mailBlock(
+      [
+        hit({ body: 'The signed contract is attached.', messageId: 'read-1' }),
+        hit({ messageId: 'preview-1' }),
+      ],
+      null,
+    )
     expect(block).toMatch(/what was agreed in it/i)
     expect(block).toMatch(/may NOT say what/i)
   })
 
   it('bulk mail says it arrived and nothing else', () => {
-    const block = mailBlock([hit({ excerpt: 'FIFTY PERCENT OFF EVERYTHING', withheld: 'bulk' })])
+    const block = mailBlock(
+      [hit({ excerpt: 'FIFTY PERCENT OFF EVERYTHING', withheld: 'bulk' })],
+      null,
+    )
     expect(block).toMatch(/bulk mail/i)
     expect(block).toMatch(/deliberately does not read marketing/i)
     // The excerpt is not rendered either: withholding a body and printing the

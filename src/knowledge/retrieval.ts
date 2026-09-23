@@ -611,7 +611,24 @@ function whatYouMaySay(read: number, preview: number, bulk: number): string {
   return parts.join(' ')
 }
 
-export function mailBlock(hits: readonly MailHit[], coverage: MailCoverage | null = null): string {
+/*
+  COVERAGE IS REQUIRED, and the default is what let a caller forget it.
+
+  `handlers/artifact.ts` called this with one argument for the life of the
+  feature, so on the path that WRITES A DOCUMENT the coverage note was never
+  produced -- and `instruction.ts`'s own comment beside its call says what that
+  costs: *"any 'there is nothing in your email' it produced was a claim about a
+  search it had never been shown"*. Every one of Grant's projects associates
+  zero of 274 cached messages today, because `public.contacts` is empty, so the
+  no-hits branch is the ONLY branch either path takes.
+
+  Passing `null` is still allowed and still means "no coverage was read" -- but
+  now a caller has to say so, and tsc names every site the day a third one is
+  added. The parameter no caller passes is a column that will never hold
+  anything; the parameter with a default is the same defect with a friendlier
+  face.
+*/
+export function mailBlock(hits: readonly MailHit[], coverage: MailCoverage | null): string {
   if (hits.length === 0) return mailCoverageNote(coverage)
 
   let used = 0

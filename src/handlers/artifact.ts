@@ -43,7 +43,13 @@ import { validatePdf } from '../artifacts/validate.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
-import { contextBlock, correspondence, mailBlock, retrieve } from '../knowledge/retrieval.ts'
+import {
+  contextBlock,
+  correspondence,
+  type MailCoverage,
+  mailBlock,
+  retrieve,
+} from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { scrub } from '../text/scrub.ts'
 
@@ -319,6 +325,25 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
             */
             const hits = await retrieve(db, brief, projectId, 8)
             const post = await correspondence(db, projectId, brief, 4)
+            /*
+              WHAT THE OFFICE COULD NOT LOOK AT, not merely what it found.
+
+              This call passed `post` alone for the life of the feature, so the
+              coverage note never reached the prompt that WRITES A DOCUMENT --
+              while `instruction.ts` has passed it since #172. Its comment
+              there says what the gap costs: any "there is nothing in your
+              email" the model produced was a claim about a search it had never
+              been shown. Every project associates zero of the cached messages
+              today, because `public.contacts` is empty and the contact tier is
+              the strong one, so the no-hits branch is the only branch this
+              path takes.
+            */
+            const cover =
+              ((
+                await db
+                  .execute(`select app.mail_coverage(${lit(projectId)}::uuid) as c`)
+                  .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+              ).rows[0]?.c as MailCoverage | undefined) ?? null
             const completion = await router.complete({
               correlationId: job.correlationId,
               jobId: job.jobId,
@@ -328,7 +353,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                 {
                   content:
                     `What was asked for: ${brief}\n\n` +
-                    `${contextBlock(hits, 40_000)}\n\n${mailBlock(post)}`,
+                    `${contextBlock(hits, 40_000)}\n\n${mailBlock(post, cover)}`,
                   role: 'user',
                 },
               ],
