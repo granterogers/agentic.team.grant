@@ -238,6 +238,31 @@ rather than counted.
 
 Clean-pass count after pass 4: **0 of 5.**
 
+### Pass 5 — the whole session corpus against v788 — **CLEAN**
+
+Territory: 113 recorded turns across forty-odd sessions, run against the
+deployed worker. Chosen because the corpus already covers the delegation
+follow-ups real traffic contains, so a new session there would have duplicated
+it; what it had never been given was a run against today's changes.
+
+Re-ran from scratch the four sessions that exercise this run's work
+(`again-on-purpose`, `again-accidental`, `again-after-stopping`) and the two
+turns the report flagged as **recorded against an older commit and therefore
+not to be believed** (`d302-dictated`, `disc-preference-scope`).
+
+**340/340 expectations held across 113 turns.** No systemic PRODUCT defect. The
+two previously-failing turns were stale, not live: both pass on the current
+commit.
+
+Containment: `check:leaks` exit 0, 0 new escapes, and `session --sweep`
+reversed the four tasks the runs left (4 -> 0).
+
+**Qualifies as a clean pass.** Multi-turn, against the deployed worker, scored
+against canonical state (job state, who answered, project, task counts), every
+surprise classified, nothing left behind.
+
+Clean-pass count after pass 5: **1 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
