@@ -980,6 +980,38 @@ No code change, so nothing to deploy.
 
 Clean-pass count after pass 20: **1 of 5.**
 
+## Pass 21 — Slack, the one real surface not yet probed
+
+**CLEAN.** No defect found. One channel of debris swept from his sidebar.
+
+1. **494 real Slack deliveries, all `sent`, none failed** — 6 September to
+   today.
+2. **244 channel mappings for four real projects**, which looked alarming: 235
+   belong to archived projects, 227 of those to fixtures. **230 of the 235 are
+   archived in Slack too** — the office does clean up after itself.
+3. **Five looked live and only one was.** `slack:tidy`'s dry run lists 14 live
+   channels and the four `chaos-*` are not among them, so Slack has them
+   archived while `slack_channel_map.archived_at` is stale. That column is
+   written and never read for a decision, so the staleness has no consequence
+   — noted, not fixed, because a stale column nobody reads is not work.
+4. **The sweep has both halves.** A name pattern (which `chaos-` would escape)
+   AND 0477's property rule — *its project is archived* — which does not go
+   stale the way a list of prefixes does. It planned the one real fixture
+   channel correctly and it has now been archived: `zz_test_artifact_31014230`
+   is out of his sidebar.
+5. **Routing is correct.** An apparent 94-of-195 messages "in another
+   project's channel" was **my own join**: `ai-team-hq-test` has TWO active
+   channel rows, so 37+37 is one project counted twice. The real residue is 9
+   messages from **9 September**, when `ai-learning` and
+   `legacy-coaching-course` had no channel at all — theirs were created on 16
+   September. A fallback, not misrouting.
+
+Two of the five checks were wrong before the product was, which is now the
+commonest event in this programme and the reason each one is chased to its
+evidence rather than filed.
+
+Clean-pass count after pass 21: **2 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and
