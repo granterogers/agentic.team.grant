@@ -3921,17 +3921,38 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     order by c.received_at desc limit 1), '') as said`)
               .then((r) => String((r.rows[0] as { said?: string } | undefined)?.said ?? ''))
               /*
+                HIS OWN WORDS, AND THE REWRITE ONLY AS A FALLBACK (#322).
+
                 The third argument is what stops a request becoming a title
                 (#255): a turn that asks for something of its own is never the
                 answer to a question about something else.
+
+                The text it reads matters more. `instruction` was replaced by
+                `resolveAgainstThread` two thousand lines up, so this veto was
+                reading a MODEL PARAPHRASE while the thing it vetoes --
+                `changesHis` -- reads Grant's own words through `firstOfHis`.
+                An action grounded in his text, guarded by a veto grounded in a
+                rewrite, is a guard that can vanish for reasons that have
+                nothing to do with what he said.
+
+                Reproduced without a model at all, by putting plausible
+                rewrites of "Call it Review the onboarding copy" through
+                `titleReply`: *"The task should be called X"* and *"Set the
+                title of the new task to X"* both return null, the veto
+                disappears, the rename path runs and the office answers "I am
+                not sure which task you mean". Three more rewrites keep the
+                veto and corrupt the TITLE -- "the task you are adding X" --
+                which is the same cause with a smaller bill.
+
+                #313 already established this rule for the personal-task
+                readers and `namedLater` was never brought across.
               */
-              .then((prev) =>
-                titleReply(
-                  instruction,
-                  prev === '' ? null : prev,
-                  notebookRequest(instruction) !== null,
-                ),
-              )
+              .then((prev) => {
+                const said = prev === '' ? null : prev
+                const read = (text: string): string | null =>
+                  titleReply(text, said, notebookRequest(text) !== null)
+                return firstOfHis(read) ?? read(instruction)
+              })
               .catch(() => null)
 
       /*
