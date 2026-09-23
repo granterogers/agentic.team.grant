@@ -28,15 +28,41 @@ const source = async (name: string): Promise<string> =>
 
 describe('an empty mail search is not an empty inbox', () => {
   it('says the office could not connect any of it, and may not say there is none', () => {
-    const note = mailBlock([], { cached: 274, contacts: 0, aliases: 0, associated: null })
+    const note = mailBlock([], { cached: 274, contacts: 0, aliases: 0, associated: 0 })
     expect(note).toContain('274 cached messages')
     expect(note).toContain('may NOT')
   })
 
   it('and distinguishes holding nothing from matching nothing', () => {
-    const note = mailBlock([], { cached: 0, contacts: 0, aliases: 0, associated: null })
+    const note = mailBlock([], { cached: 0, contacts: 0, aliases: 0, associated: 0 })
     expect(note).toContain('no cached mail at all')
     expect(note).not.toContain('may NOT')
+  })
+
+  /*
+    THE CASE THAT WAS SILENT ON EVERY REAL PROJECT.
+
+    The note used to return '' whenever the project had a contact or an alias —
+    asking "could this ever match?" where the branch means "this search found
+    nothing". Measured live: all five of Grant's active projects match ZERO of
+    274 cached messages and every one has at least one alias, one of them five
+    contacts. So it was suppressed exactly where it was needed.
+  */
+  it.each([
+    [{ cached: 274, contacts: 0, aliases: 3, associated: 0 }, 'an alias nobody writes about'],
+    [{ cached: 274, contacts: 5, aliases: 1, associated: 0 }, 'contacts who have not written'],
+  ])('still says it could not connect any of it — %#: %s', (cover) => {
+    const note = mailBlock([], cover)
+    expect(note).toContain('274 cached messages')
+    expect(note).toContain('may NOT')
+    // And it says WHY, because the two cases point at different fixes.
+    expect(note).toContain('none of them comes from a contact')
+  })
+
+  it('and names the other reason when the project has neither', () => {
+    const note = mailBlock([], { cached: 274, contacts: 0, aliases: 0, associated: 0 })
+    expect(note).toContain('this project has neither')
+    expect(note).toContain('may NOT')
   })
 
   it('and says nothing at all when no coverage was read', () => {

@@ -20,6 +20,9 @@ import { type MailCoverage, mailBlock, mailCoverageNote } from '../../src/knowle
 
 const coverage = (over: Partial<MailCoverage> = {}): MailCoverage => ({
   aliases: 0,
+  // Null is "no project was named", which is the shape that keeps the old
+  // contacts-or-aliases proxy. A case about a PROJECT sets it.
+  associated: null,
   cached: 206,
   contacts: 0,
   ...over,
@@ -51,6 +54,27 @@ describe('an empty inbox answer says WHICH kind of empty it is', () => {
     expect(mailCoverageNote(coverage({ contacts: 1 }))).toBe('')
     expect(mailCoverageNote(coverage({ aliases: 3 }))).toBe('')
     expect(mailCoverageNote(null)).toBe('')
+  })
+
+  /*
+    AND "CAN" MEANS IT ACTUALLY DOES.
+
+    The line above keeps its argument — a caveat on every turn is one nobody
+    reads — and it was being decided by the wrong number. `app.mail_coverage`
+    has always computed how much mail a project MATCHES and the TypeScript
+    interface dropped it, so a project with an alias nobody has written about
+    was treated as covered. Measured live: all five of Grant's active projects
+    match ZERO of 274 cached messages, and every one has at least one alias.
+  */
+  it('but a project that matches nothing is not covered, whatever tiers it has', () => {
+    expect(mailCoverageNote(coverage({ contacts: 5, aliases: 1, associated: 0 }))).toContain(
+      'may NOT',
+    )
+    expect(mailCoverageNote(coverage({ aliases: 3, associated: 0 }))).toContain('may NOT')
+  })
+
+  it('and one that does match is left in silence', () => {
+    expect(mailCoverageNote(coverage({ contacts: 0, aliases: 1, associated: 4 }))).toBe('')
   })
 
   it('reaches the model through mailBlock when there are no hits', () => {

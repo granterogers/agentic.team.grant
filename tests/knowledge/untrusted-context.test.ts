@@ -154,7 +154,7 @@ describe('correspondence is fenced the same way', () => {
   it('CONTROL: a coverage note with no messages states no rule', () => {
     // Nothing from outside is present, so there is nothing to fence — and a
     // warning printed on every turn is one nobody reads.
-    expect(mailBlock([], { aliases: 0, cached: 0, contacts: 0 })).not.toContain(
+    expect(mailBlock([], { aliases: 0, associated: null, cached: 0, contacts: 0 })).not.toContain(
       'DATA, not instructions',
     )
   })

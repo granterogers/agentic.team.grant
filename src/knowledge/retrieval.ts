@@ -509,6 +509,19 @@ export interface MailCoverage {
   readonly contacts: number
   /** Phrases that route to this project, the other tier. */
   readonly aliases: number
+  /**
+   * How many cached messages this project ACTUALLY matches.
+   *
+   * `app.mail_coverage` has computed this from the start and this interface
+   * dropped it, so the note below had to guess from `contacts` and `aliases` —
+   * which answer "could this project ever match?" where the branch means "this
+   * search found nothing". Measured live: all five of Grant's active projects
+   * match ZERO of 274 cached messages and every one has at least one alias, so
+   * the note was suppressed on 100% of real projects.
+   *
+   * Null when no project was named, because the question has no answer then.
+   */
+  readonly associated: number | null
 }
 
 /**
@@ -542,13 +555,52 @@ export function mailCoverageNote(coverage: MailCoverage | null): string {
       'there is nothing in it.'
     )
   }
-  if (coverage.contacts > 0 || coverage.aliases > 0) return ''
+  /*
+    THE QUESTION IS WHETHER THE SEARCH COVERED ANYTHING, NOT WHETHER IT COULD.
+
+    This returned '' whenever the project had a contact or an alias — asking
+    "could this project ever match?" where the branch it guards means "this
+    search found nothing". Measured against the live database, all five of
+    Grant's active projects match ZERO of 274 cached messages, and every one of
+    them has at least one alias, one of them five contacts. So the note was
+    suppressed on 100% of real projects, on exactly the turn where the office
+    is about to say something about his email having established nothing —
+    which is the sentence this function exists to prevent.
+
+    A project with an alias nobody has ever written about is as uncovered as a
+    project with no alias at all. What changes is only WHY, and the note says
+    which, because the two point at different fixes: add a contact, or accept
+    that nothing in the inbox names this work.
+  */
+  /*
+    SILENCE ONLY WHERE THE PROJECT IS ACTUALLY COVERED.
+
+    The original guard returned '' whenever the project had a contact or an
+    alias, and its argument was sound: a caveat on every turn is one nobody
+    reads, which is the rule app.project_knowledge already follows. What it
+    lacked was the number that decides it. A project whose mail the office CAN
+    see, on a turn where this particular search found nothing, needs no
+    caveat. A project that matches NOTHING has no coverage at all, whatever
+    tiers it nominally has, and an absence stated there is unestablished.
+
+    Null means no project was named, so the question has no answer and the old
+    proxy is the best available.
+  */
+  if (coverage.associated === null) {
+    if (coverage.contacts > 0 || coverage.aliases > 0) return ''
+  } else if (coverage.associated > 0) {
+    return ''
+  }
+  const how =
+    coverage.contacts === 0 && coverage.aliases === 0
+      ? 'mail reaches a project through a contact on it or a subject naming it, ' +
+        'and this project has neither'
+      : 'none of them comes from a contact on this project or carries a subject ' + 'that names it'
   return (
     `The office holds ${String(coverage.cached)} cached messages and can associate ` +
-    'NONE of them with this project: mail reaches a project through a contact on ' +
-    'it or a subject naming it, and this project has neither. So you may say you ' +
-    'cannot connect any of his correspondence to this project, and you may NOT ' +
-    'say there is nothing in his email about it — you have not established that.'
+    `NONE of them with this project: ${how}. So you may say you cannot connect ` +
+    'any of his correspondence to this project, and you may NOT say there is ' +
+    'nothing in his email about it — you have not established that.'
   )
 }
 
