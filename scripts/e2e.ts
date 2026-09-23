@@ -498,6 +498,21 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'every capability a conversation can start is one the agents know they hold — #320 denied a PDF it had made 139 times',
   ],
   /*
+    And the same invariant driven through the real handler, live.
+
+    `check:capabilities` asks whether the registry KNOWS about a capability.
+    This asks what the office SAYS about one: a restated request must not come
+    back as "I can't create a PDF" when the office can, which is the sentence
+    Grant was actually given. It carries its own control — the exact sentence
+    is put through the detector first and must be caught — because a suite
+    whose only capability assertion is "nothing was found" passes against a
+    detector that cannot find anything.
+  */
+  [
+    'verify:capability-claims',
+    'the office does not deny a capability it holds, driven live (#320)',
+  ],
+  /*
     A cheap integration through the DEPLOYED gateway, which is where this one
     hid.
 

@@ -376,7 +376,7 @@ const OURS = /\b(?:I|we|the office|the team)\b[^.!?]{0,30}$/i
 
 /** Saying you cannot. Generic — it names no capability and no service. */
 const DENIES =
-  /\b(?:can(?:'|’)?t|cannot|can not|unable to|not able to|don(?:'|’)?t have|do not have|no way to)\b/i
+  /\b(?:can(?:'|’)?t|cannot|can not|unable to|not able to|don(?:'|’)?t have|do not have|no way to|not something (?:I|we) can|beyond (?:me|us|what (?:I|we) can))\b/i
 
 /** Offering to. Also generic. */
 const OFFERS = /\b(?:I can|I(?:'|’)?ll|I will|I am able to|I(?:'|’)?m able to|happy to|shall I)\b/i
@@ -449,7 +449,11 @@ export function capabilityClaims(reply: string, cap: Capability): readonly Capab
     const at = DENIES.exec(clause)
     const denies =
       at !== null &&
-      OURS.test(clause.slice(0, at.index)) &&
+      // The subject is usually in front of the modal ("I can't"), and in the
+      // modal-free forms it is inside the phrase itself ("not something I can
+      // do"). Either counts; a third-person subject in front of neither does
+      // not.
+      (OURS.test(clause.slice(0, at.index)) || /\b(?:I|we)\b/i.test(at[0])) &&
       !ABOUT_CONTENT.test(clause) &&
       !EPISTEMIC_DENIAL.test(clause)
     const offers = !denies && OFFERS.test(clause)

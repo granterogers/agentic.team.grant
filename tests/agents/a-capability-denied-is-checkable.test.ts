@@ -64,6 +64,18 @@ describe('a denial is checked against what the office actually holds', () => {
       'I am not able to produce a PDF for you.',
       "Unfortunately I don't have the means to make a PDF.",
       'We cannot generate a typeset PDF from here.',
+      /*
+        No modal at all, and the office says it in its own voice.
+
+        `blocked_capability` in `src/agents/outcome.ts` composes exactly this:
+        *"I have not done this, and it is not something I can do — so there is
+        nothing to wait for."* Every other pattern here keys on can't / cannot
+        / unable, so the office's own canonical way of refusing a capability
+        was the one shape the detector could not see. Found by driving the
+        live suite, not by reading.
+      */
+      'I have not done this, and making a PDF is not something I can do.',
+      'A typeset PDF is beyond what I can do from here.',
     ]) {
       expect(capabilityLies(said, office()), said).toHaveLength(1)
     }
