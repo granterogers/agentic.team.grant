@@ -6,6 +6,18 @@ This file is the source of truth for this run, not the conversation. If the
 session is compacted or restarted: **read this file first**, then continue from
 the first item that is not VERIFIED.
 
+> **23 September 2026 — a new mission supersedes the 11-item list below where
+> they conflict.** Grant's MASTER CONTINUATION PROMPT
+> (*Basecamp frontend — user review + integration cleanup*, 60 sections) is
+> stored verbatim at
+> **`docs/basecamp/MISSION-2026-09-23-user-review-integration.md`**, and its
+> per-requirement checklist is
+> **`docs/basecamp/CHECKLIST-2026-09-23.md`**.
+>
+> After a compaction, read in this order: `CLAUDE.md`, the mission document,
+> the checklist, then this ledger. Items 1–11 below are all VERIFIED and are
+> history; the live work is in the checklist.
+
 Status words, each meaning exactly one thing:
 
 - **TODO** — not started
