@@ -268,6 +268,77 @@ check(
   asked.join(', '),
 )
 
+/*
+ * --- WHAT HAPPENS WHEN DRIVE WILL NOT PLAY ------------------------------
+ *
+ * Grant's §27: auth cancelled, auth expired, permission denied, file
+ * unavailable, provider disconnected. Every one of them reaches the page as
+ * the OFFICE'S OWN SENTENCE, because the office is the only thing that knows
+ * which of them it was - and the page must not turn any of them into an empty
+ * drive, which would say "you have nothing in Drive" about a connection that
+ * failed.
+ */
+{
+  const troubles: [string, number, string][] = [
+    [
+      'a connection that was never made',
+      502,
+      'Google is not connected yet. Connect it in Settings and try again.',
+    ],
+    [
+      'a grant that has been withdrawn',
+      502,
+      'Google would not renew the connection: invalid_grant',
+    ],
+    ['a drive that refuses', 502, 'Drive would not answer: Insufficient Permission'],
+  ]
+  for (const [what, status, sentence] of troubles) {
+    const ctx2 = await browser.newContext({ viewport: { width: 1400, height: 950 } })
+    await ctx2.addInitScript(
+      `try { localStorage.setItem('hq.token', 'not-a-credential-local-test-only') } catch {}`,
+    )
+    await ctx2.route('**/hq-api**', async (route) => {
+      const target = new URL(route.request().url())
+      if (route.request().method() === 'OPTIONS') {
+        await route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } })
+        return
+      }
+      if ((target.searchParams.get('section') ?? '') === 'drive') {
+        await route.fulfill({
+          status,
+          headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+          body: JSON.stringify({ error: sentence }),
+        })
+        return
+      }
+      await route.abort('connectionfailed')
+    })
+    const p2 = await ctx2.newPage()
+    await p2.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })
+    await p2.waitForSelector('.bcmain')
+    await p2.waitForTimeout(400)
+    await p2.locator('[data-bc-upload]').first().click()
+    await p2.waitForTimeout(250)
+    await p2.locator('[data-bc-from="drive"]').click()
+    await p2.waitForTimeout(1200)
+    const told = await p2
+      .locator('[data-bc-drivepanel]')
+      .innerText()
+      .catch(() => '')
+    check(
+      `${what}: the page says so, in the office's own words`,
+      told.includes(sentence.split(':')[0] ?? sentence),
+      told.replace(/\n+/g, ' / ').slice(0, 200),
+    )
+    check(
+      `${what}: and does not report it as an empty drive`,
+      !/nothing here/i.test(told),
+      told.replace(/\n+/g, ' / ').slice(0, 160),
+    )
+    await ctx2.close()
+  }
+}
+
 check('nothing threw', thrown.length === 0, thrown.join(' | '))
 
 await browser.close()
