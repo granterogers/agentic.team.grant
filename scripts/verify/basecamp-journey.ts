@@ -361,9 +361,22 @@ check(
   'the completion survived a reload',
   tasks.find((t) => t.title === 'Write the acceptance evidence')?.state === 'done',
 )
+/*
+  COMPLETED WORK STAYS ON THE PAGE.
+
+  This asserted the opposite - that finished work receded behind a summary
+  count - and that behaviour is precisely what Grant reported on 23 September:
+  "clicking/completing a to-do must not make it unexpectedly disappear.
+  Completed items should remain visible and clearly display a completed/done
+  state." The drawer is gone; the row stays where it was, ticked and struck
+  through, under a quiet heading.
+*/
 check(
-  'completed work recedes behind a count rather than vanishing',
-  (await page.locator('details summary').count()) === 1,
+  'completed work stays on the page rather than receding behind a count',
+  (await page.locator('details summary').count()) === 0 &&
+    (await page.locator('.bcdonelist .bcitem--done').count()) >= 1,
+  `${String(await page.locator('details summary').count())} drawer(s), ` +
+    `${String(await page.locator('.bcdonelist .bcitem--done').count())} done row(s) on the page`,
 )
 
 /* --- optimistic rollback, visibly (§12) --- */

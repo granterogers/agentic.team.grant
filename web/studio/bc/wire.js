@@ -2107,7 +2107,22 @@ const wireTasks = (root) => {
     identical to every other column is a gesture taken on faith.
   */
   for (const c of root.querySelectorAll('[data-bc-card]')) {
+    /*
+      A DRAG MUST NOT ALSO OPEN THE CARD.
+
+      Grant, 23 September: *"Prevent accidental opening/clicking while
+      dragging."* It matters on the miniature, where a card is a BUTTON that
+      opens its to-do: without this, dragging one to another column moved it
+      and then opened it, so the board you were arranging disappeared behind a
+      record you did not ask for.
+
+      A flag rather than `preventDefault`, because the click arrives after
+      `dragend` and there is nothing left to prevent by then. Cleared on a
+      timer so the next honest press is unaffected.
+    */
+    let dragged = false
     c.addEventListener('dragstart', (e) => {
+      dragged = true
       e.dataTransfer?.setData('text/plain', c.dataset.bcCard ?? '')
       if (e.dataTransfer !== null && e.dataTransfer !== undefined) {
         e.dataTransfer.effectAllowed = 'move'
@@ -2119,7 +2134,20 @@ const wireTasks = (root) => {
       for (const col of root.querySelectorAll('[data-bc-drop]')) {
         col.classList.remove('bcbcol--over')
       }
+      globalThis.setTimeout(() => {
+        dragged = false
+      }, 0)
     })
+    c.addEventListener(
+      'click',
+      (e) => {
+        if (!dragged) return
+        e.preventDefault()
+        e.stopImmediatePropagation()
+      },
+      /* Capture, so it runs before the open handler on the same element. */
+      true,
+    )
   }
   for (const col of root.querySelectorAll('[data-bc-drop]')) {
     col.addEventListener('dragover', (e) => {

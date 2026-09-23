@@ -379,7 +379,19 @@ export const cardsMini = (p) => {
   return `<div class="bcminiboard">
     ${STAGES.map((st) => {
       const items = at(st.id)
-      return `<section class="bcminicol" data-stage="${esc(st.id)}">
+      /*
+        A DROP TARGET, the same one the full board uses.
+
+        Grant, 23 September: *"Cards/elements within the miniature Card Table
+        should support appropriate drag-and-drop/reordering... Prevent
+        accidental opening/clicking while dragging."*
+
+        `data-bc-drop` and `data-bc-card` are the full board's own attributes,
+        so the wiring that already moves a card between columns moves these
+        too - one mechanism on two surfaces rather than a second
+        implementation that would drift from it.
+      */
+      return `<section class="bcminicol" data-stage="${esc(st.id)}" data-bc-drop="${esc(st.id)}">
         <header class="bcminicolhead">
           <span class="bcminicolname">${esc(st.name)}</span>
           <span class="bcminicoln">${esc(String(items.length))}</span>
@@ -390,7 +402,10 @@ export const cardsMini = (p) => {
             : items
                 .map(
                   (t) => `<button type="button" class="bcminicard"
-                    data-bc-task-open="${esc(todos.keyOf(t))}">${esc(t.title)}</button>`,
+                    data-bc-card="${esc(todos.keyOf(t))}"
+                    data-bc-task-open="${esc(todos.keyOf(t))}"
+                    draggable="true"
+                    aria-label="${esc(`${t.title} — ${st.name}`)}">${esc(t.title)}</button>`,
                 )
                 .join('')
         }

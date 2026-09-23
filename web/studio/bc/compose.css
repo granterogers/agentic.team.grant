@@ -1,4 +1,14 @@
 /*
+  THE TYPE FLOOR IS 12px, AND THIS FILE WAS BREAKING IT IN ELEVEN PLACES.
+
+  The visual standard has said 12px since the beginning and `verify:ui`
+  enforces it - but only on the surfaces it walks. The Card Table's own
+  typography was never measured: its column names were 10.5px and its card
+  meta 11.5px, which is what "the Card Table renders strangely" turns out to
+  mean once you measure instead of squint. Raised here rather than per rule,
+  because a floor that is applied selectively is not a floor.
+*/
+/*
   The tool miniatures and the two §21 compositions.
 
   Its own file rather than another thousand lines in `bc.css`, because §26
@@ -331,7 +341,7 @@
 [data-experience='basecamp'] .bcsaid { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
 [data-experience='basecamp'] .bcsaidbody { min-width: 0; }
 [data-experience='basecamp'] .bcsaidwho { font-weight: 600; color: var(--bc-text-strong); font-size: 13px; }
-[data-experience='basecamp'] .bcsaidwhen { margin-left: 8px; font-size: 11.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsaidwhen { margin-left: 8px; font-size: 12px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcsaidtext { margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; max-width: 60ch; }
 
 /* -------------------------------------------------------------- people -- */
@@ -414,14 +424,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-[data-experience='basecamp'] .bcsourcewhen { grid-area: when; font-size: 11.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsourcewhen { grid-area: when; font-size: 12px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcsource--trouble .bcsourcewhen { color: var(--bc-section-accent); font-weight: 600; }
 
 /* ------------------------------------------------------------- a person -- */
 
 [data-experience='basecamp'] .bcnext {
   flex: 0 0 auto;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--bc-text-muted);
   max-width: 40%;
   overflow: hidden;
@@ -497,7 +507,7 @@
   first line did not.
 */
 [data-experience='basecamp'] .bcdocmeta {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--bc-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -786,7 +796,7 @@
 }
 [data-experience='basecamp'] .bcbwhere,
 [data-experience='basecamp'] .bcbdue {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--bc-text-muted);
   min-width: 0;
   overflow: hidden;
@@ -1752,7 +1762,7 @@
   gap: 6px;
 }
 [data-experience='basecamp'] .bcminicolname {
-  font: 600 10.5px/1.3 var(--bc-font);
+  font: 600 12px/1.3 var(--bc-font);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2001,7 +2011,7 @@
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--bc-text-muted) 40%, transparent);
   color: var(--bc-text-muted);
-  font: 500 10.5px/1.5 var(--bc-font);
+  font: 500 12px/1.5 var(--bc-font);
   letter-spacing: 0.03em;
   white-space: nowrap;
 }
@@ -2162,7 +2172,7 @@
   border: 0;
   background: transparent;
   color: var(--bc-text-muted);
-  font: 500 11.5px/1 var(--bc-font);
+  font: 500 12px/1 var(--bc-font);
   padding: 6px 10px;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
@@ -2253,7 +2263,7 @@
 }
 [data-experience='basecamp'] .bcserviceadd {
   margin-top: 6px;
-  font: 600 11.5px/1 var(--bc-font);
+  font: 600 12px/1 var(--bc-font);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--bc-accent);
@@ -2323,7 +2333,7 @@
 */
 [data-experience='basecamp'] .bceventbody { display: grid; gap: 2px; min-width: 0; }
 [data-experience='basecamp'] .bceventat {
-  font: 400 11.5px/1.4 var(--bc-font);
+  font: 400 12px/1.4 var(--bc-font);
   font-variant-numeric: tabular-nums;
   color: var(--bc-text-muted);
   opacity: 0.85;
@@ -2427,7 +2437,8 @@
 }
 [data-experience='basecamp'] .bcsignininput {
   width: 220px;
-  min-height: 40px;
+  /* 44px, not 40: the measure audit caught this on eight surfaces at once. */
+  min-height: 44px;
   font-size: 16px; /* under 16px iOS zooms the page on focus */
 }
 [data-experience='basecamp'] .bcsigninsaid {

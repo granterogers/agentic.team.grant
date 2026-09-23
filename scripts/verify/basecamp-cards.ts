@@ -248,6 +248,115 @@ check(
 )
 await phone.close()
 
+/*
+ * --- THE MINIATURE IS A BOARD TOO ----------------------------------------
+ *
+ * Grant, 23 September: "Cards/elements within the miniature Card Table should
+ * support appropriate drag-and-drop/reordering... Prevent accidental
+ * opening/clicking while dragging. Persist ordering after reload where
+ * ordering is intended to persist."
+ */
+await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('[data-mod="board"]')
+await page.waitForTimeout(600)
+
+check(
+  'every card in the miniature can be dragged',
+  (await page.locator('[data-mod="board"] .bcminicard[draggable="true"]').count()) ===
+    (await page.locator('[data-mod="board"] .bcminicard').count()),
+  `${String(await page.locator('[data-mod="board"] .bcminicard[draggable="true"]').count())} of ${String(await page.locator('[data-mod="board"] .bcminicard').count())}`,
+)
+check(
+  'and every column in it will take one',
+  (await page.locator('[data-mod="board"] [data-bc-drop]').count()) >= 3,
+  `${String(await page.locator('[data-mod="board"] [data-bc-drop]').count())} drop target(s)`,
+)
+check(
+  'and the type on it is at or above the 12px floor',
+  (
+    (await page.evaluate(
+      inPage(`const out = []
+       for (const el of document.querySelectorAll('[data-mod="board"] *')) {
+         if (el.children.length > 0) continue
+         const t = (el.textContent ?? '').trim()
+         if (t === '') continue
+         const size = Number.parseFloat(getComputedStyle(el).fontSize)
+         if (size < 12) out.push(t.slice(0, 20) + ' @' + String(size))
+       }
+       return out`),
+    )) as string[]
+  ).length === 0,
+  (
+    (await page.evaluate(
+      inPage(`const out = []
+       for (const el of document.querySelectorAll('[data-mod="board"] *')) {
+         if (el.children.length > 0) continue
+         const t = (el.textContent ?? '').trim()
+         if (t === '') continue
+         const size = Number.parseFloat(getComputedStyle(el).fontSize)
+         if (size < 12) out.push(t.slice(0, 20) + ' @' + String(size))
+       }
+       return out`),
+    )) as string[]
+  ).join(', '),
+)
+
+/*
+  DRAGGING ONE IN THE MINIATURE, with the native events the board uses - and
+  then asserting the card did NOT also open, which is the accident Grant named.
+*/
+const miniCard = page.locator('[data-mod="board"] .bcminicard').first()
+const movedTitle = (await miniCard.innerText()).trim()
+const targetStage = (await page.evaluate(
+  inPage(`const card = document.querySelector('[data-mod="board"] .bcminicard')
+     const from = card?.closest('[data-bc-drop]')?.dataset.bcDrop ?? ''
+     for (const col of document.querySelectorAll('[data-mod="board"] [data-bc-drop]')) {
+       if (col.dataset.bcDrop !== from) return col.dataset.bcDrop
+     }
+     return ''`),
+)) as string
+await page.evaluate(
+  `(() => {
+     const card = document.querySelector('[data-mod="board"] .bcminicard')
+     const to = document.querySelector('[data-mod="board"] [data-bc-drop="${targetStage}"]')
+     if (card === null || to === null) return false
+     const dt = new DataTransfer()
+     card.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }))
+     to.dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer: dt }))
+     to.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }))
+     card.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }))
+     return true
+   })()`,
+)
+await page.waitForTimeout(900)
+check(
+  'dragging a card in the miniature moves it to the column it was dropped on',
+  (await page.evaluate(
+    inPage(`const cards = [...document.querySelectorAll('[data-mod="board"] .bcminicard')]
+       const moved = cards.find((c) => (c.textContent ?? '').trim() === ${JSON.stringify(movedTitle)})
+       return moved === undefined ? '' : (moved.closest('[data-bc-drop]')?.dataset.bcDrop ?? '')`),
+  )) === targetStage,
+  `wanted ${targetStage}`,
+)
+check(
+  'and dragging it did not also open it',
+  (await page.locator('[data-bc-expanded]').count()) === 0,
+  'a drag opened the card as well as moving it',
+)
+/* And it is still there after a reload, because the move went to the office. */
+await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('[data-mod="board"]')
+await page.waitForTimeout(700)
+check(
+  'and the move survives a reload',
+  (await page.evaluate(
+    inPage(`const cards = [...document.querySelectorAll('[data-mod="board"] .bcminicard')]
+       const moved = cards.find((c) => (c.textContent ?? '').trim() === ${JSON.stringify(movedTitle)})
+       return moved === undefined ? '' : (moved.closest('[data-bc-drop]')?.dataset.bcDrop ?? '')`),
+  )) === targetStage,
+  `wanted ${targetStage}`,
+)
+
 check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
 
 await browser.close()

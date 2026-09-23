@@ -72,11 +72,11 @@ repairing the completion defect requires it.
 - [x] **VERIFIED** A panel moves rows only when it cannot fit at its minimum width
 
 ### 7. Card Table
-- [ ] **TODO** Miniature rendering designed deliberately, not a shrunken full view
-- [ ] **TODO** Expanded rendering: sizing, spacing, clipping, overflow, typography, responsive
-- [ ] **TODO** Miniature cards drag/reorder deliberately and stably
-- [ ] **TODO** A drag does not open the card
-- [ ] **TODO** Ordering persists after reload where intended
+- [x] **VERIFIED** Miniature is columns that fit the pane (`auto-fit`, 128px minimum), not a shrunken board
+- [x] **VERIFIED** Typography: ten sub-12px declarations raised to the floor; no clipping, no sideways overflow
+- [x] **VERIFIED** Miniature cards drag between columns using the full board's own mechanism
+- [x] **VERIFIED** A drag no longer also opens the card
+- [x] **VERIFIED** The move survives a reload
 
 ### 8. Docs & Files thumbnails
 - [ ] **TODO** Audit the file/document types and the thumbnail paths
@@ -169,6 +169,26 @@ word.
 `scripts/verify/basecamp-chat.ts` (new), `scripts/verify/chat-live.ts` (new).
 
 ## Verification log
+
+**7. Card Table — VERIFIED.**
+- **Measured rather than squinted at:** the miniature's column names were
+  **10.5px** and the expanded board's card meta **11.5px**, against a stated
+  12px floor. `verify:ui` enforces that floor only on the surfaces it walks and
+  the Card Table was never one of them. Ten declarations raised across
+  `compose.css`; a floor applied selectively is not a floor.
+- The miniature's layout was already deliberate — `auto-fit` with a 128px
+  minimum, so the pane decides how many columns rather than a number in the
+  stylesheet. No clipping and no sideways overflow at 1600, 1200 or 390.
+- Miniature cards now carry `data-bc-card` and `draggable`, and mini columns
+  carry `data-bc-drop` — **the full board's own attributes**, so the existing
+  wiring moves them. One mechanism on two surfaces.
+- A drag no longer opens the card: the click that follows `dragend` is
+  swallowed in the capture phase. Without it, dragging a card moved it and then
+  opened it, so the board you were arranging vanished behind a record.
+- `verify:basecamp-cards` 24/24.
+- **The gate caught two things I had broken:** the journey suite still asserted
+  the completed-work DRAWER (the defect itself, written down as a requirement),
+  and my new sign-in field was 42px on eight surfaces — under the 44px floor.
 
 **6. Panel resizing — VERIFIED.**
 - **The cause:** `place()` clamped the new rectangle and handed it to
