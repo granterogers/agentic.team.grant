@@ -466,7 +466,20 @@ for (const d of drives) {
 /* --- the voice token, refused ------------------------------------------- */
 {
   const { page, close, thrown } = await openWith('status', { permissions: ['microphone'] })
-  await page.route('**/voice**', (r) => r.fulfill({ status: 503, body: 'no' }))
+  /*
+    THE MINT, and only the mint.
+
+    This pattern used to be a wildcard around the bare word voice, which also
+    matches this experience's own modules - voicenote.js and livevoice.js - so
+    the moment those existed the route blocked the page's own code and nothing
+    rendered at all. A route pattern matches a URL, not a meaning, and two
+    modules here have that word in their names.
+
+    No glob written out in this comment: a star followed by a slash inside a
+    block comment ends it, which is how the first version of this comment broke
+    the file.
+  */
+  await page.route('**/voice-token**', (r) => r.fulfill({ status: 503, body: 'no' }))
   await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('[data-bc-voice]')
   await page.waitForTimeout(400)
