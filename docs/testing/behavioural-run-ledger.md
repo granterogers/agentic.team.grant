@@ -167,6 +167,48 @@ CLAUDE.md.
 
 Clean-pass count after pass 2: **0 of 5.**
 
+### Pass 3 — what real traffic actually contains (v788)
+
+Territory chosen by reading Grant's 313 real messages rather than by guessing a
+third time. Two territories were considered and dropped on measured frequency
+first: project switching mid-conversation has happened **once** in real traffic,
+and no real message contains "again" or "remind".
+
+**NOT CLEAN — one systemic PRODUCT defect, the most consequential of the run,
+because Grant reported it himself. Twice.**
+
+**An instruction he stated arrived in the prompt labelled "not rules — weigh
+them"** (#332). He taught the office to answer in bullet points on 11
+September, complained on the 20th, and complained again on the 21st. The rule
+was stored, live, at 0.95 confidence and reaching the brief — under a heading
+calling every lesson a belief from past work, beside ones a specialist had
+inferred at 0.50. `guidanceFor` selected `body`, `scope` and `observations` and
+dropped `learned_by`, which is the only fact separating an order from a guess.
+
+Measured: 14 of 32 substantial real answers since he taught it used a list;
+**0 of 4 on the days he complained**. After the fix, driven through the
+deployed worker, **3 of 3**.
+
+Fixed by correcting the label rather than adding a paragraph — the prompt
+already tells the model to honour his standing instructions, and a second
+paragraph arguing the same point is what #277 is a complaint about. Which
+lessons are his is derived **from the roster**, so it cannot go stale when a
+channel composes his name differently.
+
+Also in this pass, and **not** defects: the project spine deliberately shows a
+harness job the harness's own world, which is why fixture projects appeared in
+a harness answer; and `check:callers` was red because migration 0534 arrived
+from a sibling branch through the sanctioned reconciliation path while its
+callers did not — baselined with that as the stated reason, which self-corrects
+when the branches meet.
+
+One defect of my own making: two aborted runs left four ACTIVE fixture projects
+in `public.projects`. Swept through `app.project_delete`, and both new suites
+now arm their sweep the moment there is something to sweep rather than at the
+bottom of the file.
+
+Clean-pass count after pass 3: **0 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

@@ -3207,6 +3207,37 @@ Each of these cost real time. They are here so they cost it once.
   fact in the column comments, where somebody writing a query against those
   rows will see it. A ledger you can correct is not a ledger.
 
+- **An order Grant gave arrived in the prompt as a belief to weigh, and he
+  told the office twice.** He taught it to answer in bullet points on 11
+  September, complained on the 20th and again on the 21st — *"You're still not
+  respecting my request"* — while the rule was stored, live, at 0.95
+  confidence and reaching the brief. It arrived under *"These are beliefs from
+  past work, not rules — weigh them"*, beside lessons a specialist had guessed
+  at 0.50. `remember()` already knows the difference and says so in its own
+  comment; `guidanceFor` selected `body`, `scope` and `observations` and
+  dropped `learned_by`, so the one fact separating an order from a guess was
+  discarded at the query. Measured: 14 of 32 real answers used a list since he
+  taught it, **0 of 4 on the days he complained**, 3 of 3 after the fix. The
+  repair is the LABEL, not another paragraph — the prompt already says to
+  honour his standing instructions, and a second paragraph arguing the same
+  point is what #277 is a complaint about. **What a column knows is worth
+  nothing if the query that builds the prompt does not select it.**
+- **Choose the next thing to look at by reading what he actually said, not by
+  listing plausible territories.** Two candidate areas were dropped on one
+  query each: project switching mid-conversation has happened ONCE in real
+  traffic, and no real message of his contains "again" or "remind". Forty of
+  his own messages named the defect above in his own words, and it was the
+  most repeated complaint in the corpus.
+- **A teardown that only runs on success is not a teardown.** Two aborted runs
+  of a new suite left four ACTIVE fixture projects, and the office listed them
+  back in an answer. Arm the sweep the moment there is something to sweep, and
+  use `process.exitCode` rather than `process.exit` so it is allowed to
+  finish.
+- **The project spine shows a harness job the harness's own world, on
+  purpose.** `(app.harness_job(jobId) or not is_fixture)` — so fixture
+  projects in a harness answer are the filter working, not a leak. Check which
+  side of that predicate your turn is on before reporting one.
+
 ---
 
 ## Visual standard
