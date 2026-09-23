@@ -604,6 +604,22 @@ export const wire = (root) => {
     })
   }
 
+  /*
+    THE OFFICE'S OWN SETTINGS, WIRED AT THE SHELL (§14).
+
+    This lived inside `wirePageMenu`, which returns early when the page has no
+    project menu -- so on every project SUB-page, where the header is not
+    drawn, the control in the top row was never given a listener. It looked
+    right at every width and did nothing on four phone routes, which is what
+    `verify:basecamp-controls` presses for and reading the code would not have
+    shown. The control belongs to the shell, so the shell wires it.
+  */
+  for (const b of root.querySelectorAll('[data-bc-settings]')) {
+    b.addEventListener('click', () => {
+      ctx.openGlobalSettings?.()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-bc-attention]')) {
     b.addEventListener('click', () => {
       /*
@@ -1410,12 +1426,6 @@ const wirePageMenu = (root) => {
     })
   }
 
-  for (const b of root.querySelectorAll('[data-bc-settings]')) {
-    b.addEventListener('click', () => {
-      shut()
-      ctx.openGlobalSettings?.()
-    })
-  }
 }
 
 /* ------------------------------------------- arranging the home (§14) --- */

@@ -274,6 +274,94 @@ check(
 )
 
 /* --- 5. the default studio's settings are untouched --------------------- */
+/* --- §§12-14: two scopes, two controls --------------------------------- */
+/*
+  The project's menu must not carry the word Settings (§12), must not offer
+  Arrange this page (§13), and must not be where the OFFICE's settings live
+  (§14) -- those get their own three-dot control in the shell's top right,
+  outside any project.
+*/
+await page.goto(url('/basecamp/p/legacy-coaching-course'), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('[data-bc-pagemenu]', { timeout: 20000 })
+const scopes = (await page.evaluate(
+  inPage(`
+    const trigger = document.querySelector('[data-bc-pagemenu]')
+    const menu = document.querySelector('[data-bc-pagemenu-panel]')
+    const office = document.querySelector('.bcofficemenu [data-bc-settings]')
+    const top = document.querySelector('.bctop')
+    const head = document.querySelector('.bchead, header.bchead, .bcheadrow')
+    return {
+      triggerWords: trigger === null ? '' : (trigger.innerText || '').trim(),
+      triggerNamed: trigger === null ? '' : (trigger.getAttribute('aria-label') || ''),
+      items: menu === null ? [] : [...menu.querySelectorAll('[role=menuitem]')].map((b) => (b.textContent || '').trim()),
+      officeExists: office !== null,
+      officeInTop: office !== null && top !== null && top.contains(office),
+      officeInProject: office !== null && head !== null && head.contains(office),
+      officeNamed: office === null ? '' : (office.getAttribute('aria-label') || ''),
+    }
+  `),
+)) as {
+  triggerWords: string
+  triggerNamed: string
+  items: string[]
+  officeExists: boolean
+  officeInTop: boolean
+  officeInProject: boolean
+  officeNamed: string
+}
+
+check(
+  'the project control shows dots, not the word Settings',
+  scopes.triggerWords === '',
+  `"${scopes.triggerWords}"`,
+)
+check(
+  'but it still says what it opens, for anyone reading the page aloud',
+  /settings/i.test(scopes.triggerNamed),
+  scopes.triggerNamed,
+)
+check(
+  'the project menu no longer offers Arrange this page',
+  !scopes.items.some((w) => /arrange/i.test(w)),
+  scopes.items.join(' / '),
+)
+check(
+  'and no longer offers the office-wide settings',
+  !scopes.items.some((w) => /everything/i.test(w)),
+  scopes.items.join(' / '),
+)
+check(
+  'it still offers this project settings',
+  scopes.items.some((w) => /project settings/i.test(w)),
+)
+check('the office has its own control', scopes.officeExists)
+check('in the shell top row', scopes.officeInTop)
+check('and outside the project', !scopes.officeInProject)
+check(
+  'and it says which scope it changes',
+  /office|everything|whole/i.test(scopes.officeNamed),
+  scopes.officeNamed,
+)
+
+/*
+  The office settings are the studio's own sheet, which is what
+  `openGlobalSettings` has always opened -- so what this asserts is that the
+  new control reaches it, not that a new surface exists. `body.behind` is the
+  studio's signal for "a sheet is open"; the sheet element stays in the tree
+  with its box taken away, so querying for the node reports it open while it
+  is shut.
+*/
+await page.click('.bcofficemenu [data-bc-settings]')
+const officeOpened = await page
+  .waitForFunction(
+    "document.body.classList.contains('behind') || (document.querySelector('#settings') !== null && document.querySelector('#settings').getBoundingClientRect().height > 0)",
+    undefined,
+    { timeout: 15000 },
+  )
+  .then(() => true)
+  .catch(() => false)
+check('and pressing it opens the office settings', officeOpened)
+
 /*
   THE OTHER HALF OF EVERY SCOPED CHANGE, and the one that is easy to skip.
   Every rule added for this is scoped to the experiment; this is what proves

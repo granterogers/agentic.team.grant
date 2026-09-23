@@ -2642,3 +2642,27 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   align-items: center;
   gap: var(--bc-2);
 }
+
+/* ---------------------------------------------------------------------- *
+ * TWO SCOPES, TWO CONTROLS, AND THE SHAPE SAYS WHICH IS WHICH.
+ *
+ * §14. The project's menu is three dots ACROSS, in the project header; the
+ * office's is three dots DOWN, in the shell's own row. Same family, different
+ * axis -- so they read as siblings rather than as the same control drawn
+ * twice, and neither needs a word beside it to say what it changes.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcofficemenu { display: inline-flex; }
+
+/* ---------------------------------------------------------------------- *
+ * PUTTING A MODULE BACK (§13). Drawn only when something is off the page, at
+ * the end of the board where the gap it left actually is.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcputback {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  flex-wrap: wrap;
+  margin-top: var(--bc-4);
+  padding-top: var(--bc-3);
+  border-top: 1px solid var(--bc-border-subtle);
+}

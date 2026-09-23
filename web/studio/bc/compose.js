@@ -323,23 +323,21 @@ const head = (p) => {
         -->
         <span class="bcmenuwrap">
           <!--
-            IT SAYS SETTINGS NOW.
+            THE DOTS, AND NOT THE WORD.
 
-            Grant, 23 September: "The three-dot/settings control has
-            disappeared... this is currently a blocker because project settings
-            cannot be inspected."
+            §12, 23 September: "Do not display the word Settings where the
+            three-dot project menu is sufficient. Use the project-level
+            three-dot control as the settings affordance."
 
-            It had not disappeared: it is present, visible and clickable at
-            every width, which five measurements confirmed before anything was
-            changed here. What it was not was FINDABLE - a 38px unlabelled icon
-            at the far right of a row, whose only description was "More about
+            The word was added the day before, and for a real reason: the
+            control was present and visible at every width and NOT findable -
+            an unlabelled 38px icon whose only description was "More about
             this page", which is not a phrase anybody looking for settings
-            would recognise. A control nobody can find is a control that does
-            not exist, so this is a real defect and the report of it was right.
-
-            The word rides beside the dots from tablet width up and the icon
-            stands alone on a phone, where the row has no room for it - and
-            even there the accessible name now says what it opens.
+            would recognise. What fixed that was naming the thing, and the
+            accessible name still does: it lists what the menu opens, so
+            nothing is lost to anyone reading the page aloud. The title makes
+            the same sentence available to a pointer. It is the WORD in the
+            row that Grant no longer wants, not the findability.
           -->
           <button type="button" class="bcbtn bcicon bcpagemenu" data-bc-pagemenu="1"
             aria-haspopup="menu" aria-expanded="false"
@@ -349,21 +347,31 @@ const head = (p) => {
               <circle cx="12" cy="12" r="1.7"></circle>
               <circle cx="19" cy="12" r="1.7"></circle>
             </svg>
-            <span class="bcpagemenuword">Settings</span>
+
           </button>
           <div class="bcmenu" data-bc-pagemenu-panel role="menu"${menuOpen ? '' : ' hidden'}>
-            <button type="button" role="menuitem" data-bc-arrange="1">Arrange this page</button>
+            <!--
+              ARRANGE THIS PAGE IS GONE. §13: "Remove Arrange this page from
+              project settings. The page already supports direct manipulation.
+              Do not duplicate functionality." Panels are dragged, resized and
+              hidden on the board itself; a second way in was a menu entry that
+              opened a panel to do what the page does.
+            -->
             <button type="button" role="menuitem" data-bc-look="1">How this project looks</button>
             <button type="button" role="menuitem" data-bc-expand="team">The team</button>
             <button type="button" role="menuitem" data-bc-sources="1">Sources</button>
             <button type="button" role="menuitem" data-bc-go="${esc(at(`/p/${p.slug}/settings`))}">Project settings</button>
             <!--
-              And the office's own, which is a different scope and says so.
-              Grant, #158: "Separate them explicitly into Global Settings and
-              Project Settings. Do not make users guess which scope they are
-              editing."
+              THE OFFICE'S OWN SETTINGS ARE NOT IN HERE ANY MORE.
+
+              §14: "PROJECT SETTINGS affect only the current project. GLOBAL /
+              APPLICATION SETTINGS affect the application/user generally.
+              Global settings should have their own three-dot control in the
+              TOP-RIGHT, OUTSIDE the project window/container." So they live in
+              the shell's own row now, beside Attention, where nothing about
+              them is inside a project. A menu that offers both scopes is a
+              menu that makes you guess which one you are editing.
             -->
-            <button type="button" role="menuitem" data-bc-settings="1">Settings for everything</button>
           </div>
         </span>
       </span>
@@ -446,35 +454,29 @@ export const arrangeReset = (slug) => {
   grid.reset(slug)
 }
 
-/** The panel that changes the home, opened from the three-dot menu. */
-const arrangePanel = (p) => {
+/*
+  PUTTING A MODULE BACK, ON THE PAGE RATHER THAN IN A MENU.
+
+  §13: "Remove Arrange this page from project settings. The page already
+  supports direct manipulation. Do not duplicate functionality." It did: panels
+  are dragged by their headers, pulled by their corners and taken off by the
+  cross, and a menu entry opened a panel that explained all three in prose.
+
+  What the panel also held was the ONLY way back. The cross takes a module off
+  and nothing on the board could return it -- a one-way door, which this
+  repository has already shipped once, when choosing Panels removed the control
+  that had just been pressed. So the restoring half moves onto the page and the
+  explaining half goes: it appears only when something is actually off, sits at
+  the end of the board where the gap is, and says nothing at all when the page
+  is whole.
+*/
+const putBack = (p) => {
   const off = grid.off(p.slug)
-  return `<section class="bcarrange" data-bc-arrange-panel hidden>
-    <header class="bcmodhead"><h2 class="bcmodtitle">This page</h2></header>
-    <p class="bcarrnote">
-      Drag a module by its header to move it, and pull the corner to resize
-      it. Nothing can overlap: what you drop onto moves down. The cross on a
-      header takes that module off the page, which changes nothing but this
-      page - the to-dos, documents and messages behind it are untouched.
-    </p>
-    ${
-      off.length === 0
-        ? '<p class="bcarrnote">Every module is on the page.</p>'
-        : `<div class="bcarradd">
-            <span class="bclabel">Put back</span>
-            ${off.map((id) => button(NAMES[id] ?? id, { 'data-bc-arr-on': esc(id) })).join('')}
-          </div>`
-    }
-    <p class="bcarrnote">
-      Kept on this device for now. It cannot be kept in your office yet: a
-      project holds one arrangement and your current dashboard already uses
-      it, so saving this there would take panels off that. Issue 299 has the
-      fix.
-    </p>
-    <div class="bcrow">
-      ${button('Put it back the way it was', { 'data-bc-arr-reset': '1' })}
-      ${button('Done', { kind: 'primary', 'data-bc-arr-close': '1' })}
-    </div>
+  if (off.length === 0) return ''
+  return `<section class="bcputback" data-bc-arrange-panel aria-label="Modules not on this page">
+    <span class="bclabel">Not on this page</span>
+    ${off.map((id) => button(NAMES[id] ?? id, { 'data-bc-arr-on': esc(id) })).join('')}
+    ${button('Put it back the way it was', { 'data-bc-arr-reset': '1' })}
   </section>`
 }
 
@@ -624,7 +626,6 @@ export const compositionC = (p) => {
   const by = new Map(boardMods(p).map((m) => [m.id, m]))
   return `<div class="bchome bccomp bccomp--c">
     ${head(p)}
-    ${arrangePanel(p)}
     <div class="bcpanes" data-bc-board="${esc(p.slug)}"
       style="--bc-rows:${String(place.reduce((n, m) => Math.max(n, m.y + m.h), 0))}">
       ${place
@@ -634,6 +635,7 @@ export const compositionC = (p) => {
         })
         .join('')}
     </div>
+    ${putBack(p)}
   </div>`
 }
 

@@ -332,6 +332,35 @@ const topRow = () => {
         )}">
         Attention${waiting === 0 ? '' : ` <span class="bcstatus bcstatus--waiting">${waiting}</span>`}
       </button>
+      <!--
+        THE OFFICE'S OWN SETTINGS, OUTSIDE ANY PROJECT.
+
+        §14: "PROJECT SETTINGS affect only the current project. GLOBAL /
+        APPLICATION SETTINGS affect the application/user generally. Global
+        settings should have their own three-dot control in the TOP-RIGHT,
+        OUTSIDE the project window/container. The visual hierarchy must make
+        scope obvious."
+
+        They used to be the last entry in the PROJECT's menu, which is the
+        confusion Grant is naming: a menu that offers both scopes is a menu
+        that makes you guess which one you are editing. Here it is in the
+        shell's own row, which is drawn on every screen and belongs to no
+        project, so where the control lives is the answer to what it changes.
+
+        Plain words in this comment: it sits inside a template literal.
+      -->
+      <span class="bcmenuwrap bcofficemenu">
+        <button type="button" class="bcbtn bcicon" data-bc-settings="1"
+          aria-haspopup="dialog"
+          title="Settings for the whole office"
+          aria-label="Settings for the whole office — the team, connections, appearance and how it works">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
+            <circle cx="12" cy="5" r="1.7"></circle>
+            <circle cx="12" cy="12" r="1.7"></circle>
+            <circle cx="12" cy="19" r="1.7"></circle>
+          </svg>
+        </button>
+      </span>
     </div>
   </header>`
 }

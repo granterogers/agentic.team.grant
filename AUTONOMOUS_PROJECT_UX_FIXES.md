@@ -808,3 +808,34 @@ had not repainted. A check that races is worse than no check: it teaches you to
 re-run until it is green.
 
 `verify:basecamp-todos-live` **24/24, twice**; `verify:basecamp-cards` 24/24.
+
+## 23 September — §§12-15, the two scopes
+
+The project's control is three dots ACROSS in the project header; the office's
+is three dots DOWN in the shell's own row. Same family, different axis, so they
+read as siblings without either needing a word beside it — and **where the
+control lives is the answer to what it changes**, which is the confusion §14
+names.
+
+*The word went.* It was added the day before for a real reason — an unlabelled
+38px icon described as "More about this page" is not findable by anyone looking
+for settings — and what fixed that was naming the thing, which the accessible
+name and the tooltip still do. It is the word in the row Grant no longer wants.
+
+*"Arrange this page" went, and its one irreplaceable half did not.* The panel
+explained dragging, resizing and removing, all of which the board already does.
+It also held the **only way back**: the cross takes a module off and nothing on
+the board could return it. Deleting the panel outright would have shipped a
+one-way door, which this repository has done once already. So the restoring half
+is on the page now, drawn only when something is actually off, at the end of the
+board where the gap is.
+
+**A defect I introduced and the audit caught.** The office control was wired
+inside `wirePageMenu`, which returns early when a page has no project menu — so
+on every project SUB-page the button in the top row was never given a listener.
+It looked right at every width and did nothing on four phone routes. Reading the
+code would not have shown it; `verify:basecamp-controls` presses and watches,
+which is why both it and `verify:wired` exist. After the fix: **415 controls
+pressed, 0 unpressable, 0 findings.**
+
+`verify:basecamp-settings` **34/34**, with the scope assertions permanent.

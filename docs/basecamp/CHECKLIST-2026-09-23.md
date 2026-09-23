@@ -110,15 +110,15 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 12.1 | Project three-dot control is the settings affordance | TODO |
-| 12.2 | The word "Settings" removed where the three-dot is sufficient | TODO |
-| 13.1 | "Arrange this page" removed from project settings | TODO |
-| 14.1 | Project settings affect only the current project | TODO |
-| 14.2 | Global settings have their own three-dot control, top-right, outside the project container | TODO |
-| 14.3 | Visual hierarchy makes scope obvious | TODO |
-| 14.4 | No global configuration inside project settings | TODO |
-| 15.1 | Global settings: correct entry point, clear scope, visually coherent, no project/global confusion | TODO |
-| 15.2 | No speculative complete redesign of global settings this pass | TODO |
+| 12.1 | Project three-dot control is the settings affordance | **VERIFIED** — the three dots are the affordance; the accessible name still lists what they open |
+| 12.2 | The word "Settings" removed where the three-dot is sufficient | **VERIFIED** — the word is gone from the row |
+| 13.1 | "Arrange this page" removed from project settings | **VERIFIED** — the menu entry is gone; the only thing it held that the board cannot do, putting a hidden module back, moved onto the board itself rather than being lost |
+| 14.1 | Project settings affect only the current project | **VERIFIED** — the project menu offers nothing office-wide |
+| 14.2 | Global settings have their own three-dot control, top-right, outside the project container | **VERIFIED** — three dots down, in the shell top row, asserted to be inside `.bctop` and outside the project header |
+| 14.3 | Visual hierarchy makes scope obvious | **VERIFIED** — dots across for the project, dots down for the office |
+| 14.4 | No global configuration inside project settings | **VERIFIED** — asserted in `verify:basecamp-settings` |
+| 15.1 | Global settings: correct entry point, clear scope, visually coherent, no project/global confusion | **DONE** — entry point and scope; no redesign of the panes themselves |
+| 15.2 | No speculative complete redesign of global settings this pass | **DONE** — deliberately not attempted |
 
 ## 16–17 — Team
 
