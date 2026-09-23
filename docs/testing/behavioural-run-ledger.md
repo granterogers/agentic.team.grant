@@ -1252,7 +1252,9 @@ untrue on the surface it describes; the second is half true.
 true and what he can do instead, each with a drive block that raises if the
 false claim survives or the honest one is not served.
 
-**Not fixed, deliberately, and filed instead:** no consumer was built.
+**Not fixed, deliberately, and filed as
+[#353](https://github.com/granterogers/agentic.team.grant/issues/353):** no
+consumer was built.
 `public.feedback` holds seven rows of one signal and none in seventeen days;
 building learning over it is the `public.contacts` trap this file already
 records. What a reaction should DO is a product decision, made once rather than
