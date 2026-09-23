@@ -143,6 +143,21 @@ export interface HandlerOutput {
    */
   readonly announce?: boolean
   /**
+   * What this announcement is ABOUT, when a model writes the words (#360).
+   *
+   * `app.say_once` keeps a duty from repeating itself by fingerprinting what it
+   * said. That works for a body composed in code and is defeated entirely by
+   * one composed by `sayAs`: `office.slack_rotate` reported the same failed
+   * token rotation 46 times in 30 different wordings, and every rewording read
+   * as news.
+   *
+   * A topic is a short stable key for the thing being reported, independent of
+   * this run's phrasing — `slack.rotation_failed`, not the sentence. Optional,
+   * and when it is absent the body is still what decides, so a handler that
+   * composes its own words needs to know nothing about this.
+   */
+  readonly topic?: string
+  /**
    * Everything the answer could legitimately have taken a SPECIFIC from — the
    * instruction, the conversation replayed into the prompt, and the documents
    * retrieved for it.
@@ -1143,10 +1158,37 @@ export const runJob = async (
     */
     let announce = output.announce
     if (announce) {
-      const { rows } = await db.execute(
-        `select app.say_once(${lit(job.jobId)}::uuid, ${lit(output.body)}) as say`,
-      )
-      announce = (rows[0] as { say?: boolean } | undefined)?.say !== false
+      /*
+        AND IT FAILS OPEN, which also makes the deploy order not matter.
+
+        `app.say_once` gained a third parameter in 0589. A migration is not a
+        deploy -- this repository has paid for assuming they land together --
+        so a worker carrying this line can reach a database that has only the
+        two-argument form.
+
+        Which arity is called therefore follows what is being asked, not what
+        is newest: a handler with no topic asks the TWO-argument form, which
+        0584 already shipped and which is what every deployed worker calls
+        today. Sending everything through the three-argument form would mean
+        that on a database without 0589 EVERY call throws -- and the catch
+        below would turn 0584's dedupe off altogether rather than leaving it
+        alone. A safe failure mode is not the same as no regression.
+
+        The catch then covers the remaining case -- a topic-carrying handler
+        on a database without 0589 -- by SPEAKING, the same direction the
+        `!== false` below chooses for an empty row. A dedupe rule that fails
+        closed silences a real failure report, which is the expensive
+        direction.
+      */
+      const say = await db
+        .execute(
+          output.topic === undefined
+            ? `select app.say_once(${lit(job.jobId)}::uuid, ${lit(output.body)}) as say`
+            : `select app.say_once(${lit(job.jobId)}::uuid, ${lit(output.body)}, ${lit(output.topic)}) as say`,
+        )
+        .then((r) => (r.rows[0] as { say?: boolean } | undefined)?.say)
+        .catch(() => undefined)
+      announce = say !== false
     }
     await db.execute(
       `update public.jobs set announce = ${announce ? 'true' : 'false'}

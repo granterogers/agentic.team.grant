@@ -3799,6 +3799,29 @@ Each of these cost real time. They are here so they cost it once.
   branch too would turn `<link> check this out later` into a gather, because a
   bare `check` is in that list.
 
+
+- **A SAFE FAILURE MODE IS NOT THE SAME AS NO REGRESSION.** 0589 gave
+  `app.say_once` a third parameter and the first version of the worker sent
+  EVERY call through the new arity, with a catch that fails open. On a database
+  that has 0584 and not 0589 that means every call throws, every catch fires,
+  and 0584's dedupe is silently OFF — worse than before the change, arrived at
+  through a guard that is individually correct. The arity a caller asks for must
+  follow what it is asking, not what is newest. Ask what DEPLOYING would do on
+  the database as it is now, not on the one the migration assumes.
+- **A migration can be blocked by another branch's UNCOMMITTED file, and there
+  is no honest way round it.** `npm run migrate` refuses globally on one
+  `checksum/missing`, the body is unrecoverable (`app.schema_migrations` holds
+  name and checksum only), and a reconstructed file fails `checksum/modified` —
+  the guard working in both directions. Write the migration, commit it pending,
+  make the code non-regressive without it, and say so; do not hand-write the
+  bookkeeping row.
+- **My own regression test was a wording lock on my own code — the seventh
+  instance, and the first where I wrote both halves.** The pass-29 test asserted
+  the literal expression `?.say !== false` and the exact `say_once(...)` call
+  text, so a correct refactor one pass later turned it red. Assert the
+  properties — the body is passed, the topic is passed, the arity follows the
+  question, it fails open — not the characters that currently express them.
+
 ---
 
 ## Visual standard

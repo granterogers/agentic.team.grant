@@ -1745,6 +1745,70 @@ project-scoped. Validate the query before believing the finding.
 
 Clean-pass count after pass 35: **1 of 5.**
 
+## Pass 36 — a rewording defeats my own pass-29 fix
+
+**Territory:** `office.slack_rotate`, chosen because it was the one duty still
+sending Grant real volume that pass 29 had not explained.
+
+**Classification: SYSTEMIC PRODUCT DEFECT.** Filed as
+[#360](https://github.com/granterogers/agentic.team.grant/issues/360). Code
+fixed and deployed; **migration 0589 written and committed but NOT APPLIED** —
+blocked, see below.
+
+**Finding 1.** Slack token rotation has been failing since 18 September — **5 of
+5 runs today** — and each run tells him *"rotation failed … no action needed"*.
+The job is `complete` while the outcome is a failure, so it is invisible to
+`recurring_failures` and to `app.notice`, exactly as #355 describes.
+
+**Finding 2, and the one that matters: 0584 cannot see it, and CLAUDE.md said so
+before it was written.** The lesson recorded with pass 29 reads *"a model
+rewording an unchanged fact defeats every text-based witness"*, and nothing then
+did anything about it. The rotate failure branch calls `sayAs`, so one fact
+arrives differently phrased every hour: **46 deliveries, 30 distinct bodies.**
+0584 fingerprints the body, sees 30 changes, speaks 30 times.
+
+**The fix:** an optional TOPIC on `app.say_once` — a stable key for what the
+message is about, fingerprinted in place of the body when given.
+`slack-rotation.ts` names two, not one, because *needs a human* and *will retry*
+ask different things of him and collapsing them would lose the escalation.
+
+**Three things it is careful about, and one I nearly got wrong:**
+
+- Both arities kept, and the three-argument form takes NO default — a default
+  makes `say_once(uuid, text)` match both and Postgres refuses the ambiguous
+  call.
+- **The worker calls the arity that matches the question, not the newest one.**
+  My first version sent everything through the three-argument form. On a
+  database without 0589 that means EVERY call throws, the catch fails open, and
+  0584's dedupe is off altogether — **a safe failure mode is not the same as no
+  regression**, and I had it wrong until I asked what deploying would actually
+  do.
+- It fails open, so a topic-carrying handler on an old database speaks.
+
+**And my own pass-29 TEST was a wording lock on my own code.** It asserted the
+literal old expression and went red on a correct change — the seventh instance
+of that trap in this repository and the first where I wrote both halves.
+Rewritten to assert the properties: the body is passed, the topic is passed, the
+arity follows the question, and it fails open.
+
+**BLOCKED, and not worked around.** `npm run migrate` refuses: the concurrent
+session on `claude/basecamp-team-hq` applied
+`0580_a_person_the_office_recognises.sql` to the shared database and has not
+committed it — their head stops at 0579. #326's exact condition. The body is not
+recoverable (`app.schema_migrations` stores name and checksum only) and a
+fabricated file would fail `checksum/modified`, which is the guard working. An
+attempt to record the row by hand was correctly refused as modifying shared
+state, and I left it refused.
+
+**What is true in the meantime:** the deployed worker is strictly
+non-regressive. 0584's dedupe keeps working for every code-composed duty and
+`slack_rotate` behaves exactly as it does today. 0589 needs one
+`npm run migrate` once their file lands.
+
+**Gates:** lint, typecheck, test (3,036) — green. Worker deployed.
+
+Clean-pass count after pass 36: **0 of 5** — reset by a systemic product defect.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

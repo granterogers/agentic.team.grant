@@ -29,8 +29,24 @@ describe('a scheduled duty says it once', () => {
     // The body is what makes the question answerable. Passing the job alone
     // would compare nothing, and would pass a check that only sought the name.
     expect(worker).toMatch(
-      /app\.say_once\(\$\{lit\(job\.jobId\)\}::uuid,\s*\$\{lit\(output\.body\)\}\)/,
+      /app\.say_once\(\$\{lit\(job\.jobId\)\}::uuid,\s*\$\{lit\(output\.body\)\}/,
     )
+    /*
+      AND THE TOPIC (#360), which is what lets it see past a rewording.
+      `office.slack_rotate` reported one failed rotation 46 times in 30
+      different wordings, because the branch that reports it calls `sayAs` and
+      0584 fingerprinted the words.
+    */
+    expect(worker).toMatch(/\$\{lit\(output\.body\)\}, \$\{lit\(output\.topic\)\}\) as say/)
+    /*
+      AND THE ARITY FOLLOWS THE QUESTION, not what is newest. A handler with no
+      topic asks 0584's TWO-argument form, which every deployed worker already
+      calls. Sending everything through the three-argument form would mean that
+      on a database without 0589 every call throws, and the catch would turn
+      0584's dedupe off altogether rather than leaving it alone -- a safe
+      failure mode is not the same as no regression.
+    */
+    expect(worker).toMatch(/output\.topic === undefined\s*\n?\s*\? `select app\.say_once\(/)
   })
 
   it('only ever turns speech into silence, never the other way round', () => {
@@ -55,6 +71,6 @@ describe('a scheduled duty says it once', () => {
     // `!== false` rather than `=== true`: if the row comes back empty or the
     // column is null, the office SPEAKS. A dedupe rule that fails closed would
     // silence a real failure report, which is the expensive direction.
-    expect(worker).toMatch(/\?\.say !== false/)
+    expect(worker).toMatch(/say !== false/)
   })
 })

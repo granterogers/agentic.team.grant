@@ -185,6 +185,20 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
           path: await howComposed(db, job.jobId),
           confidence: 'high',
           announce: true,
+          /*
+            WHAT THIS IS ABOUT, because a model wrote the words (#360).
+
+            This branch calls `sayAs`, so the same failed rotation comes out
+            differently phrased every hour. Rotation failed from 18 September
+            onwards and Grant was told 46 times in 30 wordings -- `say_once`
+            fingerprints the body, saw 30 changes, and spoke 30 times.
+
+            The two states are distinguished, because they need different
+            things from him: one is a credential he must regenerate by hand,
+            the other retries itself. Collapsing them under one key would mean
+            the escalation never reached him.
+          */
+          topic: outcome.needsHuman ? 'slack.rotation_needs_a_human' : 'slack.rotation_will_retry',
           severity: outcome.needsHuman ? 'important' : 'routine',
         } satisfies HandlerOutput
       }
