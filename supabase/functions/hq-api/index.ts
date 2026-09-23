@@ -721,6 +721,15 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     sends one field.
   */
   contact_update: { fn: 'hq_contact_update', required: ['p_contact_id'] },
+  contact_archive: { fn: 'hq_contact_archive', required: ['p_contact_id'] },
+  /*
+    Registered here as well as handled above, because the dispatcher checks
+    this map BEFORE anything else runs - an action missing from it is
+    "unknown action" however complete its handler is. `document_upload` is the
+    precedent and it is listed for the same reason: the storage half happens
+    before the RPC, and the RPC named here is the one the handler ends in.
+  */
+  contact_photo: { fn: 'hq_contact_photo_set', required: ['p_contact_id', 'p_project_id'] },
   contact_label_add: { fn: 'hq_contact_label_add', required: ['p_name'] },
   contact_label_rename: { fn: 'hq_contact_label_rename', required: ['p_label_id', 'p_name'] },
   contact_label_remove: { fn: 'hq_contact_label_remove', required: ['p_label_id'] },
@@ -1181,6 +1190,115 @@ Deno.serve(async (request: Request): Promise<Response> => {
       §31: *"upload this somewhere else, then paste the link"* is an avoidable
       request for manual configuration, which is a design failure.
     */
+    /*
+      A CONTACT'S PHOTOGRAPH.
+
+      Grant: *"Use the repository's established storage architecture. Do not
+      store giant base64 images in inappropriate database fields."*
+
+      So this is `document_upload`'s shape, deliberately: the bytes go into the
+      same private `files` bucket, under the project's own prefix, and the
+      DATABASE is told only the path. It is read back the way a document's file
+      is - a short-lived signed URL minted here - so a client's photograph is no
+      more reachable than their documents are, and a data URL never touches a
+      column, a backup or a log line.
+
+      Smaller than a document on purpose: 2 MB is a generous photograph and an
+      ungenerous way to fill a 1 GB allowance.
+    */
+    if (actionName === 'contact_photo') {
+      const contactId = String(args.p_contact_id ?? '')
+      const projectId = String(args.p_project_id ?? '')
+      const mime = String(args.p_mime ?? '').trim() || 'image/jpeg'
+      const b64 = String(args.p_base64 ?? '')
+      if (!/^[0-9a-f-]{36}$/i.test(contactId)) return json({ error: 'which contact?' }, 400)
+      if (!/^[0-9a-f-]{36}$/i.test(projectId)) return json({ error: 'which project?' }, 400)
+
+      /* Removing one is the same action with nothing attached. */
+      const callRpc = async (fn: string, body: unknown): Promise<unknown> => {
+        const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
+          method: 'POST',
+          headers: {
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        })
+        return await r.json().catch(() => ({}))
+      }
+
+      if (b64 === '') {
+        return json({
+          result: await callRpc('hq_contact_photo_set', {
+            p_contact_id: contactId,
+            p_path: null,
+          }),
+        })
+      }
+
+      if (!/^image\/(jpeg|png|webp|gif|avif)$/.test(mime)) {
+        return json({ error: 'a photograph has to be an image' }, 400)
+      }
+      let bytes: Uint8Array
+      try {
+        const raw = atob(b64.includes(',') ? (b64.split(',')[1] ?? '') : b64)
+        bytes = new Uint8Array(raw.length)
+        for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i)
+      } catch {
+        return json({ error: 'that image could not be read' }, 400)
+      }
+      if (bytes.byteLength === 0) return json({ error: 'that image is empty' }, 400)
+      if (bytes.byteLength > 2 * 1024 * 1024) {
+        return json({ error: 'that photograph is over 2 MB — a smaller one will do' }, 400)
+      }
+
+      const ext =
+        mime
+          .split('/')[1]
+          ?.replace(/[^a-z0-9]+/g, '')
+          .slice(0, 5) ?? 'jpg'
+      const path = `${projectId}/contacts/${contactId}.${ext}`
+      const put = await fetch(`${DB_URL}/storage/v1/object/files/${path}`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': mime,
+          'x-upsert': 'true',
+        },
+        body: bytes,
+      })
+      if (!put.ok) {
+        console.error(`hq-api contact_photo: storage ${String(put.status)}`)
+        return json({ error: 'the photograph could not be stored' }, 502)
+      }
+      const recorded = await callRpc('hq_contact_photo_set', {
+        p_contact_id: contactId,
+        p_path: path,
+      })
+      /*
+        AND A LINK BACK, so the page can show what was just uploaded without a
+        second round trip. Ten minutes, the same life every signed link in this
+        function has: long enough to look at, short enough that one caught in a
+        screenshot has expired.
+      */
+      const sign = await fetch(`${DB_URL}/storage/v1/object/sign/files/${path}`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expiresIn: 600 }),
+      })
+      const { signedURL } = (await sign.json().catch(() => ({}))) as { signedURL?: string }
+      return json({
+        result: recorded,
+        photo: signedURL === undefined ? null : `${DB_URL}/storage/v1${signedURL}`,
+      })
+    }
+
     if (actionName === 'document_upload') {
       const projectId = String(args.p_project_id ?? '')
       const name = String(args.p_name ?? '').trim()
@@ -1722,6 +1840,32 @@ Deno.serve(async (request: Request): Promise<Response> => {
     // Not fatal: the reader falls back to the text, which is usually there.
     if (url !== null) data.url = url
     data.path = undefined
+  }
+
+  /*
+    A CONTACT'S PHOTOGRAPH, signed exactly as a document's file is.
+
+    The database holds a storage path and the page must never see one: the
+    bucket is private on purpose, and a path tells a reader how storage is laid
+    out while being useless to them. So each one is swapped for a ten-minute
+    link and the path is dropped from the response.
+
+    Walked rather than mapped, because contacts arrive nested inside whichever
+    project they belong to and the shape of that payload is not this function's
+    to know. Signing is serial and a project has a handful of contacts, so the
+    cost is small; a page with fifty would deserve a batch.
+  */
+  if (name === 'studio' && Array.isArray((data as { projects?: unknown[] })?.projects)) {
+    for (const project of (data as { projects: Record<string, unknown>[] }).projects) {
+      const people = project.contacts
+      if (!Array.isArray(people)) continue
+      for (const person of people as Record<string, unknown>[]) {
+        const path = person.photo
+        if (typeof path !== 'string' || path === '') continue
+        const url = await signPath(path)
+        person.photo = url === null ? undefined : url
+      }
+    }
   }
 
   /*

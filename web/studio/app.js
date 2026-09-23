@@ -13385,6 +13385,8 @@ const bcContext = {
   voiceEndpoint: () => chat.endpoint(),
   /* The project's own name, for the transcriber's spelling hint. */
   projectName: (slug) => PROJECTS.find((x) => x.slug === slug)?.name ?? '',
+  /* The office's own id for a project, which storage paths are filed under. */
+  projectId: (slug) => PROJECTS.find((x) => x.slug === slug)?.id ?? '',
   officeToken: () => token.get(),
   chatAsk: (slug, text, onState) => chat.ask(slug, text, null, token.get(), undefined, undefined, onState),
   crew: CREW,

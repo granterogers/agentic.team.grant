@@ -72,7 +72,17 @@ const ARG = {
   note: 'p_note',
   next: 'p_next',
   nextDue: 'p_next_due',
-  image: 'p_image',
+  /*
+    NO `image` HERE, on purpose.
+
+    A photograph is not a column: 0534 stores a storage PATH and the bytes go
+    to the private files bucket through the gateway's `contact_photo`, which is
+    the architecture Grant asked for - "do not store giant base64 images in
+    inappropriate database fields". Leaving `image: 'p_image'` in this map sent
+    an argument `hq_contact_update` does not have, and PostgREST answers an
+    unknown argument by saying the FUNCTION does not exist: every save carrying
+    a photograph would have failed, saying something that was not true.
+  */
 }
 
 /*
@@ -180,12 +190,58 @@ export const save = async (project, key, patch) => {
     remember(project, key, patch)
     return { ok: true, local: true }
   }
+  /*
+    The photograph travels its own way, and may travel WITH other changes: a
+    person who replaces a picture and corrects a phone number in one press
+    should not have to do it twice.
+  */
+  if (Object.hasOwn(patch, 'image')) {
+    const { image, ...rest } = patch
+    const stored = await photo(project, key, image)
+    if (stored?.error !== undefined) return stored
+    if (Object.keys(rest).length === 0) return stored
+    return await save(project, key, rest)
+  }
   const args = { p_contact_id: key }
   for (const [k, v] of Object.entries(patch)) {
     const arg = ARG[k]
     if (arg !== undefined) args[arg] = v
   }
   return act('contact_update', args)
+}
+
+/**
+ * The photograph, through the gateway that owns storage.
+ *
+ * Takes the small square data URL `shrink` produces - the browser does the
+ * downscaling, so a four-megabyte phone photograph never crosses the network -
+ * and hands the gateway its base64. An empty string removes it.
+ *
+ * The project's id is needed because the bytes are filed under the project, so
+ * removing a project removes its people's photographs with it.
+ */
+export const photo = async (project, key, dataUrl) => {
+  if (key.startsWith('p:')) {
+    remember(project, key, { image: dataUrl })
+    return { ok: true, local: true }
+  }
+  const id = ctx?.projectId?.(project) ?? ''
+  if (id === '') return { error: 'The office could not say which project this is.' }
+  return act('contact_photo', {
+    p_contact_id: key,
+    p_project_id: id,
+    p_mime: 'image/jpeg',
+    p_base64: String(dataUrl ?? ''),
+  })
+}
+
+/** Put one away, or bring them back. Never a delete: see 0534. */
+export const putAway = async (project, key, away = true) => {
+  if (key.startsWith('p:')) {
+    remember(project, key, { away })
+    return { ok: true, local: true }
+  }
+  return act('contact_archive', { p_contact_id: key, p_put_away: away })
 }
 
 /** Add one. The office's own creator, or the prototype's list. */
