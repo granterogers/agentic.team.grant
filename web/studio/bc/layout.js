@@ -48,15 +48,28 @@
      older version, or one holding a module that has since grown a minimum
      size, is repaired rather than rejected.
 
-  ## Persistence
+  ## Persistence — the office, with the browser as a cache in front of it
 
-  Per device, keyed by project slug, in `localStorage` - the same place and
-  for the same reason the id list was kept there, which Issue 299 records:
-  `public.projects` holds ONE arrangement and Grant's current dashboard
-  already uses it, so writing this to the office would take panels off that.
-  The moment 299 lands this module gains a second store and nothing above it
-  changes, which is the whole reason the reading and writing are here rather
-  than scattered through the renderer.
+  ADR-0021, and #341: an arrangement belongs to the PERSON and the project, not
+  to the machine they happened to be sitting at. It used to live only in
+  `localStorage` here, and the panel that explained it said why -- one row per
+  (owner, project) and the default dashboard already using it, so writing this
+  to the office would have taken panels off that. 0582 is what 299 was waiting
+  for: `surface` joins the key, and the two boards stop being the same row.
+
+  The order is ADR-0021's, and each of its three parts was a bug before it was
+  a rule:
+
+  1. **The office is read first, then the browser, then the default.** Anything
+     else and the machine you last touched wins over the machine you are on.
+  2. **An empty layout is a reset, never a stored value.** Enforced in the RPC.
+  3. **This session's own change outranks both, until the next load.** Reading
+     the office's copy back during the redraw after a drop made the panel snap
+     to where it had been, because the save had not landed yet.
+
+  The reading here stays SYNCHRONOUS -- the renderer cannot await -- so the
+  office's copy is adopted into the cache when the payload arrives, and every
+  write goes to both.
 */
 
 /** The grid. Twelve columns divides by 2, 3, 4 and 6, which is why it is 12. */
@@ -169,13 +182,67 @@ export const layout = (slug) => {
   }
 }
 
-export const save = (slug, list) => {
+/*
+  WHERE A WRITE GOES BESIDES THE BROWSER.
+
+  Handed in rather than imported, for the reason `office.js` hands its
+  after-write hook in: this module is about geometry and must not know how the
+  page talks to the office. `app.js` supplies it once at boot.
+*/
+let keep = null
+let forget = null
+
+/** Tell this module how to put an arrangement in the office. */
+export const persistence = ({ save: saveAway, reset: resetAway } = {}) => {
+  keep = typeof saveAway === 'function' ? saveAway : null
+  forget = typeof resetAway === 'function' ? resetAway : null
+}
+
+/*
+  WHICH PROJECTS THIS SESSION HAS TOUCHED.
+
+  ADR-0021's third rule. The payload arrives again after every write, carrying
+  what the office had a moment ago; adopting it over a change made in this
+  session is how a dropped panel snaps back to where it was.
+*/
+const mine = new Set()
+
+/**
+ * Take the office's copy, unless this session has already changed it.
+ *
+ * Called when the payload lands. A project nobody has rearranged here adopts
+ * what the office holds, which is what makes the other machine agree.
+ */
+export const adopt = (slug, panels) => {
+  const s = typeof slug === 'string' ? slug : (slug?.slug ?? '')
+  if (s === '' || mine.has(s)) return false
+  if (!Array.isArray(panels) || panels.length === 0) return false
+  const kept = panels.filter((m) => m !== null && typeof m === 'object' && ALL.includes(m.id))
+  if (kept.length === 0) return false
   try {
-    const clean = compact(list).map((m) => ({ id: m.id, x: m.x, y: m.y, w: m.w, h: m.h }))
+    globalThis.localStorage?.setItem(KEY(s), JSON.stringify(kept))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const save = (slug, list) => {
+  const clean = compact(list).map((m) => ({ id: m.id, x: m.x, y: m.y, w: m.w, h: m.h }))
+  try {
     globalThis.localStorage?.setItem(KEY(slug), JSON.stringify(clean))
   } catch {
     /* A viewer who cannot store it still gets the default arrangement. */
   }
+  mine.add(typeof slug === 'string' ? slug : (slug?.slug ?? ''))
+  /*
+    Best effort, and deliberately not awaited: an arrangement that stuck on
+    screen and failed to reach the office is better than a gesture that waits
+    for a round trip. The next load reads the office and the two agree or the
+    browser's copy wins for this session, which is rule 3.
+  */
+  if (keep !== null) void keep(slug, clean)
+  return clean
 }
 
 export const reset = (slug) => {
@@ -184,6 +251,8 @@ export const reset = (slug) => {
   } catch {
     /* Already the default. */
   }
+  mine.add(typeof slug === 'string' ? slug : (slug?.slug ?? ''))
+  if (forget !== null) void forget(slug)
 }
 
 /** Take a module off the page. Everything else closes up behind it. */

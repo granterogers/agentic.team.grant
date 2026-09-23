@@ -33,6 +33,7 @@ import * as bc from './bc/shell.js'
 import * as bcJump from './bc/jump.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
+import * as bcGrid from './bc/layout.js'
 import * as bcWire from './bc/wire.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
@@ -13666,6 +13667,20 @@ void bcNotes.ready().then((ok) => {
   It also takes the token out of the address bar, because a URL with a session
   in it is a URL somebody pastes into a chat.
 */
+/*
+  WHERE THE BOARD'S ARRANGEMENT IS KEPT. The grid does the geometry and knows
+  nothing about the office; this is the one place that joins them, the same
+  shape as `onWrite` in `office.js`.
+*/
+bcGrid.persistence({
+  save: (slug, panels) =>
+    act('dashboard_layout_set', { p_slug: slug, p_panels: panels, p_surface: 'basecamp' }).catch(
+      () => undefined,
+    ),
+  reset: (slug) =>
+    act('dashboard_layout_reset', { p_slug: slug, p_surface: 'basecamp' }).catch(() => undefined),
+})
+
 bcSession.adopt()
 
 render()
@@ -14771,6 +14786,23 @@ async function live() {
     on every single page load.
   */
   hydrateAppearance(FROM_OFFICE.appearance)
+  /*
+    THE BOARD HE ARRANGED, FROM THE OFFICE (#341, ADR-0021, 0582).
+
+    It was kept in `localStorage` only, so arranging the board on the desk and
+    opening it on the phone showed two different boards -- and the panel that
+    explained it said so out loud, because one row per (owner, project) was
+    already taken by the default dashboard. 0582 put `surface` in the key and
+    this is the reader.
+
+    After the payload and before the redraw, and a project this session has
+    already rearranged keeps what this session did: adopting the office's copy
+    over a drop that has not landed yet is how a panel snaps back to where it
+    was, which is ADR-0021's third rule and was a bug before it was one.
+  */
+  for (const p_ of PROJECTS) {
+    if (Array.isArray(p_?.layout_board)) bcGrid.adopt(p_.slug, p_.layout_board)
+  }
   /*
     Second attempt at the address the browser arrived with (#157).
 

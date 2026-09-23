@@ -245,10 +245,10 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 | 39.2 | Console error not merely silenced | **VERIFIED** — the wrapper was missing, not the logging |
 | 39.3 | Systemic gateway-wrapper check retained (`check:gateway-wrappers`) | **VERIFIED** — `check:gateway-wrappers` clean over 147 routed functions |
 | 39.4 | Verified through deployed browser → real gateway → successful pulse | **VERIFIED** — `verify:basecamp-live` now watches every gateway answer the browser gets; proved able to fail by forcing a 502 |
-| 40.1 | #341: board arrangement persists per person + project | TODO |
-| 40.2 | Device A change visible to device B for the same person | TODO |
-| 40.3 | Backend persistence, not copied localStorage | TODO |
-| 40.4 | Verified with two independent browser contexts | TODO |
+| 40.1 | #341: board arrangement persists per person + project | **VERIFIED** — 0582 put `surface` in the key, which is what #299 blocked on; the board writes through `hq_dashboard_layout_set` |
+| 40.2 | Device A change visible to device B for the same person | **VERIFIED** — `verify:basecamp-arrangement-live`, two independent contexts |
+| 40.3 | Backend persistence, not copied localStorage | **VERIFIED** — nothing is copied between browsers; the office is the only path, proved by a sabotage that removed the write and turned three checks red |
+| 40.4 | Verified with two independent browser contexts | **VERIFIED** — and the second context is asserted empty first, so a shared profile could not pass for an office |
 | 41.1 | #344: lineage of production, main and fresh-install established afresh | TODO |
 | 42.1 | Reconciliation achieving A production truthfully represented | TODO |
 | 42.2 | B eventual main contains every migration applied to production | TODO |

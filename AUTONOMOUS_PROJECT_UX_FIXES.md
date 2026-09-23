@@ -839,3 +839,37 @@ which is why both it and `verify:wired` exist. After the fix: **415 controls
 pressed, 0 unpressable, 0 findings.**
 
 `verify:basecamp-settings` **34/34**, with the scope assertions permanent.
+
+## 24 September (overnight) — the authentication correction, and #341
+
+**§2 was wrong and Grant said so.** The Telegram pairing flow is gone — table,
+functions, endpoint body, UI. He did not ask for a nicer office-token ceremony;
+he asked for no office-token interaction at all. *Improving the ergonomics of a
+thing that should not exist is not a fix.*
+
+The trace came first, and three of its four findings decided the design:
+`auth.users` held **zero rows** (this project's identity system has existed
+since day one and was never used); all 117 row-level policies name
+`ai_team_app` and none names `anon` or `authenticated`; the browser has never
+spoken to PostgREST; and the ORIGINAL Team HQ authenticated exactly the same
+way — so the Basecamp frontend did not bypass a real session mechanism, **there
+was never one to inherit.** The whole change is which fact the gateway checks.
+**ADR-0043.**
+
+Verified in a clean browser, a refresh and a restart: **17/17**. A forged
+session is refused. The browser never holds the office key.
+
+**#341 is fixed.** ADR-0021 has said since September that an arrangement belongs
+to the person, and the board kept it in `localStorage` because one row per
+(owner, project) was already taken by the default dashboard — which is #299.
+0582 puts `surface` in the key. Two independent browser contexts now agree, and
+the detector was proved by removing the office write and watching three checks
+go red.
+
+**Four defects found on the way, three of them mine:** the voice endpoint only
+knew the office key, so a signed-in person's chat was refused; `redirect_to`
+nested under `options` is silently ignored, so links went to `site_url`;
+`live()` read `hq.token` straight from storage, so a session-holding browser
+drew the prototype **without ever asking the office** — no request, no 401,
+nothing to explain it; and three suites kept their own copy of "what this
+browser presents" and reported a working product as 401.
