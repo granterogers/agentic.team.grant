@@ -60,8 +60,15 @@ describe('and the office resolves it towards the deferral', () => {
     expect(withoutComments).toMatch(
       /const deferred = isBranch \? null : firstOfHis\(personalTaskRequest\)/,
     )
-    expect(withoutComments).toMatch(
-      /isBranch \|\| deferred !== null\s*\?\s*null\s*:\s*firstOf\(artifactRequest\)/,
+    /*
+      The guard the artifact reader actually falls through, bounded at both
+      ends. Written as one pinned expression this went red when a second
+      condition joined it (#316's repeat gate) — the wording lock again.
+    */
+    const at = withoutComments.indexOf('firstOf(artifactRequest)')
+    expect(at).toBeGreaterThan(-1)
+    expect(withoutComments.slice(withoutComments.lastIndexOf('const ', at), at)).toContain(
+      'deferred !== null',
     )
   })
 })

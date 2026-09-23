@@ -3703,8 +3703,39 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         one-pager" carries.
       */
       const deferred = isBranch ? null : firstOfHis(personalTaskRequest)
+      /*
+        AND IT DOES NOT MAKE A SECOND ONE WHILE SAYING IT HAS NOT.
+
+        `alreadyOn`'s own comment two thousand lines up is unambiguous --
+        *"Still running: say who has it, and do not start a second one"* -- and
+        the artifact branch had never been told. Driven live, one reply said
+        all of this:
+
+            You asked me that a moment ago and it came back -- here is what it
+            found: ... Say the word if you want it done again from scratch.
+            Writing that up as a PDF from what this project holds.
+
+        It offered him the choice and then took it for him in the next
+        sentence. Two PDFs into the project, which is the provenance harm this
+        repository keeps paying for: an answer citing two copies of one thing
+        as two sources.
+
+        The structural door cannot cover it. `jobs_one_live_per_idempotency_key`
+        is partial on LIVE jobs, deliberately, so once the first report
+        completes a second is permitted -- and #316's measured shape is two
+        identical requests three minutes apart, by which time the first has
+        finished. The decision has to be the one already made above.
+
+        Suppression is safe here for the reason `already.ts` gives about
+        itself: every failure of that judgement returns null, so the only way
+        this fires is the model positively identifying the new sentence as
+        real work already done. And asking for it again is one word, which the
+        reply he is reading has just told him.
+      */
       const wantsFile =
-        job.projectId === null || isBranch || deferred !== null ? null : firstOf(artifactRequest)
+        job.projectId === null || isBranch || deferred !== null || alreadyOn !== null
+          ? null
+          : firstOf(artifactRequest)
 
       /*
         A request to READ A PAGE (#135, #16).
@@ -3740,7 +3771,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         so the two paths cannot both claim one sentence.
       */
       const askedForPage =
-        job.projectId === null || isBranch || wantsFile !== null ? null : pageRequest(instruction)
+        job.projectId === null || isBranch || wantsFile !== null || alreadyOn !== null
+          ? null
+          : pageRequest(instruction)
       const wantsPage = askedForPage?.why === 'asked' ? askedForPage : null
       const reading =
         wantsPage === null
@@ -3810,7 +3843,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               })
 
       const pullOut =
-        job.projectId === null || wantsFile !== null || isBranch ? null : firstOf(extractionRequest)
+        job.projectId === null || wantsFile !== null || isBranch || alreadyOn !== null
+          ? null
+          : firstOf(extractionRequest)
       const extracting =
         pullOut === null
           ? null
