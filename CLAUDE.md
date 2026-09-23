@@ -3575,6 +3575,35 @@ Each of these cost real time. They are here so they cost it once.
   unrecognised: failing to see a READ leaves the tool `unknown`, which is
   treated as a write — more conservative, not less.
 
+- **`check:callers` counted a mention inside a COMMENT as a call, on BOTH
+  sides — and the repository half masked its own fix.** `app.raise_suggestions`
+  was reported reachable for as long as it existed, because the only database
+  mention was a block comment in `app.decide_suggestion`; nothing produced a
+  suggestion and the Governance page's *noticed* section could never populate.
+  Then a comment added beside the NEW call named the function in prose, so the
+  control that removed the call stayed green. `verify:schema` learned "a
+  comment is not a call" once and it was never carried across to the check
+  whose whole job it is. Stripping comments surfaced four more functions the
+  product names only in prose. **When you add a call, do not also name the
+  function in the comment beside it** — the check cannot tell them apart.
+- **The shared database is shared, and another branch's migration lands in it
+  before its file does.** Four `sign_in_*` functions appeared mid-run, from a
+  0577 applied SIX SECONDS after my own 0577 by a concurrent session. A check
+  over "what is in the database" will go red over work that is not in this
+  checkout, and the right rule is ownership: **if no migration here creates
+  it, this checkout cannot be asked to name its caller.** It self-heals when
+  that branch merges. `check:migrations` already models this and passes —
+  0539, 0543 and 0577 are recorded cross-branch collisions, and renaming one
+  *"would make the repository claim a number it did not run under."*
+- **0474 fixed two defects and neither was carried to the sentence beside
+  it.** The proposal round learned that `needed` is half nouns (`could not:`
+  reads for both) and that `not_capable` is the coherence gate WORKING. Three
+  days later the suggestion round still said *"We have been unable to an
+  answer the database will accept 46 times"* and still offered gate refusals
+  as capabilities to grant. Both invisible because nothing had ever run it.
+  **When you fix a composed sentence, grep for the other place that composes
+  one.**
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the
