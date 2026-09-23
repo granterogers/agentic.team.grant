@@ -20,6 +20,7 @@ import * as live from './livevoice.js'
 import * as notes from './notestore.js'
 import * as recorder from './voicenote.js'
 import * as pdf from '../pdf.js'
+import * as bcMini from './miniatures.js'
 import {
   callAbout,
   callActivity,
@@ -1633,7 +1634,15 @@ const wireArrange = (root) => {
 const wireDocs = (root) => {
   for (const host of root.querySelectorAll('[data-bc-thumb]')) {
     const ref = host.dataset.bcThumb ?? ''
-    if (ref === '' || host.classList.contains('bcthumb--object')) continue
+    /*
+      AN OBJECT TILE IS NOT NECESSARILY FINISHED. This skipped every tile that
+      had a glyph on it, which included every document known to be a PICTURE -
+      so a photograph showed the outline of a photograph for ever, and the one
+      thumbnail in the gallery that could have been the thing itself never was.
+      A tile with nothing to paint is decided in `paintThumb`, where the real
+      media type is known, rather than guessed from a class here.
+    */
+    if (ref === '') continue
     void paintThumb(host, ref)
   }
 
@@ -1717,24 +1726,58 @@ const fileFor = async (ref) => {
   }
 }
 
+/*
+  THE FACE, CORRECTED BY WHAT THE FILE TURNED OUT TO BE.
+
+  Render time has the kind and the title; this has the media type the gateway
+  reports for the actual bytes. Where they disagree the bytes win - which is
+  the whole of the spreadsheet defect: `app.studio_documents` calls everything
+  that is not audio, a PDF or written by the team a `doc`, so an .xlsx arrived
+  with fake lines of text drawn on it and kept them.
+*/
+const dressObject = (host, face) => {
+  if (face === undefined) return
+  host.classList.add('bcthumb--object', `bcthumb--${face.tone}`)
+  host.innerHTML = bcMini.glyphFor(face)
+}
+
 const paintThumb = async (host, ref) => {
   const file = await fileFor(ref)
-  if (file === null || file.url === '') return
+  if (file === null) return
+  const face = bcMini.faceFor(file.mime ?? '', file.url === '' ? (file.title ?? '') : file.url)
+  /* Something with no first page stops pretending to have one. */
+  if (face !== undefined && face.glyph !== 'image') {
+    dressObject(host, face)
+    return
+  }
+  if (file.url === '') return
   const isPdf = file.mime === 'application/pdf' || /\.pdf$/i.test(file.url)
   if (isPdf) {
     await pdf.paint(host, file.url, 220)
     return
   }
-  if (file.mime.startsWith('image/')) {
-    const img = document.createElement('img')
-    img.className = 'realpage'
-    img.alt = ''
-    img.decoding = 'async'
-    img.src = file.url
-    img.addEventListener('load', () => {
-      host.replaceChildren(img)
-    })
-  }
+  if (face === undefined) return
+  /*
+    A PICTURE, AND A DELIBERATE FALLBACK WHEN IT WILL NOT LOAD. The `load`
+    listener stood alone, so a file that 404s or will not decode left the
+    drawn page in place - this office asserting that a photograph is a page of
+    writing, which is the failure the fallback exists to prevent.
+  */
+  const img = document.createElement('img')
+  img.className = 'realpage'
+  img.alt = ''
+  img.decoding = 'async'
+  img.addEventListener('load', () => {
+    host.classList.remove('bcthumb--object', 'bcthumb--i')
+    host.replaceChildren(img)
+    /* The same marker `pdf.paint` sets, so "the real thing arrived" is one
+       signal rather than one per painter. */
+    host.classList.add('has-real')
+  })
+  img.addEventListener('error', () => {
+    dressObject(host, bcMini.faceFor('image/*', ''))
+  })
+  img.src = file.url
 }
 
 /*

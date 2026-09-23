@@ -145,6 +145,29 @@ const FALLBACK_PROJECTS = [
         is a file type nobody is checking.
       */
       { title: 'Whats App Audio From Ben', kind: 'audio', origin: 'Yours', size: '4 min · transcribed', file: '/samples/voice-note.wav' },
+      /*
+        THE FOUR WORDS THE OFFICE ACTUALLY EMITS. `app.studio_documents` maps
+        every document onto `audio`, `made`, `pdf` or `doc` - so a photograph,
+        a spreadsheet and a zip all arrive as `doc`, and these three say `doc`
+        on purpose. Before the face was derived from the file itself, all three
+        were drawn as pages of written text: a picture of a document that does
+        not exist, over a photograph, a table of numbers and an archive.
+
+        Real files, of real types, because a file type nobody can see the
+        handling of is a file type nobody is checking.
+      */
+      { title: 'The venue, from the balcony', kind: 'doc', origin: 'Yours', size: '48 KB', file: '/samples/venue.png' },
+      { title: 'Course budget', kind: 'doc', origin: 'Yours', size: '4 KB', file: '/samples/budget.csv' },
+      { title: 'Course artwork', kind: 'doc', origin: 'Yours', size: '2.1 MB', file: '/samples/assets.zip' },
+      /*
+        A RECORDING THE OFFICE FILED AS A PLAIN DOCUMENT. `studio_documents`
+        only says `audio` when the media type is already known to be audio, and
+        an upload that arrives without one is a `doc` - so this is the ordinary
+        case, not an odd one. It used to reach a details page with no player on
+        it, because two of the three places that ask "is this a recording?"
+        asked the kind and only the third read the file.
+      */
+      { title: 'Ben, second message', kind: 'doc', origin: 'Yours', size: '1 min', file: '/samples/voice-note.wav' },
     ],
     /*
       The fields `app.studio_tasks` actually returns (0222, 0530): `state_raw`,

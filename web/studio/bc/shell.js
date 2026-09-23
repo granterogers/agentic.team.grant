@@ -800,9 +800,19 @@ const taskList = (p, g, whole = false) => {
       ${
         done.length === 0
           ? ''
-          : `<p class="bcdonehead">${esc(
-              done.length === 1 ? '1 done' : `${done.length} done`,
-            )}</p>
+          : `<h4 class="bcdonehead">${esc(
+              /*
+                THE NOUN FIRST, AND A REAL HEADING.
+
+                "2 done" is the shape of a FILTER - a count beside a noun, like
+                "3 late" or "12 open tasks" - and `verify:basecamp-affordance`
+                said so: something that looks pressable and is not. It is a
+                section heading over rows that are right underneath it, so it
+                is written as one, and it is an element a screen reader can
+                navigate to rather than a paragraph in bold.
+              */
+              done.length === 1 ? 'Done (1)' : `Done (${String(done.length)})`,
+            )}</h4>
             <div class="bcdonelist">
               ${done.map((t) => taskRow(t, all.indexOf(t), g.name)).join('')}
             </div>`
@@ -1283,16 +1293,17 @@ const docRow = (d, i) => {
   const ref = bcMini.docRef(d)
   return `<div class="bcitem bcdoc--openable" data-bc-doc="${esc(ref)}"
     data-bc-doc-title="${esc(d.title ?? '')}">
-    <span class="bcrowthumb bcthumb" data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
-      ${(Array.isArray(d.lines) && d.lines.length > 0 ? d.lines : [92, 100, 84, 96])
-        .slice(0, 4)
-        .map((w) => `<span class="bcpline" style="width:${Math.max(24, Math.min(100, Number(w) || 80))}%"></span>`)
-        .join('')}
-    </span>
+    <!--
+      THE SAME DRAWING THE GALLERY USES. This row drew four lines of text
+      unconditionally, so an audio file, a spreadsheet and a photograph were
+      all little written pages here while the gallery showed each of them as
+      what it is. Two views of one list, disagreeing.
+    -->
+    ${bcMini.thumbFace(d, i, 'bcrowthumb')}
     <div class="bcitembody">
       <button type="button" class="bcitemtitle bcitemlink" data-bc-doc-open="${esc(ref)}"
         data-bc-doc-title="${esc(d.title ?? '')}">${esc(d.title)}</button>
-      <span class="bcitemmeta">${esc([KIND[d.kind] ?? d.kind, d.origin, d.size, d.when].filter(Boolean).join(' · '))}</span>
+      <span class="bcitemmeta">${esc([bcMini.kindWordOf(d), d.origin, d.size, d.when].filter(Boolean).join(' · '))}</span>
     </div>
     <span class="bcpmeta">${esc(opensAs(d))}</span>
   </div>`
@@ -1306,20 +1317,14 @@ const docRow = (d, i) => {
   than one that promises nothing, and this is the same rule as an offer only
   promising what the press can perform.
 */
-const KIND = {
-  pdf: 'PDF',
-  doc: 'Document',
-  made: 'Written by the team',
-  slides: 'Slides',
-  mindmap: 'Mind map',
-  audio: 'Audio',
-  image: 'Image',
-  sheet: 'Spreadsheet',
-  video: 'Video',
-}
+/*
+  The word map lived here AND in `miniatures.js`, so the gallery and the list
+  could describe one document with two different nouns. `bcMini.kindWordOf`
+  answers for both, from the same evidence the thumbnail is drawn from.
+*/
 
 const opensAs = (d) => {
-  if (d.kind === 'audio') return 'Plays here'
+  if (bcMini.isAudioDoc(d)) return 'Plays here'
   if (d.file !== undefined && d.file !== null && d.file !== '') return 'Opens in a new tab'
   if (d.id !== undefined && d.id !== null && d.id !== '') return 'Opens in a new tab'
   return 'Details'
@@ -2162,9 +2167,22 @@ const chatSurface = (p) => {
 const documentRecord = (p) => {
   const want = state().bcDoc
   const docs = p.documents ?? []
+  /*
+    THE REFERENCE IS THE FILE, AND TWO DOCUMENTS CAN POINT AT ONE FILE.
+
+    Matching on the reference alone opened the FIRST document holding that
+    file, so pressing the second one showed somebody else's record - the same
+    title, the same buttons, quietly the wrong row. The press carries the title
+    it was drawn with, so both are asked for first and the reference alone is
+    only the fallback, for a press that arrived without one.
+  */
+  const both = docs.find(
+    (x) => bcMini.docRef(x) === want?.ref && (x.title ?? '') === (want?.title ?? ''),
+  )
   const d =
+    both ??
+    docs.find((x) => (x.title ?? '') === (want?.title ?? '') && (want?.title ?? '') !== '') ??
     docs.find((x) => bcMini.docRef(x) === want?.ref) ??
-    docs.find((x) => (x.title ?? '') === (want?.title ?? '')) ??
     null
   if (d === null) {
     return `${crumbFor(p, 'documents')}
@@ -2173,10 +2191,10 @@ const documentRecord = (p) => {
         button('Back to Docs & Files', { 'data-bc-go': at(`/p/${p.slug}/documents`) }),
       )}`
   }
-  const isAudio = d.kind === 'audio'
+  const isAudio = bcMini.isAudioDoc(d)
   const file = d.file ?? ''
   const facts = [
-    ['What it is', KIND[d.kind] ?? d.kind ?? ''],
+    ['What it is', bcMini.kindWordOf(d)],
     ['Size', d.size ?? ''],
     ['Where it came from', d.origin ?? ''],
     ['When', d.when ?? ''],

@@ -255,6 +255,227 @@ check(
   thumbs.map((t) => `${t.title}:${String(t.h)}`).join(' | '),
 )
 
+/* --- 7. the face of a document is what the FILE is ---------------------- */
+
+/*
+  TWO MECHANISMS, DELIBERATELY REDUNDANT, AND WHAT THAT MEANS FOR THIS SUITE.
+
+  The renderer derives a face from the kind, the media type and the filename;
+  the painter corrects it once the real bytes have a type. Either one alone
+  settles to the right answer, so sabotaging one of them leaves every check
+  below green - which is not the checks being weak, it is the redundancy
+  working. The control that these checks CAN fail is therefore the combined
+  revert: both halves reading the four words `app.studio_documents` emits,
+  which is exactly the code that put lines of written text over a photograph.
+  Run with both reverted, the five checks in this section go red.
+
+  A first-frame check was written for this and removed: `fileFor` resolves on a
+  microtask for a local file, so the painter has already run by the time a
+  browser round trip can look, and the check could not fail either.
+*/
+
+/*
+  THE DEFECT THIS SECTION EXISTS FOR.
+
+  `app.studio_documents` maps every document in the office onto four words -
+  `audio`, `made`, `pdf` and `doc` - and the gallery decided a tile's face from
+  that word. So a photograph, a spreadsheet, a slide deck and a zip all arrived
+  as `doc` and were drawn as PAGES OF WRITTEN TEXT: lines of prose over a
+  picture, which is the one thing the drawing is not allowed to be.
+
+  The assertion is a property rather than a list, because a list of file types
+  goes stale the first time somebody uploads one nobody wrote down: NOTHING
+  whose file is a picture, a recording, a spreadsheet, a video or a type this
+  office does not know is drawn as a written page.
+*/
+const NOTAPAGE =
+  /\.(png|jpe?g|gif|webp|svg|avif|heic|bmp|tiff?|xlsx?|csv|tsv|ods|numbers|pptx?|odp|key|mp4|mov|webm|mkv|avi|m4v|mp3|wav|m4a|ogg|oga|aac|flac|opus|weba|zip|gz|tar|7z|dmg|exe)(\?|$)/i
+
+type Face = {
+  title: string
+  ref: string
+  word: string
+  drawn: boolean
+  glyph: boolean
+  real: boolean
+}
+const facesIn = async (sel: string): Promise<Face[]> =>
+  (await page.evaluate(
+    inPage(`const out = []
+       for (const el of document.querySelectorAll('${sel}')) {
+         const t = el.querySelector('[data-bc-thumb]')
+         if (t === null) continue
+         const meta = el.querySelector('.bcdocmeta, .bcitemmeta')
+         out.push({
+           title: el.dataset.bcDocTitle ?? '',
+           ref: t.dataset.bcThumb ?? '',
+           word: ((meta === null ? '' : meta.textContent) ?? '').split('·')[0].trim(),
+           drawn: t.querySelector('.bcpline') !== null,
+           glyph: t.querySelector('.bcglyph') !== null,
+           real: t.querySelector('.realpage') !== null,
+         })
+       }
+       return out`),
+  )) as Face[]
+
+await gallery()
+await page.waitForTimeout(1800)
+const wall = await facesIn('.bcdoc')
+
+const liars = wall.filter((f) => NOTAPAGE.test(f.ref) && f.drawn && !f.real)
+check(
+  'nothing that is not a written document is drawn as a page of writing',
+  liars.length === 0,
+  liars.map((f) => `${f.title} (${f.ref})`).join(', '),
+)
+
+const pictures = wall.filter((f) => /\.(png|jpe?g|gif|webp)(\?|$)/i.test(f.ref))
+check(
+  'a picture in the gallery is the picture itself',
+  pictures.length > 0 && pictures.every((f) => f.real),
+  pictures.map((f) => `${f.title}:${f.real ? 'real' : f.glyph ? 'glyph' : 'drawn'}`).join(' | '),
+)
+
+const unknown = wall.filter((f) => /\.(zip|gz|tar|7z|dmg|exe)(\?|$)/i.test(f.ref))
+check(
+  'a file of a type the office has never met gets a deliberate fallback, not a blank and not a lie',
+  unknown.length > 0 && unknown.every((f) => f.glyph && !f.drawn),
+  unknown.map((f) => `${f.title}:${f.glyph ? 'glyph' : f.drawn ? 'drawn' : 'nothing'}`).join(' | '),
+)
+
+/*
+  THE CAPTION AND THE PICTURE SAY THE SAME THING. A tile showing a spreadsheet
+  with the word "Document" under it is worse than either half being wrong on
+  its own, because each is then evidence that the other is broken.
+*/
+const WORDFOR: Record<string, string> = {
+  png: 'Image',
+  jpg: 'Image',
+  jpeg: 'Image',
+  gif: 'Image',
+  webp: 'Image',
+  csv: 'Spreadsheet',
+  xlsx: 'Spreadsheet',
+  xls: 'Spreadsheet',
+  pptx: 'Slides',
+  ppt: 'Slides',
+  mp4: 'Video',
+  mov: 'Video',
+  wav: 'Audio',
+  mp3: 'Audio',
+  m4a: 'Audio',
+  zip: 'File',
+  gz: 'File',
+  tar: 'File',
+}
+const mislabelled = wall.filter((f) => {
+  const ext = (f.ref.split(/[?#]/)[0] ?? '').split('.').pop()?.toLowerCase() ?? ''
+  const want = WORDFOR[ext]
+  return want !== undefined && f.word !== want
+})
+check(
+  'and the word under it names the same thing the picture does',
+  mislabelled.length === 0,
+  mislabelled.map((f) => `${f.title}: said "${f.word}"`).join(', '),
+)
+
+/*
+  TWO VIEWS OF ONE LIST. The row drew four lines of text unconditionally while
+  the gallery drew each document as what it is, so the same spreadsheet was a
+  green object in one view and a written page in the other. Compared document
+  by document rather than by counting, because two lists of the same length can
+  still disagree about every entry.
+*/
+await page.locator('[data-bc-docview="list"]').click()
+await page.waitForSelector('.bcitem')
+await page.waitForTimeout(1800)
+const list = await facesIn('.bcitem')
+const shape = (f: Face): string =>
+  f.real ? 'real' : f.glyph ? 'glyph' : f.drawn ? 'drawn' : 'nothing'
+const disagree = wall
+  .map((f) => ({ f, r: list.find((x) => x.ref === f.ref) }))
+  .filter(({ f, r }) => r !== undefined && (shape(r) !== shape(f) || r.word !== f.word))
+check(
+  'the gallery and the list show every document the same way',
+  list.length === wall.length && disagree.length === 0,
+  disagree
+    .map(
+      ({ f, r }) =>
+        `${f.title}: wall ${shape(f)}/${f.word} vs list ${shape(r as Face)}/${(r as Face).word}`,
+    )
+    .join(' | '),
+)
+
+/* --- 8. a recording plays, whatever word the office filed it under ------- */
+/*
+  DELIBERATELY THE ONE THE OFFICE FILED AS A PLAIN DOCUMENT. Picking the first
+  recording in the list would pick the one already marked `audio`, which every
+  version of this code gets right - a sample made only of cases the old code
+  also handles proves nothing about the change.
+*/
+const rec =
+  list.find((f) => /\.(wav|mp3|m4a)(\?|$)/i.test(f.ref) && f.title === 'Ben, second message') ??
+  list.find((f) => /\.(wav|mp3|m4a)(\?|$)/i.test(f.ref))
+check(
+  'a recording is in the list to test with',
+  rec !== undefined,
+  list.map((f) => f.ref).join(' | '),
+)
+if (rec !== undefined) {
+  /*
+    BY TITLE, NOT BY REFERENCE. Two documents can point at one file - the
+    reference is the file - so finding the row by reference found the FIRST
+    recording, which is the one the office had already marked `audio` and which
+    every version of this code gets right. The check was green against a
+    sabotage because it was looking at the wrong row.
+  */
+  const says = (await page.evaluate(
+    inPage(`const el = [...document.querySelectorAll('.bcitem')]
+         .find((x) => (x.dataset.bcDocTitle ?? '') === ${JSON.stringify(rec.title)})
+       return el === null || el === undefined ? '' : (el.querySelector('.bcpmeta')?.textContent ?? '').trim()`),
+  )) as string
+  check(
+    'the row says it plays here rather than promising a new tab',
+    /plays here/i.test(says),
+    says,
+  )
+  await page.locator('.bcitem', { hasText: rec.title }).first().click()
+  await page.waitForTimeout(700)
+  check(
+    'and pressing it gives a player, not a page with nothing on it',
+    (await page.locator('audio[data-bc-audio]').count()) > 0,
+    await page
+      .locator('.bcrecordhead h1')
+      .first()
+      .innerText()
+      .catch(() => ''),
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+}
+
+/* --- 9. a picture that will not load falls back rather than lying ------- */
+
+/*
+  The one path that cannot be reached by looking at the page: the image's
+  `load` listener stood alone, so a file that 404s or will not decode left the
+  DRAWN PAGE standing in for a photograph. The request is failed at the browser
+  rather than by editing a fixture, so this exercises the real handler.
+*/
+await page.route('**/samples/venue.png', (route) => route.abort())
+await gallery()
+await page.waitForTimeout(2000)
+const broken = (await facesIn('.bcdoc')).find((f) => /venue\.png/.test(f.ref))
+check('the picture that could not load is still in the gallery', broken !== undefined)
+if (broken !== undefined) {
+  check(
+    'a picture that will not load falls back to a glyph, never to a drawn page',
+    broken.glyph && !broken.drawn && !broken.real,
+    `real=${String(broken.real)} glyph=${String(broken.glyph)} drawn=${String(broken.drawn)}`,
+  )
+}
+await page.unroute('**/samples/venue.png')
+
 check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
 
 await browser.close()

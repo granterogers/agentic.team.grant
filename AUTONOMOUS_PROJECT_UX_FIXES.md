@@ -79,10 +79,13 @@ repairing the completion defect requires it.
 - [x] **VERIFIED** The move survives a reload
 
 ### 8. Docs & Files thumbnails
-- [ ] **TODO** Audit the file/document types and the thumbnail paths
-- [ ] **TODO** Fix broken, missing, distorted, wrongly sized previews
-- [ ] **TODO** Deliberate fallback where no genuine thumbnail can be made
-- [ ] **TODO** Verified with several real file types
+- [x] **VERIFIED** A document's face comes from what the file IS, not from the four words the office emits
+- [x] **VERIFIED** A picture is the picture; a spreadsheet, a deck, a recording and a video are objects
+- [x] **VERIFIED** Deliberate fallback for a type this office has never met, and for a picture that will not load
+- [x] **VERIFIED** The caption names the same thing the thumbnail shows
+- [x] **VERIFIED** The gallery and the list show every document the same way
+- [x] **VERIFIED** A recording plays whatever word the office filed it under
+- [x] **VERIFIED** Real files of five types in the prototype: PDF, PNG, CSV, WAV, ZIP
 
 ### 9. Project appearance
 - [ ] **TODO** Project colour / accent
@@ -169,6 +172,56 @@ word.
 `scripts/verify/basecamp-chat.ts` (new), `scripts/verify/chat-live.ts` (new).
 
 ## Verification log
+
+**8. Docs & Files thumbnails — VERIFIED.**
+- **The cause, and it was one cause.** `app.studio_documents` maps every
+  document in the office onto four words — `audio`, `made`, `pdf`, `doc` — and
+  three renderers each decided a thumbnail from that word. So a photograph, a
+  spreadsheet, a slide deck and an archive all arrived as `doc` and were drawn
+  as **pages of written text**, which is the one thing the drawing is not
+  allowed to be: a picture of a document that does not exist. The file's own
+  comment had said so since it was written.
+- Widening the RPC would not have fixed it, because the office cannot know the
+  type of a file it has never fetched. The face is DERIVED instead — kind, then
+  media type, then the file's own extension — in `faceOf`, and the painter
+  corrects it once the real bytes have a type.
+- **The list view drew four lines of text unconditionally**, so the same
+  spreadsheet was a green object in the gallery and a written page in the list.
+  One drawing (`thumbFace`) serves both now.
+- **The painter skipped every tile that had a glyph on it**, so a document
+  known to be a picture showed the outline of a picture for ever — the one
+  thumbnail that could have been the thing itself never was.
+- **The caption still said "Document"** under a corrected tile. A label
+  disagreeing with the picture beside it is worse than both being wrong,
+  because each is then evidence the other is broken. One word map now, shared.
+- **An image that will not load** fell back to the drawn page — the office
+  asserting that a photograph is a page of writing. It falls back to a glyph.
+- **Two of the three places asking "is this a recording?" asked the kind**, so
+  a .wav filed as a `doc` reached a details page with no player on it.
+- **And the sabotage found a defect the fix had not:** two documents pointing
+  at one file are indistinguishable by reference, so pressing the second opened
+  the first one's record. Resolved by title and reference together.
+- Five real files of five types in the prototype, because a file type nobody
+  can see the handling of is a file type nobody is checking.
+- `verify:basecamp-docs` 26/26. **Controls:** the five face checks and the
+  fallback check all go RED against the combined revert (both halves reading
+  the four-word kind, which is the original code) and green against the fix;
+  both recording checks go red against the kind-reading predicate. Each
+  sabotage printed a count proving it had landed before the suite spoke.
+- **Two checks I wrote could not fail and were removed or repaired.** The
+  renderer and the painter are redundant by design, so sabotaging either alone
+  left everything green; a "first frame" check written to separate them could
+  not fail either, because `fileFor` resolves on a microtask and the painter
+  has already run before a browser round trip can look. And the recording check
+  was reading the wrong row — two fixtures share a file, so finding by
+  reference found the one every version of the code gets right.
+- `basecamp:gate` exit 0 (64 layout states, 0 findings, no overflow at any
+  size, nothing under 44px). Every other basecamp suite green. `npm test`
+  2,254 passing, lint 0, typecheck 0, `check:secrets` clean.
+- **One regression of my own, caught by the gate:** item 4's "2 done" heading
+  is the shape of a filter — a count beside a noun — and
+  `verify:basecamp-affordance` correctly called it something that looks
+  pressable and is not. It is `Done (2)` and an `h4` now.
 
 **7. Card Table — VERIFIED.**
 - **Measured rather than squinted at:** the miniature's column names were

@@ -682,6 +682,134 @@ const FACE = {
   slides: { glyph: 'slides', tone: 'p' },
   image: { glyph: 'image', tone: 'i' },
   video: { glyph: 'video', tone: 'v' },
+  /*
+    THE DELIBERATE FALLBACK, for a file whose first page cannot be drawn and
+    whose type is not one of the five above - an archive, an installer, a
+    format nobody here has met. Grant asked for one in those words, and the
+    alternative is the drawn page, which would be this office asserting that a
+    zip file is a written document.
+  */
+  file: { glyph: 'file', tone: 'f' },
+}
+
+/*
+  A DOCUMENT'S FACE IS DECIDED BY WHAT THE FILE IS, NOT BY THE FOUR WORDS THE
+  PAYLOAD HAPPENS TO CARRY.
+
+  `app.studio_documents` maps every document in the office onto exactly four
+  kinds - `audio`, `made`, `pdf` and `doc` - so a spreadsheet, a slide deck, a
+  photograph and a video all arrive here as `doc`. The tile then drew LINES OF
+  TEXT on them, which is the one thing the comment above this map forbids: a
+  picture of a document that does not exist. A photograph of the venue was
+  rendered as a page of writing.
+
+  Widening the RPC's four words would not fix it either, because the office
+  cannot know the type of a file it has never fetched. So the face is derived,
+  here, from three pieces of evidence in order of authority: the kind if it is
+  one this map names, then the media type, then the file's own extension. The
+  painter downstream has one more piece - the type the gateway returns when the
+  file is actually fetched - and may correct the face with it.
+*/
+const EXT = {
+  png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image',
+  svg: 'image', avif: 'image', heic: 'image', bmp: 'image', tif: 'image', tiff: 'image',
+  xls: 'sheet', xlsx: 'sheet', xlsm: 'sheet', csv: 'sheet', tsv: 'sheet', ods: 'sheet', numbers: 'sheet',
+  ppt: 'slides', pptx: 'slides', odp: 'slides', key: 'slides',
+  mp4: 'video', mov: 'video', webm: 'video', mkv: 'video', avi: 'video', m4v: 'video', mpg: 'video', mpeg: 'video',
+  mp3: 'audio', wav: 'audio', m4a: 'audio', ogg: 'audio', oga: 'audio',
+  aac: 'audio', flac: 'audio', opus: 'audio', weba: 'audio',
+  /*
+    A PAGE, explicitly. These are things whose first page is worth drawing, and
+    naming them means the `file` fallback below can be the answer for an
+    extension nobody listed rather than the drawn page being it.
+  */
+  pdf: '', doc: '', docx: '', odt: '', rtf: '', txt: '', md: '', markdown: '',
+  html: '', htm: '', pages: '',
+}
+
+/** The extension of a name or URL, lower case, without the dot. */
+const extOf = (name) => {
+  const clean = String(name ?? '').split(/[?#]/)[0] ?? ''
+  const last = clean.slice(clean.lastIndexOf('/') + 1)
+  const dot = last.lastIndexOf('.')
+  return dot <= 0 ? '' : last.slice(dot + 1).toLowerCase()
+}
+
+/*
+  AND THE CAPTION SAYS THE SAME THING THE TILE DOES.
+
+  The word under a thumbnail came from `KINDWORD[d.kind]`, which is the same
+  four words - so with the tile corrected, a photograph showed a photograph and
+  said "Document" underneath it, a spreadsheet showed a spreadsheet and said
+  "Document", and an archive said "Document" too. A label disagreeing with the
+  picture beside it is worse than both being wrong, because each is then
+  evidence that the other is broken. There were two copies of the word map as
+  well, here and in the list view.
+*/
+const FACEWORD = {
+  audio: 'Audio',
+  sheet: 'Spreadsheet',
+  map: 'Mind map',
+  slides: 'Slides',
+  image: 'Image',
+  video: 'Video',
+  file: 'File',
+}
+
+/**
+ * Is this a recording?
+ *
+ * Three places asked and two of them asked the kind: `opensAs` promised "opens
+ * in a new tab" and the detail view withheld the player, so a .m4a arriving as
+ * a `doc` - which is what the office emits for anything that is not already
+ * marked audio - reached a details page with nothing to press. `openDoc` alone
+ * read the extension and routed it there correctly, which is how it came to be
+ * a page with no player rather than a file that did nothing.
+ */
+export const isAudioDoc = (d) => faceOf(d)?.glyph === 'audio'
+
+/** The words for a document, tile and row alike. */
+export const kindWordOf = (d) => {
+  const kind = String(d?.kind ?? 'doc')
+  const face = faceOf(d)
+  if (face !== undefined) return FACEWORD[face.glyph] ?? KINDWORD[kind] ?? kind
+  return KINDWORD[kind] ?? kind
+}
+
+/**
+ * The face a media type and a filename earn, or undefined for a drawn page.
+ *
+ * Exported because the painter asks the same question again once it has the
+ * real media type from the gateway, and two functions answering it separately
+ * is how the gallery and the list came to disagree in the first place.
+ */
+export const faceFor = (mime, name) => {
+  const m = String(mime ?? '').toLowerCase()
+  if (m.startsWith('audio/')) return FACE.audio
+  if (m.startsWith('image/')) return FACE.image
+  if (m.startsWith('video/')) return FACE.video
+  if (m.includes('spreadsheet') || m.includes('excel') || m === 'text/csv') return FACE.sheet
+  if (m.includes('presentation') || m.includes('powerpoint')) return FACE.slides
+  if (m === 'application/pdf' || m.startsWith('text/') || m.includes('word') || m.includes('opendocument.text')) {
+    return undefined
+  }
+  const ext = extOf(name)
+  if (ext === '') return m === '' ? undefined : FACE.file
+  const known = EXT[ext]
+  if (known === '') return undefined
+  if (known !== undefined) return FACE[known]
+  return FACE.file
+}
+
+/**
+ * What THIS document looks like. The kind first, because a document the office
+ * wrote has no filename to read and its kind is the only evidence there is.
+ */
+export const faceOf = (d) => {
+  const kind = String(d?.kind ?? '')
+  if (FACE[kind] !== undefined) return FACE[kind]
+  if (kind === 'pdf' || kind === 'made') return undefined
+  return faceFor(d?.mime ?? d?.mime_type ?? '', d?.file ?? d?.title ?? '')
 }
 
 /*
@@ -726,7 +854,15 @@ const GLYPH = {
       <rect x="3" y="5" width="24" height="22" rx="3"></rect>
       <path d="M27 13l10-5v16l-10-5z"></path>
     </svg>`,
+  file: `<svg viewBox="0 0 32 40" class="bcglyph" aria-hidden="true" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linejoin="round">
+      <path d="M6 3h14l8 8v26a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z"></path>
+      <path d="M20 3v8h8"></path>
+    </svg>`,
 }
+
+/** The glyph a face draws, so the painter can dress a tile it has corrected. */
+export const glyphFor = (face) => (face === undefined ? '' : (GLYPH[face.glyph] ?? ''))
 
 /*
   ONE REFERENCE PER DOCUMENT, and never an empty one.
@@ -745,8 +881,8 @@ export const docRef = (d) =>
   d?.file ?? (d?.id ? `id:${d.id}` : `d:${d?.title ?? ''}`)
 
 /** The drawn page, from the document's own line lengths where it has them. */
-const drawnPage = (d) => {
-  const lines = Array.isArray(d.lines) && d.lines.length > 0 ? d.lines.slice(0, 9) : [92, 100, 96, 84, 98, 70, 90]
+const drawnPage = (d, most = 9) => {
+  const lines = (Array.isArray(d.lines) && d.lines.length > 0 ? d.lines : [92, 100, 96, 84, 98, 70, 90]).slice(0, most)
   return `<span class="bcpage" aria-hidden="true">
     ${lines
       .map((w) => `<span class="bcpline" style="width:${Math.max(24, Math.min(100, Number(w) || 80))}%"></span>`)
@@ -754,9 +890,25 @@ const drawnPage = (d) => {
   </span>`
 }
 
+/**
+ * The thumbnail itself: a drawn page, or the object a thing with no page is.
+ *
+ * ONE DRAWING, TWO VIEWS. The gallery tile called `FACE[kind]` and the list
+ * row unconditionally drew lines of text, so the same spreadsheet was a green
+ * object in one view and a written page in the other - the row list built
+ * twice, with a picture on it. `extra` is the only thing that differs.
+ */
+export const thumbFace = (d, i, extra = '') => {
+  const object = faceOf(d)
+  const ref = docRef(d)
+  const tone = object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`
+  return `<span class="bcthumb${tone}${extra === '' ? '' : ` ${esc(extra)}`}"
+    data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
+    ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9) : (GLYPH[object.glyph] ?? '')}
+  </span>`
+}
+
 const thumb = (d, i) => {
-  const kind = String(d.kind ?? 'doc')
-  const object = FACE[kind]
   const ref = docRef(d)
   /*
     A FIGURE WITH A BUTTON IN IT, not a clickable div. The press was on the
@@ -766,13 +918,10 @@ const thumb = (d, i) => {
   return `<figure class="bcdoc bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-doc-title="${esc(d.title ?? '')}">
     <button type="button" class="bcdocpress" data-bc-doc-open="${esc(ref)}"
       aria-label="${esc(`Open ${d.title ?? 'document'}`)}">
-      <span class="bcthumb${object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`}"
-        data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
-        ${object === undefined ? drawnPage(d) : (GLYPH[object.glyph] ?? '')}
-      </span>
+      ${thumbFace(d, i)}
       <figcaption>
         <span class="bcdoctitle">${esc(d.title)}</span>
-        <span class="bcdocmeta">${esc([KINDWORD[kind] ?? kind, d.size].filter(Boolean).join(' · '))}</span>
+        <span class="bcdocmeta">${esc([kindWordOf(d), d.size].filter(Boolean).join(' · '))}</span>
       </figcaption>
     </button>
   </figure>`

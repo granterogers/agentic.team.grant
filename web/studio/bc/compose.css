@@ -1042,6 +1042,15 @@
 [data-experience='basecamp'] .bcthumb--s { background: color-mix(in srgb, var(--bc-success, #4a8f6a) 30%, var(--bc-surface)); }
 [data-experience='basecamp'] .bcthumb--m,
 [data-experience='basecamp'] .bcthumb--p { background: color-mix(in srgb, var(--bc-section-accent) 24%, var(--bc-surface)); }
+/*
+  A picture, a recording of moving pictures, and a file of a kind this office
+  has not met. The last one is the DELIBERATE FALLBACK: it is quieter than the
+  four above it on purpose, because it is saying "there is a file here and its
+  first page cannot be shown", not naming a type it is confident about.
+*/
+[data-experience='basecamp'] .bcthumb--i,
+[data-experience='basecamp'] .bcthumb--v { background: color-mix(in srgb, var(--bc-accent) 16%, var(--bc-surface)); }
+[data-experience='basecamp'] .bcthumb--f { background: var(--bc-surface-selected); }
 
 [data-experience='basecamp'] .bcdoc figcaption { display: grid; gap: 2px; margin-top: 8px; }
 
