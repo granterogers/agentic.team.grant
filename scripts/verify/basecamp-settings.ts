@@ -74,6 +74,46 @@ const boardEdge = (await page.evaluate(
 await page.locator('[data-bc-pagemenu]').first().click()
 await page.waitForTimeout(200)
 const entry = page.locator('[data-bc-pagemenu-panel] button', { hasText: 'Project settings' })
+/*
+ * THE MENU SURVIVES A REDRAW.
+ *
+ * Grant, 23 September: "The three-dot/settings control has disappeared... this
+ * is currently a blocker because project settings cannot be inspected."
+ *
+ * It was present and clickable at every width - five measurements said so
+ * before anything was changed. Two things were wrong and both are real:
+ * nothing on it said SETTINGS, and its open state lived in the DOM, so any of
+ * the several things that redraw this shell replaced the panel with a fresh
+ * hidden one and the menu vanished a moment after being opened.
+ *
+ * This asserts the second, which is the one a person experiences as a control
+ * that does not work.
+ */
+check(
+  'the project menu opens',
+  (await page.locator('[data-bc-pagemenu-panel]:not([hidden])').count()) === 1,
+)
+check(
+  'and it says Settings rather than describing itself as a page',
+  ((await page.locator('[data-bc-pagemenu]').first().getAttribute('aria-label')) ?? '')
+    .toLowerCase()
+    .includes('settings'),
+  (await page.locator('[data-bc-pagemenu]').first().getAttribute('aria-label')) ?? '',
+)
+/*
+  A REAL REDRAW, of the kind nobody asked for. The first version of this
+  dispatched a resize, which redraws nothing here - so it passed against a
+  deliberately broken build, which is worse than no check at all.
+*/
+await page.evaluate('window.__shots.render()')
+await page.waitForTimeout(400)
+check(
+  'and a redraw does not take it away again',
+  (await page.locator('[data-bc-pagemenu-panel]:not([hidden])').count()) === 1,
+  'the menu closed itself when the shell redrew',
+)
+/* Left OPEN, because the checks below press what is inside it. */
+
 check('the page menu offers Project settings', (await entry.count()) === 1)
 check(
   'and it is a move inside the experience rather than a hand-off out of it',

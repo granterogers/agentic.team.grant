@@ -1539,6 +1539,43 @@
 @media (pointer: coarse) {
   [data-experience='basecamp'] .bcbtn.bcicon { width: 44px; height: 44px; }
 }
+
+/* ---------------------------------------------------------------------- *
+ * THE PROJECT MENU SAYS WHAT IT IS.
+ *
+ * It was an unlabelled 38px icon described as "More about this page", and it
+ * was reported as having disappeared - which is what an unfindable control is.
+ * The word rides beside the dots from tablet width up; the phone keeps the
+ * icon alone because the row has no room, and the accessible name carries the
+ * meaning there.
+ * ---------------------------------------------------------------------- */
+/*
+  `.bcbtn.bcicon` in compose.css is two classes and this was one, so it lost
+  the cascade and the button stayed a 38px square with the word inside it and
+  nowhere to go. Matched at the same specificity, and `auto` has to beat a
+  fixed width in both directions.
+*/
+[data-experience='basecamp'] .bcbtn.bcpagemenu {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  height: auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+}
+[data-experience='basecamp'] .bcpagemenuword {
+  font: 600 14px/1 var(--bc-font);
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  /* The phone keeps the dots alone: the row is already carrying Chat with
+     Team and the microphone, and a third word wraps it. */
+  [data-experience='basecamp'] .bcpagemenuword { display: none; }
+  [data-experience='basecamp'] .bcbtn.bcpagemenu { padding: 0; width: 44px; }
+}
+
 [data-experience='basecamp'] .bcmic[aria-pressed='true'],
 [data-experience='basecamp'] .bcmic.is-live {
   border: var(--v2-edge-hover);

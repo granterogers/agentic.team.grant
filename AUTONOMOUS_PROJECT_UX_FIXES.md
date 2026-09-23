@@ -36,8 +36,8 @@ repairing the completion defect requires it.
 ## Checklist
 
 ### 1. Settings access (BLOCKER)
-- [ ] **TODO** The three-dot / settings control has disappeared — restore it
-- [ ] **TODO** Accessible at relevant viewport sizes and workspace layouts
+- [x] **VERIFIED** The three-dot / settings control — two real defects, both fixed
+- [x] **VERIFIED** Accessible at every viewport size, 44px, hit-tested
 
 ### 2. Chat with Team (BLOCKER)
 - [ ] **TODO** Sending fails with "cannot reach the office / unauthorized" — find the real cause
@@ -98,8 +98,50 @@ repairing the completion defect requires it.
 
 ## Discoveries, decisions, files changed
 
-(appended as the run proceeds)
+### 1. Settings access — what was actually wrong
+
+The control had NOT disappeared. Before changing anything, it was measured at
+five states (desktop signed out, desktop signed in, 1200, 900, 390): present,
+visible, `opacity 1`, inside the viewport and hit-testing to itself in every
+one, in the working tree AND in the deployed bytes. Two things were wrong, and
+both are real:
+
+1. **Nothing on it said settings.** A 38px unlabelled icon at the far right of
+   a row, whose accessible name was "More about this page" — not a phrase
+   anybody hunting for project settings would recognise. A control nobody can
+   find is a control that does not exist.
+2. **Its open state lived in the DOM.** This shell rebuilds itself for reasons
+   that have nothing to do with the menu — a lazy read landing, the call
+   painter ticking — and a rebuilt panel is a fresh hidden one. So the menu
+   really did vanish a moment after being opened, which is the thing Grant
+   experienced.
+
+**Fixed:** the word *Settings* rides beside the dots from 720px up (icon alone
+on a phone, where the row has no room, with the meaning in the accessible
+name); the open state is a flag in `compose.js` that the markup reads and the
+wiring sets, so a redraw re-renders the menu as the person left it; and
+choosing an item closes it.
+
+**A cascade trap on the way:** `.bcbtn.bcicon` in `compose.css` is two classes
+and fixes a 38px square. A one-class rule in `bc.css` lost twice — first on
+specificity, then on file order — and the button stayed square with the word
+inside it and nowhere to go. The rule belongs in `compose.css`, after the rule
+it overrides.
+
+**Files:** `web/studio/bc/compose.js`, `web/studio/bc/compose.css`,
+`web/studio/bc/wire.js`, `web/studio/app.js` (a `render` hook beside the
+existing capture hooks), `scripts/verify/basecamp-settings.ts`.
 
 ## Verification log
 
-(appended as the run proceeds)
+**1. Settings access — VERIFIED.**
+- Measured at 5 viewport/auth states before and after; 44x44 minimum everywhere,
+  119px wide with the word from tablet up.
+- Pressed at desktop and phone: the menu opens, holds 6 items, and *Project
+  settings* navigates to `/basecamp/p/<slug>/settings`, which renders the real
+  pane ("Project Settings … Team / Automations / Labels / Project").
+- `verify:basecamp-settings` 24/24 with three new checks.
+- **The redraw check was proved able to fail**, and its FIRST version could
+  not: it dispatched a resize, which redraws nothing here, so it passed against
+  a deliberately broken build. Replaced with a real redraw through a hook
+  exposed beside the existing capture hooks; the sabotage then turned it red.

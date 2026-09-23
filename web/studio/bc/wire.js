@@ -1171,16 +1171,23 @@ const wirePageMenu = (root) => {
 
   const shut = () => {
     panel.hidden = true
+    compose.setPageMenuOpen(false)
     trigger.setAttribute('aria-expanded', 'false')
   }
   trigger.addEventListener('click', (e) => {
     e.stopPropagation()
     panel.hidden = !panel.hidden
+    /* Remembered across redraws: the shell rebuilds this node for reasons that
+       have nothing to do with the menu, and a rebuilt panel is a hidden one. */
+    compose.setPageMenuOpen(!panel.hidden)
     trigger.setAttribute('aria-expanded', String(!panel.hidden))
     if (!panel.hidden) panel.querySelector('button')?.focus()
   })
   panel.addEventListener('click', (e) => {
     e.stopPropagation()
+    /* Choosing something closes the menu - otherwise it is still hanging open
+       over whatever the choice just opened. */
+    if (e.target?.closest?.('[role="menuitem"]') !== null) shut()
   })
   document.addEventListener('click', shut)
   document.addEventListener('keydown', (e) => {

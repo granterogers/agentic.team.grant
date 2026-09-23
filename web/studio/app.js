@@ -14890,6 +14890,18 @@ if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
     without a door, and the block would then ship unlooked-at.
   */
   globalThis.__shots = {
+    /*
+      A REDRAW, for a check that needs one that nobody clicked.
+
+      The experience rebuilds its whole shell for reasons that have nothing to
+      do with what somebody is looking at - a lazy read landing, the call
+      painter ticking, a store filling - and a rebuilt node is a fresh one. A
+      check that wants to prove an open menu SURVIVES that cannot use a resize,
+      because a resize does not redraw anything here; it has to cause the real
+      thing. Exposed beside the other capture hooks rather than invented for
+      one suite.
+    */
+    render,
     browserSites,
     browserSeen,
     reviewing,

@@ -211,6 +211,26 @@ const projectMark = (p) => {
   )}</span>`
 }
 
+/*
+  IS THE PROJECT MENU OPEN.
+
+  Held here rather than in the DOM, because the DOM is not where state
+  survives: this experience redraws its whole shell for many reasons - a lazy
+  read landing, the call painter ticking, a store filling - and each redraw
+  REPLACES the menu's node with a fresh one that is hidden. So pressing the
+  three dots and having the menu vanish half a second later is not a wiring
+  defect, it is the panel being rebuilt, and it is most of "the settings
+  control has disappeared".
+
+  One flag, read by the markup and set by the wiring, so a redraw re-renders
+  the menu in the state the person put it in.
+*/
+let menuOpen = false
+export const pageMenuOpen = () => menuOpen
+export const setPageMenuOpen = (want) => {
+  menuOpen = want === true
+}
+
 const head = (p) => {
   return `<header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}" data-bc-livehost>
     <div class="bcheadtop">
@@ -275,15 +295,36 @@ const head = (p) => {
           sentence, and for those two modules to stop occupying dashboard space.
         -->
         <span class="bcmenuwrap">
-          <button type="button" class="bcbtn bcicon" data-bc-pagemenu="1"
-            aria-haspopup="menu" aria-expanded="false" aria-label="More about this page">
+          <!--
+            IT SAYS SETTINGS NOW.
+
+            Grant, 23 September: "The three-dot/settings control has
+            disappeared... this is currently a blocker because project settings
+            cannot be inspected."
+
+            It had not disappeared: it is present, visible and clickable at
+            every width, which five measurements confirmed before anything was
+            changed here. What it was not was FINDABLE - a 38px unlabelled icon
+            at the far right of a row, whose only description was "More about
+            this page", which is not a phrase anybody looking for settings
+            would recognise. A control nobody can find is a control that does
+            not exist, so this is a real defect and the report of it was right.
+
+            The word rides beside the dots from tablet width up and the icon
+            stands alone on a phone, where the row has no room for it - and
+            even there the accessible name now says what it opens.
+          -->
+          <button type="button" class="bcbtn bcicon bcpagemenu" data-bc-pagemenu="1"
+            aria-haspopup="menu" aria-expanded="false"
+            aria-label="Project menu: settings, how this project looks, sources and the team">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
               <circle cx="5" cy="12" r="1.7"></circle>
               <circle cx="12" cy="12" r="1.7"></circle>
               <circle cx="19" cy="12" r="1.7"></circle>
             </svg>
+            <span class="bcpagemenuword">Settings</span>
           </button>
-          <div class="bcmenu" data-bc-pagemenu-panel role="menu" hidden>
+          <div class="bcmenu" data-bc-pagemenu-panel role="menu"${menuOpen ? '' : ' hidden'}>
             <button type="button" role="menuitem" data-bc-arrange="1">Arrange this page</button>
             <button type="button" role="menuitem" data-bc-look="1">How this project looks</button>
             <button type="button" role="menuitem" data-bc-expand="team">The team</button>
