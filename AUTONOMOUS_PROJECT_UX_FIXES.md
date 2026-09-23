@@ -779,3 +779,32 @@ by forcing one response to 502 in a signed-in page.
 
 *Gate:* `npm run basecamp:gate` **342 green, exit 0**; lint, typecheck and
 `check:secrets` clean.
+
+## 23 September — §8, the Stuck column
+
+**Dropping a card into Stuck opened the card editor instead of moving it.** The
+cause was a correct office rule answered in the wrong place: `hq_task_state`
+refuses `blocked` without a reason — *"a blocked task with no reason cannot be
+unblocked by anyone but the person who blocked it"* — and the board's answer was
+to ask Grant before it would move anything.
+
+The office rule is untouched. The drop supplies a reason that is true: *Moved to
+Stuck on the board*. He can say more on the task, where there is room for it;
+what he should not have to do is answer a question before a card will move.
+
+*Three attempts at the drag, and the first two were the harness.*
+`page.dragAndDrop` and then a button-down with eight intermediate moves both
+left the card in `todo` — which looks exactly like a broken product and was
+headless Chromium declining to start a native drag. The suite dispatches the
+drag events the browser would have dispatched, against one `DataTransfer`, so
+the real handlers run on the real deployed page. What remains unproven is that
+Chromium starts a drag from a gesture, which is the browser's job.
+
+*And two more instrument defects.* "Dropping into Stuck does not open the card"
+says nothing unless the same expression can be true, so a positive control now
+presses a card and watches it open. And the column check read once, passing on
+one run and failing the next with `todo` — the office had moved it and the page
+had not repainted. A check that races is worse than no check: it teaches you to
+re-run until it is green.
+
+`verify:basecamp-todos-live` **24/24, twice**; `verify:basecamp-cards` 24/24.

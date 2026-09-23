@@ -184,11 +184,30 @@ export const setDone = async (ref, done) =>
   act('task_state', { p_task_id: ref, p_state: done ? 'done' : 'todo' })
 
 /** Move between stages. Blocking needs a reason, so it is not offered here. */
-export const setStage = async (ref, stage) => {
-  if (stage === 'blocked') {
+/*
+  MOVING A TO-DO BETWEEN STAGES.
+
+  `blocked` needs a reason and the office is right to insist: a blocked task
+  with no reason cannot be unblocked by anybody but the person who blocked it.
+  What was wrong was WHERE that was answered. This used to throw, so the board
+  opened the task editor instead of dropping the card -- §8: "Stuck must behave
+  like the other columns. DRAG, DROP INTO STUCK, STATE CHANGES, NO CARD OPEN."
+
+  So the caller supplies the reason, and the one the board supplies is true:
+  it was moved to Stuck on the board, by him, just now. He can say more on the
+  task itself, which is where there is room for it. The throw stays for a
+  caller that supplies nothing, because that is still a promise nothing can
+  perform.
+*/
+export const setStage = async (ref, stage, reason = '') => {
+  if (stage === 'blocked' && String(reason).trim() === '') {
     throw new Error('say what it is blocked on — that happens on the task itself')
   }
-  return act('task_state', { p_task_id: ref, p_state: stage })
+  return act('task_state', {
+    p_task_id: ref,
+    p_state: stage,
+    ...(stage === 'blocked' ? { p_reason: String(reason).trim() } : {}),
+  })
 }
 
 /**

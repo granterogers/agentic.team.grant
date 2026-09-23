@@ -81,10 +81,10 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 8.1 | Drag into Stuck does not open the card editor | TODO |
-| 8.2 | Stuck behaves like the other columns | TODO |
-| 8.3 | Drag-end/click propagation cannot trigger open/edit | TODO |
-| 8.4 | Regression: drag → Stuck → canonical state change → no editor opened | TODO |
+| 8.1 | Drag into Stuck does not open the card editor | **VERIFIED** — the drop supplies the reason the office requires instead of asking for it |
+| 8.2 | Stuck behaves like the other columns | **VERIFIED** — one `moveCard` for every column |
+| 8.3 | Drag-end/click propagation cannot trigger open/edit | **VERIFIED** — the drop no longer calls `openTask` at all |
+| 8.4 | Regression: drag → Stuck → canonical state change → no editor opened | **VERIFIED** — `verify:basecamp-todos-live`: drag → Stuck → office state `blocked` with a reason → nothing opened, with a positive control proving a press still opens one |
 
 ## 9–10 — Visual
 
@@ -276,7 +276,7 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 | 47.2 | Office never weakened to accept fake credentials | **VERIFIED** — the office was never changed to accept anything it did not issue |
 | 48.1 | Controlled test records created, exercised, removed | **VERIFIED** — to-do subjects seeded on the test project and swept by class |
 | 48.2 | Grant's real project data undamaged | **VERIFIED** — nothing written to any project of Grant's own |
-| 49.1 | Interaction QA rule applied to every surface touched | TODO |
+| 49.1 | Interaction QA rule applied to every surface touched | in progress — applied to the sign-in, the to-dos and the card table so far |
 
 ## 50–53 — Regression, viewports, accessibility, architecture
 

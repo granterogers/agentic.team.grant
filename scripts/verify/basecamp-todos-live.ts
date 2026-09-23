@@ -246,6 +246,117 @@ try {
   )
   check('and still shows it completed', reloaded[stillAt]?.done === true)
 
+  /* --- §8: dragging a card into Stuck ------------------------------------ */
+  /*
+    It used to OPEN THE TASK instead of moving it: the office refuses `blocked`
+    without a reason, and that was answered by asking rather than by supplying
+    one. The reason the board supplies is true -- it was moved to Stuck on the
+    board -- and Grant can say more on the task, which is where there is room.
+  */
+  const board = await page
+    .waitForSelector('[data-bc-drop="blocked"]', { timeout: 20000 })
+    .then(() => true)
+    .catch(() => false)
+  check('the card table is on the project page', board)
+
+  if (board) {
+    const picked = (await page.evaluate(
+      inPage(`
+        const card = document.querySelector('[data-bc-card]')
+        if (card === null) return { key: '', title: '' }
+        const t = card.textContent || ''
+        return { key: card.getAttribute('data-bc-card') || '', title: t.replace(/\\s+/g, ' ').trim().slice(0, 60), stage: card.getAttribute('data-stage') || '' }
+      `),
+    )) as { key: string; title: string; stage?: string }
+    check('there is a card to drag', picked.key !== '', picked.title)
+
+    const expandedBefore = (await page.evaluate(
+      inPage("return document.querySelector('.bcrecordhead') !== null"),
+    )) as boolean
+    check('and nothing is expanded over the page yet', !expandedBefore)
+
+    /*
+      THE DRAG, AS THE BROWSER DELIVERS IT.
+
+      Two honest attempts at a pointer gesture first: `page.dragAndDrop`, and
+      then a button-down with eight intermediate moves. Neither made headless
+      Chromium start a NATIVE drag, and the check reported a card still in
+      `todo` -- which is exactly what a broken product looks like and was the
+      harness failing to drag. So this dispatches the events the browser would
+      have dispatched, against one DataTransfer carried between them, which is
+      what the product's handlers actually listen for.
+
+      What that does and does not prove: it drives `dragstart`, `dragover` and
+      `drop` on the real deployed page, so the routing, the write and the
+      refusal to open the card are all genuinely exercised. It does not prove
+      Chromium starts a drag from a mouse gesture, which is the browser's job
+      rather than this page's. A human dragging a card is the remaining step.
+    */
+    const dragged = (await page.evaluate(
+      inPage(`
+        const card = document.querySelector('[data-bc-card="${picked.key}"]')
+        const col = document.querySelector('[data-bc-drop="blocked"]')
+        if (card === null || col === null) return 'nothing to drag'
+        const dt = new DataTransfer()
+        card.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }))
+        if (dt.getData('text/plain') === '') return 'dragstart carried nothing'
+        col.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
+        col.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
+        card.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }))
+        return 'dropped ' + dt.getData('text/plain')
+      `),
+    )) as string
+    check('the drag carried the card it started on', dragged.startsWith('dropped'), dragged)
+    await page.waitForTimeout(4000)
+
+    const expandedAfter = (await page.evaluate(
+      inPage("return document.querySelector('.bcrecordhead') !== null"),
+    )) as boolean
+    check('dropping into Stuck does not open the card', !expandedAfter)
+
+    const moved = (
+      await db.execute(
+        `select state, blocked_on from public.tasks where task_id = '${picked.key.replace(/'/g, "''")}'`,
+      )
+    ).rows[0] as { state?: string; blocked_on?: string } | undefined
+    check('the office moved it to blocked', moved?.state === 'blocked', String(moved?.state))
+    check(
+      'and recorded why, which is what the office insists on',
+      String(moved?.blocked_on ?? '') !== '',
+      String(moved?.blocked_on),
+    )
+
+    /*
+      WAIT FOR THE REDRAW, do not read once. The first version read the column
+      immediately after the write and passed on one run and failed on the next
+      with `todo` -- the office had moved it and the page had not repainted
+      yet. A check that races is worse than no check: it teaches you to re-run
+      until it is green.
+    */
+    const landed = await page
+      .waitForFunction(
+        `(() => { const c = document.querySelector('[data-bc-card="${picked.key}"]'); if (c === null) return false; const col = c.closest('[data-bc-drop]'); return col !== null && col.getAttribute('data-bc-drop') === 'blocked' })()`,
+        undefined,
+        { timeout: 20000 },
+      )
+      .then(() => true)
+      .catch(() => false)
+    check('and the card ends up in the Stuck column', landed)
+
+    /*
+      AND THE CONTROL FOR IT. "Dropping into Stuck does not open the card" is a
+      check that says nothing unless the same expression can also be true, so
+      press a card and watch it open. Without this the drop check would pass
+      against a page where nothing can ever open.
+    */
+    await page.click(`[data-bc-card="${picked.key}"]`)
+    const openedOnPurpose = await page
+      .waitForSelector('.bcrecordhead', { timeout: 15000 })
+      .then(() => true)
+      .catch(() => false)
+    check('but pressing a card still opens it', openedOnPurpose)
+  }
+
   check('nothing threw in the page', errors.length === 0, errors.slice(0, 3).join(' | '))
 } finally {
   if (requestId !== '') {

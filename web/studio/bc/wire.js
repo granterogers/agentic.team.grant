@@ -2171,7 +2171,7 @@ const wireTasks = (root) => {
     A row with an id writes to the office; one without is the prototype's own
     memory, exactly as the tick is.
   */
-  const moveCard = async (key, wanted, cardEl, control) => {
+  const moveCard = async (key, wanted, cardEl, control, reason = '') => {
     if (key === undefined || key === '') return false
     cardEl?.classList.add('bcitem--pending')
     if (key.startsWith('p:')) {
@@ -2183,7 +2183,7 @@ const wireTasks = (root) => {
     const done = await attempt(
       control ?? cardEl,
       'Moving…',
-      () => todos.setStage(key, wanted),
+      () => todos.setStage(key, wanted, reason),
       'Moved.',
     )
     cardEl?.classList.remove('bcitem--pending')
@@ -2286,16 +2286,20 @@ const wireTasks = (root) => {
         the ledger that nothing changed.
       */
       if (cardEl?.dataset.stage === wanted) return
-      if (wanted === 'blocked') {
-        /*
-          `hq_task_state` refuses `blocked` without a reason, so dropping into
-          Stuck opens the task where there is room to say what it is waiting
-          on. An offer may only promise what the press can perform.
-        */
-        ctx.openTask(key)
-        return
-      }
-      await moveCard(key, wanted, cardEl, null)
+      /*
+        STUCK IS A COLUMN LIKE THE OTHERS.
+
+        It used to open the task editor instead of moving the card, because
+        the office refuses `blocked` without a reason -- correct, and answered
+        in the wrong place. §8: "DRAG, DROP INTO STUCK, STATE CHANGES, NO CARD
+        OPEN. Do not allow drag-end/click propagation to trigger open/edit."
+
+        The reason the drop supplies is true and says where it came from. Grant
+        can say more on the task, which is where there is room for it; what he
+        should not have to do is answer a question before the card will move.
+      */
+      const why = wanted === 'blocked' ? 'Moved to Stuck on the board' : ''
+      await moveCard(key, wanted, cardEl, null, why)
     })
   }
 
