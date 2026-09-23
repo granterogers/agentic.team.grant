@@ -3297,6 +3297,25 @@ Each of these cost real time. They are here so they cost it once.
   hand-drive that found this also left a real `drive.watch` signature in
   Grant's briefing until it was swept.
 
+- **A citation scheme is PROVENANCE, and the office had no word for its own
+  work.** `documents.connector` is nullable; **all ten null rows are
+  `origin = made`** — the documents this office produced — so five real
+  citations read `null:b8f72c15-...` and `report.ts` renders a source as
+  `label - ref`, printing the word **null** on the sources page of a PDF Grant
+  opens. The null was never missing information. Ask what the null rows have in
+  COMMON before treating a null as an absence: here they were a category, not a
+  gap. And a null connector is not UNTRUSTED — fencing the office's own
+  document as somebody else's material is the mirror defect, which is why
+  `isUntrusted` returns false for it explicitly rather than by falling through.
+- **One format written in three places will disagree, and only one of them is
+  the one he reads.** `sourceRefs` and two separate lists in
+  `handlers/artifact.ts` each interpolated the scheme themselves. The same
+  shape as the row list built twice and the two lists in two functions compared
+  by eye: one formatter, every caller. The test asserts the WIRED CALL
+  (`citationRef({ connector: d.connector` appears exactly twice) rather than
+  the import name, because a name appearing in a file is not evidence that
+  anything calls it.
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the

@@ -382,6 +382,39 @@ a grammar defect in a message he receives. LOCAL, low consequence.
 
 Clean-pass count after pass 8: **0 of 5.**
 
+## Pass 9 — what the office cites
+
+**NOT CLEAN.** One systemic product defect: [#336](https://github.com/granterogers/agentic.team.grant/issues/336).
+
+Territory: the citation, from the database column to the line printed on a PDF.
+
+**Canonical evidence, before any theorising.** 5,814 citations across 5,094
+real answers since 1 September. Five of them carry the scheme `null` —
+`null:b8f72c15-… Legacy Coaching Course — Current Status Report` — and two are
+in real `artifact.report` outputs from 17 September. `report.ts` renders a
+source as `label — ref`, so the word **null** was printed on the sources page
+of a PDF he opens.
+
+**Root cause.** `documents.connector` is nullable and all ten null rows have
+`origin = 'made'`: they are the documents this office produced. So the null is
+not missing information — it is the one case where the office cites its OWN
+work and had no word for it. Three sites interpolated the scheme
+independently, so none of them could be fixed once.
+
+**Fix.** `citationRef()` is the single formatter; a null connector resolves to
+`made` or `unknown`, never `null`. `Hit` carries `origin` so retrieval can
+answer the question. `isUntrusted` accepts a null connector and returns false
+for it — a document this office wrote is not somebody else's material and must
+not be fenced as an injection risk.
+
+**Verification.** Eight assertions wired to the CALL rather than the import
+name. Three sabotages, each printed as landed, each red: the raw connector
+interpolated again (4 failed), one PDF list reverting to a template (1), a made
+document fenced as untrusted (1). Deployed, then driven against the live
+database: 14 citations across his four active projects, **0** naming null.
+
+Clean-pass count after pass 9: **0 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
