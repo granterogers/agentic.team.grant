@@ -23,6 +23,7 @@
  */
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { signIn } from './lib/sign-in.ts'
 
 const inPage = (body: string): string => `(() => { ${body} })()`
 
@@ -81,7 +82,6 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 const page = await ctx.newPage()
 const errors: string[] = []
 page.on('pageerror', (e) => errors.push(String(e.message)))
-let requestId = ''
 
 try {
   for (const [title, due, who] of SUBJECTS) {
@@ -103,29 +103,8 @@ try {
 
   // --- signed in the way a person signs in ---------------------------------
 
-  await page.goto(`${SITE}/basecamp`, { waitUntil: 'domcontentloaded', timeout: 45000 })
-  await page.waitForSelector('.bcsignin', { timeout: 30000 })
-  await page.click('[data-bc-signin-ask]')
-  await page.waitForFunction(
-    "document.querySelector('[data-bc-signin-digits]') !== null && (document.querySelector('[data-bc-signin-digits]').textContent || '').length === 6",
-    undefined,
-    { timeout: 30000 },
-  )
-  const code = String(await page.locator('[data-bc-signin-digits]').innerText()).trim()
-  const asked = (
-    await db.execute(
-      `select request_id, approve_secret from public.sign_in_requests
-        where code = '${code.replace(/'/g, "''")}' and claimed_at is null
-        order by started_at desc limit 1`,
-    )
-  ).rows[0] as { request_id?: string; approve_secret?: string } | undefined
-  requestId = String(asked?.request_id ?? '')
-  await fetch(
-    `https://${ref}.supabase.co/functions/v1/signin?approve=${encodeURIComponent(String(asked?.approve_secret))}`,
-  )
-  await page.waitForFunction("(localStorage.getItem('hq.token') || '') !== ''", undefined, {
-    timeout: 30000,
-  })
+  await signIn(page, db, { ref, origin: SITE, back: `${SITE}/basecamp` })
+
   await page.click(`text=AI Team HQ Test`)
   await page.waitForSelector('li.bctask', { timeout: 30000 })
   await page.waitForTimeout(2000)
@@ -320,10 +299,17 @@ try {
       )
     ).rows[0] as { state?: string; blocked_on?: string } | undefined
     check('the office moved it to blocked', moved?.state === 'blocked', String(moved?.state))
+    /*
+      PROVENANCE, NOT AN EXPLANATION. §10: the automatic reason may record that
+      a person marked it, and must not invent why. Both halves are asserted --
+      something was recorded, and it does not claim to know a cause.
+    */
+    const reason = String(moved?.blocked_on ?? '')
+    check('and recorded that it was marked, which the office insists on', reason !== '', reason)
     check(
-      'and recorded why, which is what the office insists on',
-      String(moved?.blocked_on ?? '') !== '',
-      String(moved?.blocked_on),
+      'and did not invent a cause nobody has given',
+      /marked stuck/i.test(reason) && !/waiting on|blocked by|dependency|problem/i.test(reason),
+      reason,
     )
 
     /*
@@ -359,9 +345,6 @@ try {
 
   check('nothing threw in the page', errors.length === 0, errors.slice(0, 3).join(' | '))
 } finally {
-  if (requestId !== '') {
-    await db.execute(`delete from public.sign_in_requests where request_id = '${requestId}'`)
-  }
   await browser.close()
   /*
     The CLASS, not this run's ids. A crashed run leaves its work behind and the

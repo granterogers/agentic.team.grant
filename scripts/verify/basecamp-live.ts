@@ -36,8 +36,34 @@
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { signIn } from './lib/sign-in.ts'
 
 const inPage = (body: string): string => `(() => { ${body} })()`
+
+/*
+  WHAT THE BROWSER PRESENTS, as the page itself decides it.
+
+  These legs used to read `hq.token` straight out of storage. A browser signed
+  in as a PERSON holds a session and no office key, so every one of them sent
+  an empty bearer and the office answered 401 -- the suite reporting a working
+  product as broken, and for exactly the reason the product had to be fixed:
+  two ideas of what this browser presents. One expression, used everywhere.
+*/
+/*
+  AND THE GATEWAY THE PAGE ITSELF USES. The experiment runs its own copy while
+  this branch's gateway source is ahead of main and behind the backend branch
+  (ADR-0043), so a probe aimed at the hardcoded shared one is aimed at a
+  deployment that knows nothing about sessions -- which read as 401 from a page
+  that was working perfectly.
+*/
+const GATEWAY_IN_PAGE =
+  "(window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api')"
+const VOICE_IN_PAGE =
+  "(window.HQ_VOICE || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/voice')"
+
+const PRESENTS =
+  "(() => { try { const s = JSON.parse(localStorage.getItem('hq.session') || 'null'); " +
+  "return (s && s.access_token) || localStorage.getItem('hq.token') || '' } catch { return '' } })()"
 
 let pass = 0
 let fail = 0
@@ -158,78 +184,26 @@ check(
 )
 
 /*
-  SIGN IN THE WAY A PERSON DOES, where the origin allows it.
+  SIGNED IN THE WAY A PERSON IS, through the product's own login.
 
-  §47: twenty-nine suites in this repository wrote a made-up token into storage
-  and passed only because Chromium could not reach the office. This one used the
-  REAL token, which was never the same defect — but the real journey is better
-  evidence still, and it is the journey §2 changed. The tap is a URL, so the
-  suite opens the same URL, with the secret read from the database.
+  §47: twenty-nine suites here once wrote a made-up token into storage and
+  passed only because Chromium could not reach the office. This one used the
+  REAL office key, which was never that defect -- but the office key is not
+  what a person presents any more, and a suite that keeps presenting it stops
+  testing the thing Grant uses.
 
-  The fallback is not dead code: a preview deployment gets its own hostname and
-  is deliberately not on the sign-in allowlist, so BASECAMP_SITE pointed at one
-  correctly cannot ask, and the vault token behind the disclosure is how it is
-  driven there. Which path ran is printed, because a suite that silently takes
-  the easier one is a suite that stops testing the harder one.
+  `signIn` asks the office to PRODUCE the link rather than email it, then opens
+  it. Everything either side of the SMTP hop is genuinely exercised; the mail
+  arriving is not, and nothing here claims it is.
 */
-const askable = await page
-  .locator('[data-bc-signin-ask]')
-  .isVisible()
-  .catch(() => false)
-let signedInByAsking = false
-if (askable) {
-  await page.locator('[data-bc-signin-ask]').click()
-  const gotCode = await page
-    .waitForFunction(
-      "document.querySelector('[data-bc-signin-digits]') !== null && (document.querySelector('[data-bc-signin-digits]').textContent || '').length === 6",
-      undefined,
-      { timeout: 25000 },
-    )
-    .then(() => true)
-    .catch(() => false)
-  if (gotCode) {
-    const code = String(
-      await page
-        .locator('[data-bc-signin-digits]')
-        .innerText()
-        .catch(() => ''),
-    ).trim()
-    const asked = (
-      await db.execute(
-        `select request_id, approve_secret from public.sign_in_requests
-          where code = '${code.replace(/'/g, "''")}' and claimed_at is null
-          order by started_at desc limit 1`,
-      )
-    ).rows[0] as { request_id?: string; approve_secret?: string } | undefined
-    if (asked?.approve_secret !== undefined) {
-      await fetch(
-        `https://${ref}.supabase.co/functions/v1/signin?approve=${encodeURIComponent(String(asked.approve_secret))}`,
-      )
-      signedInByAsking = await page
-        .waitForFunction("(localStorage.getItem('hq.token') || '') !== ''", undefined, {
-          timeout: 25000,
-        })
-        .then(() => true)
-        .catch(() => false)
-      await db.execute(
-        `delete from public.sign_in_requests where request_id = '${String(asked.request_id)}'`,
-      )
-    }
-  }
-}
-check(
-  `signed in by ${signedInByAsking ? 'asking, and one tap' : 'the token fallback, because this origin cannot ask'}`,
-  true,
-)
-if (!signedInByAsking) {
-  await page
-    .locator('summary')
-    .first()
-    .click()
-    .catch(() => undefined)
-  await page.locator('#bc-token').fill(token)
-  await page.locator('[data-bc-signin]').click()
-}
+/*
+  Back to where the suite already was. The review build opens the root on a
+  project, which is where the document tiles live -- sending the link to
+  `/basecamp` instead landed on the home board and the tile check reported
+  zero tiles as a defect on a page that simply was not the one with tiles.
+*/
+const who = await signIn(page, db, { ref, origin: SITE, back: SITE })
+check(`signed in as ${who.email}, with no credential typed anywhere`, true)
 
 /*
   WAIT FOR THE STRIP TO GO, NOT FOR A DURATION. Four seconds was enough against
@@ -370,8 +344,8 @@ if (withFiles > 0) {
   That is the half of the signed-URL path the data can exercise today.
 */
 const asked = (await page.evaluate(
-  inPage(`return fetch('https://${ref}.supabase.co/functions/v1/hq-api?section=studio', {
-       headers: { Authorization: 'Bearer ' + (localStorage.getItem('hq.token') || '') },
+  inPage(`return fetch(${GATEWAY_IN_PAGE} + '?section=studio', {
+       headers: { Authorization: 'Bearer ' + ${PRESENTS} },
      })
        .then((r) => r.status)
        .catch(() => 0)`),
@@ -509,11 +483,11 @@ await other.close()
   can never leave work in Grant's queue, and the session id names the harness.
 */
 const turn = (await page.evaluate(
-  inPage(`return fetch('https://${ref}.supabase.co/functions/v1/voice/turn', {
+  inPage(`return fetch(${VOICE_IN_PAGE} + '/turn', {
        method: 'POST',
        headers: {
          'Content-Type': 'application/json',
-         Authorization: 'Bearer ' + (localStorage.getItem('hq.token') || ''),
+         Authorization: 'Bearer ' + ${PRESENTS},
        },
        body: JSON.stringify({ said: 'what projects have we got', session: 'verify-basecamp-live-' + Date.now() }),
      })
@@ -623,13 +597,17 @@ if (pick !== '') {
   )
 }
 
-/* --- 9. and the token can be taken back out of the browser -------------- */
+/* --- 9. and signing out leaves nothing behind --------------------------- */
 
-await page.evaluate(inPage(`try { localStorage.removeItem('hq.token') } catch {} return true`))
-const gone = (await page.evaluate(inPage(`return localStorage.getItem('hq.token')`))) as
+await page.evaluate(
+  inPage(
+    "try { localStorage.removeItem('hq.session'); localStorage.removeItem('hq.token') } catch {} return true",
+  ),
+)
+const gone = (await page.evaluate(inPage(`return ${PRESENTS} === '' ? null : 'still here'`))) as
   | string
   | null
-check('the office token can be removed from this browser again', gone === null)
+check('signing out leaves this browser holding nothing', gone === null)
 
 /*
   #340, from the seat that found it. A 502 on a section the page asks for on

@@ -19,7 +19,7 @@ import {
   hydrate,
   source,
 } from './data.js'
-import { act, attempt, canWrite, onWrite, read, say, sure, token, why } from './office.js'
+import { act, attempt, canWrite, onWrite, read, say, sure, token, why, presented, presentedFresh} from './office.js'
 /*
   The experimental Basecamp-inspired Team HQ (basecamp_clone.md).
 
@@ -32,6 +32,7 @@ import { act, attempt, canWrite, onWrite, read, say, sure, token, why } from './
 import * as bc from './bc/shell.js'
 import * as bcJump from './bc/jump.js'
 import * as bcNotes from './bc/notestore.js'
+import * as bcSession from './session.js'
 import * as bcWire from './bc/wire.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
@@ -1685,7 +1686,7 @@ function paintDock() {
   for (const b of el.querySelectorAll('[data-chat-retry]')) {
     b.addEventListener('click', () => {
       if (!p) return
-      void chat.retry(p.slug, b.dataset.chatRetry, token.get(), () => { paintDock() })
+      void chat.retry(p.slug, b.dataset.chatRetry, presented(), () => { paintDock() })
         .then(() => { paintDock() })
     })
   }
@@ -1717,7 +1718,7 @@ function paintDock() {
     if (box) box.value = ''
     chat.send(p.slug, text, null)
     paintDock()
-    void chat.ask(p.slug, text, null, token.get(), undefined, () => { paintDock() })
+    void chat.ask(p.slug, text, null, presented(), undefined, () => { paintDock() })
       .then(() => { paintDock() })
   })
 }
@@ -10605,7 +10606,7 @@ function drawShell() {
   */
   for (const b of root.querySelectorAll('[data-chat-retry]')) {
     b.addEventListener('click', () => {
-      void chat.retry(state.project, b.dataset.chatRetry, token.get(), () => {
+      void chat.retry(state.project, b.dataset.chatRetry, presented(), () => {
         keepingPlace(() => { render() })
       }).then(() => { keepingPlace(() => { render() }) })
     })
@@ -11091,7 +11092,7 @@ function drawShell() {
   */
   if (state.sub === 'chat' && !chat.isReal(state.project)) {
     void chat
-      .load(state.project, byId(state.project)?.id, token.get())
+      .load(state.project, byId(state.project)?.id, presented())
       .then((got) => { if (got !== null) render() })
   }
 
@@ -11385,7 +11386,7 @@ function drawShell() {
       const t = $('[data-thread]')
       if (t) t.scrollTop = t.scrollHeight
       $('[data-say]')?.focus()
-      void chat.ask(state.project, text, about, token.get(), to, also, () => {
+      void chat.ask(state.project, text, about, presented(), to, also, () => {
         // Sending -> waiting -> no answer yet. Each of those is a repaint, and
         // without this the row would say "Sending" until the answer landed.
         keepingPlace(() => { render() })
@@ -11399,7 +11400,7 @@ function drawShell() {
           Reading it back is what makes this thread the record rather than a
           transcript of this browser.
         */
-        await chat.load(state.project, byId(state.project)?.id, token.get())
+        await chat.load(state.project, byId(state.project)?.id, presented())
         /*
           Through `keepingPlace`, not a bare render (#205).
 
@@ -13391,7 +13392,7 @@ const bcContext = {
   },
   chatFor: (slug) => chat.thread(slug),
   chatIsReal: (slug) => chat.isReal(slug),
-  chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, token.get()),
+  chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, presented()),
   chatSend: (slug, text) => chat.send(slug, text, null),
   /*
     WHERE THE VOICE NOTE IS TRANSCRIBED, and the token to do it with.
@@ -13407,8 +13408,8 @@ const bcContext = {
   projectName: (slug) => PROJECTS.find((x) => x.slug === slug)?.name ?? '',
   /* The office's own id for a project, which storage paths are filed under. */
   projectId: (slug) => PROJECTS.find((x) => x.slug === slug)?.id ?? '',
-  officeToken: () => token.get(),
-  chatAsk: (slug, text, onState) => chat.ask(slug, text, null, token.get(), undefined, undefined, onState),
+  officeToken: () => presented(),
+  chatAsk: (slug, text, onState) => chat.ask(slug, text, null, presented(), undefined, undefined, onState),
   crew: CREW,
   tools: bc.TOOLS,
   /*
@@ -13653,6 +13654,19 @@ bcWire.mount(bcContext)
 void bcNotes.ready().then((ok) => {
   if (ok) render()
 })
+
+/*
+  THE SIGN-IN LINK COMING BACK, TAKEN BEFORE ANYTHING IS DRAWN.
+
+  Supabase returns the session in the URL fragment. It has to be adopted before
+  the first render, or the page draws itself signed out, fires its reads with
+  no credential, and only then notices -- which is a flash of "you are not
+  signed in" on the one journey where the person demonstrably is.
+
+  It also takes the token out of the address bar, because a URL with a session
+  in it is a URL somebody pastes into a chat.
+*/
+bcSession.adopt()
 
 render()
 
@@ -14433,13 +14447,7 @@ async function refresh() {
   */
   for (const k of Object.keys(progress)) delete progress[k]
   await Promise.all([
-    hydrate(API, (() => {
-      try {
-        return localStorage.getItem('hq.token') ?? ''
-      } catch {
-        return ''
-      }
-    })()),
+    hydrate(API, await presentedFresh()),
     // Both, together. Settings is a separate payload because it is a separate
     // screen and most visits never open it — but a write can change either, so
     // a refresh re-reads both rather than leaving one stale behind a tab.
@@ -14465,13 +14473,9 @@ async function refresh() {
   keepingPlace(() => { render() })
 }
 
-/** The token, read the way every other caller here reads it. */
+/** What this browser presents: a person's session if there is one. */
 function tokenNow() {
-  try {
-    return localStorage.getItem('hq.token') ?? ''
-  } catch {
-    return ''
-  }
+  return presented()
 }
 
 /**
@@ -14714,12 +14718,16 @@ function forgetArrivals() {
 }
 
 async function live() {
-  let token = ''
-  try {
-    token = localStorage.getItem('hq.token') ?? ''
-  } catch {
-    // Private browsing, or storage blocked. The mock stands.
-  }
+  /*
+    WHAT THIS BROWSER CAN PRESENT, not what is in one particular storage key.
+
+    This read `hq.token` directly, so a browser holding a PERSON'S SESSION and
+    no office key was read as holding nothing: the page drew the prototype and
+    never asked the office at all -- no request, no 401, nothing in the network
+    panel to explain it. The seam is `office.js`, which knows about both and
+    refreshes a session that is nearly out.
+  */
+  const token = await presentedFresh()
   if (token === '') {
     /*
       Not a failure, and it must not read as one (#119). `state` stays

@@ -1,3 +1,4 @@
+import { presented } from './office.js'
 /*
   The voice call, moved out of the page it is replacing.
 
@@ -37,7 +38,7 @@ const API =
   window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
 const KEY = 'hq.token'
 const MINT = API.replace(/\/hq-api$/, '/voice-token')
-const VOICE = API.replace(/\/hq-api$/, '/voice')
+const VOICE = window.HQ_VOICE || API.replace(/\/hq-api(-[a-z]+)?$/, '/voice')
 
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -369,7 +370,8 @@ if (typeof window !== 'undefined') {
 */
 const refused = (r) => {
   if (r.status !== 401) return null
-  try { localStorage.removeItem(KEY) } catch (e) { /* private window */ }
+  /* Both, because either could be what the office refused. */
+  try { localStorage.removeItem(KEY); localStorage.removeItem('hq.session') } catch (e) { /* private window */ }
   return new Error('This browser is not signed in to the office. Sign in and try again.')
 }
 
@@ -377,7 +379,7 @@ const lookUp = async (about) => {
   const r = await fetch(VOICE + '/look', {
     method: 'POST',
     headers: {
-      Authorization: 'Bearer ' + (localStorage.getItem(KEY) || ''),
+      Authorization: 'Bearer ' + presented(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ about }),
@@ -393,7 +395,7 @@ const askOffice = async (said) => {
   const r = await fetch(VOICE + '/turn', {
     method: 'POST',
     headers: {
-      Authorization: 'Bearer ' + (localStorage.getItem(KEY) || ''),
+      Authorization: 'Bearer ' + presented(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ said, session }),
@@ -571,7 +573,7 @@ export async function startCall() {
       to the team comes back unauthorized, which sounds like a broken assistant
       rather than a browser that is not signed in.
     */
-    if ((localStorage.getItem(KEY) || '') === '') {
+    if (presented() === '') {
       show('Claire', 'This browser is not signed in to the office, so I cannot look ' +
         'anything up or put work to the team on this call. Sign in and call me back.', 'bad')
     }

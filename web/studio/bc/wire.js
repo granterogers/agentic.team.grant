@@ -438,109 +438,39 @@ export const wire = (root) => {
   */
   for (const form of root.querySelectorAll('[data-bc-signinform]')) {
     const said = form.querySelector('[data-bc-signin-said]')
-    const codeBox = form.querySelector('[data-bc-signin-code]')
-    const digits = form.querySelector('[data-bc-signin-digits]')
+    const field = form.querySelector('#bc-email')
     const tell = (words) => {
       if (said !== null) said.textContent = words
     }
-    const done = async () => {
-      /*
-        Signed in: ask the office again and redraw. Nothing here judges the
-        credential -- the read is the authority, and `office.js` clears one the
-        office refuses, which is exactly the behaviour a browser that could not
-        reach the office used to hide.
-      */
-      tell('Signed in.')
-      await ctx.refresh()
-      ctx.render()
-    }
-
     /*
-      ASKING. One press, then a code to compare and a wait.
-
-      The button is disabled while an ask is live, because a second press would
-      start a second request and put a second message on his phone -- and the
-      code he is looking at would no longer be the one that works.
+      ANYTHING THE LINK BROUGHT BACK. A redirect that failed says so in the
+      fragment, and a page that swallowed it would leave somebody pressing the
+      same button and getting the same nothing.
     */
-    for (const b of form.querySelectorAll('[data-bc-signin-ask]')) {
-      b.addEventListener('click', (e) => {
-        e.preventDefault()
-        void (async () => {
-          b.disabled = true
-          tell('Asking…')
-          let asked
-          try {
-            asked = await session.begin()
-          } catch (err) {
-            b.disabled = false
-            tell(err instanceof Error ? err.message : String(err))
-            return
-          }
-          if (digits !== null) digits.textContent = asked.code
-          if (codeBox !== null) codeBox.hidden = false
-          tell('Check your Telegram. Tap the link if it shows this code.')
-          const settled = await session.settle(asked.requestId, {
-            onWait: () => {
-              tell('Waiting for you to tap…')
-            },
-          })
-          if (settled.ok) {
-            if (codeBox !== null) codeBox.hidden = true
-            await done()
-            return
-          }
-          b.disabled = false
-          if (codeBox !== null) codeBox.hidden = true
-          tell(session.SAID[settled.reason] ?? 'That did not work. Try again.')
-        })()
-      })
-    }
+    if (session.landed.problem !== '') tell(session.landed.problem)
 
-    /*
-      THE FALLBACK, folded away behind a disclosure.
-
-      A preview deployment gets its own hostname and is deliberately not on the
-      sign-in allowlist, so it cannot ask -- and it is where this experiment is
-      verified. Validated by USE, not by shape: the office is the only thing
-      that can say whether a token is good, and a token it refuses is removed
-      again so the browser is never left holding one.
-    */
-    const field = form.querySelector('#bc-token')
-    const tryToken = async () => {
-      const offered = String(field?.value ?? '').trim()
-      if (offered === '') {
-        tell('Put the token in first.')
+    const ask = async () => {
+      const email = String(field?.value ?? '').trim()
+      if (email === '') {
+        tell('Your email address first.')
         field?.focus()
         return
       }
-      tell('Checking…')
-      if (!token.set(offered)) {
-        tell(session.SAID.private)
-        return
-      }
+      tell('Asking…')
       try {
-        await read('studio')
-        if (field !== null) field.value = ''
-        await done()
+        tell(await session.askForLink(email))
       } catch (e) {
-        token.clear()
-        tell(
-          e instanceof Error && /not accepted|unauthorized/i.test(e.message)
-            ? 'The office did not accept that token.'
-            : `The office could not be reached: ${e instanceof Error ? e.message : String(e)}`,
-        )
+        tell(e instanceof Error ? e.message : String(e))
       }
     }
-    for (const f of form.querySelectorAll('[data-bc-tokenform]')) {
-      f.addEventListener('submit', (e) => {
-        e.preventDefault()
-        void tryToken()
-      })
-    }
+    form.addEventListener('submit', (e) => {
+      e.preventDefault()
+      void ask()
+    })
     for (const b of form.querySelectorAll('[data-bc-signin]')) {
       b.addEventListener('click', (e) => {
         e.preventDefault()
-        void tryToken()
+        void ask()
       })
     }
   }
@@ -2304,11 +2234,17 @@ const wireTasks = (root) => {
         in the wrong place. §8: "DRAG, DROP INTO STUCK, STATE CHANGES, NO CARD
         OPEN. Do not allow drag-end/click propagation to trigger open/edit."
 
-        The reason the drop supplies is true and says where it came from. Grant
-        can say more on the task, which is where there is room for it; what he
-        should not have to do is answer a question before the card will move.
+        What the drop supplies is PROVENANCE, not an explanation. Grant, §10:
+        "The automatically supplied reason must be truthful... Do NOT invent
+        substantive explanations such as Waiting on dependency, Blocked by
+        client, Technical problem unless that information actually exists. The
+        system must distinguish USER MARKED THIS STUCK from WHY IT IS STUCK."
+
+        So it records that he marked it, where, and that nobody has said why
+        yet -- every word of which is true -- and he can say more on the task,
+        which is where there is room for it.
       */
-      const why = wanted === 'blocked' ? 'Moved to Stuck on the board' : ''
+      const why = wanted === 'blocked' ? 'Marked stuck on the board — no reason given yet' : ''
       await moveCard(key, wanted, cardEl, null, why)
     })
   }

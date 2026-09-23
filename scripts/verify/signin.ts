@@ -1,47 +1,45 @@
 /**
- * The sign-in loop, driven end to end against the deployed endpoint.
+ * The sign-in endpoint, over the network, including what it refuses.
  *
  *   npm run verify:signin
  *
- * ## Why the positive leg is here and not only the refusals
+ * The browser half is `verify:basecamp-signin`, which drives a clean browser
+ * through the real journey. This is the half a browser cannot see: that the
+ * endpoint refuses a stranger's origin, refuses to mint a link without the
+ * office key, refuses to mint one for somebody the office does not work for,
+ * and never says whether an address is known here.
  *
- * "A suite made only of refusals passes against a system that refuses
- * everything" is written in CLAUDE.md because this office has already shipped
- * one. The deploy probe checks that a stranger, a missing origin and an unknown
- * request all come back as noes; that says nothing whatever about whether
- * anybody can actually sign in. So this drives the whole thing: ask, approve
- * through the same URL Grant taps, collect, and then USE what was collected
- * against the real gateway.
+ * WHY BOTH HALVES. "A suite made only of refusals passes against a system that
+ * refuses everything" — so the positive leg is here too: a link IS produced for
+ * a member, it points at the office's own verify endpoint, and completing it
+ * yields a session the gateway accepts. Nothing is emailed to anybody.
  *
- * ## What it does to Grant's phone
- *
- * One silent Telegram message per run, which says in its own text that it came
- * from an automated check. There is no way to prove the ask reaches him without
- * the ask reaching him, and a verification that stops short of the only part
- * that can be broken is the kind this file exists to avoid.
- *
- * ## What it must never print
- *
- * The approve secret and the token. Both are compared, neither is shown: the
- * assertions are about shape and equality, which is all they need to be.
+ * SECRETS. The office key is read from the vault, used, never printed. The
+ * action link contains a one-time token and is never printed either.
  */
 
+import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
+/*
+  The endpoint's own source, which is what is deployed: `deploy:signin` uploads
+  this exact file. Reading it is how a property about a branch that must NOT do
+  something can be checked at all — there is no request that demonstrates an
+  absence.
+*/
+const Deno_readSource = async (): Promise<string> =>
+  await readFile('supabase/functions/signin/index.ts', 'utf8')
+
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
-const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
-if (supabaseToken === '') {
+const accessToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
+if (accessToken === '') {
   console.error('SUPABASE_ACCESS_TOKEN is required')
   process.exit(2)
 }
-const db = new ManagementApiExecutor(ref, supabaseToken)
+const db = new ManagementApiExecutor(ref, accessToken)
 
-// Overridable so the harness audit can point this at a deliberately broken
-// copy under a throwaway slug. Proving a detector can fail must not mean
-// deploying the defect over the endpoint people actually use.
-const SLUG = process.env.SIGNIN_SLUG ?? 'signin'
-const ENDPOINT = `https://${ref}.supabase.co/functions/v1/${SLUG}`
-const GATEWAY = `https://${ref}.supabase.co/functions/v1/hq-api`
+const ENDPOINT = `https://${ref}.supabase.co/functions/v1/signin`
+const GATEWAY = `https://${ref}.supabase.co/functions/v1/hq-api-basecamp`
 const ORIGIN = 'https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app'
 
 let bad = 0
@@ -52,169 +50,192 @@ const check = (label: string, ok: boolean, saw = ''): void => {
 
 const post = async (
   body: Record<string, unknown>,
-  origin: string | null,
+  { origin, auth }: { origin?: string | null; auth?: string } = {},
 ): Promise<{ status: number; body: Record<string, unknown> }> => {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
-  if (origin !== null) headers.Origin = origin
+  if (origin !== null) headers.Origin = origin ?? ORIGIN
+  if (auth !== undefined) headers.authorization = `Bearer ${auth}`
   const response = await fetch(ENDPOINT, { method: 'POST', headers, body: JSON.stringify(body) })
-  const parsed = (await response.json().catch(() => ({}))) as Record<string, unknown>
-  return { status: response.status, body: parsed }
+  return {
+    status: response.status,
+    body: (await response.json().catch(() => ({}))) as Record<string, unknown>,
+  }
 }
 
-// --- the refusals ----------------------------------------------------------
-
-const health = await fetch(`${ENDPOINT}/health`)
-const healthBody = (await health.json().catch(() => ({}))) as { configured?: boolean }
-check('the endpoint is up and configured', health.status === 200 && healthBody.configured === true)
-
-const stranger = await post({ action: 'begin' }, 'https://example.invalid')
-check("a stranger's page cannot ask", stranger.status === 403, `http ${String(stranger.status)}`)
-
-const anonymous = await post({ action: 'begin' }, null)
-check(
-  'a request with no origin cannot ask',
-  anonymous.status === 403,
-  `http ${String(anonymous.status)}`,
-)
-
-const strangerCors = await fetch(ENDPOINT, {
-  method: 'OPTIONS',
-  headers: { Origin: 'https://example.invalid' },
-})
-check(
-  'the preflight for a stranger does not name their origin',
-  strangerCors.headers.get('access-control-allow-origin') !== 'https://example.invalid',
-  String(strangerCors.headers.get('access-control-allow-origin')),
-)
-
-// --- the ask ---------------------------------------------------------------
-
-const begun = await post(
-  { action: 'begin', asked_from: 'an automated check, not a browser of yours' },
-  ORIGIN,
-)
-check('the office takes the ask', begun.status === 200, `http ${String(begun.status)}`)
-const requestId = String(begun.body.request_id ?? '')
-const code = String(begun.body.code ?? '')
-check('it hands back a request', /^[0-9a-f-]{36}$/i.test(requestId))
-check('and a code to compare', /^[A-Z0-9]{6}$/.test(code), code)
-check(
-  'and NOT the thing that authorises it',
-  begun.body.approve_secret === undefined && begun.body.token === undefined,
-  Object.keys(begun.body).join(', '),
-)
-
-if (requestId === '') {
-  console.log('\nno request to carry on with')
-  process.exit(1)
-}
-
-const stored = (
-  await db.execute(
-    `select approve_secret, code, approved_at, claimed_at
-       from public.sign_in_requests where request_id = '${requestId}'`,
-  )
-).rows[0] as
-  | {
-      approve_secret?: string
-      code?: string
-      approved_at?: string | null
-      claimed_at?: string | null
-    }
-  | undefined
-check('the office wrote the request down', stored !== undefined)
-check('with the code it showed the screen', String(stored?.code ?? '') === code)
-check('and nobody has approved it yet', stored?.approved_at === null)
-
-// --- waiting ---------------------------------------------------------------
-
-const early = await post({ action: 'claim', request_id: requestId }, ORIGIN)
-check(
-  'an unapproved request hands over nothing',
-  early.body.ok === false && early.body.reason === 'waiting' && early.body.token === undefined,
-  String(early.body.reason),
-)
-
-// --- the tap ---------------------------------------------------------------
-
-const secret = String(stored?.approve_secret ?? '')
-const tapped = await fetch(`${ENDPOINT}?approve=${encodeURIComponent(secret)}`)
-const tappedHtml = await tapped.text()
-check('the link Grant taps answers', tapped.status === 200, `http ${String(tapped.status)}`)
-check('and names the code, so he can compare it', tappedHtml.includes(code))
-check(
-  'and does not leak the secret back into the page',
-  !tappedHtml.includes(secret),
-  'the approve link is not echoed',
-)
-
-const nonsense = await fetch(`${ENDPOINT}?approve=not-one-of-ours`)
-check(
-  'a link that is not ours is refused',
-  nonsense.status === 400,
-  `http ${String(nonsense.status)}`,
-)
-
-// --- the hand-off ----------------------------------------------------------
-
-const claimed = await post({ action: 'claim', request_id: requestId }, ORIGIN)
-const handed = String(claimed.body.token ?? '')
-check('the waiting browser is signed in', claimed.body.ok === true)
-// Not a length. The first draft asserted more than twenty characters and went
-// red against a working product, because the office token is ten — a guess
-// about the thing under test, which is the mistake this file's neighbours keep
-// recording. What matters is that something was handed over at all, and the
-// next check is the one that says WHICH something.
-check('and is handed something', handed !== '', `${handed.length} characters`)
-
-const vault = String(
+const key = String(
   (
     await db.execute(
       `select decrypted_secret as v from vault.decrypted_secrets where name = 'hq.api_token'`,
     )
   ).rows[0]?.v ?? '',
 )
-check('which is the office token itself, not a look-alike', handed !== '' && handed === vault)
+check('the office key is in the vault', key !== '')
 
-const spent = await post({ action: 'claim', request_id: requestId }, ORIGIN)
+const member = String(
+  (await db.execute(`select email from public.office_members order by added_at, email limit 1`))
+    .rows[0]?.email ?? '',
+)
+check('the office knows somebody it works for', member !== '', member)
+
+// --- what it refuses -------------------------------------------------------
+
+const health = await fetch(`${ENDPOINT}/health`)
+const healthBody = (await health.json().catch(() => ({}))) as { configured?: boolean }
+check('the endpoint is up and configured', health.status === 200 && healthBody.configured === true)
+
+const stranger = await post(
+  { action: 'link', email: member },
+  { origin: 'https://example.invalid' },
+)
 check(
-  'and the request is spent — a second browser gets nothing',
-  spent.body.ok === false && spent.body.reason === 'spent' && spent.body.token === undefined,
-  String(spent.body.reason),
+  "a stranger's page cannot ask for anything",
+  stranger.status === 403,
+  `http ${String(stranger.status)}`,
 )
 
-// --- and it actually works -------------------------------------------------
-//
-// The whole point. A token handed over that the gateway then refuses would
-// pass every check above.
+const nowhere = await post({ action: 'link', email: member }, { origin: null })
+check('nor can a request with no origin', nowhere.status === 403, `http ${String(nowhere.status)}`)
 
-const used = await fetch(`${GATEWAY}?section=projects`, {
-  headers: { Authorization: `Bearer ${handed}` },
-})
+const unkeyed = await post({ action: 'link_for_operator', email: member })
 check(
-  'the gateway accepts what the browser was handed',
-  used.status === 200,
-  `http ${String(used.status)}`,
+  'a link cannot be minted without the office key',
+  unkeyed.status === 401,
+  `http ${String(unkeyed.status)}`,
 )
 
-const refused = await fetch(`${GATEWAY}?section=projects`, {
-  headers: { Authorization: 'Bearer not-the-office-token' },
-})
+const outsider = await post(
+  { action: 'link_for_operator', email: 'nobody@example.com' },
+  { auth: key },
+)
 check(
-  'and still refuses one it never issued',
-  refused.status === 401,
-  `http ${String(refused.status)}`,
+  'and not even with it, for somebody the office does not work for',
+  outsider.status === 403,
+  `http ${String(outsider.status)}`,
 )
 
-// --- teardown --------------------------------------------------------------
+const dud = await post({ action: 'refresh', refresh_token: 'not-a-refresh-token' })
+check(
+  'a refresh token nothing issued yields no session',
+  dud.body.ok === false && dud.body.access_token === undefined,
+  String(dud.body.reason),
+)
 
-await db.execute(`delete from public.sign_in_requests where request_id = '${requestId}'`)
-const left = (
-  await db.execute(
-    `select count(*)::int as n from public.sign_in_requests where request_id = '${requestId}'`,
+const nobody = await post({ action: 'whoami' })
+check('and whoami with nothing presented says nothing', nobody.body.ok === false)
+
+/*
+  THE ADDRESS ORACLE, which is the one thing this endpoint must never be.
+
+  The first version of this check asked for a link for a MEMBER and for a
+  stranger and compared the two answers. It passed — and it sent real mail to
+  Grant's real inbox on every run, and ate his two-per-hour allowance doing it.
+  A verification that spams the person it is protecting is not one to keep.
+
+  So the property is asserted where it is decided. The `link` branch never
+  consults the allowlist at all: it hands the address to Supabase and reports
+  what Supabase said, so it CANNOT distinguish a member from anybody else.
+  Read out of the deployed source rather than assumed, and proved able to fail
+  by the control below it.
+
+  One live call remains, to an address that is nobody here, so the endpoint is
+  still shown to answer.
+*/
+const source = await (await fetch(`${ENDPOINT}/health`)).text().catch(() => '')
+check('the endpoint answers', source !== '')
+
+const fnSource = await Deno_readSource()
+const linkBranch = fnSource.slice(
+  fnSource.indexOf("if (action === 'link')"),
+  fnSource.indexOf("if (action === 'link_for_operator')"),
+)
+check(
+  'the sign-in branch exists to read',
+  linkBranch.length > 200,
+  `${String(linkBranch.length)} characters`,
+)
+check(
+  'and it never asks whether the address is a member',
+  !/office_member/.test(linkBranch),
+  linkBranch.includes('office_member') ? 'it consults the allowlist' : 'it does not',
+)
+check(
+  'while the operator branch, which may refuse, does ask',
+  /office_member/.test(
+    fnSource.slice(
+      fnSource.indexOf("if (action === 'link_for_operator')"),
+      fnSource.indexOf("if (action === 'refresh')"),
+    ),
+  ),
+)
+
+const anybody = await post({ action: 'link', email: 'nobody-at-all@example.com' })
+check(
+  'and asking about a stranger is answered without a fuss',
+  anybody.status === 200,
+  JSON.stringify(anybody.body).slice(0, 80),
+)
+
+// --- and what it does ------------------------------------------------------
+
+const made = await post(
+  { action: 'link_for_operator', email: member, back: `${ORIGIN}/basecamp` },
+  { auth: key },
+)
+const link = String(made.body.action_link ?? '')
+check('a link is produced for a member', made.body.ok === true && link !== '')
+if (link !== '') {
+  const u = new URL(link)
+  check(
+    'it points at the office own verify endpoint',
+    u.pathname.endsWith('/auth/v1/verify'),
+    u.pathname,
   )
-).rows[0] as { n?: number } | undefined
-check('teardown left nothing behind', left?.n === 0, `${String(left?.n)} row(s)`)
+  check(
+    'and it comes back to the page that asked',
+    (u.searchParams.get('redirect_to') ?? '').startsWith(ORIGIN),
+    String(u.searchParams.get('redirect_to')),
+  )
+
+  /*
+    Completing it. `redirect: 'manual'` so the session can be read out of the
+    Location header rather than followed into a page — this is the backend
+    suite, and the page's half is proved next door.
+  */
+  const followed = await fetch(link, { redirect: 'manual' })
+  const to = followed.headers.get('location') ?? ''
+  const hash = to.includes('#') ? new URLSearchParams(to.split('#')[1]) : new URLSearchParams()
+  const access = hash.get('access_token') ?? ''
+  check('completing it yields a session', access !== '', `${access.length} characters`)
+  check(
+    'and it is handed back in the fragment, which never reaches a server',
+    to.includes('#access_token='),
+    to.split('#')[0] ?? '',
+  )
+
+  if (access !== '') {
+    const used = await fetch(`${GATEWAY}?section=projects`, {
+      headers: { Authorization: `Bearer ${access}` },
+    })
+    check('the gateway accepts that session', used.status === 200, `http ${String(used.status)}`)
+
+    const asked = await post({ action: 'whoami' }, { auth: access })
+    check('and the office knows whose it is', asked.body.email === member, String(asked.body.email))
+  }
+}
+
+/*
+  THE CONTROL FOR THE GATEWAY, because every check above would pass against a
+  gateway that accepted anything shaped like a JWT.
+*/
+const forged = await fetch(`${GATEWAY}?section=projects`, {
+  headers: { Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.forged.forged' },
+})
+check('a forged session is refused', forged.status === 401, `http ${String(forged.status)}`)
+
+const stillMachines = await fetch(`${GATEWAY}?section=projects`, {
+  headers: { Authorization: `Bearer ${key}` },
+})
+check('and the office key still works, because machines use it', stillMachines.status === 200)
 
 console.log(bad === 0 ? '\nALL GREEN' : `\n${bad} FAILED`)
 process.exit(bad === 0 ? 0 : 1)

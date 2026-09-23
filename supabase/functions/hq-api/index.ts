@@ -1188,6 +1188,102 @@ const tokenMatches = async (presented: string | null): Promise<boolean> => {
   return diff === 0
 }
 
+/*
+  WHO IS ALLOWED TO ASK, and the two very different answers.
+
+  ## What changed, and what did not
+
+  The bearer token is unchanged. It is still one credential, still compared in
+  constant time, still rotated by changing one vault row — and it is still what
+  the worker, the deploy probes, the MCP endpoint and every script present. A
+  capability is the right shape for a machine.
+
+  What it was ALSO doing was letting a person in, and that is how it reached
+  Grant's screen. He asked for it gone from the experience:
+
+    "The normal user should not: see an office token; paste an office token;
+     ... understand what an office token is."
+
+  So a second, entirely separate answer is accepted now: a PERSON'S OWN
+  SESSION, issued by this project's Supabase Auth, verified here, and checked
+  against `public.office_members`.
+
+  ## Why this is not weaker
+
+  Three things have to be true before a session gets in, and none of them is
+  something the browser can assert about itself:
+
+    1. Supabase says the token is a live session it issued. Verified by asking
+       Supabase, not by reading the JWT — a token this function merely DECODED
+       would be a token anybody could write.
+    2. The session carries a confirmed email address.
+    3. That address is in `public.office_members`, which only the service role
+       can even read.
+
+  A stranger who signs up therefore gets a perfectly valid session and is
+  refused here, which is the property that makes open signup a nuisance rather
+  than a hole.
+
+  ## The cache
+
+  Verification is a network call, and a dashboard load makes several requests.
+  Answers are held for a minute, keyed by the token itself — well inside the
+  hour a session lasts, and short enough that removing somebody from the
+  office takes effect while they are still looking at it. Only POSITIVE answers
+  are cached: a refusal must stay cheap to change.
+*/
+const SESSION_TTL_MS = 60_000
+const seen = new Map<string, number>()
+
+const looksLikeSession = (presented: string): boolean =>
+  presented.split('.').length === 3 && presented.length > 60
+
+const sessionAllowed = async (presented: string): Promise<boolean> => {
+  const until = seen.get(presented)
+  if (until !== undefined && until > Date.now()) return true
+
+  const who = await fetch(`${DB_URL}/auth/v1/user`, {
+    headers: {
+      apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Authorization: `Bearer ${presented}`,
+    },
+  }).catch(() => null)
+  if (who === null || !who.ok) return false
+  const user = (await who.json().catch(() => ({}))) as {
+    email?: string
+    email_confirmed_at?: string
+  }
+  const email = String(user.email ?? '')
+    .trim()
+    .toLowerCase()
+  if (email === '') return false
+
+  const asked = await fetch(`${DB_URL}/rest/v1/rpc/office_member`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ p_email: email }),
+  }).catch(() => null)
+  if (asked === null || !asked.ok) return false
+  const rows = (await asked.json().catch(() => [])) as { ok?: boolean }[]
+  if (rows[0]?.ok !== true) return false
+
+  seen.set(presented, Date.now() + SESSION_TTL_MS)
+  // Bounded, because this map lives as long as the isolate does.
+  if (seen.size > 64) for (const k of [...seen.keys()].slice(0, 32)) seen.delete(k)
+  return true
+}
+
+const allowed = async (presented: string): Promise<boolean> => {
+  if (presented === '') return false
+  if (await tokenMatches(presented)) return true
+  if (!looksLikeSession(presented)) return false
+  return await sessionAllowed(presented)
+}
+
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
     status,
@@ -1215,7 +1311,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  if (!(await tokenMatches(presented))) {
+  if (!(await allowed(presented))) {
     return json({ error: 'unauthorized' }, 401)
   }
 

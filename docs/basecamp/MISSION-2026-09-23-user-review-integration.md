@@ -81,7 +81,101 @@ Do not replace default Team HQ.
 
 Keep `/basecamp` isolated.
 
-============================================================
+2. USER REVIEW — AUTHENTICATION / TOKEN EXPERIENCE
+
+> **SUPERSEDED IN PART, 24 September 2026 (overnight correction). Read the
+> correction FIRST; the original text below it is kept verbatim because it is
+> still the record of the complaint, but its remedy is no longer acceptable.**
+>
+> ---
+>
+> ### THE CORRECTION, in Grant's words
+>
+> ```
+> STOP developing the new Telegram office-token approval flow.
+>
+> This is NOT what Grant asked for.
+>
+> Grant did not ask to replace:
+>
+> "Paste the office token"
+>
+> with:
+>
+> "Approve an office token through Telegram."
+>
+> He does not want an office-token interaction in the normal user experience
+> AT ALL.
+>
+> The intended experience is:
+>
+> OPEN AGENTIC TEAM
+> -> APPLICATION LOADS
+> -> USER IS AUTHENTICATED
+> -> USE APPLICATION
+>
+> If an internal credential/token is required for secure communication with
+> the office, that is an IMPLEMENTATION DETAIL.
+>
+> The normal user should not:
+>
+> - see an office token
+> - paste an office token
+> - copy an office token
+> - receive an office token
+> - approve an office token through Telegram
+> - enter a pairing code
+> - understand what an office token is
+> - repeatedly authorize their own browser
+>
+> Do not improve the office-token UX.
+>
+> REMOVE OFFICE-TOKEN HANDLING FROM THE NORMAL UX.
+> ```
+>
+> Further, verbatim:
+>
+> ```
+> Prefer the application's existing canonical identity/session mechanism.
+> Do NOT invent another parallel authentication system if one already exists.
+> If the Basecamp frontend is failing to inherit the real application session,
+> integrate it correctly.
+>
+> A returning authenticated user should normally experience:
+> open app -> session restored -> project loads
+> No token ceremony. No Telegram ceremony. No pairing ceremony.
+>
+> Do NOT solve this by: embedding privileged secrets in frontend JavaScript;
+> shipping the office token in static assets; making a secret publicly
+> readable; hardcoding credentials; disabling authorization; weakening RLS;
+> opening privileged endpoints anonymously; broadening CORS indiscriminately;
+> bypassing origin restrictions; storing privileged secrets insecurely;
+> accepting arbitrary fake tokens; trusting browser-provided identity without
+> verification.
+>
+> The backend authorization boundary must remain real.
+> Authentication should become INVISIBLE, not nonexistent.
+>
+> If a new user genuinely needs to LOG IN to the product, that is different
+> from asking them for an internal office token. Use the product's proper
+> authentication experience. Do not disguise an internal token exchange as
+> login.
+> ```
+>
+> **Acceptance is a CLEAN BROWSER, not the one that already holds a
+> credential**: an existing authenticated session, a clean context, a refresh,
+> and a new context. And the abandoned pairing work is to be removed cleanly —
+> no dead endpoints, tables, UI, polling, secrets, tests or documentation —
+> after tracing callers.
+>
+> **The architectural conclusion reached on the correction is recorded in
+> `docs/adr/` so a compaction cannot resurrect the wrong design.** Anything in
+> the text below that implies Telegram approval is an acceptable final answer
+> is void.
+>
+> ---
+>
+> ### The original §2, verbatim, as the record of the complaint
 2. USER REVIEW — AUTHENTICATION / TOKEN EXPERIENCE
 ============================================================
 

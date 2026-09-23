@@ -31,6 +31,20 @@
 const API =
   window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
 
+import * as session from './session.js'
+
+/*
+  THE OFFICE'S OWN KEY, AND WHY IT IS STILL READ HERE.
+
+  `hq.token` is the bearer token `hq-api` compares in constant time. It is the
+  right shape for the worker, the scripts and the MCP endpoint, and it is the
+  WRONG shape for a person -- which is how it ended up on Grant's screen asking
+  to be pasted. The interface no longer offers to put one here.
+
+  The READ stays, and deliberately: browsers he already uses hold one, and
+  deleting the read would sign him out of every device he owns the moment this
+  shipped. A session beats it whenever there is one.
+*/
 const KEY = 'hq.token'
 
 export const token = {
@@ -59,8 +73,50 @@ export const token = {
   },
 }
 
-/** Whether this session can change anything, as opposed to only read. */
-export const canWrite = () => token.get() !== ''
+/*
+  WHAT THIS BROWSER CAN PRESENT, in order of preference.
+
+  A person's own session first, then the legacy office key if one is lying
+  about from before. Synchronous, because `canWrite()` is asked while a
+  template is being built and cannot await a refresh -- a session that is about
+  to expire is still a session, and the refresh happens on the next request.
+*/
+const held = () => {
+  const mine = session.heldToken()
+  return mine === '' ? token.get() : mine
+}
+
+/*
+  And the asynchronous one, for an actual request: it refreshes a session that
+  is nearly out rather than sending a token that will arrive expired.
+*/
+const toPresent = async () => {
+  const mine = await session.presentable()
+  return mine === '' ? token.get() : mine
+}
+
+/** Whether this browser can change anything, as opposed to only read. */
+export const canWrite = () => held() !== ''
+
+/*
+  WHAT TO PRESENT, for the callers that take a credential as an argument.
+
+  `chat` and the voice-note transcriber are handed one rather than reaching for
+  it, which is right -- but the thing they were handed was `token.get()`, so a
+  browser signed in as a PERSON would have handed them an empty string and the
+  chat would have reported itself signed out on a page that plainly was not.
+  One exported answer, so there is one idea of what this browser presents.
+*/
+export const presented = () => held()
+
+/*
+  The same answer, but refreshed first, for a caller that is about to make a
+  request with it. `live()` and the hydrate path take a token as an ARGUMENT,
+  so they cannot go through `act`/`read`, and they used to read the legacy key
+  straight out of storage -- which meant a browser signed in as a PERSON was
+  read as having nothing and drew the prototype without ever asking the office.
+*/
+export const presentedFresh = async () => await toPresent()
 
 /**
  * Do something to the office.
@@ -94,15 +150,21 @@ export async function act(action, args = {}) {
   const r = await fetch(API, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token.get()}`,
+      Authorization: `Bearer ${await toPresent()}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ action, args }),
   })
   const body = await r.json().catch(() => ({}))
   if (r.status === 401) {
+    /*
+      Clear BOTH, because either could be the thing the office refused and a
+      page left holding a credential nothing accepts reports every subsequent
+      failure as something else.
+    */
+    session.forget()
     token.clear()
-    throw new Error('That token was not accepted. Open Team HQ and sign in again.')
+    throw new Error('You are not signed in any more. Sign in again to change anything.')
   }
   if (!r.ok) throw new Error(body.error ?? `The server returned ${r.status}`)
   if (body.result?.error) throw new Error(body.result.error)
@@ -140,11 +202,12 @@ export async function read(section, id, extra) {
     }
   }
   const r = await fetch(`${API}?${parts.join('&')}`, {
-    headers: { Authorization: `Bearer ${token.get()}` },
+    headers: { Authorization: `Bearer ${await toPresent()}` },
   })
   if (r.status === 401) {
+    session.forget()
     token.clear()
-    throw new Error('That token was not accepted.')
+    throw new Error('You are not signed in any more.')
   }
   const answered = await r.json().catch(() => ({}))
   /*

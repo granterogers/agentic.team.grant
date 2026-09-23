@@ -1,42 +1,46 @@
 /*
-  Getting this browser signed in, without a credential passing through a person.
+  The signed-in person, and no office token anywhere near them.
 
-  ## The defect
+  ## The correction this is written to
 
-  One bearer token is the whole of the authorisation in this office, and that
-  is a hard constraint rather than a preference. The way it reached a browser
-  was `npm run hq:token`, whose own message states the problem: "Access token —
-  paste it once, per device." Grant never asked for that, and he met it as an
-  interruption in front of Chat, Voice, Settings, appearance and every write:
-  "Couldn't reach the office — browser's not signed in."
+  Grant, 24 September:
 
-  ## What replaces it
+    "He does not want an office-token interaction in the normal user
+     experience AT ALL. The intended experience is: OPEN AGENTIC TEAM ->
+     APPLICATION LOADS -> USER IS AUTHENTICATED -> USE APPLICATION. If an
+     internal credential/token is required for secure communication with the
+     office, that is an IMPLEMENTATION DETAIL."
 
-  The browser asks. The office sends the ask to the Telegram chat it already
-  knows is his — the same channel `hq:token` used — and he taps once. The
-  browser collects the same token it would have been given to paste.
+  An earlier version of this file kept the office token and made the ceremony
+  nicer — ask, tap in Telegram, collect a code. That was the wrong shape. It is
+  gone.
 
-  Strictly less exposure, not more: nothing is rendered, nothing is in a chat
-  log, nothing is in a clipboard, and a photograph of the sign-in screen is
-  worth nothing to whoever takes it.
+  ## What a person has now
 
-  ## Why there is a code on the screen
+  Their own session, issued by this project's Supabase Auth, which has been
+  sitting unused since the project was created. A magic link, once, and then
+  nothing: the session refreshes itself, so opening the page is opening the
+  page.
 
-  The endpoint cannot authenticate the ask — there is nothing yet to present —
-  so anybody who reaches the page can start one, and a request Grant did not
-  start is an attempt to sign somebody else's browser in. The page shows a
-  six-character code, the message carries the same one, and the message asks
-  him to tap only if they match. The code is not a second secret. It is
-  something to compare, which is its whole job.
+  The browser never holds a shared secret. What it holds is a short-lived token
+  that is only good for this person, expires in an hour, and is refreshed
+  against the office. The office verifies it with Supabase and checks its own
+  list of the people it works for — two different questions, deliberately.
+
+  ## The legacy key, and why it is still read
+
+  `hq.token` is the office's bearer token, and browsers Grant already uses have
+  one in storage. Removing the READ would sign him out of every device he owns
+  the moment this shipped, which is a worse first morning than the ceremony
+  being replaced. So it is still accepted if a session is absent, and nothing
+  in the interface offers to put one there.
 
   ## Nothing here decides anything
 
-  `office.js`'s rule, and §5's: this translates. It does not judge whether a
-  token is good — it stores what the office handed over and lets the next read
-  be the authority, exactly as the paste flow did.
+  §5's rule for adapters applies to a page too: this translates. It does not
+  judge whether a session is good — the office is the only thing that can say
+  that, and `office.js` clears what the office refuses.
 */
-
-import { token } from './office.js'
 
 const API =
   window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
@@ -44,109 +48,156 @@ const API =
 /** The sign-in endpoint sits beside the gateway, whatever the gateway is. */
 const ENDPOINT = window.HQ_SIGNIN || API.replace(/\/hq-api\/?$/, '/signin')
 
-/** Something short and true about this browser, for the message he reads. */
-export const askedFrom = () => {
-  const ua = String(navigator.userAgent ?? '')
-  const browser = /Edg\//.test(ua)
-    ? 'Edge'
-    : /OPR\//.test(ua)
-      ? 'Opera'
-      : /Firefox\//.test(ua)
-        ? 'Firefox'
-        : /Chrome\//.test(ua)
-          ? 'Chrome'
-          : /Safari\//.test(ua)
-            ? 'Safari'
-            : 'a browser'
-  const where = /iPhone|iPad/.test(ua)
-    ? 'an iPhone'
-    : /Android/.test(ua)
-      ? 'an Android phone'
-      : /Mac OS X/.test(ua)
-        ? 'a Mac'
-        : /Windows/.test(ua)
-          ? 'Windows'
-          : /Linux/.test(ua)
-            ? 'Linux'
-            : 'this device'
-  return `${browser} on ${where}`
+const KEY = 'hq.session'
+
+/** What a session looks like once it is ours: two tokens and a deadline. */
+const read = () => {
+  try {
+    const raw = localStorage.getItem(KEY)
+    if (raw === null || raw === '') return null
+    const s = JSON.parse(raw)
+    if (typeof s?.access_token !== 'string' || s.access_token === '') return null
+    return s
+  } catch {
+    // Private window, blocked storage, or something that is not ours.
+    return null
+  }
 }
 
-const post = async (body) => {
+const write = (s) => {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(s))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const forget = () => {
+  try {
+    localStorage.removeItem(KEY)
+  } catch {
+    /* nothing to do */
+  }
+}
+
+export const signedIn = () => read() !== null
+
+const post = async (body, auth = '') => {
+  const headers = { 'content-type': 'application/json' }
+  if (auth !== '') headers.authorization = `Bearer ${auth}`
   const response = await fetch(ENDPOINT, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   })
-  const parsed = await response.json().catch(() => ({}))
-  return { status: response.status, body: parsed }
+  return { status: response.status, body: await response.json().catch(() => ({})) }
 }
 
-/**
- * Ask to be let in.
- *
- * Resolves with the code to put on the screen, or throws with a sentence a
- * person can act on. The thing that authorises never comes back here — it goes
- * to Telegram and nowhere else.
- */
-export async function begin() {
-  const { status, body } = await post({ action: 'begin', asked_from: askedFrom() })
-  if (status === 429) {
-    throw new Error(body.error ?? 'too many sign-in requests just now — wait a few minutes')
+/*
+  THE LINK COMING BACK.
+
+  Supabase returns the session in the URL FRAGMENT, which never leaves the
+  browser — it is not sent to the server and it is not in a referrer. Taking it
+  out of the address bar immediately afterwards matters for a different reason:
+  a URL with a token in it is a URL somebody pastes into a chat.
+
+  `history.replaceState` rather than assigning `location.hash`, because
+  assigning would add a history entry and put the token one Back press away.
+*/
+export const adopt = () => {
+  const raw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : ''
+  if (raw === '') return false
+  const q = new URLSearchParams(raw)
+  const access = q.get('access_token') ?? ''
+  const refresh = q.get('refresh_token') ?? ''
+  const failed = q.get('error_description') ?? q.get('error') ?? ''
+  if (access === '' && failed === '') return false
+  const clean = `${window.location.pathname}${window.location.search}`
+  window.history.replaceState(null, '', clean)
+  if (access === '') {
+    landed.problem = failed.replace(/\+/g, ' ')
+    return false
   }
-  if (status === 403) {
-    /*
-      This page's origin is not on the endpoint's allowlist — a preview
-      deployment, which gets its own hostname on every deploy and deliberately
-      never goes on that list. Saying so plainly beats "forbidden", because the
-      answer is different: use the stable address, or paste a token.
-    */
-    throw new Error('this address cannot sign in — open the office at its usual link')
-  }
-  if (status !== 200 || typeof body.request_id !== 'string') {
-    throw new Error(body.error ?? 'the office could not start a sign-in')
-  }
-  return { requestId: body.request_id, code: String(body.code ?? ''), expiresAt: body.expires_at }
+  const seconds = Number(q.get('expires_in') ?? '3600')
+  write({
+    access_token: access,
+    refresh_token: refresh,
+    expires_at: Date.now() + Math.max(60, seconds) * 1000,
+  })
+  return true
 }
 
-/**
- * Wait for the tap, then take the token.
- *
- * Polls, because the alternative is a socket held open for five minutes on a
- * free tier. `onWait` is called with each reason so the screen can stay honest
- * about which of "nobody has tapped yet" and "that expired" it is in.
- */
-export async function settle(requestId, { onWait = () => {}, every = 2000, signal } = {}) {
-  for (;;) {
-    if (signal?.aborted === true) return { ok: false, reason: 'cancelled' }
-    const { body } = await post({ action: 'claim', request_id: requestId })
-    if (body.ok === true && typeof body.token === 'string' && body.token !== '') {
-      /*
-        Stored, and NOT validated here. A page that judged a credential would
-        be a second place the rules live; the next read is the authority, and
-        if the office refuses it `office.js` clears it — which is the behaviour
-        that made every fake-token test in this repository invert the day the
-        browser could finally reach the office.
-      */
-      if (!token.set(body.token)) {
-        return { ok: false, reason: 'private' }
+/** Anything the redirect told us that the person needs to see. */
+export const landed = { problem: '' }
+
+/*
+  THE TOKEN TO PRESENT, refreshed if it is about to be useless.
+
+  A minute of margin, because a request that starts valid and arrives expired
+  is indistinguishable from being signed out, and the page would clear a
+  perfectly good session over it.
+*/
+let refreshing = null
+
+export const presentable = async () => {
+  const s = read()
+  if (s === null) return ''
+  if (s.expires_at > Date.now() + 60_000) return s.access_token
+  if (s.refresh_token === undefined || s.refresh_token === '') {
+    forget()
+    return ''
+  }
+  /*
+    ONE REFRESH AT A TIME. Several requests go out on a page load and each
+    would otherwise start its own exchange — and a refresh token is single use,
+    so the second exchange would fail and sign a working session out.
+  */
+  if (refreshing === null) {
+    refreshing = (async () => {
+      const { body } = await post({ action: 'refresh', refresh_token: s.refresh_token })
+      if (body.ok !== true || typeof body.access_token !== 'string') {
+        forget()
+        return ''
       }
-      return { ok: true }
-    }
-    const reason = String(body.reason ?? 'unknown')
-    if (reason === 'expired' || reason === 'spent' || reason === 'unknown') {
-      return { ok: false, reason }
-    }
-    onWait(reason)
-    await new Promise((resolve) => setTimeout(resolve, every))
+      write({
+        access_token: body.access_token,
+        refresh_token: body.refresh_token ?? s.refresh_token,
+        expires_at: Date.now() + Math.max(60, Number(body.expires_in ?? 3600)) * 1000,
+      })
+      return body.access_token
+    })().finally(() => {
+      refreshing = null
+    })
   }
+  return await refreshing
 }
 
-/** What to say for each way waiting can end. One place, so both pages agree. */
-export const SAID = {
-  expired: 'That request timed out. Ask again and tap the new link.',
-  spent: 'That request was already used. Ask again.',
-  unknown: 'The office has forgotten that request. Ask again.',
-  private: 'This browser will not keep it — a private window cannot stay signed in.',
-  cancelled: '',
+/**
+ * Synchronous, for the callers that cannot wait.
+ *
+ * `canWrite()` is asked while a template is being built, so it cannot await a
+ * refresh. It answers from what is stored, which is the right answer: a
+ * session that is about to expire is still a session, and the refresh happens
+ * on the next request either way.
+ */
+export const heldToken = () => read()?.access_token ?? ''
+
+/** Ask the office to email a link. It answers the same way for any address. */
+export async function askForLink(email) {
+  const { body } = await post({
+    action: 'link',
+    email,
+    back: `${window.location.origin}${window.location.pathname}`,
+  })
+  if (body.error !== undefined) throw new Error(String(body.error))
+  return String(body.said ?? 'Check your email for a link to sign in.')
+}
+
+/** Who the office thinks this is, for a page that wants to say so. */
+export async function whoami() {
+  const token = await presentable()
+  if (token === '') return ''
+  const { body } = await post({ action: 'whoami' }, token)
+  return body.ok === true ? String(body.email ?? '') : ''
 }

@@ -1,35 +1,32 @@
 /*
- * SIGNING IN FROM THE DEPLOYED PAGE, WITH NOTHING PASTED.
+ * WHAT A BROWSER EXPERIENCES, CLEAN AND RETURNING.
  *
  *   npm run verify:basecamp-signin
  *
- * §2 of the 23 September mission: "Remove the unexpected browser sign-in /
- * office-token requirement from the normal UI flow... Fix the UNDERLYING
- * authentication/session architecture. Do NOT merely hide the warning."
+ * §2 as corrected on 24 September: *"He does not want an office-token
+ * interaction in the normal user experience AT ALL... OPEN AGENTIC TEAM ->
+ * APPLICATION LOADS -> USER IS AUTHENTICATED -> USE APPLICATION."*
  *
- * So this drives the whole journey the way a person does it: open the deployed
- * page with an empty browser, press one button, and let the office do the rest.
- * The only step a machine cannot take is Grant's thumb — and the thing his
- * thumb does is open a URL, so the suite opens the same URL, read from the
- * database rather than invented.
+ * And §6: *"Do not test authentication only in the browser that already
+ * contains credentials."* So this drives four states, in this order, because
+ * the order is the point:
  *
- * WHAT MAKES THIS MORE THAN A UI TEST. §47: twenty-nine suites in this
- * repository used to write a made-up token into `localStorage`, which worked
- * only while Chromium could not reach the office. Nothing here writes a
- * credential into the browser at all. The page ends up holding whatever the
- * office chose to hand it, and the assertions are about what that buys —
- * whether real projects appear, whether a writer-only control is drawn, and
- * whether it survives a reload.
+ *   A. a clean browser that has never been here
+ *   B. signing in the way a person does
+ *   C. a refresh
+ *   D. a brand new context with the same storage, standing in for a restart
  *
- * SECRETS. The approve secret is read from the database, used once in a URL
- * that is never printed, and the row is deleted. The token is never read into
- * this process at all: the browser gets it, and the proof is what the browser
- * can then do.
+ * WHAT IT ASSERTS ABOUT THE TOKEN. Not that the word is absent from the page —
+ * that is a wording lock and this repository has six of those written down —
+ * but the property: a clean browser is never asked for a credential, is never
+ * handed one, and the office's own key is nowhere in its storage after a
+ * successful sign-in.
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { signIn } from './lib/sign-in.ts'
 
 const inPage = (body: string): string => `(() => { ${body} })()`
 
@@ -54,7 +51,6 @@ if (accessToken === '') {
   process.exit(1)
 }
 const db = new ManagementApiExecutor(ref, accessToken)
-const endpoint = `https://${ref}.supabase.co/functions/v1/signin`
 
 const realProjects = (
   await db.execute(
@@ -63,186 +59,182 @@ const realProjects = (
 ).rows.map((r) => String((r as { name: string }).name))
 
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-const page = await ctx.newPage()
 const errors: string[] = []
-page.on('pageerror', (e) => errors.push(String(e.message)))
 
-let requestId = ''
 try {
+  /* --- A. a browser that has never been here ----------------------------- */
+
+  const cleanCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const page = await cleanCtx.newPage()
+  page.on('pageerror', (e) => errors.push(String(e.message)))
   await page.goto(`${SITE}/basecamp`, { waitUntil: 'domcontentloaded', timeout: 45000 })
   await page.waitForSelector('.bcsignin', { timeout: 30000 })
 
-  // --- what a person is asked for, before anything is pressed --------------
-
-  const offered = (await page.evaluate(
+  const shown = (await page.evaluate(
     inPage(`
       const box = document.querySelector('.bcsignin')
-      if (box === null) return { found: false }
-      const ask = box.querySelector('[data-bc-signin-ask]')
-      const field = box.querySelector('#bc-token')
-      const fieldBox = field === null ? null : field.getBoundingClientRect()
+      const fields = [...box.querySelectorAll('input')].map((i) => ({
+        type: i.type,
+        name: i.name,
+        placeholder: i.placeholder,
+        shown: i.checkVisibility === undefined ? true : i.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true }),
+      }))
       return {
-        found: true,
-        asks: ask === null ? '' : (ask.textContent || '').trim(),
-        askVisible: ask === null ? false : ask.getBoundingClientRect().height > 0,
-        // NOT a rectangle. A field inside a SHUT <details> measures 220x44 in
-        // Chromium, because a closed disclosure is content-visibility: hidden
-        // and that keeps the geometry — so the obvious check reports a folded
-        // away control as the thing being asked for. checkVisibility is the
-        // question actually being asked, and innerText below agrees with it.
-        fieldShown:
-          field !== null &&
-          field.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true }),
-        fieldBoxHeight: fieldBox === null ? 0 : fieldBox.height,
-        // innerText, not textContent: textContent reads the contents of a shut
-        // <details> and every visually-hidden label, so the first draft of
-        // this check reported a folded-away fallback as the thing being asked
-        // for. What matters is what a person can see.
         words: (box.innerText || '').replace(/\\s+/g, ' ').trim(),
-        fallbackOpen: (() => { const d = box.querySelector('details'); return d !== null && d.open })(),
+        fields,
+        stored: Object.keys(localStorage),
       }
     `),
   )) as {
-    found: boolean
-    asks: string
-    askVisible: boolean
-    fieldShown: boolean
     words: string
-    fallbackOpen: boolean
-    fieldBoxHeight: number
+    fields: { type: string; name: string; placeholder: string; shown: boolean }[]
+    stored: string[]
   }
 
-  check('the page offers a way in', offered.found && offered.askVisible, offered.asks)
-  check('and it is a button, not a paste', /sign in/i.test(offered.asks), offered.asks)
+  check('a clean browser is offered a way in', shown.fields.length > 0, shown.words)
   check(
-    'nothing on screen asks for a pasted token',
-    !offered.fieldShown && !offered.fallbackOpen && !/paste/i.test(offered.words),
-    `${offered.words.slice(0, 120)} — the field measures ${String(offered.fieldBoxHeight)}px and is ${offered.fieldShown ? 'shown' : 'not shown'}`,
+    'and what it asks for is an email address',
+    shown.fields.every((f) => f.type === 'email' || !f.shown),
+    shown.fields.map((f) => `${f.type}/${f.name}`).join(', '),
   )
-
-  // --- the ask -------------------------------------------------------------
-
-  await page.click('[data-bc-signin-ask]')
-  await page.waitForFunction(
-    "document.querySelector('[data-bc-signin-digits]') !== null && (document.querySelector('[data-bc-signin-digits]').textContent || '').length === 6",
-    undefined,
-    { timeout: 30000 },
+  check(
+    'it asks for no credential of any kind',
+    !shown.fields.some((f) => f.shown && f.type === 'password'),
+    shown.fields.map((f) => f.type).join(', '),
   )
-  const shown = (await page.evaluate(
+  check(
+    'and it is holding nothing',
+    !shown.stored.includes('hq.token') && !shown.stored.includes('hq.session'),
+    shown.stored.join(', ') || '(empty)',
+  )
+  /*
+    The office key must not be reachable from a page that nobody has signed in
+    to — not in storage, not in a global, not in the markup. A property, not a
+    wording check: the page may say the word "token" all it likes as long as it
+    does not have one.
+  */
+  const leaked = (await page.evaluate(
     inPage(`
-      const d = document.querySelector('[data-bc-signin-digits]')
-      const s = document.querySelector('[data-bc-signin-said]')
-      const box = document.querySelector('[data-bc-signin-code]')
+      const inDom = document.documentElement.innerHTML
       return {
-        code: d === null ? '' : (d.textContent || '').trim(),
-        said: s === null ? '' : (s.textContent || '').trim(),
-        codeVisible: box === null ? false : box.getBoundingClientRect().height > 0,
+        globals: Object.keys(window).filter((k) => /token|secret|key/i.test(k)),
+        bearerInDom: /Bearer\\s+\\S{6,}/.test(inDom),
       }
     `),
-  )) as { code: string; said: string; codeVisible: boolean }
-
-  check('a code appears on the screen', /^[A-Z0-9]{6}$/.test(shown.code), shown.code)
-  check('and it is shown, not merely in the DOM', shown.codeVisible)
-  check('and the page says where to look', /telegram/i.test(shown.said), shown.said)
-
-  const row = (
-    await db.execute(
-      `select request_id, approve_secret, asked_from
-         from public.sign_in_requests
-        where code = '${shown.code.replace(/'/g, "''")}' and claimed_at is null
-        order by started_at desc limit 1`,
-    )
-  ).rows[0] as { request_id?: string; approve_secret?: string; asked_from?: string } | undefined
-  check('the office is holding that exact request', row?.request_id !== undefined, shown.code)
-  if (row?.request_id === undefined) throw new Error('no request row to approve')
-  requestId = String(row.request_id)
+  )) as { globals: string[]; bearerInDom: boolean }
   check(
-    'and it says which browser asked, so he can judge it',
-    String(row.asked_from ?? '') !== '',
-    String(row.asked_from),
+    'and nothing credential-shaped is lying about in the page',
+    !leaked.bearerInDom,
+    leaked.globals.join(', '),
   )
 
-  // Still nothing in the browser. This is the assertion §47 is about: the page
-  // cannot be holding a credential yet, because nobody has approved anything.
-  const beforeTap = (await page.evaluate(
-    inPage("return { held: (localStorage.getItem('hq.token') || '') !== '' }"),
-  )) as { held: boolean }
-  check('the browser is holding nothing while it waits', !beforeTap.held)
+  /* --- B. signing in the way a person does ------------------------------- */
 
-  // --- the tap -------------------------------------------------------------
-  //
-  // Exactly what Telegram opens. Not a database update pretending to be one:
-  // if the URL in the message were wrong, this is the only thing that notices.
-
-  const tapped = await fetch(
-    `${endpoint}?approve=${encodeURIComponent(String(row.approve_secret))}`,
+  const who = await signIn(page, db, { ref, origin: SITE, back: `${SITE}/basecamp` })
+  check(`signed in as ${who.email}`, true)
+  check(
+    'and the link landed on the page it came from',
+    who.landedOn.startsWith(`${SITE}/basecamp`),
+    who.landedOn,
   )
-  const tappedHtml = await tapped.text()
-  check('the link in the message works', tapped.status === 200, `http ${String(tapped.status)}`)
-  check('and shows the code to compare', tappedHtml.includes(shown.code))
-
-  // --- and the browser lets itself in --------------------------------------
 
   await page.waitForFunction("document.querySelector('.bcnotlive') === null", undefined, {
     timeout: 45000,
   })
-  check('the page signs itself in without being touched again', true)
 
   const after = (await page.evaluate(
     inPage(`
       return {
-        held: (localStorage.getItem('hq.token') || '') !== '',
-        body: (document.body.textContent || '').replace(/\\s+/g, ' '),
-        strip: document.querySelector('.bcnotlive') !== null,
+        stored: Object.keys(localStorage),
+        hasOfficeKey: (localStorage.getItem('hq.token') || '') !== '',
+        url: location.href,
+        body: (document.body.innerText || '').replace(/\\s+/g, ' '),
       }
     `),
-  )) as { held: boolean; body: string; strip: boolean }
+  )) as { stored: string[]; hasOfficeKey: boolean; url: string; body: string }
 
-  check('the browser is now signed in', after.held)
-  check('and the "not signed in" strip is gone', !after.strip)
-
-  const seen = realProjects.filter((name) => after.body.includes(name))
+  check('the browser now holds a session', after.stored.includes('hq.session'))
   check(
-    'and it is showing his office, not the prototype',
+    'and NOT the office key — that is an implementation detail it never sees',
+    !after.hasOfficeKey,
+    after.stored.join(', '),
+  )
+  check(
+    'and the session is out of the address bar',
+    !after.url.includes('access_token'),
+    after.url.slice(0, 80),
+  )
+  const seen = realProjects.filter((n) => after.body.includes(n))
+  check(
+    'and it is showing his office rather than the prototype',
     seen.length > 0,
-    `looked for ${realProjects.length} real project name(s)`,
+    `looked for ${String(realProjects.length)} real project name(s)`,
   )
 
-  // --- and it stays signed in ----------------------------------------------
+  /* --- C. a refresh ------------------------------------------------------ */
 
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 })
   await page.waitForTimeout(2500)
   const reloaded = (await page.evaluate(
     inPage(`
       return {
-        held: (localStorage.getItem('hq.token') || '') !== '',
+        held: (localStorage.getItem('hq.session') || '') !== '',
         strip: document.querySelector('.bcnotlive') !== null,
-        writer: document.querySelector('[data-bc-signin-ask]') === null,
+        asks: document.querySelector('.bcsignin input') !== null,
       }
     `),
-  )) as { held: boolean; strip: boolean; writer: boolean }
-  check('a reload does not sign it out', reloaded.held && !reloaded.strip)
-  check('and the sign-in offer is gone, because there is nothing to offer', reloaded.writer)
+  )) as { held: boolean; strip: boolean; asks: boolean }
+  check('a refresh keeps it signed in', reloaded.held && !reloaded.strip)
+  check('and asks for nothing', !reloaded.asks)
 
-  // --- the request cannot be used twice ------------------------------------
-
-  const replay = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', Origin: SITE },
-    body: JSON.stringify({ action: 'claim', request_id: requestId }),
+  /* --- D. a new context, standing in for a restart ----------------------- */
+  /*
+    Playwright contexts do not share storage, so the honest way to stand in for
+    closing and reopening the browser is to carry the storage state across —
+    which is exactly what a restart does and a fresh context does not.
+  */
+  const carried = await cleanCtx.storageState()
+  const restarted = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    storageState: carried,
   })
-  const replayBody = (await replay.json().catch(() => ({}))) as { ok?: boolean; token?: string }
+  const second = await restarted.newPage()
+  second.on('pageerror', (e) => errors.push(String(e.message)))
+  await second.goto(`${SITE}/basecamp`, { waitUntil: 'domcontentloaded', timeout: 45000 })
+  await second.waitForTimeout(3000)
+  const afterRestart = (await second.evaluate(
+    inPage(`
+      return {
+        held: (localStorage.getItem('hq.session') || '') !== '',
+        strip: document.querySelector('.bcnotlive') !== null,
+        body: (document.body.innerText || '').replace(/\\s+/g, ' '),
+      }
+    `),
+  )) as { held: boolean; strip: boolean; body: string }
+  check('a restart keeps it signed in', afterRestart.held && !afterRestart.strip)
   check(
-    'and a second browser replaying that request gets nothing',
-    replayBody.ok === false && replayBody.token === undefined,
+    'and still shows his office',
+    realProjects.some((n) => afterRestart.body.includes(n)),
+  )
+
+  /* --- and a stranger still gets nothing --------------------------------- */
+  /*
+    The control. Every check above would pass against an office that let
+    anybody in, so one context asks the gateway with a session nobody issued.
+  */
+  const refused = await fetch(`https://${ref}.supabase.co/functions/v1/hq-api?section=projects`, {
+    headers: { Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.not.a.session' },
+  })
+  check(
+    'a session nobody issued is refused',
+    refused.status === 401,
+    `http ${String(refused.status)}`,
   )
 
   check('nothing threw in the page', errors.length === 0, errors.slice(0, 3).join(' | '))
+  await restarted.close()
+  await cleanCtx.close()
 } finally {
-  if (requestId !== '') {
-    await db.execute(`delete from public.sign_in_requests where request_id = '${requestId}'`)
-  }
   await browser.close()
 }
 

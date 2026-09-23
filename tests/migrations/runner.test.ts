@@ -167,11 +167,23 @@ describe('integrity refusal', () => {
     expect(executor.appliedNames).toEqual([])
   })
 
-  it('refuses a gap in the sequence', async () => {
-    const executor = new FakeExecutor({})
+  /*
+    A gap is only refused when something was LOST -- a number the ledger says
+    was applied whose file is gone. A branch that has simply never had the
+    numbers in between is behind, not broken, and refusing to run it would
+    leave renumbering into a collision as the only way forward.
+  */
+  it('refuses a gap over a migration that was applied and is now missing', async () => {
+    const executor = new FakeExecutor({ '0002_b.sql': hash('-- 0002_b.sql') })
     await expect(
       runMigrations([file('0001_a.sql'), file('0003_c.sql')], executor, hash),
-    ).rejects.toThrow(/sequence\/gap/)
+    ).rejects.toThrow(/sequence\/gap|checksum\/missing/)
+  })
+
+  it('runs a branch that has never had the numbers in between', async () => {
+    const executor = new FakeExecutor({})
+    const result = await runMigrations([file('0001_a.sql'), file('0003_c.sql')], executor, hash)
+    expect(result.applied.map((a) => a.name)).toEqual(['0001_a.sql', '0003_c.sql'])
   })
 })
 

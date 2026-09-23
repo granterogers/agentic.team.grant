@@ -107,35 +107,45 @@ const noOrigin = await fetch(endpoint, {
 })
 console.log(`  no origin:       http ${String(noOrigin.status)} (must be 403)`)
 
-// A claim for a request that does not exist, from a page that IS allowed. It
-// must come back as an ordinary "no", never as a token.
-const unknown = await fetch(endpoint, {
+// A refresh with a token nothing issued, from a page that IS allowed. It must
+// come back as an ordinary no, never as a session.
+const dud = await fetch(endpoint, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', Origin: PAGE_ORIGINS[0] ?? '' },
-  body: JSON.stringify({ action: 'claim', request_id: '00000000-0000-4000-8000-000000000000' }),
+  body: JSON.stringify({ action: 'refresh', refresh_token: 'not-a-refresh-token' }),
 })
-const unknownBody = (await unknown.json().catch(() => ({}))) as {
+const dudBody = (await dud.json().catch(() => ({}))) as {
   ok?: boolean
   reason?: string
-  token?: string
+  access_token?: string
 }
 console.log(
-  `  unknown claim:   http ${String(unknown.status)} ok=${String(unknownBody.ok)} ` +
-    `reason=${String(unknownBody.reason)} token=${unknownBody.token === undefined ? 'absent' : 'PRESENT'}`,
+  `  a dud refresh:   http ${String(dud.status)} ok=${String(dudBody.ok)} ` +
+    `reason=${String(dudBody.reason)} session=${dudBody.access_token === undefined ? 'absent' : 'PRESENT'}`,
 )
+
+// And a session nobody presented.
+const nobody = await fetch(endpoint, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Origin: PAGE_ORIGINS[0] ?? '' },
+  body: JSON.stringify({ action: 'whoami' }),
+})
+const nobodyBody = (await nobody.json().catch(() => ({}))) as { ok?: boolean }
+console.log(`  nobody at all:   http ${String(nobody.status)} ok=${String(nobodyBody.ok)}`)
 
 const bad =
   health.status !== 200 ||
   healthBody.configured !== true ||
   stranger.status !== 403 ||
   noOrigin.status !== 403 ||
-  unknownBody.ok !== false ||
-  unknownBody.token !== undefined
+  dudBody.ok !== false ||
+  dudBody.access_token !== undefined ||
+  nobodyBody.ok !== false
 
 if (bad) {
   console.error('the endpoint did not behave as required')
   process.exit(1)
 }
 console.log(
-  '\nsign-in: deployed, and it refuses a stranger, an unknown request and a missing origin.',
+  '\nsign-in: deployed, and it refuses a stranger, a missing origin, a dud refresh and nobody.',
 )

@@ -25,20 +25,25 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 ## 2 — Authentication / token experience
 
+> **Corrected 24 September.** The Telegram pairing flow was the wrong answer and
+> has been removed entirely (0581). A person signs in with an emailed link and
+> holds their own Supabase Auth session; the office key is what machines
+> present. **ADR-0043.**
+
 | # | Requirement | State |
 |---|---|---|
-| 2.1 | Remove "paste the office token" from the normal UI flow | **VERIFIED** — the ask is a button; the field is folded away behind a disclosure, proved by `checkVisibility`, and the detector was proved able to fail |
-| 2.2 | Fix the underlying auth/session architecture, not the warning | **VERIFIED** — 0577 + `signin` edge function + `web/studio/session.js`; the token and the constant-time check are unchanged |
-| 2.3 | No "Couldn't reach the office — browser's not signed in." in the normal journey | **VERIFIED** — the strip now offers a press, not a paste |
-| 2.4 | No "Read only — no token in this browser." in the normal journey | **VERIFIED** — reworded to name the fix: "press Sign in at the top" |
-| 2.5 | Deployed browser: chat reads | **VERIFIED** — `verify:basecamp-live` 26/26, signed in by asking |
-| 2.6 | Deployed browser: chat writes | **VERIFIED** — the chat turn leg, same run |
-| 2.7 | Deployed browser: voice credential mint | **VERIFIED** — the voice-token mint leg, same run |
-| 2.8 | Deployed browser: project settings writes | **VERIFIED** — the appearance write is a settings write through the real picker |
-| 2.9 | Deployed browser: appearance writes | **VERIFIED** — written at the office and restored |
-| 2.10 | Deployed browser: to-do mutation | **VERIFIED** — `verify:basecamp-todos-live` ticks a seeded task on the deployed page and the office records it |
-| 2.11 | Refresh and prove the session still behaves | **VERIFIED** — `verify:basecamp-signin`: a reload keeps it signed in |
-| 2.12 | Authentication not weakened; no secret exposed | **VERIFIED** — `check:secrets` clean; the wrapper that returns a bot token is service_role only |
+| 2.1 | Remove "paste the office token" from the normal UI flow | **VERIFIED** — there is no office token in the experience at all; a clean browser is asked for an email address and nothing else |
+| 2.2 | Fix the underlying auth/session architecture, not the warning | **VERIFIED** — ADR-0043: Supabase Auth (unused until now, `auth.users` held zero rows) + `public.office_members`; the gateway verifies the session with Supabase rather than decoding it |
+| 2.3 | No "Couldn't reach the office — browser's not signed in." in the normal journey | **VERIFIED** — the strip offers a login |
+| 2.4 | No "Read only — no token in this browser." in the normal journey | **VERIFIED** — reworded; a signed-in person never sees it |
+| 2.5 | Deployed browser: chat reads | **VERIFIED** — `verify:basecamp-live` 27/27 signed in as a person |
+| 2.6 | Deployed browser: chat writes | **VERIFIED** — the chat turn leg, over CORS, from the deployed page |
+| 2.7 | Deployed browser: voice credential mint | **VERIFIED** — the voice-token mint leg |
+| 2.8 | Deployed browser: project settings writes | **VERIFIED** — appearance written through the real picker and restored |
+| 2.9 | Deployed browser: appearance writes | **VERIFIED** — same |
+| 2.10 | Deployed browser: to-do mutation | **VERIFIED** — `verify:basecamp-todos-live` 25/25 |
+| 2.11 | Refresh and prove the session still behaves | **VERIFIED** — refresh AND a new context carrying storage, standing in for a restart |
+| 2.12 | Authentication not weakened; no secret exposed | **VERIFIED** — `check:secrets` clean; the browser never holds the office key; a forged session is refused |
 
 ## 3 — Two voice features remain distinct
 
@@ -81,10 +86,10 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 8.1 | Drag into Stuck does not open the card editor | **VERIFIED** — the drop supplies the reason the office requires instead of asking for it |
+| 8.1 | Drag into Stuck does not open the card editor | **VERIFIED** — and §10: the reason recorded is provenance ("Marked stuck on the board — no reason given yet"), never an invented cause |
 | 8.2 | Stuck behaves like the other columns | **VERIFIED** — one `moveCard` for every column |
 | 8.3 | Drag-end/click propagation cannot trigger open/edit | **VERIFIED** — the drop no longer calls `openTask` at all |
-| 8.4 | Regression: drag → Stuck → canonical state change → no editor opened | **VERIFIED** — `verify:basecamp-todos-live`: drag → Stuck → office state `blocked` with a reason → nothing opened, with a positive control proving a press still opens one |
+| 8.4 | Regression: drag → Stuck → canonical state change → no editor opened | **VERIFIED (HTML5 drag handlers)** — native physical pointer drag is **MANUAL ACCEPTANCE PENDING**; headless Chromium will not synthesise it |
 
 ## 9–10 — Visual
 

@@ -2723,56 +2723,32 @@ const notLive = () => {
     <span>${esc(s.say)}</span>
     ${canRetry ? button('Try again', { 'data-bc-retry-office': '1' }) : ''}
     <!--
-      SIGNING IN, where the page already says you are not.
+      SIGNING IN, and there is no office token in it anywhere.
 
-      THE DEFECT THIS FIXES. One bearer token is the whole of the
-      authorisation here, and the way it reached a browser was a Telegram
-      message saying "paste it once, per device". Grant never asked for that
-      and met it as an interruption in front of Chat, Voice, Settings,
-      appearance and every write.
+      Grant, 24 September: "He does not want an office-token interaction in the
+      normal user experience AT ALL... If an internal credential/token is
+      required for secure communication with the office, that is an
+      IMPLEMENTATION DETAIL."
 
-      So the page asks instead. The office sends the ask to the chat it
-      already knows is his, he taps once, and this browser is handed the same
-      token it would have been given to paste. The credential is never
-      rendered, never in a chat log, never in a clipboard.
+      So this is an ordinary login. An address, a link in the mail, and the
+      session that comes back belongs to the person rather than to the office.
+      Nothing here is pasted, nothing is copied, nothing is approved anywhere
+      else, and the word token does not appear.
 
-      THE CODE IS NOT A SECOND SECRET. This endpoint cannot authenticate the
-      ask, so anybody reaching the page can start one. The code is shown here
-      and repeated in the message so he can compare them, and tap only if
-      they match.
+      The office answers the same way for every address, so the sentence after
+      pressing never says whether anybody by that name is known here.
 
-      THE FALLBACK STAYS, folded away. A preview deployment gets its own
-      hostname and is deliberately not on the allowlist, so it cannot ask -
-      and a page with no way in at all would be worse than one asking for a
-      paste.
-
-      A password field, no autocomplete and no value on redraw: a credential
-      must not sit in the DOM, in a screenshot, or in this repository own
-      captures.
-
-      No backticks anywhere in this comment: it lives inside a template
-      literal and one here ends the string.
+      No backticks anywhere in this comment: it lives inside a template literal
+      and one here ends the string.
     -->
-    <div class="bcsignin" data-bc-signinform${signedOut ? '' : ' hidden'}>
-      <div class="bcsigninask">
-        ${button('Sign in', { kind: 'primary', 'data-bc-signin-ask': '1' })}
-        <span class="bcsigninsaid" data-bc-signin-said role="status"></span>
-      </div>
-      <p class="bcsignincode" data-bc-signin-code hidden>
-        <span class="bcvh">Check this code matches the one in the message</span>
-        <b data-bc-signin-digits></b>
-      </p>
-      <details class="bcsigninelse">
-        <summary>Sign in with a token instead</summary>
-        <form class="bcsigninform" data-bc-tokenform>
-          <label class="bcvh" for="bc-token">The office token</label>
-          <input class="bcinput bcsignininput" id="bc-token" type="password"
-            name="token" autocomplete="off" spellcheck="false"
-            placeholder="The office token">
-          ${button('Use it', { 'data-bc-signin': '1' })}
-        </form>
-      </details>
-    </div>
+    <form class="bcsignin" data-bc-signinform${signedOut ? '' : ' hidden'}>
+      <label class="bcvh" for="bc-email">Your email address</label>
+      <input class="bcinput bcsignininput" id="bc-email" type="email"
+        name="email" autocomplete="email" spellcheck="false"
+        placeholder="you@example.com">
+      ${button('Email me a link', { kind: 'primary', 'data-bc-signin': '1' })}
+      <span class="bcsigninsaid" data-bc-signin-said role="status"></span>
+    </form>
   </div>`
 }
 

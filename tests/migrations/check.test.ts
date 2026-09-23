@@ -50,9 +50,23 @@ describe('sequence', () => {
     expect(checkMigrations(files, {}, hash)).toEqual([])
   })
 
-  it('reports a gap', () => {
+  /*
+    A gap is only a gap if something was LOST. The rule exists to catch a
+    deleted migration, and it could not tell that from a branch that is simply
+    behind -- numbers jumping from 0539 to 0577 because the ones between were
+    written on another branch and are already applied to production. Reporting
+    that as a failure leaves two options, renumbering into a collision or
+    ignoring the check, and both are worse than the gap.
+  */
+  it('reports a gap over a number that was applied and whose file is gone', () => {
     const files = [file('0001_a.sql'), file('0003_c.sql')]
-    expect(rules(files)).toContain('sequence/gap')
+    const recorded = { '0002_b.sql': hash('-- 0002_b.sql'), '0001_a.sql': hash('-- 0001_a.sql') }
+    expect(rules(files, recorded)).toContain('sequence/gap')
+  })
+
+  it('says nothing about a number this branch has simply never had', () => {
+    const files = [file('0001_a.sql'), file('0003_c.sql')]
+    expect(rules(files)).not.toContain('sequence/gap')
   })
 
   it('reports a duplicate sequence number', () => {

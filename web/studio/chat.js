@@ -250,7 +250,14 @@ const staffSlug = (short) => {
 
 const API = () =>
   window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
-const TURN = () => API().replace(/\/hq-api$/, '/voice')
+/*
+  WHERE A TURN GOES. Derived from the gateway, with an override, because the
+  experiment runs its own copy of both under different slugs (ADR-0043) and
+  a regex anchored on `/hq-api` quietly returns the GATEWAY url when the slug
+  is `hq-api-basecamp` -- so every turn would have been posted to the wrong
+  function with no error to read.
+*/
+const TURN = () => window.HQ_VOICE || API().replace(/\/hq-api(-[a-z]+)?$/, '/voice')
 
 /**
  * Where the voice surface lives, for anything that needs it besides a turn.

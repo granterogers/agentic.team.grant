@@ -143,16 +143,46 @@ export function checkMigrations(
     if (numbers[0] !== 1) {
       err(null, 'sequence/start', `migrations must start at 0001, found ${String(numbers[0])}`)
     }
+    /*
+      A GAP IS ONLY A GAP IF SOMETHING WAS LOST.
+
+      This rule exists to catch a deleted migration. It cannot tell that from a
+      branch that is simply BEHIND — a feature branch whose numbers jump from
+      0539 to 0577 because 0540 to 0576 were written on another branch and are
+      already applied to production. That is the ordinary state of every branch
+      in a repository where several are open at once, and reporting it as a
+      failure means either renumbering into a collision (which is the disease
+      #344 is about) or ignoring the check.
+
+      So the question is asked of the LEDGER rather than of the positions: a
+      missing number matters when it names a migration that was applied and is
+      now absent, which is history destroyed. A missing number nobody has ever
+      applied here is a number this branch does not have.
+
+      The dangerous case keeps its own precise finding — `checksum/missing`
+      reads the ledger directly and names the file — so nothing is given up by
+      making this one narrower.
+    */
+    const appliedNumbers = new Set<number>()
+    for (const name of Object.keys(recorded)) {
+      const seq = NAME_PATTERN.exec(name)
+      if (seq) appliedNumbers.add(Number.parseInt(seq[1] as string, 10))
+    }
     for (let i = 1; i < numbers.length; i++) {
       const previous = numbers[i - 1] as number
       const current = numbers[i] as number
-      if (current !== previous + 1) {
-        err(
-          null,
-          'sequence/gap',
-          `gap between ${String(previous).padStart(4, '0')} and ${String(current).padStart(4, '0')}`,
-        )
+      if (current === previous + 1) continue
+      const lost: number[] = []
+      for (let n = previous + 1; n < current; n += 1) {
+        if (appliedNumbers.has(n)) lost.push(n)
       }
+      if (lost.length === 0) continue
+      err(
+        null,
+        'sequence/gap',
+        `gap between ${String(previous).padStart(4, '0')} and ${String(current).padStart(4, '0')}` +
+          ` — ${String(lost.length)} of the missing number(s) were applied and the file(s) are gone`,
+      )
     }
   }
 
