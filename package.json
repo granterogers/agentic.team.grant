@@ -290,6 +290,7 @@
     "verify:contacts-live": "tsx scripts/verify/contacts-live.ts",
     "verify:basecamp-livevoice": "tsx scripts/verify/basecamp-livevoice.ts",
     "verify:voice-note-live": "tsx scripts/verify/voice-note-live.ts",
+    "verify:basecamp-drive": "tsx scripts/verify/basecamp-drive.ts",
     "verify:basecamp-voicenote": "tsx scripts/verify/basecamp-voicenote.ts",
     "verify:basecamp-touch": "tsx scripts/verify/basecamp-touch.ts",
     "verify:basecamp-failures": "tsx scripts/verify/basecamp-failures.ts",

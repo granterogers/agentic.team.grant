@@ -15,6 +15,7 @@
 
 import { act, attempt, canWrite, read } from '../office.js'
 import { esc } from './parts.js'
+import * as bcDrive from './drive.js'
 import * as live from './livevoice.js'
 import * as notes from './notestore.js'
 import * as recorder from './voicenote.js'
@@ -544,6 +545,94 @@ const wireDocsWorkspace = (root) => {
   }
 
   const form = () => root.querySelector('[data-bc-uploadform]')
+  /*
+    WHERE THE FILE IS COMING FROM, and then from there.
+
+    Delegated on the form, because the Drive panel replaces its own contents
+    every time somebody walks into a folder or searches - the same trap that
+    made the voice note's Stop button inert, which is now three times in this
+    file and is why every panel in here is wired this way.
+  */
+  for (const f of root.querySelectorAll('[data-bc-uploadform]')) {
+    f.addEventListener('click', async (e) => {
+      const from = e.target?.closest?.('[data-bc-from]')
+      if (from === null || from === undefined) return
+      e.preventDefault()
+      const which = from.dataset.bcFrom
+      const fromComputer = f.querySelector('[data-bc-fromcomputer]')
+      if (which === 'computer') {
+        if (fromComputer !== null) fromComputer.hidden = false
+        fromComputer?.querySelector('input')?.focus()
+        return
+      }
+      if (fromComputer !== null) fromComputer.hidden = true
+      await bcDrive.browse(read)
+      ctx.render()
+    })
+  }
+
+  /*
+    THE DRIVE PANEL. Every press here is a question for the office: it lists,
+    it walks in, it searches, and it picks. The page holds no credential and
+    could not list Drive if it wanted to.
+  */
+  for (const panel of root.querySelectorAll('[data-bc-drivepanel]')) {
+    panel.addEventListener('click', async (e) => {
+      const pressed = e.target?.closest?.(
+        '[data-bc-driveclose], [data-bc-driveback], [data-bc-drivesearch], [data-bc-drivein], [data-bc-drivepick]',
+      )
+      if (pressed === null || pressed === undefined) return
+      e.preventDefault()
+      if (pressed.hasAttribute('data-bc-driveclose')) {
+        bcDrive.close()
+        ctx.render()
+        return
+      }
+      if (pressed.hasAttribute('data-bc-driveback')) {
+        await bcDrive.back(read)
+        ctx.render()
+        return
+      }
+      if (pressed.hasAttribute('data-bc-drivesearch')) {
+        const box = panel.querySelector('#bc-drive-q')
+        await bcDrive.browse(read, { q: String(box?.value ?? '').trim() })
+        ctx.render()
+        return
+      }
+      if (pressed.hasAttribute('data-bc-drivein')) {
+        await bcDrive.into(read, pressed.dataset.bcDrivein, pressed.dataset.bcDrivename ?? '')
+        ctx.render()
+        return
+      }
+      /* Picking one. The office refuses a folder, and the control is not
+         offered on one, so this can only ever be a file. */
+      const id = pressed.dataset.bcDrivepick ?? ''
+      const was = pressed.textContent
+      pressed.disabled = true
+      pressed.textContent = 'Adding…'
+      const done = await bcDrive.pick(act, ctx.projectId?.(ctx.state.project) ?? '', {
+        id,
+        name: pressed.dataset.bcDrivename ?? '',
+        mime: pressed.dataset.bcDrivemime ?? '',
+      })
+      pressed.disabled = false
+      pressed.textContent = was
+      if (done !== null) {
+        bcDrive.close()
+        await ctx.refresh()
+      }
+      ctx.render()
+    })
+    /* Return in the search box searches, which is what a search box does. */
+    const box = panel.querySelector('#bc-drive-q')
+    box?.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return
+      e.preventDefault()
+      await bcDrive.browse(read, { q: String(box.value ?? '').trim() })
+      ctx.render()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-bc-upload]')) {
     b.addEventListener('click', () => {
       const f = form()
@@ -1483,7 +1572,16 @@ const fileFor = async (ref) => {
   try {
     const full = await read('document', ref.slice(3))
     if (full === null || full === undefined || full.error) return null
-    return { url: full.url ?? '', mime: String(full.mime_type ?? ''), content: full.content ?? '', title: full.title ?? '' }
+    return {
+      url: full.url ?? '',
+      mime: String(full.mime_type ?? ''),
+      content: full.content ?? '',
+      title: full.title ?? '',
+      /* Where it really lives, when it lives somewhere else (0539). */
+      connector: String(full.connector ?? ''),
+      ref: String(full.ref ?? ''),
+      kind: String(full.kind ?? ''),
+    }
   } catch {
     return null
   }
@@ -1551,6 +1649,24 @@ const openDoc = async (ref, title) => {
   const file = await fileFor(ref)
   if (file === null) {
     ctx.openDocDetail?.(ref, title)
+    return
+  }
+  /*
+    A DOCUMENT THAT LIVES SOMEWHERE ELSE OPENS THERE.
+
+    Grant's §25: clicking it should open the actual Drive, Docs, Sheets or
+    Slides document, normally in a new tab. The office holds a reference rather
+    than a copy, so there is no file here to show - and showing its details
+    instead would be the product losing the one thing the link was for.
+
+    The address is derived in `drive.js`, in one place, from the id and the
+    kind. A connector this does not know returns '' and falls through to the
+    ordinary handling below, which is the honest answer rather than a guessed
+    URL.
+  */
+  const elsewhere = bcDrive.opensAt(file)
+  if (elsewhere !== '') {
+    globalThis.open(elsewhere, '_blank', 'noopener')
     return
   }
   if (file.url !== '') {

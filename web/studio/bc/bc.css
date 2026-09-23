@@ -1494,3 +1494,117 @@
   min-width: 0;
   color: var(--bc-text);
 }
+
+/* ---------------------------------------------------------------------- *
+ * WHERE A FILE IS COMING FROM, and the drive itself.
+ *
+ * Two tiles rather than a bare file input, because "add a file" has more than
+ * one answer now. Only sources that really work are offered.
+ * ---------------------------------------------------------------------- */
+[data-experience="basecamp"] .bcsources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--bc-3);
+  margin-bottom: var(--bc-3);
+}
+[data-experience="basecamp"] .bcsourcepick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  min-height: 64px;
+  padding: var(--bc-3);
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-row);
+  background: var(--bc-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--bc-t-in), border-color var(--bc-t-in);
+}
+[data-experience="basecamp"] .bcsourcepick:hover {
+  background: var(--bc-hover);
+  border-color: var(--bc-accent);
+}
+[data-experience="basecamp"] .bcsourcepickname {
+  font: 650 15px/1.2 var(--bc-font);
+  color: var(--bc-text-strong);
+}
+[data-experience="basecamp"] .bcsourcepickwhat {
+  font: 400 13px/1.4 var(--bc-font);
+  color: var(--bc-text-muted);
+}
+
+[data-experience="basecamp"] .bcdrive {
+  margin: var(--bc-3) 0;
+  padding: var(--bc-3);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-r-sheet);
+  background: var(--bc-surface);
+  box-shadow: var(--bc-shadow-surface);
+}
+[data-experience="basecamp"] .bcdrivehead,
+[data-experience="basecamp"] .bcdriverow {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  flex-wrap: wrap;
+}
+[data-experience="basecamp"] .bcdrivehead { justify-content: space-between; }
+[data-experience="basecamp"] .bcdriverow { margin: var(--bc-2) 0 var(--bc-3); }
+[data-experience="basecamp"] .bcdrivewhere {
+  flex: 1;
+  min-width: 120px;
+  font: 400 13px/1.4 var(--bc-font);
+  color: var(--bc-text-muted);
+}
+[data-experience="basecamp"] .bcdrivesearch { max-width: 240px; }
+[data-experience="basecamp"] .bcdriveerror {
+  margin: 0 0 var(--bc-2);
+  font: 500 13.5px/1.45 var(--bc-font);
+  color: var(--bc-danger);
+}
+[data-experience="basecamp"] .bcdrivelist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 340px;
+  overflow-y: auto;
+}
+[data-experience="basecamp"] .bcdriveitem {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience="basecamp"] .bcdriveitem:last-child { border-bottom: 0; }
+[data-experience="basecamp"] .bcdriveopen {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--bc-2);
+  border: 0;
+  background: none;
+  text-align: left;
+  font: 400 14px/1.4 var(--bc-font);
+  color: var(--bc-text);
+  cursor: pointer;
+}
+[data-experience="basecamp"] .bcdriveopen--file { cursor: default; }
+[data-experience="basecamp"] button.bcdriveopen:hover { background: var(--bc-hover); }
+[data-experience="basecamp"] .bcdriveicon { flex: none; color: var(--bc-text-muted); }
+[data-experience="basecamp"] .bcdrivename {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience="basecamp"] .bcdrivekind {
+  flex: none;
+  font: 500 12.5px/1 var(--bc-font);
+  color: var(--bc-text-muted);
+}
+[data-experience="basecamp"] .bcdriveadd { flex: none; min-height: 44px; }

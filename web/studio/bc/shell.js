@@ -36,6 +36,7 @@ import * as compose from './compose.js'
 import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
 import * as contacts from './contacts.js'
+import * as bcDrive from './drive.js'
 import * as todos from './todos.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
 
@@ -1323,8 +1324,27 @@ const documentsSurface = (p) => {
       tab, a recording plays here, and anything the office only has a record
       of opens its details.
     </p>
+    <!--
+      WHERE THE FILE IS COMING FROM.
+
+      Grant asked for a friendly source choice rather than a file input: from
+      this computer, or from Google Drive. Only sources that really work are
+      offered - a tile for something the office cannot do would be the fake
+      integration his own brief forbids - so this list is two, and grows when a
+      connector does.
+    -->
     <form class="bcaddform" data-bc-uploadform hidden>
-      <label class="bcfield">
+      <div class="bcsources">
+        <button type="button" class="bcsourcepick" data-bc-from="computer">
+          <span class="bcsourcepickname">From this computer</span>
+          <span class="bcsourcepickwhat">A file you have here</span>
+        </button>
+        <button type="button" class="bcsourcepick" data-bc-from="drive">
+          <span class="bcsourcepickname">From Google Drive</span>
+          <span class="bcsourcepickwhat">Browse your drive and pick one</span>
+        </button>
+      </div>
+      <label class="bcfield" data-bc-fromcomputer hidden>
         <span class="bclabel" for="bc-upload-file">The file</span>
         <input class="bcinput" type="file" id="bc-upload-file" name="file">
       </label>
@@ -1333,6 +1353,7 @@ const documentsSurface = (p) => {
         ${button('Cancel', { 'data-bc-uploadcancel': '1' })}
       </div>
     </form>
+    ${bcDrive.panel()}
     ${
       docs.length === 0
         ? empty(
