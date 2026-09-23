@@ -2540,6 +2540,41 @@ DELIVERED. None of the three would have been conclusive alone.
 
 Clean-pass count after pass 50: **0 of 5** — reset by a systemic product defect.
 
+## Pass 51 — the artifact recogniser: CLEAN
+
+**Territory:** how a request for a FILE is recognised, probed with the
+phrasings he would actually use.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked:**
+
+1. **All four request shapes fire**, including the one CLAUDE.md records as
+    having matched nothing: *"Write me a DOCUMENT ON where the venue thing has
+    got to"* (`document` was admitted only as "document for"), and *"I WANT a
+    one-pager"* (every other form was an imperative to MAKE something).
+2. **The three non-requests stay quiet**: *"Give me a summary of what Emma
+    said"* — deliberately still not a file, because answering a request for a
+    sentence with a PDF is the worse error of the pair — plus a question and a
+    past-tense mention.
+3. **And the apparent miss is a deliberate precedence, verified downstream.**
+    *"Remind me to write the one-pager"* DOES fire `artifactRequest`, which
+    looked wrong — it is a reminder, not a one-pager, and CLAUDE.md records the
+    office once producing the PDF and never adding the reminder. The
+    recogniser is allowed to fire; `instruction.ts:3736` suppresses the
+    artifact branch when `deferred !== null`, and `:3911` then creates the task
+    because `wantsFile` is null. The two interlock.
+
+**The check that made that conclusion worth anything:** `deferred` is
+**consulted**, not merely computed — a variable assigned and never read is a
+recorded defect class in this repository (`recordDecision`'s depth argument,
+the dial with no reader), and "the handler resolves it" would have been an
+assumption without grepping for the consumer.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 51: **1 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
