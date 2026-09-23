@@ -415,6 +415,67 @@ database: 14 citations across his four active projects, **0** naming null.
 
 Clean-pass count after pass 9: **0 of 5.**
 
+## Pass 10 — what he hears when a turn of his dies
+
+**NOT CLEAN.** One systemic product defect: [#337](https://github.com/granterogers/agentic.team.grant/issues/337).
+
+Territory: the blocker/approval round trip, and then — where the evidence
+actually led — the terminal failure of a turn a person asked for.
+
+**Three harness assumptions challenged and dropped before any product change**,
+which is most of what this pass was:
+
+1. *"457 real blockers resolved"* — **450 were "Resolved by the verification
+   script"**, harness traffic `app.harness_job` cannot see. The real answered
+   corpus is 7, all completed, the four approvals each spawning a child. The
+   approval path works.
+2. *"Real provider outages never reach the pause path"* — built on a classifier
+   that matched the word *unavailable* inside an unrelated refusal sentence.
+   No real outage in 30 days. Dropped rather than built on.
+3. *"Four real turns of his died silently"* — one is a `Simultaneous probe`,
+   two have no inbound row at all. **One is genuinely his**, and it is worth
+   more than the four: a **17-second voice note** to his real Telegram chat on
+   8 September, `Buffer is not defined`, attempt 4 of 5, **zero deliveries**.
+
+All 224 `job_pauses` rows are harness — no real job has ever paused — so that
+territory has no real-traffic frequency and was left alone.
+
+**Root cause.** Every terminal failure in `worker.ts` ended
+`moveTo(job, 'failed')` and returned. #211 taught the coherence gate to record
+an *impediment* — a Governance-page row, a screen he must go and look at — and
+stopped one layer short of CLAUDE.md's own rule: *anything that can end a turn
+with no answer has to say so somewhere he looks.*
+
+**Fix.** `app.owed_a_word` (0571) decides in SQL who is owed a sentence, so six
+gates share one definition; `src/jobs/lastword.ts` composes it in code with no
+model call, says the attempt failed rather than that the office cannot (#320),
+and knows a spoken message from a typed one. Wired at the single tick seam.
+Containment inherited from `claim_delivery`, asserted not assumed.
+
+**Verification.** The migration drives the reader against the real voice note,
+with two controls — one of which failed first time because `office.%` matches
+`office.instruction`, the kind his own messages arrive as. `verify:lastword`
+10/10 live. Ten unit tests. **Six sabotages, each printed as landed, each red.**
+A **vacuous control was found and repaired mid-pass**: `capabilityLies` given
+`EMPTY_CAPABILITY` had nothing to lie about and stayed green under a sabotage
+that denied capability outright.
+
+**Limitation, recorded not forced.** No observed terminal failure through the
+*deployed* worker: the reproduction reached `retrying` and the environment
+declined the shared-table update needed to exhaust it. Not forced, per the
+standing rule.
+
+**Containment after the pass.** `app.harness_escapes()` reports exactly the two
+preserved #298 escapes, both `known`, both predating this work. Zero new;
+refused 257.
+
+Clean-pass count after pass 10: **0 of 5.**
+
+Filed on the way past, not fixed:
+[#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
+`vault-export`'s wrong-passphrase check fails about one full run in three and
+passes alone every time. #226's shape, on a SECURITY assertion.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

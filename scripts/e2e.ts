@@ -533,6 +533,7 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'verify:withdraw',
     'the office does not deny holding a rule it holds, and can be told to drop it',
   ],
+  ['verify:lastword', 'a turn of his that died still tells him so, on the channel he asked on'],
   /*
     And the same invariant driven through the real handler, live.
 

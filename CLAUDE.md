@@ -3316,6 +3316,44 @@ Each of these cost real time. They are here so they cost it once.
   the import name, because a name appearing in a file is not evidence that
   anything calls it.
 
+- **He sent a 17-second voice note and the office never said anything.** 8
+  September, his real Telegram chat. The transcription path threw, the job
+  retried to attempt 4 of 5, moved to `failed`, and `deliveries` for it holds
+  ZERO rows. Every terminal failure in `worker.ts` ended `moveTo(job,
+  'failed')` and returned. #211 taught the coherence gate to record an
+  IMPEDIMENT — a Governance-page row, a screen he has to go and look at — and
+  stopped one layer short of this file's own rule that anything ending a turn
+  with no answer has to say so somewhere he looks. A Governance row is not
+  somewhere he looks when he asked on Telegram. **Silence on a voice note is
+  the worst case of the class, because it is indistinguishable from never
+  having been heard.** Fixed at the single tick seam, with the "who is owed"
+  decision in SQL (`app.owed_a_word`) so six gates cannot drift apart, and the
+  sentence composed in CODE — a turn that died possibly BECAUSE the model was
+  unusable is the worst moment to ask a model for an apology.
+- **A "CONTROL" given nothing to be wrong about is the vacuous control this
+  file keeps recording, and it happened while writing the test that guards
+  against it.** `capabilityLies(apology, EMPTY_CAPABILITY)` has no capability
+  to lie about, so it stayed GREEN under a sabotage that made the sentence say
+  "I cannot do" outright — and it was about to be written up as proof the
+  office's own detector approved the wording. The pair is what makes it a
+  control: the real sentence must pass AND a denial of the same capability must
+  fail. **An instrument that is always silent satisfies every silence
+  assertion.**
+- **Challenge the corpus before building on it — three assumptions died in one
+  pass.** "457 real blockers resolved" was 450 rows saying *"Resolved by the
+  verification script"*. "Real provider outages never reach the pause path"
+  came from a classifier matching the word *unavailable* inside an unrelated
+  refusal sentence. "Four real turns of his died silently" was one probe, two
+  turns with no inbound row, and **one that was genuinely his** — and that one
+  was worth more than the four, because it was a voice note. All 224
+  `job_pauses` rows are harness, so that whole territory has no real frequency.
+  The pass's product change came from the single surviving row.
+- **`office.%` matches `office.instruction`, which is how his own messages
+  arrive.** A control written to prove a duty owes him no apology used that
+  prefix and failed the migration on the one case the function exists for. The
+  duties are in `public.responsibilities`; read them from there rather than
+  guessing at a prefix.
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the

@@ -38,6 +38,7 @@ import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
 import type { Plan } from '../tools/plan.ts'
 import { plannedWrites, summarise } from '../tools/plan.ts'
+import { lastWord } from './lastword.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -1519,15 +1520,38 @@ export const drain = async (
       handlerKinds,
     )
     if (job === null) break
+    let result: WorkerResult
     try {
-      done.push(await runJob(db, job, handlers, review, options.notify, options.onStart))
+      result = await runJob(db, job, handlers, review, options.notify, options.onStart)
     } catch (error) {
-      done.push({
+      result = {
         jobId: job.jobId,
         finalState: 'failed',
         note: (error as Error).message.slice(0, 200),
-      })
+      }
     }
+
+    /*
+      THE ONE PLACE A DEAD TURN CAN STILL SPEAK.
+
+      Every terminal failure in this file - the coherence gate, the output
+      refusal, the handler that threw, the notifying contradiction - arrives
+      here as one result, so the apology is wired once rather than at six
+      gates that would drift. `app.owed_a_word` decides whether anybody is
+      owed anything; a duty, a retry, a child branch and a turn that already
+      answered all come back empty.
+
+      Grant sent a 17-second voice note on 8 September, the transcription path
+      threw, and he was told nothing at all. That is what this is for.
+    */
+    if (result.finalState === 'failed') {
+      try {
+        await lastWord(db, job, options.notify)
+      } catch {
+        /* An apology that fails must not become a second failure. */
+      }
+    }
+    done.push(result)
   }
   return done
 }
