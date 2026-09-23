@@ -20,6 +20,7 @@
  */
 
 import { opensByDroppingIt } from '../src/agents/clarify.ts'
+import { guidanceFor } from '../src/agents/guidance.ts'
 import { readTeaching } from '../src/agents/teaching.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
@@ -61,6 +62,18 @@ if (!opensByDroppingIt(canary) || readTeaching(canary) !== null) {
   process.exit(1)
 }
 
+/*
+  Who is on the roster, which is what the SQL half decides `stated` from: a
+  lesson authored by somebody who is not a specialist was stated by a person.
+  Read here too, so the check and the query can be compared rather than the
+  check simply repeating the query's answer back to itself.
+*/
+const ROSTER = new Set(
+  ((await db.execute('select slug from public.staff')).rows as { slug: string }[]).map(
+    (r) => r.slug,
+  ),
+)
+
 const wrong = held.filter((l) => opensByDroppingIt(l.body) || readTeaching(l.body) === null)
 
 console.log(`standing rules the office holds: ${String(held.length)}`)
@@ -78,4 +91,49 @@ if (wrong.length > 0) {
   )
   process.exit(1)
 }
+/*
+  AND EACH ONE REACHES THE PROMPT AS THE KIND OF THING IT IS.
+
+  Grant taught the office to answer in bullet points on 11 September, and
+  complained that it was not being followed on the 20th and again on the 21st,
+  while the rule was stored, live, and reaching the brief. It arrived under
+  "These are beliefs from past work, not rules -- weigh them", beside lessons
+  a specialist had guessed at 0.50 confidence.
+
+  The split is decided in SQL -- is the author on the roster -- so no unit test
+  can reach it. This drives the real query against the real rows, which is the
+  only way that half is checked at all.
+*/
+const briefs = await Promise.all(
+  [...new Set(held.map((l) => (l.who === '' ? 'chief-of-staff' : l.who)))].map(async (slug) => ({
+    slug,
+    guidance: await guidanceFor(db, slug),
+  })),
+)
+let misfiled = 0
+for (const { slug, guidance } of briefs) {
+  for (const lesson of guidance.lessons) {
+    const author = held.find((h) => h.body === lesson.body)
+    // Only rules this check already read can be judged; a lesson from another
+    // scope is somebody else's question.
+    if (author === undefined) continue
+    const shouldBeStated = author.by !== '' && !ROSTER.has(author.by)
+    if (lesson.stated !== shouldBeStated) {
+      misfiled += 1
+      console.log(
+        `  MISFILED ${slug}: “${lesson.body.slice(0, 60)}” — stated=${String(lesson.stated)}, ` +
+          `author ${author.by} ${ROSTER.has(author.by) ? 'is on the roster' : 'is not on the roster'}`,
+      )
+    }
+  }
+}
+if (misfiled > 0) {
+  console.error(
+    `\n${String(misfiled)} standing rule(s) reach the prompt as the wrong kind of thing.\n` +
+      'An order Grant gave must not arrive labelled a belief to weigh.',
+  )
+  process.exit(1)
+}
+console.log(`and each reaches the prompt as what it is (${String(briefs.length)} brief(s) checked)`)
+
 console.log('\nevery one of them is a rule the office would store today')

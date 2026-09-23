@@ -40,6 +40,21 @@ export interface Lesson {
   readonly body: string
   readonly scope: string
   readonly observations: number
+  /**
+   * He said it, rather than a specialist inferring it.
+   *
+   * `remember()` already knows the difference and says so in its own comment:
+   * *"Grant saying it is not a hypothesis. A lesson an agent inferred starts
+   * at 0.50 and has to earn the rest; one he stated starts high, because the
+   * evidence is that he said it."* The confidence carried it and the PROMPT
+   * threw it away — every lesson arrived under one heading calling them all
+   * "beliefs from past work, not rules — weigh them".
+   *
+   * Derived from the roster rather than from the string "grant": a lesson
+   * authored by somebody who is not a specialist was stated by a person. That
+   * cannot go stale when a channel composes his name differently.
+   */
+  readonly stated: boolean
 }
 
 export interface Skill {
@@ -79,7 +94,9 @@ export async function guidanceFor(
     const { rows } = await db.execute(`
       select
         (select coalesce(jsonb_agg(jsonb_build_object(
-                  'body', l.body, 'scope', l.scope::text, 'observations', l.observations)),
+                  'body', l.body, 'scope', l.scope::text, 'observations', l.observations,
+                  'stated', not exists (select 1 from public.staff st
+                                         where st.slug = l.learned_by))),
                 '[]'::jsonb)
            from app.lessons_for(${uuid(projectId)}, ${lit(staffSlug)},
                                 ${jobKind === null ? 'null' : lit(jobKind)},
@@ -93,7 +110,7 @@ export async function guidanceFor(
                                ${uuid(projectId)}, ${String(nSkills)}) s) as skills
     `)
     const row = (rows[0] ?? {}) as {
-      lessons?: { body: string; scope: string; observations: number }[]
+      lessons?: { body: string; scope: string; observations: number; stated?: boolean }[]
       skills?: {
         skill_id: string
         name: string
@@ -107,6 +124,9 @@ export async function guidanceFor(
         body: l.body,
         scope: l.scope,
         observations: l.observations,
+        // Defaulting to false is the safe direction: an unknown author is
+        // treated as a belief to weigh rather than as an order from Grant.
+        stated: l.stated === true,
       })),
       skills: (row.skills ?? []).map((s) => ({
         skillId: s.skill_id,
@@ -152,11 +172,45 @@ export function guidanceBrief(g: Guidance): string {
     )
   }
 
-  if (g.lessons.length > 0) {
+  /*
+    TWO KINDS OF THING, AND ONE HEADING HAD BEEN COVERING BOTH.
+
+    Grant taught the office to answer in bullet points on 11 September. He
+    complained that it was not being followed on the 20th, and again on the
+    21st — *"You're still not respecting my request to put all your messages
+    in bullet point format"* — while the rule was stored, live, and reaching
+    this function. It arrived in the prompt under "These are beliefs from past
+    work, not rules — weigh them", beside lessons a specialist had guessed at
+    0.50 confidence.
+
+    `remember()` already knows the difference and says so in its own comment.
+    The data carried it in `learned_by` and `confidence`; `guidanceFor` did
+    not select either, so the one fact separating an order from a guess was
+    dropped at the query and the brief then called them all beliefs.
+
+    This is the label being corrected, not a new paragraph: the answering
+    prompt already tells the model to honour his standing instructions and to
+    say in one clause which one it set aside. A second paragraph arguing the
+    same point is what #277 is a complaint about.
+  */
+  const stated = g.lessons.filter((l) => l.stated)
+  const inferred = g.lessons.filter((l) => !l.stated)
+  const line = (l: Lesson): string =>
+    `- ${l.body}${l.observations > 1 ? ` (said ${String(l.observations)} times)` : ''}`
+
+  if (stated.length > 0) {
+    parts.push(
+      'Standing instructions from Grant, most specific first. He stated these ' +
+        'himself. They are not beliefs to weigh — follow them in this reply.\n' +
+        stated.map(line).join('\n'),
+    )
+  }
+
+  if (inferred.length > 0) {
     parts.push(
       'What we have learned, most specific first. These are beliefs from past ' +
         'work, not rules — weigh them.\n' +
-        g.lessons
+        inferred
           .map(
             (l) =>
               `- ${l.body}${l.observations > 1 ? ` (seen ${String(l.observations)} times)` : ''}`,

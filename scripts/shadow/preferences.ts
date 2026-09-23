@@ -151,7 +151,8 @@ for (const c of CASES) {
   if (t === null || t.kind !== 'lesson') continue
   consumedOf++
   const brief = guidanceBrief({
-    lessons: [{ body: t.body, scope: 'staff', observations: 1 }],
+    // Grant stated it: that is what this harness is about.
+    lessons: [{ body: t.body, scope: 'staff', observations: 1, stated: true }],
     skills: [],
   })
   const reaches = brief.includes(t.body)
