@@ -1895,6 +1895,55 @@ exactly what the standing rule says NOT to manufacture.
 
 Clean-pass count after pass 38: **2 of 5.**
 
+## Pass 39 — routing: CLEAN
+
+**Territory:** who answers. CLAUDE.md records more defects here than anywhere
+else — the ceiling used as a preference, the fallback class sharing a name with
+a real one, the delegation span read as three intents, the trigram matcher
+routing a negated subject.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked, as pure functions plus the real database lookup:**
+
+1. **`withoutNegated` is right in both directions.** *"look at the onboarding,
+    not the pricing"* loses the pricing; *"I do not think the pricing matters"*
+    is untouched, because a negated VERB is not a negated subject. That pair is
+    the one CLAUDE.md names.
+2. **`classifyIntent` holds the two fixes that were hardest.** *"Do not draft
+    the plan. Create the tasks instead."* is a `direct_command`, so the
+    mid-message anchor fix stands; and the two-clause delegation comes back as
+    ONE confident `assignment` rather than three contested readings, so the
+    span fix stands.
+3. **Gibberish is benign.** *"asdkjh qwe zxc"* classifies as an assignment,
+    because a grammar rule reads an unknown first word with no subject as an
+    imperative — which it cannot avoid without the enumeration this repository
+    warns against. It routes to an EMPTY roster, and the recorded reason says
+    why in Grant's own terms: *"nothing in the request names a subject area, so
+    the Chief of Staff has it rather than whoever is first in that list"*. No
+    specialist is convened on noise. And `"qwertyuiop asdfgh"` honestly reports
+    `recognised: false`.
+4. **The real roster lookup ranks correctly on both recorded sentences.**
+    *"Draft the announcement email for the pricing change"* →
+    **communications-director 3.000** (announcement+draft+email) above finance
+    1.900. *"audit the refund policy for compliance risk"* →
+    **quality-director 4.000** (audit+compliance+risk) first.
+5. **And the full path agrees**: feeding those rankings into `pickRoster`, the
+    answerer is the communications director and the quality director
+    respectively — the two agents CLAUDE.md records as having been wrongly
+    passed over.
+
+**My instrument was wrong once, and it would have produced a confident false
+finding.** `pickRoster` falls back to `TOPIC_ROLES` when the roster ranking is
+omitted, so my first run tested the FALLBACK and reported the announcement going
+to finance and the compliance audit convening nobody. Both are artefacts of not
+passing `who_knows_about`, which is what production passes. **Read the
+signature's comment before believing a pure-function result.**
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 39: **3 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
