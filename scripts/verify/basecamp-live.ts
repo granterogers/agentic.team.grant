@@ -33,6 +33,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
@@ -330,11 +331,40 @@ const mint = (await page.evaluate(
        .catch((e) => ({ ok: false, status: 0, keys: String(e).slice(0, 90), credential: false, degraded: false }))`),
 )) as { ok: boolean; status: number; keys: string; credential: boolean; degraded: boolean }
 
-check(
-  'the credential minter allows the real deployed origin (CORS)',
-  mint.status !== 0,
-  `a zero status is the browser refusing the response, which is what a CORS failure looks like: ${mint.keys}`,
-)
+/*
+  WHETHER THIS ORIGIN IS SUPPOSED TO BE ALLOWED, read from the deploy script
+  rather than decided here.
+
+  `voice-token` takes no authentication, so its origin allowlist is the entire
+  security boundary around minting on Grant's OpenAI key - and `deploy/voice.ts`
+  deliberately lists STABLE ALIASES only, saying why: a per-deployment URL would
+  make an allowlist that grows without bound and never shrinks. So a trial
+  integration preview, which has its own hostname, MUST be refused.
+
+  Run against the alias, the right answer is a credential. Run against a preview
+  URL, the right answer is a refusal - and a suite that called that a failure
+  would be reporting the security boundary working as a defect.
+*/
+const allowlisted = (await readFile('scripts/deploy/voice.ts', 'utf8').catch(() => ''))
+  .split('PAGE_ORIGINS')[1]
+  ?.split(']')[0]
+  ?.includes(new URL(SITE).host)
+if (allowlisted === true) {
+  check(
+    'the credential minter allows the real deployed origin (CORS)',
+    mint.status !== 0,
+    `a zero status is the browser refusing the response, which is what a CORS failure looks like: ${mint.keys}`,
+  )
+} else {
+  check(
+    'a deployment that is NOT on the origin allowlist is refused a credential',
+    mint.status === 0,
+    `this origin is not in PAGE_ORIGINS, so minting must fail — it answered http ${String(mint.status)}`,
+  )
+  console.log(
+    'note  this subject is a preview URL, not the stable alias, so a refusal is the correct answer',
+  )
+}
 /*
   ASKED AS FIELDS, NOT AS A STRING. The first version folded everything into
   one label and tested it with `includes('degraded')` - which matched the word
@@ -342,12 +372,14 @@ check(
   one. A substring check satisfied by a superstring, which this repository
   already has a rule about.
 */
-check(
-  'and it mints a real credential for this page',
-  mint.ok && mint.credential,
-  `http ${String(mint.status)} — keys ${mint.keys}`,
-)
-check('and the minter is not answering in a degraded mode', !mint.degraded)
+if (allowlisted === true) {
+  check(
+    'and it mints a real credential for this page',
+    mint.ok && mint.credential,
+    `http ${String(mint.status)} — keys ${mint.keys}`,
+  )
+  check('and the minter is not answering in a degraded mode', !mint.degraded)
+}
 
 /* --- 6. and a stranger's origin is refused ------------------------------ */
 

@@ -2933,6 +2933,34 @@ Each of these cost real time. They are here so they cost it once.
   the real deployed origin**, the defect that left the voice call dead for
   weeks while every probe passed.
 
+- **Twenty-nine suites were passing because the browser could not reach the
+  office.** Every one of them fakes a writer with
+  `localStorage.setItem('hq.token', 'some-made-up-string')` and then asserts on
+  controls that are only drawn for a writer. That worked for exactly one
+  reason: the sandbox Chromium could not reach `*.supabase.co`, so the page's
+  first read failed as a NETWORK error and the credential stayed in storage.
+  The moment `npm run trust:proxy-ca` let the browser through, the office did
+  the right thing — it refused a token it never issued with a 401 — and
+  `office.js` did the right thing, clearing a refused credential. The page went
+  read-only **inside 600ms** and every writer-only control vanished.
+  `verify:basecamp-look` started failing against a product that was working
+  perfectly, and the instinct was to blame the merge it happened to appear in.
+  **A test that depends on a failure mode of the environment is a test that
+  will invert the day the environment is fixed.** Where a suite needs a writer,
+  give it the vault token so the office accepts it; where it needs an
+  unreachable office, say so with an explicit route abort rather than relying
+  on the network being broken.
+- **A section the gateway routes to needs a `public` wrapper, and neither
+  suite that covers it was looking there.** `hq-api?section=pulse` returned
+  **502 on every dashboard page load** — `app.hq_pulse` exists, `public.hq_pulse`
+  never did, and PostgREST only exposes `public`. `verify:pulse` passed 11/11
+  by calling `app.hq_pulse()` in SQL, which is `verify:search`'s recorded
+  defect exactly; `verify:wrappers` passed 43/43 because `hq_pulse` was not on
+  its hardcoded list. `npm run check:gateway-wrappers` asks it as a property
+  instead — the `fn:` entries in the gateway's own SECTIONS and ACTIONS maps
+  ARE the list a browser can reach — and it found the one bad entry among 147.
+  Only a browser at the real deployed origin ever saw it (#340).
+
 ---
 
 ## Visual standard

@@ -18,6 +18,7 @@
     "verify:arrangement": "tsx scripts/verify/arrangement.ts",
     "verify:wired": "tsx scripts/verify/wired.ts",
     "check:secrets": "python3 scripts/secret-scan.py",
+    "check:gateway-wrappers": "tsx scripts/check-gateway-wrappers.ts",
     "trust:proxy-ca": "tsx scripts/trust-proxy-ca.ts",
     "verify": "npm run lint && npm run typecheck && npm run check:migrations && npm run test && npm run check:secrets",
     "migrate:one": "tsx scripts/migrate-one.ts",

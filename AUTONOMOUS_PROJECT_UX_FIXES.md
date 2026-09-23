@@ -180,6 +180,97 @@ word.
 
 ## Verification log
 
+**Trial integration of every active branch, and an adversarial pass on the
+deployed app.** Nothing merged; `trial/integration-2026-09-23` is a worktree
+branch built from `origin/main`.
+
+*What exists.* `main` 3c94150. Four active branches, none behind main:
+`human-simulation-harness` (+186, and it already contains
+`production-reliability` entirely), `production-reliability` (+19),
+`fresh-install-onboarding` (+15), `basecamp-team-hq` (+86, this one). Two more
+are stale by 80 commits and were left alone.
+
+*Migration and database reconciliation — the headline.* **The live database is
+exactly `human-simulation-harness`**: 578 applied, 578 files, nothing either
+way. Every other branch is a subset — `main` is missing **45 applied
+migrations**, this branch 39. So the shared production database has been
+migrated to the state of a branch that has never been merged, and anything
+running from `main` runs against a schema 45 migrations ahead of its own
+repository.
+
+*The collision, and the two-sided reading of it.* Seven numbers (0534–0539,
+0543) are used by fourteen files across three branches. `check:migrations` is
+smarter than it looks: both files of each pair are already applied, so it calls
+those a `sequence/collided` NOTE — renaming either would make the repository
+claim a number it did not run under. The three FATAL duplicates were
+`fresh-install`'s, which are not applied anywhere; renumbering them to
+0572–0574 clears the check (**581 migrations, 578 applied, passes**), and
+`fresh-install` had already documented that exact procedure as an integration
+request.
+
+**But the same collision is fatal on a fresh install**, and that is the finding
+worth acting on: on a zero-state target nothing is applied, so the pair at 0534
+is a PENDING duplicate and the replay dies — `ZERO-STATE FAIL (523/581)`. The
+corpus can no longer build a new office. Fixing it needs one of each pair
+renumbered AND the matching row in `app.schema_migrations` renamed; that is a
+decision for the backend owners, not something this workstream should impose.
+`migrations/baseline/baseline.json` is also 45 behind, which `check:fresh`
+reports precisely.
+
+*Merge conflicts, all additive.* `human-simulation-harness` and
+`production-reliability` merged clean. `basecamp-team-hq` conflicted in
+`CLAUDE.md`, `package.json` and `hq-api/index.ts`; `fresh-install-onboarding`
+in `.gitignore` and `package.json`. Every one was a union — **no key in any
+`package.json` had two different values**. Two mistakes of mine on the way, both
+caught by checking rather than assuming: a commit that still carried
+`.gitignore`'s conflict markers, and a union that dropped `kickWorker`'s closing
+brace and broke the gateway's syntax.
+
+*Verification against the integrated tree.* lint, typecheck, `npm test`,
+`check:secrets`, `check:templates`, `check:migrations`, `check:icons` all pass.
+`check:callers` and `check:pressable` demanded four baseline entries be removed
+because the merge made them reachable — done, and a set comparison proved
+exactly four came out. `basecamp:gate` ran 320 checks with one failure, which
+turned out not to be the integration at all (below).
+
+*Deployed integration preview.* The trial tree is deployed at its own hostname
+with **no alias moved**, so the stable alias still serves this branch —
+verified 84/84 byte-identical afterwards. `verify:basecamp-live` against the
+integration preview: **23/23**. Against the stable alias: **25/25**.
+
+**Adversarial findings on the deployed app:**
+
+1. **`hq-api?section=pulse` returns 502 on every page load** — `app.hq_pulse`
+   has no `public` wrapper and PostgREST only exposes `public`. `verify:pulse`
+   passes by calling the RPC in SQL; `verify:wrappers` passes because the
+   function is not on its hardcoded list. New `npm run check:gateway-wrappers`
+   asks it as a property from the gateway's own routing map and finds the one
+   bad entry among 147. Filed as **#340**; deliberately NOT fixed from here,
+   because a migration from this workstream would worsen the number collision.
+2. **Board arrangement persists per DEVICE, not per person.** Measured with two
+   browser contexts against the real office: remove a panel, it survives a
+   reload, and a second browser sees the untouched board — it lives in
+   `localStorage` under `bc.layout.<slug>`. Grant's requirement, quoted in
+   CLAUDE.md and migration 0250, is per person per project. Filed as **#341**.
+3. **The one gate failure was a test that had been passing because the browser
+   was offline.** Twenty-nine suites fake a writer with a made-up token. That
+   only ever worked because the sandbox could not reach the office; once it
+   could, the office correctly refused the token with a 401 and the page
+   correctly cleared it, so every writer-only control vanished within 600ms.
+   `verify:basecamp-look` now uses the vault token and is 21/21. A control
+   confirmed my branch behaved identically, so it was never an integration
+   regression.
+4. **To-do completion verified at the highest level available**: ticked on the
+   deployed app, the office row went `todo` → `done` with `done_at` set, it
+   survived a refresh, and it was restored exactly.
+5. Two more honest boundaries in the data: only **three tasks exist in the
+   entire live office**, all on one project, and no approved document has a
+   file — so several surfaces are unexercised by real data rather than broken.
+
+**Still pending, deliberately: the physical live-voice acceptance.** A real
+microphone, a real spoken exchange, on a real device. Not simulated, not
+inferred from the credential minting.
+
 **Deployed, and the sandbox's browser taught to reach the real world.**
 
 *The deploy.* `npm run deploy:preview` from HEAD `36cfebb`. It targets

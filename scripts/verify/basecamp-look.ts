@@ -38,6 +38,24 @@ const check = (what: string, ok: boolean, detail = ''): void => {
   }
 }
 
+/*
+  THE OFFICE, CONNECTED BEFORE THE BROWSER LEGS — because one of them needs a
+  credential the office will actually accept. See the writer leg below.
+*/
+const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
+const accessToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
+const db = accessToken === '' ? null : new ManagementApiExecutor(ref, accessToken)
+const officeToken =
+  db === null
+    ? ''
+    : String(
+        (
+          await db.execute(
+            `select decrypted_secret as v from vault.decrypted_secrets where name = 'hq.api_token'`,
+          )
+        ).rows[0]?.v ?? '',
+      )
+
 const PORT = 4679
 const server = await serveStudio(PORT)
 const url = (p: string): string => `http://127.0.0.1:${String(PORT)}${p}`
@@ -143,13 +161,27 @@ await page.waitForTimeout(400)
   exists.
 */
 /*
-  AS A WRITER, because the button is drawn only for one - correctly, since
-  repainting a project is a write. A token in this browser is all `canWrite`
-  asks, and nothing here sends it anywhere: the picker is opened and shut.
+  AS A WRITER, WITH THE OFFICE'S OWN TOKEN — and the reason it is not a made-up
+  string any more is worth the paragraph.
+
+  It WAS a made-up string, and it worked, for one reason nobody had noticed:
+  the sandbox browser could not reach the office at all, so the page's read
+  failed as a NETWORK error and the credential stayed in storage. Now that
+  Chromium trusts the proxy CA the office answers properly - it refuses a token
+  it never issued with a 401, and `office.js` correctly clears a refused
+  credential. The page went read-only inside 600ms and every writer-only
+  control vanished, so this suite started failing against a product that was
+  working perfectly.
+
+  The suite had been passing because the browser was offline. Twenty-nine
+  suites in this repository set a local-only token the same way; this is the
+  one that depends on a writer-only control being drawn, which is why it is the
+  one that broke. The token is read from the vault, never printed, and this leg
+  only opens a picker and shuts it.
 */
 const wctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
 await wctx.addInitScript(
-  `try { localStorage.setItem('hq.token', 'look-suite-local-only') } catch {}`,
+  `try { localStorage.setItem('hq.token', ${JSON.stringify(officeToken)}) } catch {}`,
 )
 const wpage = await wctx.newPage()
 wpage.on('pageerror', (e) => {
@@ -315,16 +347,13 @@ server.close()
   inside one statement that ends in `rollback`, and a wrapper cannot know a
   call was destructive until it already has been.
 */
-const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
-const accessToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
-if (accessToken === '') {
+if (db === null) {
   check(
     'the office can be reached to prove the look persists',
     false,
     'SUPABASE_ACCESS_TOKEN is not set',
   )
 } else {
-  const db = new ManagementApiExecutor(ref, accessToken)
   const out = (
     await db.execute(`
       do $look$
