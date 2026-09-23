@@ -5,6 +5,7 @@ const hit = (n: number, excerpt = `body of ${String(n)}`): Hit => ({
   documentId: `doc-${String(n)}`,
   title: `Document ${String(n)}`,
   connector: 'notion',
+  origin: '',
   rank: 1 / n,
   excerpt,
 })

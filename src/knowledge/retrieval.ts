@@ -43,9 +43,45 @@ export const DEFAULT_LIMIT = 5
 export interface Hit {
   readonly documentId: string
   readonly title: string
-  readonly connector: string
+  /**
+   * Where it came from — and NULL for a document the office made itself.
+   *
+   * `documents.connector` is nullable and every one of the ten null rows has
+   * `origin = 'made'`. The citation was built by interpolating this straight
+   * into a template, so a report citing the office's own earlier report
+   * printed `null:<uuid>` on its sources page, in a PDF Grant reads. 0177
+   * already refused a `'none'` sentinel in this column — the answer is to ask
+   * `origin`, not to invent a value for `connector`.
+   */
+  readonly connector: string | null
+  /** `made` when the office produced it, which is what a NULL connector means. */
+  readonly origin: string
   readonly rank: number
   readonly excerpt: string
+}
+
+/**
+ * One citation, written the same way everywhere.
+ *
+ * Three sites interpolated `${connector}:${id}` independently — `sourceRefs`
+ * and both of the artifact handler's source lists — so all three printed the
+ * word `null` for a document the office made. A row list built twice is a list
+ * that will disagree; this is that rule about a FORMAT.
+ */
+export function citationRef(source: {
+  readonly connector: string | null
+  readonly origin?: string | null | undefined
+  readonly documentId: string
+}): string {
+  const scheme =
+    source.connector !== null && source.connector !== ''
+      ? source.connector
+      : source.origin === 'made'
+        ? 'made'
+        : // Honest rather than tidy: the office does not know where this came
+          // from, and saying so beats naming a connector it has not got.
+          'unknown'
+  return `${scheme}:${source.documentId}`
 }
 
 /**
@@ -63,7 +99,7 @@ export async function retrieve(
 ): Promise<readonly Hit[]> {
   const { rows } = await db.execute(`
     select s.document_id::text as document_id, coalesce(s.title, '(untitled)') as title,
-           s.connector, s.rank,
+           s.connector, coalesce(d.origin::text, '') as origin, s.rank,
            left(coalesce(d.content, ''), ${String(EXCERPT_CHARS)}) as excerpt
       -- 'any', not the default 'all'. A question is not a search box: ANDing
       -- every word of "what does our material say about the difference between
@@ -77,7 +113,8 @@ export async function retrieve(
     rows as {
       document_id: string
       title: string
-      connector: string
+      connector: string | null
+      origin: string
       rank: number
       excerpt: string
     }[]
@@ -85,6 +122,7 @@ export async function retrieve(
     documentId: r.document_id,
     title: r.title,
     connector: r.connector,
+    origin: r.origin,
     rank: Number(r.rank),
     excerpt: r.excerpt,
   }))
@@ -128,8 +166,14 @@ export async function retrieve(
  */
 export const UNTRUSTED_CONNECTORS: ReadonlySet<string> = new Set(['browser', 'gmail', 'mail'])
 
-export const isUntrusted = (connector: string): boolean =>
-  UNTRUSTED_CONNECTORS.has(connector.toLowerCase())
+/*
+  NULL is not untrusted. A document with no connector is one the OFFICE made,
+  which is the opposite of material written by somebody else and pulled in
+  automatically — `provenance.ts` already treats the office's own prose as its
+  own category, and fencing it would tell the model to distrust its own work.
+*/
+export const isUntrusted = (connector: string | null): boolean =>
+  connector !== null && UNTRUSTED_CONNECTORS.has(connector.toLowerCase())
 
 /**
  * The sentence that makes the fence mean something.
@@ -190,7 +234,7 @@ export function contextBlock(hits: readonly Hit[], budget = CONTEXT_CHARS): stri
 
 /** What goes in `outputs.sources`: a record of what was retrieved. */
 export function sourceRefs(hits: readonly Hit[]): readonly string[] {
-  return hits.map((h) => `${h.connector}:${h.documentId} ${h.title}`)
+  return hits.map((h) => `${citationRef(h)} ${h.title}`)
 }
 
 /** What the index covers for a project, and what it does not (#257). */

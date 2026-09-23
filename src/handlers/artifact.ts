@@ -44,6 +44,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
+  citationRef,
   contextBlock,
   correspondence,
   type MailCoverage,
@@ -295,6 +296,10 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                 documents: found.map((h) => ({
                   connector: h.connector,
                   id: h.documentId,
+                  // Carried so the citation can say `made` where the office
+                  // made it, rather than printing the word null on the
+                  // sources page of a PDF Grant reads.
+                  origin: h.origin,
                   title: h.title,
                 })),
                 mail: post.map((m) => ({ id: m.messageId, subject: m.subject })),
@@ -379,8 +384,16 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
             }
             const sources = [
               ...(
-                (done.gather?.documents ?? []) as { connector: string; id: string; title: string }[]
-              ).map((d) => ({ label: d.title, ref: `${d.connector}:${d.id}` })),
+                (done.gather?.documents ?? []) as {
+                  connector: string | null
+                  id: string
+                  origin?: string
+                  title: string
+                }[]
+              ).map((d) => ({
+                label: d.title,
+                ref: citationRef({ connector: d.connector, documentId: d.id, origin: d.origin }),
+              })),
               ...((done.gather?.mail ?? []) as { id: string; subject: string }[]).map((m) => ({
                 label: m.subject,
                 ref: `mail:${m.id}`,
@@ -552,9 +565,17 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         blocks: drafted.blocks as Block[],
         created: new Date(),
         sources: [
-          ...((gathered.documents ?? []) as { connector: string; id: string; title: string }[]).map(
-            (d) => ({ label: d.title, ref: `${d.connector}:${d.id}` }),
-          ),
+          ...(
+            (gathered.documents ?? []) as {
+              connector: string | null
+              id: string
+              origin?: string
+              title: string
+            }[]
+          ).map((d) => ({
+            label: d.title,
+            ref: citationRef({ connector: d.connector, documentId: d.id, origin: d.origin }),
+          })),
           ...((gathered.mail ?? []) as { id: string; subject: string }[]).map((m) => ({
             label: m.subject,
             ref: `mail:${m.id}`,

@@ -18,6 +18,8 @@ const hit = (connector: string, title: string, excerpt: string): Hit => ({
   connector,
   documentId: `doc-${connector}`,
   excerpt,
+  // Every fixture here has a connector, so origin never decides anything.
+  origin: '',
   rank: 1,
   title,
 })
