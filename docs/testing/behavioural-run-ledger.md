@@ -591,6 +591,53 @@ that evidence, which #322 had noted.
 
 Clean-pass count after pass 12: **0 of 5.**
 
+## Pass 13 — delegation, and the instrument that measures it
+
+**NOT CLEAN.** One systemic product defect
+([#345](https://github.com/granterogers/agentic.team.grant/issues/345)).
+
+Territory: delegation, chosen because CLAUDE.md records the historical state as
+five of eight agents never selected and `delegation_depth` 0 everywhere.
+
+**Delegation is now healthy, and the measure said so.** 7 of 8 agents chosen,
+30 parent jobs fanning out to 56 children all finished, consultation rate 7.8%,
+median latency 21s. The 15.3-hour worst wait is the known 13–14 September
+outage; second-worst since is 0.1h.
+
+**Two leads chased and both dropped on evidence.** `finance-director` has never
+been chosen — but the subject matcher scores them top on a finance question
+(3), the ceilings were opened to them by #230/#232, and only 3 of 89 real
+delivered instructions name finance first. Two of those three predate the
+ceiling fix, and the third — *"bring Finance in on that"* — was answered
+*"I can't bring Finance in **without knowing what she found**"*, which is
+#320's "needs information" state and legitimate. **Dormancy is a small corpus,
+not a defect.**
+
+**The finding was in the instrument itself.** `npm run measure` printed
+`evidence blocks 0 (the anti-hallucination gate firing)` — every time it has
+ever run. It counted `kind = 'missing_data'`, and **no gate has ever written
+that kind**: all four `app.cannot` sites in `worker.ts` write `not_capable`
+and identify themselves by `noticed_by`. `missing_data` holds 112 rows, **none
+real**, so the figure was zero by construction. The truth on real traffic is
+**46 output-constraint refusals and 8 quality-gate refusals — 54 turns where
+Grant asked and a gate stopped the answer**, reported to him as none.
+
+Worst possible direction: a zero there reads as *the office never
+hallucinates*.
+
+**Fix.** Count by `noticed_by`, real only, printed as a LIST so it cannot go
+silently to zero when a gate is added or renamed; and never a bare zero —
+`NO IMPEDIMENTS FOUND` in words when nothing is found, which is `npm run
+space`'s lesson applied.
+
+**Verification.** 5 assertions on the query's SHAPE, not a count. Three
+sabotages, each printed as landed, each red: reintroducing a hardcoded kind
+(2 failed), replacing the found-nothing sentence with `0` (1), dropping the
+harness filter (1). Run live: 46 and 8 where it said 0. No deploy — `measure`
+is a script, not part of the worker.
+
+Clean-pass count after pass 13: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and

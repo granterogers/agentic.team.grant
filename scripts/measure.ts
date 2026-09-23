@@ -156,12 +156,33 @@ const queue = await one(`
          coalesce(round(max(extract(epoch from (app.now_utc() - j.created_at)) / 60))::int, 0) as oldest_min
     from public.jobs j where j.state in ('queued','retrying') and ${REAL}`)
 
-const gates = await one(`
-  select count(*) filter (where i.kind = 'missing_data')::int as evidence_blocks,
-         count(*)::int as impediments
+/*
+  WHICH GATE STOPPED AN ANSWER, counted by the thing that recorded it (#345).
+
+  This line used to read `kind = 'missing_data'` under the label "the
+  anti-hallucination gate firing", and reported **0** for the life of the
+  measure. No gate in `src/jobs/worker.ts` has ever written `missing_data`:
+  all four write `not_capable` and distinguish themselves by `noticed_by`.
+  `missing_data` holds 112 rows, none of them real, so the number was zero by
+  construction and read as an office that never hallucinates. The truth on
+  real traffic is 8 refusals by the quality gate and 46 by the output
+  constraints - 54 turns where Grant asked and a gate stopped the answer.
+
+  Counted by `noticed_by` rather than by `kind`, because `kind` is the
+  vocabulary of what was MISSING and `noticed_by` is the gate itself. The
+  four markers come from the four `app.cannot` call sites in `worker.ts`.
+
+  It is printed as a LIST rather than one number: a line that can only be a
+  single hardcoded category is a line that goes silently to zero the next time
+  a gate is added or renamed, which is exactly what happened here.
+*/
+const gates = await all(`
+  select coalesce(nullif(btrim(i.noticed_by), ''), 'unattributed') as noticed_by,
+         count(*)::int as n
     from public.job_impediments i
     join public.jobs j on j.job_id = i.job_id
-   where ${REAL}`)
+   where ${REAL} and not coalesce(i.is_fixture, false)
+   group by 1 order by n desc`)
 
 const reachable = staff.filter((s) => Number(s.chosen_real) > 0)
 const dormant = staff.filter((s) => Number(s.chosen_real) === 0)
@@ -184,7 +205,7 @@ const snapshot = {
   realInstructions: Number(totals.real_instructions),
   outputs: Number(totals.outputs),
   traces: Number(totals.traces),
-  evidenceBlocks: Number(gates.evidence_blocks),
+  gateRefusals: Object.fromEntries(gates.map((g) => [String(g.noticed_by), Number(g.n)])),
   medianSeconds: Number(latency.median_s ?? 0),
   p95Seconds: Number(latency.p95_s ?? 0),
   worstSeconds: Number(latency.worst_s ?? 0),
@@ -243,9 +264,21 @@ console.log(`  harness jobs       ${String(snapshot.harnessJobs)} — never mixe
 console.log(
   `  queue waiting      ${String(snapshot.queueWaiting)}, oldest ${String(snapshot.queueOldestMin)}m`,
 )
-console.log(
-  `  evidence blocks    ${String(snapshot.evidenceBlocks)} (the anti-hallucination gate firing)`,
-)
+/*
+  Named, and never a bare zero.
+
+  `npm run space` already learned this the hard way: a measure whose selector
+  matches nothing prints a number that reads as health. So when there is
+  genuinely nothing to report this says so in words.
+*/
+console.log('\nwhen a gate stopped an answer of his (real)')
+if (gates.length === 0) {
+  console.log('  NO IMPEDIMENTS FOUND — check the query before reading this as a quiet office')
+} else {
+  for (const g of gates) {
+    console.log(`  ${String(g.noticed_by).padEnd(24)}${String(g.n)}`)
+  }
+}
 
 await mkdir('.out', { recursive: true })
 await appendFile(RECORD, `${JSON.stringify(snapshot)}\n`)
@@ -261,7 +294,17 @@ if (argv.includes('--compare') && existsSync(RECORD)) {
       ['max delegation depth', prev.maxDelegationDepth, snapshot.maxDelegationDepth],
       ['consultations', prev.consultations, snapshot.consultations],
       ['real jobs', prev.realJobs, snapshot.realJobs],
-      ['evidence blocks', prev.evidenceBlocks, snapshot.evidenceBlocks],
+      /*
+        The quality gate specifically, because that is the one the old
+        `evidence blocks` line CLAIMED to be reporting. A comparison against a
+        snapshot written before this fix finds no such key and reads 0 for the
+        earlier side, which is honest: the old measure genuinely did not know.
+      */
+      [
+        'quality-gate refusals',
+        Number(prev.gateRefusals?.['the quality gate'] ?? 0),
+        Number(snapshot.gateRefusals['the quality gate'] ?? 0),
+      ],
       ['median seconds', prev.medianSeconds, snapshot.medianSeconds],
     ]
     for (const [what, was, now] of rows) {

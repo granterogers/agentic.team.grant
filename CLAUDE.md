@@ -3422,6 +3422,29 @@ Each of these cost real time. They are here so they cost it once.
   An optional field is exactly where this happens: `holds?` absent means "no
   opinion", which is indistinguishable from "not wired".
 
+- **The instrument said the anti-hallucination gate had never fired, and it
+  had fired 54 times on his real turns.** `npm run measure` printed
+  `evidence blocks 0` for the life of the measure, counting
+  `job_impediments.kind = 'missing_data'` — a kind **no gate has ever
+  written**. All four `app.cannot` sites in `worker.ts` write `not_capable`
+  and identify themselves by `noticed_by` (`the handler`, `the quality gate`,
+  `the output constraints`, `the worker`). `missing_data` holds 112 rows, none
+  real, so the figure was zero BY CONSTRUCTION. The label claimed one thing
+  and the query counted another — the wrong-payload trap, inside the tool
+  built to make the office legible, and in the worst direction: a zero there
+  reads as *the office never hallucinates*. **Count by the thing that RECORDED
+  the event, not by the vocabulary of what was missing**, and print a LIST, so
+  the line cannot go silently to zero the next time a gate is added.
+- **Chase a dormant agent to its evidence before calling it a routing
+  defect.** `finance-director` has never been chosen, which looks exactly like
+  #230's ceiling defect. It is not: the subject matcher scores them top on a
+  finance question, the ceilings were opened by #230/#232, and only 3 of 89
+  real delivered instructions name finance first — two predating the fix and
+  the third answered *"I can't bring Finance in without knowing what she
+  found"*, which is #320's "needs information" state and correct. **A small
+  corpus looks identical to a blocked route until you ask how many turns could
+  ever have gone there.**
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the
