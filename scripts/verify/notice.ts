@@ -424,31 +424,96 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
     building three times. A real failure must still be counted and must still
     recur, or 0491 simply switched #132 off.
   */
+  /*
+    A REAL failure means a real KIND as well as a real job (0568).
+
+    This used to invent a kind of its own and attach it to a real job, which
+    made it invisible to 0491's guard on purpose -- and two crashed runs then
+    sat in Grant's morning briefing for five days as the ONLY two rows in it,
+    named to him as things that had failed three times. The office writes a
+    signature from exactly one place, app.failure_seen(job.kind, ...), so a
+    genuine one always names a kind some job has had; the reader enforces that
+    now, and this control has to use a real kind or it is asserting against
+    the fix.
+
+    Three separate statements, because failure_seen upserts and three calls
+    inside ONE statement all read the pre-statement snapshot -- they insert
+    three rows at seen = 1 instead of one at seen = 3, and the reader then
+    correctly returns nothing. The first draft did that and reported the
+    product as broken. Same shape as a data-modifying CTE that cannot see its
+    own rows.
+
+    Not wrapped in a transaction, because this executor returns the FIRST
+    statement's result and the assertion has to read the last. The rows are
+    swept instead, by a sweep armed before they are written -- which is the
+    thing whose absence caused this defect.
+  */
   const real = await one(`
-    select job_id::text as id from public.jobs
+    select job_id::text as id, kind from public.jobs
      where not app.harness_job(job_id) order by created_at desc limit 1
   `)
-  const kind = `noticeproof.${run.replace(/[^a-z0-9]/g, '')}`
-  for (let i = 0; i < 3; i++) {
-    await db.execute(
-      `select app.failure_seen(${lit(kind)}, 'drive', 'sub', ${lit(String(real.id))}::uuid)`,
-    )
+  const realKind = String(real.kind)
+  /*
+    NO SPACE IN THE SUBJECT. `failure_seen` blanks any subject that does not
+    match its own pattern -- lower-case, digits, underscore, dot, colon, hyphen
+    -- so "noticeproof <run>" is stored as the empty string and a reader
+    looking for it finds nothing. The first draft did that and reported a
+    working product as broken; a hand-drive of the writer settled it, and the
+    row it left had to be swept out of Grant's briefing.
+  */
+  const subject = `noticeproof-${run}`
+  const neverRan = `noticeproof.${run.replace(/[^a-z0-9]/g, '')}`
+  const sweepSignatures = async (): Promise<void> => {
+    await db
+      .execute(`
+        delete from public.failure_signatures
+         where subject = ${lit(subject)} or job_kind = ${lit(neverRan)}`)
+      .catch(() => undefined)
   }
-  const seen = await all(
-    `select 1 from app.recurring_failures(3, 14) f where f.job_kind = ${lit(kind)}`,
-  )
-  ok('and a REAL repeated failure still surfaces', seen.length === 1)
+  const onCrash = (error: unknown): void => {
+    console.error(`\nthe suite failed -- sweeping its signatures anyway\n${String(error)}`)
+    void sweepSignatures().finally(() => {
+      process.exitCode = 1
+    })
+  }
+  process.on('unhandledRejection', onCrash)
+  process.on('uncaughtException', onCrash)
+
+  for (let i = 0; i < 3; i++) {
+    await db.execute(`
+      select app.failure_seen(${lit(realKind)}, 'noticeproof', ${lit(subject)},
+                              ${lit(String(real.id))}::uuid)`)
+  }
+  const surfaced = await all(`
+    select 1 from app.recurring_failures(3, 14) f
+     where f.job_kind = ${lit(realKind)} and f.subject = ${lit(subject)}`)
+  ok('and a REAL repeated failure still surfaces', surfaced.length === 1)
+
+  /*
+    And the other half of 0568, which is what actually reached him: a
+    signature naming a kind the office has NEVER run must not.
+  */
+  for (let i = 0; i < 3; i++) {
+    await db.execute(`
+      select app.failure_seen(${lit(neverRan)}, 'drive', 'sub',
+                              ${lit(String(real.id))}::uuid)`)
+  }
+  const hidden = await all(`
+    select 1 from app.recurring_failures(3, 14) f where f.job_kind = ${lit(neverRan)}`)
+  ok('and a kind the office has never run does not', hidden.length === 0)
+  await sweepSignatures()
+  const bothGone = await all(`
+    select 1 from public.failure_signatures
+     where subject = ${lit(subject)} or job_kind = ${lit(neverRan)}`)
+  ok('and neither control is left in the table', bothGone.length === 0)
+
   /*
     And the reader's own half: a harness signature put in ON PURPOSE must not
     come back out. Belt and braces with the writer, because a path that writes
-    around the front door would otherwise reach Grant — and because a check
-    that only asks the table cannot tell whether the reader is doing anything.
-  */
-  /*
-    `failure_signatures_kind_format` allows only lower-case dotted segments —
-    no hyphen — so this is `noticeproofharness`, not `noticeproof-harness`.
-    Read from `pg_constraint` after the first run was refused, which is the
-    cheap way round: the constraint is the product being right.
+    around the front door would otherwise reach Grant.
+
+    failure_signatures_kind_format allows only lower-case dotted segments --
+    no hyphen -- so this is noticeproofharness, not noticeproof-harness.
   */
   const fixKind = `noticeproofharness.${run.replace(/[^a-z0-9]/g, '')}`
   await db.execute(`
@@ -466,13 +531,11 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
   )
   ok('and the reader refuses to hand it to Grant', leaked.length === 0)
 
-  await db.execute(
-    `delete from public.failure_signatures where job_kind in (${lit(kind)}, ${lit(fixKind)})`,
+  await db.execute(`delete from public.failure_signatures where job_kind = ${lit(fixKind)}`)
+  const plantedLeft = await all(
+    `select 1 from public.failure_signatures where job_kind = ${lit(fixKind)}`,
   )
-  const swept = await all(
-    `select 1 from public.failure_signatures where job_kind in (${lit(kind)}, ${lit(fixKind)})`,
-  )
-  ok('and the controls leave nothing behind', swept.length === 0)
+  ok('and the controls leave nothing behind', plantedLeft.length === 0)
 }
 
 console.log(`\n${pass}/${pass + fail} checks passed`)
