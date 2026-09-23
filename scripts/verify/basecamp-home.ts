@@ -269,19 +269,19 @@ const FORBIDDEN = ['chat', 'sources']
   const before = await mods()
 
   /*
-    OPEN THE PANEL, don't TOGGLE it. The arrange control is a toggle and the
-    panel puts itself back after a render, so a blind second press CLOSES it -
-    which is how a correct product produced "element is not visible" on the
-    reset button. Ask what state it is in, the way a person does by looking.
+    THERE IS NO PANEL TO OPEN ANY MORE (§13).
+
+    "Arrange this page" was a menu entry that opened a panel explaining
+    dragging, resizing and removing -- all of which the board itself does. It
+    is gone. What it also held was the only way BACK, since the cross takes a
+    module off and nothing on the board could return it, so that one job moved
+    onto the page: a row at the end of the board, drawn only when something is
+    actually off, saying what is not here and offering it back.
+
+    So the suite stopped needing to open anything, and what it asserts instead
+    is stronger -- that the affordance is ABSENT while the page is whole, which
+    a panel behind a menu could never be checked for.
   */
-  const openArrange = async (): Promise<void> => {
-    const panel = page.locator('[data-bc-arrange-panel]')
-    if (await panel.isVisible()) return
-    await page.locator('[data-bc-pagemenu]').first().click()
-    await page.waitForTimeout(150)
-    await page.locator('[data-bc-arrange]').first().click()
-    await page.waitForTimeout(200)
-  }
   check('the home starts with every tool on it', before.length >= 6, before.join(','))
 
   /*
@@ -289,23 +289,14 @@ const FORBIDDEN = ['chat', 'sources']
     The check timed out on a hidden control the moment v2 moved it, which is
     the audit noticing a real change rather than a defect.
   */
-  await openArrange()
   /*
-    THE PANEL NAMES WHAT IS OFF THE PAGE, and the board names what is on it.
-
-    It used to list every module with Up, Down and Remove beside each. Grant,
-    22 September: *"Do not substitute crude up/down controls for genuine
-    spatial rearrangement."* Moving is dragging now and removing is the cross
-    on the module's own header, so the panel has exactly one job left that
-    dragging cannot do - putting back something that is not there to drag.
-    With nothing off the page it correctly offers nothing, which is what is
-    asserted first.
+    WITH EVERY TOOL ON THE PAGE THERE IS NOTHING TO SAY, so nothing is drawn.
+    A row that is always there, reading "nothing is missing", is furniture.
   */
   check(
-    'with every tool on the page the panel offers nothing to put back',
-    (await page.locator('[data-bc-arrange-panel] [data-bc-arr-on]').count()) === 0,
+    'with every tool on the page nothing offers to put one back',
+    (await page.locator('[data-bc-arrange-panel]').count()) === 0,
   )
-  await page.keyboard.press('Escape')
 
   /* Removing is the cross on the module's own header now. */
   await page.locator('[data-mod="documents"]').first().hover()
@@ -338,16 +329,22 @@ const FORBIDDEN = ['chat', 'sources']
   await page.waitForTimeout(300)
   check('and the removal survives a reload', !(await mods()).includes('documents'))
 
-  await openArrange()
   check(
-    'and the panel now offers to put it back',
+    'and the page itself now offers to put it back',
     (await page.locator('[data-bc-arr-on="documents"]').count()) === 1,
   )
   await page.locator('[data-bc-arr-on="documents"]').click()
   await page.waitForTimeout(300)
   check('putting it back puts it back', (await mods()).includes('documents'))
 
-  await openArrange()
+  /*
+    Removing documents again, so there is something off the page for the reset
+    row to be drawn beside: with the board whole it correctly draws nothing.
+  */
+  await page.locator('[data-mod="documents"]').first().hover()
+  await page.waitForTimeout(150)
+  await page.locator('[data-bc-modoff="documents"]').click()
+  await page.waitForTimeout(300)
   await page.locator('[data-bc-arr-reset]').click()
   await page.waitForTimeout(300)
   check(
