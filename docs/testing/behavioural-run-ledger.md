@@ -297,6 +297,48 @@ Findings per pass: 2, 3, 3, 1, 1, 0, 2. The yield has not fallen away, and the
 single finding in pass 3 was the largest of the run. Continuing is justified by
 the evidence rather than by appetite.
 
+### Pass 7 — what the morning briefing actually says to him (#334)
+
+Territory: the one surface that reaches Grant every day without him asking.
+Read by opening the sentences it sent rather than the code that composes them.
+
+**NOT CLEAN — two systemic PRODUCT defects, both on his highest-trust
+surface, both fixed.**
+
+1. **The failure section contained nothing but fixtures**, for five days.
+   `app.recurring_failures` returned exactly two rows and both were
+   `verify:notice` debris — a suite that attaches its proof to a REAL job on
+   purpose, so 0491's guard cannot see it. Fixed at the reader (0568): the
+   office writes signatures only as `app.failure_seen(job.kind, …)`, so a
+   genuine one always names a kind some job has run, and the whole table was 2
+   rows of which 0 did.
+2. **The headline number was 94% test traffic.** *"54 items are waiting on
+   you… 50 more sit on the dashboard"* — 67 open blockers, 63 raised by
+   suites, four his. `public.needs_me` had no harness filter and has EIGHT
+   consumers, so the dashboard and the voice answer said it too. Fixed in the
+   view (0569) with its companion (0570), because without the second the two
+   halves of one sentence counted different populations.
+
+`verify:autonomy` went red and was asserting an artefact — count equality as a
+proxy for "the view does not truncate". 0570 made them one population again, so
+it is valid without being weakened. `verify:briefing` now asserts the invariant
+every run as a property, with a control.
+
+Three harness mistakes on the way, each caught by driving: three upserts in one
+statement all read the pre-statement snapshot; this executor returns the FIRST
+statement's result; and `failure_seen` blanks a subject containing a space. The
+last left a real `drive.watch` signature in his briefing for a minute, swept.
+
+Also swept: six retired harness specialists `check:leaks` named, from this
+run's session corpus.
+
+**A sabotage this environment would not allow.** DDL against the shared view is
+declined, correctly. What stands in its place is each migration's own
+raise-unless-true drive block and the suite control — recorded here rather than
+left implied.
+
+Clean-pass count after pass 7: **0 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

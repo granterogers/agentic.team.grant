@@ -3257,6 +3257,46 @@ Each of these cost real time. They are here so they cost it once.
   projects in a harness answer are the filter working, not a leak. Check which
   side of that predicate your turn is on before reporting one.
 
+- **His morning briefing was mostly harness traffic, in both of its headline
+  numbers, and nothing was counting.** The failure section held exactly two
+  rows for five days and both were `verify:notice` debris — a suite that
+  attaches its proof signature to a REAL job on purpose, so 0491's guard on
+  `last_job_id` cannot see it by construction. And *"54 items are waiting on
+  you… 50 more sit on the dashboard"* was 67 open blockers of which 63 were
+  suites' and four were his, because `public.needs_me` had no harness filter
+  at all and has EIGHT consumers — the dashboard and the voice answer said the
+  same thing. Both fixed at the CLASS: `app.recurring_failures` now ignores a
+  kind the office has never run (the writer composes it from `jobs.kind`, so a
+  real one always matches), and the view asks `app.harness_job`, which is the
+  fourth reader 0355's rule has had to be carried across to. **Ask what a
+  surface actually SAID to him, not whether its code looks right.**
+- **Filter one half of a sentence and you must filter the other.**
+  `app.needs_me_pressure` is the *"N more sit on the dashboard"* clause and
+  read `public.blockers` directly, so from the moment the view was fixed the
+  two halves counted different populations. Fourth instance of both-halves-
+  right-alone in this file.
+- **A blocker with no job is KEPT by both filters.** 0304's asymmetry decides
+  the direction: a witness that can only ever exclude cannot hide a genuine
+  request, and "I know nothing about this" must not become "this is harness"
+  on the one surface he uses to see what needs him.
+- **A suite that goes red on a correct filter may be asserting an artefact.**
+  `verify:autonomy` compared the view's count to the global open count as a
+  proxy for *"the view does not truncate"*. The property is that nothing is
+  CAPPED. Making both halves one population restored it without weakening it —
+  the alternative, relaxing the check, would have removed the only guard on
+  hiding items from him.
+- **This executor returns the FIRST statement's result, not the last**, so a
+  `begin; write; write; read; rollback;` batch hands back the write's answer
+  and a control reading it reports the product as broken. And three upserts in
+  ONE statement all read the pre-statement snapshot — three rows at `seen = 1`
+  rather than one at 3. Both found by driving the writer by hand after the
+  suite disagreed with the product.
+- **`app.failure_seen` BLANKS a subject that is not lower-case, digits,
+  underscore, dot, colon or hyphen** — so a subject with a space in it is
+  stored as `''` and a reader looking for it finds nothing, for ever. The
+  hand-drive that found this also left a real `drive.watch` signature in
+  Grant's briefing until it was swept.
+
 ---
 
 ## Visual standard
