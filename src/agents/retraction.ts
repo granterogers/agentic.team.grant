@@ -202,6 +202,41 @@ export interface Retraction {
  * "nothing was withdrawn" as "everything was withdrawn" — 0304's asymmetry
  * lesson, in a return type.
  */
+/*
+  THE FILLER BELONGS TO THE PIVOT, NOT TO THE INSTRUCTION.
+
+  Dictation puts a breath between the change of mind and the replacement:
+  *"…no actually, you know what, chase the caterers instead"*. The pivot
+  matcher stops at "no actually", so "you know what," survived into `kept` and
+  straight into a task title on Grant's own list — three of three shapes on
+  the first probe.
+
+  Stripped HERE rather than in either caller, because two callers stripping it
+  their own way is how `taskTitle` and `personalTaskRequest` came to disagree
+  about the retraction in the first place.
+*/
+const A_BREATH =
+  /^\s*(?:you know(?: what)?|i mean|i tell you what|let(?:'|\u2019)s see)\s*[,.!?-]*\s*/i
+
+const withoutTheBreath = (text: string): string => {
+  let out = text
+  /*
+    `actually` is deliberately NOT here: it is a PIVOT word, listed in
+    `BARE_PIVOTS`, and treating it as filler would let this eat the operator
+    the matcher above depends on.
+
+    Twice at most. "you know what, I mean, chase the caterers" is two
+    breaths and three would be somebody dictating something else entirely —
+    an unbounded loop here would eat a short instruction whole.
+  */
+  for (let i = 0; i < 2; i += 1) {
+    const next = out.replace(A_BREATH, '')
+    if (next === out || next.trim() === '') break
+    out = next
+  }
+  return out.trim()
+}
+
 export const readRetraction = (text: string): Retraction | null => {
   /*
     Straightened first, with the PRODUCT's own helper.
@@ -313,10 +348,12 @@ export const readRetraction = (text: string): Retraction | null => {
         .replace(/\s+([,.;:])/g, '$1')
         .trim()
     return {
-      kept: [survives, after]
-        .filter((x) => x !== '')
-        .join(' ')
-        .trim(),
+      kept: withoutTheBreath(
+        [survives, after]
+          .filter((x) => x !== '')
+          .join(' ')
+          .trim(),
+      ),
       withdrawn: cleanedBefore.slice(last.index, last.index + last.length).trim(),
       pivot: chosen.text.toLowerCase(),
       target,
@@ -324,7 +361,7 @@ export const readRetraction = (text: string): Retraction | null => {
   }
 
   return {
-    kept: after,
+    kept: withoutTheBreath(after),
     withdrawn: cleanedBefore,
     pivot: chosen.text.toLowerCase(),
     target: null,

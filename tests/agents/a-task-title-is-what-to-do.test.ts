@@ -44,6 +44,7 @@
 import { describe, expect, it } from 'vitest'
 import { dueOn, withoutTheDate } from '../../src/agents/due.ts'
 import { personalTaskRequest } from '../../src/agents/mine.ts'
+import { readRetraction } from '../../src/agents/retraction.ts'
 import { taskTitle } from '../../src/agents/tasks.ts'
 
 /** A Tuesday, so "by Friday" and "on Thursday" have somewhere to land. */
@@ -135,7 +136,27 @@ describe('a retracted false start is not part of the name', () => {
     const t = taskTitle('For me and the um... No actually, you know what? scan the entire project')
     expect(t).not.toBeNull()
     expect(String(t)).not.toContain('For me and the um')
-    expect(String(t)).toContain('scan the entire project')
+    /*
+      The dictation breath goes too — "you know what?" belongs to the change
+      of mind, not to the instruction, and it survived into a title on Grant's
+      own list.
+    */
+    expect(String(t)).not.toContain('you know what')
+    expect(String(t)).toContain('the entire project')
+    /*
+      The leading VERB does not survive, and that is a SEPARATE defect filed
+      on its own evidence: `requestBody` returns the OBJECT of a request and
+      `taskTitle` uses it as a TITLE, so "chase the caterers" titles a task
+      "the caterers". Real rows show it — `public.tasks` holds "all of Grant's
+      current tasks across all of Grant's projects" as a task name.
+
+      This assertion used to read `toContain('scan the entire project')` and
+      passed for the wrong reason: the filler was the thing being stripped, so
+      the verb survived by accident. Removing the filler made the real
+      behaviour visible. Asserted as it IS, with the defect named, rather than
+      left as a green check over a title nobody would write.
+    */
+    expect(String(t)).toBe('the entire project')
   })
 })
 
@@ -196,4 +217,65 @@ describe('the OTHER task writer gets the same classes', () => {
       expect({ title: r?.title, due: r?.due ?? null }).toEqual({ title, due })
     })
   }
+})
+
+describe('the dictation breath belongs to the change of mind', () => {
+  /*
+    Found while measuring #318, on a real row: `public.tasks` held
+
+      "For me and the um... No actually, you know what? Scan the entire
+       project"
+
+    The pivot matcher stops at "no actually", so "you know what?" survived
+    into `kept` and straight into a title on Grant's own list. Three of three
+    dictation shapes did it on the first probe.
+
+    Stripped in `readRetraction` rather than in either caller, because two
+    callers stripping it their own way is how `taskTitle` and
+    `personalTaskRequest` came to disagree about the retraction itself —
+    CLAUDE.md's two-doors-onto-one-field entry.
+  */
+  const SHAPES: readonly (readonly [string, string])[] = [
+    [
+      'Create a task for me and the um... No actually, you know what? Scan the project and make review tasks',
+      'Scan the project and make review tasks',
+    ],
+    [
+      'Add a task to chase the invoice. Actually no, you know what, chase the caterers instead',
+      'chase the caterers instead',
+    ],
+    [
+      'Remind me to call the venue. Scrap that, you know what, remind me to email them',
+      'remind me to email them',
+    ],
+  ]
+
+  it.each(SHAPES)('keeps only the instruction: %s', (said, kept) => {
+    expect(readRetraction(said)?.kept).toBe(kept)
+  })
+
+  it('and "actually" is left alone, because it is a pivot and not filler', () => {
+    /*
+      Listing it as a breath would let the stripper eat the operator the
+      matcher depends on. Asserted so nobody adds it to the list.
+    */
+    const got = readRetraction('chase the letter, redo the budget - actually no, leave the budget')
+    expect(got).not.toBeNull()
+    /*
+      The word SURVIVES rather than being eaten as filler, which is the
+      property. An earlier version of this asserted it was the chosen pivot
+      and was simply wrong about the product — the pivot here is "leave",
+      from CANCELS. Asserting what actually protects the operator.
+    */
+    expect(String(got?.kept ?? '')).toContain('actually')
+  })
+
+  it('and a sentence that is only a breath is not emptied', () => {
+    /*
+      Bounded at two strips. An unbounded loop would eat a short instruction
+      whole and hand back nothing, which is worse than the filler.
+    */
+    const got = readRetraction('Add a task to ring them. No actually, you know what, you know what')
+    expect(String(got?.kept ?? '')).not.toBe('')
+  })
 })

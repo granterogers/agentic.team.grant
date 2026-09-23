@@ -36,6 +36,7 @@ import { PREFERENCES } from './preferences.ts'
 import { REPEATING } from './repeating.ts'
 import type { Session } from './run.ts'
 import { THIRD } from './third.ts'
+import { TWO_DOMAIN } from './twodomain.ts'
 import { UNSEEN } from './unseen.ts'
 
 const DEVELOPMENT: readonly Session[] = [
@@ -821,6 +822,7 @@ export const SESSIONS: readonly Session[] = [
   ...COLLABORATION,
   ...REPEATING,
   ...OWED,
+  ...TWO_DOMAIN,
 ]
 
 export const byName = (name: string): Session | undefined => SESSIONS.find((s) => s.name === name)
