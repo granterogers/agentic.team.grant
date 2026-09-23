@@ -2040,6 +2040,43 @@ Each of these cost real time. They are here so they cost it once.
   slash, which opens the command bar from anywhere. Same shape as #268's
   substring check satisfied by a superstring: the synthetic failure has to
   exercise the path the check claims to cover, not a neighbour of it.
+- **An obligation is not a job, and four fixes each rebuilt that idea by
+  hand.** `jobs.state = 'complete'` means ONE job stopped executing. Nothing
+  meant "what Grant asked for has been done", so #312, #315, #316 and #317
+  each reconstructed it from descendants and bolted the result onto
+  `conversation_before`. Canonical traffic says the parent finishing first is
+  not an edge case — **53 of 56 real parent/child pairs had the child finish
+  AFTER the parent**, all 53 wrote something, 21 were delivered. And the
+  aggregation already existed and had never been used: 40 `branch_groups`,
+  **0 of them real**, 1055 real children outside any group. `app.fan_in_over`
+  was wired behind `branchesStarted.length >= 2` while real traffic is 5138
+  turns convening nobody, 2 convening one and **none ever convening two** — so
+  the gate stood one above the only shape that happens. 0562 derives
+  `app.obligation_state` across the tree (never stored, so no counter can get
+  stuck and a terminal child cannot strand it), 0563 lowers both halves of the
+  threshold, and a lone branch is RELAYED verbatim rather than synthesised.
+- **Both halves held the same threshold, so lowering either alone did nothing
+  — and said nothing.** `instruction.ts` gated at `>= 2` and `app.fan_in_over`
+  refused `v_count < 2`. Lowering the TypeScript gate changed no behaviour at
+  all, because the function returns `{error: …}` rather than RAISING and the
+  caller had only a `.catch`. Third instance of 0282/0293 (loosening a
+  constraint does not loosen the function that pre-checks it) sitting on top
+  of the swallowed-write defect. **When a SQL function reports refusal in its
+  return value, the caller has to read it** — a `.catch` is blind to it.
+- **A slice is a substring, so a bounded window is part of the assertion.**
+  A control sliced 2600 characters after `select app.fan_in_over(` and ran
+  past the block into the record-consultation handler, which happens to
+  contain `answer?.error` and `app.cannot` of its own — so a sabotage that
+  gutted the fan-in's error handling left the check GREEN. #268's superstring
+  trap in slice form, and the fourth vacuous control in two sessions. Bound a
+  source slice by BOTH ends.
+- **A date-dependent test is wrong one day in seven.** `verify:mytasks`
+  seeded a task at `today + 5` and asserted only that "Actually make that
+  Monday" CHANGED the date. On a Wednesday, today + 5 IS next Monday, so the
+  office moved the task to exactly the date it already had and the suite
+  reported a correct product as broken. Assert the PROPERTY — it ends up on
+  the next Monday — and seed a day the answer cannot be.
+
 - **Assert the CALL, not the NAME — three vacuous controls in one session.**
   #268 already records a substring check satisfied by a superstring. This is
   its commoner form: a test asserting `expect(source).toContain('asksWhoIsOnIt')`

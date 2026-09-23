@@ -215,6 +215,52 @@ export function synthesiseHandler(deps: SynthesiseDeps): Handler {
             'nothing for me to draw together. Nothing here is my own guess.',
         )
       }
+      /*
+        ONE BRANCH IS RELAYED, NOT SYNTHESISED (#312, 0562).
+
+        `instruction.ts` registered a fan-in only at TWO or more specialists,
+        on the reasoning that a fan-in over one branch is just that branch.
+        Canonical traffic says that is the only shape that occurs:
+
+            convened specialists   real turns
+            0                      5138
+            1                         2
+            2 or more                 0
+
+        So the gate stood one above the only case there was, and a single
+        specialist's answer had no owner — it finished after the Chief had
+        answered, `only_chief_speaks` kept it off his phone, and nothing
+        delivered it.
+
+        The comment was right about the work, though: with one branch there is
+        nothing to draw together. Relaying it verbatim and attributed spends
+        no model, cannot paraphrase a finding into something the specialist
+        did not say, and cannot credit anybody who was not there — so the
+        invention gate below has nothing to catch, because nothing was
+        invented.
+      */
+      if (outputs.length === 1) {
+        const only = outputs[0]
+        if (only === undefined) return say('I was asked to relay an answer that is not there.')
+        return {
+          ...base,
+          body: `${only.name} looked at this and came back with:\n\n${only.body.trim()}`,
+          /*
+            ASKED, NOT ASSERTED. `enforce_deterministic_claim` refuses
+            `deterministic_retrieval` on any correlation that spent a model
+            call — and the branch spent several on THIS one, because a child
+            inherits its parent's correlation. Claiming it here would have
+            failed the job at the insert, which is the shape CLAUDE.md records
+            costing `office.notion_sync` twelve failures in a day.
+
+            The branch's own confidence and evidence are plain strings off a
+            jsonb row, so they are not claimed either: `base` keeps the
+            conservative pair rather than asserting labels nothing validated.
+          */
+          path: await howComposed(deps.db, job.jobId),
+        }
+      }
+
       if (router === null) {
         return say(
           `${String(outputs.length)} colleagues answered and I cannot draw it together — the ` +

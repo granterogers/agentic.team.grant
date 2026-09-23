@@ -1307,9 +1307,32 @@ console.log('\n"actually make that Monday" (#259, migration 0516)')
   */
   await say('Morning — what is on my list?')
 
+  /*
+    THE SEED MUST NOT ALREADY BE THE ANSWER.
+
+    This seeded `today + 5` and asserted only that the date CHANGED. On a
+    Wednesday, today + 5 IS next Monday, so the office moved the task to
+    exactly the date it already had and the check reported a correct product
+    as broken — a date-dependent test that is wrong one day in seven.
+
+    Asserting the PROPERTY instead: the task ends up on the next Monday. That
+    holds every day of the week, and it is the thing the sentence actually
+    claims. The seed is deliberately a day the answer cannot be.
+  */
+  const nextMonday = (() => {
+    const d = new Date()
+    d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7 || 7))
+    return d.toISOString().slice(0, 10)
+  })()
+  const seeded = (() => {
+    const d = new Date(`${nextMonday}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + 2)
+    return d.toISOString().slice(0, 10)
+  })()
+
   const first = (await press('my_task_add', {
     p_title: `Ring the caterers ${run}`,
-    p_due_on: new Date(Date.now() + 5 * 86400_000).toISOString().slice(0, 10),
+    p_due_on: seeded,
   })) as { id?: string }
   const subject = String(first.id ?? '')
 
@@ -1318,9 +1341,8 @@ console.log('\n"actually make that Monday" (#259, migration 0516)')
     select due_on::text as due, title from public.tasks where task_id = ${lit(subject)}::uuid`)
   check(
     'a follow-up moves the task this conversation put on his list',
-    `${String(moved.due ?? 'no date')} — the office said: ${monday.slice(0, 60)}`,
-    String(moved.due ?? '') !== new Date(Date.now() + 5 * 86400_000).toISOString().slice(0, 10) &&
-      String(moved.due ?? '') !== '',
+    `${String(moved.due ?? 'no date')} (wanted ${nextMonday}, seeded ${seeded}) — ${monday.slice(0, 50)}`,
+    String(moved.due ?? '') === nextMonday,
   )
   check(
     'and it says WHICH task it changed, rather than "done"',

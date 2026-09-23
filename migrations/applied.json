@@ -560,5 +560,8 @@
   "0558_a_turn_does_not_duplicate_itself.sql": "7c308ecd040ad2382c9e8a42bbbe3c12b21eb82a5a87d9e30b8a2daa81529cb4",
   "0559_finished_work_is_still_an_answer.sql": "38307496f2135f1d131e782e2bbc7464b30c0cab67e66f812ce340dae684ce37",
   "0560_a_refusal_is_not_an_answer.sql": "f2918f2f46f41b17f82b5e3939e516a91a63cea83b5cc1e31e72992002b086a4",
-  "0561_another_pair_of_eyes.sql": "25dc1f32dcbf1fd29222cc12f9fb7dc1c7c51832ececf97249e4f7a5511cde8f"
+  "0561_another_pair_of_eyes.sql": "25dc1f32dcbf1fd29222cc12f9fb7dc1c7c51832ececf97249e4f7a5511cde8f",
+  "0562_an_obligation_is_not_a_job.sql": "5ef89ed545da17657884293770830505cd903953ab6e1f4509be6a123e7e0304",
+  "0563_one_specialist_is_a_fan_in.sql": "90c821f3399206cfb0df25d18aa22e3cd4c438c1d0dde2bce3b96b1ae194c6fa",
+  "0564_the_conversation_can_name_the_obligation.sql": "fd28affbf5a8243e49612655debbdfb60634d8978eb3c94e27d4d753d724e5b3"
 }

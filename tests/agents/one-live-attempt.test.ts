@@ -19,7 +19,7 @@
 
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { asksWhoIsOnIt } from '../../src/agents/whoison.ts'
+import { asksWhatTheyFound, asksWhoIsOnIt } from '../../src/agents/whoison.ts'
 
 const source = readFileSync('src/handlers/instruction.ts', 'utf8')
 const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
@@ -378,5 +378,33 @@ describe('#317 — what did they come back with, answered from the rows', () => 
       defect with a clock instead of a gap.
     */
     expect(withoutComments).toMatch(/wantsTheirAnswers \? "interval '24 hours'"/)
+  })
+})
+
+describe('and the question can be about the work rather than the people', () => {
+  /*
+    Observed live on v757: "did anything come back on the suppliers?" fell
+    through to the model, because every earlier pattern keyed on a colleague
+    pronoun and this names the work. It was answered honestly by luck, which
+    is the exact shape #317 is about.
+  */
+  const ASKS = [
+    'did anything come back on the suppliers?',
+    'has anything come back',
+    'did anyone come back on that',
+    'have they heard back',
+  ]
+  it.each(ASKS)('%s is asking what came back', (text) => {
+    expect(asksWhatTheyFound(text)).toBe(true)
+  })
+
+  const NOT = [
+    'did anything go wrong',
+    'has the report come out',
+    'did anything change on the pricing',
+    'come back to me on that',
+  ]
+  it.each(NOT)('declines: %s', (text) => {
+    expect(asksWhatTheyFound(text)).toBe(false)
   })
 })

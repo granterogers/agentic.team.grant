@@ -124,11 +124,29 @@ const ANY_WORD = new RegExp(
   'i',
 )
 
+/*
+  "did anything come back on the suppliers?" — the subject is the WORK rather
+  than the people, so none of the patterns above can see it: they all key on a
+  colleague pronoun. Observed live on v757, where it fell through to the model
+  and was answered from general knowledge, which is the exact shape #317 is
+  about even when the answer happens to come out honest.
+*/
+const ANYTHING_BACK = new RegExp(
+  String.raw`^\s*(?:and\s+|so\s+)?(?:did|has|have)\s+(?:anything|anyone|they|we)\s+` +
+    String.raw`(?:come|got|heard)\s+(?:back|anything)(?:\s+(?:on|from|about)\s+[a-z0-9][a-z0-9'’\- ]{0,40})?` +
+    String.raw`\s*\??\s*$`,
+  'i',
+)
+
 /** Whether this asks what the colleagues came back with. */
 export function asksWhatTheyFound(text: string): boolean {
   const said = straighten(String(text ?? '')).trim()
   if (said === '') return false
   return (
-    CAME_BACK.test(said) || DID_THEY.test(said) || WHERE_DIFFER.test(said) || ANY_WORD.test(said)
+    CAME_BACK.test(said) ||
+    DID_THEY.test(said) ||
+    WHERE_DIFFER.test(said) ||
+    ANY_WORD.test(said) ||
+    ANYTHING_BACK.test(said)
   )
 }

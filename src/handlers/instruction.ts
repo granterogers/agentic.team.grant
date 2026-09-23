@@ -2484,7 +2484,22 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         Never fatal. A group that could not be registered costs the synthesis
         and leaves every specialist's own answer exactly where it already was.
       */
-      if (branchesStarted.length >= 2) {
+      /*
+        ONE IS ENOUGH (0562).
+
+        This read `>= 2`, and the comment above explains why: a fan-in over
+        one branch is just that branch. True about the WORK and wrong about
+        the ownership — canonical traffic says 5138 real turns convened
+        nobody, 2 convened one, and **none has ever convened two**, so the
+        gate stood one above the only shape that happens and a single
+        specialist's answer had nothing responsible for delivering it. It
+        finished after the Chief had answered, `only_chief_speaks` kept it off
+        his phone, and it disappeared.
+
+        `office.synthesise` relays a single branch verbatim rather than
+        drawing it together, so this costs no model call and invents nothing.
+      */
+      if (branchesStarted.length >= 1) {
         await deps.db
           .execute(`
             select app.fan_in_over(
@@ -2502,6 +2517,37 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               'office.synthesise',
               app.now_utc() + interval '20 minutes')
           `)
+          /*
+            A REFUSAL IS NOT A THROW, AND THIS ONLY CAUGHT THROWS (0563).
+
+            `app.fan_in_over` returns `{error: …}` rather than raising, so
+            when it refused every call for months — its own `v_count < 2`
+            matching this gate exactly — nothing threw, nothing was recorded,
+            and the fan-in simply did not happen. Lowering the gate here
+            alone changed nothing and said nothing.
+
+            CLAUDE.md's own rule: a swallowed error on a write nobody reads
+            back is indistinguishable from a feature that was never built.
+            The returned object is read now, and a refusal is recorded in the
+            same place a throw would be.
+          */
+          .then(async (r) => {
+            const raw = (r.rows[0] as { fan_in_over?: unknown } | undefined) ?? {}
+            const got = Object.values(raw)[0]
+            const answer = (typeof got === 'string' ? JSON.parse(got) : got) as {
+              error?: string
+            } | null
+            if (typeof answer?.error === 'string' && answer.error !== '') {
+              await deps.db
+                .execute(`
+                  select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                    'draw several answers together', ${lit(who.slug)},
+                    ${lit(`the fan-in was refused: ${String(answer.error).slice(0, 140)}`)},
+                    ${lit(instruction.slice(0, 280))})`)
+                .catch(() => undefined)
+            }
+            return undefined
+          })
           .catch(async (error: unknown) => {
             await deps.db
               .execute(`
@@ -3049,6 +3095,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .then((r) => {
                 const raw = (r.rows[0] as { r?: unknown })?.r
                 const work = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  obligation?: string | null
                   in_flight?: { who?: string; about?: string }[]
                   recently_done?: {
                     who?: string
@@ -3136,10 +3183,25 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   names.length === 1 && names[0] === 'someone'
                     ? ''
                     : ` — ${names.slice(0, 4).join(', ')}`
+                /*
+                  NAMED, NOT COUNTED (0562, 0564).
+
+                  `jobs.state` says one job stopped executing; the obligation
+                  state says what became of what he asked for. Counting live
+                  children was the closest the office could get before the
+                  distinction existed, and it cannot tell "two people are on
+                  it" from "two people are on it and one of them needs you".
+                */
+                const named =
+                  work?.obligation === 'waiting_on_user'
+                    ? 'It is waiting on you'
+                    : work?.obligation === 'partially_complete'
+                      ? 'Part of that landed and part did not'
+                      : null
                 const head =
                   live.length === 1
-                    ? `One piece of work is running on that${who}.`
-                    : `${String(live.length)} pieces of work are running on that${who}.`
+                    ? `${named ?? 'One piece of work is running on that'}${named === null ? who : ''}.`
+                    : `${named ?? `${String(live.length)} pieces of work are running on that`}${named === null ? who : ''}.`
                 /*
                   #317's half, and it belongs in the same sentence: a blocker
                   he has not been told about is the office waiting on him

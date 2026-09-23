@@ -18,6 +18,7 @@
  * No backticks in any comment inside a template literal below.
  */
 
+import { readFileSync } from 'node:fs'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
@@ -168,10 +169,9 @@ section = 'the ceilings'
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
 
-    -- One branch is not a fan-out.
-    insert into r select 'one', app.fan_in_over(${PARENT}, 'x', jsonb_build_array(
-      jsonb_build_object('job_id', ${CHILD('research-director')}, 'agent', 'research-director',
-                         'purpose', 'p')), 'office.synthesise', null);
+    -- A fan-in over NOTHING has nothing to wait for (0563).
+    insert into r select 'none', app.fan_in_over(${PARENT}, 'x', '[]'::jsonb,
+      'office.synthesise', null);
 
     -- Somebody else's child cannot be claimed as a branch.
     insert into r select 'stolen', app.fan_in_over(${PARENT}, 'x', jsonb_build_array(
@@ -186,16 +186,47 @@ section = 'the ceilings'
       jsonb_build_object('job_id', ${CHILD('finance-director')}, 'agent', 'finance-director',
                          'purpose', 'p')), 'office.synthesise', null);
 
-    select (select v from r where k = 'one') ->> 'error' as one,
+    -- ONE branch is a fan-in now, and this runs LAST for that reason: it
+    -- succeeds, and an existing group makes every later call return early
+    -- saying the group is already registered, which is how the two controls
+    -- above silently stopped being controls the moment 0563 landed.
+    -- No backticks in this comment: it lives inside a template literal.
+    insert into r select 'one', app.fan_in_over(${PARENT}, 'x', jsonb_build_array(
+      jsonb_build_object('job_id', ${CHILD('research-director')}, 'agent', 'research-director',
+                         'purpose', 'p')), 'office.synthesise', null);
+
+    select (select v from r where k = 'none') ->> 'error' as none,
            (select v from r where k = 'stolen') ->> 'error' as stolen,
            (select v from r where k = 'ghost') ->> 'error' as ghost,
+           coalesce(((select v from r where k = 'one') ->> 'ok')::boolean, false) as one_ok,
            (select count(*) from public.branch_groups where parent_job_id = ${PARENT}) as groups;
     rollback;`)
 
+  /*
+    0563 CHANGED THIS POSTURE DELIBERATELY, so the assertion changed with it
+    rather than being deleted.
+
+    It asserted that one branch is refused "because a fan-in over one branch
+    is just a job". True about the WORK and wrong about the OWNERSHIP:
+    canonical traffic is 5138 real turns convening nobody, 2 convening one and
+    **none ever convening two**, so the rule stood one above the only shape
+    that happens and a lone specialist's answer had nothing responsible for
+    delivering it.
+
+    What replaces it is what the new posture requires: nothing is still
+    refused, one is accepted, and the restraint moved to `synthesise.ts`,
+    which RELAYS a single branch instead of spending a model to draw one
+    answer together.
+  */
   ok(
-    'a fan-in over one branch is refused, and says it is just a job',
-    String(got.one ?? '').includes('just a job'),
-    String(got.one ?? '').slice(0, 60),
+    'a fan-in over NOTHING is refused — there is nothing to wait for',
+    String(got.none ?? '').includes('nothing to wait for'),
+    String(got.none ?? '').slice(0, 60),
+  )
+  ok(
+    'and a fan-in over ONE branch is accepted, so the answer has an owner',
+    got.one_ok === true,
+    String(got.one_ok),
   )
   ok(
     'CONTROL: a job that is not a child of this question cannot be claimed as a branch',
@@ -208,8 +239,8 @@ section = 'the ceilings'
     String(got.ghost ?? '').slice(0, 60),
   )
   ok(
-    'CONTROL: and none of the three refusals left a group behind',
-    Number(got.groups) === 0,
+    'CONTROL: and the two refusals left no group behind — only the accepted one did',
+    Number(got.groups) === 1,
     `${String(got.groups)} group(s)`,
   )
 }
@@ -561,25 +592,46 @@ section = 'concurrency and restraint'
   )
 
   /*
-    Restraint. `instruction.ts` fans out only at `branchesStarted.length >= 2`,
-    so one specialist is structurally incapable of becoming a group — and
-    `fan_in_over` refuses it a second time with a sentence. Asserted at the
-    database, which is the layer that cannot be bypassed by a handler change.
+    RESTRAINT MOVED, AND THE ASSERTION MOVED WITH IT (0563).
+
+    This asserted that one specialist is structurally incapable of becoming a
+    group, in both halves — `instruction.ts` at `>= 2` and `fan_in_over`
+    refusing `v_count < 2`. The two agreed with each other and neither was
+    reachable: 5138 real turns convened nobody, 2 convened one, **none has
+    ever convened two**. So a lone specialist's answer finished after the
+    Chief had spoken and nothing owned it.
+
+    Restraint is still the point and it is now where the cost is: a lone
+    branch is RELAYED by `office.synthesise`, verbatim and attributed,
+    spending no model call. Asserted here as the property that made the old
+    rule worth having — a single-domain question must not cost a synthesis —
+    rather than as the rule itself, which is the artefact.
   */
   const alone = await one(`
     begin;
     ${SETUP}
-    select app.fan_in_over(${PARENT}, 'A single-domain question', jsonb_build_array(
-      jsonb_build_object('job_id', ${CHILD('research-director')},
+    create temp table alone_r (k text, v jsonb) on commit drop;
+    insert into alone_r select 'v', app.fan_in_over(${PARENT}, 'A single-domain question',
+      jsonb_build_array(jsonb_build_object('job_id', ${CHILD('research-director')},
                          'agent', 'research-director',
                          'purpose', 'the only thing being asked', 'required', true)),
-      'office.synthesise', null) as v,
-      (select count(*)::int from public.branch_groups where parent_job_id = ${PARENT}) as groups;
+      'office.synthesise', null);
+    -- Counted in its OWN statement: a count beside the call reads a snapshot
+    -- that predates the insert the function performed, so it comes back 0 over
+    -- a group that exists. CLAUDE.md records the same shape twice.
+    select (select v from alone_r where k = 'v') as v,
+           (select count(*)::int from public.branch_groups
+             where parent_job_id = ${PARENT}) as groups;
     rollback;`)
   ok(
-    'a single-domain request does not become a fan-out',
-    String(asJson(alone.v).error ?? '').includes('just a job') && Number(alone.groups) === 0,
-    `${String(asJson(alone.v).error ?? '(it fanned out)').slice(0, 60)}, ${String(alone.groups)} group(s)`,
+    'a single-domain request is registered, so its answer has an owner',
+    asJson(alone.v).ok === true && Number(alone.groups) === 1,
+    `${String(asJson(alone.v).error ?? 'ok')}, ${String(alone.groups)} group(s)`,
+  )
+  ok(
+    'and a lone branch is relayed rather than synthesised, so it costs no model call',
+    /if \(outputs\.length === 1\)/.test(readFileSync('src/handlers/synthesise.ts', 'utf8')),
+    'synthesise.ts has no one-branch relay',
   )
 }
 
