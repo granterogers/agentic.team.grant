@@ -1147,6 +1147,42 @@ what cannot finish in ten minutes and the script takes no arguments at all.
 
 Clean-pass count after pass 24: **0 of 5.**
 
+## Pass 25 — the connectors that feed everything
+
+**CLEAN.** No defect found.
+
+1. **Every sync duty is healthy**: `drive.watch` 272 runs, `office.sync` 48,
+   `office.notion_sync` 24 — all complete, no failures in two days.
+   `office.notion_sync` has recovered from the provenance-order defect that
+   made it twelve of the office's sixteen failures in a day.
+2. **The apparent staleness was my own misreading.** Every connector on every
+   live project shows `fetched_at` 6–16 days old, which reads as knowledge
+   nobody has refreshed. The code is explicit: it computes a fingerprint every
+   pass and writes **only on change** — *"Deliberately not even a touched-at
+   bump: a write per source per ten minutes is 144 writes/day/source that say
+   nothing."* The office re-reads hourly; the material has not changed.
+3. **The misleading column name is inert.** `fetched_at` means *last changed*,
+   and `app.project_knowledge` reports it as data beside a separate
+   `last_synced`. `coverageOf` — #257's reader, the one that decides what the
+   office may say about its own coverage — takes only `blank`, `complete` and
+   `documents`. Nothing judges staleness from it.
+4. **The positive control passes.** The sync has genuinely found things:
+   *"1 new project, 33 new sources across 4 notebooks"* on 11 September and
+   *"12 new sources added"* on the 9th. So *"Looked through 4 notebooks.
+   Nothing new."* — 296 times — is earned rather than blind.
+5. **Concurrency is handled**: *"A sync was already running, so this one stood
+   down."*
+6. `drive.watch` runs every ten minutes against three attachments on no live
+   project and says so honestly; `check:chatter` confirms it does not message
+   him.
+
+One of the six checks was wrong before the product was, which remains the
+commonest event in this programme.
+
+No code change, so nothing to deploy.
+
+Clean-pass count after pass 25: **1 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and
