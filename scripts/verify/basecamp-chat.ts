@@ -127,7 +127,7 @@ const slug = await (async (): Promise<string> => {
 /* ====================================================================== *
  * 1. A browser that has never been signed in
  * ====================================================================== */
-const { ctx, page, seen, thrown } = await open()
+const { ctx, page, seen } = await open()
 await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.bcmain')
 await page.waitForTimeout(700)
