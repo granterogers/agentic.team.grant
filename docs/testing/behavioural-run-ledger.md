@@ -2300,6 +2300,62 @@ territories: delegation and consultation (42), Slack provisioning (43), his
 personal task list (44), the evaluator (45), the voice path (46). The required
 **final adversarial synthesis pass** follows.
 
+## SECOND FINAL ADVERSARIAL SYNTHESIS PASS — a product defect. Streak resets.
+
+**The criticism this pass was built on is of my own method.** Passes 42–46 were
+clean, and every one of them either verified a RECORDED fix still holds or
+explained why an empty result is correct. **None drove a new scenario.** A gate
+checked only against the sentence that created it is checked against one
+sentence.
+
+**First, the empirical half I had deferred all session.** I deployed the worker
+twice tonight and had no evidence it was running correctly:
+
+- **25 real jobs in the 90 minutes since the first deploy: 25 complete, 0
+   failed, 0 retrying.** Neither deploy regressed anything.
+- An `office.instruction` turn completed at 22:47, which exercises the modified
+   announce seam on a NON-duty kind — the path where `say_once` must return
+   immediately. Conversation is empirically unaffected, not merely argued to be.
+- **Containment evidence intact**: the two #298 rows are unchanged, the 20 rows
+   0583 added sit beside them under #354, and all 22 escape deliveries are still
+   `sent`. Nothing was rewritten to obtain green.
+- **0586's count filter verified numerically**: 450 unfiltered 24-hour events →
+   **438** filtered, which is exactly what the function returns. The feed's
+   larger drop (125 → 55) is explained by its window being the last 500 events
+   rather than 24 hours.
+
+**THE DEFECT.** Probing `deniesWhatItHolds` — the gate added for #342 — with
+the phrasings a real answer would use rather than the one from the defect
+report:
+
+| sentence | caught before |
+|---|---|
+| `There are no projects on record.` | yes |
+| `I cannot see any projects.` | yes |
+| **`You have no open projects.`** | **no** |
+| **`You do not have any projects.`** | **no** |
+
+Its subject alternation was `there are | we have | i have`. **Not `you have`** —
+and the office talking about GRANT's holdings says none of the three. #342 IS
+the office denying his own project list, so the one phrasing that fell through
+is the canonical form of the thing the gate exists to catch.
+
+Fixed, with the negated-auxiliary form as a second pattern because it takes
+`any` rather than `not any` — **which I got wrong on the first attempt**, adding
+`you do not have` to the alternation that requires `no|none|not any` after it,
+so the sentence still missed. The probe caught my own fix in seconds.
+
+Safe because the subject was never what made it fire: the gate still requires a
+COMPLETE domain, a census of at least one, and the held noun in the SAME
+sentence. Four controls assert it — *"You have no obligation to answer this."*,
+*"Do you have any projects in mind?"*, a different domain, and the truth.
+
+**Verification:** 17 in the file, 3,043 in the suite, sabotage red then green,
+worker deployed.
+
+**Classification: SYSTEMIC PRODUCT DEFECT** — a coherence gate with a hole in
+the exact shape it was built for. **The streak resets to 0 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

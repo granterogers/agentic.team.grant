@@ -159,4 +159,38 @@ describe('the census reaches the gate', () => {
     expect(to).toBeGreaterThan(from)
     expect(handler.slice(from, to)).toMatch(/holds:\s*\{\s*projects:/)
   })
+
+  /*
+    THE SUBJECT THE LIST BELONGS TO (#361).
+
+    `DENIES_HOLDING` covered `there are`, `we have` and `i have`. The office
+    talking about GRANT's holdings says none of those — and #342, the defect
+    this gate exists for, is precisely the office denying HIS project list. So
+    *"You have no open projects."* was the canonical phrasing of the thing
+    being guarded against, and it fell straight through while *"There are no
+    projects on record."* was caught. Found by probing the gate adversarially
+    rather than by re-reading it.
+  */
+  it.each([
+    'You have no open projects.',
+    'You do not have any projects.',
+    "You don't have any projects.",
+  ])('refuses a denial addressed to him: %s', (said) => {
+    expect(deniesWhatItHolds(said, { projects: 5 }, ['projects'])).not.toBeNull()
+  })
+
+  /*
+    THE CONTROLS, and they are what make widening the subject safe. The gate
+    fires only when the office holds the whole list, holds at least one, and
+    the held noun appears in the SAME sentence — so a sentence that merely
+    opens "You have no" cannot trip it, and neither can a question.
+  */
+  it.each([
+    ['You have no obligation to answer this.', 'no held noun in it'],
+    ['Do you have any projects in mind?', 'a question, not a denial'],
+    ['There are no tasks on that project.', 'a different domain'],
+    ['You have five open projects.', 'the truth'],
+  ])('leaves %s alone (%s)', (said) => {
+    expect(deniesWhatItHolds(said, { projects: 5 }, ['projects'])).toBeNull()
+  })
 })

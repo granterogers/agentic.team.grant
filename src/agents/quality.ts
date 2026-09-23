@@ -1073,7 +1073,25 @@ const DENIES_HOLDING: readonly RegExp[] = [
   /\b(?:have|hold|see|find)\s+no\s+(?:record|records|trace|listing|entries|entry)\b/i,
   /\bno\s+(?:record|records|trace|listing)\s+of\s+(?:them|any|those|these)\b/i,
   /\bfound\s+nothing\b/i,
-  /\b(?:there\s+are|we\s+have|i\s+have)\s+(?:no|none|not\s+any)\b/i,
+  /*
+    "YOU have no open projects" — the subject the list belongs to (#361).
+
+    The alternation covered `there are`, `we have` and `i have`, and the
+    office talking about GRANT's holdings says none of those. #342 is exactly
+    that defect — the office denying his own project list — so *"You have no
+    open projects."* is the canonical phrasing of the thing this gate exists
+    to catch, and it fell straight through while *"There are no projects on
+    record."* was caught.
+
+    Safe to widen because the subject is not what makes this fire: the gate
+    already requires the domain to be one the office holds COMPLETELY, a
+    census of at least one, and the held noun to appear in the SAME sentence.
+    "You have no obligation to answer" cannot trip it — no held noun.
+  */
+  /\b(?:there\s+are|we\s+have|i\s+have|you\s+have)\s+(?:no|none|not\s+any)\b/i,
+  // The negated-auxiliary form takes `any`, not `not any` -- written as one
+  // alternation with the line above it first and caught by its own case.
+  /\b(?:you|we|i)\s+(?:do\s+not|don't|have\s+not|haven't)\s+(?:have\s+|got\s+)?any\b/i,
 ]
 
 /**

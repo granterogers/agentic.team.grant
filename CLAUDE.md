@@ -3839,6 +3839,23 @@ Each of these cost real time. They are here so they cost it once.
   narrowed failure reader, deduped announcements — with one question each: what
   of his does this no longer show?
 
+
+- **A GATE CHECKED ONLY AGAINST THE SENTENCE THAT CREATED IT IS CHECKED AGAINST
+  ONE SENTENCE.** `deniesWhatItHolds` exists for #342 — the office denying his
+  own project list — and its subject alternation was
+  `there are | we have | i have`. **Not `you have`**, which is how the office
+  actually talks about HIS holdings, so *"You have no open projects."* — the
+  canonical phrasing of the defect it guards — was the one form that slipped
+  through, while *"There are no projects on record."* was caught. Every earlier
+  check had reused the wording from the original report. Probe a gate with the
+  phrasings a real answer would use, including the ones you expect to pass.
+- **And the negated auxiliary takes a different quantifier.**
+  `you have NO projects` and `you do not have ANY projects` need two patterns;
+  putting `do not have` into the alternation that requires `no|none|not any`
+  leaves the commoner spoken form missing. I wrote that bug into the fix for
+  this bug and the probe caught it in one run — which is the argument for
+  driving a detector over a table of sentences rather than reading it.
+
 ---
 
 ## Visual standard
