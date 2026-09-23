@@ -61,6 +61,29 @@ const decoy = String(
       select (app.my_task_add(p_title => ${lit(`Chase the printers ${run}`)})->>'id') as v`)
   ).v ?? '',
 )
+/*
+  AND IT GOES ON THE WAY OUT, WHATEVER HAPPENED.
+
+  A crashed run of this probe left "Chase the printers gmzvgkuw" on Grant's
+  real open list -- a task he can see, written by a harness, which is a
+  containment violation the brief names by name. app.my_task_add takes a
+  title, a detail, a date and a time and nothing that says who is asking,
+  because it is his own door: a suite driving it cannot mark its own row, and
+  tasks.is_fixture is generated from exactly that column. Sweeping on the way
+  out is the only lever this side has.
+*/
+const sweepDecoy = (error: unknown): void => {
+  console.error(`\nthe probe failed -- sweeping the decoy anyway\n${String(error)}`)
+  void db
+    .execute(`delete from public.tasks where task_id = ${lit(decoy)}::uuid`)
+    .catch(() => undefined)
+    .finally(() => {
+      process.exitCode = 1
+    })
+}
+process.on('unhandledRejection', sweepDecoy)
+process.on('uncaughtException', sweepDecoy)
+
 const decoyBefore = String(
   (await one(`select title from public.tasks where task_id = ${lit(decoy)}::uuid`)).title ?? '',
 )

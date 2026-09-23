@@ -283,6 +283,37 @@ const piles = await db.execute(`
       where t.assigned_to_human and t.state <> 'done' and t.job_id is null
         and t.title ~ '\\m[a-z0-9]{8}\\M' and t.title ~ '\\m[a-z]*[0-9][a-z0-9]*\\M')
       as tasks_with_a_run_token,
+    /*
+      AND THE ONES WHOSE TOKEN HAPPENED TO HOLD NO DIGIT, NAMED RATHER THAN
+      COUNTED.
+
+      A run token is eight characters of base 36, so roughly one in fifteen
+      contains no digit at all and is invisible to the count above.
+      "Chase the printers gmzvgkuw" sat on Grant's real open list that way --
+      a containment violation of the kind the brief names by name, a task he
+      can see, written by a suite -- while this file reported "personal tasks
+      carrying a run token: 0".
+
+      The digit was there for a reason and it stays: without it the pattern
+      also matches "printers", and a check that hides his own work is worse
+      than the debris it removes. So the looser reading PRINTS THE TITLES
+      instead of counting them. A person can tell a run token from a word in
+      one glance and cannot do anything with a number.
+
+      Why the source cannot be fixed instead: app.my_task_add takes a title,
+      a detail, a date and a time, and nothing that says who is asking -- it
+      is Grant's own door, so added_by is his by construction. A suite
+      driving the feature therefore CANNOT mark its row, and
+      tasks.is_fixture is generated from exactly that column. The row is
+      swept by the suite and named here when a crash stops it.
+
+      No backticks in this comment: it lives inside a template literal.
+    */
+    (select coalesce(jsonb_agg(t.title order by t.created_at desc), '[]'::jsonb)
+       from public.tasks t
+      where t.assigned_to_human and t.state <> 'done' and t.job_id is null
+        and t.title ~ '\\m[a-z0-9]{8}$')
+      as tasks_ending_in_a_tokenish_word,
     (select jsonb_array_length((app.hq_governance(400))->'lessons')) as live_lessons,
     /*
       Counted on the PAGE, not in the view (0389).
@@ -542,6 +573,19 @@ if (Number(pile.fixture_connectors ?? 0) > 0) {
       'verify:connectors is not tearing down',
   )
 }
+/*
+  Named, not counted: a person can tell a run token from a word at a glance
+  and cannot do anything with a number. Reported, never a failure, for the
+  reason the query's comment gives.
+*/
+const tokenish = (pile.tasks_ending_in_a_tokenish_word ?? []) as string[]
+if (tokenish.length > 0) {
+  console.log(
+    `\n  personal tasks ending in a token-shaped word — look at these, they may be a suite's:`,
+  )
+  for (const title of tokenish) console.log(`    ${title}`)
+}
+
 console.log(
   `\n  lessons on the Governance page: ${String(pile.live_lessons)} · ` +
     `fixture tasks: ${String(pile.fixture_tasks)} · ` +
