@@ -3471,6 +3471,34 @@ Each of these cost real time. They are here so they cost it once.
   overview count. **Validate the test before believing the finding** remains
   the most-used rule in this file.
 
+- **He says "notebook"; the planner required the word "project", and the whole
+  creation clause vanished.** Both `NEW_PROJECT` and `NAMED_PROJECT` read
+  `(?:notebook\s+)?project\s+(?:called|named|titled)` — the notebook
+  optional, the **project required** — so *"Create a new Google Notebook
+  project called X"* planned and *"Create a notebook called X"* did not. The
+  say-back then reads *"Make slide deck from the sources in that notebook"*
+  with no antecedent, invites a go-ahead, and the artifacts are made in
+  whatever project he is scoped to. That is what he actually received on 11
+  September: five clauses became *"Make slide deck from it"*, and the office
+  asked *"Shall I make it in Legacy Coaching Course?"* about a notebook he had
+  asked it to create. **A pattern written around the one sentence somebody
+  used is a pattern that works for that sentence.**
+- **An old output is not evidence about current code.** That exact sentence
+  plans correctly today — three steps, with the research and the links
+  declared as dropped — and I nearly filed the September transcript as a live
+  defect. Run the real input through the real function before believing a
+  historical symptom; the class was live, the instance was not.
+- **A sabotage that reverts half a `??` fallback chain proves nothing.**
+  Reverting either project pattern alone left all five tests green, because
+  the other still matched. Only reverting BOTH turned them red. When a fix
+  touches two alternatives of one expression, the sabotage has to remove both
+  or it is exercising the neighbour.
+- **`say-what-you-dropped` reports clauses it RECOGNISED and could not map,
+  never one it failed to parse.** So a clause the reader cannot see at all is
+  dropped in the one way the mechanism built to prevent silent drops cannot
+  report. When adding a recogniser, ask what happens to the sentence it does
+  not match, not only to the one it does.
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the

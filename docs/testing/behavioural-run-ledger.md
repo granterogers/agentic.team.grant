@@ -780,6 +780,60 @@ No code change, so nothing to deploy.
 
 Clean-pass count after pass 16: **1 of 5.**
 
+## Pass 17 — voice, and the plan it makes of what he says
+
+**NOT CLEAN.** One systemic product defect
+([#347](https://github.com/granterogers/agentic.team.grant/issues/347)).
+
+Territory: voice — the surface pass 10's defect surfaced on, and one he
+actually uses. 27 voice notes, 25 transcribed; the two failures are one
+deliberate fixture and pass 10's `Buffer` crash, now covered by `lastWord`.
+
+**The finding came from reading what he SAID and what came back.** On
+11 September he asked, by voice, for a new notebook called **Coaching for
+Success**, research in it, a presentation, an audio explanation and the links.
+The office said back only *"Make slide deck from it"* and *"Make audio
+overview from it"* — *it* with no antecedent — then asked *"Shall I make it in
+**Legacy Coaching Course**?"*, substituting the project he was scoped to. No
+such notebook exists, no research was done, no links were sent. The blocker
+recorded *"Carry out 2 steps"* for a five-clause request.
+
+**And that exact sentence plans correctly today.** I nearly filed the
+historical incident as a live defect; running it through `readPlan` showed
+three steps AND `say-what-you-dropped` naming the research and the links. Do
+not judge current code by an old output.
+
+**The class is live.** Drop one word — *"Create a notebook called Onboarding…"*
+rather than *"…Google Notebook project called…"* — and the creation clause
+vanishes, the say-back reads *"from the sources in that notebook"* with no
+antecedent, and it is NOT declared as dropped, because that mechanism reports
+clauses it recognised and could not map, not one it failed to parse. Both
+patterns required the literal word `project`; the `notebook` was the optional
+half. Anchored to the one sentence he happened to use.
+
+**Fix.** `(?:notebook\s+project|notebook|project)` in both. Safe because a
+`project` step does not mean create — the resolver emits `use_project` when it
+finds one and `create_project` only when it does not.
+
+**Measured before shipping: 0 of 174 real messages plan differently.** No
+regression and no new false positives; it opens shapes he has not used yet —
+a defect waiting for its first user, invisible to any query over history.
+
+**A sabotage that proved nothing, caught.** Reverting either pattern alone
+left all five tests green, because the two are tried with `??`. Reverting BOTH
+turns three red. A half-reverted fallback chain is not a sabotage.
+
+**Deployed and driven end to end**, contained: the office now answers
+*"⚠️ Start a BRAND NEW project called "Coaching Wellness Pilot" with a new
+notebook — you have nothing by that name…"* with both artifacts bound to that
+name. Nothing sent, nothing created, `check:leaks` and `check:chatter` green.
+
+**A side effect worth recording:** `check:callers` went red because pass 15's
+undo fix made `hq_contact_archive`, `hq_contact_photo_set` and
+`hq_contact_update` reachable. The baseline may only shrink, and it did.
+
+Clean-pass count after pass 17: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and

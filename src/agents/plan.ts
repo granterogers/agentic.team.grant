@@ -142,8 +142,36 @@ const NAME_ENDS = String.raw`["”']?\s*(?=[.,;!?]|$|\band\b|\bthen\b|\bwith\b|\
 // (\s, \b) and stays raw.
 const NAME = `["“']?([A-Za-z0-9][A-Za-z0-9 &._-]{1,48}?)`
 
+/*
+  THE WORD "PROJECT" WAS MANDATORY, AND HE SAYS "NOTEBOOK" (#347).
+
+  Both patterns read `(?:notebook\s+)?project\s+(?:called|named|titled)` -
+  the `notebook` optional, the `project` required. So *"Create a new Google
+  Notebook project called X"* planned and *"Create a notebook called X"* did
+  not, and the creation clause vanished entirely rather than being reported as
+  dropped.
+
+  What he then received is the failure this was found from. On 11 September he
+  asked, by voice, for a new notebook called "Coaching for Success", research
+  in it, a presentation, an audio explanation and the links. The office said
+  back only *"Make slide deck from it"* and *"Make audio overview from it"* -
+  "it" with no antecedent - and then asked *"Shall I make it in Legacy
+  Coaching Course?"*, substituting the project he happened to be scoped to.
+  No "Coaching for Success" was ever created.
+
+  That exact sentence plans correctly today. The CLASS does not: drop the word
+  "project" and the same thing happens, with "from the sources in that
+  notebook" standing in for the missing antecedent. Anchoring to one memorable
+  sentence is the trap CLAUDE.md names.
+
+  Widening is safe because a `project` step does not mean CREATE. Its own
+  comment two hundred lines below says so: whether the thing exists is a fact
+  about the world, and the resolver emits `use_project` when it finds one and
+  `create_project` only when it does not. So "the notebook called X" that
+  already exists resolves to using it, exactly as before.
+*/
 const NEW_PROJECT = new RegExp(
-  String.raw`\bnew\b[^.]{0,40}?\b(?:notebook\s+)?project\s+(?:called|named|titled)\s+${NAME}${NAME_ENDS}`,
+  String.raw`\bnew\b[^.]{0,40}?\b(?:notebook\s+project|notebook|project)\s+(?:called|named|titled)\s+${NAME}${NAME_ENDS}`,
   'i',
 )
 
@@ -161,7 +189,7 @@ const NEW_PROJECT = new RegExp(
  * signal about Grant's intent, only about his phrasing.
  */
 const NAMED_PROJECT = new RegExp(
-  String.raw`\b(?:notebook\s+)?project\s+(?:called|named|titled)\s+${NAME}${NAME_ENDS}`,
+  String.raw`\b(?:notebook\s+project|notebook|project)\s+(?:called|named|titled)\s+${NAME}${NAME_ENDS}`,
   'i',
 )
 
