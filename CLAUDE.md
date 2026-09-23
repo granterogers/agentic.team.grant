@@ -3868,6 +3868,21 @@ Each of these cost real time. They are here so they cost it once.
   the neighbouring gates for the same pronoun assumption before the third
   instance arrives.
 
+
+- **THE WORST CREDENTIAL DECIDED THE WHOLE SERVICE, AND THE OFFICE NOW BELIEVES
+  IT CANNOT DO WHAT IT IS DOING.** `app.capability_index_core` takes one
+  `connection_health` row per service, ordered `when 'dead' then 0`. Slack has
+  two credentials doing different jobs — `bot token` (**ok**, posts) and
+  `config token (12h)` (**dead**, renews) — so the service reads
+  `reachable = false` while **35 Slack messages went out in six hours**. That
+  index builds EVERY agent's prompt, so all eight are told they cannot post,
+  and `capabilityLies` cannot catch the false denial because given the index it
+  is true. 0298 with the sign reversed, and this file already says which way is
+  expensive: a false NO produces nothing at all. **Before letting one
+  credential's state speak for a service, ask which capability that credential
+  actually serves** — and check the belief against what the office has
+  DELIVERED, which is the one source that cannot be argued with.
+
 ---
 
 ## Visual standard

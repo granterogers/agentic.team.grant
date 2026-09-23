@@ -2490,6 +2490,56 @@ from canonical state, or the thing under test is your fixture.**
 
 Clean-pass count after pass 49: **2 of 5.**
 
+## Pass 50 — the office believes it cannot do what it is doing
+
+**Territory:** followed from pass 49's one surprising silence rather than
+starting somewhere new — *"I can't post to Slack."* being permitted.
+
+**Classification: SYSTEMIC PRODUCT DEFECT.** Filed as
+[#363](https://github.com/granterogers/agentic.team.grant/issues/363). **Filed,
+not fixed** — deliberately.
+
+**The contradiction, in canonical rows:**
+
+| what the office believes | what the office does |
+|---|---|
+| `cap.reach` → Slack **`reachable = false`** | **35 Slack deliveries `sent` in 6 hours**, latest **22:59:29** |
+
+One of those 35 is the `notion_sync` announcement this session spent all
+evening waiting for.
+
+**Root cause.** `app.capability_index_core` takes ONE health row per service
+and orders to the worst (`when 'dead' then 0`). Slack has two credentials doing
+two different jobs: `bot token` = **ok**, which POSTS, and
+`config token (12h)` = **dead**, which RENEWS. The rule picks the dead one, so
+the service reads unreachable — but the dead credential is not the one that
+posts.
+
+**Why it matters more than it looks.** `capabilityBrief` builds EVERY agent's
+prompt from this index, so all eight are currently told they cannot post to
+Slack — and `capabilityLies` will not catch an answer that tells Grant so,
+because given the index the denial is "true". That is 0298's argument with the
+sign reversed, and this file states which direction is expensive: a false YES
+is a wrong answer he can argue with, a false NO produces nothing at all and he
+finds out when it does not arrive.
+
+**Why it is filed rather than fixed, which is the judgement call.** The belief
+is not simply wrong: the dead config token is real, and when the bot token
+expires there will be nothing to renew it. `reachable = false` is a true
+statement about the FUTURE served as a fact about the PRESENT. The three
+candidate fixes all need something that does not exist — a credential-to-
+capability mapping, a serving/renewing distinction, or reachability derived
+from delivery evidence — and this function is the highest-blast-radius thing in
+the product: it is in every agent's brief on every turn. Rushing it at the end
+of a long run is how a fix to a prompt input becomes tomorrow's defect.
+
+**Two passes, two directions, one conclusion.** Pass 36 found Slack rotation
+failing from job OUTPUTS; pass 49 found Slack unreachable from the CAPABILITY
+INDEX; pass 50 found the contradiction by asking what the office had actually
+DELIVERED. None of the three would have been conclusive alone.
+
+Clean-pass count after pass 50: **0 of 5** — reset by a systemic product defect.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
