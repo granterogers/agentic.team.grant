@@ -886,6 +886,58 @@ able to fire with a synthetic `probe:` command inside a rolled-back statement.
 
 Clean-pass count after pass 18: **0 of 5.**
 
+## Pass 19 — re-reading the instruments through the filter just built
+
+**NOT CLEAN.** One systemic product defect
+([#349](https://github.com/granterogers/agentic.team.grant/issues/349)) and one
+**correction to a finding this programme itself published**.
+
+**The correction first.** Pass 13's issue said *"54 real turns where Grant
+asked and a gate stopped the answer"*. Both halves were wrong, and only
+visible after pass 18's fix: the 46 `output constraints` refusals are all
+**duties** (`office.notion_sync` ×30 and friends, 16–18 September, the fixed
+provenance-order defect), and the quality gate's 8 became **7** once one was
+recognised as suite traffic. The honest figure is **7 turns of his**, not 54.
+`measure` now says WHOSE turn — *"a gate stopped an answer"* and *"an answer
+OF HIS"* are different claims and the first was being made in the second's
+words. 0394's lesson repeating: re-read your own evidence through the filter
+you built afterwards.
+
+**Of those 7: three recovered on retry and he got an answer; two failed
+silently** — and `app.owed_a_word` returns nothing for both. That is how the
+defect was found, not by looking for it.
+
+**The defect.** Their `inbound_commands` row had been deleted. **Only suite
+teardowns delete that table** — no product path, no retention sweep, no SQL
+function. A job can never be deleted, so what survives is a job with no
+evidence of whose turn it was: **68 of 206 counted as real**, 1,189 across all
+kinds, newest today.
+
+**Fix.** 0575 preserves the dedupe NAMESPACE on the job in a BEFORE DELETE
+trigger. The first draft stamped `jobs.synthetic` and **the database refused
+it** — *"synthetic is decided when the work is created and cannot be
+changed… The defect this refuses is a suite rewriting its attribution around a
+send."* That rule outranks the fix, so the trigger preserves evidence rather
+than a verdict, add-only.
+
+**A negative control could not be built, and that is the product being
+right**: `stamp_synthetic_inbound` denies by default, so every command a
+migration can insert is already synthetic. The first drive failed with
+`A REAL TURN WAS STAMPED` — the fixture being wrong, not the trigger. The
+mis-scoped-update control was built instead and holds. That same flag
+corroborates pass 18 independently: **all 138 remaining turns have
+`synthetic = false`**.
+
+**The 68 are unrecoverable** and are not guessed at. `check:leaks` asserts the
+property — nothing orphaned since 0575 may be counted as real — proved able to
+fire by moving only its date bound, which returns 68.
+
+**The migration needed a plpgsql subtransaction**: the first version raised to
+undo its fixtures and took the DDL with it, applying nothing while reporting
+success on its own marker.
+
+Clean-pass count after pass 19: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and

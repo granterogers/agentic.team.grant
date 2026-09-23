@@ -178,11 +178,12 @@ const queue = await one(`
 */
 const gates = await all(`
   select coalesce(nullif(btrim(i.noticed_by), ''), 'unattributed') as noticed_by,
+         (j.kind = 'office.instruction') as his_turn,
          count(*)::int as n
     from public.job_impediments i
     join public.jobs j on j.job_id = i.job_id
    where ${REAL} and not coalesce(i.is_fixture, false)
-   group by 1 order by n desc`)
+   group by 1, 2 order by n desc`)
 
 const reachable = staff.filter((s) => Number(s.chosen_real) > 0)
 const dormant = staff.filter((s) => Number(s.chosen_real) === 0)
@@ -271,12 +272,24 @@ console.log(
   matches nothing prints a number that reads as health. So when there is
   genuinely nothing to report this says so in words.
 */
-console.log('\nwhen a gate stopped an answer of his (real)')
+console.log('\nwhen a gate stopped an answer (real)')
 if (gates.length === 0) {
   console.log('  NO IMPEDIMENTS FOUND — check the query before reading this as a quiet office')
 } else {
+  /*
+    WHOSE turn, which the first version of this line did not say.
+
+    0574 reclassified 35 suite turns as harness and the quality gate's eight
+    refusals went with them - they were never his. What is left is 46, and
+    every one is a DUTY, from the three days the provenance-order defect was
+    live. "A gate stopped an answer" and "a gate stopped an answer OF HIS" are
+    different claims and the first was being made in the second's words.
+  */
   for (const g of gates) {
-    console.log(`  ${String(g.noticed_by).padEnd(24)}${String(g.n)}`)
+    console.log(
+      `  ${String(g.noticed_by).padEnd(24)}${String(g.n).padEnd(5)}` +
+        `${g.his_turn === true ? 'a turn of his' : 'a duty'}`,
+    )
   }
 }
 

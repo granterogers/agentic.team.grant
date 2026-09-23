@@ -682,6 +682,42 @@ if (spaces.length === 0) {
   until somebody says which it is — and a wrong guess here would either hide
   test traffic in his numbers or suppress a message he is waiting for.
 */
+/*
+  A JOB WHOSE ORIGIN A SUITE DELETED (#349).
+
+  Only suite teardowns delete `public.inbound_commands` — there is no product
+  path, no retention sweep and no SQL function that does. A job can never be
+  deleted, so what survives is a job with no evidence of whose turn it was,
+  counted as Grant's for ever. 68 of them are, spanning 7 September onward.
+
+  0575 stamps the dedupe namespace onto the job in a BEFORE DELETE trigger, so
+  the evidence outlives the row that carried it. The 68 already stranded
+  cannot be recovered — the evidence is gone, and guessing would be the
+  fabrication this office exists not to do.
+
+  So this asserts the PROPERTY rather than a number: nothing orphaned since
+  the trigger exists may be counted as real. A magic baseline of 68 would go
+  stale the first time somebody legitimately reclassified one.
+*/
+const orphans = (
+  await db.execute(`
+    select count(*)::int as since_the_trigger
+      from public.jobs j
+     where j.pinned_config ? 'command_id'
+       and not app.harness_job(j.job_id)
+       and j.created_at > (select max(applied_at) from app.schema_migrations
+                            where name like '0575_%')
+       and not exists (select 1 from public.inbound_commands c
+                        where c.command_id = (j.pinned_config ->> 'command_id')::uuid)`)
+).rows[0] as { since_the_trigger: number }
+
+if (Number(orphans.since_the_trigger) > 0) {
+  noisy.push(
+    `${String(orphans.since_the_trigger)} job(s) counted as Grant's have had their origin ` +
+      'deleted since 0575 — the trigger that preserves the dedupe namespace is not firing',
+  )
+}
+
 const REAL_CHANNELS = new Set([
   'teamhq',
   'slack',
