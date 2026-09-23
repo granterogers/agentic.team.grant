@@ -13,7 +13,7 @@
   second mechanism would be a second set of words for one thing.
 */
 
-import { act, attempt, canWrite, read } from '../office.js'
+import { act, attempt, canWrite, read, token } from '../office.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
 import * as live from './livevoice.js'
@@ -355,6 +355,65 @@ export const wire = (root) => {
       b.parentElement?.append(player)
       void player.play()
     })
+  }
+
+  /*
+    SIGNING IN.
+
+    The token goes into this browser and the page asks the office again. It is
+    VALIDATED BY USE rather than by shape - the office is the only thing that
+    can say whether a token is good, and a page that guessed would either
+    refuse a valid one or accept a dud and fail later with something vaguer.
+
+    A token that does not work is removed again, so the browser is never left
+    holding a credential the office has refused. That is the state that
+    produced the original complaint: something stored, nothing accepted, and
+    every message coming back "unauthorized".
+  */
+  for (const form of root.querySelectorAll('[data-bc-signinform]')) {
+    const said = form.querySelector('[data-bc-signin-said]')
+    const field = form.querySelector('#bc-token')
+    const tell = (words) => {
+      if (said !== null) said.textContent = words
+    }
+    const tryIt = async () => {
+      const offered = String(field?.value ?? '').trim()
+      if (offered === '') {
+        tell('Paste the token first.')
+        field?.focus()
+        return
+      }
+      tell('Checking…')
+      if (!token.set(offered)) {
+        tell('This browser will not keep it — private windows cannot stay signed in.')
+        return
+      }
+      try {
+        await read('studio')
+        /* It worked: the credential leaves the field at once. */
+        if (field !== null) field.value = ''
+        tell('')
+        await ctx.refresh()
+        ctx.render()
+      } catch (e) {
+        token.clear()
+        tell(
+          e instanceof Error && /not accepted|unauthorized/i.test(e.message)
+            ? 'The office did not accept that token.'
+            : `The office could not be reached: ${e instanceof Error ? e.message : String(e)}`,
+        )
+      }
+    }
+    form.addEventListener('submit', (e) => {
+      e.preventDefault()
+      void tryIt()
+    })
+    for (const b of form.querySelectorAll('[data-bc-signin]')) {
+      b.addEventListener('click', (e) => {
+        e.preventDefault()
+        void tryIt()
+      })
+    }
   }
 
   /*

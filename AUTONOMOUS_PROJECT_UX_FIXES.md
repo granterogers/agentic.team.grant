@@ -40,12 +40,12 @@ repairing the completion defect requires it.
 - [x] **VERIFIED** Accessible at every viewport size, 44px, hit-tested
 
 ### 2. Chat with Team (BLOCKER)
-- [ ] **TODO** Sending fails with "cannot reach the office / unauthorized" — find the real cause
-- [ ] **TODO** A real message reaches the office and a real answer comes back
-- [ ] **TODO** Enter sends
-- [ ] **TODO** Shift+Enter makes a newline
-- [ ] **TODO** The Send button still works
-- [ ] **TODO** Opening Chat still uses the sidebar
+- [x] **VERIFIED** The cause was found and fixed at the root: there was no way to sign in
+- [x] **VERIFIED** A real message reaches the deployed office and a real answer comes back
+- [x] **VERIFIED** Enter sends
+- [x] **VERIFIED** Shift+Enter makes a newline and sends nothing
+- [x] **VERIFIED** The Send button still works
+- [x] **VERIFIED** Opening Chat still uses the sidebar
 
 ### 3. Live voice (BLOCKER)
 - [ ] **TODO** "unauthorized" — trace and repair the auth/session path
@@ -132,6 +132,42 @@ it overrides.
 `web/studio/bc/wire.js`, `web/studio/app.js` (a `render` hook beside the
 existing capture hooks), `scripts/verify/basecamp-settings.ts`.
 
+### 2. Chat — the "unauthorized" was real and the endpoint was healthy
+
+Established BEFORE writing anything, over the network, three ways:
+
+| request | result |
+|---|---|
+| `/voice/turn` with the vault token | **200**, answering with real project names |
+| the same with a wrong token | **401 `{"error":"unauthorized"}`** |
+| the same with no token | **401 `{"error":"unauthorized"}`** |
+
+So the endpoint was never broken. **Browser storage is per ORIGIN**, this
+experiment is served from its own hostname, and there was **no way whatever to
+put a token into it** — no sign-in control existed anywhere in the studio; the
+only mechanism was setting `localStorage['hq.token']` by hand. So every call
+from the preview was unauthenticated, and the page repeated the server's own
+word.
+
+**Three fixes, all at the root:**
+
+1. **A sign-in control**, in the strip that already says the office cannot be
+   seen. Password field, no autocomplete, cleared the moment it works, and
+   **validated by use** — the office is the only thing that can say whether a
+   token is good. A refused token is removed again, so the browser is never
+   left holding a credential the office has rejected (which is the state that
+   produced the original complaint).
+2. **`chat.js` now handles 401 like `office.js` always has** — clears the token
+   and says "This browser is not signed in to the office. Sign in and try
+   again." It had its own `fetch` to a different endpoint, so it never learned.
+3. **Enter sends, Shift+Enter makes a newline.** A textarea does neither on its
+   own: Enter inserted a newline and nothing sent, so the keyboard could not
+   send a message at all.
+
+**Files:** `web/studio/bc/shell.js`, `web/studio/bc/wire.js`,
+`web/studio/bc/compose.css`, `web/studio/chat.js`, `web/studio/app.js`,
+`scripts/verify/basecamp-chat.ts` (new), `scripts/verify/chat-live.ts` (new).
+
 ## Verification log
 
 **1. Settings access — VERIFIED.**
@@ -145,3 +181,19 @@ existing capture hooks), `scripts/verify/basecamp-settings.ts`.
   not: it dispatched a resize, which redraws nothing here, so it passed against
   a deliberately broken build. Replaced with a real redraw through a hook
   exposed beside the existing capture hooks; the sabotage then turned it red.
+
+**2. Chat — VERIFIED.**
+- `verify:chat-live` 7/7 **against the deployed endpoint**: a real message, a
+  real answer, and the answer names a project that is really in the database —
+  so a canned string could not pass it. A wrong token and no token are both
+  refused.
+- `verify:basecamp-chat` 19/19 in a browser: no token offered a sign-in; a
+  refused token says so and is not kept; the right one signs in, clears the
+  field and dismisses the strip; the Send button sends and the answer appears;
+  Enter sends; Shift+Enter makes a newline and sends nothing; a token that goes
+  stale mid-conversation is explained in words rather than as "unauthorized"
+  and is cleared.
+- Two harness defects of my own on the way, both found and fixed rather than
+  believed: a stub that answered every read with an empty project list (which
+  emptied the studio and looked like a missing Chat button), and a payload with
+  no crew that left no current project.

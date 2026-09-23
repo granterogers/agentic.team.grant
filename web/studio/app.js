@@ -1690,6 +1690,26 @@ function paintDock() {
     })
   }
 
+  /*
+    ENTER SENDS. SHIFT+ENTER MAKES A NEWLINE.
+
+    Grant, 23 September, listing it with the Send button as a separate
+    requirement - because a textarea does neither on its own: Enter inserts a
+    newline and nothing sends, so the keyboard could not send a message at all
+    and the only way was the mouse.
+
+    `requestSubmit`, not `submit`: the form's own listener below is where
+    sending lives, and `submit()` bypasses listeners entirely. And the newline
+    case is simply left alone, which is what a textarea already does well.
+  */
+  box?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return
+    const form = e.currentTarget.closest('form')
+    if (form === null) return
+    e.preventDefault()
+    form.requestSubmit()
+  })
+
   $('[data-dockform]', el)?.addEventListener('submit', (e) => {
     e.preventDefault()
     const text = String(box?.value ?? '').trim()

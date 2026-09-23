@@ -406,6 +406,28 @@ export async function ask(slug, text, context, token, to, also, onState) {
       }),
     })
     const body = await r.json()
+    /*
+      A TOKEN THE OFFICE WILL NOT ACCEPT IS NOT A NETWORK PROBLEM.
+
+      This threw the server's own word - "unauthorized" - straight at the
+      person, which is both meaningless and unrecoverable: the stale token
+      stayed in the browser, so every following message failed the same way
+      with the same word.
+
+      `office.js` has always handled 401 properly, by clearing the token and
+      saying what to do about it. The conversation goes to a different
+      endpoint and had its own fetch, so it never learned. It says the same
+      thing now, and clears the same token, which puts the page back into the
+      signed-out state that offers a way in.
+    */
+    if (r.status === 401) {
+      try {
+        localStorage.removeItem('hq.token')
+      } catch {
+        /* Private window: nothing to clear, and the message still stands. */
+      }
+      throw new Error('This browser is not signed in to the office. Sign in and try again.')
+    }
     if (!r.ok) throw new Error(body.error ?? `the office returned ${r.status}`)
     reply = { text: body.speak, did: body.did }
   } catch (e) {

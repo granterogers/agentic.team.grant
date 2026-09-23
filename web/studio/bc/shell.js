@@ -2580,10 +2580,47 @@ const notLive = () => {
   if (source.live === true) return ''
   const s = SOURCE_STATE[source.state] ?? SOURCE_STATE.prototype
   const canRetry = source.state === 'unreachable' || source.state === 'stale'
+  /*
+    Offered when there is no token and when one was refused - the two states a
+    person can actually do something about. Not on "the office answered once
+    and has stopped", which is an outage and signing in again cannot help.
+  */
+  const signedOut = source.state === 'prototype' || source.state === 'refused'
   return `<div class="bcnotlive${s.tone === '' ? '' : ' bcnotlive--bad'}" role="status">
     <b>${esc(s.label)}</b>
     <span>${esc(s.say)}</span>
     ${canRetry ? button('Try again', { 'data-bc-retry-office': '1' }) : ''}
+    <!--
+      SIGNING IN, where the page already says you are not.
+
+      THE DEFECT THIS FIXES. Browser storage is per ORIGIN, and this experiment
+      is served from its own hostname - so a token entered on Team HQ does not
+      exist here, and there was no way whatever to enter one. Every call to the
+      office therefore came back 401, which is precisely the "unauthorized"
+      that Chat and the microphone were reporting. It was never a broken
+      endpoint: the same request with the right token answers with real state.
+
+      One bearer token is the whole of the authorisation in this office - a
+      hard constraint, not a preference - and it reaches Grant through the
+      token command, which sends it to him on Telegram. So the honest control
+      is a place to put it, beside the sentence explaining why the page cannot
+      see anything.
+
+      A password field, no autocomplete and no value on redraw: a bearer token
+      is a credential and must not sit in the DOM, in a screenshot, or in this
+      repository's own captures.
+
+      No backticks anywhere in this comment: it lives inside a template
+      literal and one here ends the string.
+    -->
+    <form class="bcsignin" data-bc-signinform${signedOut ? '' : ' hidden'}>
+      <label class="bcvh" for="bc-token">The office token</label>
+      <input class="bcinput bcsignininput" id="bc-token" type="password"
+        name="token" autocomplete="off" spellcheck="false"
+        placeholder="Paste the office token">
+      ${button('Sign in', { kind: 'primary', 'data-bc-signin': '1' })}
+      <span class="bcsigninsaid" data-bc-signin-said role="status"></span>
+    </form>
   </div>`
 }
 
