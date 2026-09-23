@@ -162,6 +162,15 @@ export interface HandlerOutput {
     readonly complete: readonly Domain[]
   }
   /**
+   * How many of each COMPLETE domain the handler put in front of the model.
+   *
+   * Handed to the coherence gate and never stored. `completeDomains` says the
+   * office holds a list whole; this says whether that list is EMPTY, which is
+   * the difference between "I have no record of them" being honest and it
+   * being a denial of what the office was just given (#342).
+   */
+  readonly holds?: Readonly<Partial<Record<Domain, number>>>
+  /**
    * The office's internal tool identifiers, for #246's answer check. Handed to
    * the coherence gate and never stored.
    */
@@ -875,6 +884,7 @@ export const runJob = async (
     ...(hadHistory === undefined ? {} : { hadHistory }),
     ...(output.grounding === undefined ? {} : { grounding: output.grounding }),
     ...(output.consulted === undefined ? {} : { consulted: output.consulted }),
+    ...(output.holds === undefined ? {} : { holds: output.holds }),
     ...(output.toolNames === undefined ? {} : { toolNames: output.toolNames }),
     ...(output.standingRules === undefined ? {} : { standingRules: output.standingRules }),
     ...(output.acted === undefined ? {} : { acted: output.acted }),

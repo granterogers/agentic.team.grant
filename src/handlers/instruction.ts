@@ -5859,6 +5859,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         */
         grounding: established(shown),
         consulted: { consulted: consulted(shown), complete: complete(shown) },
+        /*
+          The census behind `completeDomains`, as DATA (#342).
+
+          `completeDomains` says the office holds the project list WHOLE; this
+          says how many are in it, so the gate can refuse an answer that denies
+          a list it was handed. Passed as a number rather than parsed back out
+          of `projectSpine`'s sentence, which would be a wording lock across
+          two files.
+
+          The reserved bucket is excluded, for the same reason `projectSpine`
+          excludes it from the count: it is not one of his projects.
+        */
+        holds: { projects: openNow.filter((p) => !p.reserved).length },
         // The machinery half of #246's co-occurrence rule, from the same rows
         // the capability brief is built from.
         toolNames: toolNames(cap),

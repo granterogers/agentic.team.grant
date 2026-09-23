@@ -3389,6 +3389,39 @@ Each of these cost real time. They are here so they cost it once.
   ceiling again. What it reached (75 ok, including the check under test) is
   reportable; "the suite failed" is not, and neither is "the suite passed".
 
+- **Every gate asked whether the office was ENTITLED to speak, and none asked
+  whether what it said MATCHED what it was handed.** Grant asked *"what
+  projects have we got"* six times on 23 September; five answers listed his
+  four, and the sixth said *"I can't list any projects — I have no record of
+  them in our database… if you can point me to the source (Notion page, Drive
+  folder, etc.)"* — from a prompt carrying all four names, with byte-identical
+  metadata to the five that were right. `assertsRecordsUnseen` permits it
+  because `projects` WAS consulted and complete; `EPISTEMIC` exempts it
+  because a denial is framed as what the office knows; every other gate keys
+  on a CLAIM and a denial asserts nothing. `deniesWhatItHolds` is the missing
+  question, and 0304's asymmetry is what makes it safe to run on every turn:
+  **it can only fire when the census is NON-EMPTY**, so an honest absence can
+  never be suppressed. `documents` stays out, because a search is not a census.
+- **Pass the census as DATA, never parse it back out of the sentence you
+  composed.** Reading "4 of them" out of `projectSpine`'s wording would be a
+  wording lock across two files — the seventh instance this file would have
+  recorded. `holds: { projects: n }` cannot drift.
+- **`enqueue_inbound` composes `requested_by` from `<origin_channel>:<subject>`
+  — the SUBJECT, not the actor — and a probe that puts "grant" there is a REAL
+  job that will message him.** This file already stated the rule and I still
+  got it wrong, because "actor" is the field that reads like the author. What
+  caught it was asserting `is_fixture` and `app.deliverable_to(job, channel,
+  his chat)` BEFORE letting the job run, rather than after. **Assert
+  containment before the work, not in the teardown** — afterwards is a report,
+  not a guard. It survived on a fake chat id, which is luck, and luck is what
+  0350's Telegram branch was too.
+- **A sabotage that stays GREEN is the most useful one in the set.** Three
+  sabotages on #342: two went red and the third — making the handler stop
+  supplying the census — did not, because nothing asserted the wiring. The
+  gate would have gone silently inert while every unit check kept passing.
+  An optional field is exactly where this happens: `holds?` absent means "no
+  opinion", which is indistinguishable from "not wired".
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the

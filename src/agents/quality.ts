@@ -185,6 +185,14 @@ export interface OutputMetadata {
     readonly complete: readonly Domain[]
   }
   /**
+   * How many of each COMPLETE domain the office was handed this turn.
+   *
+   * Data, not prose. The alternative - reading the count back out of the
+   * canonical sentence the handler composed - would be a wording lock across
+   * two files, which this repository has paid for six times.
+   */
+  readonly holds?: Readonly<Partial<Record<Domain, number>>>
+  /**
    * The office's internal tool identifiers, from `tool_permissions`.
    *
    * Supplied by the handler, which already builds the capability brief from
@@ -1024,6 +1032,107 @@ const HYPOTHETICAL =
 const ATTRIBUTED_TO_RECORDS =
   /\b(?:our|the|my|your)\s+(?:records?|database|db|system|files?|logs?|books?|spreadsheets?)\b|\bon file\b|\bon record\b|\bis logged\b|\bare logged\b|\blogged (?:this|in|at|on)\b/i
 
+/**
+ * The nouns a person uses for each domain the office can hold WHOLE.
+ *
+ * Only the domains the handler declares complete can ever be checked here, so
+ * this map is allowed to be short. `documents` is deliberately absent and must
+ * stay absent: `retrieve()` returns the best few matches, so the office never
+ * holds the documents whole and "there is nothing in our documents about
+ * renewals" is an honest sentence it must keep being able to say.
+ */
+const HELD_NOUN: Partial<Record<Domain, RegExp>> = {
+  calendar: /\b(?:meetings|events|appointments|entries)\b/i,
+  contacts: /\bcontacts\b/i,
+  projects: /\bprojects\b/i,
+  tasks: /\b(?:tasks|to-?dos)\b/i,
+}
+
+/*
+  PLURAL ONLY, and measured rather than reasoned.
+
+  The singular is a MODIFIER far more often than it is the census: against 133
+  real delivered answers the first version fired three times and two were
+  wrong - "I can't see any research item in our records, so I need the project
+  or file name" and "no record of X in the indexed project data". Both are
+  good, honest sentences, and refusing them is the expensive direction: a
+  missed denial is one bad answer, a false refusal is every good answer that
+  mentions the word. Denying a whole list is inherently plural.
+*/
+
+/**
+ * Denying, in one breath, that the office holds anything of a kind.
+ *
+ * Structural rather than a phrase list: a negation, a holding verb and the
+ * domain's own noun, close together. The three real shapes it was built from
+ * are *"I can't list any projects"*, *"I have no record of them in our
+ * database"* and *"found nothing matching a project list"*.
+ */
+const DENIES_HOLDING: readonly RegExp[] = [
+  /\b(?:can(?:no|')?t|cannot|unable to)\s+(?:list|find|see|show|give you)\s+any\b/i,
+  /\b(?:have|hold|see|find)\s+no\s+(?:record|records|trace|listing|entries|entry)\b/i,
+  /\bno\s+(?:record|records|trace|listing)\s+of\s+(?:them|any|those|these)\b/i,
+  /\bfound\s+nothing\b/i,
+  /\b(?:there\s+are|we\s+have|i\s+have)\s+(?:no|none|not\s+any)\b/i,
+]
+
+/**
+ * THE OFFICE MAY NOT DENY WHAT IT WAS JUST HANDED.
+ *
+ * On 23 September Grant asked *"what projects have we got"* six times. Five
+ * answers listed his four dashboard projects correctly. The sixth said:
+ *
+ *   "I can't list any projects - I have no record of them in our database.
+ *    I searched the internal records and found nothing matching a project
+ *    list. If you can point me to the source (Notion page, Drive folder,
+ *    etc.) I'll pull the current project names and send them over."
+ *
+ * Same question, same day, same scope, same model, same pipeline - and the
+ * four project names were in the prompt that produced it. `projectSpine`'s
+ * own comment already records this failure once, from a prompt "listing all
+ * four".
+ *
+ * Every existing gate permitted it, and for a defensible reason each time.
+ * `assertsRecordsUnseen` asks whether a lookup RAN: `projects` was consulted
+ * AND complete, so the office was entitled to speak. `EPISTEMIC` exempts any
+ * sentence framed as what the office knows, which is exactly how a denial is
+ * phrased. Neither ever compares what was SAID against the state that was
+ * SUPPLIED - the office was allowed to speak about its projects and then not
+ * held to what it holds.
+ *
+ * The asymmetry is what makes this safe, and it is 0304's: this can only fire
+ * when a domain is COMPLETE and its census is NON-EMPTY. It can never suppress
+ * an honest absence, because an office holding nothing has nothing to deny -
+ * and a false refusal is the expensive direction, being every good answer that
+ * mentions the word.
+ *
+ * `holds` is passed as DATA rather than parsed out of the canonical sentence.
+ * Reading a count back out of `projectSpine`'s wording would be a wording lock
+ * across two files, which this repository has paid for six times.
+ */
+export const deniesWhatItHolds = (
+  body: string,
+  holds: Readonly<Partial<Record<Domain, number>>>,
+  complete: readonly Domain[],
+): string | null => {
+  const text = straighten(String(body ?? ''))
+  if (text.trim() === '') return null
+  for (const domain of complete) {
+    const census = holds[domain]
+    if (census === undefined || census < 1) continue
+    const noun = HELD_NOUN[domain]
+    if (noun === undefined) continue
+    for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
+      if (!noun.test(sentence)) continue
+      for (const re of DENIES_HOLDING) {
+        const hit = re.exec(sentence)
+        if (hit !== null) return sentence.trim().slice(0, 180)
+      }
+    }
+  }
+  return null
+}
+
 export const assertsRecordsUnseen = (
   body: string,
   grounding: string,
@@ -1668,6 +1777,29 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
     the caller cannot tell, and a check that assumed "nothing" would refuse
     every handler that does not report.
   */
+  /*
+    AND THE OTHER DIRECTION: denying what it was handed.
+
+    `assertsRecordsUnseen` below asks whether the office was ENTITLED to speak
+    about a domain. This asks whether what it said MATCHES the state it was
+    given. Grant asked "what projects have we got" six times on 23 September;
+    five answers listed his four projects and the sixth said "I can't list any
+    projects - I have no record of them in our database", from a prompt that
+    carried all four.
+  */
+  if (m.holds !== undefined && m.consulted !== undefined) {
+    const denied = deniesWhatItHolds(m.body ?? '', m.holds, m.consulted.complete)
+    if (denied !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `the text says the office holds nothing ("${denied}") about something it was ` +
+          'handed in full this turn. That list is in front of you and it is not empty — ' +
+          'read it and answer from it.',
+      })
+    }
+  }
+
   if (m.grounding !== undefined && m.consulted !== undefined) {
     const claimed = assertsRecordsUnseen(m.body ?? '', m.grounding, m.consulted)
     if (claimed !== null) {

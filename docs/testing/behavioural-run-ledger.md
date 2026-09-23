@@ -530,6 +530,67 @@ project')` with the history kept.
 
 Clean-pass count after pass 11: **0 of 5.**
 
+## Pass 12 — the office denying what it was handed
+
+**NOT CLEAN.** One systemic product defect fixed
+([#342](https://github.com/granterogers/agentic.team.grant/issues/342)); one
+filed ([#343](https://github.com/granterogers/agentic.team.grant/issues/343)).
+
+**Territory chosen from where his traffic actually goes**, not from a list of
+plausible ones: 238 real `office.instruction` turns in 30 days, every other
+kind in single figures.
+
+**The finding.** On 23 September he asked *"what projects have we got"* **six
+times**. Five answers listed his four dashboard projects. The sixth, at 16:37,
+said *"I can't list any projects — I have no record of them in our database…
+if you can point me to the source (Notion page, Drive folder, etc.)"* — the
+office asking him to find a Notion page listing the projects it reads from its
+own table. Metadata byte-identical across all six.
+
+**Why it is systemic and not variance.** The four names were in the prompt.
+Every gate allowed it for a defensible reason: `assertsRecordsUnseen` asks
+whether a lookup RAN (projects was consulted AND complete, so the office was
+entitled to speak) and `EPISTEMIC` exempts any sentence framed as what the
+office knows, which is how a denial is phrased. **Nothing ever compared what
+was SAID against the state SUPPLIED.** `projectSpine`'s own comment records
+this failure once already; its fix reduced it without removing it.
+
+**Fix.** `deniesWhatItHolds` — a domain held WHOLE whose census is non-empty
+may not be described as empty. 0304's asymmetry makes it safe: it can only
+fire when the census is non-empty, so an honest absence can never be
+suppressed, and `documents` stays excluded because a search is not a census.
+The count is passed as DATA, never parsed out of the canonical sentence.
+
+**Calibrated, not reasoned.** Against 133 real delivered answers the first
+version fired 3 times with **2 false positives**, both on the singular
+"project" used as a modifier. Tightened to the plural; **1 of 133, zero false
+positives**, and both false positives kept as controls.
+
+**The third sabotage stayed GREEN**, and that was the useful one: nothing
+asserted the handler actually supplies the census, so the gate would have gone
+silently inert. Wiring assertion added, bounded at both ends; it then went red.
+
+**A containment near-miss, recorded.** A probe enqueued through the real path
+came back `is_fixture = false`, `requested_by = telegram:grant` — because
+`enqueue_inbound` composes that from **subject**, not actor, and I had put
+"grant" in subject. Caught by asserting containment BEFORE the job ran; stop
+requested, and the one delivery was `suppressed`. **He was spared partly by a
+fake chat id, which is luck.** Re-run correctly with the fixture name in
+subject: `is_fixture` true and `deliverable_to` his chat false before it ran.
+The misfired job's attribution was corrected in teardown and asserted.
+
+**Deployed verification.** The same question driven through the deployed
+worker as contained harness traffic: all four projects, correct, one attempt,
+delivery suppressed. The gate could not be observed FIRING there, because the
+denial is roughly one turn in six and not forceable — recorded as an inherent
+limitation rather than a skipped step.
+
+**Containment after the pass.** `check:leaks` **green**: 0 new escapes, 269
+refused, only the two preserved #298 rows. It is no longer permanently red on
+that evidence, which #322 had noted.
+
+Clean-pass count after pass 12: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and
