@@ -235,26 +235,61 @@ if (who !== '') {
 
 say('nothing was thrown in the whole pass', thrown.length === 0, thrown.join(' | '))
 /*
-  THE SANDBOX CANNOT REACH supabase.co: outbound HTTPS goes through an agent
-  proxy whose CA this Chromium does not carry, so every avatar and every edge
-  function fails with ERR_CERT_AUTHORITY_INVALID. That is the environment, not
-  the page, and counting it would make every run of this red for a reason no
-  person will ever see. Anything else is a real finding.
+  WHAT MAY BE ON THE CONSOLE, AND WHY EACH ONE IS ALLOWED.
+
+  This pass runs SIGNED OUT against a local server, and the page's gateway
+  address is the real office - so the office answers an unauthenticated read
+  with 401, which is the office being right. That used to be invisible because
+  the sandbox browser could not reach it at all; now that it can
+  (`npm run trust:proxy-ca`), the refusal shows up on the console and this
+  check went red over correct behaviour.
+
+  Discounted BY REASON rather than by host. A blanket "ignore anything from
+  supabase.co" would have hidden the 502 that #340 turned out to be, which is
+  exactly the failure this check exists to catch - and the first version of
+  this line said "refused on its own certificate" about failures that had
+  nothing to do with a certificate, which is a report line asserting something
+  it had not checked.
 */
-const mine = (s: string): boolean => !/ERR_CERT_AUTHORITY_INVALID|supabase\.co/.test(s)
+const EXPECTED = [
+  {
+    why: 'the sandbox proxy CA, where a tool still does not trust it',
+    re: /ERR_CERT_AUTHORITY_INVALID/,
+  },
+  {
+    why: 'the office refusing an unauthenticated read, which is correct here',
+    re: /401|ERR_FAILED/,
+  },
+  /*
+    The microphone is pressed on this pass, and the voice-token origin
+    allowlist holds deployed origins only - so a local page is refused. That is
+    the security boundary around a credential minted on Grant's OpenAI key
+    doing its job, and it only became visible once the browser could reach the
+    office at all.
+  */
+  {
+    why: 'the voice-token origin allowlist refusing a local page, which is the boundary working',
+    re: /blocked by CORS policy|Access-Control-Allow-Origin/,
+  },
+]
+const unexplained = (s: string): boolean => !EXPECTED.some((e) => e.re.test(s))
+
+const badConsole = consoleErrs.filter(unexplained)
+const badNet = netFail.filter(unexplained)
 say(
-  'the console stayed clean apart from the sandbox TLS proxy',
-  consoleErrs.filter(mine).length === 0,
-  consoleErrs.filter(mine).slice(0, 3).join(' | '),
+  'nothing unexplained on the console',
+  badConsole.length === 0,
+  badConsole.slice(0, 3).join(' | '),
 )
 say(
-  'no request failed apart from ones the sandbox cannot reach',
-  netFail.filter(mine).length === 0,
-  netFail.filter(mine).slice(0, 3).join(' | '),
+  'and no request failed for a reason this pass does not expect',
+  badNet.length === 0,
+  badNet.slice(0, 3).join(' | '),
 )
-console.log(
-  `      (the sandbox refused ${String(netFail.length - netFail.filter(mine).length)} supabase.co requests on its own certificate)`,
-)
+for (const e of EXPECTED) {
+  const n = [...consoleErrs, ...netFail].filter((m) => e.re.test(m)).length
+  if (n > 0) console.log(`      allowed: ${String(n)} x ${e.why}`)
+}
 
 await page.screenshot({ path: '.out/final-project.png', fullPage: true })
 await browser.close()
