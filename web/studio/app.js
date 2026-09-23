@@ -327,6 +327,17 @@ const state = {
   bcContactAdd: false,
   // Which document the detail view is showing (audio, or one with no file).
   bcDoc: null,
+  /*
+    Which filter the to-dos are under, from the counts at the top of the
+    project, and which half of Mine / The team's is on. Both are places -
+    they go in the address - because a count that opens a filtered list and
+    then loses the filter on a reload is a count that lied.
+  */
+  bcFilter: null,
+  bcMine: null,
+  // Which source is open, and whether the Add Source surface is showing.
+  bcSource: null,
+  bcSourceAdd: false,
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
@@ -8613,10 +8624,19 @@ function pathNow() {
       state.bcExpanded === 'document'
         ? (state.bcDoc?.ref ?? '')
         : state.bcExpanded === 'tasks'
-          ? (state.bcTask ?? '')
+          ? /*
+              A FILTER IS A PLACE TOO, and it travels where the record does.
+              `~` cannot begin a task key - the port's keys are a uuid or
+              `p:<title>` - so the two cannot be confused, and a count that
+              opens a filtered list keeps that filter through a reload and a
+              Back.
+            */
+            (state.bcTask ?? (state.bcFilter === null ? '' : `~${state.bcFilter}`))
           : state.bcExpanded === 'contacts'
             ? (state.bcContactAdd === true ? 'new' : (state.bcContact ?? ''))
-            : ''
+            : state.bcExpanded === 'sources'
+              ? (state.bcSourceAdd === true ? 'new' : (state.bcSource ?? ''))
+              : ''
     const x =
       state.experience === 'basecamp' &&
       state.bcExpanded !== null &&
@@ -8681,6 +8701,9 @@ function goToPath(path) {
   state.bcContact = null
   state.bcContactAdd = false
   state.bcDoc = null
+  state.bcFilter = null
+  state.bcSource = null
+  state.bcSourceAdd = false
   if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
   /*
     The experiment's full search (§7.4). Its own view, reachable only under
@@ -8706,10 +8729,17 @@ function goToPath(path) {
       const inside = bits[cut + 2] === undefined ? '' : decodeURIComponent(bits[cut + 2])
       if (inside !== '') {
         if (state.bcExpanded === 'document') state.bcDoc = { ref: inside, title: '' }
-        if (state.bcExpanded === 'tasks') state.bcTask = inside
+        if (state.bcExpanded === 'tasks') {
+          if (inside.startsWith('~')) state.bcFilter = inside.slice(1)
+          else state.bcTask = inside
+        }
         if (state.bcExpanded === 'contacts') {
           if (inside === 'new') state.bcContactAdd = true
           else state.bcContact = inside
+        }
+        if (state.bcExpanded === 'sources') {
+          if (inside === 'new') state.bcSourceAdd = true
+          else state.bcSource = inside
         }
       }
       bits = bits.slice(0, cut)
@@ -13465,6 +13495,43 @@ const bcContext = {
     One document, as a record over the page. Used where a new tab is the wrong
     answer - a recording, or a document with no file behind it at all.
   */
+  /*
+    A COUNT, PRESSED. The filter and the expanded view are set together, so
+    there is no state in which the to-dos are open under a filter the page
+    cannot name.
+  */
+  openFiltered: (kind) => {
+    state.bcFilter = kind
+    state.bcTask = null
+    state.bcExpanded = 'tasks'
+    render()
+  },
+  clearFilter: () => {
+    state.bcFilter = null
+    render()
+  },
+  /* Mine / The team's. Pressing the half that is on clears it. */
+  setMine: (kind) => {
+    state.bcMine = kind === null || state.bcMine === kind ? null : kind
+    render()
+  },
+  openSource: (key) => {
+    state.bcSource = key
+    state.bcSourceAdd = false
+    if (state.tab !== 'sources') state.bcExpanded = 'sources'
+    render()
+  },
+  openSourceAdd: () => {
+    state.bcSource = null
+    state.bcSourceAdd = true
+    if (state.tab !== 'sources') state.bcExpanded = 'sources'
+    render()
+  },
+  closeSource: () => {
+    state.bcSource = null
+    state.bcSourceAdd = false
+    render()
+  },
   openDocDetail: (ref, title) => {
     state.bcDoc = { ref, title }
     state.bcExpanded = 'document'

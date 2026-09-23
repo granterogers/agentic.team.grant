@@ -33,6 +33,7 @@
 import { PROJECTS, source } from '../data.js'
 import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
+import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
 import * as contacts from './contacts.js'
 import * as todos from './todos.js'
@@ -788,7 +789,31 @@ const taskList = (p, g, whole = false) => {
   </section>`
 }
 
-const tasksSurface = (p) => {
+/*
+  THE FILTER THE COUNTS OPEN, applied HERE rather than in each renderer.
+
+  Grant: *"Verify the count corresponds to the records displayed."* The only
+  way to make that true rather than checked is for one predicate to produce
+  both, so the surface narrows the project by `bcMini.FILTERS` - the same
+  table `stateLine` counts from - and then renders the narrowed project as it
+  always did. A filtered project is still a project: the lists, the add
+  controls and the completed drawers all still work, because nothing below
+  knows it happened.
+*/
+/** What the surface says it is showing, and the way back to everything. */
+const filterBar = (p) => {
+  const kind = state().bcFilter ?? state().bcMine
+  const f = kind === null || kind === undefined ? undefined : bcMini.FILTERS[kind]
+  if (f === undefined) return ''
+  const n = bcMini.filtered(p, kind).length
+  return `<div class="bcfilterbar" data-bc-filterbar="${esc(String(kind))}">
+    <span class="bcstatus bcstatus--waiting">${esc(`${f.name}: ${String(n)}`)}</span>
+    ${button('Show everything', { 'data-bc-filter-off': '1' })}
+  </div>`
+}
+
+const tasksSurface = (whole) => {
+  const p = bcMini.narrowFor(whole)
   const all = p.tasks ?? []
   const groups = bcMini.listsOf(p)
   /*
@@ -823,6 +848,7 @@ const tasksSurface = (p) => {
         ${button('New list', { 'data-bc-addlist': '1' })}
       </span>
     </div>
+    ${filterBar(whole)}
     <p class="bcpmeta bcprose bcgap-l">
       What this project has committed to, in its lists. Your own list is under
       My Tasks, and what the team is running is under Agentic Team — three
@@ -1511,41 +1537,186 @@ const contactsSurface = (p) => {
   It shares the miniature's vocabulary rather than restating it, and it says
   what each source IS rather than asserting a connection it cannot verify.
 */
+/*
+  SOURCES: A GALLERY, A RECORD, AND A WAY TO ADD ONE.
+
+  Grant, 23 September: *"Clicking an existing source must do something useful.
+  Add Source must work. Source details must show real known metadata rather
+  than invented information."*
+
+  It was five rows of text with nothing pressable and no way to add anything -
+  a whole surface with zero interaction, which is the plainest false
+  affordance this pass found. Three parts now, and the third is the one that
+  needs care: what the office KNOWS about a source is a small set of facts,
+  and a detail page is an invitation to invent the rest. So the record prints
+  the fields that exist and says plainly when one does not, which is why a
+  reference shows no "last read" rather than showing "never".
+*/
+const sourceKey = (s, i) => String(s?.id ?? s?.name ?? s?.title ?? i)
+
+const sourceRow = (s, i) => {
+  const trouble = s.health === 'blocked' || s.trouble === true
+  const connected = s.kind === 'connector'
+  return `<button type="button" class="bcsource bcsource--press${trouble ? ' bcsource--trouble' : ''}"
+    data-bc-source="${esc(sourceKey(s, i))}">
+    ${bcMini.sourceMark(s)}
+    <span class="bcsourcename">${esc(s.name ?? s.title ?? 'A source')}</span>
+    <span class="bcsourcewhat">${esc(s.what ?? s.detail ?? '')}</span>
+    <span class="bcsourcewhen">${
+      trouble
+        ? status(esc(s.problem ?? 'Needs attention'), 'blocked')
+        : esc(
+            connected
+              ? ['Connected', s.last ? `last read ${s.last}` : 'not read yet'].join(' · ')
+              : 'Something to read',
+          )
+    }</span>
+  </button>`
+}
+
 const sourcesSurface = (p) => {
   const ss = p.sources ?? []
+  if (state().bcSourceAdd === true) return addSourceSurface(p)
+  const wanted = state().bcSource
+  if (wanted !== null && wanted !== undefined) {
+    const i = ss.findIndex((x, n) => sourceKey(x, n) === String(wanted))
+    if (i !== -1) return sourceRecord(p, ss[i])
+  }
   return `${crumbFor(p, 'sources')}
-    <div class="bcrecordhead"><h1>${esc(toolById('sources')?.name ?? 'Sources')}</h1></div>
+    <div class="bcrecordhead">
+      <h1>${esc(toolById('sources')?.name ?? 'Sources')}</h1>
+      <span class="bcactions">${button('Add Source', { kind: 'primary', 'data-bc-source-add': '1' })}</span>
+    </div>
     <p class="bcpmeta bcprose bcgap-l">
       Where this project's material comes from. A connected service is one the
       team can read; something to read is a link somebody left for it.
     </p>
     ${
       ss.length === 0
-        ? empty({
-            title: 'Nothing is connected yet',
-            body: 'A connected notebook, drive folder or workspace lets the team read what is already written down. Until then it works from what is filed here.',
-          })
-        : `<div class="bcsources bcsources--full">${ss
-            .map((s) => {
-              const trouble = s.health === 'blocked' || s.trouble === true
-              const connected = s.kind === 'connector'
-              return `<div class="bcsource${trouble ? ' bcsource--trouble' : ''}">
-                ${bcMini.sourceMark(s)}
-                <span class="bcsourcename">${esc(s.name ?? s.title ?? 'A source')}</span>
-                <span class="bcsourcewhat">${esc(s.what ?? s.detail ?? '')}</span>
-                <span class="bcsourcewhen">${
-                  trouble
-                    ? status(esc(s.problem ?? 'Needs attention'), 'blocked')
-                    : esc(
-                        connected
-                          ? ['Connected', s.last ? `last read ${s.last}` : 'not read yet'].join(' · ')
-                          : 'Something to read',
-                      )
-                }</span>
-              </div>`
-            })
-            .join('')}</div>`
+        ? empty(
+            {
+              title: 'Nothing is connected yet',
+              body: 'A connected notebook, drive folder or workspace lets the team read what is already written down. Until then it works from what is filed here.',
+            },
+            button('Add Source', { kind: 'primary', 'data-bc-source-add': '1' }),
+          )
+        : `<div class="bcsources bcsources--full">${ss.map((s, i) => sourceRow(s, i)).join('')}</div>`
     }`
+}
+
+/** One source, with the facts the office actually holds about it. */
+const sourceRecord = (p, s) => {
+  const connected = s.kind === 'connector'
+  const trouble = s.health === 'blocked' || s.trouble === true
+  /*
+    EVERY LINE HERE IS A FIELD THAT EXISTS. `gave` is how many documents this
+    source has contributed, `last` when it was read, `url` where a reference
+    points. A connector has no url and a reference has no last read, and
+    neither gets a row invented for it - which is the difference between a
+    detail page and a detail page that lies.
+  */
+  const facts = [
+    ['What it is', connected ? 'A connected service' : (s.via ?? 'Something to read')],
+    ['What it gives this project', s.what ?? s.detail ?? ''],
+    ['Documents it has contributed', s.gave === undefined || s.gave === null ? '' : String(s.gave)],
+    ['Last read', connected ? (s.last ?? 'not read yet') : ''],
+    ['State', trouble ? (s.problem ?? 'Needs attention') : connected ? 'Connected' : ''],
+  ].filter(([, v]) => v !== '' && v !== undefined && v !== null)
+  const url = s.url ?? (s.kind === 'reference' ? (s.name ?? '') : '')
+  return `${breadcrumb([
+    { name: p.name, to: at(`/p/${p.slug}`) },
+    { name: toolById('sources')?.name ?? 'Sources', to: at(`/p/${p.slug}/sources`) },
+    { name: s.name ?? s.title ?? 'A source' },
+  ])}
+    <div class="bcrecordhead">
+      <span class="bcpersonhead">
+        ${bcMini.sourceMark(s)}
+        <h1>${esc(s.name ?? s.title ?? 'A source')}</h1>
+      </span>
+      <span class="bcactions">${button('Back to Sources', { 'data-bc-source-close': '1' })}</span>
+    </div>
+    ${
+      url === '' || !/^https?:\/\//i.test(String(url))
+        ? ''
+        : `<div class="bcrow bcgap-l">
+            ${button('Open it', { kind: 'primary', 'data-bc-doc-tab': esc(String(url)) })}
+          </div>`
+    }
+    <dl class="bcfacts bcgap-l">
+      ${facts.map(([k, v]) => `<div class="bcfact"><dt>${esc(k)}</dt><dd>${esc(String(v))}</dd></div>`).join('')}
+    </dl>
+    <h2 class="bcsubhead">Where this is managed</h2>
+    <p class="bcpmeta bcprose">
+      ${
+        connected
+          ? 'Connecting and disconnecting a service is the office\'s own setting, because one service serves every project. This page is what it gives THIS project.'
+          : 'A link belongs to this project alone. Removing it is on the office\'s Sources page.'
+      }
+    </p>`
+}
+
+/*
+  ADDING ONE: the gallery Grant described, built from the marks the studio
+  already has, plus the one kind of source a project can add by itself.
+
+  A connected SERVICE is not something a project can switch on: one account
+  serves every project, the credential lives in the office, and the place that
+  holds it is Settings. So a service tile says whether the office has it and
+  takes you to the place that changes that, rather than offering a connection
+  it cannot make. A LINK is the project's own, and `reference_add` has existed
+  at the gateway all along - so that half is a field and a button.
+*/
+const addSourceSurface = (p) => {
+  const known = [
+    { key: 'drive', name: 'Google Drive', what: 'A folder the team watches for new files' },
+    { key: 'notion', name: 'Notion', what: 'Pages the office can read and write' },
+    { key: 'notebooklm', name: 'NotebookLM', what: 'A notebook of sources' },
+    { key: 'github', name: 'GitHub', what: 'A repository' },
+    { key: 'mcp', name: 'An MCP server', what: 'Anything that speaks MCP' },
+    { key: 'upload', name: 'Upload a file', what: 'A document handed straight to the project' },
+  ]
+  return `${breadcrumb([
+    { name: p.name, to: at(`/p/${p.slug}`) },
+    { name: toolById('sources')?.name ?? 'Sources', to: at(`/p/${p.slug}/sources`) },
+    { name: 'Add Source' },
+  ])}
+    <div class="bcrecordhead">
+      <h1>Add Source</h1>
+      <span class="bcactions">${button('Back to Sources', { 'data-bc-source-close': '1' })}</span>
+    </div>
+
+    <h2 class="bcsubhead">Something to read</h2>
+    <p class="bcpmeta bcprose">
+      A page, a document, anything with an address. It belongs to this project
+      and the team reads it when the work needs it.
+    </p>
+    <form class="bcaddform bcgap-l" data-bc-sourceform="1">
+      ${input({ id: 'bc-src-url', label: 'The address', name: 'url', autocomplete: 'off', hint: 'For example innergy.com/journey-vs-destination' })}
+      <div class="bcrow">
+        ${button('Add it', { kind: 'primary', 'data-bc-source-save': '1' })}
+        <span class="bcsaidhere" data-bc-source-said role="status" aria-live="polite"></span>
+      </div>
+    </form>
+
+    <h2 class="bcsubhead">A connected service</h2>
+    <p class="bcpmeta bcprose bcgap-l">
+      One account serves every project, so a service is connected once for the
+      whole office and then attached to the projects that need it.
+    </p>
+    <div class="bcservices">
+      ${known
+        .map(
+          (k) => `<button type="button" class="bcservice" data-bc-service="${esc(k.key)}">
+            <span class="bcservicemark" style="color:${esc(MARKS[k.key]?.tint ?? 'currentColor')}">${
+              MARKS[k.key]?.svg ?? ''
+            }</span>
+            <span class="bcservicename">${esc(k.name)}</span>
+            <span class="bcservicewhat">${esc(k.what)}</span>
+            <span class="bcserviceadd">Set up</span>
+          </button>`,
+        )
+        .join('')}
+    </div>`
 }
 
 /*

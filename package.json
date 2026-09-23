@@ -285,6 +285,7 @@
     "verify:chief": "tsx scripts/verify/chief.ts",
     "verify:understands": "tsx scripts/verify/understands.ts",
     "verify:basecamp-routes": "tsx scripts/verify/basecamp-routes.ts",
+    "live:mirror": "tsx scripts/verify/live-mirror.ts",
     "verify:basecamp-words": "tsx scripts/verify/basecamp-words.ts",
     "verify:basecamp-settings": "tsx scripts/verify/basecamp-settings.ts",
     "verify:basecamp-voice": "tsx scripts/verify/basecamp-voice.ts",

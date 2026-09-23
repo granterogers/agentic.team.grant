@@ -113,6 +113,8 @@ export const wire = (root) => {
   wireArrange(root)
   wireBoard(root)
   wireDocsWorkspace(root)
+  wireCounts(root)
+  wireSources(root)
   wireVoice(root)
   wireContacts(root)
   wireProjectSettings(root)
@@ -392,6 +394,106 @@ const wireProjectSettings = (root) => {
   for (const b of root.querySelectorAll('[data-setpane]')) {
     b.addEventListener('click', () => {
       ctx.setPane?.(b.dataset.setpane)
+    })
+  }
+}
+
+/*
+  THE COUNTS AT THE TOP OF THE PROJECT, and the Mine / The team's switch.
+
+  Each one opens the to-dos under its own filter. The filter is state and an
+  address, so Back closes it and a reload keeps it - which is what stops a
+  count being a claim the page cannot honour a second later.
+*/
+const wireCounts = (root) => {
+  for (const b of root.querySelectorAll('[data-bc-filter]')) {
+    b.addEventListener('click', () => {
+      ctx.openFiltered?.(b.dataset.bcFilter)
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-filter-off]')) {
+    b.addEventListener('click', () => {
+      ctx.clearFilter?.()
+      ctx.setMine?.(null)
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-mine]')) {
+    b.addEventListener('click', () => {
+      ctx.setMine?.(b.dataset.bcMine)
+    })
+  }
+  /*
+    "Needs you" is the team's finished work, which lives on the team surface -
+    so it opens that rather than a to-do filter that would be empty.
+  */
+  for (const b of root.querySelectorAll('[data-bc-waiting]')) {
+    b.addEventListener('click', () => {
+      ctx.openExpanded?.('team')
+    })
+  }
+}
+
+/*
+  SOURCES: opening one, adding one, and what a service tile honestly does.
+*/
+const wireSources = (root) => {
+  for (const b of root.querySelectorAll('[data-bc-source]')) {
+    b.addEventListener('click', () => {
+      ctx.openSource?.(b.dataset.bcSource)
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-source-add]')) {
+    b.addEventListener('click', () => {
+      ctx.openSourceAdd?.()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-source-close]')) {
+    b.addEventListener('click', () => {
+      ctx.closeSource?.()
+    })
+  }
+  /*
+    A LINK IS THE PROJECT'S OWN, and `reference_add` has been at the gateway
+    since #35. Validated with the same rule the contact editor uses, so a bare
+    domain is completed rather than refused.
+  */
+  for (const b of root.querySelectorAll('[data-bc-source-save]')) {
+    b.addEventListener('click', async () => {
+      const field = root.querySelector('#bc-src-url')
+      const said = root.querySelector('[data-bc-source-said]')
+      const v = contacts.check('website', field?.value ?? '')
+      if (!v.ok || v.value === '') {
+        if (said !== null) said.textContent = v.ok ? 'An address, first.' : v.why
+        field?.focus()
+        return
+      }
+      if (canWrite() !== true) {
+        if (said !== null) {
+          said.textContent =
+            'There is no office token in this browser, so nothing was sent. Signed in, this adds the link to the project.'
+        }
+        return
+      }
+      const done = await attempt(
+        b,
+        'Adding…',
+        () => act('reference_add', { p_slug: ctx.state.project, p_url: v.value }),
+        'Added.',
+      )
+      if (done !== null) {
+        ctx.closeSource?.()
+        await ctx.refresh()
+      }
+    })
+  }
+  /*
+    A SERVICE IS CONNECTED ONCE FOR THE WHOLE OFFICE, so the tile opens the
+    place that does it rather than offering a connection this page cannot
+    make. An offer may only promise what the press can perform.
+  */
+  for (const b of root.querySelectorAll('[data-bc-service]')) {
+    b.addEventListener('click', () => {
+      ctx.openGlobalSettings?.('connections')
     })
   }
 }

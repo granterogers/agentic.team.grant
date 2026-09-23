@@ -130,7 +130,14 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
     <header class="bcmodhead" data-bc-expand="${esc(id)}" role="button" tabindex="0"
       aria-label="${esc(`${name} — open, or drag to move`)}">
       <h2 class="bcmodtitle">${esc(name)}</h2>
-      ${meta === '' ? '' : `<span class="bcmodmeta">${esc(meta)}</span>`}
+      <!--
+        THE META IS MARKUP NOW, not a string. It was escaped as text, which
+        was right while it was a sentence and wrong the moment Mine and The
+        team's became a pair of switches: escaping would have printed the
+        buttons. Callers pass a string that is already safe, each composed
+        from escaped values in miniatures.js. Plain words in this comment.
+      -->
+      ${meta === '' ? '' : `<span class="bcmodmeta">${meta}</span>`}
       ${
         rect === null
           ? ''

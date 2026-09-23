@@ -36,6 +36,7 @@
   template.
 */
 
+import { MARKS } from '../logos/marks.js'
 import * as todos from './todos.js'
 import { esc, status } from './parts.js'
 
@@ -224,18 +225,55 @@ const taskLine = (t) => {
   a named requirement look unbuilt on exactly the projects where the answer is
   most reassuring.
 */
+/*
+  MINE AND THE TEAM'S, AS A SWITCH.
+
+  Grant's own list of what a miniature must do includes "switch Mine/Team". It
+  was a sentence in the module header: two true numbers and no way to act on
+  either. Both halves are filters now, they say which one is on, and pressing
+  the one that is on clears it - which is what a person expects of a pair of
+  toggles and is one press fewer than hunting for a "show all".
+*/
 export const mineAndTeam = (p) => {
   const open = (p.tasks ?? []).filter((t) => t.milestone !== true && !isDone(t))
   if (open.length === 0) return ''
   const mine = open.filter((t) => t.mine === true).length
-  return `${String(mine)} yours · ${String(open.length - mine)} the team's`
+  const on = ctx?.state?.bcMine ?? null
+  const half = (kind, n, label) =>
+    `<button type="button" class="bcsplitbtn${on === kind ? ' bcsplitbtn--on' : ''}"
+      data-bc-mine="${esc(kind)}" aria-pressed="${on === kind ? 'true' : 'false'}">${esc(
+        `${String(n)} ${label}`,
+      )}</button>`
+  return `<span class="bcsplit2">
+    ${half('mine', mine, 'yours')}
+    ${half('theirs', open.length - mine, "the team's")}
+  </span>`
 }
 
-export const todosMini = (p, { lists = 2, per = 3 } = {}) => {
+export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
+  const p = narrowFor(whole)
   const groups = listsOf(p)
   if (groups.length === 0) {
     const flat = (p.tasks ?? []).filter((t) => t.milestone !== true)
-    if (flat.length === 0) return `<p class="bcmpty">No to-dos on this project yet.</p>`
+    /*
+      AN EMPTY FILTER IS NOT AN EMPTY PROJECT.
+
+      "No to-dos on this project yet" is true of a project with none and false
+      of a project whose to-dos are all the team's while Yours is switched on -
+      and the second is one press away from the first, so the wrong sentence
+      is the likelier one. A filtered empty says which filter emptied it and
+      offers the way out.
+    */
+    if (flat.length === 0) {
+      const on = ctx?.state?.bcFilter ?? ctx?.state?.bcMine ?? null
+      const f = on === null ? undefined : FILTERS[on]
+      const whole_ = (whole.tasks ?? []).filter((t) => t.milestone !== true)
+      if (f !== undefined && whole_.length > 0) {
+        return `<p class="bcmpty">Nothing here under ${esc(f.name)}.
+          <button type="button" class="bclinky" data-bc-filter-off="1">Show everything</button></p>`
+      }
+      return `<p class="bcmpty">No to-dos on this project yet.</p>`
+    }
     return `<ul class="bctasks">${flat.slice(0, per * lists).map(taskLine).join('')}</ul>`
   }
   /*
@@ -791,22 +829,89 @@ export const timelineMini = (p, { items = 5 } = {}) => {
  * three are genuinely zero — an encouraging summary over a late project is the
  * one thing a state line must never do.
  */
-export const stateLine = (p) => {
+/*
+  THE COUNTS ARE CONTROLS, and this is what they were not.
+
+  Grant, 23 September: *"These top-level project indicators must be real
+  navigation/filter controls. Click each. Verify the count corresponds to the
+  records displayed. Then open those records... No decorative counters."*
+
+  Every one of them was a `span`. They counted real things and did nothing -
+  the most prominent false affordance in the product, at the top of the page
+  Grant looks at first. Each is a button that opens the To-dos in its own
+  filter now, and the filter is computed from the SAME predicate the count is,
+  so a count that disagrees with what opens is impossible by construction
+  rather than by care.
+*/
+export const FILTERS = {
+  late: { name: 'Late', of: (t) => !isDone(t) && isLate(t) },
+  stuck: { name: 'Stuck', of: (t) => !isDone(t) && (Boolean(t.blocked) || t.state_raw === 'blocked') },
+  open: { name: 'Open', of: (t) => !isDone(t) },
+  mine: { name: 'Yours', of: (t) => !isDone(t) && t.mine === true },
+  theirs: { name: "The team's", of: (t) => !isDone(t) && t.mine !== true },
+}
+
+/** Every task a filter matches, from the project the page is holding. */
+export const filtered = (p, kind) => {
+  const f = FILTERS[kind]
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
-  const late = tasks.filter(isLate)
-  const stuck = tasks.filter((t) => !isDone(t) && (t.blocked || t.state_raw === 'blocked'))
+  return f === undefined ? tasks : tasks.filter(f.of)
+}
+
+/*
+  THE PROJECT AS THE FILTER LEAVES IT.
+
+  Lives here, beside the filters themselves, because BOTH the miniature and
+  the full surface have to narrow and they must narrow identically - a
+  miniature that ignored the switch while the surface obeyed it is two answers
+  to one question, which is the defect this file has been paying off all week.
+  The head counts deliberately do NOT use it: a count of what is left after
+  filtering by itself is always the same number.
+*/
+export const narrowFor = (p) => {
+  const kind = ctx?.state?.bcFilter ?? ctx?.state?.bcMine ?? null
+  const f = kind === null ? undefined : FILTERS[kind]
+  if (f === undefined) return p
+  return {
+    ...p,
+    tasks: (p.tasks ?? []).filter((t) => t.milestone === true || f.of(t)),
+  }
+}
+
+const countChip = (kind, label, tone) =>
+  `<button type="button" class="bcstatus bcstatus--${esc(tone)} bcstatus--press"
+    data-bc-filter="${esc(kind)}">${esc(label)}</button>`
+
+export const stateLine = (p) => {
+  const late = filtered(p, 'late')
+  const stuck = filtered(p, 'stuck')
+  const open = filtered(p, 'open')
   const waiting = p.waiting ?? []
-  const open = tasks.filter((t) => !isDone(t))
   const bits = []
-  if (waiting.length > 0) bits.push(status(waiting.length === 1 ? '1 thing needs you' : `${waiting.length} things need you`, 'waiting'))
-  if (late.length > 0) bits.push(status(late.length === 1 ? '1 late' : `${late.length} late`, 'blocked'))
-  if (stuck.length > 0) bits.push(status(stuck.length === 1 ? '1 stuck' : `${stuck.length} stuck`, 'blocked'))
+  /*
+    "Needs you" is the team's finished work waiting to be read, which lives on
+    the team surface rather than in the to-dos - so it opens that. The others
+    are to-dos and open the to-dos.
+  */
+  if (waiting.length > 0) {
+    bits.push(
+      `<button type="button" class="bcstatus bcstatus--waiting bcstatus--press" data-bc-waiting="1">${esc(
+        waiting.length === 1 ? '1 thing needs you' : `${waiting.length} things need you`,
+      )}</button>`,
+    )
+  }
+  if (late.length > 0) bits.push(countChip('late', late.length === 1 ? '1 late' : `${late.length} late`, 'blocked'))
+  if (stuck.length > 0) bits.push(countChip('stuck', stuck.length === 1 ? '1 stuck' : `${stuck.length} stuck`, 'blocked'))
   if (bits.length === 0 && open.length > 0) bits.push(status('On track', 'done'))
   return `<div class="bcstate">
     ${bits.join('')}
-    <span class="bcstatecount">${esc(
-      open.length === 0 ? 'nothing open' : open.length === 1 ? '1 open task' : `${open.length} open tasks`,
-    )}</span>
+    ${
+      open.length === 0
+        ? `<span class="bcstatecount">nothing open</span>`
+        : `<button type="button" class="bcstatecount bcstatecount--press" data-bc-filter="open">${esc(
+            open.length === 1 ? '1 open task' : `${open.length} open tasks`,
+          )}</button>`
+    }
   </div>`
 }
 
@@ -875,65 +980,67 @@ const SOURCEWORD = {
  * appear from.
  */
 /*
-  THE MARK A SOURCE IS RECOGNISED BY.
+  THE MARK A SOURCE IS RECOGNISED BY — and it is the studio's own.
 
-  Grant, 22 September: *"Grant has repeatedly requested visual identification
-  of sources. Add the appropriate logo/icon next to each source. Do not leave
-  this as another text-only source list. The source should be recognizable
-  visually as well as by name."*
+  Grant, 22 September: *"Add the appropriate logo/icon next to each source...
+  The source should be recognizable visually as well as by name."* And on the
+  23rd: *"rounded-square tile + correct recognizable logo + service name +
+  clear Add state. No generic placeholder symbols where a proper service
+  identity should exist."*
 
-  Simplified marks in each provider's own colour rather than downloaded brand
-  assets: they are drawn here, so there is no fetch, no licence file, nothing
-  to 404, and they render at any size in both schemes. A provider nobody has a
-  mark for gets a lettered tile in the experience's own palette, which is a
-  fallback rather than a blank - and the NAME is always beside it, so the mark
-  never has to carry the identification on its own.
+  The first pass drew five marks HERE. That was a second set of service logos
+  in a product that already had twelve in `web/studio/logos/marks.js` - drawn
+  on a common 24px grid at a common weight, in `currentColor`, with each
+  brand's tint and a licence file beside them, for reasons that file sets out
+  at length. Two tables of logos is the row-list-built-twice defect with
+  branding attached: they would drift, and half the services would have a mark
+  in one place and an initial in the other.
 
-  Matched on the NAME, lower-cased, because that is what the office stores for
-  a connector and what a person reads. A match on a connector id would be
-  narrower and would miss every reference, which is half the list.
+  So there is one table, it is the one that already existed, and this maps a
+  SOURCE onto it. The match is on the connector id where there is one and on
+  the name otherwise, because a reference has no connector and a person still
+  reads "Zoom" in a URL.
 */
-const MARK = {
-  notion: {
-    tint: '#ffffff',
-    svg: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4.2 3.4 15 2.6c1.3-.1 1.7.1 2.5.7l2.6 1.8c.5.4.7.5.7 1v13.2c0 .8-.3 1.3-1.3 1.4l-12.5.8c-.8 0-1.2-.1-1.6-.6L3.5 19c-.4-.6-.6-1-.6-1.6V4.7c0-.7.3-1.2 1.3-1.3Z"/><path fill="#111" d="M15 2.6 4.2 3.4c-1 .1-1.3.6-1.3 1.3v12.7c0 .6.2 1 .6 1.6l1.9 2.5c.4.5.8.6 1.6.6l12.5-.8c1-.1 1.3-.6 1.3-1.4V6.1c0-.5-.2-.6-.7-1l-2.6-1.8c-.8-.6-1.2-.8-2.5-.7Zm-8.3 3c-1 0-1.2.1-1.7-.4l-1.3-1c-.1-.2 0-.4.3-.4l10.4-.8c.8-.1 1.2.2 1.5.4l1.6 1.2c.1 0 .2.3 0 .3l-10.7.7Zm-.6 12.9V7.2c0-.5.1-.7.6-.7l11-.7c.4 0 .6.2.6.7v11.1c0 .5-.1.9-.7.9l-10.5.6c-.6 0-.9-.2-.9-.7Zm10.5-10.7c.1.3 0 .6-.3.6l-.5.1v7.4c-.4.2-.8.4-1.2.4-.6 0-.7-.2-1.1-.7l-3.5-5.5v5.3l1 .3s0 .6-.8.6l-2.3.1c0-.3 0-.5.5-.6l.6-.2V8.9l-.8-.1c-.1-.3.1-.7.6-.8l2.5-.1 3.6 5.5V8.5l-.9-.1c-.1-.4.2-.6.6-.7l2-.1Z"/></svg>`,
-  },
-  'google drive': {
-    tint: '#4285f4',
-    svg: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#0f9d58" d="M8.2 2.6 1.4 14.4h6.4L14.6 2.6Z"/><path fill="#4285f4" d="M22.6 14.4 15.8 2.6 12.6 8.2l6.8 11.8Z"/><path fill="#fbbc04" d="M1.4 14.4 4.6 20h13.1l-3.2-5.6Z"/></svg>`,
-  },
-  notebooklm: {
-    tint: '#8ab4f8',
-    svg: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 6.4C10.6 5 8.7 4.4 6 4.4H3.4v13.2H6c2.7 0 4.6.6 6 2 1.4-1.4 3.3-2 6-2h2.6V4.4H18c-2.7 0-4.6.6-6 2Z"/><path d="M12 6.4v13.2"/></svg>`,
-  },
-  github: {
-    tint: '#e6edf3',
-    svg: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.8a10.2 10.2 0 0 0-3.2 19.9c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.2-1.5-1.2-1.5-.9-.6.1-.6.1-.6 1 .1 1.6 1 1.6 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.7-1.4-2.2-.2-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c2-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.8-4.6 5 .4.3.7 1 .7 2v2.9c0 .3.2.6.7.5A10.2 10.2 0 0 0 12 1.8Z"/></svg>`,
-  },
-  slack: {
-    tint: '#e01e5a',
-    svg: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#36c5f0" d="M6.4 14.9a2 2 0 1 1-2-2h2Zm1 0a2 2 0 1 1 4 0v5a2 2 0 1 1-4 0Z"/><path fill="#2eb67d" d="M9.4 6.4a2 2 0 1 1 2-2v2Zm0 1a2 2 0 1 1 0 4h-5a2 2 0 1 1 0-4Z"/><path fill="#ecb22e" d="M17.6 9.4a2 2 0 1 1 2 2h-2Zm-1 0a2 2 0 1 1-4 0v-5a2 2 0 1 1 4 0Z"/><path fill="#e01e5a" d="M14.6 17.6a2 2 0 1 1-2 2v-2Zm0-1a2 2 0 1 1 0-4h5a2 2 0 1 1 0 4Z"/></svg>`,
-  },
-}
+const MARK_KEY = [
+  ['notebooklm', 'notebooklm'],
+  ['notebook', 'notebooklm'],
+  ['google drive', 'drive'],
+  ['drive', 'drive'],
+  ['notion', 'notion'],
+  ['github', 'github'],
+  ['slack', 'slack'],
+  ['telegram', 'telegram'],
+  ['zoom', 'zoom'],
+  ['supabase', 'supabase'],
+  ['openrouter', 'openrouter'],
+  ['browser', 'browser'],
+  ['mcp', 'mcp'],
+  ['upload', 'upload'],
+]
 
-const markFor = (s) => {
-  const name = String(s?.name ?? s?.title ?? '').toLowerCase()
-  for (const [key, m] of Object.entries(MARK)) {
-    if (name.includes(key)) return m
+export const markKeyFor = (s) => {
+  const hay = `${String(s?.connector ?? '')} ${String(s?.name ?? s?.title ?? '')}`.toLowerCase()
+  for (const [needle, key] of MARK_KEY) {
+    if (hay.includes(needle)) return key
   }
   return null
 }
 
 export const sourceMark = (s) => {
-  const m = markFor(s)
+  const key = markKeyFor(s)
+  const mark = key === null ? undefined : MARKS[key]
   const name = String(s?.name ?? s?.title ?? '?')
-  if (m === null) {
-    /* A lettered tile is a fallback; a blank space is the absence of one. */
+  if (mark === undefined) {
+    /*
+      A lettered tile is a fallback and says so by being plainly not a logo; a
+      blank space is the absence of one. A reference to somebody's own website
+      has no service identity to get right, which is the case this covers.
+    */
     return `<span class="bcsrcmark bcsrcmark--letter" aria-hidden="true">${esc(
       name.trim().charAt(0).toUpperCase() || '?',
     )}</span>`
   }
-  return `<span class="bcsrcmark" aria-hidden="true" style="color:${esc(m.tint)}">${m.svg}</span>`
+  return `<span class="bcsrcmark" aria-hidden="true" style="color:${esc(mark.tint)}">${mark.svg}</span>`
 }
 
 export const sourcesMini = (p, { items = 4 } = {}) => {
