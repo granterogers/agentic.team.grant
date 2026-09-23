@@ -764,6 +764,13 @@ const wirePageMenu = (root) => {
     the render root and survives every repaint, which is exactly why it is the
     right thing to reuse.
   */
+  for (const b of root.querySelectorAll('[data-bc-look]')) {
+    b.addEventListener('click', () => {
+      shut()
+      ctx.openLook?.()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-bc-settings]')) {
     b.addEventListener('click', () => {
       shut()
@@ -1600,6 +1607,26 @@ const wireTasks = (root) => {
           }),
         'Saved.',
       )
+      if (done !== null) await ctx.refresh()
+    })
+  }
+
+  /*
+    GIVING AN UNDATED TO-DO A DATE, from the schedule, where the absence is.
+    The same two paths as every other write: the office where there is a
+    record, this browser where there is not.
+  */
+  for (const f of root.querySelectorAll('[data-bc-setdue]')) {
+    f.addEventListener('change', async () => {
+      const key = f.dataset.bcSetdue ?? ''
+      const due = String(f.value ?? '').trim()
+      if (key === '' || due === '') return
+      if (key.startsWith('p:')) {
+        todos.rememberPatch(ctx.state.project, key, { due })
+        ctx.render()
+        return
+      }
+      const done = await attempt(f, 'Saving…', () => todos.update(key, { due }), 'Dated.')
       if (done !== null) await ctx.refresh()
     })
   }

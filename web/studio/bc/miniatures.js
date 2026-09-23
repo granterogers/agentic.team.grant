@@ -37,6 +37,7 @@
 */
 
 import { MARKS } from '../logos/marks.js'
+import * as when from '../when.js'
 import * as todos from './todos.js'
 import { esc, status } from './parts.js'
 
@@ -785,15 +786,61 @@ export const docsMini = (p, { items = 6 } = {}) => {
  * shorter TIMELINE rather than a shorter LIST, which is the difference between
  * a preview and a duplicate.
  */
+/*
+  ACTIVITY: AN AUDITABLE TIME, AND A ROW THAT OPENS WHAT IT NAMES.
+
+  Grant, 23 September: *"open linked records; verify exact DATE + HH:MM:SS;
+  ensure raw internal slugs do not leak into human-facing prose."* Three
+  things, and each was genuinely wrong:
+
+   - the row carried "2h ago" and nothing else. A relative phrase cannot be
+     compared with anything and two events an hour apart read as one moment.
+     The live payload has carried the instant since 0288 (`at`); the prototype
+     did not, which is the second-vocabulary trap this file's own comment
+     about Drive's last-read warns about - so the prototype carries instants
+     now too and a capture shows what Grant gets;
+   - `named(a.who) || a.who` printed the raw slug whenever the roster did not
+     know somebody. The fallback is a readable name now, and the slug never
+     reaches the page;
+   - nothing was openable. A row opens the document or the to-do it NAMES,
+     matched against what the project actually holds - and where nothing
+     matches it stays plain text rather than becoming a link to a guess.
+*/
+const prettyWho = (who) => {
+  const name = named(who)
+  if (name !== '' && name !== who) return name
+  /* A slug is not prose: "chief-of-staff" becomes "Chief Of Staff". */
+  return String(who ?? '')
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
+/** What this event points at, if the project holds something by that name. */
+const eventTarget = (p, a) => {
+  const what = String(a.what ?? '').toLowerCase()
+  if (what === '') return null
+  for (const d of p.documents ?? []) {
+    const title = String(d.title ?? '').toLowerCase()
+    if (title !== '' && what.includes(title)) return { kind: 'doc', ref: docRef(d), title: d.title }
+  }
+  for (const t of (p.tasks ?? []).filter((x) => x.milestone !== true)) {
+    const title = String(t.title ?? '').toLowerCase()
+    if (title !== '' && what.includes(title)) return { kind: 'task', ref: todos.keyOf(t), title: t.title }
+  }
+  return null
+}
+
 export const timelineMini = (p, { items = 5 } = {}) => {
   const acts = (p.activity ?? []).slice(0, items)
   if (acts.length === 0) return `<p class="bcmpty">Nothing has happened here yet.</p>`
   const days = []
   for (const a of acts) {
-    const when = a.when ?? ''
+    const day = a.at ? when.words(a.at) : (a.when ?? '')
     const last = days[days.length - 1]
-    if (last !== undefined && last.when === when) last.items.push(a)
-    else days.push({ when, items: [a] })
+    if (last !== undefined && last.when === day) last.items.push(a)
+    else days.push({ when: day, items: [a] })
   }
   return `<ol class="bctimeline">
     ${days
@@ -802,13 +849,27 @@ export const timelineMini = (p, { items = 5 } = {}) => {
           <span class="bcdaywhen">${esc(d.when || 'Earlier')}</span>
           <ul class="bcdayitems">
             ${d.items
-              .map(
-                (a) => `<li class="bcevent">
+              .map((a) => {
+                const target = eventTarget(p, a)
+                const words = `${a.verb ?? 'changed'} ${a.what ?? ''}`.trim()
+                const stamp = a.at ? when.precise(a.at) : ''
+                const body = `<b>${esc(prettyWho(a.who) || 'The team')}</b> ${esc(words)}`
+                return `<li class="bcevent">
                   <span class="bcdot" aria-hidden="true"></span>
-                  <span class="bceventwhat"><b>${esc(named(a.who) || a.who || 'The team')}</b>
-                    ${esc(`${a.verb ?? 'changed'} ${a.what ?? ''}`.trim())}</span>
-                </li>`,
-              )
+                  <span class="bceventbody">
+                    ${
+                      target === null
+                        ? `<span class="bceventwhat">${body}</span>`
+                        : `<button type="button" class="bceventwhat bceventwhat--press" ${
+                            target.kind === 'doc'
+                              ? `data-bc-doc-open="${esc(target.ref)}" data-bc-doc-title="${esc(target.title)}"`
+                              : `data-bc-task-open="${esc(target.ref)}"`
+                          }>${body}</button>`
+                    }
+                    ${stamp === '' ? '' : `<time class="bceventat" datetime="${esc(String(a.at))}">${esc(stamp)}</time>`}
+                  </span>
+                </li>`
+              })
               .join('')}
           </ul>
         </li>`,
@@ -878,9 +939,15 @@ export const narrowFor = (p) => {
   }
 }
 
+/*
+  THE SAME CHIP THE STATUS HELPER DRAWS, with the dot, so a pressable state
+  and an unpressable one are the same object. `status()` cannot be reused
+  directly because it renders a span and this has to be a button; what it
+  CONTAINS is copied deliberately rather than approximated.
+*/
 const countChip = (kind, label, tone) =>
   `<button type="button" class="bcstatus bcstatus--${esc(tone)} bcstatus--press"
-    data-bc-filter="${esc(kind)}">${esc(label)}</button>`
+    data-bc-filter="${esc(kind)}"><span class="bcdot" aria-hidden="true"></span>${esc(label)}</button>`
 
 export const stateLine = (p) => {
   const late = filtered(p, 'late')
@@ -895,7 +962,7 @@ export const stateLine = (p) => {
   */
   if (waiting.length > 0) {
     bits.push(
-      `<button type="button" class="bcstatus bcstatus--waiting bcstatus--press" data-bc-waiting="1">${esc(
+      `<button type="button" class="bcstatus bcstatus--waiting bcstatus--press" data-bc-waiting="1"><span class="bcdot" aria-hidden="true"></span>${esc(
         waiting.length === 1 ? '1 thing needs you' : `${waiting.length} things need you`,
       )}</button>`,
     )

@@ -369,7 +369,17 @@ check(
 /* --- optimistic rollback, visibly (§12) --- */
 failNext = 'task_state'
 const before = tasks.find((t) => t.id === 't-1')?.state
-await page.locator('[data-bc-tick]').first().check()
+/*
+  CLICKED, not `.check()`.
+
+  `.check()` asserts the box ends up CHECKED - and the whole point of this
+  step is that the write is refused and the tick rolls back, so the assertion
+  races the rollback. It passed on a quiet machine and threw inside a full
+  gate run, which is the signature of a harness race rather than a product
+  defect: four standalone runs and two gate runs disagreed about the same
+  code. The two checks below are what this step is actually for.
+*/
+await page.locator('[data-bc-tick]').first().click()
 await page.waitForTimeout(900)
 check(
   'a refused write left the office unchanged',

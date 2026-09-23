@@ -37,6 +37,7 @@
   A NOTE ON COMMENTS. Plain words only inside a returned template literal.
 */
 
+import * as icons from '../icons.js'
 import * as grid from './layout.js'
 import { button, esc } from './parts.js'
 import {
@@ -180,10 +181,39 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
   off this page entirely, and a row of monograms beside the project name was
   the most decorative instance of it.
 */
+/*
+  THE PROJECT'S OWN MARK, and its hue, on the page it belongs to.
+
+  Grant, 23 September: *"Test project colour/accent, SVG icon, uploaded image
+  if supported... Verify the correct identity persists and projects are
+  immediately distinguishable. Make sure project-specific styling remains
+  restrained rather than recolouring the whole application."*
+
+  `app.hq_project_look` has stored an icon, a hue and an image since 0253, the
+  default studio has a whole picker for it, and this experience drew none of
+  it - every project's head was identical but for the words. So the mark is
+  here, at the size of the title, and the hue tints the MARK and a single
+  accent rule under the head. Nothing else changes colour: a project is
+  recognised by its badge, not by repainting the product.
+*/
+const projectMark = (p) => {
+  if (typeof p.image === 'string' && p.image.startsWith('data:image/')) {
+    return `<img class="bcprojmark bcprojmark--img" src="${esc(p.image)}" alt="">`
+  }
+  const key = p.icon ?? ''
+  if (icons.known(key)) {
+    return `<span class="bcprojmark ${esc(p.iconHue ?? p.hue ?? '')}">${icons.svg(key, 26)}</span>`
+  }
+  /* No icon chosen: the initial, in the project's hue, rather than nothing. */
+  return `<span class="bcprojmark bcprojmark--letter ${esc(p.iconHue ?? p.hue ?? '')}">${esc(
+    String(p.name ?? '?').trim().charAt(0).toUpperCase(),
+  )}</span>`
+}
+
 const head = (p) => {
-  return `<header class="bchead">
+  return `<header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}">
     <div class="bcheadtop">
-      <h1>${esc(p.name)}</h1>
+      <h1 class="bcprojtitle">${projectMark(p)}<span>${esc(p.name)}</span></h1>
     </div>
     ${p.purpose ? `<p class="bcheadwhy">${esc(p.purpose)}</p>` : ''}
     <div class="bcheadrow">
@@ -254,6 +284,7 @@ const head = (p) => {
           </button>
           <div class="bcmenu" data-bc-pagemenu-panel role="menu" hidden>
             <button type="button" role="menuitem" data-bc-arrange="1">Arrange this page</button>
+            <button type="button" role="menuitem" data-bc-look="1">How this project looks</button>
             <button type="button" role="menuitem" data-bc-expand="team">The team</button>
             <button type="button" role="menuitem" data-bc-sources="1">Sources</button>
             <button type="button" role="menuitem" data-bc-go="${esc(at(`/p/${p.slug}/settings`))}">Project settings</button>

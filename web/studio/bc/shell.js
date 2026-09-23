@@ -1976,8 +1976,40 @@ const scheduleSurface = (p) => {
             ? ''
             : `<section class="bcundated">
                 <h2>No date yet</h2>
+                <p class="bcpmeta bcprose">
+                  Work with nothing to be due by. Giving one a date puts it on
+                  the month above.
+                </p>
                 <div class="bclist">
-                  ${undated.map((t) => taskRow(t, all.indexOf(t))).join('')}
+                  ${undated
+                    .map(
+                      (t) => `<div class="bcitem bcundatedrow">
+                        <span></span>
+                        <div class="bcitembody">
+                          <button type="button" class="bcitemtitle bcitemlink"
+                            data-bc-task-open="${esc(taskKey(t))}">${esc(t.title)}</button>
+                          ${t.who ? `<span class="bcitemmeta">${esc(whoName(t.who))}</span>` : ''}
+                        </div>
+                        <!--
+                          THE DATE IS GIVEN HERE, on the row that lacks it.
+
+                          Grant's own journey for this screen is: open a dated
+                          item, open No date yet, assign a date, change it,
+                          save, refresh, reopen. Everything but the assigning
+                          worked, and it worked by opening the record - which
+                          is two screens away from the list of exactly the
+                          things that need one. It saves on change: there is no
+                          other field, so a Save button would be a second press
+                          that can only ever mean yes.
+                        -->
+                        <label class="bcduecell">
+                          <span class="bcvh">${esc(`When ${t.title} is due`)}</span>
+                          <input class="bcinput bcdueinput" type="date"
+                            data-bc-setdue="${esc(taskKey(t))}" value="">
+                        </label>
+                      </div>`,
+                    )
+                    .join('')}
                 </div>
               </section>`)
     }`

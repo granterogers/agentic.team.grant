@@ -75,6 +75,21 @@ const FALLBACK_CREW = [
     hue: 'p-slate', tone: 196, state: 'idle' },
 ]
 
+/*
+  An instant this many minutes and seconds ago, as an ISO string.
+
+  The seconds are given explicitly rather than left to the clock so that two
+  events never share one, which is the whole point of showing them.
+
+  DECLARED ABOVE ITS FIRST USE, and the first attempt was not: a `const` is in
+  its temporal dead zone until the line that declares it runs, so putting this
+  helper below the array that calls it threw "Cannot access AGO before
+  initialization" and the whole page drew nothing. CLAUDE.md records the same
+  trap twice, both times in app.js.
+*/
+const AGO = (minutes, seconds = 0) =>
+  new Date(Date.now() - minutes * 60_000 - seconds * 1000).toISOString()
+
 const FALLBACK_PROJECTS = [
   {
     slug: 'legacy-coaching-course',
@@ -334,10 +349,19 @@ const FALLBACK_PROJECTS = [
         derived: ['Whats App Audio From Ben'],
       },
     ],
+    /*
+      WITH AN INSTANT, like the office's own payload (0288's `at`).
+
+      It carried relative phrases and nothing else, so the prototype held a
+      second vocabulary in the one place every capture looks - the same trap
+      this file already records about a Drive source's last-read. Computed
+      from now rather than written down, because a fixed date drifts into
+      absurdity and the point of these rows is that they are recent.
+    */
     activity: [
-      { who: 'emma', verb: 'pulled', what: 'the WS02 client list into the vision map', when: '2h ago' },
-      { who: 'oliver', verb: 'made', what: 'the course one-pager', when: '2d ago' },
-      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', when: '2d ago' },
+      { who: 'emma', verb: 'pulled', what: 'the WS02 client list into the vision map', at: AGO(2 * 60 + 12, 41), when: '2h ago' },
+      { who: 'oliver', verb: 'made', what: 'the course one-pager', at: AGO(2 * 24 * 60 + 95, 7), when: '2d ago' },
+      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', at: AGO(2 * 24 * 60 + 340, 19), when: '2d ago' },
     ],
   },
   {
@@ -364,7 +388,7 @@ const FALLBACK_PROJECTS = [
         from: 'Grant · voice', who: 'emma', asked: '6 hours ago',
         context: null, state: 'working', delivered: '', output: null, derived: [] },
     ],
-    activity: [{ who: 'tom', verb: 'summarised', what: 'two sources', when: '1d ago' }],
+    activity: [{ who: 'tom', verb: 'summarised', what: 'two sources', at: AGO(24 * 60 + 18, 3), when: '1d ago' }],
   },
   {
     slug: 'wellness',
@@ -418,6 +442,7 @@ const FALLBACK_WAITING = {
   here — one place, and the direction of travel is obvious if the slugs are ever
   reconciled.
 */
+
 export const DESIGN = {
   'chief-of-staff':          { slug: 'claire', hue: 'p-moss',  tone: 152 },
   'research-director':       { slug: 'emma',   hue: 'p-rust',  tone: 28 },

@@ -13361,6 +13361,19 @@ const bcContext = {
     state.setpane = id
     render()
   },
+  /*
+    HOW THIS PROJECT LOOKS: the picker that already exists.
+
+    `lookSheet` is the default studio's, it writes through `project_look`, and
+    it holds 451 icons, the hues and an image upload. Rebuilding it here would
+    be a second picker writing the same three columns - the settings decision
+    again, for the same reason.
+  */
+  openLook: () => {
+    const p = PROJECTS.find((x) => x.slug === state.project)
+    if (p === undefined) return
+    lookSheet(p)
+  },
   /* The office's own settings, in the sheet that already holds them. */
   openGlobalSettings: (tab) => {
     if (typeof tab === 'string' && tab !== '') state.setting = tab

@@ -2051,17 +2051,25 @@
   buttons that look exactly like the labels they were, which is a false
   affordance in the opposite direction - the thing works and nobody tries it.
 */
+/*
+  AND IT IS STILL A CHIP. The first version of this reset the border to
+  transparent, which took the chip's outline away and left three coloured
+  words floating in the head - the control gained an affordance and lost its
+  shape in the same edit. `border-color` only, so `.bcstatus`'s own border,
+  radius, padding and font all survive.
+*/
 [data-experience='basecamp'] .bcstatus--press,
 [data-experience='basecamp'] .bcstatecount--press {
   appearance: none;
-  border: 1px solid transparent;
-  font: inherit;
+  background: none;
+  font: 600 12px/18px var(--bc-font);
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
 [data-experience='basecamp'] .bcstatus--press:hover,
 [data-experience='basecamp'] .bcstatecount--press:hover {
-  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
   transform: translateY(-1px);
 }
 [data-experience='basecamp'] .bcstatus--press:focus-visible,
@@ -2230,4 +2238,110 @@
   [data-experience='basecamp'] .bcstatecount--press { flex: none; }
   [data-experience='basecamp'] .bchead h1 { font-size: 26px; }
   [data-experience='basecamp'] .bcheadwhy { margin: 4px 0 0; }
+}
+
+/* The date a to-do has not got, on the row that has not got it. */
+[data-experience='basecamp'] .bcundatedrow { align-items: center; }
+[data-experience='basecamp'] .bcdueinput {
+  min-height: 40px;
+  font-size: 13.5px;
+  padding: 7px 10px;
+  width: 168px;
+}
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bcdueinput { min-height: 44px; font-size: 16px; }
+}
+
+/*
+  The instant on an activity row: quiet, monospaced digits so a column of them
+  lines up, and never larger than the sentence it belongs to.
+*/
+[data-experience='basecamp'] .bceventbody { display: grid; gap: 2px; min-width: 0; }
+[data-experience='basecamp'] .bceventat {
+  font: 400 11.5px/1.4 var(--bc-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-muted);
+  opacity: 0.85;
+}
+[data-experience='basecamp'] .bceventwhat--press {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+[data-experience='basecamp'] .bceventwhat--press:hover {
+  border-bottom-color: color-mix(in srgb, var(--bc-accent) 60%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bceventwhat--press:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcduecell { display: flex; align-items: center; }
+
+/*
+  THE PROJECT'S IDENTITY, restrained on purpose.
+
+  Grant asked for projects to be immediately distinguishable AND for the
+  styling to stay restrained rather than recolouring the application. So the
+  hue reaches exactly two things: the mark, and a hairline under the head.
+  Everything else in the experience keeps its own palette, which is what stops
+  six projects looking like six different products.
+
+  The hue classes are the studio's own (p-rust, p-amber, p-moss, p-slate,
+  p-iris, p-plum) and they set `--hue` in tokens.css; this reads that rather
+  than redefining six colours a second time. A project with no hue falls back
+  to the experience's accent, so the mark is never colourless.
+*/
+[data-experience='basecamp'] .bcprojtitle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcprojmark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 13px;
+  color: var(--hue, var(--bc-accent));
+  background: color-mix(in srgb, var(--hue, var(--bc-accent)) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue, var(--bc-accent)) 40%, transparent);
+}
+[data-experience='basecamp'] .bcprojmark svg { width: 26px; height: 26px; }
+[data-experience='basecamp'] .bcprojmark--letter {
+  font: 700 20px/1 var(--bc-font);
+}
+[data-experience='basecamp'] .bcprojmark--img {
+  object-fit: cover;
+  background: none;
+  box-shadow: none;
+}
+[data-experience='basecamp'] .bchead {
+  border-bottom: 1px solid color-mix(in srgb, var(--bc-text-muted) 16%, transparent);
+  padding-bottom: 14px;
+}
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcprojmark { width: 36px; height: 36px; border-radius: 10px; }
+  [data-experience='basecamp'] .bcprojmark svg { width: 20px; height: 20px; }
+}
+
+/*
+  An activity row that opens what it names is a control, so it meets the touch
+  floor on a touch device. The hit area grows, not the type: the row is a
+  sentence and a sentence at 44px would be a heading.
+*/
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bceventwhat--press {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
 }
