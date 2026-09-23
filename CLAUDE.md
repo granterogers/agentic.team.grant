@@ -3883,6 +3883,25 @@ Each of these cost real time. They are here so they cost it once.
   actually serves** — and check the belief against what the office has
   DELIVERED, which is the one source that cannot be argued with.
 
+
+- **ONE RECOGNISER DEFERRED TO ANOTHER AND THE OTHER DECLINED, SO THE
+  INSTRUCTION WENT NOWHERE.** `callsItOff` refuses `stop` + a gerund on purpose
+  — its comment says *"a rule about how the office behaves… 'stop sending me
+  updates'"* — because a false call-off destroys work in flight. It hands the
+  sentence to the rule path. `readTeaching` needs a standing marker (`from now
+  on`, `always`, `never`), so *"Stop sending me updates."* is stored by
+  NOTHING, and `remember()` is gated on it so there is no second route. The
+  office complies that turn, because the sentence is in the prompt, and forgets
+  by the next — which is exactly what he complained about twice in September.
+  **When a recogniser declines by deferring, open the thing it defers to and
+  check it accepts.**
+- **And the obvious widening is worse than the gap.** `stop\s+\w+ing` covers
+  *"stop using bullet points"* (a rule) and *"stop working on the venue
+  report"* (calling off work) identically, so teaching a bare imperative would
+  store the second as a standing rule — and 0567 records what a wrongly-stored
+  rule costs: eight days in every prompt at 0.95 confidence, permanent, because
+  `public.lessons` refuses UPDATE.
+
 ---
 
 ## Visual standard

@@ -2615,6 +2615,65 @@ ledger.
 
 Clean-pass count after pass 52: **2 of 5.**
 
+## Pass 53 — an instruction neither side takes
+
+**Territory:** `callsItOff` — calling off work in flight, the most destructive
+thing a recogniser can get wrong.
+
+**Classification: SYSTEMIC PRODUCT DEFECT.** Filed as
+[#364](https://github.com/granterogers/agentic.team.grant/issues/364). **Filed,
+not fixed.**
+
+**The finding.** A plain behaviour instruction is stored by NEITHER side:
+
+| he says | callsItOff | readTeaching | stored |
+|---|---|---|---|
+| `From now on, stop using bullet points.` | null | STORED | yes |
+| `Stop using bullet points.` | null | null | **no** |
+| `Stop sending me updates.` | null | null | **no** |
+| `Do not use bullet points.` | null | null | **no** |
+
+`remember()` is the only storing path and is gated on `teaching !== null`, so
+there is no second route — checked, not assumed.
+
+**Both halves right alone, only their disagreement wrong — the sixth instance
+in this file.** `callsItOff` declines these DELIBERATELY, and its comment names
+the very example: *"`stop` plus a gerund is a rule about how the office
+behaves… **'stop sending me updates', 'stop copying Ruby in'**"*. That is the
+safe call, because a false call-off destroys work in flight. It hands the
+sentence to the rule path, and the rule path does not take it — a comment
+asserting a property with no mechanism behind it.
+
+**Why it matters.** The sentence still reaches the model that turn, so the
+office complies ONCE and forgets. That is exactly the shape of his recorded
+complaint: taught on 11 September, complained on the 20th and again on the 21st
+— *"You're still not respecting my request."* And `check:standing` cannot see
+it, because it verifies stored rules make sense, not that instructions get
+stored.
+
+**Why it is filed rather than widened.** `A_RULE` is `stop\s+\w+ing`, which
+covers *"stop using bullet points"* (a rule) AND *"stop working on the venue
+report"* (calling off work) — identical surface form. Widening `readTeaching`
+to take a bare imperative would store the second as a STANDING RULE, and 0567
+records what that costs: a nonsense rule in every Chief of Staff prompt for
+eight days at 0.95 confidence, permanent because `public.lessons` refuses
+UPDATE. The gap is cheaper than the wrong fix.
+
+**Two smaller findings on the same boundary**, filed together rather than
+separately: *"Forget what I said about lists — keep using them."* is read as a
+CALL-OFF whose target is the nonsense string
+`"what I said about lists - keep using them"` (the longer phrasing correctly
+goes to teaching only, so the boundary is close but not right); and *"Forget
+the pricing doc, I will do it myself."* is missed because the trailing clause
+falls outside `TAIL`'s enumerated suffixes.
+
+**And one non-finding, validated rather than reported:** *"Stop working on the
+venue report."* is NOT read as a call-off, which looked wrong and is the
+documented safe direction — missing a call-off costs one more sentence, a false
+one destroys work.
+
+Clean-pass count after pass 53: **0 of 5** — reset by a systemic product defect.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
