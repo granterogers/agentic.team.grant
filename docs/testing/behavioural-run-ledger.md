@@ -2257,6 +2257,49 @@ still at 0579.
 
 Clean-pass count after pass 45: **4 of 5.**
 
+## Pass 46 — the voice path: CLEAN
+
+**Territory:** the voice call's BEHAVIOUR. Pass 28 used this surface to find a
+containment escape and never asked whether the path answers well.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked:**
+
+1. **`voice_state()` serves the roster** — all eight, with names and titles, so
+    a caller can be told who is who.
+2. **`voice_lookup` resolves a project and declines a fragment.** *"Legacy
+    Coaching Course"* → `about: "project"`. A bare *"legacy"* → `about:
+    "everything"`, which is the right call on a path where mishearing a
+    fragment and confidently picking the wrong project is the worse error.
+3. **`voice_refusal` is about CAPABILITY, not the utterance.** It takes a bot
+    id and asks whether `voice.transcription` is configured, returning a token
+    so the adapter can SAY it cannot transcribe. It is configured — `api`,
+    Groq `whisper-large-v3-turbo` — so nothing is refused.
+4. **And the usage is consistent with all of that.** 129 voice commands, every
+    one carrying an `instruction`, **none carrying a `voice_file_id`**. So the
+    voice CALL path has been exercised and the AUDIO path has not: nothing has
+    ever needed transcribing, which is why `transcript` is empty on all 129 and
+    why that emptiness is not a defect.
+
+**Stated rather than glossed:** 67 of the 129 are labelled harness and the rest
+are deploy probes and context suites, as pass 28 established. **No genuine
+human voice call is on record**, so this pass verifies the path's structure and
+its refusal honesty, not its answer quality under real use. Audio transcription
+is configured and unproven — a fact about traffic, like the contact tier in
+pass 37, not a fault in the derivation.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 46: **5 of 5.**
+
+---
+
+**FIVE CONSECUTIVE CLEAN PASSES AGAIN**, in five materially different
+territories: delegation and consultation (42), Slack provisioning (43), his
+personal task list (44), the evaluator (45), the voice path (46). The required
+**final adversarial synthesis pass** follows.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
