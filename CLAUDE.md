@@ -74,6 +74,7 @@ control back to Grant because a compaction happened.
 | **this file** | how to work here — standing instructions and traps |
 | **`docs/AUTONOMOUS-RUN.md`** | ⭐ **read this second.** Where the work is, the current checkpoint, and how to continue after a compaction |
 | [GitHub Issues](https://github.com/granterogers/agentic.team.grant/issues) | **all actionable work.** Milestones M0 → v1.0 |
+| `docs/testing/behavioural-run-ledger.md` | ⭐ **the behavioural discovery programme** — objective, passes, stopping criteria, outstanding investigations. Read it before resuming that work |
 | `docs/HANDOFF.md` | current state, summarised |
 | `docs/testing/backend-acceptance-verdict-2026-09-15.md` | ⭐ **the GREEN verdict, what it rests on, and what it does not claim** |
 | `docs/testing/green-blocker-ledger.md` | every blocker this campaign opened and how each closed |
