@@ -116,6 +116,28 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
         )?.n ?? 0,
       )
 
+      /*
+        AND THE NOTICING ROUND, WHICH HAD NO CALLER AT ALL (#351).
+
+        The round that fills the noticed section of the Governance page - this
+        connector has produced nothing since you attached it, and the like.
+        Nothing anywhere called it: the only database mention was inside a
+        COMMENT, and the only caller in the repository was a verify suite,
+        which is not a caller. public.suggestions had never held a row.
+
+        Here rather than in a duty of its own, because it is the same idea as
+        the round above: turn what the office noticed into something Grant can
+        answer. One duty, two rounds, one report.
+
+        Its count is deliberately NOT folded into raised: a proposal asks him
+        for a capability and a suggestion points at something already in front
+        of him, and a number that mixed them would mean neither.
+      */
+      const noticed = Number(
+        ((await db.execute('select app.raise_suggestions(40) as n')).rows[0] as { n?: number })
+          ?.n ?? 0,
+      )
+
       const body =
         raised === 0 && updated === 0
           ? 'Nothing new the office could not do often enough to be worth asking about.' +
@@ -126,11 +148,15 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
               ? ''
               : `, ${String(silent)} left alone because you have already said no`) +
             `. ${count(open, 'proposal', 'proposals')} open on the Governance page.`
+      const withNoticed =
+        noticed === 0
+          ? body
+          : `${body} ${count(noticed, 'thing', 'things')} noticed on the Governance page.`
       const withRestored =
         restored === 0
-          ? body
-          : `${body} ${count(restored, 'proposal', 'proposals')} put back: a previous round said ` +
-            'it had told you and the message never arrived.'
+          ? withNoticed
+          : `${withNoticed} ${count(restored, 'proposal', 'proposals')} put back: a previous ` +
+            'round said it had told you and the message never arrived.'
 
       /*
         And the half that speaks (0489).

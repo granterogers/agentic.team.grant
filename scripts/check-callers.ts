@@ -44,7 +44,7 @@
  */
 
 import { execSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 const db = new ManagementApiExecutor(
@@ -74,9 +74,34 @@ const fns = (
 const sqlMentions = String(
   (
     await db.execute(`
+      /*
+        COMMENTS STRIPPED, because a comment is not a call (#351).
+
+        app.raise_suggestions was reported reachable for as long as it has
+        existed. The only mention of it anywhere in the database was inside a
+        block comment in app.decide_suggestion — *"raise_suggestions reads
+        it; so does the page"* — and the only caller in the repository was a
+        verify suite, which this check correctly does not count. Nothing had
+        ever produced a suggestion, and the Governance page's *noticed*
+        section could not populate.
+
+        verify:schema learned this once and the lesson was never carried
+        across to the check whose entire job is finding a capability nothing
+        calls. Measured across all 795 functions, exactly ONE was hidden by
+        it, which is the one above.
+
+        Both block and line comments, and the strip is only applied to the
+        HAYSTACK — a function is still found by its own name.
+      */
       select string_agg(x.t, '
 ') as all_sql from (
-        select coalesce(prosrc, '') as t from pg_proc p
+        -- Character classes rather than backslash escapes: this SQL lives in a
+        -- JS template literal, which eats a lone backslash, so the pattern
+        -- reached Postgres as an invalid quantifier the first time round.
+        select regexp_replace(
+                 regexp_replace(coalesce(prosrc, ''), '/[*].*?[*]/', ' ', 'gs'),
+                 '--[^' || chr(10) || ']*', ' ', 'g') as t
+          from pg_proc p
           join pg_namespace n on n.oid = p.pronamespace
          where n.nspname in ('app', 'public')
         union all
@@ -149,6 +174,25 @@ const operatorCode = [...operatorFiles]
   .map((f) => readFileSync(f, 'utf8'))
   .join('\n')
 
+/*
+  A COMMENT IS NOT A CALL, on either side of the fence (#351).
+
+  The database half read a function as reached because one other function
+  MENTIONED it inside a block comment. The repository half had the same hole,
+  and it masked its own fix: a comment added beside the new call named the
+  function in prose, so removing the call left the check green.
+
+  Stripped here, once, so both haystacks are judged the same way. Deliberately
+  crude - block comments, line comments, and SQL's double dash - because the
+  question is only whether a NAME survives, and a stray string that looks like
+  a comment can at worst make the check stricter.
+*/
+const withoutComments = (text: string): string =>
+  text
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    .replace(/--[^\n]*/g, ' ')
+
 const named = (haystack: string, name: string): boolean => haystack.includes(name)
 
 /*
@@ -158,7 +202,7 @@ const named = (haystack: string, name: string): boolean => haystack.includes(nam
   tests because every call site below asks the same question, and two of them
   diverging is how a check starts disagreeing with its own report.
 */
-const reachable = `${appCode}\n${operatorCode}`
+const reachable = withoutComments(`${appCode}\n${operatorCode}`)
 
 /*
   A public wrapper is the mouth of the app function it wraps, so an app
@@ -198,6 +242,12 @@ type Verdict = { fn: string; why: string }
 const mouthless: Verdict[] = []
 const onlyTests: Verdict[] = []
 
+/* Every migration THIS checkout has, so ownership can be decided above. */
+const migrationSql = readdirSync('migrations')
+  .filter((f) => f.endsWith('.sql'))
+  .map((f) => readFileSync(`migrations/${f}`, 'utf8'))
+  .join('\n')
+
 for (const f of fns) {
   const full = `${f.schema}.${f.name}`
   if (named(reachable, f.name)) continue
@@ -214,7 +264,25 @@ for (const f of fns) {
   const elsewhere = sqlMentions.split(f.body).join('')
   if (named(elsewhere, f.name)) continue
 
-  if (named(scriptCode, f.name)) {
+  /*
+    NOT THIS CHECKOUT'S TO ACCOUNT FOR.
+
+    The shared database is shared, and another branch's migration lands in it
+    while its file is still on that branch. That happened mid-run: four
+    sign_in_* functions appeared with no migration here defining them and no
+    caller here naming them, and turned this check red over somebody else's
+    in-flight work. `check:migrations` already models the same fact — it
+    records 0539, 0543 and 0577 as collisions BETWEEN BRANCHES and passes,
+    because renaming one would make the repository claim a number it did not
+    run under.
+
+    So the rule is ownership, not an allow-list: if no migration in this
+    checkout creates it, this checkout cannot be asked to name its caller. It
+    self-heals the moment that branch merges and its file arrives.
+  */
+  if (!named(migrationSql, f.name)) continue
+
+  if (named(withoutComments(scriptCode), f.name)) {
     onlyTests.push({ fn: full, why: 'only scripts/ names it — a suite is not a caller' })
   } else {
     mouthless.push({ fn: full, why: 'nothing in the repository names it at all' })

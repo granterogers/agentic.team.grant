@@ -1056,6 +1056,57 @@ level.
 
 Clean-pass count after pass 22: **0 of 5.**
 
+## Pass 23 — the Governance page, and the instrument that hid half of it
+
+**NOT CLEAN.** One systemic product defect
+([#351](https://github.com/granterogers/agentic.team.grant/issues/351)).
+
+**The proposals section is honestly empty.** All 22 rows are
+`verify:proposes` fixtures and `app.harness_proposal` filters every one, so
+the page shows none. My first measure said otherwise — it used
+`harness_label`, which is not the predicate the reader uses. And the round has
+nothing real to raise: `impediments_tally(14,3)` holds **only** `not_capable`,
+and 0474 correctly skips that kind.
+
+**The finding was the section beside it.** `public.suggestions` had never held
+a row, because **nothing called `app.raise_suggestions`**. Run by hand it
+raised three immediately.
+
+**`check:callers` reported it reachable for as long as it has existed**,
+because the only database mention was inside a COMMENT in
+`app.decide_suggestion`. CLAUDE.md records `verify:schema` learning *"a
+comment is not a call"*; it was never carried across to the check whose whole
+job that is. **The repository half had the same hole and masked its own fix**
+— a comment beside the new call named the function in prose, so removing the
+call left the check green. Found only because my own control failed.
+
+Stripping comments surfaced **four more** functions the product names only in
+prose: `app.unarchive_document`, `public.model_speed`, `app.mail_recent`,
+`app.notebook_chat_allowed`. Recorded with reasons, not fixed here.
+
+**And what the round produced was broken in two ways 0474 had fixed three days
+earlier**: *"We have been unable to an answer the database will accept 46
+times"* — the template assumes a verb phrase and half of `needed` is a noun —
+and it offered coherence-gate refusals as capabilities Grant might grant. Both
+invisible because nothing had ever run it. The two defective rows were removed
+from his page; the genuine third is kept.
+
+**An ownership rule the fix made necessary.** Stripping comments briefly
+turned the gate red over ANOTHER BRANCH's in-flight work: four `sign_in_*`
+functions, from `0577_signing_in_without_pasting_a_credential.sql`, applied to
+the shared database **six seconds after my own 0577**. A concurrent session.
+Grants are `postgres`/`service_role` only, so nothing was exposed. The check
+now skips a function no migration in this checkout creates, and self-heals
+when that branch merges — `check:migrations` already models the same fact and
+passes on 0539, 0543 and 0577 as cross-branch collisions.
+
+**Two mistakes of my own worth recording**: I used `git checkout` on
+`propose.ts` and destroyed an uncommitted edit — this file's FIRST recorded
+trap — and I put backticks in a comment inside a template literal, which is
+its most-recorded one.
+
+Clean-pass count after pass 23: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and
