@@ -580,5 +580,6 @@
   "0572_an_undo_it_offers_it_can_perform.sql": "d8edc7102f3d3a5f75884e3a27e478d895876cd0e9c8114048f5964820af9e23",
   "0573_the_two_the_rows_could_not_show.sql": "a578ad1a4369a49bd36176715609f951bb49e08cf5639439a74f5dcdc82dd5d2",
   "0574_a_suite_that_signs_its_own_messages.sql": "974404be694012ee999c05fb7f96663be21f8996cf89fac331cfed39eed39ed4",
-  "0575_the_verdict_outlives_the_evidence.sql": "06cddd5f0f2f13c2f8e09ad9f79586a762dd77ed1e3aa82f719a192efd53e569"
+  "0575_the_verdict_outlives_the_evidence.sql": "06cddd5f0f2f13c2f8e09ad9f79586a762dd77ed1e3aa82f719a192efd53e569",
+  "0576_a_tool_description_is_written_in_the_third_person.sql": "049a762dbbaaf13d245b6fb0183411b8469371205f3344818d07564ad961f6d6"
 }

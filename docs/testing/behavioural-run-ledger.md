@@ -1012,6 +1012,50 @@ evidence rather than filed.
 
 Clean-pass count after pass 21: **2 of 5.**
 
+## Pass 22 — permissions and reach, on the authority boundary
+
+**NOT CLEAN.** One systemic product defect
+([#350](https://github.com/granterogers/agentic.team.grant/issues/350)).
+
+Territory: what the office is allowed to do, chosen because CLAUDE.md records
+a defect that hid *"on a security boundary for the life of the feature"*.
+
+**The recorded defect is fixed and holds.** `app.guess_reach` now sees inside
+every separator — `db.delete`, `delete_everything`, `purge_all`,
+`crm_removeContact` all read destructive — and the asymmetry holds: a
+reassuring description cannot soften a destructive NAME. 16 enabled tools, 5
+read / 7 write / 4 external, **nothing at level 3**, and `db.delete` is level
+3 and disabled.
+
+**The finding is the other half of the same classifier.** The vocabularies
+match `\m(delete|destroy|…)\M` — the exact word — and a tool description is
+written in the THIRD PERSON, which is how every API reference writes one.
+*"Deletes every record it touches"*, *"Permanently destroys the archive"*,
+*"Wipes all local state"*, *"Charges the customer card"* all read `unknown`;
+`offer_mcp_tool`'s own comment says *"unknown is treated as a write"* while
+`destructive` becomes level 3 — the level `autonomy_policy` can never resolve
+to `proceed` and which cannot take a standing authorization.
+
+Proved on the same text: the old pattern is **false** on all three
+third-person forms and **true** on the imperative.
+
+**`mcp_discovered_tools` holds zero rows**, so nothing has been misclassified
+yet. Second defect this programme has found waiting for its first user.
+
+**Widening is escalation-only**, which is the safe direction on an authority
+boundary: a false escalation costs a human decision on an unvetted third-party
+tool; a false relaxation hands a standing authorization to something that
+deletes. "queries" is still not recognised, deliberately — failing to see a
+READ leaves it `unknown`, which is treated as a write.
+
+**Verification.** The migration drives all seven shapes plus three controls,
+including the one that must never move. Seven permanent assertions added to
+`verify:connectors`, which owns this path: **52/52**. Driven against the
+database rather than unit-tested, because the consequence is an authority
+level.
+
+Clean-pass count after pass 22: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and

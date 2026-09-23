@@ -3557,6 +3557,24 @@ Each of these cost real time. They are here so they cost it once.
   *"A gate stopped an answer"* and *"an answer OF HIS"* are different claims,
   and an instrument that conflates them will be quoted as the second.
 
+- **A tool DESCRIPTION is written in the third person, and `\mdelete\M` does
+  not match "deletes".** `app.guess_reach` classifies a discovered MCP tool
+  and `app.offer_mcp_tool` turns that into an authority level — `destructive`
+  is level 3, which `autonomy_policy` can never resolve to `proceed` and which
+  cannot take a standing authorization, while `unknown` *"is treated as a
+  write"* by that function's own comment. So *"Permanently destroys the
+  archive"*, *"Wipes all local state"* and *"Charges the customer card"* were
+  all offered as writes. The imperative worked and the third person did not —
+  and the third person is how every API reference in the world writes a tool
+  description. **This is the same word-boundary trap as `delete_everything`,
+  one inflection further on.**
+- **On an authority boundary, widen only in the escalating direction and say
+  so.** A false escalation costs a human decision about a third-party tool
+  nobody has vetted; a false relaxation hands a standing authorization to
+  something that deletes. For the same reason "queries" is still deliberately
+  unrecognised: failing to see a READ leaves the tool `unknown`, which is
+  treated as a write — more conservative, not less.
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the

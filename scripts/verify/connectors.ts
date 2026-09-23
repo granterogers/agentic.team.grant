@@ -173,6 +173,50 @@ section = 'what the office thinks each one does'
 }
 
 // ---------------------------------------------------------------------------
+/*
+  A TOOL DESCRIPTION IS WRITTEN IN THE THIRD PERSON (#350).
+
+  `guess_reach` matched `\m(delete|destroy|...)\M` — the exact word — and a
+  tool description is written the way every API reference writes one:
+  *"Deletes a record"*, *"Charges the customer card"*, *"Creates a page"*. All
+  of those read as `unknown`, and `offer_mcp_tool`'s own comment says
+  *"unknown is treated as a write"* while `destructive` becomes level 3 — the
+  level `autonomy_policy` can never resolve to `proceed` and which cannot take
+  a standing authorization.
+
+  Driven here rather than unit-tested because the function is SQL and the
+  consequence is an authority level, so the thing worth asserting is the
+  verdict the database actually returns.
+*/
+{
+  const shapes: readonly [string, string, string][] = [
+    ['Deletes every record it touches', 'notes.sync', 'destructive'],
+    ['Permanently destroys the archive', 'notes.sync', 'destructive'],
+    ['Charges the customer card', 'notes.sync', 'destructive'],
+    ['Sends a message to the channel', 'notes.sync', 'write'],
+    // The imperative, which always worked and must go on working.
+    ['Delete every record', 'notes.sync', 'destructive'],
+    /*
+      THE SECURITY PROPERTY. `greatest(by_name, by_description)` means a
+      description can only ever escalate: a reassuring one must never soften a
+      destructive NAME. This is the assertion that must never be relaxed.
+    */
+    ['Perfectly safe, read only, nothing is removed', 'delete_all_contacts', 'destructive'],
+    // And a plainly harmless tool is still not called destructive.
+    ['Reads a contact', 'contact.read', 'read'],
+  ]
+  for (const [descr, name, want] of shapes) {
+    const got = await one(
+      `select app.guess_reach(${lit(name)}, ${lit(descr)}) ->> 'reach' as reach`,
+    )
+    ok(
+      `“${descr.slice(0, 40)}” on ${name} reads as ${want}`,
+      String(got.reach) === want,
+      String(got.reach),
+    )
+  }
+}
+
 console.log('\noffering one, which still grants nothing')
 section = 'offering one'
 // ---------------------------------------------------------------------------
