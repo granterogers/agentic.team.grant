@@ -133,3 +133,42 @@ say:
 **So: after merging any branch that adds a migration, run
 `npm run fresh:baseline` and commit the result.** It takes about twenty
 seconds and it is the one step that keeps a fresh install honest.
+
+---
+
+## IR-3 — Thirteen zero-state preconditions live on the integration branch, not here
+
+**To:** the fresh-install workstream · **From:** the merge-readiness pass,
+24 September 2026
+
+`claude/fresh-install-onboarding` carries 536 migrations and nine
+preconditions, and `npm run fresh:zero-state -- --preconditions` is green
+against that corpus. The corpus on `claude/human-simulation-harness` is now
+**607**, and the F-002 class grew with it: 0539, 0545, 0547, 0566, 0571, 0574,
+0582, 0583, 0584, 0585, 0586, 0589, 0590 and 0591 each need one, and 0573
+needs a planner fix that is not a data precondition at all (F-013).
+
+They are written, and the integrated corpus replays **607/607 from a database
+dropped immediately beforehand**. They are on
+`trial/integration-2026-09-24`, commit `19bbd05`, as
+`scripts/fresh/sql/preconditions/before-05*.sql`.
+
+### Why they are not on this branch
+
+A precondition is staged by NAME — `files.filter(f => f.name < stage.before)`
+— so a stage naming a migration this branch does not have applies at the END
+of the run instead of at its point. Several of them would then write into
+tables that do not exist here, and `before-0566` would fail outright. Pushing
+them would turn a green branch red for a reason that has nothing to do with
+this workstream.
+
+### What to do with them
+
+**When this branch next takes the backend corpus** — a rebase or merge that
+brings 0537–0591 across — cherry-pick `19bbd05` in the same step and re-run
+`npm run fresh:zero-state -- --preconditions`. It is one commit, it touches
+nothing but `scripts/fresh/sql/preconditions/` and
+`docs/fresh-install/FINDINGS.md`, and it is the difference between a corpus
+that replays and one that stops at 0539.
+
+And then `npm run fresh:baseline`, for the reason IR-2 gives above.
