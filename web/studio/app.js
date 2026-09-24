@@ -13373,15 +13373,32 @@ const bcContext = {
     has changed and a dialog over it is about somewhere else.
   */
   closeExpanded: () => {
+    /*
+      A SHEET THAT IS ITSELF THE RECORD HAS NO LEVEL TO GO BACK TO.
+
+      The step above is right for a record inside a LIST -- a contact in
+      Contacts, a source in Sources, a to-do in To-dos -- and wrong for the
+      document viewer, whose whole sheet exists to show one document. Stepping
+      there leaves `bcExpanded = 'document'` with no document in it: a dialog
+      showing nothing, which `verify:basecamp-docs` found within minutes by
+      being unable to click through its own backdrop.
+
+      The discriminator is derived rather than listed: `bc.TOOLS` is the set of
+      things with a list behind them, and the viewer is not one of them. A
+      hand-kept list of exceptions here would be the next thing to fall out of
+      step with the tools.
+    */
+    const isTool = (bc.TOOLS ?? []).some((t) => t.id === state.bcExpanded)
     const inside =
-      state.bcTask !== null ||
-      state.bcContact !== null ||
-      state.bcContactAdd === true ||
-      state.bcDoc !== null ||
-      state.bcSource !== null ||
-      state.bcSourceAdd === true ||
-      state.bcWaiting !== null ||
-      state.bcOutput !== null
+      isTool &&
+      (state.bcTask !== null ||
+        state.bcContact !== null ||
+        state.bcContactAdd === true ||
+        state.bcDoc !== null ||
+        state.bcSource !== null ||
+        state.bcSourceAdd === true ||
+        state.bcWaiting !== null ||
+        state.bcOutput !== null)
     if (inside) {
       state.bcTask = null
       state.bcContact = null

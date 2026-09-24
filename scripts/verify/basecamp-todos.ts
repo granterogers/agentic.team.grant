@@ -37,6 +37,27 @@ const check = (what: string, ok: boolean, detail = ''): void => {
   }
 }
 
+/*
+  BACK TO THE BOARD, which is now more than one press.
+
+  §21 made dismissal step exactly one level: a record inside a sheet closes to
+  the sheet, and the sheet closes to the page. A single Escape used to do both,
+  so loops like this one pressed once and carried on -- and now leave the sheet
+  open, whose backdrop swallows the next click and reports as a timeout on a
+  control that is perfectly fine.
+
+  Pressing until nothing is open is the honest way to say "get me back to the
+  page", and it is bounded so a surface that will not close fails as a test
+  rather than hanging.
+*/
+const dismissAll = async (): Promise<void> => {
+  for (let i = 0; i < 4; i += 1) {
+    if ((await page.locator('[data-bc-expanded]').count()) === 0) return
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(250)
+  }
+}
+
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
 const page = await ctx.newPage()
@@ -180,7 +201,7 @@ const back = (await page.evaluate(
 check('unticking it in the expanded view puts it back', back === 'open', back)
 
 /* --- 6. and the miniature agrees, without a reload ---------------------- */
-await page.keyboard.press('Escape')
+await dismissAll()
 await page.waitForTimeout(400)
 const mini = (await page.evaluate(
   inPage(`const el = document.querySelector('[data-mod="tasks"] [data-bc-tick="${firstKey}"]')
@@ -202,8 +223,7 @@ check(
   !record.includes('not on this project any more'),
   record.replace(/\n/g, ' / ').slice(0, 200),
 )
-await page.keyboard.press('Escape')
-await page.waitForTimeout(300)
+await dismissAll()
 
 /* --- 8. the surface, at its own address --------------------------------- */
 await page.goto(url(`${slug}/tasks`), { waitUntil: 'domcontentloaded' })
@@ -271,8 +291,7 @@ for (let i = 0; i < entries; i += 1) {
     broken += 1
     brokenNames.push(`${name} (opened something else)`)
   }
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(250)
+  await dismissAll()
 }
 check('every schedule entry opens the task it names', broken === 0, brokenNames.join(', '))
 

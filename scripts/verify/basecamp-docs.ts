@@ -36,6 +36,27 @@ const check = (what: string, ok: boolean, detail = ''): void => {
   }
 }
 
+/*
+  BACK TO THE BOARD, which is now more than one press.
+
+  §21 made dismissal step exactly one level: a record inside a sheet closes to
+  the sheet, and the sheet closes to the page. A single Escape used to do both,
+  so loops like this one pressed once and carried on -- and now leave the sheet
+  open, whose backdrop swallows the next click and reports as a timeout on a
+  control that is perfectly fine.
+
+  Pressing until nothing is open is the honest way to say "get me back to the
+  page", and it is bounded so a surface that will not close fails as a test
+  rather than hanging.
+*/
+const dismissAll = async (): Promise<void> => {
+  for (let i = 0; i < 4; i += 1) {
+    if ((await page.locator('[data-bc-expanded]').count()) === 0) return
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(250)
+  }
+}
+
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
 const page = await ctx.newPage()
@@ -140,8 +161,7 @@ for (const d of docs) {
   if (got === 'nothing') wrong.push(`${d.title} (${d.kind}) did nothing`)
   if (d.kind === 'Audio' && got !== 'player') wrong.push(`${d.title} is audio and did not play`)
   for (const p of ctx.pages().slice(before)) await p.close()
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(200)
+  await dismissAll()
 }
 check(
   'pressing each one opens it, plays it, or shows its details',
@@ -205,8 +225,7 @@ if (audioRow !== undefined) {
        return el.play().then(() => 'playing').catch((e) => 'refused: ' + e.name)`),
   )) as string
   check('and it plays when it is asked to', played === 'playing', played)
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(250)
+  await dismissAll()
 }
 
 /* --- 5. a document with no file gets details, not silence --------------- */
@@ -225,8 +244,7 @@ if (noFile !== undefined) {
     body.includes(noFile.title) && /no file behind this one/i.test(body),
     body.replace(/\n/g, ' / ').slice(0, 180),
   )
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(250)
+  await dismissAll()
 }
 
 /* --- 6. thumbnails: a real page where there is one, a glyph where not --- */
@@ -458,8 +476,7 @@ if (rec !== undefined) {
       .innerText()
       .catch(() => ''),
   )
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(300)
+  await dismissAll()
 }
 
 /* --- 9. a picture that will not load falls back rather than lying ------- */
