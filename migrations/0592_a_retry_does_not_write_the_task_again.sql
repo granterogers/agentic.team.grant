@@ -9,7 +9,9 @@
   answer is judged must be idempotent at the writer.
 
   Both task writers the conversation uses. Spliced from their LIVE definitions;
-  only the early return is new.
+  only the early returns are new. my_task_add also returns the task the SAME
+  conversation made in the last ten minutes under the same title (ledger R18:
+  one message sent twice made two tasks).
 */
 
 CREATE OR REPLACE FUNCTION app.my_task_add(p_title text, p_detail text DEFAULT ''::text, p_due_on date DEFAULT NULL::date, p_remind_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_priority integer DEFAULT 100, p_project text DEFAULT NULL::text, p_labels text[] DEFAULT NULL::text[], p_parent text DEFAULT NULL::text, p_job uuid DEFAULT NULL::uuid)
@@ -80,6 +82,37 @@ begin
     if v_id is not null then
       return jsonb_build_object('ok', true, 'id', v_id, 'title', v_title,
         'project', coalesce(p_project, ''), 'parent', v_parent, 'existing', true);
+    end if;
+
+    /*
+      AND THE SAME MESSAGE TWICE IS ONE TASK (ledger R18).
+
+      A re-sent message or a double submit arrives as a second command with
+      its own dedupe key, so it is a second job and the rule above cannot see
+      it. Driven on production: "Add a task to ring the plumber about the
+      boiler tomorrow" sent twice three seconds apart made two identical
+      tasks, both confirmed. An open task with the same title that THIS
+      CONVERSATION's own jobs made in the last ten minutes is the one he
+      already asked for; it is returned, marked, and the handler says so.
+      Ten minutes and the same conversation, because "add it again" an hour
+      later, or from another chat, is a request rather than an accident.
+    */
+    select t.task_id into v_id
+      from public.tasks t
+      join public.inbound_commands c on c.job_id = t.job_id
+      join public.inbound_commands me on me.job_id = p_job
+     where t.assigned_to_human
+       and t.state not in ('done', 'cancelled')
+       and lower(btrim(t.title)) = lower(v_title)
+       and t.created_at >= app.now_utc() - interval '10 minutes'
+       and c.origin_channel = me.origin_channel
+       and split_part(c.origin_ref, ':', 1) = split_part(me.origin_ref, ':', 1)
+       and coalesce(c.subject, c.actor) = coalesce(me.subject, me.actor)
+     order by t.created_at desc limit 1;
+    if v_id is not null then
+      return jsonb_build_object('ok', true, 'id', v_id, 'title', v_title,
+        'project', coalesce(p_project, ''), 'parent', v_parent,
+        'existing', true, 'repeated', true);
     end if;
   end if;
 

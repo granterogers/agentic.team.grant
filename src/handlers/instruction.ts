@@ -3988,6 +3988,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 const answer = (r.rows[0] as { t?: unknown })?.t
                 const got = (typeof answer === 'string' ? JSON.parse(answer) : answer) as {
                   ok?: boolean
+                  repeated?: boolean
                 }
                 /*
                   An offer may only promise what the press can perform. If the
@@ -3997,6 +3998,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   cheaper to simply not make.
                 */
                 if (got?.ok !== true) return null
+                /*
+                  The same message twice (ledger R18, 0592): the writer
+                  returned the task this conversation made moments ago, so
+                  saying "that is on your list" again would read as a second
+                  one. Said plainly instead.
+                */
+                if (got.repeated === true) {
+                  return `That is already on your list from a moment ago — "${forGrant.title}". I have not added it twice.`
+                }
                 return forGrant.due === null
                   ? `That is on your list — "${forGrant.title}", no date on it yet.`
                   : `That is on your list for ${forGrant.due} — "${forGrant.title}".`

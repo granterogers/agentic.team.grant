@@ -29,20 +29,38 @@ const sql = `begin;
 ${migration}
 do $v$
 declare
-  j1 uuid; j2 uuid; p uuid; a jsonb; b jsonb; c jsonb; d jsonb; e jsonb;
+  j1 uuid; j2 uuid; j3 uuid; c3 uuid; p uuid; a jsonb; b jsonb; c jsonb; d jsonb; e jsonb; f jsonb;
 begin
   -- Two harness jobs, so nothing here can reach Grant's list or health.
-  select job_id into j1 from public.jobs where app.harness_job(job_id) order by created_at desc limit 1;
-  select job_id into j2 from public.jobs where app.harness_job(job_id) and job_id <> j1 order by created_at desc limit 1;
+  /*
+    The control job must be in a DIFFERENT conversation: my_task_add also
+    merges the same title asked twice in one conversation within ten minutes
+    (ledger R18), which is a different property with its own check below.
+  */
+  select c.job_id into j1 from public.inbound_commands c
+   where c.job_id is not null and app.harness_job(c.job_id) order by c.received_at desc limit 1;
+  select c.job_id into j2 from public.inbound_commands c
+   where c.job_id is not null and app.harness_job(c.job_id)
+     and split_part(c.origin_ref, ':', 1) <> (select split_part(origin_ref, ':', 1) from public.inbound_commands where job_id = j1)
+   order by c.received_at desc limit 1;
+  /* A second turn of j1's conversation, so the R18 property has a subject. */
+  insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id, subject)
+    select origin_channel, split_part(origin_ref, ':', 1) || ':again', actor, instruction,
+           origin_channel || ':verify:retrywrites-' || md5(random()::text), app.now_utc(), project_id, subject
+      from public.inbound_commands where job_id = j1
+    returning command_id into c3;
+  j3 := (app.enqueue_inbound(c3) ->> 'job_id')::uuid;
   select project_id into p from public.projects where is_fixture and status <> 'archived' limit 1;
   a := app.my_task_add(p_title => 'verify retry-writes subject', p_job => j1);
   b := app.my_task_add(p_title => 'Verify Retry-Writes subject ', p_job => j1);
   c := app.my_task_add(p_title => 'verify retry-writes subject', p_job => j2);
+  f := app.my_task_add(p_title => 'verify retry-writes subject', p_job => j3);
   d := app.task_add(p_project => p, p_title => 'verify retry-writes project', p_job => j1);
   e := app.task_add(p_project => p, p_title => 'verify retry-writes project', p_job => j1);
   raise exception 'RESULT %', jsonb_build_object(
     'personal_same_job', (a->>'id') = (b->>'id'),
     'personal_other_job_distinct', (a->>'id') <> (c->>'id'),
+    'same_conversation_repeat', (f->>'id') = (a->>'id') and (f->>'repeated') = 'true',
     'personal_rows_for_job', (select count(*) from public.tasks where job_id = j1 and lower(title) = 'verify retry-writes subject'),
     'project_same_job', (d->>'id') = (e->>'id'),
     'project_rows_for_job', (select count(*) from public.tasks where job_id = j1 and title = 'verify retry-writes project'));
@@ -67,8 +85,12 @@ const checks: [string, boolean][] = [
   ['my_task_add: the same job asking twice gets one task', result.personal_same_job === true],
   ['my_task_add: one row for the job, not two', Number(result.personal_rows_for_job) === 1],
   [
-    'CONTROL: a different job asking the same thing gets its own task',
+    'CONTROL: a job in another conversation asking the same thing gets its own task',
     result.personal_other_job_distinct === true,
+  ],
+  [
+    'the same message sent twice in one conversation is one task, and says so (R18)',
+    result.same_conversation_repeat === true,
   ],
   ['task_add: the same job asking twice gets one task', result.project_same_job === true],
   ['task_add: one row for the job, not two', Number(result.project_rows_for_job) === 1],
