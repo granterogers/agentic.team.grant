@@ -101,6 +101,30 @@ export function exact(iso) {
 }
 
 /**
+ * The instant, to the second, for a log rather than for prose.
+ *
+ * Grant, 23 September, about Activity: *"verify exact DATE + HH:MM:SS"*. A
+ * relative phrase is the right thing in a sentence and the wrong thing in a
+ * history somebody is auditing - "2d ago" cannot be compared with anything,
+ * and two events an hour apart read as the same moment. This is the other
+ * half, and it is deliberately not a replacement: the day still groups the
+ * list, and this is what each row carries.
+ */
+export function precise(iso) {
+  const at = Date.parse(iso)
+  if (Number.isNaN(at)) return ''
+  const d = new Date(at)
+  const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+  return `${date} · ${time}`
+}
+
+/**
  * A `<time>` element that can be re-made later.
  *
  * `fallback` is what the server already rendered. Used when the instant is

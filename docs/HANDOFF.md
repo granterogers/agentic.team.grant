@@ -9,6 +9,42 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
+> ## State as of 2026-09-24 — MERGE-READINESS, and two defects it found
+>
+> **Nothing is merged.** `docs/integration/merge-plan-2026-09-24.md` is the
+> exact plan, written from a candidate that was built, deployed and driven:
+> `claude/human-simulation-harness` (which already contains `main` and
+> `claude/production-reliability`), then `claude/fresh-install-onboarding`,
+> then this branch. Five conflicts, of which one — the gateway — ends
+> mid-function and must be read rather than concatenated.
+>
+> **ADR-0048: the dashboard resolves its own office.** Six modules under
+> `web/studio` each fell back to one project's gateway, so a dashboard
+> somebody else deployed pointed at an office that was not theirs and was
+> refused with a 401 and no explanation. `web/studio/backend.js` resolves it
+> once and returns the empty string when nothing has named one;
+> `npm run config:site` writes `web/studio/config.js`, which is gitignored, so
+> a clone has no default to be wrong about; `npm run check:backend-ref` is the
+> regression, in the gate, and proves it can fail.
+>
+> **A throttle signed people out.** The gateway verified a session with a
+> boolean, so a 429 from Supabase Auth was indistinguishable from "this
+> session is not valid" — and the page clears a session the office refused, so
+> an upstream hiccup signed somebody out. Three verdicts now: 401 for a
+> refusal, **503** for could-not-check. Found by running the acceptance pass,
+> not by reading.
+>
+> **And an office with no projects could not draw at all** — `PROJECTS[0]` is
+> undefined on every office's first morning, and the whole screen rendered as
+> "This screen did not draw" for a signed-in person whose only mistake was
+> being new.
+>
+> | | |
+> |---|---|
+> | Unit tests | **3,125 passing** (194 files) · migrations **608** in the candidate |
+> | Zero-state | **608/608** from a database dropped immediately beforehand |
+> | Deployed for the pass | `hq-api-integration` v6 and a preview with its own hostname. Production and the stable Basecamp alias were probed afterwards and are untouched. |
+>
 > ## State as of 2026-09-21 — GOAL PLANNING, and the end of the architecture phase
 >
 > **The architecture phase is finished.** The office can now take an ordinary

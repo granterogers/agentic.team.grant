@@ -1,0 +1,379 @@
+/*
+  THE PROJECT HOME'S LAYOUT ENGINE.
+
+  Grant, 22 September 2026:
+
+    "The project homepage is intended to behave as a configurable workspace,
+    not a static collection of cards... drag-and-drop module repositioning;
+    dynamic module resizing; sensible minimum sizes; sensible maximum sizes;
+    collision prevention; responsive rearrangement; persistence... Do not
+    substitute crude up/down controls for genuine spatial rearrangement."
+
+  What this replaces is an ORDERED LIST OF IDS rendered into a three-column
+  CSS grid. That model cannot express any of the above: there is no position
+  to drag to and no size to resize, because a module has neither. So the unit
+  of storage changes from a name to a RECTANGLE.
+
+  ## The model
+
+  A layout is a list of `{ id, x, y, w, h }` on a 12-column grid with a fixed
+  row unit. `x` and `w` are columns; `y` and `h` are rows. Nothing else is
+  stored - the module's content, name and renderer are looked up by id, so a
+  tool that is removed from the product cannot leave a hole, and a tool that
+  is added simply is not placed until somebody places it.
+
+  ## Why a fixed row unit rather than content height
+
+  Because requirement 7 depends on it. Grant:
+
+    "Remove patterns such as One More being used merely because additional
+    content does not fit. Modules containing more data than their visible area
+    should instead become internally scrollable."
+
+  A pane whose height is decided by its content can never scroll internally -
+  it has no height to overflow. A pane whose height is decided by the LAYOUT
+  can, and the same decision is what makes a resize handle mean something.
+
+  ## Collision
+
+  Resolved by downward compaction, the same rule every spatial dashboard uses
+  and the only one that is stable under repeated drags: sort by row then
+  column, and lower each module to the highest row where it does not overlap
+  anything already placed. Two consequences worth stating because they are
+  deliberate:
+
+   - dragging a module ONTO another pushes the other down rather than swapping
+     them. Swapping reads as magic and is ambiguous when the sizes differ;
+   - a layout is compacted on every read, so a stored layout written by an
+     older version, or one holding a module that has since grown a minimum
+     size, is repaired rather than rejected.
+
+  ## Persistence — the office, with the browser as a cache in front of it
+
+  ADR-0021, and #341: an arrangement belongs to the PERSON and the project, not
+  to the machine they happened to be sitting at. It used to live only in
+  `localStorage` here, and the panel that explained it said why -- one row per
+  (owner, project) and the default dashboard already using it, so writing this
+  to the office would have taken panels off that. 0582 is what 299 was waiting
+  for: `surface` joins the key, and the two boards stop being the same row.
+
+  The order is ADR-0021's, and each of its three parts was a bug before it was
+  a rule:
+
+  1. **The office is read first, then the browser, then the default.** Anything
+     else and the machine you last touched wins over the machine you are on.
+  2. **An empty layout is a reset, never a stored value.** Enforced in the RPC.
+  3. **This session's own change outranks both, until the next load.** Reading
+     the office's copy back during the redraw after a drop made the panel snap
+     to where it had been, because the save had not landed yet.
+
+  The reading here stays SYNCHRONOUS -- the renderer cannot await -- so the
+  office's copy is adopted into the cache when the payload arrives, and every
+  write goes to both.
+*/
+
+/** The grid. Twelve columns divides by 2, 3, 4 and 6, which is why it is 12. */
+export const COLS = 12
+
+/** One row unit, in pixels. The CSS must agree; it reads the same token. */
+export const ROW = 44
+
+/**
+ * What each module needs, and what it may not exceed.
+ *
+ * A minimum is a statement about the CONTENT: below it the pane stops being
+ * able to say anything, which is the failure CLAUDE.md records as eight agent
+ * names wrapping one character per line. A maximum is a statement about the
+ * PAGE: a pane wider than this is a pane that has stopped being a pane.
+ */
+export const BOUNDS = {
+  tasks: { minW: 3, minH: 4, maxW: 12, maxH: 14 },
+  board: { minW: 3, minH: 4, maxW: 12, maxH: 12 },
+  documents: { minW: 3, minH: 4, maxW: 12, maxH: 14 },
+  schedule: { minW: 3, minH: 4, maxW: 12, maxH: 12 },
+  contacts: { minW: 3, minH: 4, maxW: 12, maxH: 14 },
+  activity: { minW: 4, minH: 4, maxW: 12, maxH: 14 },
+}
+
+/** Every module the home can hold. The order is the order they are put back. */
+export const ALL = Object.keys(BOUNDS)
+
+/*
+  The default, which is also the reference composition: three columns of four,
+  the tools in the order the project is read in, and Latest Activity full
+  width underneath because it is a history rather than a tool.
+*/
+/*
+  THE HEIGHTS ARE SET BY THE FOLD, not by taste. §21 requires every tool to be
+  understandable inside the first 1440x900 view, and a 1440 window leaves
+  about 580px under the project head for two rows and the gap between them -
+  so five rows each. A row unit is 44px and the grid's own 18px gap falls
+  BETWEEN the rows a module spans, so h=5 is 5*44 + 4*18 = 292px rather than
+  220 - which is the arithmetic that made a first attempt at six rows overrun
+  the fold by 77px. The audit measures it rather than trusting this comment.
+*/
+export const DEFAULT = [
+  { id: 'tasks', x: 0, y: 0, w: 4, h: 5 },
+  { id: 'board', x: 4, y: 0, w: 4, h: 5 },
+  { id: 'documents', x: 8, y: 0, w: 4, h: 5 },
+  { id: 'schedule', x: 0, y: 5, w: 4, h: 5 },
+  { id: 'contacts', x: 4, y: 5, w: 4, h: 5 },
+  { id: 'activity', x: 8, y: 5, w: 4, h: 5 },
+]
+
+const KEY = (slug) => `bc.layout.${slug}`
+
+const bounds = (id) => BOUNDS[id] ?? { minW: 3, minH: 3, maxW: 12, maxH: 14 }
+
+/** One module, clamped into the grid and into its own bounds. */
+export const clamp = (m) => {
+  const b = bounds(m.id)
+  const w = Math.max(b.minW, Math.min(b.maxW, Math.round(m.w ?? b.minW)))
+  const h = Math.max(b.minH, Math.min(b.maxH, Math.round(m.h ?? b.minH)))
+  const x = Math.max(0, Math.min(COLS - w, Math.round(m.x ?? 0)))
+  const y = Math.max(0, Math.round(m.y ?? 0))
+  return { id: m.id, x, y, w, h }
+}
+
+const hits = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+/**
+ * Resolve overlaps and close vertical gaps, in one pass.
+ *
+ * `held` is the module the person is dragging: it keeps the row it was put on
+ * so the drop lands where the pointer is, and everything else settles around
+ * it. Without that exception the dragged module compacts to the top with the
+ * rest and the drop appears to have been ignored.
+ */
+export const compact = (list, held = null) => {
+  const sorted = [...list].map(clamp).sort((a, b) => a.y - b.y || a.x - b.x)
+  const placed = []
+  for (const m of sorted) {
+    let y = m.id === held ? m.y : 0
+    for (;;) {
+      const at = { ...m, y }
+      const clash = placed.find((q) => hits(at, q))
+      if (clash === undefined) break
+      y = clash.y + clash.h
+    }
+    placed.push({ ...m, y })
+  }
+  return placed.sort((a, b) => a.y - b.y || a.x - b.x)
+}
+
+/** The stored layout for a project, repaired, or the default. */
+export const layout = (slug) => {
+  const s = typeof slug === 'string' ? slug : (slug?.slug ?? '')
+  try {
+    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    if (raw === '') return compact(DEFAULT)
+    const saved = JSON.parse(raw)
+    if (!Array.isArray(saved)) return compact(DEFAULT)
+    /*
+      Filtered against ALL on the way OUT rather than on the way in, which is
+      the one thing the id-list version got right: a stored id for a tool that
+      has since been removed renders nothing and would otherwise hold a
+      rectangle of empty grid.
+    */
+    const kept = saved.filter((m) => m !== null && typeof m === 'object' && ALL.includes(m.id))
+    return kept.length === 0 ? compact(DEFAULT) : compact(kept)
+  } catch {
+    return compact(DEFAULT)
+  }
+}
+
+/*
+  WHERE A WRITE GOES BESIDES THE BROWSER.
+
+  Handed in rather than imported, for the reason `office.js` hands its
+  after-write hook in: this module is about geometry and must not know how the
+  page talks to the office. `app.js` supplies it once at boot.
+*/
+let keep = null
+let forget = null
+
+/** Tell this module how to put an arrangement in the office. */
+export const persistence = ({ save: saveAway, reset: resetAway } = {}) => {
+  keep = typeof saveAway === 'function' ? saveAway : null
+  forget = typeof resetAway === 'function' ? resetAway : null
+}
+
+/*
+  WHICH PROJECTS THIS SESSION HAS TOUCHED.
+
+  ADR-0021's third rule. The payload arrives again after every write, carrying
+  what the office had a moment ago; adopting it over a change made in this
+  session is how a dropped panel snaps back to where it was.
+*/
+const mine = new Set()
+
+/**
+ * Take the office's copy, unless this session has already changed it.
+ *
+ * Called when the payload lands. A project nobody has rearranged here adopts
+ * what the office holds, which is what makes the other machine agree.
+ */
+export const adopt = (slug, panels) => {
+  const s = typeof slug === 'string' ? slug : (slug?.slug ?? '')
+  if (s === '' || mine.has(s)) return false
+  if (!Array.isArray(panels) || panels.length === 0) return false
+  const kept = panels.filter((m) => m !== null && typeof m === 'object' && ALL.includes(m.id))
+  if (kept.length === 0) return false
+  try {
+    globalThis.localStorage?.setItem(KEY(s), JSON.stringify(kept))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const save = (slug, list) => {
+  const clean = compact(list).map((m) => ({ id: m.id, x: m.x, y: m.y, w: m.w, h: m.h }))
+  try {
+    globalThis.localStorage?.setItem(KEY(slug), JSON.stringify(clean))
+  } catch {
+    /* A viewer who cannot store it still gets the default arrangement. */
+  }
+  mine.add(typeof slug === 'string' ? slug : (slug?.slug ?? ''))
+  /*
+    Best effort, and deliberately not awaited: an arrangement that stuck on
+    screen and failed to reach the office is better than a gesture that waits
+    for a round trip. The next load reads the office and the two agree or the
+    browser's copy wins for this session, which is rule 3.
+  */
+  if (keep !== null) void keep(slug, clean)
+  return clean
+}
+
+export const reset = (slug) => {
+  try {
+    globalThis.localStorage?.removeItem(KEY(slug))
+  } catch {
+    /* Already the default. */
+  }
+  mine.add(typeof slug === 'string' ? slug : (slug?.slug ?? ''))
+  if (forget !== null) void forget(slug)
+}
+
+/** Take a module off the page. Everything else closes up behind it. */
+export const remove = (slug, id) => {
+  save(slug, layout(slug).filter((m) => m.id !== id))
+}
+
+/**
+ * Put a module back, in the first place it fits.
+ *
+ * At the END rather than in a gap: a tool reappearing in the middle of a
+ * board somebody has arranged is a tool that moved their work, and the
+ * compaction will close the gap if there is one under it anyway.
+ */
+export const add = (slug, id) => {
+  const now = layout(slug)
+  if (now.some((m) => m.id === id)) return
+  const b = bounds(id)
+  const bottom = now.reduce((n, m) => Math.max(n, m.y + m.h), 0)
+  save(slug, [...now, { id, x: 0, y: bottom, w: Math.max(b.minW, 4), h: Math.max(b.minH, 6) }])
+}
+
+/**
+ * Has this page been arranged at all, or is it still as it was given?
+ *
+ * WHY THIS EXISTS: the way back used to be reachable only while a module was
+ * OFF the page, because the panel holding it renders only then. So a person
+ * who dragged and resized six modules and removed none had no way to undo any
+ * of it -- the one-way door this repository has already shipped once, when
+ * choosing Panels removed the control that had just been pressed.
+ *
+ * It compares the arrangement to the default rather than merely asking whether
+ * anything is stored, so that a board saved back into its original shape stops
+ * offering to restore a shape it is already in. Geometry, by id, because two
+ * lists in the same order with the same rectangles ARE the same arrangement.
+ */
+export const customised = (slug) => {
+  const now = layout(slug)
+  const was = compact(DEFAULT)
+  if (now.length !== was.length) return true
+  const same = (a, b) => a.id === b.id && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
+  return now.some((m, i) => !same(m, was[i]))
+}
+
+/** Which of ALL is not currently on the page. */
+export const off = (slug) => {
+  const on = new Set(layout(slug).map((m) => m.id))
+  return ALL.filter((id) => !on.has(id))
+}
+
+/**
+ * Move or resize one module and settle the rest.
+ *
+ * One function for both, because both are the same operation on the same
+ * rectangle and having two would be two places for the clamping and the
+ * compaction to disagree - which is the defect CLAUDE.md records as a row
+ * list built twice.
+ */
+/**
+ * Make room for a module by asking its neighbours to give way, not to leave.
+ *
+ * Grant, 23 September: *"when two panels occupy the same row and one is
+ * widened, the neighbouring panel should intelligently shrink to compensate
+ * where possible... Only move a panel to another row when the available width
+ * genuinely cannot accommodate both panels at their minimum viable widths."*
+ *
+ * What happened before: `place` clamped the new rectangle and handed it to
+ * `compact`, whose only tool is vertical. A panel widened by one column shoved
+ * its neighbour onto a row of its own - the whole board reflowing because of a
+ * gesture that meant "a bit wider".
+ *
+ * So the negotiation happens first, and it is horizontal:
+ *
+ *   - a neighbour sharing this row band and sitting to the RIGHT is moved to
+ *     the right edge of the resized module and narrowed to whatever is left;
+ *   - one sitting to the LEFT is narrowed against the resized module's edge;
+ *   - a neighbour that cannot reach its own minimum width is left alone, and
+ *     `compact` then moves it down - which is the case Grant says is the ONLY
+ *     one where a row change is right.
+ *
+ * Pure, and takes the list rather than a slug, so it can be tested without a
+ * browser.
+ */
+export const squeeze = (list, id) => {
+  const me = list.find((m) => m.id === id)
+  if (me === undefined) return list
+  return list.map((o) => {
+    if (o.id === id) return o
+    if (!hits(o, me)) return o
+    /* Only a neighbour on the same band is a neighbour to negotiate with. */
+    const sharesRow = o.y < me.y + me.h && me.y < o.y + o.h
+    if (!sharesRow) return o
+    const b = bounds(o.id)
+    if (o.x >= me.x) {
+      /*
+        ITS RIGHT EDGE STAYS PUT.
+
+        A first version moved the neighbour rightwards and kept its width,
+        which merely passed the problem along: with three panels on a row the
+        third was shoved off the row instead of the second - the same jump,
+        one module further away. Holding the right edge and shrinking from the
+        left means nothing beyond the neighbour moves at all, which is what
+        "spatially predictable" has to mean.
+      */
+      const edge = o.x + o.w
+      const x = me.x + me.w
+      const room = edge - x
+      return room >= b.minW ? { ...o, x, w: room } : o
+    }
+    const room = me.x - o.x
+    return room >= b.minW ? { ...o, w: room } : o
+  })
+}
+
+export const place = (slug, id, rect) => {
+  const now = layout(slug)
+  const next = now.map((m) => (m.id === id ? clamp({ ...m, ...rect, id }) : m))
+  /*
+    Squeeze, THEN compact: the neighbours give way horizontally where they can,
+    and only what still cannot fit is moved to another row.
+  */
+  save(slug, compact(squeeze(next, id).map(clamp), id))
+  return layout(slug)
+}

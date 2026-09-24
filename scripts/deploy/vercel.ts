@@ -23,7 +23,25 @@ if (token === undefined || token === '') {
   process.exit(2)
 }
 
-const html = await readFile('web/voice/index.html', 'utf8')
+/*
+  WHICH OFFICE THIS PAGE MINTS AGAINST.
+
+  The page shipped with a project reference written into it, which is one
+  person's office in a file anybody can clone and deploy (IR-1). It carries a
+  placeholder now and this substitutes it, from the same environment variable
+  every other deploy script reads. If the substitution ever fails to happen the
+  page says which step is missing rather than calling an office that is not
+  yours -- see the guard beside `MINT_URL`.
+*/
+const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
+const functions = process.env.SUPABASE_FUNCTIONS_URL ?? `https://${ref}.supabase.co/functions/v1`
+
+const source = await readFile('web/voice/index.html', 'utf8')
+if (!source.includes('__HQ_FUNCTIONS__')) {
+  console.error('web/voice/index.html no longer carries the __HQ_FUNCTIONS__ placeholder')
+  process.exit(2)
+}
+const html = source.split('__HQ_FUNCTIONS__').join(functions)
 
 const deployment = await fetch('https://api.vercel.com/v13/deployments', {
   method: 'POST',

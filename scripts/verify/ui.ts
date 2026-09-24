@@ -53,6 +53,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { namesAnOffice } from './lib/office-seam.ts'
 
 const CHROMIUM = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 const PORT = Number(process.env.UI_VERIFY_PORT ?? 8971)
@@ -416,6 +417,10 @@ for (const [label, device, touch] of VIEWPORTS) {
   // The token gets the page past its own gate; the fetch shim answers with the
   // captured rows. Both in an init script so they are in place before the
   // page's first line runs.
+  // The page has to know which office it belongs to before its first line
+  // runs, or the shim below never sees a URL with hq-api in it. ADR-0048.
+  await page.addInitScript(namesAnOffice())
+
   await page.addInitScript(`
     window.__SECTIONS = ${JSON.stringify(sections)};
     try { localStorage.setItem('hq.token', 'verify-ui'); } catch (e) {}

@@ -27,6 +27,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { namesAnOffice, theRealOffice } from './lib/office-seam.ts'
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN
 if (supabase === undefined || supabase === '') {
@@ -62,9 +63,20 @@ const TYPES: Record<string, string> = {
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
   const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  /*
+    READ FIRST, THEN WRITE.
+
+    This wrote the 200 header and then read the file, so a missing file sent
+    headers and THEN tried to send a 404 -- `ERR_HTTP_HEADERS_SENT`, which
+    kills the server rather than 404ing. Latent for as long as nothing had ever
+    asked for a file that is not there, and `web/studio/config.js` is the first:
+    it is generated and gitignored (ADR-0048), so a clean checkout does not
+    have it and index.html asks for it on every page load.
+  */
   try {
+    const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
-    res.end(await readFile(file))
+    res.end(body)
   } catch {
     res.writeHead(404)
     res.end('not here')
@@ -262,6 +274,14 @@ try {
       */
       ignoreHTTPSErrors: true,
     })
+    /*
+      The page has to know which office it belongs to before its first line
+      runs (ADR-0048), and for this suite it has to be the REAL one: the reads
+      are answered from a fixture below and the WRITE goes over the wire,
+      because the defect this file exists for lives in the round trip.
+    */
+    await ctx.addInitScript(namesAnOffice(theRealOffice()))
+
     await ctx.addInitScript(
       `try{localStorage.setItem('hq.token', ${JSON.stringify(bearer)})}catch(e){}`,
     )

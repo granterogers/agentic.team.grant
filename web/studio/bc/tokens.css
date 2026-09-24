@@ -1,0 +1,162 @@
+/*
+  Design tokens for the experimental Basecamp-inspired Team HQ.
+
+  §4 of basecamp_clone.md made executable. If a value here disagrees with that
+  document, one of the two is wrong — they are never both right.
+
+  EVERY RULE IN THIS FILE AND ITS SIBLINGS IS SCOPED to the experience root.
+  The default studio and this experiment share one deployment, one index.html
+  and one stylesheet chain, so an unscoped rule here would silently restyle the
+  product Grant actually uses. `[data-experience="basecamp"]` on <html> is the
+  only thing separating them, and Failure N of the run's pre-mortem is exactly
+  the regression that follows from forgetting it.
+
+  The directory is `bc/` and the route is `/basecamp` ON PURPOSE. The SPA
+  rewrite in vercel.json sends any DOTLESS path to index.html and lets any path
+  with a dot fall through to a real file, so a module at `basecamp/x.js` and a
+  route at `/basecamp/p/slug` would in fact coexist — but only by a rule about
+  full stops that nobody should have to know. Different words, no overlap.
+*/
+
+:root[data-experience='basecamp'] {
+  /* --- Colour (§4.1) ---------------------------------------------------- */
+  --bc-canvas: #0b151b;
+  --bc-surface: #1b2930;
+  --bc-surface-selected: #2a4259;
+  --bc-text: #e1e5e8;
+  --bc-text-strong: #f2f4f5;
+  --bc-text-muted: #a8afb3;
+  --bc-accent: #6ab3fd;
+  --bc-accent-ink: #0e1d24;
+  --bc-section-accent: #fbbda8;
+
+  /* --- Module identity (§§9-10) ------------------------------------------
+   *
+   * Grant, 23 September: "Dashboard modules currently look too similar. Give
+   * individual modules subtle visual differentiation. Use restrained
+   * accents/tints. Do NOT create a rainbow dashboard." And: "Module headings
+   * do not all need to remain white... Yellow/gold is an acceptable
+   * direction."
+   *
+   * So there is ONE heading colour, warm and quiet, and a per-module accent
+   * that appears as a two-pixel rule at the top of the panel and nowhere else.
+   * The differentiation is in a line you notice only when you look for it; the
+   * hierarchy is in the heading, which you notice immediately. A dashboard
+   * where every module is a different colour is the thing he asked not to have.
+   *
+   * The hues are deliberately close together and all desaturated against the
+   * dark surface, so the board still reads as one object.
+   */
+  --bc-heading: #e8c88f;
+  --bc-mod-tasks: #7fb4d8;
+  --bc-mod-board: #9db98a;
+  --bc-mod-documents: #c9a978;
+  --bc-mod-schedule: #b49ad4;
+  --bc-mod-contacts: #d99b93;
+  --bc-mod-activity: #8fb8b0;
+  /* Anything the board grows later, until it is given one of its own. */
+  --bc-mod-other: #8d9aa2;
+  --bc-border-subtle: rgb(225 229 232 / 0.1);
+  --bc-border-control: rgb(225 229 232 / 0.15);
+  --bc-border-popover: #475257;
+  --bc-hover: rgb(255 255 255 / 0.08);
+  --bc-focus-fill: rgb(255 255 255 / 0.1);
+
+  /*
+    Destructive and persisted reuse the studio's own tokens, as §4.1 requires
+    ("Agentic Team existing destructive/success token"). Inventing a second red
+    is how a product ends up with two reds that disagree about what danger is.
+
+    They are the DARK values from skins.css rather than `var(--bad)`, because
+    the tokens.css defaults are the light palette and this experience is dark
+    in both schemes — reading the live variable would hand us a red tuned for
+    a white page.
+  */
+  --bc-danger: #f0857c;
+  --bc-success: #6fd3a3;
+
+  /* --- Typography (§4.2) ------------------------------------------------ */
+  /*
+    Instrument Sans is the face this project already self-hosts and owns; Inter
+    heads the spec's recommended stack. Neither is Graphik, which §2.8 forbids
+    bundling without a licence, and no Basecamp asset appears anywhere here.
+  */
+  --bc-font: 'Instrument Sans', Inter, ui-sans-serif, -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+
+  --bc-body: 400 16px/24px var(--bc-font);
+  --bc-compact: 400 14px/21px var(--bc-font);
+  --bc-tool-heading: 600 18px/24px var(--bc-font);
+  --bc-title: 800 36px/41.4px var(--bc-font);
+  --bc-title-mobile: 800 22px/28px var(--bc-font);
+  --bc-section-title: 800 28px/32.2px var(--bc-font);
+  --bc-day: 800 14px/15.4px var(--bc-font);
+  --bc-editor: 400 20px/30px var(--bc-font);
+
+  /* --- Space and geometry (§4.3) ---------------------------------------- */
+  --bc-1: 4px;
+  --bc-2: 8px;
+  --bc-3: 12px;
+  --bc-4: 16px;
+  --bc-6: 24px;
+  --bc-8: 32px;
+  --bc-10: 40px;
+  --bc-12: 48px;
+  --bc-16: 64px;
+
+  /*
+    THE WORKSPACE USES THE SCREEN. Grant, 22 September: "The project homepage
+    currently wastes too much horizontal screen space. Allow the workspace to
+    occupy substantially more of the available viewport width while retaining
+    a tasteful outer margin."
+
+    1088px was a READING measure, which is right for prose and wrong for a
+    twelve-column board: on a 1920 display it left 800px of canvas either
+    side. The margin is kept as a percentage of the window rather than as a
+    constant, so a larger display gets a larger workspace AND a larger margin.
+  */
+  --bc-measure: 1680px;
+  /* One grid row on the project board. layout.js holds the same number. */
+  --bc-row: 44px;
+  --bc-nav-h: 40px;
+  --bc-main-pad: 40px;
+  --bc-main-pad-bottom: 144px;
+
+  --bc-r-control: 8px;
+  --bc-r-menu: 6px;
+  --bc-r-sheet: 16px;
+  --bc-r-row: 5px;
+
+  --bc-shadow-surface: 0 0 30px rgb(0 0 0 / 0.08);
+  --bc-shadow-menu: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 8px -2px rgb(0 0 0 / 0.1);
+  --bc-shadow-sheet: 0 4px 8px -2px rgb(0 0 0 / 0.08), 0 16px 32px -8px rgb(0 0 0 / 0.1);
+
+  /* --- Motion (§5) ------------------------------------------------------ */
+  --bc-t-colour: 200ms;
+  --bc-t-nav: 300ms;
+  --bc-t-page: 250ms;
+  --bc-t-focus: 125ms;
+  --bc-t-in: 140ms;
+  --bc-t-out: 100ms;
+  --bc-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --bc-ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+
+/*
+  §5: under reduced motion, remove translation and nonessential fade and set
+  durations to effectively zero, keeping only instantaneous state cues.
+
+  Done by zeroing the TOKENS rather than by writing `animation: none` over each
+  component, so a component added later inherits the contract instead of having
+  to remember it.
+*/
+@media (prefers-reduced-motion: reduce) {
+  :root[data-experience='basecamp'] {
+    --bc-t-colour: 1ms;
+    --bc-t-nav: 1ms;
+    --bc-t-page: 1ms;
+    --bc-t-focus: 1ms;
+    --bc-t-in: 1ms;
+    --bc-t-out: 1ms;
+  }
+}

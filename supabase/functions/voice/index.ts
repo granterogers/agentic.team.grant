@@ -63,6 +63,67 @@ const tokenMatches = async (presented: string | null): Promise<boolean> => {
   return diff === 0
 }
 
+/*
+  A PERSON'S SESSION, as well as the office's key.
+
+  The chat and the live call both come here, and they come from the PAGE. Once
+  a person signs in the page presents their own session and not the office
+  token -- which this function did not understand, so chat answered 401 for a
+  signed-in person while every other surface worked. ADR-0043.
+
+  THE DUPLICATION IS DELIBERATE AND UNAVOIDABLE. Each edge function is uploaded
+  as one file, so `hq-api` and this cannot import a shared verifier. What keeps
+  them honest is that both ask the SAME two questions of the same two places:
+  Supabase, whether it issued this session; and `office_members`, whether the
+  address is somebody the office works for. Neither decodes the JWT itself -- a
+  token a function merely decoded is a token anybody can write.
+*/
+const SESSION_TTL_MS = 60_000
+const seenSessions = new Map<string, number>()
+
+const sessionAllowed = async (presented: string): Promise<boolean> => {
+  const until = seenSessions.get(presented)
+  if (until !== undefined && until > Date.now()) return true
+  const base = Deno.env.get('SUPABASE_URL') ?? ''
+  const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const who = await fetch(`${base}/auth/v1/user`, {
+    headers: {
+      apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Authorization: `Bearer ${presented}`,
+    },
+  }).catch(() => null)
+  if (who === null || !who.ok) return false
+  const user = (await who.json().catch(() => ({}))) as { email?: string }
+  const email = String(user.email ?? '')
+    .trim()
+    .toLowerCase()
+  if (email === '') return false
+  const asked = await fetch(`${base}/rest/v1/rpc/office_member`, {
+    method: 'POST',
+    headers: {
+      apikey: service,
+      Authorization: `Bearer ${service}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ p_email: email }),
+  }).catch(() => null)
+  if (asked === null || !asked.ok) return false
+  const rows = (await asked.json().catch(() => [])) as { ok?: boolean }[]
+  if (rows[0]?.ok !== true) return false
+  seenSessions.set(presented, Date.now() + SESSION_TTL_MS)
+  if (seenSessions.size > 64) {
+    for (const k of [...seenSessions.keys()].slice(0, 32)) seenSessions.delete(k)
+  }
+  return true
+}
+
+const allowed = async (presented: string | null): Promise<boolean> => {
+  if (presented === null || presented === '') return false
+  if (await tokenMatches(presented)) return true
+  if (presented.split('.').length !== 3 || presented.length <= 60) return false
+  return await sessionAllowed(presented)
+}
+
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
     status,
@@ -99,7 +160,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  if (!(await tokenMatches(presented))) return json({ error: 'unauthorized' }, 401)
+  if (!(await allowed(presented))) return json({ error: 'unauthorized' }, 401)
 
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
@@ -127,6 +188,121 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const about = typeof asked.about === 'string' ? asked.about.trim() : ''
     const found = await rpc('voice_lookup', { p_about: about })
     return json({ found })
+  }
+
+  /*
+    A VOICE NOTE: audio in, words out, and nothing else.
+
+    Grant, 23 September: *"press microphone, record a voice message, stop, send
+    or cancel, audio is transcribed, transcription becomes part of the normal
+    project conversation, agents can understand/respond to it exactly as if
+    Grant had typed the message."*
+
+    WHY THIS ENDPOINT RETURNS TEXT AND STOPS THERE. The same brief says: *"Do
+    not create a separate voice note conversation."* The studio's ordinary chat
+    already posts to `/turn` on this very function, so the shortest route to
+    "exactly as if he had typed it" is to hand the page the words and let it
+    take the path a typed message takes. Anything more here would be a second
+    conversational system, and the two would drift.
+
+    WHY THE TRANSCRIPTION HAPPENS HERE rather than in the browser.
+    `dictate.js` (#196) uses the browser's own recogniser, which produces text
+    and keeps no audio - right for dictating into a composer, wrong for a voice
+    message, where the recording is the thing. This uses the service the office
+    already has configured for Telegram voice notes, so there is one speech
+    service, one key, and one place it is configured.
+
+    The configuration is read PER CALL from `public.voice_transcriber()`, not
+    from this function's environment, so rotating the key does not need a
+    deploy of this function.
+
+    The request shape below duplicates `transcribeOverApi` in
+    `src/voice/inbound.ts`, because an edge function is a single file and
+    cannot import it. `tests/voice/note-endpoint.test.ts` reads both and
+    asserts they send the same fields to the same path, so the copy cannot
+    drift quietly.
+  */
+  if (url.pathname.endsWith('/note')) {
+    const heardForm = await request.formData().catch(() => null)
+    const audio = heardForm?.get('audio')
+    if (!(audio instanceof File)) return json({ error: 'no audio was sent' }, 400)
+    if (audio.size < 1024) return json({ error: 'that recording was too short to hear' }, 400)
+    /* 25 MB is the speech service's own ceiling; refusing here is a sentence
+       rather than a rejection the page has to interpret. */
+    if (audio.size > 25 * 1024 * 1024) {
+      return json({ error: 'that recording is too long to transcribe' }, 413)
+    }
+
+    const conf = (await rpc('voice_transcriber', {})) as {
+      mode?: string
+      base_url?: string
+      model?: string
+      key?: string
+    } | null
+    const mode = conf?.mode ?? 'none'
+    const baseUrl = conf?.base_url ?? ''
+    const model = conf?.model ?? ''
+    const key = conf?.key ?? ''
+    if (mode !== 'api' || baseUrl === '' || model === '' || key === '') {
+      /* Named, never printed: the reason says WHICH part is missing and no
+         part of it is the credential. */
+      return json({ error: 'the office has no speech service configured' }, 503)
+    }
+
+    const speech = new FormData()
+    /*
+      The name matters, not the bytes. The service accepts
+      [flac mp3 mp4 mpeg mpga m4a ogg opus wav webm] BY EXTENSION, and a
+      browser recording arrives as webm or mp4 depending on the browser - so
+      the extension is taken from the type the recorder actually used rather
+      than assumed. `src/voice/inbound.ts` learned this the expensive way with
+      Telegram's `.oga`.
+    */
+    const kind = String(audio.type || 'audio/webm').split(';')[0] ?? 'audio/webm'
+    const ext =
+      kind.includes('mp4') || kind.includes('m4a')
+        ? 'mp4'
+        : kind.includes('ogg') || kind.includes('opus')
+          ? 'ogg'
+          : kind.includes('wav')
+            ? 'wav'
+            : 'webm'
+    speech.append('file', new File([await audio.arrayBuffer()], `note.${ext}`, { type: kind }))
+    speech.append('model', model)
+    speech.append('response_format', 'json')
+    speech.append('language', 'en')
+    /*
+      A spelling hint, and only that. The page sends the project's name and the
+      team's names because "NotebookLM" is not a word a general speech model
+      expects. It biases spelling; it decides nothing, so §5 is intact.
+    */
+    const said = heardForm?.get('vocabulary')
+    const hint = typeof said === 'string' ? said.slice(0, 400) : ''
+    if (hint !== '') speech.append('prompt', hint)
+
+    const heardBack = await fetch(`${baseUrl.replace(/\/$/, '')}/audio/transcriptions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}` },
+      body: speech,
+    }).catch(() => null)
+    if (heardBack === null) return json({ error: 'the speech service could not be reached' }, 502)
+    const heardJson = (await heardBack.json().catch(() => ({}))) as {
+      text?: string
+      error?: { message?: string }
+    }
+    if (!heardBack.ok || heardJson.error !== undefined) {
+      return json(
+        {
+          error:
+            `the speech service refused (${String(heardBack.status)}): ` +
+            String(heardJson.error?.message ?? 'no reason given').slice(0, 200),
+        },
+        502,
+      )
+    }
+    const words = String(heardJson.text ?? '').trim()
+    if (words === '') return json({ error: 'nothing could be made out in that recording' }, 422)
+    return json({ heard: words })
   }
 
   const body = (await request.json().catch(() => ({}))) as {

@@ -1,0 +1,301 @@
+/**
+ * Signing in to the office — the product's own login, and no office token.
+ *
+ * ## The correction this is written to
+ *
+ * Grant, 24 September: *"He does not want an office-token interaction in the
+ * normal user experience AT ALL. The intended experience is: OPEN AGENTIC TEAM
+ * -> APPLICATION LOADS -> USER IS AUTHENTICATED -> USE APPLICATION. If an
+ * internal credential/token is required for secure communication with the
+ * office, that is an IMPLEMENTATION DETAIL."*
+ *
+ * An earlier version of this file kept the office token and made the ceremony
+ * nicer — ask, tap in Telegram, collect. That was the wrong shape: it is still
+ * a person handling the office's own key.
+ *
+ * ## What the trace found
+ *
+ * There was already an identity system here and nobody had ever used it.
+ * `auth.users` held zero rows. All 117 row-level policies name `ai_team_app`;
+ * not one names `anon` or `authenticated`, and the browser has never spoken to
+ * PostgREST at all — it speaks to `hq-api`, which holds the service key. So
+ * adopting Supabase Auth changes exactly one thing: WHICH FACT the gateway
+ * checks before it answers. Nothing about the data path moves, and no policy
+ * is loosened.
+ *
+ * ## The shape
+ *
+ * The browser never holds a shared secret and never sees the anon key either.
+ * It asks this endpoint for a sign-in link; the office asks Supabase to send
+ * one; the link comes back to the page with the person's OWN short-lived
+ * session in it; the page presents that session to `hq-api`, which verifies it
+ * with Supabase and checks `public.office_members`.
+ *
+ * Two boundaries, and they are different questions on purpose:
+ *
+ *   Supabase says WHO PROVED AN ADDRESS.
+ *   `office_members` says WHO THE OFFICE WORKS FOR.
+ *
+ * So a stranger who signs up gets a perfectly valid session and is refused by
+ * the office, which is why signup being open is a nuisance rather than a hole.
+ *
+ * ## Why the anon key stays here
+ *
+ * Supabase's auth endpoints want it, and it is a public key by design — but
+ * putting it in the repository or the page would be one more thing to rotate
+ * and one more thing to explain. Edge functions are handed it in the
+ * environment, so the browser asks the office and the office asks Supabase.
+ *
+ * ## What is never said
+ *
+ * Whether an address is known. A sign-in request answers the same way for
+ * every address, because an endpoint that says "no such person" is an address
+ * oracle. The office's refusal happens later, at the gateway, to a caller who
+ * has already proved they own the mailbox.
+ */
+
+const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const ANON = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
+
+/** Constant time, the same comparison `hq-api` makes, for the same reason. */
+const isOfficeKey = async (presented: string): Promise<boolean> => {
+  if (HQ_TOKEN === '' || presented === '') return false
+  const digest = async (v: string) =>
+    new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)))
+  const [a, b] = await Promise.all([digest(presented), digest(HQ_TOKEN)])
+  let diff = 0
+  for (let i = 0; i < a.length; i += 1) diff |= (a[i] ?? 0) ^ (b[i] ?? 0)
+  return diff === 0
+}
+
+const ALLOWED_ORIGINS = (Deno.env.get('SIGNIN_ALLOWED_ORIGIN') ?? '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter((o) => o !== '')
+
+const corsFor = (request: Request): Record<string, string> => {
+  const asked = request.headers.get('origin') ?? ''
+  const allowed =
+    ALLOWED_ORIGINS.includes(asked) && asked !== ''
+      ? asked
+      : // A well-formed refusal rather than a header the caller can misread:
+        // the browser compares this with its own origin and stops.
+        (ALLOWED_ORIGINS[0] ?? 'null')
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Headers': 'content-type, authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin',
+  }
+}
+
+const json = (body: unknown, status: number, request: Request): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      ...corsFor(request),
+    },
+  })
+
+Deno.serve(async (request: Request): Promise<Response> => {
+  const url = new URL(request.url)
+
+  if (request.method === 'OPTIONS') return json({ ok: true }, 200, request)
+
+  if (request.method === 'GET' && url.pathname.endsWith('/health')) {
+    return json(
+      { ok: true, endpoint: 'signin', configured: ANON !== '' && DB_URL !== '' },
+      200,
+      request,
+    )
+  }
+
+  if (request.method !== 'POST') return json({ error: 'method' }, 405, request)
+
+  // The origin allowlist, for the same reason `voice-token` has one: these
+  // routes take no credential of ours, so the origin is the only thing that
+  // distinguishes the office's own page from a stranger's. An empty allowlist
+  // is treated as misconfiguration rather than waved through.
+  const origin = request.headers.get('origin') ?? ''
+  if (ALLOWED_ORIGINS.length === 0 || !ALLOWED_ORIGINS.includes(origin)) {
+    return json({ error: 'origin' }, 403, request)
+  }
+
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+  const action = String(body.action ?? '')
+
+  if (action === 'link') {
+    const email = String(body.email ?? '')
+      .trim()
+      .toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return json({ error: 'that does not look like an email address' }, 400, request)
+    }
+    const back = String(body.back ?? '')
+    const redirect = ALLOWED_ORIGINS.some((o) => back.startsWith(o)) ? back : origin
+
+    const asked = await fetch(`${DB_URL}/auth/v1/otp`, {
+      method: 'POST',
+      headers: { apikey: ANON, 'content-type': 'application/json' },
+      body: JSON.stringify({ email, create_user: true, redirect_to: redirect }),
+    }).catch(() => null)
+
+    /*
+      THE SAME ANSWER WHATEVER HAPPENED, with one exception. A rate limit is
+      worth saying out loud because it tells the person to wait rather than to
+      keep pressing; everything else would tell a stranger whether an address
+      is known here.
+    */
+    if (asked !== null && asked.status === 429) {
+      return json(
+        { ok: false, wait: true, said: 'Too many sign-in emails just now. Try again in an hour.' },
+        200,
+        request,
+      )
+    }
+    /*
+      WHETHER IT WAS SENT IS NOT AN ORACLE, and saying nothing about it was a
+      defect. Signup is open at the identity layer, so Supabase's answer does
+      not depend on whether the office knows this address -- it depends on
+      whether the mail went. The first version returned ok for everything and
+      reported a silent failure as success, which is the exact shape this
+      repository keeps paying for. What is still never said is whether the
+      person is allowed in; that refusal happens at the gateway, later, to
+      somebody who has already proved they own the mailbox.
+    */
+    if (asked === null || !asked.ok) {
+      const why = asked === null ? '' : await asked.text().catch(() => '')
+      return json(
+        {
+          ok: false,
+          said: 'The office could not send that. Check the address, or try again shortly.',
+          status: asked === null ? 0 : asked.status,
+          detail: why.slice(0, 200),
+        },
+        200,
+        request,
+      )
+    }
+    return json({ ok: true, said: 'Check your email for a link to sign in.' }, 200, request)
+  }
+
+  /*
+    A LINK, HANDED OVER INSTEAD OF EMAILED.
+
+    Two things need this and neither is a person: an operator onboarding
+    somebody when mail is not working, and the verification suites, which have
+    to sign a browser in without an inbox and must not email Grant every run.
+
+    It escalates nothing. It requires the OFFICE KEY -- the machine credential
+    that already opens the whole gateway -- so anybody who can call this could
+    already read and write everything by presenting the same header. What it
+    adds is the ability to do so as a named person rather than as the office,
+    which is strictly narrower.
+
+    And it still refuses an address the office does not work for, so it cannot
+    be used to mint a link for a stranger who happens to have signed up.
+  */
+  if (action === 'link_for_operator') {
+    const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+    if (!(await isOfficeKey(presented))) return json({ error: 'unauthorized' }, 401, request)
+
+    const email = String(body.email ?? '')
+      .trim()
+      .toLowerCase()
+    const member = await fetch(`${DB_URL}/rest/v1/rpc/office_member`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ p_email: email }),
+    }).catch(() => null)
+    const rows =
+      member === null ? [] : ((await member.json().catch(() => [])) as { ok?: boolean }[])
+    if (rows[0]?.ok !== true)
+      return json({ error: 'not somebody the office works for' }, 403, request)
+
+    const back = String(body.back ?? '')
+    const redirect = ALLOWED_ORIGINS.some((o) => back.startsWith(o))
+      ? back
+      : (ALLOWED_ORIGINS[0] ?? '')
+    const made = await fetch(`${DB_URL}/auth/v1/admin/generate_link`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'content-type': 'application/json',
+      },
+      /*
+        `redirect_to` is TOP LEVEL here. Nesting it under `options` is the
+        JavaScript client's shape, and the REST endpoint silently ignores it --
+        so the first version produced links that went to `site_url` instead of
+        the page that asked, which on a deployment running older bytes meant
+        the session arrived and was dropped on the floor. Silently: the link
+        worked, the redirect worked, and nobody was signed in.
+      */
+      body: JSON.stringify({ type: 'magiclink', email, redirect_to: redirect }),
+    }).catch(() => null)
+    if (made === null || !made.ok) {
+      const why = made === null ? '' : await made.text().catch(() => '')
+      return json({ ok: false, status: made?.status ?? 0, detail: why.slice(0, 200) }, 200, request)
+    }
+    const link = (await made.json()) as {
+      action_link?: string
+      properties?: { action_link?: string }
+    }
+    return json(
+      { ok: true, action_link: link.action_link ?? link.properties?.action_link ?? '' },
+      200,
+      request,
+    )
+  }
+
+  if (action === 'refresh') {
+    const refresh = String(body.refresh_token ?? '')
+    if (refresh === '') return json({ error: 'refresh_token' }, 400, request)
+    const swapped = await fetch(`${DB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { apikey: ANON, 'content-type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refresh }),
+    }).catch(() => null)
+    if (swapped === null || !swapped.ok) {
+      // Expired or revoked. The page signs itself out rather than retrying, and
+      // saying which is not useful to anybody holding a dead token.
+      return json({ ok: false, reason: 'expired' }, 200, request)
+    }
+    const got = (await swapped.json()) as {
+      access_token?: string
+      refresh_token?: string
+      expires_in?: number
+    }
+    return json(
+      {
+        ok: true,
+        access_token: got.access_token,
+        refresh_token: got.refresh_token,
+        expires_in: got.expires_in,
+      },
+      200,
+      request,
+    )
+  }
+
+  if (action === 'whoami') {
+    const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+    if (presented === '') return json({ ok: false, reason: 'nothing presented' }, 200, request)
+    const who = await fetch(`${DB_URL}/auth/v1/user`, {
+      headers: { apikey: ANON, Authorization: `Bearer ${presented}` },
+    }).catch(() => null)
+    if (who === null || !who.ok) return json({ ok: false, reason: 'not a session' }, 200, request)
+    const user = (await who.json()) as { email?: string }
+    return json({ ok: true, email: user.email ?? '' }, 200, request)
+  }
+
+  return json({ error: 'unknown action' }, 400, request)
+})

@@ -110,6 +110,21 @@ const openTalk = async (device: Record<string, unknown>) => {
   const context = await browser.newContext({ ...device })
   const page = await context.newPage()
   await page.addInitScript(`
+    /*
+      NAME AN OFFICE, rather than relying on one being written into the page.
+
+      Every module under web/studio used to fall back to one project's gateway,
+      so a suite that named none still got a URL with /voice/turn on the end and
+      the stub below matched it. ADR-0048 removed the fallback: a page nothing
+      has configured resolves to the empty string and refuses honestly, which is
+      the point, and it left this suite posting to the page's own origin and
+      reporting "nothing reached the office" about a page that had nowhere to
+      reach. The seam is window.HQ_API, the same one every other suite uses.
+
+      An address that cannot exist, because nothing here is meant to leave the
+      browser: window.fetch is replaced two lines below.
+    */
+    window.HQ_API = 'https://office.invalid/functions/v1/hq-api';
     try { localStorage.setItem('hq.token', 'verify-talk'); } catch (e) {}
     window.__MODE = 'answered';
     window.__ASKED = [];

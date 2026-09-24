@@ -63,7 +63,13 @@
 // The mint endpoint stays on Supabase Edge Functions, which serve JSON
 // correctly. Only the PAGE had to move: Supabase forces content-type
 // text/plain on every response, by design (see ADR-0011).
-const MINT_URL = 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/voice-token'
+// The functions base belongs to the DEPLOYMENT, not to this file: a hardcoded
+// project reference here is somebody else's office shipped to everybody who
+// clones this. `npm run deploy:page` substitutes it, and leaves the token in
+// place when nothing is configured -- so the page says which step is missing
+// rather than quietly calling an office that is not yours.
+const FUNCTIONS = '__HQ_FUNCTIONS__'
+const MINT_URL = FUNCTIONS.indexOf('__') === 0 ? '' : FUNCTIONS + '/voice-token'
 const $ = (id) => document.getElementById(id)
 const log = (msg, cls='') => {
   const el = $('log')
@@ -86,6 +92,9 @@ $('go').onclick = async () => {
   $('go').disabled = true
   try {
     $('status').textContent = 'minting'
+    if (MINT_URL === '') {
+      throw new Error('this page has not been told which office it belongs to — deploy it with npm run deploy:page')
+    }
     const t0 = performance.now()
     // The permanent key never reaches this page (§12). This endpoint mints an
     // ephemeral credential that expires in about a minute.
