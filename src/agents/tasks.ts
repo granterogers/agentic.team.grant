@@ -45,6 +45,7 @@
 import { readFollowUp } from './clarify.ts'
 import { clauses } from './clauses.ts'
 import { type Classification, withoutOpeningAffirmation } from './intent.ts'
+import { mentionsWithoutAsking } from './not-a-request.ts'
 import { PROJECT_ADJUNCT, readRequest, requestBody } from './request.ts'
 import { readRetraction } from './retraction.ts'
 
@@ -370,6 +371,8 @@ export const taskRequest = (
   antecedent = '',
 ): TaskRequest | null => {
   const rawInstruction = withElliptical(rawText, antecedent)
+  // A prohibition, an advice question or somebody else's words (ledger R34).
+  if (mentionsWithoutAsking(rawInstruction)) return null
   /*
     The same cut `classifyIntent` makes, and for the same measurement.
 

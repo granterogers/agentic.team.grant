@@ -58,6 +58,7 @@
   what he sends. The corpus caught it on its first run.
 */
 import { withoutOpeningAffirmation } from './intent.ts'
+import { mentionsWithoutAsking } from './not-a-request.ts'
 import { REMIND_TIME_WORDS, remindAtFor, spokenToDigits } from './remind-at.ts'
 import { DANGLING_AFTER_A_DATE, PROJECT_ADJUNCT } from './request.ts'
 
@@ -565,6 +566,8 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
   if (said === '') return null
   if (REMIND_ME_A_QUESTION.test(said)) return null
   if (ASKING_WHETHER_IT_EXISTS.test(said)) return null
+  // A prohibition, an advice question or somebody else's words (ledger R34).
+  if (mentionsWithoutAsking(said)) return null
   const remind = REMIND_ME.test(said) && !REMIND_SOMEBODY_ELSE.test(said)
   const commit =
     I_MUST.test(said) ||
@@ -864,8 +867,9 @@ export function taskStateChange(text: string): TaskStateChange | null {
   if (said === '') return null
   // A question about it is not a request — unless it is the polite imperative.
   if (said.endsWith('?') && !/^(?:can|could|would|will)\s+you\b/i.test(said)) return null
-  // A prohibition is not a request: "don't delete that one yet".
-  if (/\b(?:don'?t|do\s+not|never|not\s+yet|no\s+need\s+to)\b/i.test(said)) return null
+  // A prohibition is not a request: "don't delete that one yet", "can you not
+  // delete that one" (ledger R34).
+  if (/\b(?:don'?t|do\s+not|never|not\s+yet|no\s+need\s+to|not)\b/i.test(said)) return null
   for (const [forms, state] of [
     [DONE_FORMS, 'done'],
     [CANCEL_FORMS, 'cancelled'],
@@ -873,6 +877,19 @@ export function taskStateChange(text: string): TaskStateChange | null {
     for (const re of forms) {
       const hit = re.exec(said)
       if (hit === null) continue
+      /*
+        Taken back in the same breath: "mark the Hartley one done, actually
+        no, leave it" (ledger R34). A change of mind AFTER the request
+        withdraws it, whatever the retraction reader makes of the rest.
+      */
+      const after = said.slice(hit.index + hit[0].length)
+      if (
+        /^[\s,.;:\u2014-]*(?:actually|no|wait|hang\s+on|on\s+second\s+thoughts?|scratch\s+that|forget\s+(?:it|that))\b/i.test(
+          after,
+        )
+      ) {
+        return null
+      }
       const name = hit.groups?.name?.trim().toLowerCase() ?? null
       return { state, name: name === '' ? null : name }
     }
