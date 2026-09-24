@@ -3671,3 +3671,11 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
     color: var(--bc-text);
   }
 }
+
+/* A search match: the accent, lightly, never a yellow highlighter. */
+[data-experience='basecamp'] .bcmark {
+  background: color-mix(in srgb, var(--bc-accent) 22%, transparent);
+  color: var(--bc-text-strong);
+  border-radius: 3px;
+  padding: 0 1px;
+}

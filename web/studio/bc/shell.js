@@ -3179,6 +3179,19 @@ const allActivity = () => {
  * ======================================================================== */
 
 /*
+  THE MATCH, MARKED. Escaped FIRST and the query matched against the escaped
+  text, so a query can only ever wrap text in <mark> - never add markup of
+  its own. Case-insensitive, every occurrence.
+*/
+const marked = (text, query) => {
+  const safe = esc(text)
+  const needle = esc(String(query ?? '').trim())
+  if (needle === '') return safe
+  const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+  return safe.replace(re, (m) => `<mark class="bcmark">${m}</mark>`)
+}
+
+/*
   WHY THIS EXISTS RATHER THAN A REDIRECT.
 
   Shift+Enter promoted the query to `/?q=…` in the default studio. Nothing
@@ -3300,8 +3313,8 @@ const search = () => {
                 (h) => `<button type="button" class="bcitem bcresult" data-bc-go="${esc(h.to)}">
                   <span class="bcstatus">${esc(h.kind)}</span>
                   <span class="bcitembody">
-                    <span class="bcitemtitle">${esc(h.title)}</span>
-                    ${h.excerpt ? `<span class="bcitemmeta">${esc(h.excerpt)}</span>` : ''}
+                    <span class="bcitemtitle">${marked(h.title, q)}</span>
+                    ${h.excerpt ? `<span class="bcitemmeta">${marked(h.excerpt, q)}</span>` : ''}
                     <span class="bcitemmeta">${esc(
                       [h.kind === 'Project' ? '' : h.project, h.who, h.when].filter(Boolean).join(' · '),
                     )}</span>
