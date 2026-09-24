@@ -27,7 +27,17 @@ if (token === undefined || token === '') {
 }
 
 const ROOT = '.out/site'
-const NAME = 'agentic-team-hq-basecamp'
+/*
+  WHICH PROJECT, AND WHETHER THIS IS THE ONE PEOPLE OPEN.
+
+  A merge-readiness pass needs a deployment nobody is looking at: the same
+  bytes, a URL of its own, and the stable Basecamp alias left exactly where it
+  is. `VERCEL_PREVIEW=1` omits `target`, which is what makes Vercel give the
+  deployment its own hostname and move no alias -- so the thing being proved is
+  the candidate and the thing Grant has open is untouched.
+*/
+const NAME = process.env.VERCEL_PROJECT ?? 'agentic-team-hq-basecamp'
+const PREVIEW = process.env.VERCEL_PREVIEW === '1'
 const TEAM = 'agentic-team-grant'
 const AUTH = { Authorization: `Bearer ${token}` }
 
@@ -90,7 +100,7 @@ const made = await tryHard('create the deployment', async () => {
     headers: { ...AUTH, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: NAME,
-      target: 'production',
+      ...(PREVIEW ? {} : { target: 'production' as const }),
       // No framework and no build step: these are the files, served as they are.
       projectSettings: { framework: null },
       files,
