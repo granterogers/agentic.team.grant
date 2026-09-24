@@ -469,7 +469,9 @@ const slugOf = async (page: Awaited<ReturnType<typeof openWith>>['page']): Promi
   const slug = await slugOf(page)
   const recording = async (): Promise<boolean> =>
     (await page.evaluate(async () => {
-      const m = await import('/bc/voicenote.js')
+      /* A variable specifier: this runs in the page, and tsc cannot resolve it. */
+      const where = '/bc/voicenote.js'
+      const m = (await import(where)) as { active: () => boolean }
       return m.active()
     })) as boolean
   await page.goto(url(`${slug}/chat`), { waitUntil: 'domcontentloaded' })
