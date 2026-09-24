@@ -22,13 +22,36 @@ continue at NEXT ACTION.**
 
 | # | Surface | Finding | State |
 |---|---|---|---|
-| 1 | To-dos, Schedule | task titles CENTRED in their row, floating away from the checkbox / date chip | open |
-| 2 | Card table, Docs, Contacts | content clipped mid-line at the card bottom with no fade | open |
-| 3 | Docs & files | meta line (`PDF · 24,606 words`) sliced horizontally | open |
-| 4 | Page header | the `…` page menu is a near-invisible 12px glyph on phone | open |
-| 5 | Needs you | one small low-contrast pill; Late / Stuck not visible at a glance | open |
-| 6 | Home frame | ~70px dead band above the toolbar, ~140px below the grid | open |
-| 7 | Latest activity | timestamp column and timeline dot misaligned; empty dot for grouped rows | open |
+| 1 | To-dos, Schedule | task titles CENTRED in their row, floating away from the checkbox / date chip | **fixed** `ce3081f` — root cause UA `text-align:center` on a stretched `.bclinky` button; fixed at the class |
+| 2 | Card table, Docs, Contacts | content clipped mid-line at the card bottom with no fade | **fixed** `ce3081f` — scroll-timeline fade, inert when not overflowing |
+| 3 | Docs & files | meta line sliced horizontally | **fixed** by #2 (it was the pane edge) |
+| 4 | Page header | the `…` page menu is a near-invisible glyph on phone | **fixed** `ce3081f` — ringed face |
+| 5 | Needs you | one small pill; Late / Stuck not visible | **fixed** `ce3081f` — three counters; zero muted & unpressable; 99+ cap |
+| 6 | Home frame | dead band above toolbar, 140px below grid | **fixed** `ce3081f` |
+| 7 | Latest activity | timestamp column and dot misaligned | open |
+| 8 | Card table @1024 | clamped titles leak a third line into padding | **fixed** `ce3081f` — `overflow-clip-margin: content-box` |
+| 9 | Phone to-dos | titles run under assignee, no ellipsis (inline-flex kills text-overflow) | **fixed** `ce3081f` |
+| 10 | Tray | text glyphs ✎⌂✓≡ as icons; 10px label under the 12px floor | **fixed** `ce3081f` |
+
+## Pass 2 — Team Chat
+
+| # | Finding | State |
+|---|---|---|
+| 11 | **Enter in the chat field did a native form submit: page reload, message lost, no error** (functional defect) | **fixed** — submit handler + Enter sends / Shift+Enter newline |
+| 12 | Message body in one `<p>`: newlines and numbered lists collapsed (CLAUDE.md #209 trap) | **fixed** — `prose()` moved verbatim from `app.js` to shared `web/studio/prose.js`, used by both |
+| 13 | Composer: one-line input, 44px Voice note beside a 32px Send, idle mic wore a red "recording" dot | **fixed** — one composer surface, auto-growing textarea, 44px actions, dot only while recording |
+| 14 | Composer below the fold on phone | **fixed** — sticky, clears the tray |
+| 15 | Thread lines up to 1,270px; 22px letter faces; no role; you vs team undistinguished | **fixed** — 760px measure, 34px faces, role, accent on your lines |
+| 16 | Phone dock = legacy 58vh sheet: ~160px thread, strip of page under it | **fixed** (scoped) — full screen above the tray |
+| 17 | Dock row texture painted a pale block in the avatar gutter | **fixed** (scoped) |
+| 18 | Recording meter = 14 equal 22px capsules | **fixed** — graduated level meter |
+| 19 | Textarea `field-sizing:content` + auto grid track pushed phone to 461px | found by my own capture, **fixed** before commit |
+
+## Harness notes
+
+- `verify:basecamp-reconcile` was 19/21 in this sandbox (office.invalid → proxy tunnel failure). Taught the reason, tied to that host. 21/21.
+- `verify:basecamp-voicenote` needs `espeak-ng` (installed). My 40px composer buttons were caught by its 44px floor — the detector working.
+- `basecamp:measure` caught my first counters at 39px on touch — detector working.
 
 ## Changes
 

@@ -1404,7 +1404,6 @@
 }
 [data-experience="basecamp"] .bcnotebar[data-lit="1"] {
   background: var(--bc-danger);
-  height: 100%;
 }
 [data-experience="basecamp"] .bcnotesaid {
   margin: var(--bc-2) 0 0;

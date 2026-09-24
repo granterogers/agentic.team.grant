@@ -1024,10 +1024,123 @@
   A pinned composer would need a scroll container of its own, which is #108's
   territory, and this conversation is read far more often than it is added to.
 */
+/*
+  THE COMPOSER STAYS WITHIN REACH. It was a form at the foot of the thread,
+  so on a phone the only way to reply was to scroll past everything that had
+  been said - and on a long thread, on a desktop too. Sticky rather than
+  fixed: it rides the bottom of the viewport only while the thread is taller
+  than the screen, needs no scroll container of its own (#108's territory),
+  and on a phone clears the fixed tray.
+*/
 [data-experience='basecamp'] .bcsay {
-  border-top: 1px solid var(--bc-border-subtle);
-  padding-top: 18px;
+  position: sticky;
+  bottom: 16px;
+  z-index: 2;
+  max-width: 860px;
+  padding-top: 8px;
 }
+[data-experience='basecamp'] .bcsaybox {
+  display: grid;
+  /*
+    minmax(0, 1fr), not auto: field-sizing: content makes the textarea as
+    wide as its placeholder, and an auto track then pushed a 390px phone to
+    461px - the whole page zoomed out and the tray slid off screen.
+  */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 10px 10px 8px 14px;
+  border: 1px solid var(--bc-border-control);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bc-surface) 92%, black);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+[data-experience='basecamp'] .bcsaybox:focus-within {
+  border-color: color-mix(in srgb, var(--bc-accent) 60%, transparent);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.28), 0 0 0 3px color-mix(in srgb, var(--bc-accent) 18%, transparent);
+}
+[data-experience='basecamp'] .bcsayinput {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  max-height: 184px;
+  min-width: 0;
+  field-sizing: content;
+  resize: none;
+  padding: 4px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--bc-text-strong);
+  /* 16px: below it iOS Safari zooms the page on focus. */
+  font: 400 16px/24px var(--bc-font);
+}
+[data-experience='basecamp'] .bcsayinput::placeholder { color: color-mix(in srgb, var(--bc-text-muted) 88%, transparent); }
+[data-experience='basecamp'] .bcsaybox .bcerror { margin: 0 0 2px; }
+[data-experience='basecamp'] .bcsaybar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+[data-experience='basecamp'] .bcsayhint {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-experience='basecamp'] .bcsaybar .bcbtn--primary {
+  height: 44px;
+  min-width: 76px;
+  padding: 0 18px;
+  border-radius: 12px;
+}
+[data-experience='basecamp'] .bcsaybar .bcnotemic {
+  min-height: 44px;
+  border-radius: 12px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcsaybar .bcnotemic:hover { color: var(--bc-text-strong); background: var(--bc-hover); }
+[data-experience='basecamp'] .bcnotemicdot { display: none; }
+[data-experience='basecamp'] .bcnotemic[data-bc-note='recording'] .bcnotemicdot { display: inline-block; }
+[data-experience='basecamp'] .bcnotemic[data-bc-note='recording'] .bcnotemicicon { display: none; }
+[data-experience='basecamp'] .bcsaybar .bcnotemic[data-bc-note='recording'] {
+  color: var(--bc-danger);
+  border-color: color-mix(in srgb, var(--bc-danger) 55%, transparent);
+  background: color-mix(in srgb, var(--bc-danger) 10%, transparent);
+}
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcsaybar .bcbtn--primary,
+  [data-experience='basecamp'] .bcsaybar .bcnotemic { min-height: 44px; height: 44px; }
+  /* A hint about keys means nothing on a touch keyboard. */
+  [data-experience='basecamp'] .bcsayhint { visibility: hidden; }
+}
+
+/*
+  THE THREAD. A readable measure (a line of 1,270px is not read, it is
+  scanned), faces large enough to be faces, and the role beside an agent's
+  name so "Emma" also says what Emma is for. Grant's own lines carry a quiet
+  accent rather than a bubble on the other side: this is a project's room,
+  read top to bottom, not a phone chat.
+*/
+[data-experience='basecamp'] .bcchat--full { max-width: 760px; }
+[data-experience='basecamp'] .bcchat--full .bcsaid { gap: 12px; }
+[data-experience='basecamp'] .bcchat--full .bcface { width: 34px; height: 34px; font-size: 13px; margin-top: 1px; }
+[data-experience='basecamp'] .bcchat--full .bcsaidtext { font-size: 15px; line-height: 1.6; max-width: 68ch; color: var(--bc-text); }
+[data-experience='basecamp'] .bcsaidrole { margin-left: 6px; font-size: 12px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsaid--mine .bcface { background: color-mix(in srgb, var(--bc-accent) 30%, var(--bc-surface)); }
+[data-experience='basecamp'] .bcsaid--mine .bcsaidwho { color: var(--bc-accent); }
+[data-experience='basecamp'] .bcsaidtext p { margin: 0; }
+[data-experience='basecamp'] .bcsaidtext p + p,
+[data-experience='basecamp'] .bcsaidtext p + ol,
+[data-experience='basecamp'] .bcsaidtext ol + p { margin-top: 0.6em; }
+[data-experience='basecamp'] .bcsaidtext ol { margin: 0.3em 0 0; padding-left: 1.4em; }
+[data-experience='basecamp'] .bcsaidtext li + li { margin-top: 0.2em; }
 /*
   The full source list is the same grammar with more room, so the rows breathe
   rather than being restyled into a second appearance of one thing.
@@ -3018,3 +3131,71 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--bc-success) 14%, transparent);
   }
 }
+
+/*
+  The chat composer clears the phone's fixed tray (max-width 760px in
+  bc.css), which is 52px plus the safe area. At the END of the file, because a
+  media query adds no specificity and an earlier one loses to source order.
+*/
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcsay { bottom: calc(60px + env(safe-area-inset-bottom)); }
+  [data-experience='basecamp'] .bcsaybox { padding: 8px 8px 8px 12px; }
+}
+
+/*
+  THE DOCK ON A PHONE IS THE CONVERSATION, not a sheet over the project.
+
+  The dock is the studio's own (app.js paintDock, studio.css), and its phone
+  sheet is 58vh capped at 440px and sits 76px up to clear the legacy studio's
+  nav. This experience's tray is 53px, so a strip of the page showed under the
+  sheet and the thread got about 160px - one message - between a header and a
+  composer. Here it takes the screen above the tray. Scoped to this
+  experience, so the default studio's sheet is untouched.
+*/
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .dock {
+    inset: 0 0 calc(53px + env(safe-area-inset-bottom)) 0;
+    height: auto;
+    border-radius: 0;
+    border-top: 0;
+    padding-top: calc(12px + env(safe-area-inset-top));
+    z-index: 45;
+  }
+  [data-experience='basecamp'] body.docked .shell { padding-bottom: 0; }
+  [data-experience='basecamp'] .dock textarea { font-size: 16px; }
+}
+
+/*
+  The legacy studio textures the whole message ROW; on this experience's dark
+  dock that painted a pale rectangle in the avatar gutter beside every reply,
+  which read as a smudge. The bubble keeps its own surface.
+*/
+[data-experience='basecamp'] .dock .msg.theirs { background-image: none; background-color: transparent; }
+
+/*
+  THE RECORDING METER AS A LEVEL METER. Fourteen equal 22px capsules filled
+  the whole row and read as a chain of pink blocks. Slim bars on a rising
+  ramp say what a meter says: how loud, right now.
+*/
+[data-experience='basecamp'] .bcnotemeter { flex: 1 1 auto; gap: 4px; align-items: flex-end; height: 24px; }
+[data-experience='basecamp'] .bcnotebar {
+  flex: 0 0 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bc-text) 16%, transparent);
+  transition: background 90ms linear;
+}
+[data-experience='basecamp'] .bcnotebar[data-lit='1'] { background: var(--bc-danger); }
+[data-experience='basecamp'] .bcnotebar:nth-child(1) { height: 7px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(2) { height: 8px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(3) { height: 9px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(4) { height: 11px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(5) { height: 12px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(6) { height: 13px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(7) { height: 14px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(8) { height: 15px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(9) { height: 16px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(10) { height: 17px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(11) { height: 19px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(12) { height: 20px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(13) { height: 21px; }
+[data-experience='basecamp'] .bcnotebar:nth-child(14) { height: 22px; }

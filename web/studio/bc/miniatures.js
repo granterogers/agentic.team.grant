@@ -40,6 +40,7 @@ import * as contacts from './contacts.js'
 import * as notes from './notestore.js'
 import { MARKS } from '../logos/marks.js'
 import * as when from '../when.js'
+import { prose } from '../prose.js'
 import * as todos from './todos.js'
 import * as docorder from './docorder.js'
 import { esc, status } from './parts.js'
@@ -556,7 +557,9 @@ export const said_ = (m) => {
   return `<div class="bcsaid${mine ? ' bcsaid--mine' : ''}">
     ${face(mine ? { name: 'Grant', slug: 'grant' } : person(who))}
     <div class="bcsaidbody">
-      <span class="bcsaidwho">${esc(mine ? 'You' : named(who) || who)}</span>
+      <span class="bcsaidwho">${esc(mine ? 'You' : named(who) || who)}</span>${
+        mine || !person(who)?.role ? '' : `<span class="bcsaidrole">${esc(person(who).role)}</span>`
+      }
       <!--
         THE TIME, as a person reads it.
 
@@ -572,7 +575,13 @@ export const said_ = (m) => {
         one here ends the string. That is how this file broke a moment ago.
       -->
       <span class="bcsaidwhen">${when.stamp(when_, when_)}</span>
-      <p class="bcsaidtext">${esc(m.text ?? '')}</p>
+      <!--
+        THE BODY KEEPS ITS SHAPE. One escaped string in one paragraph tag
+        collapsed every newline, so a reply written as three short paragraphs
+        or a numbered list read here as one run-on block. The same renderer
+        the studio uses: paragraphs, line breaks, and a real ordered list.
+      -->
+      <div class="bcsaidtext">${prose(m.text ?? '')}</div>
       <!--
         PLAY IT BACK, only where there is something to play.
 

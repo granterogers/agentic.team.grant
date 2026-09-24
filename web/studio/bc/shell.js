@@ -2571,23 +2571,48 @@ const chatSurface = (p) => {
           `<p class="bcpmeta bcgap">This is an example conversation. Sign in and the
             office's own record replaces it.</p>`
     }
-    <form class="bcaddform bcsay" data-bc-sayform>
-      ${input({ id: 'bc-say', label: `Ask the team about ${p.name}`, name: 'say', autocomplete: 'off' })}
-      <div class="bcrow">
-        <!--
-          THE VOICE NOTE, and it is deliberately HERE rather than at the top of
-          the project. Grant drew that line himself: the microphone inside the
-          chat sends a voice message, and the one on the project head opens a
-          live conversation. Its place is what says which it is, so this one
-          sits in the composer beside Send, where the thing you are composing
-          is a message.
-        -->
-        <button type="button" class="bcnotemic" data-bc-note="idle"
-          aria-label="Record a voice note">
-          <span class="bcnotemicdot" aria-hidden="true"></span>
-          <span class="bcnotemictxt">Voice note</span>
-        </button>
-        ${button('Send', { kind: 'primary', 'data-bc-say': '1' })}
+    <form class="bcsay" data-bc-sayform>
+      <label class="bcvh" for="bc-say">${esc(`Message the team about ${p.name}`)}</label>
+      <!--
+        ONE COMPOSER, SHAPED LIKE ONE. It was a labelled one-line field above
+        a row holding a 44px Voice note and a 32px Send, so the two actions
+        were different heights and neither sat with the text. Now a single
+        surface: the text grows with what is typed, and the actions sit on its
+        own bottom edge.
+
+        A TEXTAREA, because a message can be more than one line - and Enter
+        still sends, Shift+Enter makes the new line (Grant, 23 September, for
+        the dock; the same rule here so the two chats agree).
+      -->
+      <div class="bcsaybox">
+        <textarea class="bcsayinput" id="bc-say" name="say" rows="1" autocomplete="off"
+          placeholder="${esc(`Ask the team about ${p.name}…`)}"></textarea>
+        <div class="bcsaybar">
+          <!--
+            THE VOICE NOTE, and it is deliberately HERE rather than at the top
+            of the project. Grant drew that line himself: the microphone inside
+            the chat sends a voice message, and the one on the project head
+            opens a live conversation. Its place is what says which it is.
+
+            A MICROPHONE, NOT A RED DOT. The idle control carried a red dot,
+            which is the universal sign for already recording - so the
+            control said "on" before it had been pressed. The dot now appears
+            only while it actually records.
+          -->
+          <button type="button" class="bcnotemic" data-bc-note="idle"
+            aria-label="Record a voice note">
+            <svg class="bcnotemicicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+              stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+              <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"></path>
+              <path d="M12 18v3"></path>
+            </svg>
+            <span class="bcnotemicdot" aria-hidden="true"></span>
+            <span class="bcnotemictxt">Voice note</span>
+          </button>
+          <span class="bcsayhint" aria-hidden="true">Enter to send · Shift+Enter for a new line</span>
+          ${button('Send', { kind: 'primary', 'data-bc-say': '1' })}
+        </div>
       </div>
       <!--
         One panel, three states, because a recorder that appears in a different

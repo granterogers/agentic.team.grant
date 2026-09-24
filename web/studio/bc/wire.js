@@ -2295,6 +2295,24 @@ const wireTasks = (root) => {
     The draft is cleared on send, which #197 established, and the answer
     arrives through the same repaint the default Team HQ uses.
   */
+  /*
+    THE FORM NEVER SUBMITS ITSELF. It had no submit listener, so Enter in the
+    field did a native form submission: the page reloaded and the message was
+    gone, with nothing on screen to say so. Enter now presses Send; Shift+Enter
+    is left to the textarea, which makes a new line.
+  */
+  for (const f of root.querySelectorAll('[data-bc-sayform]')) {
+    f.addEventListener('submit', (e) => {
+      e.preventDefault()
+      f.querySelector('[data-bc-say]')?.click()
+    })
+    const box = f.querySelector('#bc-say')
+    box?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return
+      e.preventDefault()
+      f.querySelector('[data-bc-say]')?.click()
+    })
+  }
   for (const b of root.querySelectorAll('[data-bc-say]')) {
     b.addEventListener('click', async () => {
       const f = root.querySelector('[data-bc-sayform]')
