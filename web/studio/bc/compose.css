@@ -3589,3 +3589,14 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bcpsig--waiting b { color: var(--bc-section-accent); }
 [data-experience='basecamp'] .bcpsig--late b { color: var(--bc-danger); }
 [data-experience='basecamp'] .bcpsig--stuck b { color: #f2c46d; }
+
+/* A contact record's groups: small, quiet headings between the fields. */
+[data-experience='basecamp'] .bcctgroup {
+  margin: 18px 0 2px;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bc-heading);
+}
+[data-experience='basecamp'] form[data-bc-contactedit] .bcctgroup:first-of-type { margin-top: 4px; }

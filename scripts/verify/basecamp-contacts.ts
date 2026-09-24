@@ -185,10 +185,15 @@ await page.waitForTimeout(900)
 await people()
 await page.locator('[data-bc-contact]').first().click()
 await page.waitForTimeout(500)
-const hasPhoto = (await page.locator('[data-bc-contactedit] img.bcface--photo').count()) > 0
+const hasPhoto =
+  (await page
+    .locator(
+      /* the record: its header carries the one face now */ '.bcpersonhead img.bcface--photo, [data-bc-contactedit] img.bcface--photo',
+    )
+    .count()) > 0
 check('an uploaded image appears on the record and survives a reload', hasPhoto)
 const shrunk = (await page.evaluate(
-  inPage(`const img = document.querySelector('[data-bc-contactedit] img.bcface--photo')
+  inPage(`const img = document.querySelector(/* the record: its header carries the one face now */ '.bcpersonhead img.bcface--photo, [data-bc-contactedit] img.bcface--photo')
      return img === null ? -1 : img.src.length`),
 )) as number
 check(
@@ -203,7 +208,11 @@ await page.locator('[data-bc-contact]').first().click()
 await page.waitForTimeout(450)
 check(
   'and it can be removed again',
-  (await page.locator('[data-bc-contactedit] img.bcface--photo').count()) === 0,
+  (await page
+    .locator(
+      /* the record: its header carries the one face now */ '.bcpersonhead img.bcface--photo, [data-bc-contactedit] img.bcface--photo',
+    )
+    .count()) === 0,
 )
 
 /* --- 7. adding somebody ------------------------------------------------- */

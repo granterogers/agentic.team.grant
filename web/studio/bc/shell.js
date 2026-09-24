@@ -1948,8 +1948,12 @@ const contactRecord = (p, c, i) => {
     </div>
 
     <form class="bcaddform bcgap-l" data-bc-contactedit="${esc(key)}">
+      <!--
+        ONE FACE. The header already shows the person's photograph or
+        monogram; a second, larger copy above the fields made the record open
+        on the same face twice. The row keeps only what changes it.
+      -->
       <div class="bcimagerow">
-        ${avatar(c, 72)}
         <span class="bcimageacts">
           <label class="bcbtn bcbtn--file">
             <span>${esc(faceOf(c) !== '' ? 'Replace the image' : 'Add an image')}</span>
@@ -1964,7 +1968,16 @@ const contactRecord = (p, c, i) => {
       </div>
       ${lines
         .map(
-          (l) => `<div class="${l.fields.length > 1 ? 'bcformrow' : ''}">
+          /*
+            GROUPED BY WHAT A PERSON ASKS: who is this, how do I reach them,
+            what happens next. Eleven boxes in a row read as a database form;
+            the same boxes under three plain headings read as a person.
+          */
+          (l) => `${
+            { 1: 'Who they are', 3: 'How to reach them', 5: 'Next step' }[l.n] === undefined
+              ? ''
+              : `<h2 class="bcctgroup">${esc({ 1: 'Who they are', 3: 'How to reach them', 5: 'Next step' }[l.n])}</h2>`
+          }<div class="${l.fields.length > 1 ? 'bcformrow' : ''}">
             ${l.fields
               .map((f) =>
                 f.kind === 'long'
