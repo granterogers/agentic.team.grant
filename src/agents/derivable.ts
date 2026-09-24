@@ -31,6 +31,15 @@ import { whenFor } from './mine.ts'
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
+/**
+ * A month, as a WHOLE word: its name or a standard abbreviation.
+ *
+ * Shared with `fabricatedWhen` so the gate and the resolver cannot disagree
+ * about what a month is. A prefix match made "margin" March.
+ */
+export const MONTH_WORD =
+  'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?'
+
 const isoOf = (y: number, m: number, d: number): string | null => {
   const dt = new Date(Date.UTC(y, m, d))
   // A round trip, because Date.parse('2026-02-31') is a perfectly good number.
@@ -94,10 +103,10 @@ export const datesIn = (grounding: string, now: Date = new Date()): ReadonlySet<
       if (on !== null) out.add(on)
     }
   }
-  const MONTH = MONTHS.join('|')
+  const MONTH = MONTH_WORD
   const absolute = [
-    new RegExp(String.raw`\b(?:${MONTH})[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?\b`, 'gi'),
-    new RegExp(String.raw`\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:${MONTH})[a-z]*\b`, 'gi'),
+    new RegExp(String.raw`\b(?:${MONTH})\.?\s+\d{1,2}(?:st|nd|rd|th)?\b`, 'gi'),
+    new RegExp(String.raw`\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:${MONTH})\b`, 'gi'),
     /\b\d{4}-\d{2}-\d{2}\b/g,
   ]
   for (const re of absolute) {

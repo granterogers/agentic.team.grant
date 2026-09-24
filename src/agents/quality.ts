@@ -28,7 +28,7 @@
  * someone wrote a second caller.
  */
 
-import { datesIn, isoForMention } from './derivable.ts'
+import { datesIn, isoForMention, MONTH_WORD } from './derivable.ts'
 import type { Domain } from './provenance.ts'
 
 /** How an output was produced. The only input the exemption is allowed to read. */
@@ -813,7 +813,15 @@ export const fabricatedWhen = (
     `derivable.ts`). Computed lazily: most answers mention no date at all.
   */
   let derived: ReadonlySet<string> | null = null
-  const MONTH = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec'
+  /*
+    WHOLE month words, never a prefix (behavioural remediation, 24 September
+    2026). This was `jan|feb|mar|...` followed by any letters, so "margin"
+    was March, "decision" December, "separate" September and "maybe" May:
+    "a £8 margin per head" read as "8 Mar…" and a correct
+    arithmetic answer was refused as an invented date. The retry then
+    re-enqueued the child work its first attempt had already finished.
+  */
+  const MONTH = MONTH_WORD
   const shapes: RegExp[] = [
     /*
       A clock time, and the hour has to be an HOUR.
@@ -835,8 +843,8 @@ export const fabricatedWhen = (
     /\b(?:1[0-2]|0?\d)[:.][0-5]\d\s*(?:am|pm)\b/gi,
     /\b(?:1[0-2]|0?\d)\s*(?:am|pm)\b/gi,
     // A calendar date: Oct 18, 18 October, 2026-10-18.
-    new RegExp(String.raw`\b(?:${MONTH})[a-z]*\.?\s+\d{1,2}\b`, 'gi'),
-    new RegExp(String.raw`\b\d{1,2}(?:st|nd|rd|th)?\s+(?:${MONTH})[a-z]*\b`, 'gi'),
+    new RegExp(String.raw`\b(?:${MONTH})\.?\s+\d{1,2}(?:st|nd|rd|th)?\b`, 'gi'),
+    new RegExp(String.raw`\b\d{1,2}(?:st|nd|rd|th)?\s+(?:${MONTH})\b`, 'gi'),
     /\b\d{4}-\d{2}-\d{2}\b/g,
   ]
   for (const re of shapes) {

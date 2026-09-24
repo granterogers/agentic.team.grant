@@ -70,3 +70,24 @@ describe('"by the 30th" is a due date, not part of the title', () => {
     ).toBeNull()
   })
 })
+
+describe('a word that begins like a month is not a month', () => {
+  // The measured refusal: a correct arithmetic answer failed as "8 margin".
+  it.each([
+    'That leaves a £8 margin per person.',
+    'We have 5 decisions still open.',
+    'Split it into 3 separate invoices.',
+    'Try 2 novel formats, maybe 4.',
+    'Build a 10 deck slide pack.',
+    'The margin 40 figure is what you gave me.',
+  ])('%s', (body) => {
+    expect(fabricatedWhen(body, 'tickets are 35, food 21, room 6', now)).toBeNull()
+  })
+
+  it.each(['due 18 Oct', 'due Oct 18', 'on 3 March', 'by September 12th', 'Sept 9'])(
+    'NEGATIVE CONTROL: a real month is still checked: %s',
+    (body) => {
+      expect(fabricatedWhen(body, 'tickets are 35, food 21, room 6', now)).not.toBeNull()
+    },
+  )
+})
