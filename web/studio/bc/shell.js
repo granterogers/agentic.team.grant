@@ -2418,7 +2418,7 @@ const boardSurface = (p) => {
       <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      The same to-dos, by stage. Drag a card to another column to move it.
+      The same to-dos, by stage. Drag a card to another column, or choose its stage on the card.
     </p>
     ${
       all.length === 0
