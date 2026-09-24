@@ -121,6 +121,32 @@ const dragOnto = async (page: Page, moved: string, onto: string): Promise<string
 
 const before = await atTheOffice()
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
+/*
+  WAIT FOR THE DOCUMENTS, AND SAY WHAT THE PAGE HAD IF THEY NEVER CAME.
+
+  A bare 30-second selector wait after a fresh sign-in is a race with a cold
+  deployment, and when it lost it said only "waiting for locator" -- which
+  names no cause and reads like a missing feature. Twice in one pass, on a page
+  that renders perfectly when the suite runs alone.
+
+  Longer, and it prints what was on screen instead of a bare timeout, because a
+  failure that names nothing is the thing CLAUDE.md warns about most.
+*/
+const waitForDocs = async (p: Page): Promise<void> => {
+  try {
+    await p.waitForSelector('[data-bc-docdrop] [data-bc-docid]', { timeout: 60000 })
+  } catch {
+    const said = (
+      (await p
+        .evaluate("(() => (document.body.innerText || '').slice(0, 300))()")
+        .catch(() => '')) as string
+    )
+      .replace(/\s+/g, ' ')
+      .trim()
+    throw new Error(`no document rows after 60s. The page said: ${said}`)
+  }
+}
+
 const errors: string[] = []
 
 try {
@@ -128,7 +154,7 @@ try {
   const page = await ctx.newPage()
   page.on('pageerror', (e) => errors.push(String(e.message)))
   await signIn(page, db, { ref, origin: SITE, back: `${SITE}/basecamp/p/${SLUG}` })
-  await page.waitForSelector('[data-bc-docdrop] [data-bc-docid]', { timeout: 30000 })
+  await waitForDocs(page)
   await page.waitForTimeout(1500)
 
   /* --- the control is there, in the miniature ---------------------------- */
@@ -253,7 +279,7 @@ try {
   /* --- and a refresh ----------------------------------------------------- */
 
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 })
-  await page.waitForSelector('[data-bc-docdrop] [data-bc-docid]', { timeout: 30000 })
+  await waitForDocs(page)
   await page.waitForTimeout(2000)
   await choose(page, 'custom')
   check(
@@ -268,7 +294,7 @@ try {
     waitUntil: 'domcontentloaded',
     timeout: 45000,
   })
-  await page.waitForSelector('[data-bc-docdrop] [data-bc-docid]', { timeout: 30000 })
+  await waitForDocs(page)
   await page.waitForTimeout(1500)
   await choose(page, 'custom')
   const expanded = await drawn(page)
@@ -294,7 +320,7 @@ try {
   /* --- back to the miniature, which must agree --------------------------- */
 
   await page.goto(`${SITE}/basecamp/p/${SLUG}`, { waitUntil: 'domcontentloaded', timeout: 45000 })
-  await page.waitForSelector('[data-bc-docdrop] [data-bc-docid]', { timeout: 30000 })
+  await waitForDocs(page)
   await page.waitForTimeout(1500)
   await choose(page, 'custom')
   const backInMini = await drawn(page)

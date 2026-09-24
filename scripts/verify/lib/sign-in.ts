@@ -108,42 +108,82 @@ export async function signIn(
   const elsewhere = ceremonyOrigin !== '' && !back.startsWith(ceremonyOrigin)
   const landing = elsewhere ? `${ceremonyOrigin}${new URL(back).pathname}` : back
 
-  const asked = await fetch(`https://${ref}.supabase.co/functions/v1/signin`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      Origin: elsewhere ? ceremonyOrigin : origin,
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({ action: 'link_for_operator', email, back: landing }),
-  })
-  const body = (await asked.json().catch(() => ({}))) as {
-    ok?: boolean
-    action_link?: string
-    detail?: string
-  }
-  if (body.ok !== true || typeof body.action_link !== 'string' || body.action_link === '') {
-    throw new Error(`no sign-in link: http ${String(asked.status)} ${String(body.detail ?? '')}`)
+  /*
+    THE PROVIDER RATE-LIMITS MAGIC LINKS, AND A RATE LIMIT IS NOT A DEFECT.
+
+    Supabase issues one link per address per minute. A gate that runs a dozen
+    signed-in suites back to back asks for a dozen in four minutes, and the
+    ones that land inside the window get a link that does not sign anybody in:
+    the ceremony completes, the fragment carries an error rather than tokens,
+    and the suite times out waiting for a session. Three suites reported a
+    working product as broken that way in one pass, each passing alone.
+
+    CLAUDE.md's rule about a throttled Management API is the same rule: never
+    let an infra failure enter a measurement as data. So the ask is retried,
+    the wait is the provider's own window, and every retry is PRINTED -- a run
+    that spent two minutes waiting for a rate limit should say so rather than
+    look slow for no reason.
+  */
+  const askForLink = async (): Promise<string> => {
+    const asked = await fetch(`https://${ref}.supabase.co/functions/v1/signin`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Origin: elsewhere ? ceremonyOrigin : origin,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ action: 'link_for_operator', email, back: landing }),
+    })
+    const body = (await asked.json().catch(() => ({}))) as {
+      ok?: boolean
+      action_link?: string
+      detail?: string
+    }
+    if (body.ok !== true || typeof body.action_link !== 'string' || body.action_link === '') {
+      throw new Error(`no sign-in link: http ${String(asked.status)} ${String(body.detail ?? '')}`)
+    }
+    return body.action_link
   }
 
-  /*
-    Opening the link is the whole point: it is what the person's click does,
-    and if the redirect target were wrong — the commonest way this breaks —
-    this is the only thing that would notice.
-  */
-  await page.goto(body.action_link, { waitUntil: 'domcontentloaded', timeout: 45000 })
-  await page.waitForFunction(
-    "(() => { try { return (localStorage.getItem('hq.session') || '') !== '' } catch { return false } })()",
-    undefined,
-    { timeout: 40000 },
-  )
-  if (elsewhere) {
-    const held = (await page.evaluate(
+  const held = async (): Promise<string> =>
+    (await page.evaluate(
       "(() => { try { return localStorage.getItem('hq.session') || '' } catch { return '' } })()",
     )) as string
-    if (held === '') throw new Error('the ceremony left no session to carry')
+
+  let landed = ''
+  for (let attempt = 1; attempt <= 3 && landed === ''; attempt += 1) {
+    const link = await askForLink()
+    /*
+      Opening the link is the whole point: it is what the person's click does,
+      and if the redirect target were wrong — the commonest way this breaks —
+      this is the only thing that would notice.
+    */
+    await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45000 })
+    await page
+      .waitForFunction(
+        "(() => { try { return (localStorage.getItem('hq.session') || '') !== '' } catch { return false } })()",
+        undefined,
+        { timeout: attempt === 3 ? 40000 : 15000 },
+      )
+      .catch(() => null)
+    landed = await held()
+    if (landed === '' && attempt < 3) {
+      const said = (await page.evaluate(
+        "(() => (document.body.innerText || '').slice(0, 160))()",
+      )) as string
+      console.log(
+        `  sign-in attempt ${String(attempt)} produced no session — waiting out the ` +
+          `provider's one-a-minute window. ${said.replace(/\s+/g, ' ').trim().slice(0, 90)}`,
+      )
+      await new Promise((ok) => setTimeout(ok, 65_000))
+    }
+  }
+  if (landed === '') {
+    throw new Error('three sign-in links in a row produced no session')
+  }
+  if (elsewhere) {
     await page.addInitScript(
-      `try { localStorage.setItem('hq.session', ${JSON.stringify(held)}) } catch {}`,
+      `try { localStorage.setItem('hq.session', ${JSON.stringify(landed)}) } catch {}`,
     )
     await page.goto(back, { waitUntil: 'domcontentloaded', timeout: 45000 })
   }
