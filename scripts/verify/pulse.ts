@@ -33,6 +33,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { namesAnOffice } from './lib/office-seam.ts'
 
 const PORT = 4635
 const TYPES: Record<string, string> = {
@@ -159,6 +160,10 @@ page.on('pageerror', (e) => crashes.push(e.message.slice(0, 120)))
   the poll is driven directly instead — the interval is a constant, the
   behaviour is what needs proving.
 */
+// The page has to know which office it belongs to before its first line
+// runs, or the shim below never sees a URL with hq-api in it. ADR-0048.
+await page.addInitScript(namesAnOffice())
+
 await page.addInitScript(`
   window.__S = ${JSON.stringify({ studio })};
   window.__PULSE = { jobs_running: 0, jobs_done: 1, outputs: 1, tasks_open: 0, documents: 1 };
