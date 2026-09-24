@@ -150,9 +150,9 @@ export const skeleton = (lines = 3) =>
  * "button" nine times and hearing what each one opens.
  */
 export const tool = (o) => {
-  const { name, to, summary, body, count = null } = o
+  const { name, to, summary, body, count = null, mark = '' } = o
   return `<section class="bctool">
-    <h2><a href="${esc(to)}" data-bc-go="${esc(to)}">${esc(name)}</a>${
+    <h2>${mark === '' ? '' : `<span class="bctoolmark" aria-hidden="true">${mark}</span>`}<a href="${esc(to)}" data-bc-go="${esc(to)}">${esc(name)}</a>${
       count === null ? '' : ` <span class="bcmore">${esc(count)}</span>`
     }</h2>
     <button type="button" class="bcpreview" data-bc-go="${esc(to)}"

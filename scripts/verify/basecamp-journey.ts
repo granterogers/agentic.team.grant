@@ -321,7 +321,15 @@ await page
   .locator('[data-bc-taskform]:not([hidden]) input[name="title"]')
   .fill('Write the acceptance evidence')
 await page.locator('[data-bc-taskform]:not([hidden]) input[name="due"]').fill('2026-10-02')
-await page.locator('[data-bc-taskform]:not([hidden]) input[name="who"]').fill('claire')
+/*
+  Chosen from the team, not typed. It typed 'claire', which only this suite's
+  fake office accepted: hq_task_add resolves p_assignee against
+  public.staff.slug, and Claire's is chief-of-staff.
+*/
+const addWho = page.locator('[data-bc-taskform]:not([hidden]) select[name="who"]')
+const claireValue =
+  (await addWho.locator('option').filter({ hasText: 'Claire' }).first().getAttribute('value')) ?? ''
+await addWho.selectOption(claireValue)
 await page.locator('[data-bc-taskform]:not([hidden]) [data-bc-tasksave]').click()
 await page.waitForTimeout(900)
 
@@ -332,7 +340,8 @@ check(
   add?.args.p_project === 'journey-subject' &&
     add?.args.p_title === 'Write the acceptance evidence' &&
     add?.args.p_due_on === '2026-10-02' &&
-    add?.args.p_assignee === 'claire',
+    claireValue === 'chief-of-staff' &&
+    add?.args.p_assignee === claireValue,
   JSON.stringify(add?.args ?? {}),
 )
 check('the office now holds two tasks', tasks.length === 2)

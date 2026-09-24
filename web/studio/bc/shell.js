@@ -776,14 +776,25 @@ const portfolio = () => {
       ${PROJECTS.map((p) => {
         const open = (p.tasks ?? []).filter((t) => t.state !== 'done').length
         const waiting = (p.waiting ?? []).length
+        const late = bcMini.filtered(p, 'late').length
+        const stuck = bcMini.filtered(p, 'stuck').length
+        /*
+          THE SAME THREE SIGNALS AS THE PROJECT HOME, so a project reads the
+          same from across the portfolio as it does inside. Static figures,
+          not buttons: the whole preview is already the one control that
+          opens the project, and a control inside it would be nested.
+        */
+        const signal = (n, word, tone) =>
+          `<span class="bcpsig${n === 0 ? ' bcpsig--zero' : ` bcpsig--${tone}`}"><b>${esc(String(n > 99 ? '99+' : n))}</b> ${esc(word)}</span>`
         return tool({
           name: p.name,
           to: at(`/p/${p.slug}`),
-          summary: `${open === 1 ? '1 open task' : `${open} open tasks`}, ${
-            (p.documents ?? []).length
-          } documents. Opens the project.`,
+          mark: compose.projectMark(p, 22),
+          summary: `${waiting} waiting on you, ${late} late, ${stuck} stuck, ${
+            open === 1 ? '1 open task' : `${open} open tasks`
+          }. Opens the project.`,
           body: `${p.purpose ? `<div class="bcpexcerpt">${esc(p.purpose)}</div>` : ''}
-            ${waiting === 0 ? '' : `<div class="bcgap">${status(waiting === 1 ? '1 thing waiting on you' : `${waiting} things waiting on you`, 'waiting')}</div>`}
+            <div class="bcpsigs">${signal(waiting, waiting === 1 ? 'needs you' : 'need you', 'waiting')}${signal(late, 'late', 'late')}${signal(stuck, 'stuck', 'stuck')}</div>
             ${tasksPreview(p)}`,
         })
       }).join('')}
@@ -830,13 +841,43 @@ const crumbFor = (p, toolId) =>
   recoverable and honest, and better than not offering it at all.
 */
 
+/*
+  WHO A TASK IS FOR, as a choice of the team rather than a box to type in.
+  Shared by the record and the add form so the two cannot drift. The value
+  is the office's own name for the person (staffSlug), because hq_task_add
+  and hq_task_update resolve p_assignee against public.staff.slug and refuse
+  anything else - a free-text box only worked if somebody typed a role slug.
+  Anybody the row names who is not on the team stays selectable, so opening
+  a record can never silently reassign it.
+*/
+const assigneePicker = (id, current) => {
+  const crew = ctx?.crew ?? []
+  const now = String(current ?? '')
+  const known = crew.some((c) => c.slug === now || c.staffSlug === now)
+  const opts = crew
+    .map((c) => {
+      const v = c.staffSlug ?? c.slug
+      const on = now !== '' && (c.slug === now || c.staffSlug === now)
+      return `<option value="${esc(v)}"${on ? ' selected' : ''}>${esc(c.role ? `${c.name} · ${c.role}` : c.name)}</option>`
+    })
+    .join('')
+  return `<div class="bcfield">
+    <label class="bclabel" for="${esc(id)}">Assigned to</label>
+    <select class="bcinput bcselect" id="${esc(id)}" name="who">
+      <option value=""${now === '' ? ' selected' : ''}>Nobody yet</option>
+      ${opts}
+      ${known || now === '' ? '' : `<option value="${esc(now)}" selected>${esc(bcMini.pretty(now))}</option>`}
+    </select>
+  </div>`
+}
+
 /** One list's add-a-task form. Per list, because §10.2 expands IN PLACE. */
 const taskAddForm = (listId) => {
   const k = listId === '' ? 'loose' : listId
   return `<form class="bcaddform" data-bc-taskform="${esc(k)}" hidden>
     ${input({ id: `bc-task-title-${k}`, label: 'What needs doing', name: 'title', autocomplete: 'off' })}
     ${input({ id: `bc-task-due-${k}`, label: 'Due date', name: 'due', type: 'date' })}
-    ${input({ id: `bc-task-who-${k}`, label: 'Assigned to', name: 'who', autocomplete: 'off', hint: 'A team member’s name, or leave it unassigned.' })}
+    ${assigneePicker(`bc-task-who-${k}`, '')}
     <div class="bcrow">
       ${button('Add this task', { kind: 'primary', 'data-bc-tasksave': esc(k) })}
       ${button('Cancel', { 'data-bc-taskcancel': esc(k) })}
@@ -1217,26 +1258,7 @@ const taskRecord = (p) => {
         has to address. Anybody the row names who is not on the team stays
         selectable, so opening a record can never silently reassign it.
       -->
-      ${(() => {
-        const crew = ctx?.crew ?? []
-        const now = String(t.who ?? '')
-        const known = crew.some((c) => c.slug === now || c.staffSlug === now)
-        const opts = crew
-          .map((c) => {
-            const v = c.staffSlug ?? c.slug
-            const on = now !== '' && (c.slug === now || c.staffSlug === now)
-            return `<option value="${esc(v)}"${on ? ' selected' : ''}>${esc(c.role ? `${c.name} · ${c.role}` : c.name)}</option>`
-          })
-          .join('')
-        return `<div class="bcfield">
-          <label class="bclabel" for="bc-edit-who">Assigned to</label>
-          <select class="bcinput bcselect" id="bc-edit-who" name="who">
-            <option value=""${now === '' ? ' selected' : ''}>Nobody yet</option>
-            ${opts}
-            ${known || now === '' ? '' : `<option value="${esc(now)}" selected>${esc(now)}</option>`}
-          </select>
-        </div>`
-      })()}
+      ${assigneePicker('bc-edit-who', t.who)}
       <!--
         The date the row actually carries. This read t.due, which is prose
         ("Due 16 September") or absent, so a task due today opened with an

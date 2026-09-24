@@ -78,3 +78,5 @@ node_modules if the container was recycled).
 | 56 | "Sea of blue": every to-do and schedule title was accent link text, so real actions had nothing to stand out against | **fixed** — titles in strong ink, accent on hover/focus |
 | 57 | Timeline dots floated beside the rule (#7) | **fixed** — nodes on the rule, level with the first line |
 | 58 | `basecamp:measure` caught the new title buttons at 24px and the framed select at 42px on touch | **fixed** — hit areas grown without moving layout |
+| 59 | Portfolio: no project identity, one lone pill, empty columns | **improved** — each project's own mark beside its name; the same Needs you / Late / Stuck signals as the project home (static figures: the preview is already one control) |
+| 60 | **Add-a-task form: free-text "Assigned to"** — `hq_task_add` resolves `p_assignee` against `staff.slug`, so typing "Claire" or "claire" is refused by the real office; only a role slug worked | **fixed** — the record's picker, extracted to one shared `assigneePicker()`; `verify:basecamp-journey` now asserts `chief-of-staff` reaches the office |
