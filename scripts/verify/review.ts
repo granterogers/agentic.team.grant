@@ -172,7 +172,20 @@ check(
 )
 
 const before = (await page.evaluate('location.hash')) as string
-await page.locator('.bcmodhead h2 a').first().click()
+/*
+  THE HEADER IS THE CONTROL, and it was a link once.
+
+  This clicked `.bcmodhead h2 a`. The module title is a plain h2 inside a
+  header that carries role="button" and data-bc-expand, so the selector matched
+  nothing and the suite timed out -- reported as a bundle that cannot move
+  between tools, on a bundle that moves between tools perfectly. A selector
+  lock, which is the same mistake as a wording lock and is written down six
+  times in CLAUDE.md.
+
+  The property asserted below is unchanged: pressing the thing that opens a
+  tool changes the address.
+*/
+await page.locator('.bcmodhead').first().click()
 await page.waitForTimeout(600)
 check(
   'moving between tools works without a server',

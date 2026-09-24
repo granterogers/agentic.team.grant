@@ -522,6 +522,7 @@ const piles = await db.execute(`
        from jsonb_array_elements(app.hq_studio_lately(200) -> 'office') e,
             jsonb_to_record(e) as x(who text)
       where app.harness_label(x.who)) as harness_on_his_activity_panel,
+    /*
       HARNESS CONTACTS, which had no witness until 24 September.
 
       A contact is the one row on this board that is a PERSON, and the office
