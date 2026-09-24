@@ -3460,3 +3460,36 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 
 /* A progress count is one token: "67/200" never breaks after the 20. */
 [data-experience='basecamp'] .bclistcount { white-space: nowrap; }
+
+/*
+  The phone tray shares its width. Four items of content width came to 363px
+  on a 360px screen - three pixels of sideways scroll on the smallest phones.
+*/
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bctray > a,
+  [data-experience='basecamp'] .bctray > button { flex: 1 1 0; min-width: 0; }
+  [data-experience='basecamp'] .bctray > * > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/*
+  THE SMALLEST PHONES. A module header holding a title, the Mine / The team's
+  switch and the close control needed 336px at 320 wide - and one overflowing
+  header widens a phone's whole layout viewport, which is why the fixed tray
+  ran 43px off the side (pre-existing on main). Below 400px the meta takes
+  its own line under the title rather than pushing the page.
+*/
+@media (max-width: 400px) {
+  [data-experience='basecamp'] .bcmodhead { flex-wrap: wrap; row-gap: 6px; }
+  [data-experience='basecamp'] .bcmodhead .bcmodmeta {
+    order: 3;
+    flex: 1 1 100%;
+    min-width: 0;
+    text-align: left;
+  }
+}
+
+[data-experience='basecamp'] .bcattbell { display: none; }
+@media (max-width: 380px) {
+  [data-experience='basecamp'] .bcattbell { display: block; }
+  [data-experience='basecamp'] .bcattword { display: none; }
+}

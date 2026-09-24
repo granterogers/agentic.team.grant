@@ -363,7 +363,15 @@ const topRow = () => {
               ? `Attention: ${waiting} waiting on you, and you are looking at it`
               : `Attention: ${waiting} waiting on you`,
         )}">
-        Attention${waiting === 0 ? '' : ` <span class="bcstatus bcstatus--waiting">${waiting}</span>`}
+        <!--
+          The word gives way to a bell on the narrowest phones, where it was
+          taking the room the project's own name needed (the name was cut to
+          one letter at 320 wide). The accessible name above is unchanged.
+        -->
+        <svg class="bcattbell" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+          stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>
+        </svg><span class="bcattword">Attention</span>${waiting === 0 ? '' : ` <span class="bcstatus bcstatus--waiting">${waiting}</span>`}
       </button>
       <!--
         THE OFFICE'S OWN SETTINGS, OUTSIDE ANY PROJECT.

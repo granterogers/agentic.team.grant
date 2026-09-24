@@ -110,3 +110,11 @@ Trap I hit and recovered from: `git checkout -p` on an uncommitted file reverted
 | 42 | **Network drop with the page open: nothing said; the page looked current and changes looked saved** | **fixed** — `offline`/`online` listeners; strip at once; reconnect re-asks the office only when signed in. 4 new checks in `verify:basecamp-failures` (43/43), 3 proved red under sabotage |
 | 43 | Phone list count "67/200" wrapped mid-number | **fixed** |
 | — | Offline **reload** is a blank browser error page: no offline shell/service worker | **not changed** — a cache on this static deploy can serve stale builds; architectural, recorded as UX debt |
+
+## Pass 6 — responsive sweep (1280 → 320, ten widths)
+
+| # | Finding | State |
+|---|---|---|
+| 44 | **320–360px: page 43px/3px wider than the phone** — the To-dos module header (title + Mine/Team switch + close) needed 336px; one overflowing header widens a phone's layout viewport, so the fixed tray ran off-screen. **Pre-existing on `main`** (measured in the pristine worktree) | **fixed** — header meta wraps under the title below 400px; 0 overflow at 320/360/390 |
+| 45 | 320px: project chip truncated to one letter | **fixed** — "Attention" becomes a bell below 380px (accessible name unchanged) |
+| — | 1280 (12-col board) → 1180 (2-col) → 820 (1-col) transitions | inspected; no overlap, header row wraps cleanly at 820 |
