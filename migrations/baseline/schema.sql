@@ -338,6 +338,20 @@ COMMENT ON TYPE public.notify_severity IS 'Ordered by severity: enum comparison 
 
 
 --
+-- Name: obligation_state; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.obligation_state AS ENUM (
+    'working',
+    'waiting_on_user',
+    'partially_complete',
+    'fulfilled',
+    'failed',
+    'cancelled'
+);
+
+
+--
 -- Name: policy_verdict; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -522,7 +536,7 @@ CREATE FUNCTION app.action_in_words(p_action text) RETURNS jsonb
           when split_part(p_action, '.', 1) in ('office', 'ledger', 'system')
             -- These are the office acting on itself; "a office" is not a thing.
             then replace(split_part(p_action, '.', 1), '_', ' ')
-          else 'a ' || replace(split_part(p_action, '.', 1), '_', ' ')
+          else case when split_part(p_action, '.', 1) ~* '^[aeiou]' then 'an ' else 'a ' end || replace(split_part(p_action, '.', 1), '_', ' ')
         end)
   end
 $$;
@@ -730,6 +744,87 @@ $$;
 --
 
 COMMENT ON FUNCTION app.alias_is_free_among_active() IS '#45. Uniqueness among projects Grant can actually be routed to. An archived project keeps its aliases as history and no longer blocks a live one — which releases 561 phrases without deleting a single row.';
+
+
+--
+-- Name: another_pair_of_eyes(uuid, uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.another_pair_of_eyes(p_command_id uuid, p_except_under uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+declare
+  v_work jsonb;
+  v_item jsonb;
+  v_about text;
+  v_taken text[];
+  v_slug text;
+begin
+  v_work := app.conversation_work(p_command_id, interval '24 hours', p_except_under);
+
+  /*
+    Running first, then just-finished. A second opinion on work still in
+    flight is the commoner ask, and one on work that just came back is the
+    other half of #316's list.
+  */
+  v_item := coalesce((v_work -> 'in_flight') -> -1, (v_work -> 'recently_done') -> -1);
+  if v_item is null then
+    return jsonb_build_object('ok', false, 'why', 'nothing to look at again');
+  end if;
+  v_about := coalesce(v_item ->> 'about', '');
+  if btrim(v_about) = '' then
+    return jsonb_build_object('ok', false, 'why', 'nothing to look at again');
+  end if;
+
+  /* Everybody already carrying this obligation, so a second opinion is one. */
+  select coalesce(array_agg(distinct x.who), '{}')
+    into v_taken
+    from (
+      select j.recipient_agent as who
+        from jsonb_array_elements(coalesce(v_work -> 'in_flight', '[]'::jsonb)) e
+        join public.jobs j on j.job_id = (e ->> 'job')::uuid
+       where j.recipient_agent is not null
+      union
+      select j.recipient_agent
+        from jsonb_array_elements(coalesce(v_work -> 'recently_done', '[]'::jsonb)) e
+        join public.jobs j on j.job_id = (e ->> 'job')::uuid
+       where j.recipient_agent is not null
+    ) x;
+
+  /*
+    Somebody with a reason to have an opinion, then anybody at all. An empty
+    answer is the defect this migration exists to remove, so the fallback is
+    deliberate rather than tidy.
+  */
+  select k.slug into v_slug
+    from app.who_knows_about(v_about, 8) k
+   where not (k.slug = any(v_taken))
+   limit 1;
+
+  if v_slug is null then
+    select s.slug into v_slug from public.staff s
+     where s.retired_at is null
+       and not (s.slug = any(v_taken))
+     order by s.slug
+     limit 1;
+  end if;
+
+  if v_slug is null then
+    return jsonb_build_object('ok', false, 'why', 'everybody is already on it');
+  end if;
+
+  return jsonb_build_object('ok', true, 'slug', v_slug, 'about', v_about,
+                            'already_on_it', to_jsonb(v_taken));
+end;
+$$;
+
+
+--
+-- Name: FUNCTION another_pair_of_eyes(p_command_id uuid, p_except_under uuid); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.another_pair_of_eyes(p_command_id uuid, p_except_under uuid) IS 'The original obligation of this conversation and somebody not already on it, so "get another person to look at that" can put another person on it. The new sentence carries no subject, so the work comes from canonical state rather than from the words. 0561.';
 
 
 --
@@ -1363,6 +1458,110 @@ $$;
 --
 
 COMMENT ON FUNCTION app.awaiting_review(p_project uuid) IS 'What the team has made and Grant has not decided about (#28). Draft AND review: nothing has ever written the review state, so the original predicate could not match a row and the queue was empty by construction.';
+
+
+--
+-- Name: backup_health(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.backup_health() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  with finished as (
+    -- A run that got as far as writing its manifest. See the header: the
+    -- manifest is written last, so its presence is what "complete" means.
+    select split_part(o.name, '/', 1) as run, max(o.created_at) as at
+      from storage.objects o
+     where o.bucket_id = 'backups'
+       and o.name like '%manifest.json.gz'
+     group by 1
+  ),
+  partial as (
+    -- Objects with no manifest beside them: an upload that stopped halfway.
+    -- Counted rather than ignored, because it looks exactly like a backup
+    -- from the outside and would restore short.
+    select count(*) as n
+      from (select split_part(o.name, '/', 1) as run
+              from storage.objects o
+             where o.bucket_id = 'backups' and o.name like 'run-%'
+             group by 1) r
+     where not exists (select 1 from finished f where f.run = r.run)
+  ),
+  newest as (select run, at from finished order by at desc limit 1),
+  sized as (
+    select count(*) as objects, coalesce(sum((o.metadata->>'size')::bigint), 0) as bytes
+      from storage.objects o, newest n
+     where o.bucket_id = 'backups' and o.name like n.run || '/%'
+  ),
+  rehearsal as (
+    select e.occurred_at as at, e.after_state->>'outcome' as outcome
+      from public.events e
+     where e.action_type = 'backup.rehearsed'
+     order by e.occurred_at desc
+     limit 1
+  ),
+  passed as (
+    select max(e.occurred_at) as at
+      from public.events e
+     where e.action_type = 'backup.rehearsed'
+       and e.after_state->>'outcome' = 'passed'
+  ),
+  limits as (
+    select
+      coalesce((select value::text::numeric from public.system_config
+                 where key = 'backup.max_age_hours'), 36) as backup_h,
+      coalesce((select value::text::numeric from public.system_config
+                 where key = 'backup.rehearsal_max_age_hours'), 192) as rehearsal_h
+  )
+  select jsonb_build_object(
+    'newest_backup_at', (select at from newest),
+    'newest_backup_age_hours', (
+      select round(extract(epoch from (app.now_utc() - at)) / 3600.0, 1) from newest),
+    'newest_backup_objects', (select objects from sized),
+    'newest_backup_bytes', (select bytes from sized),
+    'finished_backups_kept', (select count(*) from finished),
+    'partial_uploads', (select n from partial),
+    'backup_overdue', (
+      select (select at from newest) is null
+          or extract(epoch from (app.now_utc() - (select at from newest))) / 3600.0
+             > (select backup_h from limits)),
+    'last_rehearsal_at', (select at from rehearsal),
+    'last_rehearsal_outcome', (select outcome from rehearsal),
+    'last_passing_rehearsal_at', (select at from passed),
+    'last_passing_rehearsal_age_hours', (
+      select round(extract(epoch from (app.now_utc() - at)) / 3600.0, 1) from passed),
+    'rehearsal_overdue', (
+      select (select at from passed) is null
+          or extract(epoch from (app.now_utc() - (select at from passed))) / 3600.0
+             > (select rehearsal_h from limits)),
+    'thresholds', jsonb_build_object(
+      'backup_max_age_hours', (select backup_h from limits),
+      'rehearsal_max_age_hours', (select rehearsal_h from limits)),
+    -- Stated every time rather than left to be discovered during a restore.
+    'offsite', false,
+    'offsite_note',
+      'The only copy is a private bucket in the same Supabase project it '
+      'protects. It survives losing the code, this machine and every other '
+      'vendor account; it does not survive losing the project. Sending it '
+      'elsewhere needs a new vendor account or the whole database emailed, '
+      'and that is Grant''s decision.',
+    -- The other half of RTO, and the one nothing measured: the dump excludes
+    -- the vault, so a restore today produces a working database with no
+    -- credentials in it at all.
+    'vault_exported', (
+      select coalesce((select true from public.responsibilities r
+                        where r.job_kind = 'office.vault_export' and r.enabled
+                          and r.last_run_at is not null limit 1), false))
+  )
+$$;
+
+
+--
+-- Name: FUNCTION backup_health(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.backup_health() IS 'Whether there is a recent FINISHED backup and a recently PROVEN restore — invariant 13, both halves. A manifest is what makes a run complete; a backup.rehearsed event is what makes a restore proven. States the offsite gap and the empty-vault gap rather than leaving them to a real recovery.';
 
 
 --
@@ -2157,7 +2356,7 @@ CREATE FUNCTION app.capability_index_core(p_staff text DEFAULT NULL::text) RETUR
         select ch.state, ch.detail
           from public.connection_health ch
          where ch.service = k.health_service
-         order by case ch.state when 'dead' then 0 when 'missing' then 1
+         order by (ch.purpose = 'maintains'), case ch.state when 'dead' then 0 when 'missing' then 1
                                 when 'unknown' then 2 when 'ok' then 3 else 4 end
          limit 1
       ) h on true
@@ -2175,7 +2374,7 @@ CREATE FUNCTION app.capability_index_core(p_staff text DEFAULT NULL::text) RETUR
         from public.connection_health c
        where c.service in ('Slack', 'Telegram')
          and not exists (select 1 from connectors n where n.service = c.service)
-       order by c.service,
+       order by c.service, (c.purpose = 'maintains'),
                 case c.state when 'dead' then 0 when 'missing' then 1
                              when 'unknown' then 2 else 3 end
     ) surfaces
@@ -2246,6 +2445,81 @@ $$;
 
 
 --
+-- Name: chores_for_backups(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.chores_for_backups() RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+declare
+  h jsonb;
+  v_raised int := 0;
+  v_cleared int := 0;
+  v_about text[] := '{}';
+
+  -- One helper, two chores. Written as a loop over a literal list so the two
+  -- cases cannot drift apart — an offer and its press in two places is how
+  -- they came to differ everywhere else in this repository.
+  r record;
+begin
+  h := app.backup_health();
+
+  for r in
+    select * from (values
+      ('backup:stale', (h->>'backup_overdue')::boolean,
+       'Check why the nightly backup has not finished',
+       format('The newest finished backup is %s hours old and the office '
+              'expects one every %s. Look at the last office.backup job: '
+              'npm run q -- "select state, attempt, max_attempts, state_reason '
+              'from public.jobs where kind = ''office.backup'' order by '
+              'created_at desc limit 3". A backup that is not happening is '
+              'the one failure nothing else in the office can compensate for.',
+              coalesce(h->>'newest_backup_age_hours', 'an unknown number of'),
+              h->>'backup_max_age_hours')),
+      ('backup:unproven', (h->>'rehearsal_overdue')::boolean,
+       'Prove the backup can still be restored',
+       format('The last restore rehearsal that passed was %s. A backup '
+              'nobody has restored from is a hope rather than a backup. Run '
+              'npm run backup:rehearse — it restores the newest archive into '
+              'a scratch schema, checks it, and drops it, and it now records '
+              'the verdict so this chore clears itself.',
+              coalesce(h->>'last_passing_rehearsal_at', 'never')))
+    ) as v(chore_key, broken, title, detail)
+  loop
+    if r.broken then
+      insert into public.tasks
+        (project_id, title, detail, state, priority, assigned_to_human,
+         added_by, labels, chore_key)
+      values (null, r.title, left(r.detail, 2000), 'todo', 20, true,
+              'the office', array['backup'], r.chore_key)
+      on conflict do nothing;
+      if found then
+        v_raised := v_raised + 1;
+        v_about := v_about || r.chore_key;
+      end if;
+    else
+      update public.tasks
+         set state = 'done', done_at = app.now_utc(), updated_at = app.now_utc()
+       where chore_key = r.chore_key and state <> 'done';
+      if found then v_cleared := v_cleared + 1; end if;
+    end if;
+  end loop;
+
+  return jsonb_build_object('raised', v_raised, 'cleared', v_cleared,
+                            'about', to_jsonb(v_about));
+end;
+$$;
+
+
+--
+-- Name: FUNCTION chores_for_backups(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.chores_for_backups() IS 'Raise a chore on My Tasks when there is no recent finished backup or no recently proven restore, and clear it in the same pass when there is. A chore rather than a message, for 0484''s reason: chore_key dedupes to one row instead of one message an hour, which is invariant 18 by construction.';
+
+
+--
 -- Name: chores_for_credentials(); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -2259,6 +2533,7 @@ declare
   v_raised int := 0;
   v_cleared int := 0;
   v_names text[] := '{}';
+  v_backup jsonb;
 begin
   for r in
     select service, credential, state, coalesce(action, '') as action,
@@ -2269,12 +2544,10 @@ begin
 
     if r.state in ('dead', 'missing')
        and r.action <> ''
-       /*
-          Not a parked one. Grant asked on 6 September for Groq, OpenAI and
-          OpenRouter to be left alone, and the owner column is where that
-          decision lives. A chore he has already declined is the fastest way to
-          make him stop reading the list.
-       */
+       -- Not a parked one. Grant asked on 6 September for Groq, OpenAI and
+       -- OpenRouter to be left alone, and the owner column is where that
+       -- decision lives. A chore he has already declined is the fastest way
+       -- to make him stop reading the list.
        and r.owner not ilike '%parked%'
        and r.action not ilike 'parked%'
        and r.action not ilike 'nothing%'
@@ -2284,11 +2557,9 @@ begin
          added_by, labels, chore_key)
       values (null,
               format('Reconnect %s — %s', r.service, r.credential),
-              /*
-                The office's own words for what to do, verbatim. A task that
-                says "fix Google" is a task he has to go and work out; the
-                action column already says where the button is.
-              */
+              -- The office's own words for what to do, verbatim. A task that
+              -- says "fix Google" is a task he has to go and work out; the
+              -- action column already says where the button is.
               format('%s. The office cannot do this itself: %s.',
                      r.action, case r.state when 'dead' then 'the credential is refused'
                                             else 'it is not there' end),
@@ -2299,13 +2570,10 @@ begin
         v_names := v_names || format('%s / %s', r.service, r.credential);
       end if;
     else
-      /*
-        Healthy again, parked, or nothing to do — so the chore is finished.
-
-        By the same pass that raises them, because a list that fills up and
-        never empties is one he stops trusting, and clearing is the half nobody
-        sees working.
-      */
+      -- Healthy again, parked, or nothing to do — so the chore is finished.
+      -- By the same pass that raises them, because a list that fills up and
+      -- never empties is one he stops trusting, and clearing is the half
+      -- nobody sees working.
       update public.tasks
          set state = 'done', done_at = app.now_utc(), updated_at = app.now_utc()
        where chore_key = v_key and state <> 'done';
@@ -2313,10 +2581,30 @@ begin
     end if;
   end loop;
 
+  -- 0540. The backup pass, from the door that is actually deployed. See the
+  -- header: the handler that should call it is on an unmerged branch, and a
+  -- feature that works and is not running is worth nothing tonight.
+  begin
+    v_backup := app.chores_for_backups();
+  exception when others then
+    -- Never fatal and never silent. A dead credential must still reach him if
+    -- the backup reading throws, and an unreported backup check looks exactly
+    -- like a backup that is fine.
+    v_backup := jsonb_build_object('error', left(sqlerrm, 200));
+  end;
+
   return jsonb_build_object('raised', v_raised, 'cleared', v_cleared,
-                            'about', to_jsonb(v_names));
+                            'about', to_jsonb(v_names),
+                            'backup', v_backup);
 end;
 $$;
+
+
+--
+-- Name: FUNCTION chores_for_credentials(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.chores_for_credentials() IS 'Raise and clear the chores a person has to act on: a dead credential, and (0540) the backup, by delegating to app.chores_for_backups. The delegation is here because office.chores is deployed and calls this function by name, while the handler that should call the backup pass directly is on an unmerged branch — a migration is not a deploy.';
 
 
 --
@@ -3012,7 +3300,44 @@ CREATE FUNCTION app.conversation_before(p_command_id uuid) RETURNS jsonb
            -- from `outputs` through the job, because that is the text actually
            -- delivered rather than a second copy of it.
            (select left(o.body, 700) from public.outputs o
-             where o.job_id = c.job_id order by o.created_at desc limit 1) as answered
+             where o.job_id = c.job_id order by o.created_at desc limit 1) as answered,
+           /*
+             And what the specialists this turn convened came back with.
+
+             Attributed and separate, never folded into `answered`: a
+             colleague's output is the office's own prose, and merging the two
+             would let a figure invented downstream read as something the
+             office had established. Bounded at two, because twelve turns of
+             unbounded specialist output would crowd out the material the
+             current turn is about.
+           */
+           (select jsonb_agg(x.line)
+              from (select left(o2.body, 400) as line
+                      from public.jobs k
+                      join public.outputs o2 on o2.job_id = k.job_id
+                     where k.parent_job_id = c.job_id
+                       and coalesce(trim(o2.body), '') <> ''
+                     order by o2.created_at desc
+                     limit 2) x) as colleagues,
+           /*
+             AND WHAT IS STILL IN FLIGHT FROM THAT TURN (0550).
+
+             `colleagues` is what came BACK. This is what has not: a child
+             still running, or paused with an open blocker waiting on Grant.
+
+             Live on v727: turn 0 fanned out, its child PAUSED, and three
+             turns later "so what is actually being worked on now?" was
+             answered "I don't have a current task list in the records I can
+             see." The office does not know what it is doing, because nothing
+             ever told it — the question is about the office and it was
+             answered from document retrieval.
+           */
+           (select count(*) from public.jobs k2
+             where k2.parent_job_id = c.job_id
+               and k2.state not in ('complete', 'failed', 'cancelled')) as still_going,
+           (select count(*) from public.blockers b
+             join public.jobs k3 on k3.job_id = b.job_id
+            where k3.parent_job_id = c.job_id and b.state = 'open') as waiting_on_you
       from public.inbound_commands c, self
      where c.origin_channel = self.origin_channel
        and split_part(c.origin_ref, ':', 1) = self.chat
@@ -3030,7 +3355,10 @@ CREATE FUNCTION app.conversation_before(p_command_id uuid) RETURNS jsonb
          where key = 'conversation.max_turns'), 12)
   )
   select coalesce(
-    jsonb_agg(jsonb_build_object('said', said, 'answered', answered)
+    jsonb_agg(jsonb_build_object('said', said, 'answered', answered,
+                                 'colleagues', coalesce(colleagues, '[]'::jsonb),
+                                 'stillGoing', still_going,
+                                 'waitingOnYou', waiting_on_you)
               order by received_at asc),
     '[]'::jsonb)
     from turns
@@ -3042,7 +3370,7 @@ $$;
 -- Name: FUNCTION conversation_before(p_command_id uuid); Type: COMMENT; Schema: app; Owner: -
 --
 
-COMMENT ON FUNCTION app.conversation_before(p_command_id uuid) IS 'The recent turns of one chat with one person, oldest first, with what we answered. Read by the instruction handler so a correction is understood as a correction rather than answered as a standalone sentence.';
+COMMENT ON FUNCTION app.conversation_before(p_command_id uuid) IS 'The conversation so far: what he said, what went back, and what the specialists that turn convened came back with. The last of those was missing entirely — all 56 real child jobs had written an output and not one could reach a later turn, so the office asked two specialists, they answered, and it told Grant it had nothing. Attributed under its own key rather than folded into the answer, because a colleague''s output is the office''s own prose and must not read as something established.';
 
 
 --
@@ -3379,6 +3707,153 @@ CREATE FUNCTION app.conversation_history(p_project_id uuid, p_limit integer DEFA
   -- taken from the recent end but a conversation is read forwards.
   select coalesce(jsonb_agg(r.v order by r.at), '[]'::jsonb) from recent r
 $$;
+
+
+--
+-- Name: conversation_work(uuid, interval, uuid, interval); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.conversation_work(p_command_id uuid, p_within interval DEFAULT '24:00:00'::interval, p_except_under uuid DEFAULT NULL::uuid, p_done_within interval DEFAULT '00:30:00'::interval) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  with recursive conversation as (
+    select c.origin_channel,
+           split_part(c.origin_ref, ':', 1) as chat,
+           coalesce(c.subject, c.actor) as who
+      from public.inbound_commands c
+     where c.command_id = p_command_id
+  ),
+  turns as (
+    select c.job_id
+      from public.inbound_commands c, conversation v
+     where c.origin_channel = v.origin_channel
+       and split_part(c.origin_ref, ':', 1) = v.chat
+       and coalesce(c.subject, c.actor) = v.who
+       and c.received_at >= app.now_utc() - p_within
+       and c.job_id is not null
+  ),
+  descendants as (
+    select j.job_id, j.state, j.kind, j.parent_job_id
+      from public.jobs j where j.job_id in (select job_id from turns)
+    union all
+    select k.job_id, k.state, k.kind, k.parent_job_id
+      from public.jobs k
+      join descendants d on k.parent_job_id = d.job_id
+  ),
+  /*
+    0558. Everything descended from ONE job, so the caller can ask about the
+    conversation's work EXCEPT its own turn's.
+  */
+  mine as (
+    select j.job_id from public.jobs j where j.job_id = p_except_under
+    union all
+    select k.job_id from public.jobs k join mine m on k.parent_job_id = m.job_id
+  ),
+  handed_on as (
+    select * from descendants
+     where job_id not in (select job_id from turns)
+       and (p_except_under is null or job_id not in (select job_id from mine))
+  )
+  select jsonb_build_object(
+    'in_flight', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'job', w.job_id, 'kind', w.kind, 'state', w.state,
+               'who', coalesce((select s.name from public.staff s
+                                 join public.jobs j2 on j2.job_id = w.job_id
+                                where s.slug = j2.recipient_agent), 'someone'),
+               /*
+                 0557. What it is FOR, in the words it was handed on with.
+                 The key differs by kind, so the first one present wins; a
+                 kind carrying none of them has no sentence, which is honest.
+               */
+               'about', left(coalesce(
+                 (select j3.pinned_config ->> 'request' from public.jobs j3 where j3.job_id = w.job_id),
+                 (select j3.pinned_config ->> 'brief' from public.jobs j3 where j3.job_id = w.job_id),
+                 (select j3.pinned_config ->> 'instruction' from public.jobs j3 where j3.job_id = w.job_id),
+                 ''), 240))
+               order by w.job_id)
+        from handed_on w where app.job_is_stoppable(w.state)), '[]'::jsonb),
+    'finished', coalesce((
+      select count(*)::int from handed_on w where w.state = 'complete'), 0),
+    /*
+      0559. Work that has FINISHED recently, with what it produced.
+
+      `in_flight` is stoppable work only, so a request repeated after its
+      first attempt finished had nothing to match against and duplicated —
+      observed on v741, and it is the real-traffic shape: Grant's two
+      identical PDF requests were 190 seconds apart and the first had
+      finished. #316's own case list calls this one out: previous work
+      completed means answer from the results, not start it again.
+
+      Bounded by `p_done_within` rather than the whole conversation window,
+      because "you asked me this an hour ago" and "you asked me this a minute
+      ago" deserve different answers, and only the second is somebody
+      repeating themselves because nothing arrived.
+    */
+    'recently_done', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'job', w.job_id, 'kind', w.kind,
+               'who', coalesce((select s.name from public.staff s
+                                 join public.jobs j2 on j2.job_id = w.job_id
+                                where s.slug = j2.recipient_agent), 'someone'),
+               'about', left(coalesce(
+                 (select j3.pinned_config ->> 'request' from public.jobs j3 where j3.job_id = w.job_id),
+                 (select j3.pinned_config ->> 'brief' from public.jobs j3 where j3.job_id = w.job_id),
+                 (select j3.pinned_config ->> 'instruction' from public.jobs j3 where j3.job_id = w.job_id),
+                 ''), 240),
+               /*
+                 0560. Did it actually deliver, or record that it could not?
+                 A job whose content is "I have not done this" is COMPLETE and
+                 is not an answer, and suppressing a retry against it tells
+                 Grant his repeat was unnecessary when it was the only thing
+                 that could still get him an answer.
+               */
+               'hit_trouble', exists (
+                 select 1 from public.job_impediments i where i.job_id = w.job_id),
+               'answer', left(coalesce(
+                 (select o.body from public.outputs o where o.job_id = w.job_id
+                   order by o.created_at desc limit 1), ''), 700))
+               order by w.job_id)
+        from handed_on w
+        join public.jobs jf on jf.job_id = w.job_id
+       where w.state = 'complete'
+         and jf.finished_at >= app.now_utc() - p_done_within), '[]'::jsonb),
+    /*
+      0564. What has become of what he actually asked for, by name.
+
+      `jobs.state` says one job stopped executing; this says whether the
+      OBLIGATION is still working, waiting on him, partly done or fulfilled.
+      Without a reader the model was dead weight — the dial-with-no-reader
+      defect CLAUDE.md records, and `check:callers` said so within minutes of
+      it being written.
+
+      The most recent turn of this conversation that handed anything on: the
+      one an ordinary "what is the state of that?" is about.
+    */
+    'obligation', (
+      select app.obligation_state(c.job_id)::text
+        from public.inbound_commands c, conversation v
+       where c.origin_channel = v.origin_channel
+         and split_part(c.origin_ref, ':', 1) = v.chat
+         and coalesce(c.subject, c.actor) = v.who
+         and c.job_id is not null
+         and c.received_at >= app.now_utc() - p_within
+         and exists (select 1 from public.jobs k where k.parent_job_id = c.job_id)
+       order by c.received_at desc
+       limit 1),
+    'waiting_on_you', coalesce((
+      select count(*)::int from handed_on w
+        join public.blockers b on b.job_id = w.job_id
+       where b.state = 'open'), 0))
+$$;
+
+
+--
+-- Name: FUNCTION conversation_work(p_command_id uuid, p_within interval, p_except_under uuid, p_done_within interval); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.conversation_work(p_command_id uuid, p_within interval, p_except_under uuid, p_done_within interval) IS 'What this conversation handed on and what has become of it, including the OBLIGATION state of its most recent delegating turn — as opposed to jobs.state, which says only that one job stopped executing. 0555-0564.';
 
 
 --
@@ -4820,6 +5295,62 @@ COMMENT ON FUNCTION app.enqueue_child(p_parent uuid, p_kind text, p_payload json
 
 
 --
+-- Name: enqueue_child_once(uuid, text, text, jsonb, boolean, uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.enqueue_child_once(p_parent uuid, p_kind text, p_request text, p_payload jsonb DEFAULT '{}'::jsonb, p_announce boolean DEFAULT true, p_project uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+declare
+  v_parent public.jobs;
+  v_key text;
+  v_id uuid;
+  v_live uuid;
+  v_payload jsonb;
+begin
+  select * into v_parent from public.jobs where job_id = p_parent;
+  if not found then
+    raise exception 'no job % to hang a child on', p_parent using errcode = '23503';
+  end if;
+
+  v_key := app.obligation_key(p_parent, p_kind, p_request);
+  v_payload := coalesce(p_payload, '{}'::jsonb);
+  if coalesce(btrim(p_request), '') <> ''
+     and not (v_payload ? 'request' or v_payload ? 'brief' or v_payload ? 'instruction') then
+    v_payload := v_payload || jsonb_build_object('request', p_request);
+  end if;
+
+  begin
+    insert into public.jobs
+      (parent_job_id, correlation_id, project_id, idempotency_key, kind,
+       requested_by, priority, pinned_config, announce)
+    values (
+      p_parent, v_parent.correlation_id,
+      coalesce(p_project, v_parent.project_id),
+      v_key, p_kind, v_parent.requested_by, v_parent.priority,
+      v_payload, p_announce)
+    returning job_id into v_id;
+    return jsonb_build_object('job_id', v_id, 'created', true);
+  exception when unique_violation then
+    select job_id into v_live from public.jobs
+     where idempotency_key = v_key
+       and state not in ('complete', 'cancelled', 'failed')
+     limit 1;
+    return jsonb_build_object('job_id', v_live, 'created', false);
+  end;
+end;
+$$;
+
+
+--
+-- Name: FUNCTION enqueue_child_once(p_parent uuid, p_kind text, p_request text, p_payload jsonb, p_announce boolean, p_project uuid); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.enqueue_child_once(p_parent uuid, p_kind text, p_request text, p_payload jsonb, p_announce boolean, p_project uuid) IS 'Hand work on unless this conversation is already pursuing exactly it, in which case say which job is doing it. The insert IS the check, because asking first loses the race two near-simultaneous messages create. A cancelled, failed or complete obligation frees its key, so an explicit restart needs no special case (#315). 0556.';
+
+
+--
 -- Name: enqueue_inbound(uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -4830,6 +5361,8 @@ CREATE FUNCTION app.enqueue_inbound(p_command_id uuid) RETURNS jsonb
 declare
   c record;
   v_project uuid;
+  v_scope public.project_scope_kind;
+  v_talk text;
   v_job uuid;
 begin
   select * into c from public.inbound_commands where command_id = p_command_id;
@@ -4912,6 +5445,106 @@ begin
      where m.channel_id = split_part(c.origin_ref, ':', 1)
        and m.active
        and m.project_id is not null;
+  end if;
+
+  /*
+    0547. WHICH CONVERSATION IS THIS, and what was it already about.
+
+    Everything above resolves a project from THIS message. Nothing had ever
+    asked what the conversation was already working on, so the second turn of
+    every exchange started again from nothing: a third of Grant's real
+    messages and half his voice notes carry no project, and all of them fell
+    to the Unnamed fallback below.
+
+    `project_switches` has existed since the beginning and all 169 of its rows
+    are harness traffic, because `switchTo` and `resolveProject` in
+    `src/projects/context.ts` have no importer and nothing in the resolution
+    cascade consulted `app.current_project`. The table, the writer and the
+    reader all existed and no line of code joined them - the same shape as the
+    dial with no reader, in the mechanism that decides where Grant's work
+    goes.
+
+    The conversation is the FIRST segment of origin_ref, which is what the
+    Slack branch above already assumes: `4242424242:325` is a chat and a
+    message, `C000EXAMPLE0:1790016258.057200` is a channel and a timestamp.
+  */
+  v_scope := case c.origin_channel
+               when 'telegram' then 'telegram_chat'
+               when 'slack'    then 'slack_channel'
+               when 'voice'    then 'voice'
+               when 'teamhq'   then 'dashboard'
+             end::public.project_scope_kind;
+  v_talk := nullif(split_part(coalesce(c.origin_ref, ''), ':', 1), '');
+
+  /*
+    RECORDED ONLY FROM AN EXPLICIT RESOLUTION, never from a guess.
+
+    Everything that set v_project above is a resolution: an asset's own
+    project, a project the surface named, a Slack channel's mapping. The two
+    branches BELOW are guesses - the Unnamed fallback and the
+    most-recently-updated heuristic - and writing either into the
+    conversation's memory would lock the whole exchange onto something nobody
+    said. That is the difference between inheriting context and inventing it.
+
+    Unnamed is excluded for the same reason: it is the absence of a project,
+    not a project, and a conversation that remembered it could never resolve
+    to anything else.
+
+    Idempotent by comparing with what the scope already says, so an exchange
+    that stays on one project writes one row rather than one per turn.
+  */
+  if v_project is not null
+     and v_scope is not null
+     and v_talk is not null
+     and v_project is distinct from app.unnamed_project()
+     and v_project is distinct from app.current_project(v_scope, v_talk)
+     /*
+       0548. ACTIVE only, because `project_switches` refuses anything else and
+       says why: "switching into an archived project would file new work
+       somewhere nobody is looking." Perfectly right, and 0547 put that
+       refusal in the path of every inbound message — a paused project made
+       `enqueue_inbound` RAISE, so the message was not merely mis-filed, it
+       was lost. Found by the session runner, whose fixture projects are
+       paused by ADR-0014.
+     */
+     and exists (select 1 from public.projects p
+                  where p.project_id = v_project and p.status = 'active') then
+    /*
+      And wrapped, because REMEMBERING is best-effort and DELIVERING is not.
+
+      The condition above covers the rule that exists today. A constraint
+      added to `project_switches` tomorrow would otherwise silently become a
+      way to drop Grant's messages, and no future author of that constraint
+      would think to check this path. The failure is recorded rather than
+      swallowed: `app.cannot` is what this repository uses for a write that
+      may fail without failing the work.
+    */
+    begin
+      insert into public.project_switches
+        (scope_kind, scope_ref, project_id, switched_by, reason)
+      values (v_scope, v_talk, v_project,
+              coalesce(c.subject, c.actor, 'the office'),
+              'The message resolved to this project, so the conversation is about it.');
+    exception when others then
+      null;
+    end;
+  end if;
+
+  /*
+    AND INHERITED when this message says nothing.
+
+    The invariant: once a conversation is operating in a known project, later
+    turns without an explicit one stay there until it is explicitly switched
+    or cleared. `app.current_project` already answers that, and already
+    returns nothing when the latest switch points at a fixture project (0164),
+    so a harness exchange cannot hand a real one its context.
+
+    Below the explicit routes and above both guesses, which is the whole
+    ordering argument: anything this message actually says wins, and the
+    conversation beats a fallback.
+  */
+  if v_project is null and v_scope is not null and v_talk is not null then
+    v_project := app.current_project(v_scope, v_talk);
   end if;
 
   /*
@@ -5339,9 +5972,29 @@ begin
   end if;
 
   v_count := coalesce(jsonb_array_length(p_branches), 0);
-  if v_count < 2 then
+  /*
+    0563. ONE IS ENOUGH.
+
+    This refused fewer than two branches, matching the `>= 2` gate in
+    `instruction.ts`, and canonical traffic says two has never happened:
+
+        convened specialists   real turns
+        0                      5138
+        1                         2
+        2 or more                 0
+
+    So both halves agreed with each other and neither was reachable, which is
+    CLAUDE.md's 0282/0293 trap for the third time — a caller loosened while
+    the function that pre-checks the same thing stayed strict. Lowering the
+    gate in TypeScript alone changed nothing, silently, because this returns
+    an error OBJECT rather than raising and the caller only caught throws.
+
+    Zero is still refused: a fan-in over no branches has nothing to wait for
+    and would pause for ever.
+  */
+  if v_count < 1 then
     return jsonb_build_object('error',
-      'a fan-in over fewer than two branches is just a job');
+      'a fan-in over no branches has nothing to wait for');
   end if;
   /*
     `system_config.value` is JSONB, not text.
@@ -5414,6 +6067,13 @@ begin
     'branches', v_seen, 'synthesis', v_synth);
 end;
 $$;
+
+
+--
+-- Name: FUNCTION fan_in_over(p_parent uuid, p_objective text, p_branches jsonb, p_synthesis_kind text, p_deadline timestamp with time zone); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.fan_in_over(p_parent uuid, p_objective text, p_branches jsonb, p_synthesis_kind text, p_deadline timestamp with time zone) IS 'Register a fan-in over branches that already exist, so somebody owns the answer. One branch is enough: it is the only shape real traffic produces, and office.synthesise relays a lone branch rather than synthesising it. Zero is still refused — nothing to wait for. 0563.';
 
 
 --
@@ -5778,6 +6438,33 @@ COMMENT ON FUNCTION app.free_tier_headroom() IS 'Real database and storage usage
 
 
 --
+-- Name: from_production_ingress(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.from_production_ingress() RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select exists (
+    select 1
+      from jsonb_array_elements_text(
+             coalesce(
+               (select value from public.system_config
+                 where key = 'delivery.production_ingress'),
+               '["PostgREST%"]'::jsonb)) as pattern
+     where coalesce(current_setting('application_name', true), '') like pattern
+  )
+$$;
+
+
+--
+-- Name: FUNCTION from_production_ingress(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.from_production_ingress() IS 'Whether this connection is one a real person''s message can arrive through. Read from system_config so a vendor rename is one statement (0541).';
+
+
+--
 -- Name: github_dispatch(); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -6001,10 +6688,10 @@ CREATE FUNCTION app.guess_reach(p_name text, p_description text) RETURNS jsonb
   ),
   patterns as (
     select
-      '\m(delete|destroy|remove|purge|drop|wipe|revoke|cancel|uninstall|terminate)\M' as gone,
-      '\m(pay|charge|order|purchase|buy|invoice|transfer|wire|refund|subscribe)\M' as money,
-      '\m(send|post|create|update|write|add|set|put|patch|upload|publish|invite)\M' as writes,
-      '\m(get|list|read|search|find|fetch|query|show|describe|lookup|count)\M' as looks
+      '\m(delete|destroy|remove|purge|drop|wipe|revoke|cancel|uninstall|terminate)s?\M' as gone,
+      '\m(pay|charge|order|purchase|buy|invoice|transfer|wire|refund|subscribe)s?\M' as money,
+      '\m(send|post|create|update|write|add|set|put|patch|upload|publish|invite)s?\M' as writes,
+      '\m(get|list|read|search|find|fetch|query|show|describe|lookup|count)(?:es|s)?\M' as looks
   ),
   /*
     The name is evidence and the description is a claim. Each is judged on its
@@ -6089,6 +6776,31 @@ $_$;
 
 
 --
+-- Name: harness_author(text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.harness_author(p_by text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+  select coalesce(p_by, '') like 'verify:%'
+      or coalesce(p_by, '') like 'verify-%'
+      or coalesce(p_by, '') = 'verify'
+      or coalesce(p_by, '') like '%-verification'
+      or coalesce(p_by, '') like 'gate-%'
+      or coalesce(p_by, '') = 'probe'
+      or coalesce(p_by, '') like 'purge:%'
+$$;
+
+
+--
+-- Name: FUNCTION harness_author(p_by text); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.harness_author(p_by text) IS 'Would a lesson written by this author be harness traffic? The same predicate lessons.is_fixture is GENERATED from, named so a caller can ask it BEFORE the row exists — which is what deciding whether a teaching may retire an existing rule requires. 0546: a suite-authored withdrawal retracted one of Grant''s three real standing instructions on its first run. verify:preferences asserts this agrees with is_fixture on every row.';
+
+
+--
 -- Name: harness_browsing(uuid, uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -6123,27 +6835,41 @@ CREATE FUNCTION app.harness_escapes() RETURNS jsonb
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
+  with out as (
+    select d.delivery_id, d.channel, d.target_ref, d.sent_at, j.requested_by,
+           k.issue, k.why
+      from public.deliveries d
+      join public.jobs j on j.job_id = d.job_id
+      left join public.known_escapes k on k.delivery_id = d.delivery_id
+     where app.harness_job(d.job_id)
+       and d.sent_at is not null
+       and d.created_at > app.harness_guard_since()
+  )
   select jsonb_build_object(
     'since', app.harness_guard_since(),
     'escaped', coalesce((
       select jsonb_agg(jsonb_build_object(
-               'channel', d.channel, 'target', d.target_ref,
-               'by', j.requested_by, 'at', d.sent_at) order by d.sent_at desc)
-        from public.deliveries d
-        join public.jobs j on j.job_id = d.job_id
-       where app.harness_job(d.job_id)
-         and d.sent_at is not null
-         and d.created_at > app.harness_guard_since()), '[]'::jsonb),
+               'channel', o.channel, 'target', o.target_ref,
+               'by', o.requested_by, 'at', o.sent_at,
+               'known', o.issue is not null, 'issue', o.issue)
+               order by o.sent_at desc) from out o), '[]'::jsonb),
+    'known', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'channel', o.channel, 'target', o.target_ref,
+               'by', o.requested_by, 'at', o.sent_at,
+               'issue', o.issue, 'why', o.why)
+               order by o.sent_at desc) from out o where o.issue is not null), '[]'::jsonb),
+    'new', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'channel', o.channel, 'target', o.target_ref,
+               'by', o.requested_by, 'at', o.sent_at)
+               order by o.sent_at desc) from out o where o.issue is null), '[]'::jsonb),
     'refused', coalesce((
       select count(*)::int from public.deliveries d
        where app.harness_job(d.job_id)
          and d.state = 'suppressed'
          and d.suppressed_reason like '%production destination%'
          and d.created_at > app.harness_guard_since()), 0),
-    /*
-      And the historical total, reported rather than hidden. The number is the
-      argument for the guard and nobody should have to dig for it.
-    */
     'before_the_guard', coalesce((
       select count(*)::int from public.deliveries d
        where app.harness_job(d.job_id) and d.sent_at is not null
@@ -6182,7 +6908,12 @@ CREATE FUNCTION app.harness_job(p_job_id uuid) RETURNS boolean
     SET search_path TO 'public', 'pg_catalog'
     AS $$
   select coalesce(
-    (select j.is_fixture or coalesce(p.is_fixture, false)
+    (select j.synthetic or j.is_fixture or coalesce(p.is_fixture, false)
+              or (j.pinned_config ->> 'origin_namespace') = 'verify'
+              or exists (
+                   select 1 from public.inbound_commands c
+                    where c.command_id = (j.pinned_config ->> 'command_id')::uuid
+                      and app.harness_label(c.dedupe_key))
        from public.jobs j
        left join public.projects p on p.project_id = j.project_id
       where j.job_id = p_job_id),
@@ -6194,7 +6925,7 @@ $$;
 -- Name: FUNCTION harness_job(p_job_id uuid); Type: COMMENT; Schema: app; Owner: -
 --
 
-COMMENT ON FUNCTION app.harness_job(p_job_id uuid) IS 'True when a job is harness traffic - by its own generated is_fixture, or because it belongs to a fixture PROJECT, which the generated column cannot see (#212). NULL job means not harness: an unattributable row is real.';
+COMMENT ON FUNCTION app.harness_job(p_job_id uuid) IS 'Is this job the harness talking? Four signals: the job says so, its name says so, its project says so, or the suite signed the inbound message with a verify: dedupe namespace no real adapter writes.';
 
 
 --
@@ -6260,6 +6991,29 @@ $$;
 --
 
 COMMENT ON FUNCTION app.harness_proposal(p_staff text, p_needed text) IS '#49/#272. Whether a proposal is harness traffic, DERIVED from the impediments that evidenced it rather than guessed from its wording. verify:proposes names its subject to read like a real one on purpose (#45), so no pattern over `needed` can ever be right; what a suite cannot fake is the provenance of its own jobs.';
+
+
+--
+-- Name: harness_suggestion(jsonb); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.harness_suggestion(p_offer_args jsonb) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select case
+    when p_offer_args is null then false
+    when nullif(p_offer_args ->> 'from_job', '') is null then false
+    else app.harness_job((p_offer_args ->> 'from_job')::uuid)
+  end
+$$;
+
+
+--
+-- Name: FUNCTION harness_suggestion(p_offer_args jsonb); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.harness_suggestion(p_offer_args jsonb) IS 'Whether an offer was raised by harness traffic, read from the from_job that propose_standing_rule already stores in offer_args. An offer with no job is a real one (0543, #290).';
 
 
 --
@@ -7021,6 +7775,41 @@ $$;
 
 
 --
+-- Name: hq_contact_archive(uuid, boolean); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.hq_contact_archive(p_contact_id uuid, p_put_away boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+declare
+  v_name text;
+  v_was  timestamptz;
+  v_undo uuid;
+begin
+  select name, archived_at into v_name, v_was
+    from public.contacts where contact_id = p_contact_id;
+  if not found then
+    return jsonb_build_object('error', 'no such contact');
+  end if;
+
+  update public.contacts
+     set archived_at = case when p_put_away then coalesce(archived_at, app.now_utc()) else null end
+   where contact_id = p_contact_id;
+
+  v_undo := app.undo_offer(
+    'contact.archive',
+    format('%s %s', case when p_put_away then 'Put away' else 'Brought back' end, v_name),
+    jsonb_build_object('action', 'contact_archive',
+                       'args', jsonb_build_object('p_contact_id', p_contact_id,
+                                                  'p_put_away', v_was is not null)));
+
+  return jsonb_build_object('ok', true, 'undo', v_undo, 'archived', p_put_away);
+end;
+$$;
+
+
+--
 -- Name: hq_contact_fields_set(uuid, jsonb); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -7246,6 +8035,125 @@ $$;
 
 
 --
+-- Name: hq_contact_photo_set(uuid, text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.hq_contact_photo_set(p_contact_id uuid, p_path text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+declare
+  v_was  text;
+  v_name text;
+  v_undo uuid;
+begin
+  select photo_path, name into v_was, v_name
+    from public.contacts where contact_id = p_contact_id;
+  if not found then
+    return jsonb_build_object('error', 'no such contact');
+  end if;
+
+  update public.contacts
+     set photo_path = nullif(btrim(coalesce(p_path, '')), '')
+   where contact_id = p_contact_id;
+
+  v_undo := app.undo_offer(
+    'contact.photo',
+    format('%s %s',
+           case when p_path is null or btrim(p_path) = '' then 'Removed the photograph of'
+                else 'Changed the photograph of' end,
+           v_name),
+    jsonb_build_object('action', 'contact_photo_set',
+                       'args', jsonb_build_object('p_contact_id', p_contact_id,
+                                                  'p_path', v_was)));
+
+  return jsonb_build_object('ok', true, 'undo', v_undo);
+end;
+$$;
+
+
+--
+-- Name: hq_contact_update(uuid, text, text, text, text, text, text, text, text, text, text, text, text, text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.hq_contact_update(p_contact_id uuid, p_name text DEFAULT NULL::text, p_role text DEFAULT NULL::text, p_org text DEFAULT NULL::text, p_email text DEFAULT NULL::text, p_phone text DEFAULT NULL::text, p_website text DEFAULT NULL::text, p_instagram text DEFAULT NULL::text, p_where text DEFAULT NULL::text, p_note text DEFAULT NULL::text, p_kind text DEFAULT NULL::text, p_stage text DEFAULT NULL::text, p_next text DEFAULT NULL::text, p_next_due text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+declare
+  v_was  public.contacts%rowtype;
+  v_name text := btrim(coalesce(p_name, ''));
+  v_kind text := lower(btrim(coalesce(p_kind, '')));
+  v_undo uuid;
+  v      jsonb;
+begin
+  select * into v_was from public.contacts where contact_id = p_contact_id;
+  if not found then
+    return jsonb_build_object('error', 'no such contact');
+  end if;
+  if v_was.archived_at is not null then
+    return jsonb_build_object('error', format('%s has been put away', v_was.name));
+  end if;
+
+  -- A name may be changed and may not be emptied: it is the only thing on a
+  -- contact that everything else hangs off.
+  if p_name is not null and v_name = '' then
+    return jsonb_build_object('error', 'a contact needs a name');
+  end if;
+  if v_kind <> '' and v_kind not in ('person', 'company', 'collaborator', 'supplier') then
+    return jsonb_build_object('error', format(
+      '%L is not a kind — it is one of person, company, collaborator, supplier', v_kind));
+  end if;
+
+  -- The same refusal `hq_contact_add` gives, for the same reason, because a
+  -- rename is the other door onto one field and a constraint enforced at one
+  -- door only is a constraint that is not enforced.
+  if v_name <> '' and lower(v_name) <> lower(v_was.name)
+     and exists (select 1 from public.contacts
+                  where project_id = v_was.project_id
+                    and archived_at is null
+                    and lower(btrim(name)) = lower(v_name)) then
+    return jsonb_build_object('error', format('%s is already a contact on this project', v_name));
+  end if;
+
+  update public.contacts set
+    name      = case when p_name      is null then name      else v_name end,
+    role      = case when p_role      is null then role      else btrim(p_role) end,
+    org       = case when p_org       is null then org       else btrim(p_org) end,
+    email     = case when p_email     is null then email     else btrim(p_email) end,
+    phone     = case when p_phone     is null then phone     else btrim(p_phone) end,
+    website   = case when p_website   is null then website   else btrim(p_website) end,
+    instagram = case when p_instagram is null then instagram else btrim(p_instagram) end,
+    "where"   = case when p_where     is null then "where"   else btrim(p_where) end,
+    note      = case when p_note      is null then note      else btrim(p_note) end,
+    kind      = case when v_kind = ''         then kind      else v_kind end,
+    stage     = case when p_stage     is null then stage     else btrim(p_stage) end,
+    next      = case when p_next      is null then next      else btrim(p_next) end,
+    next_due  = case when p_next_due  is null then next_due  else btrim(p_next_due) end
+  where contact_id = p_contact_id;
+
+  -- Every other writer on this table offers an undo, so this one does too.
+  v_undo := app.undo_offer(
+    'contact.update',
+    format('Changed %s', v_was.name),
+    jsonb_build_object(
+      'action', 'contact_update',
+      'args', jsonb_build_object(
+        'p_contact_id', p_contact_id,
+        'p_name', v_was.name, 'p_role', v_was.role, 'p_org', v_was.org,
+        'p_email', v_was.email, 'p_phone', v_was.phone, 'p_website', v_was.website,
+        'p_instagram', v_was.instagram, 'p_where', v_was."where", 'p_note', v_was.note,
+        'p_kind', v_was.kind, 'p_stage', v_was.stage,
+        'p_next', v_was.next, 'p_next_due', v_was.next_due)));
+
+  select jsonb_build_object('ok', true, 'id', contact_id, 'name', name, 'undo', v_undo)
+    into v from public.contacts where contact_id = p_contact_id;
+  return v;
+end;
+$$;
+
+
+--
 -- Name: hq_cost_per_outcome(integer); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -7455,118 +8363,59 @@ $$;
 
 
 --
--- Name: hq_dashboard_layout_reset(text); Type: FUNCTION; Schema: app; Owner: -
+-- Name: hq_dashboard_layout_reset(text, text); Type: FUNCTION; Schema: app; Owner: -
 --
 
-CREATE FUNCTION app.hq_dashboard_layout_reset(p_slug text) RETURNS jsonb
+CREATE FUNCTION app.hq_dashboard_layout_reset(p_slug text, p_surface text DEFAULT 'studio'::text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public', 'pg_catalog'
+    SET search_path TO ''
     AS $$
 declare
   v_project uuid;
 begin
-  select project_id into v_project
-    from public.projects
-   where slug = p_slug and status = 'active';
+  select project_id into v_project from public.projects where slug = p_slug;
   if v_project is null then
-    return jsonb_build_object('error', format('no active dashboard project called %s', p_slug));
+    return jsonb_build_object('error', format('no project called %L', p_slug));
   end if;
   delete from public.dashboard_layouts
-   where project_id = v_project and owner = 'grant';
-  return jsonb_build_object('ok', true);
+   where project_id = v_project and owner = 'grant' and surface = coalesce(p_surface, 'studio');
+  return jsonb_build_object('ok', true, 'reset', true);
 end;
 $$;
 
 
 --
--- Name: hq_dashboard_layout_set(text, jsonb); Type: FUNCTION; Schema: app; Owner: -
+-- Name: hq_dashboard_layout_set(text, jsonb, text); Type: FUNCTION; Schema: app; Owner: -
 --
 
-CREATE FUNCTION app.hq_dashboard_layout_set(p_slug text, p_panels jsonb) RETURNS jsonb
+CREATE FUNCTION app.hq_dashboard_layout_set(p_slug text, p_panels jsonb, p_surface text DEFAULT 'studio'::text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public', 'pg_catalog'
+    SET search_path TO ''
     AS $$
 declare
   v_project uuid;
-  v_bad     int;
-  v_was     jsonb;
-  v_undo    uuid;
 begin
-  select project_id into v_project
-    from public.projects
-   where slug = p_slug and status = 'active';
+  select project_id into v_project from public.projects where slug = p_slug;
   if v_project is null then
-    return jsonb_build_object('error', format('no active dashboard project called %s', p_slug));
+    return jsonb_build_object('error', format('no project called %L', p_slug));
   end if;
-
-  if jsonb_typeof(p_panels) <> 'array' then
-    return jsonb_build_object('error', 'panels must be an array');
+  if coalesce(p_surface, '') not in ('studio', 'basecamp') then
+    return jsonb_build_object('error', format('%L is not a surface', p_surface));
   end if;
-
-  select panels into v_was
-    from public.dashboard_layouts
-   where project_id = v_project and owner = 'grant';
-
-  -- Nothing left on the board is a reset, not a layout.
-  if jsonb_array_length(p_panels) = 0 then
+  -- ADR-0021: an empty layout is a RESET, never a stored value. `[]` cannot be
+  -- told apart from a layout that failed to load, so the row goes and the
+  -- default comes back -- enforced here rather than only in the page.
+  if p_panels is null or jsonb_typeof(p_panels) <> 'array'
+     or jsonb_array_length(p_panels) = 0 then
     delete from public.dashboard_layouts
-     where project_id = v_project and owner = 'grant';
-    if v_was is not null then
-      v_undo := app.undo_offer(
-        'dashboard.layout',
-        format('Emptied the board on %s', p_slug),
-        jsonb_build_object('action', 'dashboard_layout_set',
-                           'args', jsonb_build_object('p_slug', p_slug, 'p_panels', v_was)));
-    end if;
-    return jsonb_build_object('ok', true, 'panels', 0, 'undo', v_undo,
-      'note', 'the board was emptied, so it is back to its default');
+     where project_id = v_project and owner = 'grant' and surface = p_surface;
+    return jsonb_build_object('ok', true, 'reset', true);
   end if;
-
-  -- `coalesce(..., 'missing')`, so an absent key is a failure rather than a
-  -- NULL that the WHERE clause quietly drops.
-  select count(*) into v_bad
-    from jsonb_array_elements(p_panels) e
-   where coalesce(jsonb_typeof(e), 'missing') <> 'object'
-      or coalesce(jsonb_typeof(e -> 'id'), 'missing') <> 'string'
-      or coalesce(jsonb_typeof(e -> 'x'), 'missing') <> 'number'
-      or coalesce(jsonb_typeof(e -> 'y'), 'missing') <> 'number'
-      or coalesce(jsonb_typeof(e -> 'w'), 'missing') <> 'number'
-      or coalesce(jsonb_typeof(e -> 'h'), 'missing') <> 'number';
-  if v_bad > 0 then
-    return jsonb_build_object('error',
-      format('%s panel(s) are not {id, x, y, w, h} -- nothing was saved', v_bad));
-  end if;
-
-  insert into public.dashboard_layouts (project_id, owner, panels, updated_at)
-  values (v_project, 'grant', p_panels, now())
-  on conflict (owner, project_id)
-    do update set panels = excluded.panels, updated_at = now();
-
-  /*
-    There are two inverses here and they are different operations.
-
-    If an arrangement existed, undo restores it. If there was NONE — this is
-    the first time the board has been arranged — undo has to REMOVE the row,
-    not write an empty one, because a saved empty arrangement and no saved
-    arrangement are different states: the second falls back to the default and
-    the first does not. `dashboard_layout_reset` is that operation and it
-    already exists.
-  */
-  if v_was is null then
-    v_undo := app.undo_offer(
-      'dashboard.layout',
-      format('Arranged the board on %s', p_slug),
-      jsonb_build_object('action', 'dashboard_layout_reset',
-                         'args', jsonb_build_object('p_slug', p_slug)));
-  elsif v_was is distinct from p_panels then
-    v_undo := app.undo_offer(
-      'dashboard.layout',
-      format('Rearranged the board on %s', p_slug),
-      jsonb_build_object('action', 'dashboard_layout_set',
-                         'args', jsonb_build_object('p_slug', p_slug, 'p_panels', v_was)));
-  end if;
-
-  return jsonb_build_object('ok', true, 'panels', jsonb_array_length(p_panels), 'undo', v_undo);
+  insert into public.dashboard_layouts (owner, project_id, surface, panels, updated_at)
+  values ('grant', v_project, p_surface, p_panels, app.now_utc())
+  on conflict (owner, project_id, surface)
+    do update set panels = excluded.panels, updated_at = excluded.updated_at;
+  return jsonb_build_object('ok', true, 'panels', jsonb_array_length(p_panels));
 end;
 $$;
 
@@ -7863,6 +8712,80 @@ $$;
 
 
 --
+-- Name: hq_document_link(uuid, text, text, text, text, text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.hq_document_link(p_project_id uuid, p_connector text, p_external_ref text, p_title text, p_mime text DEFAULT NULL::text, p_source_title text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+declare
+  v_title text := btrim(coalesce(p_title, ''));
+  v_conn  text := lower(btrim(coalesce(p_connector, '')));
+  v_ref   text := btrim(coalesce(p_external_ref, ''));
+  v_mime  text := lower(btrim(coalesce(p_mime, '')));
+  v_kind  text;
+  v_id    uuid;
+  v_new   boolean;
+begin
+  if v_title = '' then
+    return jsonb_build_object('error', 'that file has no name to file it under');
+  end if;
+  if v_ref = '' then
+    return jsonb_build_object('error', 'nothing said which file this is');
+  end if;
+  if v_conn not in ('drive', 'notion', 'notebooklm', 'github', 'mcp', 'upload') then
+    return jsonb_build_object('error', format('%L is not a connector this office reads', v_conn));
+  end if;
+  if not exists (select 1 from public.projects
+                  where project_id = p_project_id and coalesce(status, '') <> 'archived') then
+    return jsonb_build_object('error', 'no such dashboard project');
+  end if;
+
+  v_kind := case
+    when v_mime = 'application/vnd.google-apps.folder' then 'folder'
+    when v_mime = 'application/vnd.google-apps.document' then 'google-doc'
+    when v_mime = 'application/vnd.google-apps.spreadsheet' then 'google-sheet'
+    when v_mime = 'application/vnd.google-apps.presentation' then 'google-slides'
+    when v_mime = 'application/vnd.google-apps.form' then 'google-form'
+    when v_mime = 'application/pdf' then 'pdf'
+    when v_mime like 'image/%' then 'image'
+    when v_mime like 'audio/%' then 'audio'
+    when v_mime like 'video/%' then 'video'
+    when v_mime like 'text/%' then 'text'
+    else 'file'
+  end;
+  if v_kind = 'folder' then
+    return jsonb_build_object('error', 'that is a folder — pick a file inside it');
+  end if;
+
+  insert into public.documents
+    (project_id, connector, external_ref, title, source_title,
+     origin, state, added_by, doc_type)
+  values
+    (p_project_id, v_conn, v_ref, v_title,
+     nullif(btrim(coalesce(p_source_title, '')), ''),
+     'source', 'approved', 'grant', v_kind)
+  -- The narrow index above, and its predicate written out: a conflict target
+  -- without the same predicate matches no index and the insert fails, which is
+  -- how a sync once stored zero rows for a whole run.
+  on conflict (connector, external_ref)
+    where external_ref is not null and external_parent_ref is null
+    do update set
+      title        = excluded.title,
+      doc_type     = excluded.doc_type,
+      source_title = coalesce(excluded.source_title, public.documents.source_title),
+      project_id   = excluded.project_id,
+      updated_at   = app.now_utc()
+  returning document_id, (xmax = 0) into v_id, v_new;
+
+  return jsonb_build_object('ok', true, 'id', v_id, 'added', v_new,
+                            'title', v_title, 'kind', v_kind);
+end;
+$$;
+
+
+--
 -- Name: hq_document_move(uuid, uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -7925,6 +8848,71 @@ begin
 
   return jsonb_build_object('moved', true, 'to', v_to_name,
                             'from', v_was_name, 'undo', v_undo);
+end;
+$$;
+
+
+--
+-- Name: hq_document_order_reset(text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.hq_document_order_reset(p_slug text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare v_project uuid;
+begin
+  select project_id into v_project from public.projects where slug = p_slug;
+  if v_project is null then
+    return jsonb_build_object('error', format('no project called %L', p_slug));
+  end if;
+  delete from public.document_orders where project_id = v_project and owner = 'grant';
+  return jsonb_build_object('ok', true, 'reset', true);
+end;
+$$;
+
+
+--
+-- Name: hq_document_order_set(text, jsonb); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.hq_document_order_set(p_slug text, p_ids jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_project uuid;
+  v_clean jsonb;
+begin
+  select project_id into v_project from public.projects where slug = p_slug;
+  if v_project is null then
+    return jsonb_build_object('error', format('no project called %L', p_slug));
+  end if;
+  if p_ids is null or jsonb_typeof(p_ids) <> 'array' or jsonb_array_length(p_ids) = 0 then
+    delete from public.document_orders where project_id = v_project and owner = 'grant';
+    return jsonb_build_object('ok', true, 'reset', true);
+  end if;
+  -- Only documents that are really on this project, in the order given, each
+  -- once. A list carrying an id from somewhere else would quietly reorder
+  -- nothing and look like a save that worked.
+  select coalesce(jsonb_agg(to_jsonb(x.id) order by x.ord), '[]'::jsonb) into v_clean
+    from (
+      select distinct on (e.value #>> '{}') (e.value #>> '{}')::uuid as id, e.ordinality as ord
+        from jsonb_array_elements(p_ids) with ordinality as e(value, ordinality)
+       where exists (
+         select 1 from public.documents d
+          where d.document_id = (e.value #>> '{}')::uuid and d.project_id = v_project
+       )
+       order by e.value #>> '{}', e.ordinality
+    ) x;
+  if jsonb_array_length(v_clean) = 0 then
+    return jsonb_build_object('error', 'none of those documents are on this project');
+  end if;
+  insert into public.document_orders (owner, project_id, doc_ids, updated_at)
+  values ('grant', v_project, v_clean, app.now_utc())
+  on conflict (owner, project_id)
+    do update set doc_ids = excluded.doc_ids, updated_at = excluded.updated_at;
+  return jsonb_build_object('ok', true, 'kept', jsonb_array_length(v_clean));
 end;
 $$;
 
@@ -8268,8 +9256,9 @@ CREATE FUNCTION app.hq_governance(p_limit integer DEFAULT 40) RETURNS jsonb
                'at', s.raised_at
              ) order by (s.state = 'open') desc, s.weight desc, s.raised_at desc),
              '[]'::jsonb)
-        from (select * from public.suggestions
-               order by (state = 'open') desc, weight desc, raised_at desc
+        from (select * from public.suggestions g
+               where not app.harness_suggestion(g.offer_args)
+               order by (g.state = 'open') desc, g.weight desc, g.raised_at desc
                limit greatest(coalesce(p_limit, 40), 1)) s
         left join public.projects p on p.project_id = s.project_id
     ),
@@ -8473,6 +9462,60 @@ CREATE FUNCTION app.hq_office_chat() RETURNS jsonb
       (select value #>> '{}' from public.system_config where key = 'telegram.direct_to_grant'), '')
   );
 $$;
+
+
+--
+-- Name: hq_output(uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.hq_output(p_output_id uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select jsonb_build_object(
+           'id', o.output_id,
+           -- WHAT IT IS CALLED, and jobs have no title to take it from.
+           -- `understood_as` is what the office understood the request to be,
+           -- which is the nearest true thing: an output's name is the question
+           -- it answers. Guessing a column called `subject` cost one migration
+           -- here, which is the trap this file's neighbours keep recording.
+           'title', coalesce(nullif(btrim(j.understood_as), ''), j.kind, 'Untitled'),
+           'body', o.body,
+           'kind', o.shape,
+           'who', coalesce(st.name, st.slug, 'The team'),
+           'made', o.created_at,
+           'confidence', o.confidence,
+           -- `evidence` is an enum and `sources` is already jsonb. Both were
+           -- guessed as text and an array on the first pass, which is two more
+           -- entries for the list of columns whose type has to be READ.
+           'evidence', o.evidence::text,
+           'sources', coalesce(o.sources, '[]'::jsonb),
+           'reviewed', o.reviewer_status,
+           'reviewed_at', o.reviewed_at,
+           -- What was asked for, which is the other half of reading an answer.
+           'asked', j.understood_as,
+           'job_kind', j.kind,
+           'project', p.name,
+           'project_slug', p.slug,
+           -- Whether it has already become a document, so the surface can
+           -- offer the one action that is still available rather than both.
+           'imported', exists (
+             select 1 from public.documents d where d.produced_by_job = o.job_id
+           )
+         )
+    from public.outputs o
+    join public.jobs j on j.job_id = o.job_id
+    left join public.staff st on st.staff_id = o.staff_id
+    left join public.projects p on p.project_id = j.project_id
+   where o.output_id = p_output_id
+$$;
+
+
+--
+-- Name: FUNCTION hq_output(p_output_id uuid); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.hq_output(p_output_id uuid) IS 'One output, with the body and the provenance -- what was asked, who answered, what they read and how sure they were (§19).';
 
 
 --
@@ -10412,6 +11455,10 @@ CREATE FUNCTION app.hq_studio_core() RETURNS jsonb
             order by tk.due_on limit 1) as next,
 
           app.studio_documents(p.project_id) as documents,
+
+          -- The order he put them in (§§29-31), or nothing if he has not.
+          (select o.doc_ids from public.document_orders o
+            where o.project_id = p.project_id and o.owner = 'grant') as doc_order,
           app.studio_tasks(p.project_id)     as tasks,
           app.studio_sources(p.project_id)   as sources,
           app.studio_activity(p.project_id)  as activity,
@@ -10445,7 +11492,17 @@ CREATE FUNCTION app.hq_studio_core() RETURNS jsonb
 
           -- The arrangement he made, so it is his on every device (#81).
           (select l.panels from public.dashboard_layouts l
-            where l.project_id = p.project_id and l.owner = 'grant') as layout,
+            where l.project_id = p.project_id and l.owner = 'grant'
+              and l.surface = 'studio') as layout,
+
+          -- And the experiment's, which is a DIFFERENT arrangement of a
+          -- different board: twelve columns and heights in rows, where the
+          -- studio's is three columns and heights in pixels. One row per
+          -- surface is what #299 was waiting for; before it, saving one would
+          -- have taken panels off the other.
+          (select l.panels from public.dashboard_layouts l
+            where l.project_id = p.project_id and l.owner = 'grant'
+              and l.surface = 'basecamp') as layout_board,
 
           -- What the project LOOKS like, when he has said (#83).
           p.icon, p.icon_hue as "iconHue", p.image
@@ -10522,7 +11579,8 @@ CREATE FUNCTION app.hq_studio_lately(p_limit integer DEFAULT 40) RETURNS jsonb
            p.name as project_name
       from public.events e
       left join public.projects p on p.project_id = e.project_id
-     where p.project_id is null or not p.is_fixture
+     where (p.project_id is null or not p.is_fixture)
+       and not app.harness_label(e.actor)
      order by e.occurred_at desc
      limit greatest(coalesce(p_limit, 40), 1) * 10
   ),
@@ -10588,6 +11646,7 @@ CREATE FUNCTION app.hq_studio_lately(p_limit integer DEFAULT 40) RETURNS jsonb
                    from public.events e
                    left join public.projects p on p.project_id = e.project_id
                   where e.occurred_at > app.now_utc() - interval '24 hours'
+                    and not app.harness_label(e.actor)
                     and (p.project_id is null or not p.is_fixture)),
       'jobs_done', (select count(*)::int from public.jobs j
                      where not app.harness_job(j.job_id) and j.state = 'complete'
@@ -10837,8 +11896,8 @@ CREATE FUNCTION app.hq_studio_settings() RETURNS jsonb
              -- standing instruction: full instructions every time, never
              -- "you know the one".
              'steps', case c.key
-               when 'telegram' then 'Open Telegram and message the bot named in "Who" below. It answers as Claire. A thumbs up or down on any reply teaches the office something.'
-               when 'slack' then 'The office posts to one channel per dashboard project, plus a queue channel. Reacting with a thumbs up or down is read as feedback.'
+               when 'telegram' then 'Open Telegram and message the bot named in "Who" below. It answers as Claire. A thumbs down on any reply asks what you would have preferred and takes your answer as an instruction. A thumbs up is recorded only.'
+               when 'slack' then 'The office posts to one channel per dashboard project, plus a queue channel. A thumbs up or down here is recorded but not yet acted on. To correct an answer, reply in the channel and it is taken as an instruction.'
                when 'voice' then 'Press "Call the team" in the sidebar. The browser asks for the microphone once. Talk over her whenever you like.'
                when 'mail' then 'Read only. The office can search and draft, and cannot send: section 11 keeps sending off by policy whatever the permission allows.'
                else '' end
@@ -11265,6 +12324,35 @@ begin
     -- #130, migration 0398.
     when 'tasks_from_job' then
       v_did := app.undo_tasks_from_job((v_args ->> 'p_job')::uuid);
+    -- The four the writers have always recorded and this case never knew
+    -- about (0572). Each one calls the same function the dashboard calls,
+    -- so undoing goes through the same door as doing.
+    when 'contact_update' then
+      v_did := app.hq_contact_update((v_args ->> 'p_contact_id')::uuid,
+                                     v_args ->> 'p_name', v_args ->> 'p_role',
+                                     v_args ->> 'p_org', v_args ->> 'p_email',
+                                     v_args ->> 'p_phone', v_args ->> 'p_website',
+                                     v_args ->> 'p_instagram', v_args ->> 'p_where',
+                                     v_args ->> 'p_note', v_args ->> 'p_kind',
+                                     v_args ->> 'p_stage', v_args ->> 'p_next',
+                                     v_args ->> 'p_next_due');
+    when 'contact_archive' then
+      v_did := app.hq_contact_archive((v_args ->> 'p_contact_id')::uuid,
+                                      (v_args ->> 'p_put_away')::boolean);
+    when 'contact_photo_set' then
+      v_did := app.hq_contact_photo_set((v_args ->> 'p_contact_id')::uuid,
+                                        v_args ->> 'p_path');
+    when 'document_rename' then
+      v_did := app.rename_document((v_args ->> 'p_document')::uuid,
+                                   v_args ->> 'p_title');
+    -- The two no row could show, because nobody had used either yet
+    -- (0573). Found by reading the writers rather than the rows.
+    when 'document_move' then
+      v_did := app.hq_document_move((v_args ->> 'p_document_id')::uuid,
+                                    (v_args ->> 'p_project_id')::uuid);
+    when 'document_restore' then
+      v_did := app.hq_document_restore((v_args ->> 'p_document_id')::uuid,
+                                       v_args ->> 'p_state');
     else
       -- A reversal naming something this function cannot perform is a bug in
       -- whoever recorded it, and raising rolls back the claim so the offer is
@@ -11734,6 +12822,86 @@ COMMENT ON FUNCTION app.job_depth(p_job_id uuid) IS 'How many parents a job has 
 
 
 --
+-- Name: job_inherits_synthetic(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.job_inherits_synthetic() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_command uuid;
+  v_mark boolean;
+begin
+  -- An explicit true is never softened. A caller that already knows this is
+  -- synthetic outranks anything derived.
+  if new.synthetic then
+    return new;
+  end if;
+
+  if new.parent_job_id is not null then
+    select j.synthetic into v_mark from public.jobs j where j.job_id = new.parent_job_id;
+    if coalesce(v_mark, false) then
+      new.synthetic := true;
+    end if;
+    return new;
+  end if;
+
+  -- app.enqueue_inbound composes this key. The uuid cast is guarded because
+  -- the column is free text and a malformed key must not raise inside an
+  -- insert -- a guard that breaks the write it protects is worse than no
+  -- guard.
+  if new.idempotency_key like 'inbound-%' then
+    begin
+      v_command := substring(new.idempotency_key from 9)::uuid;
+    exception when others then
+      return new;
+    end;
+    select c.synthetic into v_mark
+      from public.inbound_commands c where c.command_id = v_command;
+    if coalesce(v_mark, false) then
+      new.synthetic := true;
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+
+--
+-- Name: FUNCTION job_inherits_synthetic(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.job_inherits_synthetic() IS 'Carry the synthetic mark onto a job from its lineage: a child from its parent, an inbound job from its command. Never from the connection, because a worker running degraded on the Management API fallback must not stop delivering real answers (0542).';
+
+
+--
+-- Name: job_is_stoppable(public.job_state); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.job_is_stoppable(p_state public.job_state) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+  /*
+    Derived from the transition table rather than restated. A state gains or
+    loses the ability to be cancelled in ONE place, and this follows it.
+  */
+  select exists (
+    select 1 from app.job_transitions_allowed
+     where from_state = p_state and to_state = 'cancelled')
+$$;
+
+
+--
+-- Name: FUNCTION job_is_stoppable(p_state public.job_state); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.job_is_stoppable(p_state public.job_state) IS 'Whether a job in this state can legally be cancelled, read off app.job_transitions_allowed rather than restated as a third list. 0555.';
+
+
+--
 -- Name: job_plan(uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -12065,6 +13233,61 @@ COMMENT ON FUNCTION app.jobs_waiting(p_minutes integer) IS 'Work accepted and ne
 
 
 --
+-- Name: journal_terminal_failure(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.journal_terminal_failure() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+begin
+  -- Only the edge into failure. A job already failed that is touched again is
+  -- not a new death, and `jobs_touch_updated_at` guarantees updates are common.
+  if new.state <> 'failed' or old.state = 'failed' then
+    return null;
+  end if;
+
+  -- The three careful call sites write theirs first, so this is how they win.
+  if exists (
+    select 1 from public.job_impediments i where i.job_id = new.job_id
+  ) then
+    return null;
+  end if;
+
+  begin
+    insert into public.job_impediments
+      (job_id, project_id, staff_slug, kind, needed_raw, detail, understood_as,
+       noticed_by)
+    values (
+      new.job_id,
+      new.project_id,
+      new.recipient_agent,
+      'not_capable',
+      left('to finish ' || new.kind, 64),
+      left(coalesce(nullif(btrim(new.state_reason), ''),
+                    'it failed without saying why'), 500),
+      left(new.kind || ' ended in failure and produced nothing', 280),
+      'the job machinery'
+    );
+  exception when others then
+    -- Deliberately swallowed. See the header: a failure that cannot be
+    -- journalled must still be allowed to finish failing.
+    null;
+  end;
+
+  return null;
+end;
+$$;
+
+
+--
+-- Name: FUNCTION journal_terminal_failure(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.journal_terminal_failure() IS 'Every terminal job failure leaves a durable trace, whichever layer caused it. Stands aside where a call site has already written a better one. Added after the 17 September nightly backup died silently through app.recover_stalled_jobs, which is SQL and was unreachable from the three places the worker had learned this rule.';
+
+
+--
 -- Name: judge_consultation(uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -12156,6 +13379,50 @@ $$;
 
 
 --
+-- Name: last_progress(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.last_progress() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select jsonb_build_object(
+    -- Not "did the heartbeat fire". app.kick_worker() returns null silently
+    -- when its secret is missing and cron records `succeeded, 1 row` either
+    -- way, so the cron log cannot answer this and never could.
+    'last_dequeue_at', (
+      select max(t.occurred_at) from public.job_state_transitions t
+       where t.to_state = 'running'),
+    'last_completion_at', (
+      select max(t.occurred_at) from public.job_state_transitions t
+       where t.to_state = 'complete'),
+    'last_delivery_at', (select max(d.sent_at) from public.deliveries d
+                          where d.state = 'sent'),
+    'minutes_since_dequeue', (
+      select round(extract(epoch from (app.now_utc() - max(t.occurred_at))) / 60.0)
+        from public.job_state_transitions t where t.to_state = 'running'),
+    'minutes_since_completion', (
+      select round(extract(epoch from (app.now_utc() - max(t.occurred_at))) / 60.0)
+        from public.job_state_transitions t where t.to_state = 'complete'),
+    -- A queue with nothing in it and no recent completion is IDLE, not stuck,
+    -- and the difference is the whole reason this is reported beside the
+    -- waiting count rather than instead of it.
+    'runnable_now', (
+      select count(*) from public.jobs j
+       where j.state in ('queued', 'retrying')
+         and not app.harness_job(j.job_id))
+  )
+$$;
+
+
+--
+-- Name: FUNCTION last_progress(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.last_progress() IS 'When work last actually MOVED — dequeued, completed, delivered — beside how much is runnable now. A green heartbeat is not progress: the whole fifteen-hour outage happened while cron logged 1,440 successes.';
+
+
+--
 -- Name: learn(public.lesson_scope, text, text, uuid, text, text, uuid, numeric, uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -12226,20 +13493,23 @@ COMMENT ON FUNCTION app.learn(p_scope public.lesson_scope, p_body text, p_learne
 
 
 --
--- Name: lessons_for(uuid, text, text, integer); Type: FUNCTION; Schema: app; Owner: -
+-- Name: lessons_for(uuid, text, text, integer, boolean); Type: FUNCTION; Schema: app; Owner: -
 --
 
-CREATE FUNCTION app.lessons_for(p_project_id uuid DEFAULT NULL::uuid, p_staff_slug text DEFAULT NULL::text, p_job_kind text DEFAULT NULL::text, p_limit integer DEFAULT 8) RETURNS TABLE(lesson_id uuid, scope public.lesson_scope, body text, observations integer, confidence numeric, learned_by text, created_at timestamp with time zone)
+CREATE FUNCTION app.lessons_for(p_project_id uuid DEFAULT NULL::uuid, p_staff_slug text DEFAULT NULL::text, p_job_kind text DEFAULT NULL::text, p_limit integer DEFAULT 8, p_include_harness boolean DEFAULT false) RETURNS TABLE(lesson_id uuid, scope public.lesson_scope, body text, observations integer, confidence numeric, learned_by text, created_at timestamp with time zone)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
   select l.lesson_id, l.scope, l.body, l.observations, l.confidence,
          l.learned_by, l.created_at
     from public.lessons_live l
-   where (l.scope = 'global')
+   where (p_include_harness
+          or (not l.is_fixture
+              and not coalesce(app.harness_job(l.from_job), false)))
+     and ((l.scope = 'global')
       or (l.scope = 'project' and l.project_id = p_project_id)
       or (l.scope = 'staff'   and l.staff_slug = p_staff_slug)
-      or (l.scope = 'kind'    and l.job_kind   = p_job_kind)
+      or (l.scope = 'kind'    and l.job_kind   = p_job_kind))
    order by
      -- Specificity first. The general lesson is usually already reflected in
      -- how the office is built; the specific one is what nobody knew.
@@ -12252,10 +13522,10 @@ $$;
 
 
 --
--- Name: FUNCTION lessons_for(p_project_id uuid, p_staff_slug text, p_job_kind text, p_limit integer); Type: COMMENT; Schema: app; Owner: -
+-- Name: FUNCTION lessons_for(p_project_id uuid, p_staff_slug text, p_job_kind text, p_limit integer, p_include_harness boolean); Type: COMMENT; Schema: app; Owner: -
 --
 
-COMMENT ON FUNCTION app.lessons_for(p_project_id uuid, p_staff_slug text, p_job_kind text, p_limit integer) IS 'The lessons a job should be told, scoped and ranked by specificity then weight of evidence. Capped by the caller, because a chat turn and an overnight research job can afford different amounts.';
+COMMENT ON FUNCTION app.lessons_for(p_project_id uuid, p_staff_slug text, p_job_kind text, p_limit integer, p_include_harness boolean) IS 'Standing instructions for a prompt. Excludes a lesson a suite named itself in (lessons.is_fixture, 0539) AND one taught during a harness job, which that flag cannot see because it is GENERATED and may only read its own row: 12 of the 15 lessons reaching a real prompt were the second kind, including two contradictory prices for Grant''s middle tier. A null from_job is kept, because an absent witness excludes nothing. p_include_harness is for a suite driving this function, never production.';
 
 
 --
@@ -13639,7 +14909,7 @@ CREATE FUNCTION app.morning_briefing_facts() RETURNS jsonb
              'still_going', count(*) filter (where j.state in ('queued', 'running'))
            ) as v
       from public.jobs j
-     where not j.is_fixture
+     where not app.harness_job(j.job_id)
        and j.updated_at >= app.now_utc() - interval '18 hours'
   ),
 
@@ -13654,7 +14924,7 @@ CREATE FUNCTION app.morning_briefing_facts() RETURNS jsonb
            ) order by j.updated_at), '[]'::jsonb) as v
       from public.jobs j
       left join public.projects p on p.project_id = j.project_id
-     where not j.is_fixture
+     where not app.harness_job(j.job_id)
        and j.state in ('waiting_external', 'waiting_user', 'retrying', 'paused')
        and j.updated_at < app.now_utc() - interval '2 hours'
   ),
@@ -13903,6 +15173,75 @@ $$;
 --
 
 COMMENT ON FUNCTION app.my_task_recent(p_within interval) IS 'The task a follow-up means by "that" (#259): the most recently created open personal task inside a short window, or null. Deliberately not a title match — a fuzzy match is one bad guess away from editing the wrong row.';
+
+
+--
+-- Name: my_task_referent(uuid, interval); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.my_task_referent(p_command_id uuid, p_within interval DEFAULT '02:00:00'::interval) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  with conversation as (
+    select c.origin_channel,
+           split_part(c.origin_ref, ':', 1) as chat,
+           coalesce(c.subject, c.actor) as who
+      from public.inbound_commands c
+     where c.command_id = p_command_id
+  ),
+  mine as (
+    select c.job_id, c.received_at
+      from public.inbound_commands c, conversation v
+     where c.origin_channel = v.origin_channel
+       and split_part(c.origin_ref, ':', 1) = v.chat
+       and coalesce(c.subject, c.actor) = v.who
+       and c.received_at >= app.now_utc() - p_within
+  ),
+  /*
+    When this exchange began, inside the bound. Null when there is no
+    conversation at all, and a null compares false, so a lookup with no
+    antecedent offers no loose task rather than the newest one.
+
+    0554. This is 0552's bound restored. 0553 replaced it with the window
+    itself, which let a task that predates the whole conversation — even one
+    on another channel — be handed over as the referent.
+  */
+  began as (select min(received_at) as at from mine),
+  candidates as (
+    select t.task_id, t.title, t.due_on, t.priority, t.created_at
+      from public.tasks t, began b
+     where t.assigned_to_human
+       and t.state not in ('done', 'cancelled')
+       and not app.harness_task(t.is_fixture, t.job_id)
+       and (
+         -- the office made it, in this conversation
+         t.job_id in (select job_id from mine where job_id is not null)
+         -- or he made it himself, since this conversation began
+         or (t.job_id is null and b.at is not null and t.created_at >= b.at)
+       )
+     order by t.seq desc nulls last, t.created_at desc
+  )
+  select case
+           when (select count(*) from candidates) = 1
+             then (select jsonb_build_object(
+                     'id', task_id, 'title', title, 'due_on', due_on,
+                     'priority', priority, 'created_at', created_at)
+                     from candidates)
+           when (select count(*) from candidates) > 1
+             then jsonb_build_object(
+                    'ambiguous', (select count(*) from candidates),
+                    'titles', (select jsonb_agg(title) from candidates))
+           else null
+         end
+$$;
+
+
+--
+-- Name: FUNCTION my_task_referent(p_command_id uuid, p_within interval); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.my_task_referent(p_command_id uuid, p_within interval) IS 'The ONE task this conversation could be pointing at, or a count when there are several, or null when there are none. A task with no job counts only where it appeared since this conversation began: 0553 counted any loose task inside the window, which handed a fresh chat on another channel a task Grant typed twenty minutes earlier. 0554.';
 
 
 --
@@ -14246,8 +15585,17 @@ CREATE FUNCTION app.needs_me_pressure() RETURNS TABLE(open_items integer, cap in
     app.needs_me_cap(),
     greatest(count(*)::int - app.needs_me_cap(), 0),
     coalesce(round(extract(epoch from (app.now_utc() - min(created_at))) / 86400, 1), 0)
-  from public.blockers where state = 'open';
+  from public.blockers
+  where state = 'open'
+    and not coalesce(app.harness_job(job_id), false);
 $$;
+
+
+--
+-- Name: FUNCTION needs_me_pressure(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.needs_me_pressure() IS 'How much is waiting on Grant beyond what the briefing names, and how old the oldest is (#272). Counts the same population as public.needs_me (0570): before that they disagreed, and the briefing told him fifty more were behind four.';
 
 
 --
@@ -14605,12 +15953,27 @@ CREATE FUNCTION app.notice(p_limit integer DEFAULT 12) RETURNS TABLE(kind text, 
 
   blocked_capability as (
     select 'capability_missing'::text, null::uuid, i.needed,
-           format('We have been unable to %s %s times in the last fortnight.',
+           /*
+             `could not:` reads for a noun AND a verb phrase (0474, 0577).
+             "We have been unable to an answer the database will accept" was
+             on his page; half of what `needed` holds is a noun.
+           */
+           format('Could not: %s — %s times in the last fortnight.',
                   replace(i.needed, '-', ' '), i.times),
            jsonb_build_object('times', i.times, 'who', i.staff_slug),
            70,
            null::text, null::jsonb
       from public.impediments_tally(14, 3) i
+     /*
+       NOT the coherence gate refusing an answer (0474's rule, carried across).
+
+       `not_capable` is overwhelmingly #185's gate declining to let the office
+       claim something it did not do. That is the gate working, there is
+       nothing in it for Grant to approve, and offering it to him as a
+       capability he might grant reads as the office asking permission to
+       fabricate.
+     */
+     where i.kind <> 'not_capable'
   )
 
   select k.kind, k.project_id, k.subject_ref, k.body, k.because,
@@ -14821,6 +16184,113 @@ COMMENT ON FUNCTION app.notification_patterns(p_min_sample integer, p_ignored_ra
 
 
 --
+-- Name: obligation_key(uuid, text, text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.obligation_key(p_parent uuid, p_kind text, p_request text) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  /*
+    The conversation this job belongs to, or the job itself when it has no
+    inbound command — a duty, or a child of a child. Falling back to the job
+    means an unattributed obligation is unique to itself, which is the safe
+    direction: it duplicates rather than suppressing somebody else's work.
+  */
+  select 'obl-' || encode(extensions.digest(
+    coalesce((
+      select c.origin_channel || ':' || split_part(c.origin_ref, ':', 1) || ':' ||
+             coalesce(c.subject, c.actor)
+        from public.inbound_commands c
+       where c.job_id = p_parent
+       limit 1), p_parent::text)
+    || '|' || coalesce(p_kind, '')
+    || '|' || lower(btrim(regexp_replace(coalesce(p_request, ''), '\s+', ' ', 'g'))),
+    'sha256'), 'hex')
+$$;
+
+
+--
+-- Name: FUNCTION obligation_key(p_parent uuid, p_kind text, p_request text); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.obligation_key(p_parent uuid, p_kind text, p_request text) IS 'The identity of a piece of work: this conversation, this kind, this request. Scoped to the conversation because an unscoped key would let one chat silently suppress another chat''s work. 0556.';
+
+
+--
+-- Name: obligation_state(uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.obligation_state(p_root uuid) RETURNS public.obligation_state
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  with t as (select * from app.obligation_tree(p_root)),
+  counted as (
+    select
+      (select state from t where is_root) as root_state,
+      count(*) filter (where state not in ('complete', 'cancelled', 'failed')) as live,
+      count(*) filter (where state = 'complete') as done,
+      count(*) filter (where state = 'failed') as failed,
+      count(*) filter (where state = 'cancelled') as cancelled,
+      (select count(*) from t
+        join public.blockers b on b.job_id = t.job_id
+       where b.state = 'open'
+         and t.state not in ('complete', 'cancelled', 'failed')) as blocked
+      from t
+  )
+  select case
+    /*
+      The root being cancelled settles it, whatever finished afterwards. A
+      child that completes after a cancellation is work Grant called off, and
+      reporting the obligation as fulfilled because it landed anyway is the
+      stale-result defect #315 was written for.
+    */
+    when root_state = 'cancelled' then 'cancelled'::public.obligation_state
+    when blocked > 0 then 'waiting_on_user'::public.obligation_state
+    when live > 0 then 'working'::public.obligation_state
+    when done = 0 then 'failed'::public.obligation_state
+    when failed > 0 or cancelled > 0 then 'partially_complete'::public.obligation_state
+    else 'fulfilled'::public.obligation_state
+  end
+  from counted
+$$;
+
+
+--
+-- Name: FUNCTION obligation_state(p_root uuid); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.obligation_state(p_root uuid) IS 'What has become of what Grant actually asked for, across the whole job tree — as opposed to jobs.state, which says only that one job stopped executing. Derived, never stored, so there is no counter to get stuck and a terminal child cannot leave an obligation waiting for ever. 0562.';
+
+
+--
+-- Name: obligation_tree(uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.obligation_tree(p_root uuid) RETURNS TABLE(job_id uuid, state public.job_state, kind text, is_root boolean)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  with recursive tree as (
+    select j.job_id, j.state, j.kind, true as is_root
+      from public.jobs j where j.job_id = p_root
+    union all
+    select k.job_id, k.state, k.kind, false
+      from public.jobs k join tree t on k.parent_job_id = t.job_id
+  )
+  select * from tree
+$$;
+
+
+--
+-- Name: FUNCTION obligation_tree(p_root uuid); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.obligation_tree(p_root uuid) IS 'Every job descended from one turn, the turn included. The shared walk the conversation readers each used to write for themselves. 0562.';
+
+
+--
 -- Name: offer_mcp_tool(uuid, text); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -14942,7 +16412,7 @@ CREATE FUNCTION app.office_health(p_hours integer DEFAULT 24) RETURNS jsonb
        where h.state = 'open'
          and h.provider not like 'probe_%'
     ),
-    'held_for_budget', app.held_for_budget(), 'excluded_fixtures', (
+    'backup', app.backup_health(), 'progress', app.last_progress(), 'held_for_budget', app.held_for_budget(), 'excluded_fixtures', (
       select count(*) from public.jobs
        where app.harness_job(job_id)
          and created_at > app.now_utc() - make_interval(hours => p_hours)
@@ -14959,6 +16429,34 @@ $$;
 --
 
 COMMENT ON FUNCTION app.office_health(p_hours integer) IS 'Health as a fact, not a verdict. cannot_think names any provider whose breaker is open (0372).';
+
+
+--
+-- Name: office_member(text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.office_member(p_email text) RETURNS TABLE(ok boolean, owner_key text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select true, m.owner_key
+    from public.office_members m
+   where m.email = lower(btrim(coalesce(p_email, '')))
+   union all
+  select false, null::text
+   where not exists (
+     select 1 from public.office_members m2
+      where m2.email = lower(btrim(coalesce(p_email, '')))
+   )
+  limit 1
+$$;
+
+
+--
+-- Name: FUNCTION office_member(p_email text); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.office_member(p_email text) IS 'Whether an authenticated address belongs to somebody the office works for, and which owner key their stored state hangs off.';
 
 
 --
@@ -15177,6 +16675,176 @@ CREATE FUNCTION app.over_budget(p_agent text) RETURNS text
   end
   from lim
 $$;
+
+
+--
+-- Name: owed_a_word(uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.owed_a_word(p_job_id uuid) RETURNS TABLE(channel text, account_ref text, target_ref text, thread_ref text, kind text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select c.origin_channel::text,
+         split_part(c.origin_ref, ':', 1)::text,
+         split_part(c.origin_ref, ':', 1)::text,
+         nullif(split_part(c.origin_ref, ':', 2), '')::text,
+         j.kind::text
+    from public.jobs j
+    join public.inbound_commands c
+      on c.command_id = (j.pinned_config ->> 'command_id')::uuid
+   where j.job_id = p_job_id
+     and j.state = 'failed'
+     and j.parent_job_id is null
+     and c.origin_channel in ('telegram', 'slack', 'teamhq', 'voice')
+     and coalesce(nullif(btrim(c.origin_ref), ''), '') <> ''
+     and not exists (select 1 from public.deliveries d where d.job_id = j.job_id)
+$$;
+
+
+--
+-- Name: FUNCTION owed_a_word(p_job_id uuid); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.owed_a_word(p_job_id uuid) IS 'Who is owed a sentence because this turn died without one. Empty for a retry, a duty, a child, a turn that already answered, or one with nowhere to reply to. Containment is app.claim_delivery''s, not this function''s.';
+
+
+--
+-- Name: page_backup_failure(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.page_backup_failure() RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  j          record;
+  v_last_ok  timestamptz;
+  v_token    text;
+  v_chat     text;
+  v_text     text;
+  v_hours    numeric;
+  v_request  bigint;
+begin
+  select job.job_id, job.created_at, job.state_reason, job.attempt, job.max_attempts
+    into j
+    from public.jobs job
+   where job.kind = 'office.backup'
+     and job.state = 'failed'
+     and not app.harness_job(job.job_id)
+     and not exists (
+       select 1 from public.jobs ok
+        where ok.kind = 'office.backup'
+          and ok.state = 'complete'
+          and not app.harness_job(ok.job_id)
+          and ok.created_at > job.created_at)
+   order by job.created_at desc
+   limit 1;
+
+  if not found then
+    return jsonb_build_object('paged', 0, 'why', 'no unrecovered terminal failure');
+  end if;
+
+  /*
+    Exactly once DELIVERED (0544).
+
+    A previous attempt silences the pager only if it is not KNOWN to have
+    failed. `net._http_response` is pruned, so an attempt whose evidence has
+    gone counts as delivered -- see the header: re-paging for ever about a
+    pruned request is the alert storm, and the cooldown below already bounds
+    a duplicate to one a day.
+  */
+  if exists (
+    select 1
+      from public.events e
+      left join net._http_response r
+        on r.id = (e.after_state->>'request_id')::bigint
+     where e.action_type = 'backup.paged'
+       and e.after_state->>'job_id' = j.job_id::text
+       and not (coalesce(r.timed_out, false)
+                or (r.status_code is not null and r.status_code >= 300))
+  ) then
+    return jsonb_build_object('paged', 0, 'why', 'already paged', 'job', j.job_id);
+  end if;
+
+  if exists (
+    select 1
+      from public.events e
+      left join net._http_response r
+        on r.id = (e.after_state->>'request_id')::bigint
+     where e.action_type = 'backup.paged'
+       and e.occurred_at > app.now_utc() - interval '20 hours'
+       and not (coalesce(r.timed_out, false)
+                or (r.status_code is not null and r.status_code >= 300))
+  ) then
+    return jsonb_build_object('paged', 0, 'why', 'cooling down', 'job', j.job_id);
+  end if;
+
+  select max(o.created_at) into v_last_ok
+    from storage.objects o
+   where o.bucket_id = 'backups' and o.name like '%manifest.json.gz';
+  v_hours := round(extract(epoch from (app.now_utc() - v_last_ok)) / 3600.0, 1);
+
+  select decrypted_secret into v_token
+    from vault.decrypted_secrets where name = 'telegram.chief.bot_token';
+  select c.chat_id::text into v_chat
+    from public.telegram_chats c
+    join public.telegram_bots b on b.bot_id = c.bot_id
+   where c.subject = 'grant' and c.chat_type = 'private'
+     and b.staff_slug = 'chief-of-staff' and c.deliverable
+   limit 1;
+
+  if v_token is null or v_token = '' or v_chat is null then
+    return jsonb_build_object('paged', 0, 'why', 'no pager credential or chat',
+                              'job', j.job_id);
+  end if;
+
+  v_text :=
+    'The nightly backup failed and did not recover.' || chr(10) || chr(10) ||
+    'Last good copy: ' ||
+      coalesce(to_char(v_last_ok, 'DD Mon HH24:MI') || ' UTC (' || v_hours::text || 'h ago)',
+               'none found') || chr(10) ||
+    'It gave up after ' || j.attempt::text || ' of ' || j.max_attempts::text ||
+      ' attempts: ' || left(coalesce(j.state_reason, 'no reason recorded'), 120) || chr(10) ||
+    chr(10) ||
+    'There is no offsite copy, so this is the only one. To look:' || chr(10) ||
+    'npm run q -- "select state, attempt, state_reason from public.jobs ' ||
+      'where kind = ''office.backup'' order by created_at desc limit 3"' || chr(10) ||
+    'To take one now: npm run backup:now';
+
+  -- Twenty seconds, not four. The first page of a quiet week pays for a cold
+  -- DNS lookup that every other caller here never sees, and nothing waits on
+  -- this: net.http_post returns an id immediately.
+  v_request := net.http_post(
+    url     := format('https://api.telegram.org/bot%s/sendMessage', v_token),
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body    := jsonb_build_object('chat_id', v_chat, 'text', v_text),
+    timeout_milliseconds := 20000
+  );
+
+  perform public.append_event(
+    extensions.gen_random_uuid(),
+    'system', 'backup:pager', 'terminal_backup_failure',
+    'backup.paged',
+    false, null, null,
+    jsonb_build_object('job_id', j.job_id, 'chat', v_chat,
+                       'request_id', v_request,
+                       'last_good_backup_hours', v_hours),
+    'Paged Grant about a nightly backup that failed and did not recover.',
+    '[]'::jsonb, null, null, null, j.job_id, null, null
+  );
+
+  return jsonb_build_object('paged', 1, 'job', j.job_id, 'request_id', v_request,
+                            'last_good_backup_hours', v_hours);
+end;
+$$;
+
+
+--
+-- Name: FUNCTION page_backup_failure(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.page_backup_failure() IS 'Page Grant when the nightly backup has terminally failed and not recovered. From the database over pg_net rather than from a handler, because an alert emitted by the worker goes quiet exactly when the worker is what broke (0543). Exactly once DELIVERED -- a prior attempt known to have timed out or errored does not silence it (0544) -- at most once in twenty hours, never for harness traffic, never while a later backup has succeeded.';
 
 
 --
@@ -17679,6 +19347,45 @@ $$;
 
 
 --
+-- Name: record_rehearsal(text, jsonb); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.record_rehearsal(p_outcome text, p_detail jsonb DEFAULT '{}'::jsonb) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_event uuid;
+begin
+  if p_outcome not in ('passed', 'failed') then
+    raise exception 'a rehearsal either passed or failed, not %', p_outcome;
+  end if;
+
+  select public.append_event(
+    extensions.gen_random_uuid(),
+    'system', 'backup:rehearse', 'restore_rehearsal',
+    'backup.rehearsed',
+    -- Nothing to undo: it restores into a scratch schema and drops it.
+    false,
+    null, null,
+    jsonb_build_object('outcome', p_outcome) || coalesce(p_detail, '{}'::jsonb),
+    format('A restore rehearsal %s.', p_outcome),
+    '[]'::jsonb, null, null, null, null, null, null
+  ) into v_event;
+
+  return v_event;
+end;
+$$;
+
+
+--
+-- Name: FUNCTION record_rehearsal(p_outcome text, p_detail jsonb); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.record_rehearsal(p_outcome text, p_detail jsonb) IS 'Record that a restore rehearsal passed or failed. Into public.events as backup.rehearsed rather than a new table, because the ledger of what the office did is exactly what this is. Before 0537 the rehearsal recorded nothing and "when did a restore last work" had no answer.';
+
+
+--
 -- Name: record_signal(text, text, text, uuid, text, jsonb, uuid, timestamp with time zone); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -17888,7 +19595,15 @@ declare
   v_to public.job_state;
   v_reason text;
   v_has_output boolean;
+  v_progressed boolean;
+  v_since timestamptz;
+  v_ceiling integer;
+  v_grant integer;
 begin
+  v_ceiling := coalesce(
+    (select value::text::integer from public.system_config
+      where key = 'jobs.max_dequeues'), 60);
+
   for r in
     select j.job_id, j.state, j.attempt, j.max_attempts, j.leased_by
     from public.jobs j
@@ -17899,25 +19614,56 @@ begin
     order by j.created_at
     for update
   loop
+    -- Per row, or a grant made for one job would be applied to the next.
+    v_grant := null;
+
     select exists (select 1 from public.outputs o where o.job_id = r.job_id)
       into v_has_output;
 
+    -- Did THIS attempt get anywhere? The lease began at the most recent move
+    -- into `running`; a checkpoint finished after that is work the next
+    -- attempt will not repeat.
+    select max(t.occurred_at) into v_since
+      from public.job_state_transitions t
+     where t.job_id = r.job_id and t.to_state = 'running';
+
+    v_progressed := v_since is not null and exists (
+      select 1 from public.job_steps s
+       where s.job_id = r.job_id
+         and s.finished_at is not null
+         and s.finished_at >= v_since
+    );
+
     if v_has_output or r.state in ('committed', 'notifying') then
-      -- §18's case. Two conditions, neither redundant: an output row means the
-      -- work is durable wherever it stalled and retrying would redo it; and
-      -- `committed`/`notifying` cannot legally go to `retrying` at all, so the
-      -- machine decides those regardless of what the evidence says.
+      -- Section 18's case. Two conditions, neither redundant: an output row
+      -- means the work is durable wherever it stalled and retrying would redo
+      -- it; and `committed`/`notifying` cannot legally go to `retrying` at
+      -- all, so the machine decides those regardless of what the evidence says.
       v_to := 'notifying';
       v_reason := case
         when v_has_output then 'recovery: committed work with delivery outstanding'
         else 'recovery: past the commit point with no output to deliver'
       end;
 
+    elsif v_progressed and r.attempt < v_ceiling then
+      -- 0536. The attempt ran out of wall clock having finished at least one
+      -- checkpoint. That is what 0436 built resumption for, and it is not a
+      -- failure, so it earns another slice rather than spending one.
+      v_to := 'retrying';
+      v_grant := greatest(r.max_attempts, r.attempt + 1);
+      v_reason := format(
+        'recovery: worker %s ran out of time mid-job, resuming from checkpoint (slice %s, ceiling now %s of at most %s)',
+        coalesce(r.leased_by, '(unleased)'), r.attempt, v_grant, v_ceiling
+      );
+
     elsif r.attempt >= r.max_attempts then
       v_to := 'failed';
-      v_reason := format(
-        'recovery: %s attempts exhausted while in %s', r.max_attempts, r.state
-      );
+      v_reason := case
+        when v_progressed then format(
+          'recovery: %s dequeues without finishing, which is the absolute ceiling', r.attempt)
+        else format(
+          'recovery: %s attempts exhausted while in %s', r.max_attempts, r.state)
+      end;
 
     else
       v_to := 'retrying';
@@ -17930,6 +19676,9 @@ begin
     update public.jobs j
     set state        = v_to,
         state_reason = v_reason,
+        -- Only the resumption branch sets this. Everywhere else the ceiling
+        -- is left exactly as it was.
+        max_attempts = coalesce(v_grant, j.max_attempts),
         leased_by    = null,
         leased_until = null
     where j.job_id = r.job_id;
@@ -17944,7 +19693,7 @@ $$;
 -- Name: FUNCTION recover_stalled_jobs(); Type: COMMENT; Schema: app; Owner: -
 --
 
-COMMENT ON FUNCTION app.recover_stalled_jobs() IS 'Reconciles jobs a dead worker left in flight. Only touches expired leases, so it is safe to run while workers are active. Resumes delivery rather than retrying when an output row exists (the work is durable) OR when the state is committed/notifying (the machine forbids retrying from there) - §18.';
+COMMENT ON FUNCTION app.recover_stalled_jobs() IS 'Decide what to do with a job whose lease expired. An attempt that finished a checkpoint step ran out of wall clock rather than failing, so it resumes without spending against max_attempts (0536) — bounded by monotonic progress, by an attempt that finishes nothing spending normally, and by jobs.max_dequeues. The slice is granted by raising max_attempts, because jobs_attempt_within_max and app.requeue_retrying both enforce attempt <= max_attempts and neither would have let a bare requeue work.';
 
 
 --
@@ -18023,11 +19772,22 @@ CREATE FUNCTION app.recurring_failures(p_least integer DEFAULT 3, p_days integer
     from public.failure_signatures f
    -- Belt and braces with the writer (0491): a signature whose last job is
    -- a suite's never reaches Grant, however it got into the table.
-   where (f.last_job_id is null or not app.harness_job(f.last_job_id))
+   where f.last_job_id is not null
+     and not app.harness_job(f.last_job_id)
+     -- And a kind the office has never run is not something that failed.
+     -- The writer composes this from jobs.kind, so a real one always matches.
+     and exists (select 1 from public.jobs j where j.kind = f.job_kind)
      and f.seen >= greatest(coalesce(p_least, 3), 2)
      and f.last_seen > app.now_utc() - make_interval(days => coalesce(p_days, 14))
    order by f.seen desc, f.last_seen desc
 $$;
+
+
+--
+-- Name: FUNCTION recurring_failures(p_least integer, p_days integer); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.recurring_failures(p_least integer, p_days integer) IS 'What has failed repeatedly, for the morning briefing. Excludes a signature whose last job was a suite''s (0491) AND one naming a job kind the office has never run (0568) -- verify:notice attaches its proof to a real job on purpose, so the first guard cannot see it, and two of its crashed runs sat in Grant''s briefing for five days as the only two rows in it.';
 
 
 --
@@ -18405,6 +20165,41 @@ COMMENT ON FUNCTION app.relations_of(p_kind text, p_id uuid) IS '#29. Every rela
 
 
 --
+-- Name: remember_a_deleted_origin(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.remember_a_deleted_origin() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+begin
+  if coalesce(old.synthetic, false)
+     or split_part(coalesce(old.dedupe_key, ''), ':', 1) = 'verify' then
+    /*
+      The namespace, not a verdict. `harness_job` reads it the same way it
+      reads the inbound row, so nothing is decided here - the evidence simply
+      survives the row that carried it.
+    */
+    update public.jobs j
+       set pinned_config = coalesce(j.pinned_config, '{}'::jsonb)
+             || jsonb_build_object('origin_namespace',
+                                   split_part(coalesce(old.dedupe_key, ''), ':', 1))
+     where j.pinned_config ->> 'command_id' = old.command_id::text
+       and j.pinned_config ->> 'origin_namespace' is null;
+  end if;
+  return old;
+end
+$$;
+
+
+--
+-- Name: FUNCTION remember_a_deleted_origin(); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.remember_a_deleted_origin() IS 'A suite teardown deletes the inbound command and the job outlives it. This copies the dedupe NAMESPACE onto the job while it is still legible. Not a verdict: jobs.synthetic is immutable on purpose, so a suite cannot rewrite its own attribution around a send.';
+
+
+--
 -- Name: reminders_due(interval); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -18712,6 +20507,15 @@ begin
   if v_id is not null then
     return v_id;
   end if;
+
+  -- What answering this PERFORMS. Without it app.hq_answer_blocker
+  -- resolves the question and queues nothing, which is what Grant
+  -- got for three approvals between 9 and 11 September (0591).
+  update public.jobs
+     set pinned_config = coalesce(pinned_config, '{}'::jsonb)
+           || jsonb_build_object('approval_next', 'notebook.generate')
+   where job_id = p_job
+     and coalesce(pinned_config ->> 'approval_next', '') = '';
 
   insert into public.blockers
     (project_id, job_id, requested_action, why_needed, consequences_of_delay,
@@ -19062,10 +20866,10 @@ $$;
 
 
 --
--- Name: resolve_project_by_name(text); Type: FUNCTION; Schema: app; Owner: -
+-- Name: resolve_project_by_name(text, boolean); Type: FUNCTION; Schema: app; Owner: -
 --
 
-CREATE FUNCTION app.resolve_project_by_name(p_text text) RETURNS TABLE(project_id uuid, slug text, name text, confidence numeric, how text)
+CREATE FUNCTION app.resolve_project_by_name(p_text text, p_include_fixtures boolean DEFAULT false) RETURNS TABLE(project_id uuid, slug text, name text, confidence numeric, how text)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -19074,8 +20878,14 @@ CREATE FUNCTION app.resolve_project_by_name(p_text text) RETURNS TABLE(project_i
   ),
   live as (
     -- One place the fixture rule is applied, rather than four.
+    --
+    -- The flag widens this set and nothing else, so every branch below keeps
+    -- scoring exactly as it did. It defaults to false, so every existing
+    -- caller - and every message Grant sends - resolves against precisely
+    -- the same rows as before.
     select p.* from public.projects p
-     where p.status = 'active' and not p.is_fixture
+     where p.status = 'active'
+       and (p_include_fixtures or not p.is_fixture)
   ),
   scored as (
     select p.project_id, p.slug, p.name, 1.00::numeric as confidence, 'slug'::text as how
@@ -19144,10 +20954,10 @@ $_$;
 
 
 --
--- Name: FUNCTION resolve_project_by_name(p_text text); Type: COMMENT; Schema: app; Owner: -
+-- Name: FUNCTION resolve_project_by_name(p_text text, p_include_fixtures boolean); Type: COMMENT; Schema: app; Owner: -
 --
 
-COMMENT ON FUNCTION app.resolve_project_by_name(p_text text) IS 'Scored candidates for a phrase, best route per project. Never picks — the caller applies its own threshold and says which route it took (0153).';
+COMMENT ON FUNCTION app.resolve_project_by_name(p_text text, p_include_fixtures boolean) IS 'Score active dashboard projects against a phrase. p_include_fixtures widens the candidate set to fixture projects and is for harness traffic only: the production caller passes app.harness_job(job_id), which is false for every message a person sends (#295, 0534).';
 
 
 --
@@ -19652,6 +21462,97 @@ begin
     'addressee_dropped', to_jsonb(v_dropped));
 end;
 $$;
+
+
+--
+-- Name: say_once(uuid, text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.say_once(p_job_id uuid, p_body text) RETURNS boolean
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select app.say_once(p_job_id, p_body, null::text)
+$$;
+
+
+--
+-- Name: FUNCTION say_once(p_job_id uuid, p_body text); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.say_once(p_job_id uuid, p_body text) IS 'Whether a job should announce. True when the body CHANGED, when nothing was said before, or when a day has passed; false when a scheduled duty is about to repeat itself inside 20 hours. Always true for a kind no responsibility schedules, so conversation is untouched (#355).';
+
+
+--
+-- Name: say_once(uuid, text, text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.say_once(p_job_id uuid, p_body text, p_topic text) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_kind text;
+  v_project uuid;
+  v_is_duty boolean;
+  v_print text;
+  v_prev text;
+  v_said timestamptz;
+begin
+  select kind, coalesce(project_id, app.unnamed_project())
+    into v_kind, v_project
+    from public.jobs where job_id = p_job_id;
+
+  if v_kind is null then
+    return true;
+  end if;
+
+  -- Only the clock repeats itself. A person asking twice deserves two answers.
+  select exists (select 1 from public.responsibilities r where r.job_kind = v_kind)
+    into v_is_duty;
+  if not v_is_duty then
+    return true;
+  end if;
+
+  -- The topic when the handler named one, the body when it did not. Prefixed
+  -- so a topic can never collide with the md5 of some body.
+  v_print := case
+               when coalesce(trim(p_topic), '') <> ''
+                 then 'topic:' || trim(p_topic)
+               else 'body:' || md5(coalesce(p_body, ''))
+             end;
+
+  select fingerprint, said_at into v_prev, v_said
+    from public.duty_said
+   where job_kind = v_kind and project_id = v_project;
+
+  if v_prev is distinct from v_print
+     or v_said < app.now_utc() - interval '20 hours' then
+    insert into public.duty_said
+      (job_kind, project_id, fingerprint, said_at, repeats, last_seen_at)
+    values (v_kind, v_project, v_print, app.now_utc(), 0, app.now_utc())
+    on conflict (job_kind, project_id) do update
+      set fingerprint = excluded.fingerprint,
+          said_at = excluded.said_at,
+          repeats = 0,
+          last_seen_at = excluded.last_seen_at;
+    return true;
+  end if;
+
+  update public.duty_said
+     set repeats = repeats + 1,
+         last_seen_at = app.now_utc()
+   where job_kind = v_kind and project_id = v_project;
+  return false;
+end
+$$;
+
+
+--
+-- Name: FUNCTION say_once(p_job_id uuid, p_body text, p_topic text); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.say_once(p_job_id uuid, p_body text, p_topic text) IS 'Whether a job should announce. True when what it is ABOUT changed, when nothing was said before, or when a day has passed. p_topic is a stable key a handler gives when a model writes the words, so a rewording of one unchanged fact is not mistaken for news (#360). Always true for a kind no responsibility schedules, so conversation is untouched.';
 
 
 --
@@ -20511,6 +22412,25 @@ COMMENT ON FUNCTION app.staff_on_project(p_project_id uuid) IS '#36. Who may be 
 
 
 --
+-- Name: stamp_synthetic_inbound(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.stamp_synthetic_inbound() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+begin
+  -- Deny by default: anything that did not come through a production door is
+  -- synthetic, whatever it calls itself.
+  if not app.from_production_ingress() then
+    new.synthetic := true;
+  end if;
+  return new;
+end;
+$$;
+
+
+--
 -- Name: standing_never_covers_level_three(); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -20669,6 +22589,63 @@ $$;
 
 
 --
+-- Name: stop_conversation_work(uuid, text, interval); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.stop_conversation_work(p_command_id uuid, p_why text DEFAULT 'you asked me to stop'::text, p_within interval DEFAULT '24:00:00'::interval) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+declare
+  v_before jsonb;
+  v_stopped integer := 0;
+  v_refused integer := 0;
+  v_job uuid;
+  v_names text[] := '{}';
+begin
+  v_before := app.conversation_work(p_command_id, p_within);
+
+  for v_job in
+    select (x ->> 'job')::uuid from jsonb_array_elements(v_before -> 'in_flight') x
+  loop
+    begin
+      update public.jobs
+         set state = 'cancelled',
+             finished_at = app.now_utc(),
+             state_reason = left(p_why, 500)
+       where job_id = v_job;
+      v_stopped := v_stopped + 1;
+      v_names := v_names || coalesce(
+        (select kind::text from public.jobs where job_id = v_job), 'something');
+    exception when others then
+      /*
+        A job that refused is mid-commit and will finish. Counted and
+        reported rather than swallowed: a stop that silently did less than it
+        said is the claim-with-no-row defect, and the whole point here is
+        that the office was claiming to have stopped things it had not.
+      */
+      v_refused := v_refused + 1;
+    end;
+  end loop;
+
+  return jsonb_build_object(
+    'ok', true,
+    'stopped', v_stopped,
+    'could_not', v_refused,
+    'already_finished', coalesce((v_before ->> 'finished')::int, 0),
+    'kinds', to_jsonb(v_names));
+end;
+$$;
+
+
+--
+-- Name: FUNCTION stop_conversation_work(p_command_id uuid, p_why text, p_within interval); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.stop_conversation_work(p_command_id uuid, p_why text, p_within interval) IS 'Stop what this conversation handed on, and say what was stopped, what refused, and what had already finished — because a finished child cannot be un-done by cancelling it, and taking back what it DID is hq_undo''s question. 0555.';
+
+
+--
 -- Name: stop_requested(uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -20811,10 +22788,12 @@ CREATE FUNCTION app.studio_contacts(p_project_id uuid) RETURNS jsonb
                                  from public.contact_label_links k
                                 where k.contact_id = c.contact_id), '[]'::jsonb),
            'labelsSet', c.labels_set,
-           'fields', c.fields
+           'fields', c.fields,
+           'photo', c.photo_path,
+           'away', (c.archived_at is not null)
          )) order by c.name), '[]'::jsonb)
     from public.contacts c
-   where c.project_id = p_project_id and not c.is_fixture
+   where c.project_id = p_project_id and not c.is_fixture and c.archived_at is null
 $$;
 
 
@@ -20835,6 +22814,8 @@ CREATE FUNCTION app.studio_document(p_document_id uuid) RETURNS jsonb
                 'title',     d.title,
                 'content',   d.content,
                 'mime_type', d.mime_type,
+    'connector', d.connector,
+    'ref', d.external_ref,
                 'path',      d.storage_path,
                 'bytes',     d.byte_size,
                 'seconds',   d.duration_s,
@@ -20888,6 +22869,29 @@ CREATE FUNCTION app.studio_documents(p_project_id uuid, p_limit integer DEFAULT 
                then format('%s KB', round(d.byte_size / 1024.0))
              else '' end,
            'state', d.state,
+
+           -- THE TWO DATES, AND THE HONEST GAPS IN THEM (§§27-28).
+           --
+           -- `uploaded` is when this copy entered the office, which for
+           -- anything pulled from a connector or dropped on a project is
+           -- exactly `fetched_at`. A document the office WROTE was never
+           -- uploaded, so it has none, and saying so is the point: "do NOT
+           -- silently substitute another timestamp merely because an upload
+           -- timestamp is missing."
+           --
+           -- `created` is when the thing itself was made, and the office only
+           -- knows that for its own work. For a source document `created_at`
+           -- is when the office first recorded it -- which is the UPLOAD date
+           -- wearing another name, and confusing the two is what §28 forbids.
+           -- `remote_updated_at` is a MODIFIED date and is not it either.
+           --
+           -- `added` is neither: it is the office's own row date, always
+           -- present, and it is here as the deterministic tiebreak so two
+           -- documents with equal or absent dates never swap places between
+           -- renders.
+           'uploaded', d.fetched_at,
+           'created', case when d.origin = 'made' then d.created_at else null end,
+           'added', d.created_at,
            -- What the two new controls toggle. Sorted, so a press that adds a
            -- tag does not reorder the ones already there.
            'tags', to_jsonb(coalesce((select array(select distinct unnest(d.tags) order by 1)), '{}'::text[])),
@@ -21473,6 +23477,10 @@ CREATE FUNCTION app.studio_tasks(p_project_id uuid) RETURNS jsonb
            'priority', tk.priority,
            'milestone', tk.is_milestone,
            'parent', tk.parent_task_id,
+           -- When it joined the project. The one key here that a tick cannot
+           -- move, which is the whole reason it is here: it is what lets the
+           -- page keep a completed row where Grant left it.
+           'created', tk.created_at,
            -- Grant's own, on the project it belongs to (#259). Marked
            -- rather than hidden: the project is where he decides, and a
            -- list that mixes his errands with the team's work without
@@ -21487,6 +23495,13 @@ CREATE FUNCTION app.studio_tasks(p_project_id uuid) RETURNS jsonb
     left join public.staff st on st.staff_id = tk.assignee_staff
    where tk.project_id = p_project_id and not app.harness_task(tk.is_fixture, tk.job_id)
 $$;
+
+
+--
+-- Name: FUNCTION studio_tasks(p_project_id uuid); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.studio_tasks(p_project_id uuid) IS 'A project''s tasks for the studio. Carries created_at as "created" so a surface can order by something a tick cannot move (#7).';
 
 
 --
@@ -21717,6 +23732,27 @@ begin
      set state = 'suppressed', suppressed_reason = p_reason
    where delivery_id = v_row.delivery_id;
   return 'suppressed';
+end;
+$$;
+
+
+--
+-- Name: synthetic_is_immutable(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.synthetic_is_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+begin
+  if new.synthetic is distinct from old.synthetic then
+    raise exception
+      'synthetic is decided when the work is created and cannot be changed '
+      '(% -> %). The defect this refuses is a suite rewriting its attribution '
+      'around a send.', old.synthetic, new.synthetic
+      using errcode = 'check_violation';
+  end if;
+  return new;
 end;
 $$;
 
@@ -24803,6 +26839,16 @@ CREATE FUNCTION public.hq_contact_add(p_project text, p_name text, p_role text D
 
 
 --
+-- Name: hq_contact_archive(uuid, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.hq_contact_archive(p_contact_id uuid, p_put_away boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$ select app.hq_contact_archive(p_contact_id, p_put_away); $$;
+
+
+--
 -- Name: hq_contact_fields_set(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -24853,6 +26899,30 @@ CREATE FUNCTION public.hq_contact_labels_set(p_contact_id uuid, p_labels jsonb) 
 
 
 --
+-- Name: hq_contact_photo_set(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.hq_contact_photo_set(p_contact_id uuid, p_path text) RETURNS jsonb
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$ select app.hq_contact_photo_set(p_contact_id, p_path); $$;
+
+
+--
+-- Name: hq_contact_update(uuid, text, text, text, text, text, text, text, text, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.hq_contact_update(p_contact_id uuid, p_name text DEFAULT NULL::text, p_role text DEFAULT NULL::text, p_org text DEFAULT NULL::text, p_email text DEFAULT NULL::text, p_phone text DEFAULT NULL::text, p_website text DEFAULT NULL::text, p_instagram text DEFAULT NULL::text, p_where text DEFAULT NULL::text, p_note text DEFAULT NULL::text, p_kind text DEFAULT NULL::text, p_stage text DEFAULT NULL::text, p_next text DEFAULT NULL::text, p_next_due text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+  select app.hq_contact_update(p_contact_id, p_name, p_role, p_org, p_email, p_phone,
+                               p_website, p_instagram, p_where, p_note, p_kind,
+                               p_stage, p_next, p_next_due);
+$$;
+
+
+--
 -- Name: hq_cost_per_outcome(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -24875,23 +26945,23 @@ $$;
 
 
 --
--- Name: hq_dashboard_layout_reset(text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: hq_dashboard_layout_reset(text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.hq_dashboard_layout_reset(p_slug text) RETURNS jsonb
+CREATE FUNCTION public.hq_dashboard_layout_reset(p_slug text, p_surface text DEFAULT 'studio'::text) RETURNS jsonb
     LANGUAGE sql SECURITY DEFINER
-    SET search_path TO 'public', 'pg_catalog'
-    AS $$ select app.hq_dashboard_layout_reset(p_slug) $$;
+    SET search_path TO ''
+    AS $$ select app.hq_dashboard_layout_reset(p_slug, p_surface) $$;
 
 
 --
--- Name: hq_dashboard_layout_set(text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+-- Name: hq_dashboard_layout_set(text, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.hq_dashboard_layout_set(p_slug text, p_panels jsonb) RETURNS jsonb
+CREATE FUNCTION public.hq_dashboard_layout_set(p_slug text, p_panels jsonb, p_surface text DEFAULT 'studio'::text) RETURNS jsonb
     LANGUAGE sql SECURITY DEFINER
-    SET search_path TO 'public', 'pg_catalog'
-    AS $$ select app.hq_dashboard_layout_set(p_slug, p_panels) $$;
+    SET search_path TO ''
+    AS $$ select app.hq_dashboard_layout_set(p_slug, p_panels, p_surface) $$;
 
 
 --
@@ -24935,6 +27005,19 @@ CREATE FUNCTION public.hq_disconnect(p_service text) RETURNS jsonb
 
 
 --
+-- Name: hq_document_link(uuid, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.hq_document_link(p_project_id uuid, p_connector text, p_external_ref text, p_title text, p_mime text DEFAULT NULL::text, p_source_title text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+  select app.hq_document_link(p_project_id, p_connector, p_external_ref, p_title,
+                              p_mime, p_source_title);
+$$;
+
+
+--
 -- Name: hq_document_move(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -24942,6 +27025,26 @@ CREATE FUNCTION public.hq_document_move(p_document_id uuid, p_project_id uuid) R
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public', 'pg_catalog'
     AS $$ select app.hq_document_move(p_document_id, p_project_id) $$;
+
+
+--
+-- Name: hq_document_order_reset(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.hq_document_order_reset(p_slug text) RETURNS jsonb
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$ select app.hq_document_order_reset(p_slug) $$;
+
+
+--
+-- Name: hq_document_order_set(text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.hq_document_order_set(p_slug text, p_ids jsonb) RETURNS jsonb
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$ select app.hq_document_order_set(p_slug, p_ids) $$;
 
 
 --
@@ -25067,6 +27170,16 @@ CREATE FUNCTION public.hq_office_chat() RETURNS jsonb
 
 
 --
+-- Name: hq_output(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.hq_output(p_output_id uuid) RETURNS jsonb
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$ select app.hq_output(p_output_id) $$;
+
+
+--
 -- Name: hq_overview(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -25151,6 +27264,23 @@ CREATE FUNCTION public.hq_projects() RETURNS jsonb
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public', 'pg_catalog'
     AS $$ select app.hq_projects() $$;
+
+
+--
+-- Name: hq_pulse(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.hq_pulse() RETURNS jsonb
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$ select app.hq_pulse() $$;
+
+
+--
+-- Name: FUNCTION hq_pulse(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.hq_pulse() IS 'The cheap poll the dashboard makes on every load. A wrapper, because PostgREST only exposes public and app.hq_pulse alone answered 502.';
 
 
 --
@@ -25960,6 +28090,16 @@ CREATE FUNCTION public.office_health(p_hours integer DEFAULT 24) RETURNS jsonb
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public', 'pg_catalog'
     AS $$ select app.office_health(p_hours) $$;
+
+
+--
+-- Name: office_member(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.office_member(p_email text) RETURNS TABLE(ok boolean, owner_key text)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$ select * from app.office_member(p_email) $$;
 
 
 --
@@ -27376,7 +29516,9 @@ CREATE TABLE public.connection_health (
     owner text NOT NULL,
     action text DEFAULT ''::text NOT NULL,
     checked_at timestamp with time zone DEFAULT app.now_utc() NOT NULL,
+    purpose text DEFAULT 'acts'::text NOT NULL,
     CONSTRAINT connection_health_carries_no_credential CHECK ((((((service || credential) || detail) || owner) || action) !~ '(xox[a-z]-|sbp_|ntn_|sk-[A-Za-z0-9]|AIza|eyJ[A-Za-z0-9_-]{10})'::text)),
+    CONSTRAINT connection_health_purpose_known CHECK ((purpose = ANY (ARRAY['acts'::text, 'maintains'::text]))),
     CONSTRAINT connection_health_state_known CHECK ((state = ANY (ARRAY['ok'::text, 'dead'::text, 'missing'::text, 'unknown'::text, 'parked'::text, 'attested'::text])))
 );
 
@@ -27395,6 +29537,13 @@ COMMENT ON TABLE public.connection_health IS 'What each connected service was do
 --
 
 COMMENT ON COLUMN public.connection_health.state IS 'ok = a probe reached it and it answered. attested = a person said so, and no program has checked. The distinction exists because painting them the same colour makes the indicator stop depending on the thing it indicates.';
+
+
+--
+-- Name: COLUMN connection_health.purpose; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.connection_health.purpose IS 'What this credential is FOR. ''acts'': the office carries work on it, so its death denies the capability. ''maintains'': it administers or renews the connection, so its death is an operational problem for Grant and NOT a statement about what the office can do. Defaults to ''acts'' because that is the conservative reading: an unclassified credential keeps its old meaning. Only app.capability_index_core reads it -- the surfaces that report health to Grant still take the worst row of the service, deliberately (#363).';
 
 
 --
@@ -27506,9 +29655,12 @@ CREATE TABLE public.contacts (
     is_fixture boolean GENERATED ALWAYS AS ((name ~~ 'fixture-%'::text)) STORED,
     fields jsonb DEFAULT '[]'::jsonb NOT NULL,
     labels_set boolean DEFAULT false NOT NULL,
+    photo_path text,
+    archived_at timestamp with time zone,
     CONSTRAINT contacts_fields_is_a_list CHECK ((jsonb_typeof(fields) = 'array'::text)),
     CONSTRAINT contacts_kind_known CHECK ((kind = ANY (ARRAY['person'::text, 'company'::text, 'collaborator'::text, 'supplier'::text]))),
     CONSTRAINT contacts_name_present CHECK ((length(btrim(name)) > 0)),
+    CONSTRAINT contacts_photo_is_a_path CHECK (((photo_path IS NULL) OR ((photo_path <> ''::text) AND (photo_path !~ '^[a-z]+:'::text) AND (photo_path !~ '\.\.'::text) AND (length(photo_path) <= 400)))),
     CONSTRAINT contacts_stage_known CHECK ((stage = ANY (ARRAY['active'::text, 'prospect'::text, 'past'::text, 'paused'::text])))
 );
 
@@ -27532,6 +29684,20 @@ COMMENT ON COLUMN public.contacts.fields IS '#110. Fields Grant added himself: [
 --
 
 COMMENT ON COLUMN public.contacts.labels_set IS '#110. True once Grant has decided this contact''s labels, even if he decided on none. Distinguishes "no labels" from "never touched", which #107''s derived-label fallback needs and which an absent link row cannot say — without it, a label he removes comes straight back and is unremovable.';
+
+
+--
+-- Name: COLUMN contacts.photo_path; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.contacts.photo_path IS 'Storage path in the private files bucket, never the image itself. The gateway swaps it for a short-lived signed URL on read, exactly as a document''s file is handled.';
+
+
+--
+-- Name: COLUMN contacts.archived_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.contacts.archived_at IS 'When this contact was put away. Readers exclude them; nothing is deleted, so anything that referred to the person still can.';
 
 
 --
@@ -27648,7 +29814,9 @@ CREATE TABLE public.dashboard_layouts (
     owner text DEFAULT 'grant'::text NOT NULL,
     panels jsonb NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT dashboard_layouts_panels_is_array CHECK (((jsonb_typeof(panels) = 'array'::text) AND (jsonb_array_length(panels) > 0)))
+    surface text DEFAULT 'studio'::text NOT NULL,
+    CONSTRAINT dashboard_layouts_panels_is_array CHECK (((jsonb_typeof(panels) = 'array'::text) AND (jsonb_array_length(panels) > 0))),
+    CONSTRAINT dashboard_layouts_surface_known CHECK ((surface = ANY (ARRAY['studio'::text, 'basecamp'::text])))
 );
 
 
@@ -27799,6 +29967,26 @@ CREATE TABLE public.document_collections (
     collection_id uuid NOT NULL,
     added_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: document_orders; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.document_orders (
+    owner text DEFAULT 'grant'::text NOT NULL,
+    project_id uuid NOT NULL,
+    doc_ids jsonb NOT NULL,
+    updated_at timestamp with time zone DEFAULT app.now_utc() NOT NULL,
+    CONSTRAINT document_orders_is_a_list CHECK (((jsonb_typeof(doc_ids) = 'array'::text) AND (jsonb_array_length(doc_ids) > 0)))
+);
+
+
+--
+-- Name: TABLE document_orders; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.document_orders IS 'The order one person put one project''s documents in. A list of ids: anything absent is newer than the arrangement and sorts after it.';
 
 
 --
@@ -28002,6 +30190,34 @@ COMMENT ON COLUMN public.drive_watch.last_reconciled_at IS 'When the folder was 
 --
 
 COMMENT ON COLUMN public.drive_watch.last_reconcile_note IS 'What that listing concluded, including a refusal from the blast-radius guard, so a quiet failure is visible.';
+
+
+--
+-- Name: duty_said; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.duty_said (
+    job_kind text NOT NULL,
+    fingerprint text NOT NULL,
+    said_at timestamp with time zone DEFAULT app.now_utc() NOT NULL,
+    repeats integer DEFAULT 0 NOT NULL,
+    last_seen_at timestamp with time zone DEFAULT app.now_utc() NOT NULL,
+    project_id uuid DEFAULT app.unnamed_project() NOT NULL
+);
+
+
+--
+-- Name: TABLE duty_said; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.duty_said IS 'The last thing each scheduled duty actually said, so it can say it again when it CHANGES rather than every time it runs (#355). repeats counts the runs that were kept quiet, which is the number worth looking at: a large one means a condition nobody has fixed.';
+
+
+--
+-- Name: COLUMN duty_said.project_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.duty_said.project_id IS 'The project this duty run was about, or app.unnamed_project() when it was about everything. In the key so one project cannot silence another (#355).';
 
 
 --
@@ -28289,6 +30505,7 @@ CREATE TABLE public.inbound_commands (
     context jsonb,
     project_id uuid DEFAULT app.unnamed_project() NOT NULL,
     addressed_also text[] DEFAULT '{}'::text[] NOT NULL,
+    synthetic boolean DEFAULT false NOT NULL,
     CONSTRAINT inbound_callback_action_known CHECK (((callback_action IS NULL) OR (callback_action = ANY (ARRAY['useful'::text, 'not_useful'::text, 'undo'::text, 'open_project'::text, 'mute_24h'::text, 'more_detail'::text, 'approve'::text, 'decline'::text])))),
     CONSTRAINT inbound_commands_says_something CHECK (((callback_action IS NOT NULL) OR (COALESCE(TRIM(BOTH FROM instruction), ''::text) <> ''::text) OR (voice_file_id IS NOT NULL))),
     CONSTRAINT inbound_compensates_only_for_undo CHECK (((compensates_event_id IS NULL) OR (callback_action = 'undo'::text))),
@@ -28360,6 +30577,13 @@ COMMENT ON COLUMN public.inbound_commands.project_id IS 'Which dashboard project
 --
 
 COMMENT ON COLUMN public.inbound_commands.addressed_also IS 'Who ELSE was asked. addressed_to answers; each of these answers in their own name. #26';
+
+
+--
+-- Name: COLUMN inbound_commands.synthetic; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.inbound_commands.synthetic IS 'This did not come through a production door. Stamped from the connection at insert and never afterwards (0541).';
 
 
 --
@@ -28719,6 +30943,7 @@ CREATE TABLE public.jobs (
     is_fixture boolean GENERATED ALWAYS AS (((COALESCE(requested_by, ''::text) ~~ 'verify:%'::text) OR (COALESCE(requested_by, ''::text) ~~ 'verify'::text) OR (COALESCE(requested_by, ''::text) ~~ '%-verification'::text) OR (COALESCE(requested_by, ''::text) ~~ 'gate-%'::text) OR (COALESCE(requested_by, ''::text) = 'probe'::text) OR (COALESCE(requested_by, ''::text) ~~ 'purge:%'::text) OR (COALESCE(requested_by, ''::text) ~~ '%:verify-%'::text) OR (kind ~~ 'verification.%'::text))) STORED,
     stop_requested_at timestamp with time zone,
     stop_requested_by text,
+    synthetic boolean DEFAULT false NOT NULL,
     CONSTRAINT jobs_attempt_within_max CHECK (((attempt >= 0) AND (attempt <= max_attempts))),
     CONSTRAINT jobs_finished_iff_terminal CHECK (((state = ANY (ARRAY['complete'::public.job_state, 'cancelled'::public.job_state, 'failed'::public.job_state])) = (finished_at IS NOT NULL))),
     CONSTRAINT jobs_idempotency_key_present CHECK (((length(idempotency_key) >= 8) AND (length(idempotency_key) <= 200))),
@@ -28783,6 +31008,13 @@ COMMENT ON COLUMN public.jobs.stop_requested_at IS 'Somebody asked for this job 
 
 
 --
+-- Name: COLUMN jobs.synthetic; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.jobs.synthetic IS 'This work is synthetic. Taken from the inbound command or inherited from the parent job, never from anything the harness can rename, and immutable once set (0541).';
+
+
+--
 -- Name: knowledge_connectors; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -28815,6 +31047,27 @@ COMMENT ON TABLE public.knowledge_connectors IS 'Where a document came from, and
 --
 
 COMMENT ON COLUMN public.knowledge_connectors.health_service IS 'The `connection_health.service` this connector depends on, so a project can tell "not connected" from "connected but the service is down". Null means nothing external can fail — an upload has no service behind it.';
+
+
+--
+-- Name: known_escapes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.known_escapes (
+    delivery_id uuid NOT NULL,
+    issue text NOT NULL,
+    why text NOT NULL,
+    acknowledged_at timestamp with time zone DEFAULT app.now_utc() NOT NULL,
+    CONSTRAINT known_escapes_has_a_reason CHECK ((length(btrim(why)) >= 20)),
+    CONSTRAINT known_escapes_has_an_issue CHECK ((btrim(issue) <> ''::text))
+);
+
+
+--
+-- Name: TABLE known_escapes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.known_escapes IS 'Harness deliveries that reached a real destination, investigated and kept as evidence. Acknowledged one delivery_id at a time so that no future escape can be silenced in advance.';
 
 
 --
@@ -28860,10 +31113,24 @@ COMMENT ON TABLE public.lessons IS 'Operating knowledge the office keeps about i
 
 
 --
+-- Name: COLUMN lessons.body; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.lessons.body IS 'The rule, or -- on a retraction row -- why it was dropped. RETRACTIONS WRITTEN BEFORE 2026-09-23 HOLD THE AUTHOR HERE INSTEAD: remember.ts passed app.retract_lesson its arguments the wrong way round, and this table refuses UPDATE, so those rows cannot be corrected. Read them with that in mind and do not count them as Grant''s.';
+
+
+--
+-- Name: COLUMN lessons.learned_by; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.lessons.learned_by IS 'Who stated or withdrew it. RETRACTIONS WRITTEN BEFORE 2026-09-23 HOLD THE REASON HERE INSTEAD -- see the comment on body. is_fixture is GENERATED from this column, so those rows are marked real whoever wrote them, and a harness retraction among them cannot be told from one of Grant''s.';
+
+
+--
 -- Name: COLUMN lessons.is_fixture; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.lessons.is_fixture IS 'Harness traffic on the office''s memory (#181). GENERATED from learned_by with the same predicate jobs and tasks use, so it cannot go stale the way a trigger-maintained copy can (0303). The lessons are not deleted: this table is what the office learned, and a sweep of it would be deleting that.';
+COMMENT ON COLUMN public.lessons.is_fixture IS 'Generated from learned_by. Trustworthy on lesson rows; on retraction rows written before 2026-09-23 it is generated from the reason text and means nothing.';
 
 
 --
@@ -29188,7 +31455,7 @@ CREATE VIEW public.needs_me AS
     created_at,
     ((real_deadline IS NOT NULL) AND (real_deadline <= app.now_utc())) AS overdue
    FROM public.blockers b
-  WHERE (state = 'open'::public.blocker_state)
+  WHERE ((state = 'open'::public.blocker_state) AND (NOT COALESCE(app.harness_job(job_id), false)))
   ORDER BY ((real_deadline IS NOT NULL) AND (real_deadline <= app.now_utc())) DESC, work_can_continue, real_deadline, created_at;
 
 
@@ -29196,7 +31463,7 @@ CREATE VIEW public.needs_me AS
 -- Name: VIEW needs_me; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.needs_me IS '§12''s "Needs Me": open blockers, most urgent first. Deliberately NOT capped in the view - the cap belongs to the caller that renders it, and a view that silently returned 7 of 40 would hide the thing worth knowing.';
+COMMENT ON VIEW public.needs_me IS 'Open blockers that are Grant''s to answer. Excludes harness traffic (0569): it had none, and the morning briefing told him 54 things were waiting when four were. A blocker with no job is kept, because the filter may only ever exclude and must never hide a genuine request.';
 
 
 --
@@ -29489,6 +31756,26 @@ CREATE TABLE public.notification_preferences (
 );
 
 ALTER TABLE ONLY public.notification_preferences FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: office_members; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.office_members (
+    email text NOT NULL,
+    note text DEFAULT ''::text NOT NULL,
+    added_at timestamp with time zone DEFAULT app.now_utc() NOT NULL,
+    owner_key text DEFAULT 'grant'::text NOT NULL,
+    CONSTRAINT office_members_email_shape CHECK (((email = lower(btrim(email))) AND (email ~~ '%@%'::text)))
+);
+
+
+--
+-- Name: TABLE office_members; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.office_members IS 'The people whose authenticated session the office will answer. Not a copy of auth.users: that says who proved an address, this says who is allowed.';
 
 
 --
@@ -31700,7 +33987,7 @@ ALTER TABLE ONLY public.contacts
 --
 
 ALTER TABLE ONLY public.dashboard_layouts
-    ADD CONSTRAINT dashboard_layouts_pkey PRIMARY KEY (owner, project_id);
+    ADD CONSTRAINT dashboard_layouts_pkey PRIMARY KEY (owner, project_id, surface);
 
 
 --
@@ -31736,11 +34023,27 @@ ALTER TABLE ONLY public.document_collections
 
 
 --
+-- Name: document_orders document_orders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_orders
+    ADD CONSTRAINT document_orders_pkey PRIMARY KEY (owner, project_id);
+
+
+--
 -- Name: drive_watch drive_watch_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.drive_watch
     ADD CONSTRAINT drive_watch_pkey PRIMARY KEY (attachment_id);
+
+
+--
+-- Name: duty_said duty_said_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.duty_said
+    ADD CONSTRAINT duty_said_pkey PRIMARY KEY (job_kind, project_id);
 
 
 --
@@ -31960,6 +34263,14 @@ ALTER TABLE ONLY public.knowledge_connectors
 
 
 --
+-- Name: known_escapes known_escapes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.known_escapes
+    ADD CONSTRAINT known_escapes_pkey PRIMARY KEY (delivery_id);
+
+
+--
 -- Name: lessons lessons_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -32141,6 +34452,14 @@ ALTER TABLE ONLY public.notification_events
 
 ALTER TABLE ONLY public.notification_preferences
     ADD CONSTRAINT notification_preferences_pkey PRIMARY KEY (preference_id);
+
+
+--
+-- Name: office_members office_members_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.office_members
+    ADD CONSTRAINT office_members_pkey PRIMARY KEY (email);
 
 
 --
@@ -32882,6 +35201,13 @@ COMMENT ON INDEX public.documents_one_per_imported_output IS '#28. One document 
 
 
 --
+-- Name: documents_one_per_linked_file; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX documents_one_per_linked_file ON public.documents USING btree (connector, external_ref) WHERE ((external_ref IS NOT NULL) AND (external_parent_ref IS NULL));
+
+
+--
 -- Name: documents_origin_state_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -33082,6 +35408,20 @@ CREATE INDEX job_traces_at_idx ON public.job_traces USING btree (at);
 --
 
 CREATE INDEX job_transitions_job_idx ON public.job_state_transitions USING btree (job_id, occurred_at);
+
+
+--
+-- Name: job_transitions_state_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX job_transitions_state_time_idx ON public.job_state_transitions USING btree (to_state, occurred_at DESC);
+
+
+--
+-- Name: INDEX job_transitions_state_time_idx; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON INDEX public.job_transitions_state_time_idx IS 'For "when did work last actually move" — app.last_progress() takes three max(occurred_at) by to_state and each was a 1.2-second sequential scan before this existed (0538).';
 
 
 --
@@ -33897,10 +36237,31 @@ CREATE TRIGGER inbound_addressed_also_is_real BEFORE INSERT OR UPDATE OF address
 
 
 --
+-- Name: inbound_commands inbound_commands_remember_origin; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER inbound_commands_remember_origin BEFORE DELETE ON public.inbound_commands FOR EACH ROW EXECUTE FUNCTION app.remember_a_deleted_origin();
+
+
+--
 -- Name: inbound_commands inbound_commands_resolve_subject; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER inbound_commands_resolve_subject BEFORE INSERT ON public.inbound_commands FOR EACH ROW EXECUTE FUNCTION app.resolve_inbound_subject();
+
+
+--
+-- Name: inbound_commands inbound_commands_stamp_synthetic; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER inbound_commands_stamp_synthetic BEFORE INSERT ON public.inbound_commands FOR EACH ROW EXECUTE FUNCTION app.stamp_synthetic_inbound();
+
+
+--
+-- Name: inbound_commands inbound_commands_synthetic_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER inbound_commands_synthetic_immutable BEFORE UPDATE OF synthetic ON public.inbound_commands FOR EACH ROW EXECUTE FUNCTION app.synthetic_is_immutable();
 
 
 --
@@ -34009,6 +36370,20 @@ CREATE TRIGGER jobs_enforce_transition BEFORE UPDATE OF state ON public.jobs FOR
 
 
 --
+-- Name: jobs jobs_inherit_synthetic; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER jobs_inherit_synthetic BEFORE INSERT ON public.jobs FOR EACH ROW EXECUTE FUNCTION app.job_inherits_synthetic();
+
+
+--
+-- Name: jobs jobs_journal_terminal_failure; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER jobs_journal_terminal_failure AFTER UPDATE OF state ON public.jobs FOR EACH ROW WHEN (((new.state = 'failed'::public.job_state) AND (old.state IS DISTINCT FROM 'failed'::public.job_state))) EXECUTE FUNCTION app.journal_terminal_failure();
+
+
+--
 -- Name: jobs jobs_log_creation; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -34020,6 +36395,13 @@ CREATE TRIGGER jobs_log_creation AFTER INSERT ON public.jobs FOR EACH ROW EXECUT
 --
 
 CREATE TRIGGER jobs_replays_never_announce BEFORE INSERT OR UPDATE ON public.jobs FOR EACH ROW EXECUTE FUNCTION app.replays_never_announce();
+
+
+--
+-- Name: jobs jobs_synthetic_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER jobs_synthetic_immutable BEFORE UPDATE OF synthetic ON public.jobs FOR EACH ROW EXECUTE FUNCTION app.synthetic_is_immutable();
 
 
 --
@@ -34670,6 +37052,14 @@ ALTER TABLE ONLY public.document_collections
 
 
 --
+-- Name: document_orders document_orders_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_orders
+    ADD CONSTRAINT document_orders_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id) ON DELETE CASCADE;
+
+
+--
 -- Name: documents documents_connector_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -34722,6 +37112,14 @@ ALTER TABLE ONLY public.documents
 
 ALTER TABLE ONLY public.drive_watch
     ADD CONSTRAINT drive_watch_attachment_id_fkey FOREIGN KEY (attachment_id) REFERENCES public.project_attachments(attachment_id) ON DELETE CASCADE;
+
+
+--
+-- Name: duty_said duty_said_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.duty_said
+    ADD CONSTRAINT duty_said_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id) ON DELETE CASCADE;
 
 
 --
@@ -34962,6 +37360,14 @@ ALTER TABLE ONLY public.jobs
 
 ALTER TABLE ONLY public.jobs
     ADD CONSTRAINT jobs_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id);
+
+
+--
+-- Name: known_escapes known_escapes_delivery_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.known_escapes
+    ADD CONSTRAINT known_escapes_delivery_id_fkey FOREIGN KEY (delivery_id) REFERENCES public.deliveries(delivery_id) ON DELETE CASCADE;
 
 
 --
@@ -36980,6 +39386,15 @@ GRANT ALL ON FUNCTION app.autonomy_for(p_project_id uuid) TO ai_team_app;
 
 
 --
+-- Name: FUNCTION backup_health(); Type: ACL; Schema: app; Owner: -
+--
+
+REVOKE ALL ON FUNCTION app.backup_health() FROM PUBLIC;
+GRANT ALL ON FUNCTION app.backup_health() TO service_role;
+GRANT ALL ON FUNCTION app.backup_health() TO authenticated;
+
+
+--
 -- Name: FUNCTION build_shots_orphaned(p_limit integer); Type: ACL; Schema: app; Owner: -
 --
 
@@ -37007,6 +39422,14 @@ GRANT ALL ON FUNCTION app.capability_index_core(p_staff text) TO ai_team_app;
 --
 
 GRANT ALL ON FUNCTION app.capacity_limit(p_name text, p_default integer) TO ai_team_app;
+
+
+--
+-- Name: FUNCTION chores_for_backups(); Type: ACL; Schema: app; Owner: -
+--
+
+REVOKE ALL ON FUNCTION app.chores_for_backups() FROM PUBLIC;
+GRANT ALL ON FUNCTION app.chores_for_backups() TO service_role;
 
 
 --
@@ -37292,6 +39715,14 @@ GRANT ALL ON FUNCTION app.harness_job(p_job_id uuid) TO service_role;
 --
 
 GRANT ALL ON FUNCTION app.harness_proposal(p_staff text, p_needed text) TO ai_team_app;
+
+
+--
+-- Name: FUNCTION harness_suggestion(p_offer_args jsonb); Type: ACL; Schema: app; Owner: -
+--
+
+GRANT ALL ON FUNCTION app.harness_suggestion(p_offer_args jsonb) TO authenticated;
+GRANT ALL ON FUNCTION app.harness_suggestion(p_offer_args jsonb) TO service_role;
 
 
 --
@@ -37682,6 +40113,13 @@ GRANT ALL ON FUNCTION app.jobs_stuck_queued(p_floor_minutes integer) TO ai_team_
 
 
 --
+-- Name: FUNCTION journal_terminal_failure(); Type: ACL; Schema: app; Owner: -
+--
+
+REVOKE ALL ON FUNCTION app.journal_terminal_failure() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION judge_consultation(p_job_id uuid); Type: ACL; Schema: app; Owner: -
 --
 
@@ -37694,6 +40132,15 @@ GRANT ALL ON FUNCTION app.judge_consultation(p_job_id uuid) TO ai_team_app;
 
 REVOKE ALL ON FUNCTION app.kick_worker() FROM PUBLIC;
 GRANT ALL ON FUNCTION app.kick_worker() TO service_role;
+
+
+--
+-- Name: FUNCTION last_progress(); Type: ACL; Schema: app; Owner: -
+--
+
+REVOKE ALL ON FUNCTION app.last_progress() FROM PUBLIC;
+GRANT ALL ON FUNCTION app.last_progress() TO service_role;
+GRANT ALL ON FUNCTION app.last_progress() TO authenticated;
 
 
 --
@@ -37912,6 +40359,22 @@ GRANT ALL ON FUNCTION app.output_value_is(p_value jsonb, p_type text) TO ai_team
 
 
 --
+-- Name: FUNCTION owed_a_word(p_job_id uuid); Type: ACL; Schema: app; Owner: -
+--
+
+GRANT ALL ON FUNCTION app.owed_a_word(p_job_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION app.owed_a_word(p_job_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION page_backup_failure(); Type: ACL; Schema: app; Owner: -
+--
+
+REVOKE ALL ON FUNCTION app.page_backup_failure() FROM PUBLIC;
+GRANT ALL ON FUNCTION app.page_backup_failure() TO service_role;
+
+
+--
 -- Name: FUNCTION pause_worker(p_seconds integer); Type: ACL; Schema: app; Owner: -
 --
 
@@ -38075,6 +40538,14 @@ GRANT ALL ON FUNCTION app.record_provider_failure(p_provider text, p_error text)
 --
 
 GRANT ALL ON FUNCTION app.record_provider_success(p_provider text) TO ai_team_app;
+
+
+--
+-- Name: FUNCTION record_rehearsal(p_outcome text, p_detail jsonb); Type: ACL; Schema: app; Owner: -
+--
+
+REVOKE ALL ON FUNCTION app.record_rehearsal(p_outcome text, p_detail jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION app.record_rehearsal(p_outcome text, p_detail jsonb) TO service_role;
 
 
 --
@@ -38918,6 +41389,13 @@ GRANT ALL ON FUNCTION public.hq_connections() TO service_role;
 
 
 --
+-- Name: FUNCTION hq_contact_archive(p_contact_id uuid, p_put_away boolean); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_contact_archive(p_contact_id uuid, p_put_away boolean) TO service_role;
+
+
+--
 -- Name: FUNCTION hq_contact_fields_set(p_contact_id uuid, p_fields jsonb); Type: ACL; Schema: public; Owner: -
 --
 
@@ -38953,11 +41431,43 @@ GRANT ALL ON FUNCTION public.hq_contact_labels_set(p_contact_id uuid, p_labels j
 
 
 --
+-- Name: FUNCTION hq_contact_photo_set(p_contact_id uuid, p_path text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_contact_photo_set(p_contact_id uuid, p_path text) TO service_role;
+
+
+--
+-- Name: FUNCTION hq_contact_update(p_contact_id uuid, p_name text, p_role text, p_org text, p_email text, p_phone text, p_website text, p_instagram text, p_where text, p_note text, p_kind text, p_stage text, p_next text, p_next_due text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_contact_update(p_contact_id uuid, p_name text, p_role text, p_org text, p_email text, p_phone text, p_website text, p_instagram text, p_where text, p_note text, p_kind text, p_stage text, p_next text, p_next_due text) TO service_role;
+
+
+--
 -- Name: FUNCTION hq_cost_per_outcome(p_days integer); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.hq_cost_per_outcome(p_days integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.hq_cost_per_outcome(p_days integer) TO service_role;
+
+
+--
+-- Name: FUNCTION hq_dashboard_layout_reset(p_slug text, p_surface text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_dashboard_layout_reset(p_slug text, p_surface text) TO anon;
+GRANT ALL ON FUNCTION public.hq_dashboard_layout_reset(p_slug text, p_surface text) TO authenticated;
+GRANT ALL ON FUNCTION public.hq_dashboard_layout_reset(p_slug text, p_surface text) TO service_role;
+
+
+--
+-- Name: FUNCTION hq_dashboard_layout_set(p_slug text, p_panels jsonb, p_surface text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_dashboard_layout_set(p_slug text, p_panels jsonb, p_surface text) TO anon;
+GRANT ALL ON FUNCTION public.hq_dashboard_layout_set(p_slug text, p_panels jsonb, p_surface text) TO authenticated;
+GRANT ALL ON FUNCTION public.hq_dashboard_layout_set(p_slug text, p_panels jsonb, p_surface text) TO service_role;
 
 
 --
@@ -38978,11 +41488,36 @@ GRANT ALL ON FUNCTION public.hq_disconnect(p_service text) TO service_role;
 
 
 --
+-- Name: FUNCTION hq_document_link(p_project_id uuid, p_connector text, p_external_ref text, p_title text, p_mime text, p_source_title text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_document_link(p_project_id uuid, p_connector text, p_external_ref text, p_title text, p_mime text, p_source_title text) TO service_role;
+
+
+--
 -- Name: FUNCTION hq_document_move(p_document_id uuid, p_project_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.hq_document_move(p_document_id uuid, p_project_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.hq_document_move(p_document_id uuid, p_project_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION hq_document_order_reset(p_slug text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_document_order_reset(p_slug text) TO anon;
+GRANT ALL ON FUNCTION public.hq_document_order_reset(p_slug text) TO authenticated;
+GRANT ALL ON FUNCTION public.hq_document_order_reset(p_slug text) TO service_role;
+
+
+--
+-- Name: FUNCTION hq_document_order_set(p_slug text, p_ids jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_document_order_set(p_slug text, p_ids jsonb) TO anon;
+GRANT ALL ON FUNCTION public.hq_document_order_set(p_slug text, p_ids jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.hq_document_order_set(p_slug text, p_ids jsonb) TO service_role;
 
 
 --
@@ -39049,6 +41584,15 @@ GRANT ALL ON FUNCTION public.hq_job_trace(p_job_id text) TO service_role;
 
 
 --
+-- Name: FUNCTION hq_output(p_output_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_output(p_output_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.hq_output(p_output_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.hq_output(p_output_id uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION hq_overview(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -39103,6 +41647,15 @@ GRANT ALL ON FUNCTION public.hq_project_seen(p_project_id uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.hq_projects() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.hq_projects() TO ai_team_app;
 GRANT ALL ON FUNCTION public.hq_projects() TO service_role;
+
+
+--
+-- Name: FUNCTION hq_pulse(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.hq_pulse() TO anon;
+GRANT ALL ON FUNCTION public.hq_pulse() TO authenticated;
+GRANT ALL ON FUNCTION public.hq_pulse() TO service_role;
 
 
 --
@@ -39230,6 +41783,15 @@ GRANT ALL ON FUNCTION public.hq_usage() TO service_role;
 --
 
 GRANT ALL ON FUNCTION public.import_output(p_output uuid, p_collection text, p_tags text[], p_related_task uuid, p_related_source uuid, p_title text) TO ai_team_app;
+
+
+--
+-- Name: FUNCTION lessons_for(p_project_id uuid, p_staff_slug text, p_job_kind text, p_limit integer); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.lessons_for(p_project_id uuid, p_staff_slug text, p_job_kind text, p_limit integer) TO anon;
+GRANT ALL ON FUNCTION public.lessons_for(p_project_id uuid, p_staff_slug text, p_job_kind text, p_limit integer) TO authenticated;
+GRANT ALL ON FUNCTION public.lessons_for(p_project_id uuid, p_staff_slug text, p_job_kind text, p_limit integer) TO service_role;
 
 
 --
@@ -39379,6 +41941,14 @@ GRANT ALL ON FUNCTION public.my_tasks_counts() TO service_role;
 
 REVOKE ALL ON FUNCTION public.office_health(p_hours integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.office_health(p_hours integer) TO service_role;
+
+
+--
+-- Name: FUNCTION office_member(p_email text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.office_member(p_email text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.office_member(p_email text) TO service_role;
 
 
 --
@@ -39532,6 +42102,15 @@ GRANT ALL ON FUNCTION public.remove_project_reference(p_reference_id uuid) TO ai
 --
 
 GRANT ALL ON FUNCTION public.rename_document(p_document uuid, p_title text) TO ai_team_app;
+
+
+--
+-- Name: FUNCTION resolve_project_by_name(p_text text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.resolve_project_by_name(p_text text) TO anon;
+GRANT ALL ON FUNCTION public.resolve_project_by_name(p_text text) TO authenticated;
+GRANT ALL ON FUNCTION public.resolve_project_by_name(p_text text) TO service_role;
 
 
 --

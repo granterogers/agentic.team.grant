@@ -97,6 +97,32 @@ delete from public.project_attachments
  where project_id in (select project_id from public.projects
                        where slug in ('baseline-scaffold-do-not-use', 'legacy-coaching-course'));
 
+-- ---------------------------------------------------------------------------
+-- AND THE REFERENCES THE SCAFFOLD JOBS AND ENTRIES HOLD.
+--
+-- 32 foreign keys point at `public.projects` and only nine cascade, so a
+-- project that anything still references cannot be deleted -- the same refusal
+-- `app.project_delete` turns into a sentence. The replay's own preconditions
+-- now attach work to the two scaffold projects: a `drive.watch` job on each
+-- (0585 needs two projects saying the same thing) and a `notebook.generate`
+-- job (0591).
+--
+-- They are POINTED AWAY rather than deleted, and the distinction matters.
+-- `jobs` is not in the baseline's seed allow-list, so none of them reaches a
+-- fresh install whatever is done here -- and a job cannot be deleted at all:
+-- `job_state_transitions` holds it, which is the rule that protects Grant's
+-- history and applies to a replay's history too. Nulling the column is the
+-- smallest change that lets ADR-0014's order finish.
+--
+-- `public.events` is not in this list because nothing can move it: the ledger
+-- is append-only and refuses UPDATE as well as DELETE. The precondition before
+-- 0586 records its one activity entry against NO project instead, which is
+-- what 0586's own reader already allows.
+-- ---------------------------------------------------------------------------
+update public.jobs set project_id = null
+ where project_id in (select project_id from public.projects
+                       where slug in ('baseline-scaffold-do-not-use', 'legacy-coaching-course'));
+
 delete from public.projects
  where slug in ('baseline-scaffold-do-not-use', 'legacy-coaching-course');
 

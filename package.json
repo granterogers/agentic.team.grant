@@ -335,6 +335,7 @@
     "fresh:first-use": "tsx scripts/fresh/first-use.ts",
     "fresh:accept": "tsx scripts/fresh/accept.ts",
     "check:fresh": "tsx scripts/check-fresh.ts",
+    "check:reconcile": "tsx scripts/reconcile-production.ts",
     "fresh:docs": "tsx scripts/fresh/docs.ts",
     "verify:basecamp-routes": "tsx scripts/verify/basecamp-routes.ts",
     "verify:drive-live": "tsx scripts/verify/drive-live.ts",

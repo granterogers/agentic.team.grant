@@ -28,11 +28,22 @@
 -- is constrained to a dotted lower-case shape.
 -- ---------------------------------------------------------------------------
 
+/*
+  AGAINST NO PROJECT, deliberately.
+
+  0586's feed reads `where p.project_id is null or not p.is_fixture`, so an
+  entry belonging to no project is exactly as visible as one on a real project
+  -- and `public.events` is append-only, refusing UPDATE and DELETE alike, so
+  an entry attached to a scaffold project could never be released again and
+  would hold that project alive through `events_project_id_fkey` for ever.
+  Anything this replay writes has to be removable by the teardown that follows
+  it, and this is the only column that makes that true.
+*/
 insert into public.events
   (correlation_id, project_id, actor_kind, actor, trigger, action_type,
    occurred_at, rationale_summary, reversible)
 select gen_random_uuid(),
-       p.project_id,
+       null,
        'system',
        'fresh-install-scaffold',
        'migration',
@@ -40,6 +51,4 @@ select gen_random_uuid(),
        app.now_utc() - interval '1 hour',
        'fresh-install baseline scaffolding: one entry so the activity panel is not empty',
        false
-  from public.projects p
- where p.slug = 'baseline-scaffold-do-not-use'
-   and not exists (select 1 from public.events e where e.actor = 'fresh-install-scaffold');
+ where not exists (select 1 from public.events e where e.actor = 'fresh-install-scaffold');
