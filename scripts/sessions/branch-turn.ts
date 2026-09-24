@@ -18,7 +18,8 @@ import { db, lit } from './run.ts'
 
 const [session, slug, ...says] = process.argv.slice(2)
 const run = Math.random().toString(36).slice(2, 8)
-const chat = `branch-${String(session)}-${run}`
+// CHAT=<chat> resumes an existing conversation; START=<n> numbers its turns from there.
+const chat = process.env.CHAT ?? `branch-${String(session)}-${run}`
 const actor = `verify-branch-${String(session)}`
 const MINE = `teamhq:${actor}`
 const WORKER = `branch-${run}`
@@ -40,7 +41,7 @@ const pass = await buildPass(db, WORKER, {
   projectRef: process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
 })
 
-let i = 0
+let i = Number(process.env.START ?? '0')
 for (const say of says) {
   i += 1
   const key = `teamhq:branch_turn:${chat}-${String(i)}`
@@ -51,16 +52,32 @@ for (const say of says) {
     insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
       values ('teamhq', ${lit(`${chat}:${String(i)}`)}, ${lit(actor)}, ${lit(say)}, ${lit(key)}, app.now_utc(), ${lit(proj)}::uuid);
     create temp table _j on commit drop as select (app.enqueue_inbound((select command_id from public.inbound_commands where dedupe_key = ${lit(key)})) ->> 'job_id')::uuid as id;
-    update public.jobs set announce = false where job_id = (select id from _j);
+    /*
+      Not runnable for three seconds, so the deployed worker - which is kicked
+      on enqueue - finds nothing to take, and this process claims it once it
+      is due. Without it the kick won about half the races.
+    */
+    update public.jobs set announce = false, not_before = app.now_utc() + interval '3 seconds'
+     where job_id = (select id from _j);
     select (select id from _j)::text as id;
     commit;`)
     ).id,
   )
+  await pause(3_200)
   let job: Job | null = null
   for (let t = 0; t < 6 && job === null; t++) {
     const got = await dequeue(db, WORKER, false, false, undefined, MINE)
     if (got?.jobId === jobId) job = got
-    else await pause(500)
+    else if (got !== null) {
+      /*
+        Another job of THIS conversation - a child the previous turn started
+        inherits the actor, so the scope admits it. Run it here rather than
+        dropping it: a dequeued job left alone holds its lease and strands,
+        which is exactly what the first version of this driver did to a
+        pursuit (CLAUDE.md: settle anything else that arrives).
+      */
+      await runJob(db, got, pass.handlers, pass.review).catch(() => undefined)
+    } else await pause(500)
   }
   let ranHere = job !== null
   for (let attempt = 1; job !== null && attempt <= 3; attempt++) {
@@ -74,6 +91,8 @@ for (const say of says) {
     for (let t = 0; t < 6 && job === null; t++) {
       const got = await dequeue(db, WORKER, false, false, undefined, MINE)
       if (got?.jobId === jobId) job = got
+      else if (got !== null)
+        await runJob(db, got, pass.handlers, pass.review).catch(() => undefined)
       else await pause(500)
     }
   }

@@ -137,6 +137,7 @@ import { asksForWork } from '../agents/request.ts'
 import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
+import { optionFor, spokenAnswer } from '../agents/spoken-answer.ts'
 import { nameSubjects } from '../agents/subject.ts'
 import {
   NEEDS_A_TITLE,
@@ -4572,6 +4573,82 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 return null
               })
 
+      /*
+        HIS YES OR NO TO THE QUESTION THIS CONVERSATION ASKED (ledger R33).
+
+        Only for a short, unambiguous yes or no, only when this conversation's
+        own work - its jobs and everything they started - has exactly ONE open
+        question, and only onto that question's own option by its first word.
+        Several open questions are named and asked about; none, and this does
+        nothing. Answered through app.hq_answer_blocker, the same door the
+        dashboard button uses, so what answering performs is identical.
+      */
+      const spoken = isBranch ? null : spokenAnswer(asSaid)
+      const answeredQuestion: { text: string; did: boolean } | null =
+        spoken === null
+          ? null
+          : await deps.db
+              .execute(`
+                with recursive me as (
+                  select origin_channel, split_part(origin_ref, ':', 1) as chat,
+                         coalesce(subject, actor) as who, command_id
+                    from public.inbound_commands
+                   where command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid
+                ), ours as (
+                  select c.job_id from public.inbound_commands c, me
+                   where c.origin_channel = me.origin_channel
+                     and split_part(c.origin_ref, ':', 1) = me.chat
+                     and coalesce(c.subject, c.actor) = me.who
+                     and c.command_id <> me.command_id
+                     and c.job_id is not null
+                     and c.received_at >= app.now_utc() - interval '12 hours'
+                ), tree as (
+                  select job_id from ours
+                  union
+                  select j.job_id from public.jobs j join tree t on j.parent_job_id = t.job_id
+                )
+                select b.blocker_id::text as id, b.requested_action as what,
+                       coalesce(b.approval_options, array[]::text[]) as options
+                  from public.blockers b
+                 where b.state = 'open' and b.job_id in (select job_id from tree)
+                 order by b.created_at desc limit 5`)
+              .then(async (r) => {
+                const open = r.rows as { id: string; what: string; options: string[] }[]
+                if (open.length === 0) return null
+                if (open.length > 1) {
+                  return {
+                    did: false,
+                    text: `I have not answered anything yet — there is more than one question waiting: ${open
+                      .map((o) => `"${o.what}"`)
+                      .join(', ')}. Which one is that for?`,
+                  }
+                }
+                const q = open[0]
+                const option = q === undefined ? null : optionFor(spoken, q.options)
+                if (q === undefined || option === null) return null
+                const res = await deps.db.execute(
+                  `select app.hq_answer_blocker(${lit(q.id)}::uuid, ${lit(option)}) as r`,
+                )
+                const out = (res.rows[0] as { r?: unknown })?.r
+                const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
+                  ok?: boolean
+                  error?: string
+                } | null
+                return got?.ok === true
+                  ? {
+                      did: true,
+                      text:
+                        spoken === 'yes'
+                          ? `Taken as a yes to "${q.what}" — it is going ahead now.`
+                          : `Taken as a no to "${q.what}" — I have left it.`,
+                    }
+                  : {
+                      did: false,
+                      text: `I could not record that answer to "${q.what}"${got?.error === undefined ? '' : `: ${got.error}`}.`,
+                    }
+              })
+              .catch(() => null)
+
       const filed =
         asked !== null
           ? await addTask(deps.db, job, asked, instruction, deps.now?.() ?? new Date())
@@ -4645,6 +4722,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         changed,
         settledTask?.text ?? null,
         subbed?.text ?? null,
+        answeredQuestion?.text ?? null,
         stopped,
         whoIsOn,
         alreadyOn,
@@ -4685,6 +4763,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           changed,
           settledTask?.text ?? null,
           subbed?.text ?? null,
+          answeredQuestion?.text ?? null,
           stopped,
           whoIsOn,
           alreadyOn,
@@ -4779,6 +4858,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         (changed === null ? 0 : 1) +
         (settledTask?.did === true ? 1 : 0) +
         (subbed?.did === true ? 1 : 0) +
+        (answeredQuestion?.did === true ? 1 : 0) +
         who.alsoConvened.length
 
       /*
@@ -5049,7 +5129,23 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         } satisfies HandlerOutput
       }
 
-      const hits = !answering ? [] : await retrieve(deps.db, instruction, job.projectId)
+      /*
+        A SHORT FOLLOW-UP SEARCHES WITH WHAT IT FOLLOWS (ledger R32).
+
+        "Yes, go ahead." retrieves nothing, so the answer to it had no
+        documents behind it, and the date the office had just read out of the
+        venue terms ("2 Oct") was refused four times as invented - the job
+        failed. A short message also searches with the words of the message
+        before it, which is what it is about; a long one stands on its own.
+        Only the SEARCH widens: the office's own earlier answer is still not
+        evidence, but the documents that answer came from are.
+      */
+      const lastSaid = turnsBefore.at(-1)?.said ?? ''
+      const searchFor =
+        instruction.split(/\s+/).length <= 8 && lastSaid !== ''
+          ? `${lastSaid} ${instruction}`
+          : instruction
+      const hits = !answering ? [] : await retrieve(deps.db, searchFor, job.projectId)
       const context = contextBlock(hits)
 
       /*
