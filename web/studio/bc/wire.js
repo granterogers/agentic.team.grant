@@ -1569,20 +1569,16 @@ const wireArrange = (root) => {
   const panel = root.querySelector('[data-bc-arrange-panel]')
   const slug = ctx.state.project
 
-  for (const b of root.querySelectorAll('[data-bc-arrange]')) {
-    b.addEventListener('click', () => {
-      if (panel === null) return
-      panel.hidden = !panel.hidden
-      b.setAttribute('aria-expanded', String(!panel.hidden))
-      if (!panel.hidden) panel.querySelector('button')?.focus()
-    })
-  }
-  for (const b of root.querySelectorAll('[data-bc-arr-close]')) {
-    b.addEventListener('click', () => {
-      if (panel !== null) panel.hidden = true
-      root.querySelector('[data-bc-arrange]')?.focus()
-    })
-  }
+  /*
+    There is no longer a control that OPENS this panel, and there must not be:
+    the panel appears on the board exactly when something is off it, and
+    disappears when the page is whole. Two loops used to hang a toggle and a
+    close button off it. They survived the move and matched nothing for the
+    life of the feature -- a listener bound to an attribute no renderer emits,
+    which is the dead-control shape with the sign reversed. They are gone
+    rather than kept: a handler nothing can reach is a claim that a control
+    exists.
+  */
 
   /*
     The panel is inside the thing being redrawn, so a press closes it unless it

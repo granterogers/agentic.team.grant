@@ -336,7 +336,8 @@
     "basecamp:compose": "tsx scripts/verify/basecamp-compose-shots.ts",
     "verify:basecamp-home": "tsx scripts/verify/basecamp-home.ts",
     "review:build": "tsx scripts/review-build.ts",
-    "deploy:preview": "npm run review:build && tsx scripts/deploy/site.ts"
+    "deploy:preview": "npm run review:build && tsx scripts/deploy/site.ts",
+    "verify:basecamp-photo": "tsx scripts/verify/basecamp-photo.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

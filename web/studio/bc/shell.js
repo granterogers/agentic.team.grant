@@ -1519,9 +1519,26 @@ const documentsSurface = (p) => {
 */
 const contactKey = (c, i) => contacts.keyOf(c, i)
 
+/*
+  A CONTACT'S PHOTOGRAPH ARRIVES AS `photo`, NOT `image`.
+
+  `app.studio_contacts` projects `photo_path`, the gateway signs it and hands
+  it over as `photo`; the miniature has read that key correctly all along. This
+  read `image`, which only the prototype's local data-URL path ever sets -- so
+  a real photograph rendered in the miniature and vanished in the record, two
+  views of one person disagreeing about whether there is a picture of them.
+  Both keys are taken, because the prototype still supplies `image` and a
+  capture with no face in it is a capture nobody can judge.
+*/
+const faceOf = (c) => {
+  const url = typeof c?.photo === 'string' && c.photo !== '' ? c.photo : ''
+  if (url !== '') return url
+  return typeof c?.image === 'string' && c.image !== '' ? c.image : ''
+}
+
 const avatar = (c, size = 56) =>
-  c.image
-    ? `<img class="bcface bcface--photo" src="${esc(c.image)}" alt="" width="${String(size)}" height="${String(size)}">`
+  faceOf(c) !== ''
+    ? `<img class="bcface bcface--photo" src="${esc(faceOf(c))}" alt="" width="${String(size)}" height="${String(size)}" loading="lazy" decoding="async">`
     : `<span class="bcface bcface--mono" aria-hidden="true">${esc(
         String(c.name ?? '?')
           .split(/\s+/)
@@ -1568,11 +1585,11 @@ const contactRecord = (p, c, i) => {
         ${avatar(c, 72)}
         <span class="bcimageacts">
           <label class="bcbtn bcbtn--file">
-            <span>${esc(c.image ? 'Replace the image' : 'Add an image')}</span>
+            <span>${esc(faceOf(c) !== '' ? 'Replace the image' : 'Add an image')}</span>
             <input type="file" accept="image/*" data-bc-contact-image="${esc(key)}" hidden>
           </label>
           ${
-            c.image
+            faceOf(c) !== ''
               ? button('Remove it', { 'data-bc-contact-image-off': esc(key) })
               : ''
           }

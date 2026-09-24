@@ -275,6 +275,28 @@ export const add = (slug, id) => {
   save(slug, [...now, { id, x: 0, y: bottom, w: Math.max(b.minW, 4), h: Math.max(b.minH, 6) }])
 }
 
+/**
+ * Has this page been arranged at all, or is it still as it was given?
+ *
+ * WHY THIS EXISTS: the way back used to be reachable only while a module was
+ * OFF the page, because the panel holding it renders only then. So a person
+ * who dragged and resized six modules and removed none had no way to undo any
+ * of it -- the one-way door this repository has already shipped once, when
+ * choosing Panels removed the control that had just been pressed.
+ *
+ * It compares the arrangement to the default rather than merely asking whether
+ * anything is stored, so that a board saved back into its original shape stops
+ * offering to restore a shape it is already in. Geometry, by id, because two
+ * lists in the same order with the same rectangles ARE the same arrangement.
+ */
+export const customised = (slug) => {
+  const now = layout(slug)
+  const was = compact(DEFAULT)
+  if (now.length !== was.length) return true
+  const same = (a, b) => a.id === b.id && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
+  return now.some((m, i) => !same(m, was[i]))
+}
+
 /** Which of ALL is not currently on the page. */
 export const off = (slug) => {
   const on = new Set(layout(slug).map((m) => m.id))

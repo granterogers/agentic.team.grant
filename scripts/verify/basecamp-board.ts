@@ -157,16 +157,49 @@ check(
   overlapping(afterOff),
 )
 
-/* --- 4. putting it back -------------------------------------------------- */
-await page.locator('[data-bc-pagemenu]').first().click()
-await page.waitForTimeout(200)
-await page.locator('[data-bc-arrange]').first().click()
-await page.waitForTimeout(300)
+/* --- 4. putting it back -------------------------------------------------- *
+ *
+ * THE WAY BACK HAS TO BE ON THE BOARD, NOT BEHIND A MENU.
+ *
+ * This section used to open the page menu and press an Arrange entry. Section
+ * 13 of the mission removed that entry -- the board supports direct
+ * manipulation and the panel was explaining it in prose -- so the RESTORING
+ * half moved onto the page and the explaining half went. The suite kept
+ * pressing the vanished trigger and timed out, which reads exactly like the
+ * product having lost the control it had in fact just been given.
+ *
+ * So assert the property rather than the mechanism, in both directions: with
+ * the page whole there is nothing offering anything back, and the moment a
+ * module is off, the offer is THERE, unprompted, naming that module.
+ */
+check(
+  'taking a module off puts the way back on the board, unprompted',
+  (await page.locator('[data-bc-arrange-panel]').count()) > 0,
+)
+check(
+  'and it names the module that is missing',
+  (await page.locator('[data-bc-arr-on="contacts"]').count()) > 0,
+)
 await page.locator('[data-bc-arr-on="contacts"]').first().click()
 await page.waitForTimeout(400)
 check(
-  'the arrange panel puts a removed module back',
+  'pressing it puts the module back',
   (await page.locator('[data-mod="contacts"]').count()) > 0,
+)
+check(
+  'and with every module back, it stops naming any',
+  (await page.locator('[data-bc-arr-on]').count()) === 0,
+)
+/*
+  The reset SURVIVES that, deliberately. Putting a module back does not put it
+  back WHERE it was -- `add` drops it at the foot of the board -- so the page
+  still differs from the shape it was given, and the one control that can undo
+  that has to remain reachable. It used to vanish here, which is how a person
+  who had only dragged things could end up with no way back at all.
+*/
+check(
+  'while the way back to the original shape remains',
+  (await page.locator('[data-bc-arr-reset]').count()) > 0,
 )
 
 /* --- 5. dragging a module by its header moves it ------------------------- */
@@ -256,11 +289,17 @@ check(
   overlapping(await boxes()),
 )
 
-/* --- 10. reset ----------------------------------------------------------- */
-await page.locator('[data-bc-pagemenu]').first().click()
-await page.waitForTimeout(200)
-await page.locator('[data-bc-arrange]').first().click()
-await page.waitForTimeout(250)
+/* --- 10. reset ----------------------------------------------------------- *
+ *
+ * Reached on the board, not through a menu -- and asserted to be there BEFORE
+ * it is pressed, because sections 5 to 9 have dragged and resized without
+ * removing anything, which is exactly the state in which this control used to
+ * be unreachable.
+ */
+check(
+  'a board that has only been rearranged still offers the way back',
+  (await page.locator('[data-bc-arr-reset]').count()) > 0,
+)
 await page.locator('[data-bc-arr-reset]').first().click()
 await page.waitForTimeout(400)
 await openBoard()

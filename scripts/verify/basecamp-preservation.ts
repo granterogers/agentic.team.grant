@@ -205,12 +205,14 @@ const known = new Set(sections.map((x) => x.id))
   worse than none.
 */
 const handoffs: string[] = []
+let visited = 0
 for (const s of sections) {
   if (s.id === 'settings') continue
   const to = s.id === 'overview' ? slug : `${slug}/${s.id}`
   await page.goto(url(to), { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.bcmain')
   await page.waitForTimeout(300)
+  visited += 1
   handoffs.push(
     ...((await page.evaluate(
       inPage(
@@ -219,10 +221,28 @@ for (const s of sections) {
     )) as string[]),
   )
 }
+/*
+  WHAT THE GUARD IS ACTUALLY FOR, which changed when the thing it guarded
+  disappeared.
+
+  It used to demand that the sweep FIND hand-offs, on the reasoning that a
+  sweep finding nothing reports a perfect score. Correct then and wrong now:
+  §20 removed the last of them, so the check went red on the day the product
+  got better -- which is a shape this repository has recorded four times.
+
+  The real worry was a sweep that visited nothing, so that is what it asserts.
+  Whether any hand-off SHOULD exist is `verify:basecamp-routes`'s question now,
+  and it fails on any link at all that leaves the experience.
+*/
 check(
-  'the hand-off sweep actually visited surfaces and found links',
-  handoffs.length > 0,
-  'a sweep that found nothing reports a perfect score',
+  'the hand-off sweep actually visited every surface',
+  visited === sections.filter((x) => x.id !== 'settings').length && visited > 0,
+  `${String(visited)} surface(s)`,
+)
+check(
+  'and there are none left to name a destination for',
+  handoffs.length === 0,
+  handoffs.join(', '),
 )
 for (const h of [...new Set(handoffs)]) {
   const bits = h.split('/').filter((x) => x !== '')

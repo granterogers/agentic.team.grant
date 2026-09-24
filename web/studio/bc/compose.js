@@ -472,10 +472,24 @@ export const arrangeReset = (slug) => {
 */
 const putBack = (p) => {
   const off = grid.off(p.slug)
-  if (off.length === 0) return ''
-  return `<section class="bcputback" data-bc-arrange-panel aria-label="Modules not on this page">
-    <span class="bclabel">Not on this page</span>
-    ${off.map((id) => button(NAMES[id] ?? id, { 'data-bc-arr-on': esc(id) })).join('')}
+  /*
+    THE RESET IS NOT CONDITIONAL ON SOMETHING BEING MISSING.
+
+    It was, and that was a one-way door: drag and resize six modules, remove
+    none, and this panel never appeared -- so the only control that could undo
+    any of it was unreachable precisely when nothing was wrong enough to
+    summon it. The offer now stands whenever the page differs from the shape it
+    was given, and says nothing at all when it does not.
+  */
+  const changed = grid.customised(p.slug)
+  if (off.length === 0 && !changed) return ''
+  return `<section class="bcputback" data-bc-arrange-panel aria-label="Putting this page back">
+    ${
+      off.length > 0
+        ? `<span class="bclabel">Not on this page</span>
+           ${off.map((id) => button(NAMES[id] ?? id, { 'data-bc-arr-on': esc(id) })).join('')}`
+        : ''
+    }
     ${button('Put it back the way it was', { 'data-bc-arr-reset': '1' })}
   </section>`
 }

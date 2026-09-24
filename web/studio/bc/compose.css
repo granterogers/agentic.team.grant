@@ -2817,3 +2817,22 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   [data-experience='basecamp'] .bcrecordhead { flex-wrap: wrap; }
   [data-experience='basecamp'] .bcrecordhead .bcactions { margin-left: 0; width: 100%; }
 }
+
+/* ---------------------------------------------------------------------- *
+ * WHAT THE TEAM WROTE, READ AS PROSE (§19).
+ *
+ * A measure rather than the full width: an output is something to read, and a
+ * line of a hundred characters is not. The paragraphs get room between them
+ * because the body arrives with real newlines and HTML would otherwise
+ * collapse them -- CLAUDE.md records that defect costing #186's whole outcome,
+ * invisible on the dashboard for weeks while Telegram and Slack showed it.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcoutputbody {
+  max-width: var(--bc-measure);
+  margin: var(--bc-4) 0;
+}
+[data-experience='basecamp'] .bcoutputbody p {
+  margin: 0 0 var(--bc-3);
+  color: var(--bc-text);
+}
+[data-experience='basecamp'] .bcoutputbody p:last-child { margin-bottom: 0; }
