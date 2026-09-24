@@ -1311,9 +1311,24 @@ const teamSurface = (p) => {
                 </div>
                 <span class="bcactions">
                   ${
+                    /*
+                      A PILL THAT SAYS RUNNING ABOUT WORK THAT IS WAITING IS A
+                      STATUS LIGHT THAT LIES.
+
+                      `studio_requests` folds six states into `working`, which
+                      is right for the filter and wrong for the label: a job
+                      waiting on a person or on something outside is not
+                      running, and the row already carries the reason. Stop is
+                      still offered, because a job waiting on something that
+                      will never come is exactly one somebody wants to stop.
+                    */
                     stopping.wasAsked(r.id)
                       ? status('Asked to stop', 'blocked')
-                      : `${status('Running', 'running')}
+                      : `${
+                          typeof r.blocked === 'string' && r.blocked !== ''
+                            ? status('Waiting', 'waiting')
+                            : status('Running', 'running')
+                        }
                          ${button('Stop', { 'data-bc-stopjob': esc(String(r.id)) })}`
                   }
                 </span>
@@ -1381,8 +1396,17 @@ const outputRow = (r) => {
     <div class="bcitembody">
       <button type="button" class="bcitemtitle bcitemlink" data-bc-output-open="${esc(r.output.id)}"
         aria-label="${esc(`Open ${r.output.title}`)}">${esc(r.output.title)}</button>
+      <!--
+        THE PERSON'S NAME, not their database key. Every other row on this
+        surface resolves the slug -- the roster above, the waiting list, the
+        running list -- and this one printed "oliver" in a column of Claires
+        and Emmas. One shared lookup, so a fourth list cannot disagree with the
+        other three.
+      -->
       <span class="bcitemmeta">${esc(
-        [r.who, r.output.kind, r.output.size, r.delivered].filter(Boolean).join(' · '),
+        [bcMini.named(r.who) || r.who, r.output.kind, r.output.size, r.delivered]
+          .filter(Boolean)
+          .join(' · '),
       )}</span>
       ${r.ask ? `<span class="bcitemmeta">Asked: ${esc(r.ask)}${r.from ? ` — ${esc(r.from)}` : ''}</span>` : ''}
       ${

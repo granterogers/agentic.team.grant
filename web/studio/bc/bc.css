@@ -1720,6 +1720,13 @@
   max-width: var(--bc-measure);
 }
 [data-experience='basecamp'] .bcwaitfacts + .bcsubhead { margin-top: var(--bc-8); }
+/*
+  A ROW OF LINKS DIRECTLY UNDER A LIST NEEDS AIR. With Running work built, the
+  team surface ends with a bordered list and then Team chat / Team board
+  immediately beneath it, touching the last row's rule -- which reads as a
+  fourth row of the list rather than as two links about the page.
+*/
+[data-experience='basecamp'] .bclist + .bcinline-list { margin-top: var(--bc-6); }
 .bcwaitanswer { display: grid; gap: var(--bc-3); margin-top: var(--bc-3); }
 /*
   The options WRAP rather than scroll. A blocker may offer two answers or five,

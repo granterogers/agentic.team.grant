@@ -164,7 +164,7 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 | # | Requirement | State |
 |---|---|---|
 | 20.1 | Running work → Outputs implemented in the new design | **VERIFIED** — Outputs open here; the block is the surface |
-| 20.2 | Active jobs implemented in the new design | BLOCKED — running jobs with stop controls are not built in the new design. The escape is gone and the surface says so plainly rather than linking out; `stop_job` exists at the gateway with nothing pressing it |
+| 20.2 | Active jobs implemented in the new design | **VERIFIED** — Running work lists every in-flight job with what it is, who has it, how long it has been going and why it is waiting, and a Stop control that presses `stop_job`. `verify:basecamp-running`, 9/9. One honest limit: the row says **Asked to stop**, not Stopped — `request_stop` stamps the job and the worker notices, and the stamp cannot be read back until another branch's 56 unshared migrations land (see the morning report) |
 | 20.3 | Team chat implemented in the new design | **VERIFIED** — Team chat now links to the experiment's own Chat tool, which existed all along |
 | 20.4 | Team board implemented in the new design | **VERIFIED** — Team board links to the Card Table, likewise |
 | 20.5 | Every visible link/action reachable from the new project UI audited | **VERIFIED** — every surface walked; the dead hand-off branch in the tool list is gone, and so is the task record's |
