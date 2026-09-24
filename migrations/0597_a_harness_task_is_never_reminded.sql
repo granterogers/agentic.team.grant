@@ -8,6 +8,10 @@
   traffic, so claim_delivery would have let a test session's reminder reach
   Grant. Spliced from the LIVE definition; one predicate changes.
 
+  app.tasks_to_push (outbound task sync) had the identical predicate and
+  would push a harness job's personal task to an external provider. Latent:
+  no provider is linked today (task_links is empty). Same fix, same file.
+
   MUST be applied before, or with, the worker that sets remind_at.
 */
 
@@ -52,4 +56,49 @@ AS $function$
      and t.reminded_at is null
      and t.remind_at <= app.now_utc()
      and t.remind_at >= app.now_utc() - p_grace
+$function$;
+
+CREATE OR REPLACE FUNCTION app.tasks_to_push(p_provider text, p_limit integer DEFAULT 200)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  with mine as (
+    select t.*, l.external_id, l.external_project_id, l.synced_revision
+      from public.tasks t
+      left join public.task_links l
+        on l.task_id = t.task_id and l.provider = p_provider
+     where t.assigned_to_human
+       -- 0597: a harness task never leaves the office (see app.reminders_due).
+       and not app.harness_task(t.is_fixture, t.job_id)
+       -- Never pushed, or moved since it was.
+       and (l.task_id is null or t.revision > coalesce(l.synced_revision, 0))
+     order by t.updated_at
+     limit greatest(coalesce(p_limit, 200), 1)
+  )
+  select jsonb_build_object(
+    'provider', p_provider,
+    'upserts', (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', m.task_id, 'revision', m.revision,
+        'title', m.title, 'detail', m.detail,
+        'state', m.state, 'done', m.state = 'done',
+        'priority', m.priority, 'due_on', m.due_on, 'starts_on', m.starts_on,
+        'remind_at', m.remind_at, 'labels', to_jsonb(m.labels),
+        'parent', m.parent_task_id,
+        'project', (select p.slug from public.projects p where p.project_id = m.project_id),
+        'external_id', m.external_id,
+        'external_project_id', m.external_project_id) order by m.updated_at), '[]'::jsonb)
+      from mine m),
+    /*
+      Deletions travel in the same answer as the upserts, because a provider
+      that learns about them separately will eventually apply them in the
+      wrong order and resurrect a task Grant deleted.
+    */
+    'deletes', (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', d.task_id, 'title', d.title, 'links', d.links)), '[]'::jsonb)
+      from public.task_tombstones d
+     where d.cleared_at is null
+       and d.links @> jsonb_build_array(jsonb_build_object('provider', p_provider)))
+  )
 $function$;
