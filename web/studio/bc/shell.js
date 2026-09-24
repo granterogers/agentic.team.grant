@@ -78,8 +78,22 @@ const at = (p = '') => `/basecamp${p}`
   is applied. Both touch only rows that have no record behind them, so a
   signed-in session sees neither.
 */
-const project = () =>
-  contacts.overlay(todos.overlay(PROJECTS.find((p) => p.slug === state().project) ?? PROJECTS[0]))
+/*
+  AND IT MAY LEGITIMATELY BE NOBODY.
+
+  `PROJECTS[0]` is undefined when the office has no projects -- which is not an
+  edge case, it is every office on its first morning. The overlays passed the
+  undefined straight through, `topRow` read `.name` off it, and the whole
+  screen rendered as "This screen did not draw" for a signed-in person whose
+  only mistake was being new. `body()` already had an honest empty state for
+  this and never got the chance to show it.
+
+  So the absence is stated once, here, rather than guessed at by each caller.
+*/
+const project = () => {
+  const found = PROJECTS.find((p) => p.slug === state().project) ?? PROJECTS[0]
+  return found === undefined ? null : contacts.overlay(todos.overlay(found))
+}
 
 /* ======================================================================== *
  * Tool definitions
@@ -3264,7 +3278,7 @@ const body = () => {
   if (s.view === 'lately') return allActivity()
   if (s.view === 'project') {
     const p = project()
-    if (p === undefined) {
+    if (p === null || p === undefined) {
       return errorState('That project could not be found.', button('Back to your projects', { 'data-bc-go': at('/') }))
     }
     /*

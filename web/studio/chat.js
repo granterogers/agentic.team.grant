@@ -26,6 +26,7 @@
 */
 
 import { HQ_API, VOICE } from './backend.js'
+import * as session from './session.js'
 import { CREW, PROJECTS } from './data.js'
 
 const KEY = 'studio.chat'
@@ -429,8 +430,18 @@ export async function ask(slug, text, context, token, to, also, onState) {
       endpoint and had its own fetch, so it never learned. It says the same
       thing now, and clears the same token, which puts the page back into the
       signed-out state that offers a way in.
+
+      AND IT HAS TO CLEAR BOTH. The sentence above was written when `hq.token`
+      was the only credential a browser held. A person signs in with their own
+      SESSION now, and clearing the legacy key alone left a dead session in
+      storage -- so the page went on believing it was signed in, every message
+      failed identically, and the way back in was never offered. Exactly the
+      defect this block exists to fix, unfixed for the architecture that
+      replaced it. `office.js` clears both for the same reason: either could
+      be the thing the office refused.
     */
     if (r.status === 401) {
+      session.forget()
       try {
         localStorage.removeItem('hq.token')
       } catch {
