@@ -33,6 +33,24 @@ const check = (what: string, ok: boolean, detail = ''): void => {
   }
 }
 
+/*
+  BACK TO THE PAGE, which is now more than one press (§21).
+
+  Dismissal steps exactly one level: a record inside a sheet closes to the
+  sheet, and the sheet closes to the page. A single Escape used to do both, so
+  a tidy-up like this one left a sheet open whose backdrop swallowed the next
+  click -- and that reports as a timeout on a control that is perfectly fine,
+  sometimes several sections later. Bounded, so a surface that will not close
+  fails as a test rather than hanging.
+*/
+const dismissAll = async (): Promise<void> => {
+  for (let i = 0; i < 4; i += 1) {
+    if ((await page.locator('[data-bc-expanded]').count()) === 0) return
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(250)
+  }
+}
+
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
 const page = await ctx.newPage()
@@ -142,8 +160,7 @@ check(
   drawn.includes('logo'),
   drawn.join(', '),
 )
-await page.keyboard.press('Escape')
-await page.waitForTimeout(300)
+await dismissAll()
 
 /* --- 5. Add Contact, in all three places -------------------------------- */
 check(

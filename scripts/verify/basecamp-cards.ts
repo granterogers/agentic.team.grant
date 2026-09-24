@@ -37,6 +37,26 @@ const check = (what: string, ok: boolean, detail = ''): void => {
   }
 }
 
+/*
+  BACK TO THE PAGE, which is now more than one press.
+
+  §21 made dismissal step exactly one level: a record inside a sheet closes to
+  the sheet, and the sheet closes to the page. A single Escape used to do both,
+  so this left the To-dos sheet open after opening a card -- and its backdrop
+  then swallowed the next click and reported as a timeout on a control that was
+  perfectly fine, four sections later.
+
+  Bounded, so a surface that will not close fails as a test rather than
+  hanging.
+*/
+const dismissAll = async (): Promise<void> => {
+  for (let i = 0; i < 4; i += 1) {
+    if ((await page.locator('[data-bc-expanded]').count()) === 0) return
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(250)
+  }
+}
+
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
 const page = await ctx.newPage()
@@ -102,8 +122,7 @@ check(
   opened.includes(miniName),
   opened.replace(/\n/g, ' / ').slice(0, 140),
 )
-await page.keyboard.press('Escape')
-await page.waitForTimeout(300)
+await dismissAll()
 
 /* --- 3. the module opens the full board --------------------------------- */
 await page.locator('[data-mod="board"] .bcmodhead').first().click()
@@ -112,8 +131,7 @@ check(
   'the Card Table module opens the board',
   (await page.locator('[data-bc-expanded="board"] .bcbcol').count()) === 4,
 )
-await page.keyboard.press('Escape')
-await page.waitForTimeout(300)
+await dismissAll()
 
 /* --- 4. at its own address, with real columns --------------------------- */
 const board = async (): Promise<void> => {
