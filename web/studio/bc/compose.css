@@ -3393,3 +3393,13 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 @media (pointer: coarse) {
   [data-experience='basecamp'] .bcaddback { min-height: 44px; }
 }
+
+/*
+  A DIALOG IS AS WIDE AS WHAT IS IN IT. The expanded view is 1,040px because
+  a card table or a gallery needs it; the Add Contact form in it is five
+  short fields, which at that width became two 470px columns of empty boxes.
+*/
+[data-experience='basecamp'] .bcexpbox:has(> .bcexpbody > form[data-bc-contactform]),
+[data-experience='basecamp'] .bcexpbox:has(form[data-bc-contactform]):not(:has(.bclist)) {
+  width: min(680px, 100%);
+}
