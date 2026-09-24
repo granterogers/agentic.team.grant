@@ -4326,12 +4326,31 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               )
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
-                const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                const pointed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
                   id?: string
                   title?: string
                   ambiguous?: number
                   titles?: string[]
                 } | null
+                /*
+                  A task NAMED ("move the Hartley one to Monday") is found by
+                  its name on his list, never by proximity (ledger R29). A name
+                  that picks nothing, or several, is asked about below exactly
+                  as an empty referent is.
+                */
+                const byName =
+                  change.name == null
+                    ? null
+                    : await hisTaskByName(deps.db, job.jobId, change.name).catch(() => null)
+                const subject =
+                  change.name == null
+                    ? pointed
+                    : byName === null
+                      ? null
+                      : { id: byName.id, title: byName.title }
+                if (change.name != null && byName === null) {
+                  return `I have not changed anything — I could not find one open task matching "the ${change.name} one". Say its name as it is on the list.`
+                }
                 /*
                   SEVERAL things it could mean, so it asks which — and names
                   them, because "which one?" with no list is a question he

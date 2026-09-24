@@ -641,6 +641,12 @@ export interface PersonalTaskChange {
   readonly title: string | null
   /** Which words matched, so a caller can say why and a test can assert it. */
   readonly matched: readonly string[]
+  /**
+   * The task NAMED rather than pointed at - "move the Hartley one to Monday"
+   * (ledger R29). Null for a bare referent, which is the older, conversation-
+   * scoped case. Optional so older readers of this shape are unchanged.
+   */
+  readonly name?: string | null
 }
 
 /*
@@ -792,7 +798,14 @@ export function personalTaskChange(
     none of them can be the subject the guard is protecting against.
   */
   residue = residue.replace(new RegExp(CHANGING.source, 'gi'), ' ')
-  if (!namedReferent && !BARE_REFERENT.test(residue)) return null
+  /*
+    Or a task NAMED: "the Hartley one", "the insurance task" (ledger R29). The
+    handler resolves the name among his tasks and asks when it is not exactly
+    one, so a name is safe where an open noun phrase would not be.
+  */
+  const namedTask = /\bthe\s+([a-z0-9'’ -]{2,40}?)\s+(?:one|task|to-?do|reminder)\b/i.exec(residue)
+  const taskName = namedTask === null ? null : String(namedTask[1]).trim().toLowerCase()
+  if (!namedReferent && !BARE_REFERENT.test(residue) && taskName === null) return null
 
   /*
     Nothing recognised is nothing to do. Returning an empty change would make
@@ -801,7 +814,7 @@ export function personalTaskChange(
     make it true by accident.
   */
   if (matched.length === 0) return null
-  return { due, priority, title: title === '' ? null : title, matched }
+  return { due, priority, title: title === '' ? null : title, matched, name: taskName }
 }
 
 /**
