@@ -1029,6 +1029,38 @@ export async function speaker(
  * project — both right for something a person types and wrong for a job that
  * resolved its project several hundred lines ago.
  */
+/**
+ * A task NAMED by Grant, looked for on his whole open list (ledger R29).
+ *
+ * The conversation's own tasks are the referent set, deliberately: "mark it
+ * done" must not reach across chats. But the interfaces are entrances to ONE
+ * office, and a task made on Telegram and named on Slack - "mark the Hartley
+ * one done" - was answered "no task has been added in this conversation"
+ * although there is exactly one open task by that name on his list. A NAME is
+ * not a pronoun: when it picks exactly one of his open personal tasks, that
+ * is the one he means. A bare referent never comes here.
+ */
+async function hisTaskByName(
+  db: SqlExecutor,
+  jobId: string,
+  name: string,
+): Promise<{ id: string; title: string } | null> {
+  const r = await db.execute(`
+    select app.my_tasks('all', 200, null, 'smart', app.harness_job(${lit(jobId)}::uuid)) as t`)
+  const raw = (r.rows[0] as { t?: unknown })?.t
+  const all = ((typeof raw === 'string' ? JSON.parse(raw) : raw) ?? []) as {
+    id?: string
+    task_id?: string
+    title?: string
+    state?: string
+  }[]
+  const open = all
+    .filter((t) => t.state !== 'done' && t.state !== 'cancelled')
+    .map((t) => ({ id: String(t.id ?? t.task_id ?? ''), title: String(t.title ?? '') }))
+    .filter((t) => t.id !== '')
+  return pickByName(name, open)
+}
+
 async function addTask(
   db: SqlExecutor,
   job: Job,
@@ -4370,7 +4402,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 } | null
                 const candidates = subject?.candidates ?? []
                 const verb = settles.state === 'done' ? 'tick off' : 'take off the list'
-                if (candidates.length === 0) {
+                // A named task can be found on his whole list (ledger R29).
+                const acrossChats =
+                  settles.name !== null && pickByName(settles.name, candidates) === null
+                    ? await hisTaskByName(deps.db, job.jobId, settles.name).catch(() => null)
+                    : null
+                if (candidates.length === 0 && acrossChats === null) {
                   return {
                     did: false,
                     text:
@@ -4380,11 +4417,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   }
                 }
                 const target =
-                  settles.name === null
+                  acrossChats ??
+                  (settles.name === null
                     ? candidates.length === 1
                       ? (candidates[0] ?? null)
                       : null
-                    : pickByName(settles.name, candidates)
+                    : pickByName(settles.name, candidates))
                 if (target === null) {
                   const names = candidates
                     .slice(0, 4)
@@ -4452,7 +4490,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     ? candidates.length === 1
                       ? (candidates[0] ?? null)
                       : null
-                    : pickByName(subOf.parentName, candidates)
+                    : (pickByName(subOf.parentName, candidates) ??
+                      (await hisTaskByName(deps.db, job.jobId, subOf.parentName).catch(() => null)))
                 if (parent === null) {
                   return {
                     did: false,

@@ -82,3 +82,19 @@ describe('the handler acts through the writer and counts only what changed', () 
     expect(src).toMatch(/tasksChanged:[\s\S]{0,200}settledTask\?\.did === true/)
   })
 })
+
+describe('a NAMED task is found on his whole list; a pronoun never leaves the chat (R29)', () => {
+  const src = readFileSync('src/handlers/instruction.ts', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^[ \t]*\/\/.*$/gm, '')
+  it('only when a name was given and this conversation did not match it', () => {
+    expect(src).toMatch(
+      /settles\.name !== null && pickByName\(settles\.name, candidates\) === null\s*\?\s*await hisTaskByName\(/,
+    )
+  })
+  it('reads his list with the harness flag of THIS turn', () => {
+    expect(src).toMatch(
+      /app\.my_tasks\('all', 200, null, 'smart', app\.harness_job\(\$\{lit\(jobId\)\}::uuid\)\)/,
+    )
+  })
+})
