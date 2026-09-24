@@ -4,14 +4,31 @@ A private, cloud-first agentic operating system: a persistent business think
 tank of eight AI staff that works across projects, reachable from Slack,
 Telegram, or the web.
 
+> ### Setting one up for yourself?
+>
+> **[`SETUP.md`](SETUP.md) is the one page to follow.** About ten minutes of
+> your own time across three things only you can do — a Supabase project, an
+> access token, an OpenRouter key — and everything else is a command. It is
+> free: the one paid feature is talking to the office out loud, and that stays
+> off until you ask for it.
+>
+> ```bash
+> npm run fresh:doctor     # what is done, what is missing, the one thing next
+> ```
+>
+> Anything else in this repository that looks like setup instructions is a
+> record of how **this** office was built. It is kept for history, and it is
+> not current.
+
+
 **Not a chatbot.** Work is queued, routed to the smallest justified set of
 specialists, reviewed before it commits, delivered exactly once to the right
 place, and undoable. Every inference attempt is recorded, and paid inference is
 prevented by deterministic code rather than by a prompt.
 
 ```
-12,400 lines of TypeScript · 73 migrations · 668 unit tests
-22 live verification suites, 454 checks against real services
+536 migrations · 2,207 unit tests · 140 test files
+a fresh install proved from an empty database: npm run fresh:accept
 ```
 
 ---
