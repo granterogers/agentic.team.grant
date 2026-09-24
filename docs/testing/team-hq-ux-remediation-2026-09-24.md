@@ -88,3 +88,10 @@ Trap I hit and recovered from: `git checkout -p` on an uncommitted file reverted
 | 28 | Docs toolbar | 44px select beside 32px buttons; select said only "Custom" | **fixed** |
 | 29 | Docs | prototype `venue.png` was a 206-byte stripe pattern (hazard tape on the deployed preview) | **fixed** — generated 16 KB illustration |
 | 30 | **Sources** | **`.bcsources` defined twice (upload picker grid + sources list): list laid out as 5 × 200px columns, names truncated, each logo beside the wrong name** | **fixed** — picker renamed `.bcpickfrom`; full page redesigned as integration cards |
+| 31 | Portfolio, waiting, outputs, activity, search | assignee printed as database slug in 8 places | **fixed** — roster lookup, either slug |
+| 32 | Activity | pressable entry 16px among 13px neighbours (`font: inherit` on a button) | **fixed** |
+| 33 | Card table, My Tasks | stale `t.due` again ("Due 16 September" for a 19 Sep overdue) | **fixed** — class closed: no `t.due` reader remains in bc/ |
+| 34 | My Tasks (signed out) | "This browser has no token… the projects above" | **fixed** copy; swept all routes for token/API/RPC/payload/JSON/SDP/fixture/schema/gateway/job: none |
+| 35 | Settings, dock, chat | failed face image paints the broken-image glyph over the initial | **fixed** — capture-phase `error` listener hides failed face images (scoped) |
+| 36 | Settings roster, dock | names in the studio's display face (Anybody) inside Instrument Sans panes | **fixed** — `--display` mapped to `--bc-font` on the Basecamp root |
+| 37 | Team (signed out) | "Asking the office who is on this project…" for ever (example projects have no uuid, so nothing is asked) | **fixed** — example team drawn read-only, labelled |

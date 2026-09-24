@@ -1452,8 +1452,29 @@ const teamSurface = (p) => {
     ${
       held === 'failed'
         ? errorState('The office could not say who is on this project.')
+        : !ready && (typeof p.id !== 'string' || p.id === '')
+          ? /*
+              AN EXAMPLE PROJECT HAS NOBODY TO ASK. The office is addressed by
+              the project's uuid and the studio's examples have none, so the
+              question was never sent and "Asking the office..." stayed on
+              screen for ever - a loading state that could not finish. The
+              example's own team is drawn instead, read-only, and says so.
+            */
+            `<div class="bclist">${(ctx?.crewFor?.(p.slug) ?? [])
+              .map(
+                (c) => `<div class="bcitem">
+                  ${bcMini.face(c, 'md')}
+                  <div class="bcitembody">
+                    <span class="bcitemtitle">${esc(c.name ?? c.slug)}</span>
+                    <span class="bcitemmeta">${esc(c.role ?? '')}</span>
+                  </div>
+                  <span></span>
+                </div>`,
+              )
+              .join('')}</div>
+             <p class="bcpmeta bcprose">This is the example project's team. Sign in to see and change who works on your projects.</p>`
         : !ready
-          ? `<p class="bcpmeta bcprose">Asking the office who is on this project…</p>`
+          ? `<p class="bcpmeta bcprose" role="status">Asking the office who is on this project…</p>`
           : onProject.length === 0
             ? empty({
                 title: 'Nobody is on this project yet',
@@ -2313,7 +2334,7 @@ const card = (p, t, i) => {
     <button type="button" class="bcitemtitle bcitemlink" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
     <div class="bcbmeta">
       ${list === undefined ? '' : `<span class="bcbwhere">${esc(list.name)}</span>`}
-      ${t.due ? `<span class="bcbdue">${esc(t.due)}</span>` : ''}
+      ${bcMini.dueWords(t) ? `<span class="bcbdue${bcMini.isLate(t) ? ' bcbdue--late' : ''}">${esc(bcMini.dueWords(t))}</span>` : ''}
     </div>
     <label class="bcbmove">
       <span class="bcvh">Where this is</span>
@@ -3066,7 +3087,7 @@ const myTasks = () => {
       !signedIn
         ? empty({
             title: 'Sign in to see your list',
-            body: 'My Tasks is your own list, kept by the office. This browser has no token, so there is nothing to read — the projects above are the studio’s examples.',
+            body: 'My Tasks is your own list, kept by the office and separate from any project’s to-dos. Sign in above and it appears here.',
           })
         : trouble
           ? errorState('Your list could not be read just now.', button('Try again', { 'data-bc-go': at('/tasks') }))
@@ -3082,7 +3103,7 @@ const myTasks = () => {
                     aria-label="${esc(`${t.state === 'done' ? 'Completed' : 'Not completed'}: ${t.title}`)}">
                   <div class="bcitembody">
                     <span class="bcitemtitle">${esc(t.title)}</span>
-                    <span class="bcitemmeta">${esc([t.due, t.project].filter(Boolean).join(' · '))}</span>
+                    <span class="bcitemmeta">${esc([bcMini.dueWords(t), t.project].filter(Boolean).join(' · '))}</span>
                   </div>
                   <span></span>
                 </div>`,

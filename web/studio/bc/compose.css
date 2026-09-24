@@ -3366,3 +3366,5 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   [data-experience='basecamp'] .bcsources--full .bcsource.bcsource--press { transition: none; }
   [data-experience='basecamp'] .bcsources--full .bcsource.bcsource--press:hover { transform: none; }
 }
+
+[data-experience='basecamp'] .bcbdue--late { color: var(--bc-danger); font-weight: 600; }

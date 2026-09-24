@@ -890,6 +890,31 @@ let lastOpener = ''
   nothing of its own. Toggle rather than start, because a microphone that
   cannot stop the call it began is a control with no way out.
 */
+/*
+  A FACE THAT DOES NOT LOAD IS A PERSON, NOT A BROKEN IMAGE.
+
+  Every face in this experience draws the person's initial underneath the
+  photograph so that a missing photo still reads as somebody. But a failed
+  image still paints Chromium's broken-image glyph over the initial - alt=""
+  notwithstanding - which is what the settings roster, the dock and the chat
+  showed whenever a photo was deleted, the connection dropped or the storage
+  host was unreachable. `error` does not bubble, so this listens in the
+  capture phase, once, for the whole document; it hides the image rather than
+  removing it, so a redraw that brings a good photo back simply shows it.
+  Scoped to this experience: the default studio is not this branch's to change.
+*/
+document.addEventListener(
+  'error',
+  (e) => {
+    const img = e.target
+    if (!(img instanceof HTMLImageElement)) return
+    if (document.documentElement.dataset.experience !== 'basecamp') return
+    if (img.closest('.bcface, .setface, .face, .bcmateface, .dock') === null) return
+    img.hidden = true
+  },
+  true,
+)
+
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return
   if (document.querySelector('[data-bc-expanded]') === null) return
