@@ -4,11 +4,14 @@
 Plan: `docs/integration/three-branch-reconnaissance-2026-09-24.md` (on
 `claude/gracious-volta-48lh36`).
 
-**Verdict: TRIAL INTEGRATION BUILT — VERIFICATION BLOCKED.** Everything that
-can run without credentials passed or was classified with evidence. Every gate
-that needs the database or Vercel is BLOCKED: this environment has no
-`SUPABASE_ACCESS_TOKEN`, `VERCEL_TOKEN` or `HQ_API_TOKEN`. None of those gates
-was inferred to pass.
+**Verdict: TRIAL INTEGRATION VERIFIED — READY FOR MAIN-MERGE AUTHORISATION.**
+
+The first pass (below, from "Inputs" down to "Before `main`") ran without
+credentials and ended BUILT — VERIFICATION BLOCKED. The second pass, recorded
+in **Live verification** at the end of this file, ran every one of those
+blocked gates against the live office and an isolated preview. It made **no
+change to the candidate**. The integration code is still `60ba0b3`, and the
+commits after it are documentation only.
 
 ## Inputs (frozen, verified to exist; none moved during the trial)
 
@@ -210,3 +213,238 @@ was deployed; no alias, slug, secret or worker was touched.
    probes, CORS from the real origin with `signin` still blocked, then
    `basecamp:gate2` against it.
 3. Only then, a main-merge decision.
+
+---
+
+# Live verification — second pass, 24 September 2026
+
+Credentials present (`SUPABASE_ACCESS_TOKEN`, `VERCEL_TOKEN`), checked by
+presence only; no value was printed, logged or committed. Candidate verified
+unchanged at `b959032` before starting; every frozen source ref unchanged at
+the start and the end.
+
+**Code changes made during this pass: none.** Every product and suite file
+is byte-for-byte the candidate. What changed was the environment: the proxy CA
+was trusted for Chromium (`npm run trust:proxy-ca`, verification left on and
+checked with bad certificates), and `libnss3-tools` and `espeak-ng` were
+installed in the container.
+
+## Database
+
+| Check | Result |
+|---|---|
+| `npm run migrate -- --dry` | 604 already applied, **nothing pending** (run first, so nothing could be applied by surprise) |
+| `npm run migrate` | **Applied 0, skipped 604**; 604 recorded; 13 `[sequence/collided]` notes; no checksum finding; `applied.json` rewritten byte-identical |
+| `check:leaks` | exit 0; **22 known, 0 new**; refused 330, and 333 after all live suites. The three added refusals are the three suppressed harness Slack sends attributed below |
+| leak witness, live completeness | the integrated `piles` select run against the database returns exactly the 19 expected columns |
+| `check:callers` | exit 0, 12 in the baseline. **Control:** with Backend's 15-entry baseline put back, it fails naming exactly `hq_document_order_reset`, `hq_document_order_set` and `hq_output` — "something calls it now". Restored: exit 0 |
+| `check:gateway-wrappers` | exit 0; 151 routed functions, all reachable through PostgREST |
+| `check:icons` | exit 0 |
+
+One harness error of mine, found and corrected. The first live read of the
+`piles` SQL sent the template literal's SOURCE text, so `\\m` reached Postgres
+as a literal backslash and two columns read 0 where `check:leaks` said 5.
+Evaluating the literal as JavaScript does made the two readings agree. The
+five token-shaped tasks are reported-only by design. All predate this session
+(the latest was created 12:33 today) and came from other sessions' suites. I
+left them alone: Grant's list is his to tidy.
+
+## Backend acceptance
+
+- **Standing checks**, all exit 0: `check:answerable` (4 of his questions, all
+  "starts work", 0 STARTS NOTHING), `check:believes`, `check:capabilities`,
+  `check:standing`, `check:chatter`, `check:undo`, `check:consumed`.
+- `verify:stop` 19/19 · `verify:lastword` 10/10 · `verify:escapes` 13/13.
+- Deployed worker (not redeployed): no credential 401, wrong credential 401,
+  kick secret 200.
+- **`verify:another-go` 9/10, twice** — a HARNESS DEFECT, pre-existing on
+  Backend:
+  - All 147 files in the suite's transitive import graph are byte-identical
+    between the candidate and `3bb5bb8`.
+  - Unmodified Backend passed 10/10 against the same database in between.
+  - The job rows show the mechanism. In both failing runs the first report
+    child carries `state_reason = "not this suite's job"`: `ask()`'s dequeue
+    loop cancels any in-scope job it did not ask for, and here that was its
+    own first report. The repeat then correctly found nothing in flight.
+  - In the passing run the deployed worker had claimed that child first. This
+    is the repository's recorded "a suite takes its own earlier work" shape
+    (#184/#273), decided by a race with the live worker.
+
+## Production acceptance
+
+- `verify:escapes` 13/13 · `verify:backups` 14/14 · `verify:resumes` 4/4 ·
+  `verify:journals` 4/4 · `verify:artifact-slack` 20/20 ·
+  `verify:collaborates` 13/13.
+- Autonomy settings digest unchanged across the run.
+- Only three deliveries were created during those suites: all harness jobs,
+  all `suppressed`.
+- `app.office_health()` still carries its `backup` key; executor 429/5xx and
+  `chores_for_backups` present; both kick paths present in the deployed
+  candidate gateway.
+
+## Frontend acceptance (this candidate, not the fresh-install trial)
+
+- `verify:ui` 54/54 · `verify:tasks-ui` 52/52 · `verify:talk` 40/40.
+- **`basecamp:gate`, every step:**
+
+  | Step | Result |
+  |---|---|
+  | covered | pass (see below) |
+  | classes, actions | pass |
+  | home | 45/45 |
+  | routes | 64/64 |
+  | journey | 55/55 |
+  | keyboard | 31/31 |
+  | preservation | 26/26 |
+  | states | 64/64 |
+  | docs | 27/27 |
+  | **look** | **21/21** (the writer leg, with the real office token) |
+  | chat | 30/30 |
+  | controls | 423 pressed, 0 unpressable, 0 findings |
+  | measure | pass |
+  | reconcile | 19/21 — environment, see below |
+
+  `covered` first exited 1 because `.out/basecamp` held no captures in this
+  checkout. After `npm run basecamp:shots`: 209 files, pass.
+- **Reproduced pre-existing on unmodified `9c51e1e`**, same environment, same
+  counts, same failing checks:
+
+  | Suite | Result |
+  |---|---|
+  | `verify:modules` | 14/16 (#368) |
+  | `verify:offline` | 22/23 (#368) |
+  | `verify:inverse` | 24/26 (#368) |
+  | `verify:hq` | 46/47 — missing `assigned, output` until the merged gateway is canonical |
+  | `verify:basecamp-reconcile` | 19/21 — the sandbox proxy answers the deliberately unreachable `office.invalid` with `ERR_TUNNEL_CONNECTION_FAILED`, which the suite does not list |
+
+## Isolated preview
+
+- **Gateway: `hq-api-trialthree`** v1, uploaded byte-identical to the
+  candidate's `supabase/functions/hq-api/index.ts`.
+  - Deployed WITHOUT `scripts/deploy/hq-basecamp.ts`'s POST to `/secrets`:
+    function secrets are project-wide, so that write reaches the canonical
+    `hq-api`.
+  - The six secrets it reads were confirmed present by name.
+  - Probes: no credential 401 · wrong 401 · office key 200 · fake session 401.
+- **Page:** `https://agentic-team-hq-basecamp-dun85j0o1-agentic-team-grant.vercel.app`
+  (`VERCEL_PREVIEW=1`, so no target and no alias).
+  - Its deployed `config.js` names `hq-api-trialthree` and `voice-basecamp`.
+  - The page itself derives `signin`, `chat`, `voice-token` and
+    `voice-basecamp`.
+- **A first preview, `hq-api-trial3`, was invalid, and the cause is a latent
+  Frontend defect.**
+  - `backend.js`'s `sibling()` rewrites the gateway name with
+    `/\/hq-api(-[a-z]+)?\/?$/`. A digit in the suffix does not match, so it
+    silently returned the GATEWAY url for `signin`, `chat` and `voice-token`.
+  - `livevoice` was 10/28 there. The same deployed bytes passed 28/28 with
+    the address changed to `office.invalid`, which isolated it.
+  - Not an integration regression: `backend.js` is unchanged by the merge, and
+    every canonical slug is letters-only.
+  - `hq-api-trial3` still exists, non-canonical, and should be retired with
+    the others.
+- **Real Chromium at the preview origin:** gateway GET and POST and
+  `voice-basecamp` all 401 and readable (CORS correct). `signin` is
+  **BLOCKED** for the preview origin and readable from the stable alias: the
+  allow-list was not widened.
+- **Signed in (office key):** 18 gateway calls, **all to `hq-api-trialthree`,
+  all 200, none to the canonical `hq-api`**, 0 page errors, GETs only.
+  `pulse` answers 200.
+- **Writes through the preview, all no-effect:**
+  - `document_order_reset` with a missing argument → 400; unknown action →
+    400; on a slug naming no project → 200 carrying the RPC's own error, 0
+    rows created.
+  - `contact_photo`: missing args, bad id and non-image each → 400; removing
+    a photo from a contact that does not exist → 200 `{result:{error}}`; 0
+    contacts created. Frontend's response shapes are unchanged.
+  - The upload path ran live and succeeded in `verify:basecamp-photo`.
+- **`basecamp:gate2` against the preview:**
+  - **Mirror-driven, 16 of 16:**
+
+    | Suite | Result |
+    |---|---|
+    | board | 35/35 |
+    | todos | 30/30 |
+    | cards | 24/24 |
+    | docs | 27/27 |
+    | back | 20/20 |
+    | contacts | 31/31 |
+    | voice | 16/16 |
+    | settings | 34/34 |
+    | words | 22/22 |
+    | affordance | 16/16 |
+    | torture | 31/31 |
+    | failures | 39/39 |
+    | touch | 28/28 |
+    | voicenote | 36/36 |
+    | livevoice | 28/28 |
+    | drive | 26/26 |
+
+    The mirror was taken from the preview (`LIVE_HOST`), not the stable
+    alias, which serves an older Frontend deployment.
+  - **Site-driven, 10 of 10:**
+
+    | Suite | Result |
+    |---|---|
+    | photo | 11/11 |
+    | waiting | 17/17 |
+    | running | 9/9 |
+    | sources | 9/9 |
+    | team | 12/12 |
+    | addsource | 10/10 |
+    | signin | 17/17 |
+    | todos-live | 25/25 |
+    | arrangement-live | 8/8 |
+    | docorder-live | 21/21 |
+
+  - `signin` and `docorder-live` first died on their first wait, before any
+    assertion, against a cold deployment. The strip was then observed
+    rendering, and one re-run passed both.
+  - Magic links come from admin `generate_link`, which returns the link and
+    emails nobody.
+- **Left as found:**
+  - Grant's non-basecamp layouts, his open tasks, contacts, document orders
+    and autonomy settings all have identical digests before and after.
+  - The one new sent delivery is his own 2-hourly `duty:notion-sync`
+    (17:06), not test traffic.
+- **Canonical production unchanged:**
+  - Every edge function keeps its version: `hq-api` v774, `worker` v837,
+    `signin` v31, `voice` v552, `voice-token` v582, `hq-api-basecamp` v15,
+    `voice-basecamp` v11, and the rest. The only additions are the two trial
+    slugs.
+  - Both Vercel production deployments and all four aliases are unchanged.
+
+## Not driven live, and why
+
+- **The 503 could-not-check verdict** needs the identity service itself to
+  fail, which cannot be arranged without changing production. It is held by
+  `tests/gateway/a-throttle-is-not-a-refusal.test.ts`, as the Frontend handoff
+  states.
+- **The worker kick's own invocation.** The Management API logs endpoint
+  refused both table names tried. What is proven instead:
+  - the deployed gateway is the candidate blob, with the definition and four
+    call sites;
+  - both kick secrets are present;
+  - every refusal returns before the kick point;
+  - the success paths ran live.
+
+## Final repository pass (candidate, with credentials)
+
+- lint, typecheck, `check:migrations`, `check:secrets`, `check:templates`,
+  `check:tokens`, `check:pressable` and `check:backend-ref`: all exit 0.
+- Biome on the gateway: exit 0.
+- **vitest 195/195 files, 3,130 tests.** The token-dependent file now passes,
+  which confirms the first pass's environment classification.
+- 0 conflict markers.
+
+## Before `main`
+
+1. Grant's main-merge authorisation.
+2. After the merge: `npm run deploy:hq` (page + canonical gateway) and
+   `npm run deploy:signin`. `verify:hq` then goes 47/47.
+3. Retire `hq-api-trial3`, `hq-api-trialthree`, `hq-api-integration` and the
+   preview deployments.
+4. The findings above that are not the merge's — `sibling()`'s letters-only
+   suffix, `verify:another-go` cancelling its own work, `check:backend-ref
+   --prove-it`'s stale anchor, the doubled ADR 0047, `hq-basecamp.ts`'s
+   project-wide secret write, `reconcile` versus the proxy, and the gate's cold
+   first waits — are filed as #370.
