@@ -1325,17 +1325,67 @@ const seen = new Map<string, number>()
 const looksLikeSession = (presented: string): boolean =>
   presented.split('.').length === 3 && presented.length > 60
 
-const sessionAllowed = async (presented: string): Promise<boolean> => {
-  const until = seen.get(presented)
-  if (until !== undefined && until > Date.now()) return true
+/*
+  A THROTTLE IS NOT AN ANSWER, AND NEITHER IS A DROPPED CONNECTION.
 
-  const who = await fetch(`${DB_URL}/auth/v1/user`, {
+  This returned a plain boolean, so every way of failing to ASK collapsed into
+  "this session is not valid": a 429 from Supabase Auth under a burst, a 5xx,
+  a network blip. The caller then got 401 -- and office.js clears a session the
+  office refused, correctly -- so an upstream hiccup SIGNED THE PERSON OUT of
+  every device it reached.
+
+  Seen in this repository's own acceptance run: four suites signing in within a
+  minute, and the fifth read an office that answered nothing, because the
+  verification behind it was being throttled rather than refusing anybody.
+
+  So the three answers are separated. CLAUDE.md states both halves of the rule:
+  a throttle is not an answer, and the absence of a "yes" is not the presence
+  of a "no". `unknown` grants nothing -- it is answered with 503, which says
+  the office could not check rather than that it checked and said no.
+*/
+type Verdict = 'yes' | 'no' | 'unknown'
+
+/** One request, retried once on a throttle, because a 429 is a wait. */
+const askUpstream = async (
+  url: string,
+  init: RequestInit,
+): Promise<{ response: Response } | { unreachable: true }> => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const r = await fetch(url, init).catch(() => null)
+    if (r === null) {
+      if (attempt === 0) {
+        await new Promise((ok) => setTimeout(ok, 250))
+        continue
+      }
+      return { unreachable: true }
+    }
+    if (r.status === 429 && attempt === 0) {
+      await new Promise((ok) => setTimeout(ok, 400))
+      continue
+    }
+    return { response: r }
+  }
+  return { unreachable: true }
+}
+
+const sessionAllowed = async (presented: string): Promise<Verdict> => {
+  const until = seen.get(presented)
+  if (until !== undefined && until > Date.now()) return 'yes'
+
+  const asking = await askUpstream(`${DB_URL}/auth/v1/user`, {
     headers: {
       apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       Authorization: `Bearer ${presented}`,
     },
-  }).catch(() => null)
-  if (who === null || !who.ok) return false
+  })
+  if ('unreachable' in asking) return 'unknown'
+  const who = asking.response
+  /*
+    401 and 403 are the identity service SAYING NO. Anything else that is not
+    ok -- 429, 5xx, a gateway error -- is it failing to answer, and the two
+    must not be the same word.
+  */
+  if (!who.ok) return who.status === 401 || who.status === 403 ? 'no' : 'unknown'
   const user = (await who.json().catch(() => ({}))) as {
     email?: string
     email_confirmed_at?: string
@@ -1343,9 +1393,9 @@ const sessionAllowed = async (presented: string): Promise<boolean> => {
   const email = String(user.email ?? '')
     .trim()
     .toLowerCase()
-  if (email === '') return false
+  if (email === '') return 'no'
 
-  const asked = await fetch(`${DB_URL}/rest/v1/rpc/office_member`, {
+  const membership = await askUpstream(`${DB_URL}/rest/v1/rpc/office_member`, {
     method: 'POST',
     headers: {
       apikey: SERVICE_KEY,
@@ -1353,21 +1403,27 @@ const sessionAllowed = async (presented: string): Promise<boolean> => {
       'content-type': 'application/json',
     },
     body: JSON.stringify({ p_email: email }),
-  }).catch(() => null)
-  if (asked === null || !asked.ok) return false
-  const rows = (await asked.json().catch(() => [])) as { ok?: boolean }[]
-  if (rows[0]?.ok !== true) return false
+  })
+  if ('unreachable' in membership) return 'unknown'
+  /*
+    The membership list is this office's own table. A failure to READ it is
+    never evidence that somebody is not on it -- that is exactly the direction
+    0304 warns about -- so anything other than a successful answer is unknown.
+  */
+  if (!membership.response.ok) return 'unknown'
+  const rows = (await membership.response.json().catch(() => [])) as { ok?: boolean }[]
+  if (rows[0]?.ok !== true) return 'no'
 
   seen.set(presented, Date.now() + SESSION_TTL_MS)
   // Bounded, because this map lives as long as the isolate does.
   if (seen.size > 64) for (const k of [...seen.keys()].slice(0, 32)) seen.delete(k)
-  return true
+  return 'yes'
 }
 
-const allowed = async (presented: string): Promise<boolean> => {
-  if (presented === '') return false
-  if (await tokenMatches(presented)) return true
-  if (!looksLikeSession(presented)) return false
+const allowed = async (presented: string): Promise<Verdict> => {
+  if (presented === '') return 'no'
+  if (await tokenMatches(presented)) return 'yes'
+  if (!looksLikeSession(presented)) return 'no'
   return await sessionAllowed(presented)
 }
 
@@ -1398,8 +1454,22 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  if (!(await allowed(presented))) {
+  const verdict = await allowed(presented)
+  if (verdict === 'no') {
     return json({ error: 'unauthorized' }, 401)
+  }
+  /*
+    COULD NOT CHECK IS NOT REFUSED, and the status code is the whole of the
+    difference. The page clears a session on 401 and keeps it on anything else,
+    so answering a throttled identity service with 401 would sign somebody out
+    because Supabase was busy. 503 says what actually happened, grants nothing,
+    and leaves the session where it is.
+  */
+  if (verdict === 'unknown') {
+    return json(
+      { error: 'The office could not check who you are just now. Try again in a moment.' },
+      503,
+    )
   }
 
   // --- configuration -------------------------------------------------------

@@ -76,6 +76,38 @@ const asUploaded = (b: Buffer): Buffer => {
 const built = (await walk(FROM)).map((f) => relative(FROM, f)).sort()
 console.log(`${String(built.length)} file(s) in the deployment`)
 
+/*
+  WAIT FOR THE HOST TO BE SERVING WHAT WAS UPLOADED.
+
+  A deployment that has not finished serves a placeholder of its own -- every
+  file came back as the same 19,700 bytes on one run -- and the report then
+  names nine files as DIFFERENT, which reads as nine files that failed to
+  upload. The condition is real and it is temporary, so it is waited for and
+  said out loud rather than retried invisibly.
+*/
+{
+  const want = await readFile(join(FROM, 'index.html'))
+  const until = Date.now() + 90_000
+  let waited = 0
+  for (;;) {
+    const r = await fetch(`https://${HOST}/index.html`)
+    if (r.ok) {
+      const got = asUploaded(Buffer.from(await r.arrayBuffer()))
+      if (sha(got) === sha(want)) break
+    }
+    if (Date.now() >= until) {
+      console.log('  (the host is still not serving the uploaded index.html after 90s)')
+      break
+    }
+    waited += 1
+    await new Promise((ok) => setTimeout(ok, 3000))
+  }
+  if (waited > 0) {
+    console.log(`  (waited ${String(waited * 3)}s for the deployment to start serving)`)
+  }
+  strippedFeedback = 0
+}
+
 let same = 0
 const differ: string[] = []
 const missing: string[] = []
