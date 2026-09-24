@@ -124,6 +124,40 @@ npm run live:mirror && npm run basecamp:gate2
   ships a dashboard that does not know which office it belongs to — and says so
   honestly rather than guessing, which is the point.
 
+## The candidate carries more than the three branches do
+
+Merging the three branches reproduces the candidate's TREE, not its work. The
+pass found defects that only exist where two branches meet, and the fixes for
+them live on `trial/integration-2026-09-24b`. Most were pushed back to the
+branch that owns them; four commits are the integration's own and have nowhere
+else to go.
+
+**Already on `claude/basecamp-team-hq`**, so the merge picks them up:
+
+| | |
+|---|---|
+| ADR-0048 | the dashboard resolves its own office, `config:site`, `check:backend-ref` |
+| the gateway | three verdicts rather than two, so a throttle no longer signs people out, plus the test that holds it |
+| the preview | `VERCEL_PREVIEW`, `HQ_API_SLUG`, the sign-in ceremony origin and its rate-limit wait |
+| the live suites | four timing assumptions and one route pattern |
+| basecamp CSS | three tokens that resolved to nothing |
+| `verify:basecamp-chat` | rewritten for the session architecture, and the two defects that found |
+
+**Only on the candidate**, and to be cherry-picked in the same step as the
+merge — each names the branch it really belongs to:
+
+| Commit | What | Whose |
+|---|---|---|
+| `7e07ede` | preconditions 0539–0591, the neutralise fix, migration 0595, `probe-understand`'s project ref | fresh-install + backend |
+| `c6f74cf` (the `scripts/` half) | `check:tokens` understands an experience | whoever owns `check:tokens` |
+| `655f906` | the callers baseline shrinks by three; `check:provenance` stops counting a suite's blockers | backend |
+| `0a8f030` | `check-leaks.ts`'s re-opened comment | this merge |
+| `b354ebf` (the `src/migrations` half) | `collisions.json` and the checker that reads it | this merge |
+
+`docs/fresh-install/INTEGRATION-REQUESTS.md` (IR-3) says the same thing to the
+fresh-install workstream in its own words, because a precondition staged by
+NAME cannot live on a branch that does not have the migration it is named for.
+
 ## What is deliberately still standing
 
 - `hq-api-integration` (v6) — the isolated gateway this pass drove. Nothing
