@@ -178,11 +178,11 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 | 21.2 | Outside click, Escape, Back and explicit close all tested | **VERIFIED** — all four, on Grant's own Sources → Notion example. Back was already right (real history); Escape and outside click were the two that were broken, and the sabotage proves exactly those two go red. A fifth check holds the other end: the Sources list must still be dismissable |
 | 22.1 | Useful connection identity shown (notebook/account/folder/workspace) | **VERIFIED** — a row was the attachment's name and then the raw `role` enum, so three real Notion databases read "Projects / home / Connected". Each now names its service and says what it is for in English; the record adds how many documents this project has actually had out of it. `verify:basecamp-sources`, 9/9, signed in as Grant so the subject is his connections and not the prototype's |
 | 22.2 | No secrets, tokens or credentials exposed | **VERIFIED** — five credential shapes checked against the whole surface, each requiring token material after the prefix so help text saying "starts xoxb-" cannot trip it |
-| 23.1 | Add Source exercised through a real supported provider flow | TODO |
-| 23.2 | Persistence: reload → still connected, identity still shown | TODO |
-| 23.3 | Source genuinely available to the agentic system | TODO |
-| 23.4 | Failures tested: cancelled, rejected, expired, unavailable, malformed | TODO |
-| 24.1 | Sources visual direction preserved; no unnecessary churn | TODO |
+| 23.1 | Add Source exercised through a real supported provider flow | **PARTLY — and the split is stated rather than averaged.** Add Source has two paths. *Something to read* (a URL) is driven end to end on the deployed page and read back out of `project_references`: `verify:basecamp-addsource`, 10/10. *A connected service* opens the office's own Connections, which is correct — one account serves every project — but the provider half is an OAuth round trip that cannot be driven here and must not be faked. **BLOCKED on a human.** |
+| 23.2 | Persistence: reload → still connected, identity still shown | **VERIFIED** for the reference path — written, reloaded, still listed, and saying what it is rather than only that it exists |
+| 23.3 | Source genuinely available to the agentic system | **PARTLY.** The row lands in `project_references`, which is the office's own table and not a frontend list — asserted from the database, not the screen. Whether a handler then READS a reference is a separate question this suite does not answer, and saying otherwise would be the claim §23 forbids |
+| 23.4 | Failures tested: cancelled, rejected, expired, unavailable, malformed | **PARTLY.** Malformed, empty, and refused-because-signed-out are driven, and each is asserted to have written nothing. Cancelled, rejected and expired belong to the OAuth flow and are **named as not covered** rather than approximated with something that merely looks similar |
+| 24.1 | Sources visual direction preserved; no unnecessary churn | **VERIFIED** — nothing was redesigned. The changes are §21's navigation, §22's second line on each row and two fields in the record, and the Add Source surface is untouched |
 
 ## 25–38 — Documents
 
