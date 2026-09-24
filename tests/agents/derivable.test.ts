@@ -91,3 +91,35 @@ describe('a word that begins like a month is not a month', () => {
     },
   )
 })
+
+import { clauses } from '../../src/agents/clauses.ts'
+import { asksForWork, readClause } from '../../src/agents/request.ts'
+
+describe('the mood of a clause: numbers and discourse words', () => {
+  it('a clause opening with a number is not a command', () => {
+    expect(readClause('6 for the room').mood).not.toBe('ask')
+    expect(readClause('£35 per head for the dinner').mood).not.toBe('ask')
+    // the measured sentence: a question, not work
+    expect(
+      asksForWork(
+        'If tickets are 35 quid and each head costs us 21 in food and 6 for the room, what is our margin per person?',
+        clauses,
+      ),
+    ).toBe(false)
+  })
+  it.each([
+    'Now give me a numbered list of those five points',
+    'OK. Add a task to chase the caterers for the final headcount by Wednesday.',
+    'ok so give me the state of play on the funding one',
+    'Then just drop it in Slack for me, same thing.',
+  ])('a request after a discourse word is still a request: %s', (s) => {
+    expect(asksForWork(s, clauses)).toBe(true)
+  })
+  it.each([
+    'So what do you think about it?',
+    'Just thinking out loud here',
+    'Book 3 rooms for Friday',
+  ])('NEGATIVE CONTROL keeps its reading: %s', (s) => {
+    expect(asksForWork(s, clauses)).toBe(s.startsWith('Book'))
+  })
+})
