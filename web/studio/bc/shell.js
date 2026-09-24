@@ -989,9 +989,7 @@ const tasksSurface = (whole) => {
     ${bcMini.taskCounts(whole)}
     ${filterBar(whole)}
     <p class="bcpmeta bcprose bcgap-l">
-      What this project has committed to, in its lists. Your own list is under
-      My Tasks, and what the team is running is under Agentic Team — three
-      different things.
+      Everything this project has committed to, by list. Your own tasks live in My Tasks.
     </p>
     <form class="bcaddform" data-bc-listform hidden>
       ${input({ id: 'bc-list-name', label: 'What is this list called', name: 'name', autocomplete: 'off', hint: 'A stage, a workstream, a module — whatever the work actually divides into.' })}
@@ -1134,13 +1132,24 @@ const taskRow = (t, i = 0, listName = '') => {
           "Client Vision & Journey") is the same repetition with four extra
           characters, and an exact comparison let all of those through.
         */
-        [whoName(t.who), t.due, repeatsList(t.note, listName) ? '' : t.note]
+        [whoName(t.who), repeatsList(t.note, listName) ? '' : t.note]
           .filter((x) => x !== undefined && x !== null && x !== '')
           .join(' · '),
       )}</span>
       ${t.blocked ? `<span class="bcitemmeta">${status('Blocked', 'blocked')} ${esc(t.blocked)}</span>` : ''}
     </div>
-    <span></span>
+    <!--
+      THE DATE, in the row's last column, which was an empty span. It read
+      t.due, which rows rarely carry, so no row on this page showed when
+      anything was due - the overdue one looked exactly like the undated
+      ones. The miniature's reader, so both say the same words.
+    -->
+    ${(() => {
+      const due = isDone ? '' : bcMini.dueWords(t)
+      return due === ''
+        ? '<span></span>'
+        : `<span class="bcitemdue${bcMini.isLate(t) ? ' bcitemdue--late' : ''}">${esc(due)}</span>`
+    })()}
   </div>`
 }
 

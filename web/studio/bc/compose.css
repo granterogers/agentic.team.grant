@@ -86,6 +86,9 @@
   counter is a 44px-tall button (touch floor) whose face is a quiet chip.
 */
 [data-experience='basecamp'] .bccounts {
+  /* Shrink-wrapped: a block parent would otherwise stretch it to the page. */
+  width: max-content;
+  max-width: 100%;
   gap: 2px;
   padding: 3px;
   border-radius: 14px;
@@ -3234,3 +3237,17 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   0%, 97% { opacity: 1; visibility: visible; }
   100% { opacity: 0; visibility: hidden; }
 }
+
+/* The To-dos page's date column (it was an empty span). */
+[data-experience='basecamp'] .bcitemdue {
+  align-self: center;
+  justify-self: end;
+  white-space: nowrap;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcitemdue--late { color: var(--bc-danger); font-weight: 650; }
+[data-experience='basecamp'] .bccount--open .bccountn { color: var(--bc-text-strong); }
+
+[data-experience='basecamp'] .bcrecordhead + .bccounts { margin-bottom: 10px; }

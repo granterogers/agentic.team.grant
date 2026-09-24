@@ -115,7 +115,9 @@ export const named = (slug) => person(slug)?.name ?? ''
 const DONE = new Set(['done', 'cancelled'])
 const isDone = (t) => DONE.has(t.state_raw ?? t.state ?? '')
 
-const dueWords = (t) => {
+/* Exported: the To-dos page read t.due, which prototype and office rows
+   rarely carry, so its rows showed no date at all. One reader. */
+export const dueWords = (t) => {
   const iso = t.due_on ?? null
   if (iso === null || iso === undefined || iso === '') return t.due ?? ''
   const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`)
@@ -1302,22 +1304,25 @@ export const needsYouLine = (p) => {
 
 /** Late, stuck and open - each a filter, beside the to-dos they narrow. */
 export const taskCounts = (p) => {
-  const late = filtered(p, 'late')
-  const stuck = filtered(p, 'stuck')
-  const open = filtered(p, 'open')
-  const bits = []
-  if (late.length > 0) bits.push(countChip('late', late.length === 1 ? '1 late' : `${late.length} late`, 'blocked'))
-  if (stuck.length > 0) bits.push(countChip('stuck', stuck.length === 1 ? '1 stuck' : `${stuck.length} stuck`, 'blocked'))
-  if (bits.length === 0 && open.length > 0) bits.push(status('On track', 'done'))
-  return `<div class="bcstate">
-    ${bits.join('')}
-    ${
-      open.length === 0
-        ? `<span class="bcstatecount">nothing open</span>`
-        : `<button type="button" class="bcstatecount bcstatecount--press" data-bc-filter="open">${esc(
-            open.length === 1 ? '1 open task' : `${open.length} open tasks`,
-          )}</button>`
-    }
+  /*
+    THE SAME COUNTER GROUP AS THE PROJECT HOME, so "late" looks like one
+    thing wherever it is counted. It was a pair of 12px pills beside a bare
+    count here and three weighted counters on the home. Open stays on this
+    page - it is the size of the list below, which the home does not show.
+  */
+  const late = filtered(p, 'late').length
+  const stuck = filtered(p, 'stuck').length
+  const open = filtered(p, 'open').length
+  const shown = (n) => (n > 99 ? '99+' : String(n))
+  const one = (n, word, tone, kind) => {
+    const inner = `<span class="bccountn">${esc(shown(n))}</span><span class="bccountw">${esc(word)}</span>`
+    if (n === 0) return `<span class="bccount bccount--zero">${inner}</span>`
+    return `<button type="button" class="bccount bccount--${esc(tone)}" data-bc-filter="${esc(kind)}">${inner}</button>`
+  }
+  return `<div class="bcstate bccounts" role="group" aria-label="How these to-dos stand">
+    ${one(late, 'late', 'late', 'late')}
+    ${one(stuck, 'stuck', 'stuck', 'stuck')}
+    ${one(open, 'open', 'open', 'open')}
   </div>`
 }
 
