@@ -1807,6 +1807,48 @@ const contactsSurface = (p) => {
 */
 const sourceKey = (s, i) => String(s?.id ?? s?.name ?? s?.title ?? i)
 
+/*
+  WHAT THIS CONNECTION IS ACTUALLY POINTING AT  (§22)
+
+  §22: "`Connected` alone is insufficient. Show enough information to
+  understand WHAT is connected... The Sources page should answer: what is this
+  connection actually pointing at? at a glance."
+
+  It did not. A row said the attachment's NAME and then the raw value of
+  `project_attachments.role` -- so Grant's real Notion databases read
+  "Projects / home / Connected", which names no service, and "home" is a
+  database enum on a person's screen. The service was in the payload the whole
+  time, as `via`, and nothing drew it.
+
+  One assembly, two callers: the row and the record. A row list built twice is
+  a list that will disagree, and the record already had its own phrasing for
+  the same fact.
+
+  ROLES ARE TRANSLATED, NOT LISTED AWAY. The three the table permits are
+  source, home and mirror, and an unrecognised one falls through as itself
+  rather than vanishing -- a vocabulary the office grows should show up as an
+  odd word, not as a blank line.
+*/
+const ROLE_SAYS = {
+  source: 'read for material',
+  home: 'where new material is filed',
+  mirror: 'kept in step with what the office holds',
+}
+
+/**
+ * @param withService - false where the service is already named beside it,
+ *   which is the record: "What it is: Notion" then "What it gives this
+ *   project: Notion, read for material" says Notion twice. One function with a
+ *   parameter rather than two that will drift.
+ */
+const sourceSays = (s, { withService = true } = {}) => {
+  if (s?.kind !== 'connector') return s?.what ?? s?.detail ?? ''
+  const role = typeof s?.what === 'string' ? s.what : ''
+  const said = ROLE_SAYS[role] ?? role
+  if (!withService) return said
+  return [s?.via ?? '', said].filter((x) => String(x ?? '') !== '').join(' · ')
+}
+
 const sourceRow = (s, i) => {
   const trouble = s.health === 'blocked' || s.trouble === true
   const connected = s.kind === 'connector'
@@ -1814,7 +1856,7 @@ const sourceRow = (s, i) => {
     data-bc-source="${esc(sourceKey(s, i))}">
     ${bcMini.sourceMark(s)}
     <span class="bcsourcename">${esc(s.name ?? s.title ?? 'A source')}</span>
-    <span class="bcsourcewhat">${esc(s.what ?? s.detail ?? '')}</span>
+    <span class="bcsourcewhat">${esc(sourceSays(s))}</span>
     <span class="bcsourcewhen">${
       trouble
         ? status(esc(s.problem ?? 'Needs attention'), 'blocked')
@@ -1869,8 +1911,12 @@ const sourceRecord = (p, s) => {
     detail page and a detail page that lies.
   */
   const facts = [
-    ['What it is', connected ? 'A connected service' : (s.via ?? 'Something to read')],
-    ['What it gives this project', s.what ?? s.detail ?? ''],
+    /*
+      WHICH SERVICE, not "a connected service" -- §22's whole question. The
+      name above is the notebook or the database; this is what it lives in.
+    */
+    ['What it is', connected ? (s.via ?? 'A connected service') : (s.via ?? 'Something to read')],
+    ['What it gives this project', sourceSays(s, { withService: false })],
     ['Documents it has contributed', s.gave === undefined || s.gave === null ? '' : String(s.gave)],
     ['Last read', connected ? (s.last ?? 'not read yet') : ''],
     ['State', trouble ? (s.problem ?? 'Needs attention') : connected ? 'Connected' : ''],
