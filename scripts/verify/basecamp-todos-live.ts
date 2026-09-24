@@ -21,6 +21,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import type { Page } from 'playwright'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { signIn } from './lib/sign-in.ts'
@@ -77,6 +78,33 @@ if (projectId === '') {
 }
 
 const made: string[] = []
+/*
+  WAIT FOR THE TASKS, AND SAY WHAT THE PAGE HAD IF THEY NEVER CAME.
+
+  A bare thirty-second selector wait after a fresh sign-in is a race with a
+  cold deployment, and when it loses it says only "waiting for locator" --
+  which names no cause and reads like a missing feature. It lost twice against
+  a page that renders perfectly when the suite runs alone.
+
+  Longer, and it prints what was on screen, because a failure that names
+  nothing is the thing CLAUDE.md warns about most. The same helper
+  basecamp-docorder-live got for the same reason.
+*/
+const waitForTasks = async (p: Page): Promise<void> => {
+  try {
+    await p.waitForSelector('li.bctask', { timeout: 60000 })
+  } catch {
+    const said = (
+      (await p
+        .evaluate("(() => (document.body.innerText || '').slice(0, 300))()")
+        .catch(() => '')) as string
+    )
+      .replace(/\s+/g, ' ')
+      .trim()
+    throw new Error(`no task rows after 60s. The page said: ${said}`)
+  }
+}
+
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 const page = await ctx.newPage()
@@ -105,8 +133,29 @@ try {
 
   await signIn(page, db, { ref, origin: SITE, back: `${SITE}/basecamp` })
 
-  await page.click(`text=AI Team HQ Test`)
-  await page.waitForSelector('li.bctask', { timeout: 30000 })
+  /*
+    OPENING THE PROJECT, and saying what was on the home board if it is not
+    there.
+
+    `page.click` on a text locator reports only "waiting for locator", which
+    names neither the cause nor what the page had instead -- and on a cold
+    deployment the home board's project list arrives after the shell does. The
+    project is asserted to exist in the office two steps above this; if it is
+    not on the screen, the screen is what needs printing.
+  */
+  try {
+    await page.click('text=AI Team HQ Test', { timeout: 60000 })
+  } catch {
+    const said = (
+      (await page
+        .evaluate("(() => (document.body.innerText || '').slice(0, 400))()")
+        .catch(() => '')) as string
+    )
+      .replace(/\s+/g, ' ')
+      .trim()
+    throw new Error(`the home board never offered AI Team HQ Test. It said: ${said}`)
+  }
+  await waitForTasks(page)
   await page.waitForTimeout(2000)
 
   const readRows = async (): Promise<Row[]> =>
@@ -214,7 +263,7 @@ try {
   // --- and a reload agrees -------------------------------------------------
 
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 })
-  await page.waitForSelector('li.bctask', { timeout: 30000 })
+  await waitForTasks(page)
   await page.waitForTimeout(2500)
   const reloaded = await readRows()
   const stillAt = reloaded.findIndex((r) => r.title === targetTitle)
