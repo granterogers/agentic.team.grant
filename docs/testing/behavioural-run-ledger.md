@@ -2874,6 +2874,70 @@ Clean-pass count after pass 56: **1 of 5** — the pass found no product defect,
 but it corrected published evidence of my own, so it is recorded as a
 correction rather than claimed as clean.
 
+---
+
+## Pass 57 — the 182 real turns, end to end: ONE LOCAL DEFECT, FILED (#365)
+
+**Territory:** with the canonical filter in hand, what actually happened to
+every genuinely real turn of his. Fresh, because every earlier pass measured a
+corpus that was 87% harness.
+
+**129 real turns have jobs. 124 were delivered. Five were not**, and four
+dissolved on inspection:
+
+- **two were answered by their CHILDREN.** *"Make an audio overview in the
+  notebook…"* and the Legacy Coaching notebook instruction both show
+  `announce = false` on the parent and one child each that delivered — 2 sends
+  and 1 send. The parent handed off and the child answered. #316's rule, and
+  my query was counting per JOB rather than per OBLIGATION.
+- **one is the 8 September voice note**, `handler threw: Buffer is not
+  defined`, which is the case 0571 was written for.
+- **one is labelled in its own `state_reason`** as a fixture whose voice file
+  was deleted.
+
+### The one that did not dissolve — #365
+
+13 September, 04:52:34, from the dashboard: *"Review Decision from ChatGPT and
+tell me what you think."* Cancelled at 04:52:49, fifteen seconds later,
+`attempt = 0` so it never ran. **Empty `state_reason`, empty transition
+reason, actor `postgres`, no `stop_requested_by`, no event, no delivery.** He
+asked and the office said nothing at all.
+
+`app.owed_a_word` gates on `j.state = 'failed'`. **Cancelled is not covered.**
+A cancellation he REQUESTED owes him nothing; one he did not is the same
+silence as a failure, and `stop_requested_by` is exactly the column that tells
+them apart.
+
+**Filed rather than built**, deliberately. The seam that calls `owed_a_word`
+is the worker's terminal tick, and a SQL-side cancellation never passes
+through the worker — so widening the predicate alone would change no
+behaviour, which is CLAUDE.md's own lesson about lowering one half of a
+threshold. Closing it needs a sweeper, and one occurrence of unknown cause
+does not justify building one. The cause is still unidentified: no function,
+script or trigger accounts for a single targeted cancel with no reason.
+
+### The 27 that looked worse than they were
+
+27 real-attributed `office.instruction` jobs are cancelled with no reason at
+all. **26 have no `inbound_commands` row**, which CLAUDE.md already explains —
+only suite teardowns delete that table, and these predate 0575's preserving
+trigger. Their shape is the suite signature: all four channel namespaces, one
+eight-day window. Unattributable rather than his. The 27th is #365.
+
+**THE RULE THIS EARNS: a cancellation with no reason is indistinguishable from
+work silently destroyed.** 45 of the cancelled real-attributed turns say what
+did it (*"verify:history debris"*, *"verify-boundary teardown"*) and could be
+triaged in one query; the 27 that say nothing could not be triaged at all
+without reading every row.
+
+**Gates:** lint 0, typecheck 0, test 3062/3062, check:secrets 0,
+check:believes clean.
+
+Clean-pass count after pass 57: **1 of 5** — NOT claimed as clean, because a
+real turn of his got silence; not a reset either, because the defect is local
+and latent rather than systemic, and the invariant it belongs to is already
+in place for the failure path.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
