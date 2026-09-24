@@ -1244,14 +1244,19 @@ const teamSurface = (p) => {
         ? `<p class="bcpmeta bcprose">Nothing is waiting on a decision from you.</p>`
         : `<div class="bclist">${waiting
             .map(
-              (w) => `<div class="bcitem">
+              /*
+                A ROW, NOT A NOTICE. §18's journey begins with opening the
+                item, so the row is the control that opens it -- it was a div
+                with a pill on it, which is the whole complaint.
+              */
+              (w) => `<button type="button" class="bcitem bcitem--press" data-bc-waitopen="${esc(String(w.id))}">
                 <span></span>
                 <div class="bcitembody">
                   <span class="bcitemtitle">${esc(w.what)}</span>
-                  <span class="bcitemmeta">${esc([w.who, w.when, w.why].filter(Boolean).join(' · '))}</span>
+                  <span class="bcitemmeta">${esc([bcMini.named(w.who), w.when, w.why].filter(Boolean).join(' · '))}</span>
                 </div>
-                <span>${status('Waiting for you', 'waiting')}</span>
-              </div>`,
+                <span>${w.overdue === true ? status('Overdue', 'blocked') : status('Waiting for you', 'waiting')}</span>
+              </button>`,
             )
             .join('')}</div>`
     }
@@ -2448,10 +2453,166 @@ const settingsSurface = (p) => {
     <div class="bcsetframe">${ctx?.projectSettingsBody?.(p) ?? ''}</div>`
 }
 
+/* ======================================================================== *
+ * WAITING FOR YOU, RESOLVED RATHER THAN DISPLAYED  (§18)
+ * ======================================================================== *
+ *
+ * §18: "Items marked Waiting for you currently tell Grant something needs him
+ * without providing a useful resolution path... Do not merely display status.
+ * Trace the canonical waiting/decision/approval architecture. Use the real
+ * underlying state."
+ *
+ * THE CANONICAL ARCHITECTURE WAS ALREADY THERE, WHICH IS THE POINT. A blocker
+ * is a row in `public.blockers`; `app.studio_waiting` already carries what was
+ * asked, why it is needed, who asked, what delay costs, the deadline, whether
+ * the work can continue without an answer, and -- the part that makes this a
+ * decision rather than a message -- `approval_options`, the answers the
+ * handler that raised it can actually act on. `hq_answer_blocker` is a gateway
+ * action and has been since 0289.
+ *
+ * So nothing here invents a parallel approval system. What was missing was the
+ * screen: the team surface listed each item as three lines of grey text with a
+ * pill reading "Waiting for you" and no way to answer, which is precisely the
+ * "merely display status" the section forbids.
+ *
+ * WHY THE OPTIONS ARE BUTTONS AND NOT A TEXT BOX WHEN THEY EXIST. The RPC
+ * refuses an answer the blocker did not offer, deliberately: an answer the
+ * handler cannot act on would resolve the row and strand the job, and the
+ * interface would report success. Offering a field beside the buttons would be
+ * offering something the office is going to refuse -- the dead-control shape
+ * this repository keeps paying for. A blocker with no options wants words, and
+ * gets a field.
+ */
+
+/** The one this person is looking at, or undefined. */
+const waitingOf = (p) => {
+  const id = state().bcWaiting
+  if (id === null || id === undefined) return undefined
+  return (p.waiting ?? []).find((w) => String(w.id) === String(id))
+}
+
+const waitingRecord = (p) => {
+  const w = waitingOf(p)
+  /*
+    A blocker that is no longer in the list has been answered -- by this person
+    somewhere else, by a colleague, or by the job withdrawing it. That is the
+    good ending, not a crash, and the honest screen says so rather than
+    rendering an empty record.
+  */
+  if (w === undefined) {
+    return `${crumbFor(p, 'team')}
+      <div class="bcrecordhead"><h1>Waiting for you</h1></div>
+      ${empty(
+        {
+          title: 'This one is settled',
+          body: 'It has been answered or withdrawn, so there is nothing left to decide here.',
+        },
+        button('Back to the team', { 'data-bc-waitclose': '1', kind: 'primary' }),
+      )}`
+  }
+
+  const facts = [
+    ['Asked by', bcMini.named(w.who) || 'The team'],
+    ['Asked', typeof w.at === 'string' ? when.words(w.at) : (w.when ?? '')],
+    ['Needed by', typeof w.due === 'string' ? when.words(w.due) : 'No deadline given'],
+    [
+      'Meanwhile',
+      w.blocks === true
+        ? 'The work has stopped until you answer'
+        : 'The team is carrying on without this',
+    ],
+  ].filter(([, v]) => String(v ?? '') !== '')
+
+  const options = Array.isArray(w.options) ? w.options.filter((o) => String(o ?? '') !== '') : []
+
+  return `${breadcrumb([
+    { name: p.name, to: at(`/p/${p.slug}`) },
+    { name: 'Agentic Team', to: at(`/p/${p.slug}/team`) },
+    { name: w.what },
+  ])}
+    <div class="bcrecordhead">
+      <h1>${esc(w.what)}</h1>
+      <span class="bcactions">
+        ${w.overdue === true ? status('Overdue', 'blocked') : status('Waiting for you', 'waiting')}
+        ${button('Back to the team', { 'data-bc-waitclose': '1' })}
+      </span>
+    </div>
+
+    ${
+      typeof w.why === 'string' && w.why !== ''
+        ? `<p class="bcprose bcwaitwhy">${esc(w.why)}</p>`
+        : ''
+    }
+    ${
+      typeof w.cost === 'string' && w.cost !== ''
+        ? `<p class="bcprose bcwaitcost"><b>If this waits:</b> ${esc(w.cost)}</p>`
+        : ''
+    }
+
+    <dl class="bcwaitfacts">
+      ${facts
+        .map(
+          ([k, v]) => `<div class="bcwaitfact">
+            <dt>${esc(k)}</dt>
+            <dd>${esc(String(v))}</dd>
+          </div>`,
+        )
+        .join('')}
+    </dl>
+
+    <h2 class="bcsubhead">Your answer</h2>
+    <form class="bcwaitanswer" data-bc-waitform="${esc(String(w.id))}">
+      ${
+        /*
+          BUTTONS, AND NO TEXT FIELD BESIDE THEM.
+
+          A first draft offered a textarea when a blocker named no options,
+          because `app.studio_waiting` says in its own comment that "empty
+          means it wants words rather than a button, and the page draws a
+          field". The table disagrees: `blockers_has_an_option` is a CHECK that
+          every blocker carries at least one approval option, so the empty case
+          cannot exist and the field could never have been used -- a control
+          nothing can reach, which is a claim that a control exists.
+
+          The comment is now the only thing wrong, and this is not the file to
+          fix it in. What is left is the branch a person can actually be shown:
+          a blocker whose options went missing is reported as something this
+          screen cannot answer, rather than being given a field the office
+          would refuse.
+        */
+        options.length > 0
+          ? `<p class="bcpmeta bcprose">Pick one. The team acts on it as soon as you do.</p>
+             <div class="bcwaitoptions">
+               ${options
+                 .map((o, i) =>
+                   button(o, {
+                     'data-bc-waitanswer': esc(String(o)),
+                     kind: i === 0 ? 'primary' : 'plain',
+                   }),
+                 )
+                 .join('')}
+             </div>`
+          : `<p class="bcpmeta bcprose">This one arrived without the answers it accepts, so it cannot be settled here. Ask the team in chat and they can withdraw it.</p>`
+      }
+      <span class="bcsaidhere" data-bc-waitsaid role="status" aria-live="polite"></span>
+    </form>`
+}
+
 const SURFACE = {
   overview,
   tasks: (p) => (state().bcTask === null || state().bcTask === undefined ? tasksSurface(p) : taskRecord(p)),
-  team: (p) => (state().bcOutput === null || state().bcOutput === undefined ? teamSurface(p) : outputRecord(p)),
+  /*
+    Three states of one surface. An output record and a waiting record are both
+    "the team page, looking at one thing", which is why they are states here
+    rather than routes: the breadcrumb goes back to the team page and the rail
+    keeps saying Agentic Team, which is where the person still is.
+  */
+  team: (p) => {
+    if (state().bcWaiting !== null && state().bcWaiting !== undefined) return waitingRecord(p)
+    return state().bcOutput === null || state().bcOutput === undefined
+      ? teamSurface(p)
+      : outputRecord(p)
+  },
   documents: documentsSurface,
   contacts: contactsSurface,
   sources: sourcesSurface,

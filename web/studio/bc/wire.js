@@ -977,6 +977,57 @@ const wireCounts = (root) => {
       ctx.openExpanded?.('team')
     })
   }
+
+  /*
+    WAITING FOR YOU, ANSWERED (§18).
+
+    Opening is ordinary. Answering is the part with a rule in it: the office
+    refuses an answer the blocker did not offer, so the page sends one of the
+    options VERBATIM rather than anything it composed. A blocker with no
+    options takes words, and an empty box is not an answer -- refusing it here
+    is kinder than a round trip that comes back rejected.
+  */
+  for (const b of root.querySelectorAll('[data-bc-waitopen]')) {
+    b.addEventListener('click', () => {
+      const id = b.dataset.bcWaitopen ?? ''
+      if (id === '') return
+      ctx.openWaiting?.(id)
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-waitclose]')) {
+    b.addEventListener('click', () => {
+      ctx.closeWaiting?.()
+    })
+  }
+
+  const answer = async (el, id, text) => {
+    const said = root.querySelector('[data-bc-waitsaid]')
+    const done = await attempt(
+      el,
+      'Sending your answer…',
+      () => act('answer_blocker', { p_blocker_id: id, p_answer: text }),
+      'Answered. The team has it.',
+    )
+    if (done === null) return
+    /*
+      Close only AFTER the office has taken it. Closing first would show the
+      list without the item and imply a resolution that had not happened yet --
+      and if the office refuses, the person is left looking at a page that says
+      nothing went wrong.
+    */
+    await ctx.refresh?.()
+    ctx.closeWaiting?.()
+    if (said !== null) said.textContent = ''
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-waitanswer]')) {
+    b.addEventListener('click', () => {
+      const id = b.closest('[data-bc-waitform]')?.dataset.bcWaitform ?? ''
+      const text = b.dataset.bcWaitanswer ?? ''
+      if (id === '' || text === '') return
+      void answer(b, id, text)
+    })
+  }
 }
 
 /*

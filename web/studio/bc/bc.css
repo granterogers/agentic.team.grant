@@ -681,6 +681,29 @@
   from the markup the way a hand-applied class does.
 */
 .bcitem:has(button, a[href], input):hover { background: var(--bc-hover); }
+/*
+  A ROW THAT IS ITSELF THE BUTTON.
+
+  The rule above asks whether a row CONTAINS something pressable, which is the
+  right question for every row it was written for and the wrong one for a
+  waiting item: that row is a button, so it contains none and lit up for
+  nothing. The modifier says so explicitly rather than widening the :has() to
+  match the element itself, which would light up any row that merely sits
+  inside a form.
+*/
+.bcitem--press {
+  width: 100%;
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--bc-border-subtle);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.bcitem--press:hover { background: var(--bc-hover); }
+
 .bcitem .bcitembody { min-width: 0; display: grid; gap: 2px; }
 .bcitem .bcitemtitle { font: 600 15px/22px var(--bc-font); overflow-wrap: anywhere; }
 /*
@@ -1626,3 +1649,61 @@
 [data-experience="basecamp"] .bcdriveadd { flex: none; min-height: 44px; }
 
 
+
+
+/* ========================================================================
+   WAITING FOR YOU, AS A DECISION  (§18)
+
+   The record a waiting item opens into. Everything here is in service of one
+   sentence: a person should be able to read what is wanted, see what it costs
+   to wait, and answer, without leaving the page or learning a vocabulary.
+
+   No new colour and no new geometry. The reason clause takes the prose
+   measure, the facts are a definition list because that is what they are, and
+   the answer sits under a heading like any other section of a record.
+   ======================================================================== */
+
+.bcwaitwhy {
+  max-width: var(--bc-measure);
+  margin: var(--bc-3) 0 0;
+}
+/*
+  What delay costs is the one line that should carry weight: it is the reason
+  the item is urgent rather than merely open. A left rule in the danger hue
+  rather than danger-coloured text, because red prose reads as an error having
+  happened and nothing has gone wrong yet.
+*/
+.bcwaitcost {
+  max-width: var(--bc-measure);
+  margin: var(--bc-3) 0 0;
+  padding-left: var(--bc-3);
+  border-left: 3px solid var(--bc-danger);
+}
+.bcwaitfacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--bc-3);
+  margin: var(--bc-4) 0 0;
+  padding: var(--bc-3);
+  background: var(--bc-surface-raised);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-r-row);
+}
+.bcwaitfact { display: grid; gap: 2px; min-width: 0; }
+.bcwaitfact dt {
+  font: var(--bc-compact);
+  color: var(--bc-text-muted);
+}
+.bcwaitfact dd {
+  margin: 0;
+  font: 600 15px/22px var(--bc-font);
+  color: var(--bc-text);
+  overflow-wrap: anywhere;
+}
+.bcwaitanswer { display: grid; gap: var(--bc-3); margin-top: var(--bc-3); }
+/*
+  The options WRAP rather than scroll. A blocker may offer two answers or five,
+  and a row that scrolls sideways hides the option a person was looking for at
+  exactly the moment they are deciding.
+*/
+.bcwaitoptions { display: flex; flex-wrap: wrap; gap: var(--bc-3); }

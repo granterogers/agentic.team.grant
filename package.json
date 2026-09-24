@@ -330,14 +330,15 @@
     "verify:basecamp-classes": "tsx scripts/verify/basecamp-classes.ts",
     "verify:basecamp-states": "tsx scripts/verify/basecamp-states.ts",
     "basecamp:gate": "npm run verify:basecamp-covered && npm run verify:basecamp-classes && npm run verify:basecamp-actions && npm run verify:basecamp-home && npm run verify:basecamp-routes && npm run verify:basecamp-journey && npm run verify:basecamp-keyboard && npm run verify:basecamp-preservation && npm run verify:basecamp-states && npm run verify:basecamp-docs && npm run verify:basecamp-look && npm run verify:basecamp-reconcile && npm run verify:basecamp-controls && npm run basecamp:measure",
-    "basecamp:gate2": "npm run verify:basecamp-board && npm run verify:basecamp-todos && npm run verify:basecamp-cards && npm run verify:basecamp-docs && npm run verify:basecamp-back && npm run verify:basecamp-contacts && npm run verify:basecamp-voice && npm run verify:basecamp-settings && npm run verify:basecamp-words && npm run verify:basecamp-affordance && npm run verify:basecamp-torture && npm run verify:basecamp-failures && npm run verify:basecamp-touch && npm run verify:basecamp-voicenote && npm run verify:basecamp-livevoice && npm run verify:basecamp-drive && npm run verify:basecamp-photo",
+    "basecamp:gate2": "npm run verify:basecamp-board && npm run verify:basecamp-todos && npm run verify:basecamp-cards && npm run verify:basecamp-docs && npm run verify:basecamp-back && npm run verify:basecamp-contacts && npm run verify:basecamp-voice && npm run verify:basecamp-settings && npm run verify:basecamp-words && npm run verify:basecamp-affordance && npm run verify:basecamp-torture && npm run verify:basecamp-failures && npm run verify:basecamp-touch && npm run verify:basecamp-voicenote && npm run verify:basecamp-livevoice && npm run verify:basecamp-drive && npm run verify:basecamp-photo && npm run verify:basecamp-waiting",
     "verify:basecamp-controls": "tsx scripts/verify/basecamp-controls.ts",
     "verify:basecamp-covered": "tsx scripts/verify/basecamp-covered.ts",
     "basecamp:compose": "tsx scripts/verify/basecamp-compose-shots.ts",
     "verify:basecamp-home": "tsx scripts/verify/basecamp-home.ts",
     "review:build": "tsx scripts/review-build.ts",
     "deploy:preview": "npm run review:build && tsx scripts/deploy/site.ts",
-    "verify:basecamp-photo": "tsx scripts/verify/basecamp-photo.ts"
+    "verify:basecamp-photo": "tsx scripts/verify/basecamp-photo.ts",
+    "verify:basecamp-waiting": "tsx scripts/verify/basecamp-waiting.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

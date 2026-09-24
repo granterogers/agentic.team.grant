@@ -13512,6 +13512,20 @@ const bcContext = {
     state.bcOutput = null
     render()
   },
+  /*
+    §18: one waiting item, open. It clears `bcOutput` on the way in because the
+    team surface shows one thing at a time and two ids set at once would make
+    which-one-you-see depend on the order of the checks in SURFACE.team.
+  */
+  openWaiting: (id) => {
+    state.bcOutput = null
+    state.bcWaiting = id
+    render()
+  },
+  closeWaiting: () => {
+    state.bcWaiting = null
+    render()
+  },
   openTask: (id) => {
     state.bcTask = id
     /*

@@ -86,7 +86,13 @@ export const face = (person, size = 'sm') => {
 const person = (slug) =>
   (ctx?.crew ?? []).find((c) => c.slug === slug) ?? (slug ? { slug, name: slug } : null)
 
-const named = (slug) => person(slug)?.name ?? ''
+/*
+  Exported because §18's waiting record needs the same answer the miniatures
+  give: a slug is a database key and "communications-director needs you" is not
+  a sentence. Two copies of this would be two places for the roster lookup to
+  disagree, which is the row-list-built-twice defect in a person's name.
+*/
+export const named = (slug) => person(slug)?.name ?? ''
 
 /* ======================================================================== *
  * To-dos: PROJECT -> LIST -> TASK  (§6)
@@ -631,13 +637,19 @@ export const crewMini = (p, { people = 4 } = {}) => {
     ${waiting
       .slice(0, 2)
       .map(
-        (w) => `<div class="bcmate bcmate--asks">
+        /*
+          PRESSABLE, because §18's journey starts by opening the item and this
+          is where most people meet one: the board, not the team page. It was a
+          div, so the only thing a person could do with the news that something
+          needed them was read it again.
+        */
+        (w) => `<button type="button" class="bcmate bcmate--asks bcmate--press" data-bc-waitopen="${esc(String(w.id ?? ''))}">
           <div class="bcmatebody">
             <span class="bcmatename">${esc(named(w.who) || 'The team')} needs you</span>
             <span class="bcmatedoing">${esc(w.what ?? '')}</span>
           </div>
-          ${status('Waiting for you', 'waiting')}
-        </div>`,
+          ${w.overdue === true ? status('Overdue', 'blocked') : status('Waiting for you', 'waiting')}
+        </button>`,
       )
       .join('')}
     ${
