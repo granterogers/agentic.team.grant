@@ -58,7 +58,9 @@ if (accessToken === '') {
 const db = new ManagementApiExecutor(ref, accessToken)
 
 const SLUG = 'ai-team-hq-test'
-const NAME = `Face probe ${Math.random().toString(36).slice(2, 8)}`
+const RUN = Math.random().toString(36).slice(2, 8)
+const NAME = `Face probe ${RUN}`
+const PLAIN = `Face probe ${RUN} unphotographed`
 const FACE = new URL('./fixtures/contact-face.png', import.meta.url).pathname
 
 const q = (s: string): string => s.replace(/'/g, "''")
@@ -71,13 +73,26 @@ if (project === undefined) {
   process.exit(1)
 }
 
+/*
+  TWO CONTACTS, BOTH OURS.
+
+  The negative control -- a person with no photograph shows initials -- cannot
+  be taken from Grant's own rows, because he has none: the five in this project
+  are archived acceptance-run debris from 23 September, which is why the board
+  says nobody is recorded here. A first draft asserted the fallback "on every
+  other contact" and failed against an empty list, which is a check passing
+  judgement on a population of zero.
+*/
 const made = await db.execute(
   `insert into public.contacts (project_id, kind, name, role)
-   values ('${project.id}'::uuid, 'person', '${q(NAME)}', 'probe')
-   returning contact_id::text as id`,
+   values ('${project.id}'::uuid, 'person', '${q(NAME)}', 'probe'),
+          ('${project.id}'::uuid, 'person', '${q(PLAIN)}', 'probe')
+   returning contact_id::text as id, name`,
 )
-const id = String((made.rows[0] as { id: string }).id)
-check('a contact of our own exists to photograph', id !== '')
+const rows = made.rows as { id: string; name: string }[]
+const id = String(rows.find((r) => r.name === NAME)?.id ?? '')
+const plainId = String(rows.find((r) => r.name === PLAIN)?.id ?? '')
+check('two contacts of our own exist, one to photograph and one not', id !== '' && plainId !== '')
 
 /** What the office holds for this contact. */
 const storedPath = async (): Promise<string> => {
@@ -138,15 +153,33 @@ try {
   const path = await officeHasAPhoto()
   check('choosing a file puts a photograph in the office', path !== '', path.slice(0, 48))
 
-  /* --- 3. the record shows it -------------------------------------------- */
-  await page.waitForTimeout(1500)
-  const inRecord = (await page.evaluate(
-    inPage(`
-      const img = document.querySelector('img.bcface--photo')
-      if (img === null) return 'no image in the record'
-      return img.complete && img.naturalWidth > 0 ? 'drawn ' + img.naturalWidth : 'not drawn: ' + img.currentSrc.slice(0, 60)
-    `),
-  )) as string
+  /* --- 3. the record shows it -------------------------------------------- *
+   *
+   * WAIT FOR THE PAGE, not for the office. These are two different clocks and
+   * the second is much the slower: the row was written within a second, and
+   * the open record redraws on the payload's own refresh cycle, about ten. A
+   * first draft read 1.5s after the office confirmed and reported "no image in
+   * the record" -- the exact words of the defect it had just fixed, about a
+   * product that was working. A fixed pause here is a coin flip, and the side
+   * it lands on is "the thing you set out to prove is broken".
+   */
+  const recordDraws = async (within = 30000): Promise<string> => {
+    const until = Date.now() + within
+    let saw = 'no image in the record'
+    while (Date.now() < until) {
+      saw = (await page.evaluate(
+        inPage(`
+          const img = document.querySelector('img.bcface--photo')
+          if (img === null) return 'no image in the record'
+          return img.complete && img.naturalWidth > 0 ? 'drawn ' + img.naturalWidth : 'not drawn yet'
+        `),
+      )) as string
+      if (saw.startsWith('drawn')) return saw
+      await page.waitForTimeout(500)
+    }
+    return saw
+  }
+  const inRecord = await recordDraws()
   check('and the record draws it', inRecord.startsWith('drawn'), inRecord)
 
   /* --- 4. the miniature, which is what §11 actually asked about ----------- */
@@ -190,21 +223,20 @@ try {
     src.slice(0, 70),
   )
 
-  /* --- 6. the fallback is not merely the absence of an image ------------- */
-  const others = (await page.evaluate(
+  /* --- 6. the control: the one we did NOT photograph ---------------------- */
+  const control = (await page.evaluate(
     inPage(`
-      const out = []
-      for (const b of document.querySelectorAll('[data-bc-contact]')) {
-        if (b.getAttribute('data-bc-contact') === '${id}') continue
-        out.push(b.querySelector('img.bcmateface') !== null ? 'image' : (b.querySelector('.bcmateface--none')?.textContent ?? '').trim())
-      }
-      return out
+      const b = document.querySelector('[data-bc-contact="${plainId}"]')
+      if (b === null) return 'the control contact is not on the board'
+      if (b.querySelector('img.bcmateface') !== null) return 'an image, on the one with nothing stored'
+      const none = b.querySelector('.bcmateface--none')
+      return none === null ? 'no face at all' : 'initials: ' + none.textContent.trim()
     `),
-  )) as string[]
+  )) as string
   check(
-    'every other contact still shows initials, none of them blank',
-    others.length > 0 && others.every((o) => o !== ''),
-    others.join(' | '),
+    'the contact we did not photograph still shows initials',
+    control.startsWith('initials:') && control.length > 'initials:'.length + 1,
+    control,
   )
 
   check('nothing threw while all of that happened', errors.length === 0, errors.join(' | '))
@@ -215,11 +247,11 @@ try {
     looks exactly like a teardown that worked -- CLAUDE.md's own rule, and the
     reason the count is read back rather than the delete being trusted.
   */
-  await db.execute(`delete from public.contacts where contact_id = '${id}'`)
+  await db.execute(`delete from public.contacts where contact_id in ('${id}', '${plainId}')`)
   const left = await db.execute(
-    `select count(*)::int as n from public.contacts where contact_id = '${id}'`,
+    `select count(*)::int as n from public.contacts where contact_id in ('${id}', '${plainId}')`,
   )
-  check('the probe contact is gone again', (left.rows[0] as { n: number }).n === 0)
+  check('both probe contacts are gone again', (left.rows[0] as { n: number }).n === 0)
 }
 
 console.log(`\n${String(pass)}/${String(pass + fail)} passed`)

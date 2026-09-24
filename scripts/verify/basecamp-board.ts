@@ -182,10 +182,7 @@ check(
 )
 await page.locator('[data-bc-arr-on="contacts"]').first().click()
 await page.waitForTimeout(400)
-check(
-  'pressing it puts the module back',
-  (await page.locator('[data-mod="contacts"]').count()) > 0,
-)
+check('pressing it puts the module back', (await page.locator('[data-mod="contacts"]').count()) > 0)
 check(
   'and with every module back, it stops naming any',
   (await page.locator('[data-bc-arr-on]').count()) === 0,
