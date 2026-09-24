@@ -12,6 +12,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { MigrationFile, RecordedChecksums } from '../src/migrations/check.ts'
 import { checkMigrations } from '../src/migrations/check.ts'
+import { recordedCollisions } from '../src/migrations/collisions.ts'
 
 const MIGRATIONS_DIR = 'migrations'
 const CHECKSUM_LEDGER = join(MIGRATIONS_DIR, 'applied.json')
@@ -52,7 +53,7 @@ async function readRecorded(): Promise<RecordedChecksums> {
 }
 
 const [files, recorded] = await Promise.all([readMigrations(), readRecorded()])
-const findings = checkMigrations(files, recorded, sha256)
+const findings = checkMigrations(files, recorded, sha256, await recordedCollisions())
 
 const notes = findings.filter((f) => f.severity === 'note')
 const errors = findings.filter((f) => f.severity !== 'note')

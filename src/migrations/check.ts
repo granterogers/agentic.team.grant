@@ -21,6 +21,20 @@ export interface MigrationFile {
 /** Content hashes of migrations that have already been applied somewhere. */
 export type RecordedChecksums = Readonly<Record<string, string>>
 
+/**
+ * Migration numbers two branches took at the same time and BOTH applied.
+ *
+ * Read from `migrations/collisions.json`, which explains itself. It exists
+ * because the rule below could not tell a collision that HAPPENED from one
+ * somebody is about to make, on a database where nothing is applied -- and on
+ * an empty one, nothing is applied by definition, so a fresh install was
+ * refused by the history it had not lived through.
+ */
+export interface RecordedCollision {
+  readonly n: string
+  readonly files: readonly string[]
+}
+
 export interface Finding {
   /**
    * `note` is reported and does not fail.
@@ -98,12 +112,21 @@ const NAME_PATTERN = /^(\d{4})_([a-z0-9]+(?:_[a-z0-9]+)*)\.sql$/
  * @param recorded Checksums of migrations already applied. Pass `{}` before the
  *   first migration has ever run.
  * @param hash Content hashing function, injected so this stays pure.
+ * @param history Migration numbers two branches took at once and both applied,
+ *   from `migrations/collisions.json`. Empty means the strict rule.
  * @returns Every finding, in a stable order. Empty means the check passed.
  */
 export function checkMigrations(
   files: readonly MigrationFile[],
   recorded: RecordedChecksums,
   hash: (content: string) => string,
+  /*
+    Defaulted to none rather than required: a caller that knows nothing about
+    history gets the strict rule, which is the safe direction. Only the callers
+    that read `migrations/` pass it, and it goes last so every existing call
+    site keeps working unchanged.
+  */
+  history: readonly RecordedCollision[] = [],
 ): Finding[] {
   const findings: Finding[] = []
   const err = (file: string | null, rule: string, message: string): void => {
@@ -163,13 +186,32 @@ export function checkMigrations(
         fixed by taking a free number.
       */
       const allApplied = names.every((n) => recorded[n] !== undefined)
+      /*
+        AND THE SAME DISTINCTION ON A DATABASE THAT HAS APPLIED NOTHING.
+
+        `allApplied` is the right test against the shared database and is
+        vacuously false against an empty one -- so a fresh install was refused
+        by thirteen collisions from a history it had not lived through, which
+        is the one thing that stood between the corpus and a blank database
+        once the genuinely pending three were renumbered.
+
+        The manifest is evidence, not permission: the group must match a
+        recorded entry EXACTLY, so a third file appearing on a listed number is
+        still an error, and a collision nobody wrote down is still an error.
+      */
+      const sorted = [...names].sort()
+      const known = history.some(
+        (c) =>
+          c.files.length === sorted.length &&
+          [...c.files].sort().every((f, i) => f === sorted[i]),
+      )
       const where = `sequence ${String(sequence).padStart(4, '0')} used by ${names.length} files: ${names.join(', ')}`
-      if (allApplied) {
+      if (allApplied || known) {
         findings.push({
           severity: 'note',
           file: null,
           rule: 'sequence/collided',
-          message: `${where} - both applied, so this is a recorded collision between branches rather than a pending one. Renaming either would make the repository claim a number it did not run under.`,
+          message: `${where} - a recorded collision between branches rather than a pending one${allApplied ? ', both applied' : ', listed in migrations/collisions.json'}. Renaming either would make the repository claim a number it did not run under.`,
         })
       } else {
         err(
@@ -178,6 +220,34 @@ export function checkMigrations(
           `${where} - at least one is NOT yet applied, so take a free number with npm run migrate:next before applying it`,
         )
       }
+    }
+  }
+
+  /*
+    A MANIFEST THAT HAS GONE STALE SAYS SO. An entry naming a file that no
+    longer exists would silently excuse a future collision on that number --
+    the shape of an allow-list that outlives what it was allowing.
+  */
+  const inTree = new Set(files.map((f) => f.name))
+  for (const c of history) {
+    const missing = c.files.filter((f) => !inTree.has(f))
+    /*
+      A SUBSET IS NOT A STALE MANIFEST.
+
+      `runMigrations` is legitimately called with part of the corpus -- the
+      zero-state harness applies it in stages, pausing to install historical
+      preconditions -- so an entry whose files are ALL absent is simply a
+      number this run does not reach. What is worth reporting is an entry the
+      run DOES reach and finds half of: that is a file renamed out from under
+      the manifest, which would silently excuse a future collision.
+    */
+    if (missing.length === c.files.length) continue
+    if (missing.length > 0) {
+      err(
+        null,
+        'collision/stale',
+        `migrations/collisions.json records ${c.n} as a collision between ${c.files.join(' and ')}, and ${missing.join(', ')} is no longer in migrations/. Remove the entry or restore the file.`,
+      )
     }
   }
 

@@ -44,7 +44,7 @@ day that bucket changes.
 
 The office already knows its own address. `system_config.db.project_ref` holds
 it, `npm run fresh:configure` sets it, and `app.hq_mcp()` composes a URL from it
-(0534). Two possibilities, and the second is better:
+(0592). Two possibilities, and the second is better:
 
 1. Have `npm run deploy:page` write `window.HQ_API` into the deployed page from
    the project being deployed to, so the fallback is never reached.
