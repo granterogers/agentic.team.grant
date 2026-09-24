@@ -3600,3 +3600,36 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   color: var(--bc-heading);
 }
 [data-experience='basecamp'] form[data-bc-contactedit] .bcctgroup:first-of-type { margin-top: 4px; }
+
+/* The dock's voice note: an icon beside Send; the panel under the composer. */
+[data-experience='basecamp'] .bcnotemic--dock {
+  flex: 0 0 auto;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 12px;
+  border-color: var(--bc-border-control);
+  background: transparent;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcnotemic--dock:hover { color: var(--bc-text-strong); background: var(--bc-hover); }
+[data-experience='basecamp'] .bcnotemic--dock[data-bc-note='recording'] {
+  color: var(--bc-danger);
+  border-color: color-mix(in srgb, var(--bc-danger) 55%, transparent);
+  background: color-mix(in srgb, var(--bc-danger) 10%, transparent);
+}
+[data-experience='basecamp'] .dock .bcnote { margin-top: 8px; }
+[data-experience='basecamp'] .dock .bcnoterow { gap: 8px; }
+
+/*
+  AN EXPANDED MODULE SITS BESIDE AN OPEN DOCK, NOT OVER IT. The overlay was
+  inset 0, so opening a module while talking to the team covered the dock
+  with a backdrop: the conversation became unreachable, and a voice note
+  being recorded there could not be stopped. On a desktop the dock takes
+  the right-hand 380px (body.docked pads for it), so the overlay stops there.
+  The phone's dock is full screen, and closes itself when a sheet opens.
+*/
+@media (min-width: 761px) {
+  [data-experience='basecamp'] body.docked .bcexp { right: min(380px, 100vw); }
+}

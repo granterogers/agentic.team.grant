@@ -3551,3 +3551,20 @@ export const html = () =>
   ${notLive()}
   <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>
   ${tray()}`
+
+/*
+  The dock's voice-note control: the same button the Chat page's composer
+  draws (same attribute, same states), icon-only because the dock's row is
+  380px and already holds the text and Send.
+*/
+export const dockNoteButton = () => `<button type="button" class="bcnotemic bcnotemic--dock" data-bc-note="idle"
+    aria-label="Record a voice note" title="Record a voice note">
+    <svg class="bcnotemicicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"></path>
+      <path d="M12 18v3"></path>
+    </svg>
+    <span class="bcnotemicdot" aria-hidden="true"></span>
+    <span class="bcnotemictxt bcvh">Voice note</span>
+  </button>`

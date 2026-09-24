@@ -81,3 +81,12 @@ node_modules if the container was recycled).
 | 59 | Portfolio: no project identity, one lone pill, empty columns | **improved** — each project's own mark beside its name; the same Needs you / Late / Stuck signals as the project home (static figures: the preview is already one control) |
 | 60 | **Add-a-task form: free-text "Assigned to"** — `hq_task_add` resolves `p_assignee` against `staff.slug`, so typing "Claire" or "claire" is refused by the real office; only a role slug worked | **fixed** — the record's picker, extracted to one shared `assigneePicker()`; `verify:basecamp-journey` now asserts `chief-of-staff` reaches the office |
 | 61 | Contact record: the same face twice (header + a larger copy above the fields); eleven ungrouped boxes | **improved** — one face; fields under "Who they are / How to reach them / Next step" (still fully editable, per Grant). `verify:basecamp-contacts` looks for the photo on the record (header or form), 31/31 |
+
+## Pass 9 — voice note in the dock, and a privacy defect
+
+| # | Finding | State |
+|---|---|---|
+| 62 | The dock ("Chat with Team") — Team Chat for most people — had no voice note; only the separate Chat page did | **fixed** — same control and panel in the dock composer (Basecamp only); machinery extracted to one `voiceNote()` factory used by both |
+| 63 | **PRIVACY: leaving the Chat page mid-recording left the microphone recording with no control on screen**; any re-render drew the panel into a detached node (pre-existing) | **fixed** — instances resolve their composer live and `resync()` after every render: restore the recording/review if the composer exists, **stop the microphone if it does not**. Same for closing the dock |
+| 64 | Opening a module while the dock was open covered the dock with the modal backdrop (Stop unreachable mid-recording) | **fixed** — on desktop the expanded view stops at the dock's edge |
+| — | 6 new checks in `verify:basecamp-voicenote` (43/43); 4 proved red by disabling the stop path | recorded |

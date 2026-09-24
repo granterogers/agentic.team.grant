@@ -126,37 +126,28 @@ const rememberDialogScroll = (root) => {
   )
 }
 
-export const wire = (root) => {
-  rememberDialogScroll(root)
-
-  // Navigation inside the experience.
-  for (const b of root.querySelectorAll('[data-bc-go]')) {
-    b.addEventListener('click', (e) => {
-      e.preventDefault()
-      ctx.goAnywhere(b.dataset.bcGo)
-    })
-  }
-
-  /*
-    ASKING THE TEAM — one path, whether the words were typed or spoken.
-
-    The last line of this is why it exists. `chat.ask` reports its states
-    through the callback (sending, then waiting) and writes the ANSWER after
-    the last of them, so a page that redraws only from the callback keeps the
-    waiting bubble for ever: the stored thread had Claire's reply in it while
-    the screen showed an empty one. That was true of the typed Send button
-    before the voice note was built, and it was found by building the voice
-    note - two callers of one path, of which only one was being looked at.
-  */
-  const askTheTeam = async (project, text, { alreadySaid = false } = {}) => {
-    if (!alreadySaid) ctx.chatSend?.(project, text)
+const askTheTeam = async (project, text, { alreadySaid = false } = {}) => {
+  if (!alreadySaid) ctx.chatSend?.(project, text)
+  ctx.render()
+  await ctx.chatAsk?.(project, text, () => {
     ctx.render()
-    await ctx.chatAsk?.(project, text, () => {
-      ctx.render()
-    })
-    ctx.render()
-  }
+  })
+  ctx.render()
+}
 
+/*
+  ONE VOICE NOTE PER SCOPE: the Chat page's composer, or the dock. `scope`
+  holds the microphone and the panel; the returned handler is attached to it.
+*/
+/*
+  WHICH INSTANCE HOLDS THE MICROPHONE. The recorder is one module for the
+  whole page; the Chat page's composer and the dock each drive it, and only
+  one can be recording.
+*/
+let micOwner = null
+
+const voiceNote = (getScope) => {
+  const scopeNow = () => getScope() ?? null
   /*
     THE VOICE NOTE, end to end.
 
@@ -169,8 +160,8 @@ export const wire = (root) => {
     because they change many times a second while recording and a shell redraw
     would take the microphone with it.
   */
-  const notePanel = () => root.querySelector('[data-bc-notepanel]')
-  const noteMic = () => root.querySelector('[data-bc-note]')
+  const notePanel = () => scopeNow()?.querySelector('[data-bc-notepanel]') ?? null
+  const noteMic = () => scopeNow()?.querySelector('[data-bc-note]') ?? null
   const clock = (n) =>
     `${String(Math.floor(n / 60))}:${String(Math.floor(n % 60)).padStart(2, '0')}`
   const meter = (lvl) => {
@@ -256,6 +247,7 @@ export const wire = (root) => {
     const mic = noteMic()
     try {
       await recorder.start(drawRecording)
+      micOwner = self
       if (mic !== null) {
         mic.dataset.bcNote = 'recording'
         mic.querySelector('.bcnotemictxt').textContent = 'Recording'
@@ -285,6 +277,7 @@ export const wire = (root) => {
       mic.querySelector('.bcnotemictxt').textContent = 'Voice note'
     }
     const kept = await recorder.stop().catch(() => null)
+    micOwner = null
     if (kept === null) {
       noteShut()
       return
@@ -369,37 +362,132 @@ export const wire = (root) => {
     in one afternoon in one file; the cure is the same one: listen on the
     element that does NOT get replaced.
   */
-  for (const form of root.querySelectorAll('[data-bc-sayform]')) {
-    form.addEventListener('click', async (e) => {
-      const pressed = e.target?.closest?.(
-        '[data-bc-note], [data-bc-notestop], [data-bc-noteagain], [data-bc-notecancel], [data-bc-notesend]',
-      )
-      if (pressed === null || pressed === undefined) return
-      e.preventDefault()
-      if (pressed.hasAttribute('data-bc-notestop')) {
-        await stopNote()
-        return
-      }
-      if (pressed.hasAttribute('data-bc-noteagain')) {
-        held = null
-        await startNote()
-        return
-      }
-      if (pressed.hasAttribute('data-bc-notecancel')) {
-        held = null
+  /*
+    DELEGATED, on the scope, because the panel replaces its own contents.
+
+    Stop, Cancel, Send and Record again are all drawn by `drawRecording` and
+    `drawReview` AFTER wiring, so a listener attached per button would be
+    attached to nothing - which is exactly what the first run of
+    `verify:basecamp-voicenote` found: the meter moved, the clock ran, and
+    pressing Stop did nothing at all. Listen on the element that does NOT get
+    replaced.
+  */
+  /*
+    AFTER EVERY RENDER, AGREE WITH THE PAGE. A render replaces the composer,
+    so a recording in progress had its panel drawn into a node that was no
+    longer on screen - and when the composer was gone altogether (Grant left
+    the Chat page, or closed the dock) the MICROPHONE KEPT RECORDING with
+    nothing anywhere to show it or stop it. That is the one state this
+    control must never be in. So: if the composer is still here, put the
+    recording or review back on it; if it is not, stop the microphone.
+  */
+  const resync = () => {
+    const panel = notePanel()
+    const mine = micOwner === self && recorder.active()
+    if (panel === null) {
+      if (mine) {
         recorder.cancel()
-        noteShut()
-        return
+        micOwner = null
       }
-      if (pressed.hasAttribute('data-bc-notesend')) {
-        await sendNote()
-        return
+      held = null
+      return
+    }
+    if (mine) {
+      const mic = noteMic()
+      if (mic !== null) {
+        mic.dataset.bcNote = 'recording'
+        const t = mic.querySelector('.bcnotemictxt')
+        if (t !== null) t.textContent = 'Recording'
       }
-      /* The microphone itself: press to start, press again to stop. */
-      if (recorder.active()) await stopNote()
-      else await startNote()
+      if (panel.querySelector('.bcnoteclock') === null) drawRecording({ seconds: 0, level: 0 })
+      return
+    }
+    if (held !== null && panel.dataset.bcNotephase !== 'review') void drawReview(held)
+  }
+  const press = async (e) => {
+    const pressed = e.target?.closest?.(
+      '[data-bc-note], [data-bc-notestop], [data-bc-noteagain], [data-bc-notecancel], [data-bc-notesend]',
+    )
+    if (pressed === null || pressed === undefined) return
+    e.preventDefault()
+    if (pressed.hasAttribute('data-bc-notestop')) {
+      await stopNote()
+      return
+    }
+    if (pressed.hasAttribute('data-bc-noteagain')) {
+      held = null
+      await startNote()
+      return
+    }
+    if (pressed.hasAttribute('data-bc-notecancel')) {
+      held = null
+      recorder.cancel()
+      micOwner = null
+      noteShut()
+      return
+    }
+    if (pressed.hasAttribute('data-bc-notesend')) {
+      await sendNote()
+      return
+    }
+    /* The microphone itself: press to start, press again to stop. */
+    if (recorder.active()) await stopNote()
+    else await startNote()
+  }
+  const self = { press, resync }
+  return self
+}
+
+/* One instance for the Chat page's composer, resolved live every time. */
+const pageNote = voiceNote(() => document.querySelector('#root [data-bc-sayform]'))
+
+/*
+  THE DOCK GETS THE VOICE NOTE TOO. "Chat with Team" opens the dock, so for
+  most people the dock IS Team Chat - and it had no microphone at all; the
+  voice note lived only on the separate Chat page. The dock is the studio's
+  (app.js paintDock), repainted on every render, so the listener sits on the
+  persistent #dock element and is attached once, and paintDock carries the
+  live microphone and panel across each repaint.
+*/
+const dockNote = voiceNote(() => document.getElementById('dock'))
+export const wireDockNote = (dock) => {
+  if (dock !== null && dock !== undefined && dock.dataset.bcNoteWired !== '1') {
+    dock.dataset.bcNoteWired = '1'
+    dock.addEventListener('click', (e) => {
+      void dockNote.press(e)
     })
   }
+  dockNote.resync()
+}
+
+export const wire = (root) => {
+  rememberDialogScroll(root)
+
+  // Navigation inside the experience.
+  for (const b of root.querySelectorAll('[data-bc-go]')) {
+    b.addEventListener('click', (e) => {
+      e.preventDefault()
+      ctx.goAnywhere(b.dataset.bcGo)
+    })
+  }
+
+  /*
+    ASKING THE TEAM — one path, whether the words were typed or spoken.
+
+    The last line of this is why it exists. `chat.ask` reports its states
+    through the callback (sending, then waiting) and writes the ANSWER after
+    the last of them, so a page that redraws only from the callback keeps the
+    waiting bubble for ever: the stored thread had Claire's reply in it while
+    the screen showed an empty one. That was true of the typed Send button
+    before the voice note was built, and it was found by building the voice
+    note - two callers of one path, of which only one was being looked at.
+  */
+  for (const form of root.querySelectorAll('[data-bc-sayform]')) {
+    form.addEventListener('click', (e) => {
+      void pageNote.press(e)
+    })
+  }
+  pageNote.resync()
 
   /*
     PLAYING ONE BACK. The control is only drawn for a message that HAS a

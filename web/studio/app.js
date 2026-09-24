@@ -1561,7 +1561,12 @@ function paintDock() {
   const open = dockOpen()
   el.hidden = !open
   document.body.classList.toggle('docked', open)
-  if (!open) { el.innerHTML = ''; return }
+  if (!open) {
+    el.innerHTML = ''
+    /* Closing the dock must also stop a voice note recording inside it. */
+    if (state.experience === 'basecamp') bcWire.wireDockNote(el)
+    return
+  }
 
   /*
     Asking from the portfolio, without a project (#149).
@@ -1585,6 +1590,14 @@ function paintDock() {
   const messages = p ? chat.thread(p.slug) : []
   const draft = $('[data-docksay]')?.value ?? ''
   const at = $('[data-dockthread]')?.scrollTop
+  /*
+    THE BASECAMP EXPERIENCE'S VOICE NOTE LIVES IN THIS COMPOSER, and a repaint
+    must not take a recording with it: the live microphone and panel nodes are
+    carried across the innerHTML below and put back where they were.
+  */
+  const bcNote = state.experience === 'basecamp'
+  const keptMic = bcNote ? el.querySelector('[data-bc-note]') : null
+  const keptPanel = bcNote ? el.querySelector('[data-bc-notepanel]') : null
 
   el.innerHTML = `<div class="dockhead">
       <span style="flex:1;min-width:0">
@@ -1629,9 +1642,14 @@ function paintDock() {
       <div class="crow">
         <textarea data-docksay rows="1" placeholder="Ask the team…"
                   aria-label="Message the team"></textarea>
+        ${bcNote ? bc.dockNoteButton() : ''}
         <button class="btn primary" type="submit">Send</button>
       </div>
+      ${bcNote ? '<div class="bcnote" data-bc-notepanel hidden></div>' : ''}
     </form>`
+  if (keptMic !== null) el.querySelector('[data-bc-note]')?.replaceWith(keptMic)
+  if (keptPanel !== null) el.querySelector('[data-bc-notepanel]')?.replaceWith(keptPanel)
+  if (bcNote) bcWire.wireDockNote(el)
 
   const box = $('[data-docksay]', el)
   if (box) box.value = draft

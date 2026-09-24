@@ -444,6 +444,75 @@ const slugOf = async (page: Awaited<ReturnType<typeof openWith>>['page']): Promi
   await browser.close()
 }
 
+/*
+ * --- THE MICROPHONE NEVER OUTLIVES ITS CONTROL -------------------------------
+ *
+ * Found by using it: start a voice note on the Chat page, go back to the
+ * project, and the recorder was STILL RECORDING with no microphone state,
+ * no panel and no Stop anywhere on screen. The same when the dock - which
+ * now has the voice note too - was closed mid-recording. A privacy defect:
+ * the one question this control must always answer is "is it on?".
+ */
+{
+  const browser = await chromium.launch({
+    args: [
+      '--use-fake-ui-for-media-stream',
+      '--use-fake-device-for-media-stream',
+      `--use-file-for-fake-audio-capture=${process.cwd()}/.out/voice/said.wav`,
+    ],
+  })
+  const ctx = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    permissions: ['microphone'],
+  })
+  const page = await ctx.newPage()
+  const slug = await slugOf(page)
+  const recording = async (): Promise<boolean> =>
+    (await page.evaluate(async () => {
+      const m = await import('/bc/voicenote.js')
+      return m.active()
+    })) as boolean
+  await page.goto(url(`${slug}/chat`), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-sayform]')
+  await page.waitForTimeout(400)
+  await page.locator('[data-bc-sayform] [data-bc-note]').click()
+  await page.waitForTimeout(900)
+  check('the Chat page records', await recording())
+  await page.locator('.bccrumb a').first().click()
+  await page.waitForTimeout(800)
+  check('leaving the Chat page mid-recording stops the microphone', !(await recording()))
+  await page.locator('[data-bc-dock]').first().click()
+  await page.waitForTimeout(500)
+  check('the dock has a voice note', (await page.locator('#dock [data-bc-note]').count()) === 1)
+  await page.locator('#dock [data-bc-note]').click()
+  await page.waitForTimeout(900)
+  check('the dock records', await recording())
+  await page.locator('[data-bc-filter="late"]').first().click()
+  await page.waitForTimeout(700)
+  check(
+    'a module opened beside the dock leaves its Stop reachable',
+    await page
+      .locator('#dock [data-bc-notestop]')
+      .click({ timeout: 2500 })
+      .then(() => true)
+      .catch(() => false),
+  )
+  await page.waitForTimeout(900)
+  check(
+    'and stopping there goes to review',
+    (await page.locator('#dock [data-bc-notepanel]').getAttribute('data-bc-notephase')) ===
+      'review',
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+  await page.locator('#dock [data-bc-note]').click()
+  await page.waitForTimeout(900)
+  await page.locator('#dock [data-dock-close]').click()
+  await page.waitForTimeout(500)
+  check('closing the dock mid-recording stops the microphone', !(await recording()))
+  await browser.close()
+}
+
 server.close()
 console.log(`\n${String(pass)}/${String(pass + fail)} passed — subject: ${subject}`)
 console.log(
