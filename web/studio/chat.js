@@ -25,7 +25,7 @@
   button is bad; a lying button is worse.
 */
 
-import { HQ_API, VOICE } from './backend.js'
+import { HQ_API, UNCONFIGURED, VOICE } from './backend.js'
 import * as session from './session.js'
 import { CREW, PROJECTS } from './data.js'
 
@@ -384,6 +384,18 @@ export async function ask(slug, text, context, token, to, also, onState) {
 
   let reply = null
   try {
+    /*
+      NO OFFICE NAMED IS A STATE, AND IT IS NOT A NETWORK FAILURE.
+
+      `backend.js` returns the empty string when nothing has told this
+      deployment which office it belongs to (ADR-0048), and posting to
+      `''/turn` is not an error -- it resolves against the page's own origin
+      and asks Vercel for a conversation. `office.js` asks first for the same
+      reason; this is the other door and it was left open, which
+      `verify:talk` found by reporting "nothing reached the office" about a
+      page that had nowhere to reach.
+    */
+    if (TURN() === '') throw new Error(UNCONFIGURED)
     const r = await fetch(`${TURN()}/turn`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'application/json' },

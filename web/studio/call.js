@@ -34,7 +34,7 @@ import { presented } from './office.js'
   can stop it, and `callIsLive()` so any button can show the truth.
 */
 
-import { HQ_API as API, VOICE, VOICE_TOKEN as MINT } from './backend.js'
+import { HQ_API as API, UNCONFIGURED, VOICE, VOICE_TOKEN as MINT } from './backend.js'
 const KEY = 'hq.token'
 
 const esc = (s) =>
@@ -373,6 +373,7 @@ const refused = (r) => {
 }
 
 const lookUp = async (about) => {
+  if (VOICE === '') throw new Error(UNCONFIGURED)
   const r = await fetch(VOICE + '/look', {
     method: 'POST',
     headers: {
@@ -389,6 +390,7 @@ const lookUp = async (about) => {
 }
 
 const askOffice = async (said) => {
+  if (VOICE === '') throw new Error(UNCONFIGURED)
   const r = await fetch(VOICE + '/turn', {
     method: 'POST',
     headers: {
@@ -550,6 +552,15 @@ export async function startCall() {
       means that one. Sent as a hint and nothing else: an adapter that narrowed
       the call to one project would be an adapter deciding, which §5 forbids.
     */
+    /*
+      AND NO OFFICE NAMED IS NOT A CALL THAT FAILED TO START.
+
+      An empty MINT resolves against the page's own origin, so the browser asks
+      Vercel to mint a realtime credential and the error a person sees is about
+      a status code rather than about a deployment nobody configured. Same door
+      as office.js and chat.js, closed the same way (ADR-0048).
+    */
+    if (MINT === '') throw new Error(UNCONFIGURED)
     const minted = await fetch(MINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
