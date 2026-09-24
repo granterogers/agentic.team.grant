@@ -58,7 +58,8 @@ describe('and the office resolves it towards the deferral', () => {
       three vacuous controls in this repository passed exactly that way.
     */
     expect(withoutComments).toMatch(
-      /const deferred = isBranch \? null : firstOfHis\(personalTaskRequest\)/,
+      // Wrapped since ledger R4b; the wired call is still firstOfHis over personalTaskRequest.
+      /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\(text\)\s*\n/,
     )
     /*
       The guard the artifact reader actually falls through, bounded at both

@@ -34,3 +34,30 @@ describe('a colleague named as the one to do it (ledger R21)', () => {
     expect(namedColleague(clause, STAFF)).toBeNull()
   })
 })
+
+import { groundedIn } from '../../src/agents/named.ts'
+
+describe('a new task title is grounded in what he said (ledger R4b)', () => {
+  it.each([
+    ['review the Pemberton renewal', 'And put it down as mine.'],
+    ['down as belonging to Grant', 'And put it down as mine.'],
+    ['Chase the venue about parking', 'yeah do that'],
+  ])('NOT grounded: "%s" from "%s"', (title, said) => {
+    expect(groundedIn(title, said)).toBe(false)
+  })
+  it.each([
+    [
+      'Review the Hartley proposal',
+      'Fine. Create a task to review the Hartley proposal on Friday.',
+    ],
+    [
+      'Renew the public liability insurance',
+      'Couple of things. Add a task to renew the public liability insurance by the 30th',
+    ],
+    ['Book the minibus for the away day', 'Thanks. Also one to book the minibus for the away day.'],
+    // dictation: the title and the message come from the same words
+    ['ring the plumbr about the boilr', 'add a task to ring the plumbr about the boilr tomorow'],
+  ])('grounded: "%s"', (title, said) => {
+    expect(groundedIn(title, said)).toBe(true)
+  })
+})

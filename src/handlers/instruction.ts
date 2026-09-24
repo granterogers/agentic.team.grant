@@ -108,7 +108,7 @@ import {
   pickByName,
   taskStateChange,
 } from '../agents/mine.ts'
-import { namedColleague } from '../agents/named.ts'
+import { groundedIn, namedColleague } from '../agents/named.ts'
 import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
 import type { CanonicalOutcome } from '../agents/outcome.ts'
 import { contractFor, sayWhatHappened } from '../agents/outcome.ts'
@@ -3757,7 +3757,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         for me", "on my list" or "I must", none of which a bare "write me a
         one-pager" carries.
       */
-      const deferred = isBranch ? null : firstOfHis(personalTaskRequest)
+      const deferred = isBranch
+        ? null
+        : firstOfHis((text) => {
+            // Grounded in his words, for the reason given at the project-task reader.
+            const got = personalTaskRequest(text)
+            return got === null || groundedIn(got.title, asSaid) ? got : null
+          })
       /*
         AND IT DOES NOT MAKE A SECOND ONE WHILE SAYING IT HAS NOT.
 
@@ -4085,7 +4091,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? null
           : changesHis !== null
             ? null
-            : firstOfHis((text) => taskRequest(text, classifyIntent(text)))
+            : firstOfHis((text) => {
+                /*
+                  A title from a REWRITE must be grounded in his words (ledger
+                  R4b): "And put it down as mine." became a creation in the
+                  paraphrase and filed the task he had just made a second
+                  time. His literal reading comes first in hisRequests, so a
+                  request he made himself is unaffected.
+                */
+                const got = taskRequest(text, classifyIntent(text))
+                return got === null || got.title === null || groundedIn(got.title, asSaid)
+                  ? got
+                  : null
+              })
 
       /*
         And the ANSWER to "what should it be called?", which is the other half.

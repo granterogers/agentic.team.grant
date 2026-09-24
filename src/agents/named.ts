@@ -40,3 +40,53 @@ export function namedColleague(clause: string, staff: readonly Colleague[]): str
   }
   return null
 }
+
+/**
+ * Is a new task's title grounded in what he actually said this turn?
+ *
+ * Behavioural remediation, 24 September 2026 (ledger R4b). "And put it down
+ * as mine." was rewritten by the thread resolver into a sentence that CREATES
+ * — "put the Pemberton renewal review on my list" — and a second copy of the
+ * task he had just made was filed. The creation readers take the model's
+ * decomposed intent texts as well as his words, which is right for splitting
+ * several requests out of one message and wrong when the "request" exists only
+ * in the paraphrase. A split clause is his words; a resolved referent is not.
+ *
+ * So: at least half of the title's content words must appear in what he said.
+ * Measured by word, not by string, so dictation typos in the ordinary case
+ * (title and message from the same text) cannot fail it.
+ */
+export function groundedIn(title: string, said: string): boolean {
+  const words = (t: string) =>
+    t
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4 && !STOP.has(w))
+  const his = new Set(words(said).map((w) => w.slice(0, 5)))
+  const content = words(title)
+  if (content.length === 0) return true
+  const found = content.filter((w) => his.has(w.slice(0, 5))).length
+  return found * 2 >= content.length
+}
+
+const STOP = new Set([
+  'that',
+  'this',
+  'with',
+  'from',
+  'into',
+  'about',
+  'task',
+  'tasks',
+  'list',
+  'have',
+  'there',
+  'their',
+  'them',
+  'they',
+  'your',
+  'mine',
+  'make',
+  'need',
+  'please',
+])
