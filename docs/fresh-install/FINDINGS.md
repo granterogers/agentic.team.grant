@@ -76,9 +76,9 @@ integrity check. **The fix must be forward-only.**
 
 ---
 
-## F-002 — Nine migrations assert the CONTENTS of Grant's database, not its schema
+## F-002 — Twenty migrations assert the CONTENTS of Grant's database, not its schema
 
-**Status:** OPEN · **Journey:** C, J · **Severity:** blocks zero-state; cannot be fixed in place
+**Status:** SCAFFOLDED — zero-state is GREEN at 607/607 · **Journey:** C, J · **Severity:** blocks zero-state; cannot be fixed in place
 
 ### Evidence
 
@@ -97,8 +97,45 @@ stopped nine times at a migration that required Grant's operational data:
 | `0523` | that Grant's real chat `1386648496` has **received real deliveries** | 522 |
 | `0524` | **at least 100** harness deliveries that escaped before the guard existed | 523 |
 
-With all nine scaffolded: **533/533 applied, 14.6s.** Reproduce with
+The corpus grew to 607 while this workstream ran, and the class grew with it.
+Eleven more appeared between 0539 and 0591, every one the same shape — a drive
+block that is right to refuse to claim it proved anything:
+
+| Migration | What it requires of the DATA |
+|---|---|
+| `0539` | a lesson the harness authored, for `p_include_harness` to widen over |
+| `0545` | a lesson **he** authored, so the filter does not leave nothing |
+| `0547` | a project that is not the inbox, for the drive's `order by updated_at` |
+| `0566` | **two specific delivery uuids** — the two #298 escapes, by id |
+| `0571` | the 8 September voice note that died: a failed root turn owed a sentence |
+| `0574` | a suite-signed inbound command, so the widened predicate has a subject |
+| `0582` | a suite that labelled itself in a voice key's **third** segment |
+| `0583` | escaped deliveries to acknowledge — *"known escapes fell to 0"* |
+| `0584` | a `google.read_mail` job, to drive `say_once` against |
+| `0585` | two `drive.watch` jobs on **different** projects |
+| `0586` | one activity-panel entry that is not suite traffic |
+| `0589` | an `office.slack_rotate` job |
+| `0590` | a **connected** Slack and Telegram in `connection_health` |
+| `0591` | a `notebook.generate` job to drive the approval round-trip against |
+
+With all twenty scaffolded: **607/607 applied, 17.8s, from a database dropped
+immediately before the run.** Reproduce with
 `npm run fresh:zero-state -- --preconditions`.
+
+`0590` is worth separating from the rest. It is not an assumption about Grant's
+BUSINESS, it is an assumption about a CONNECTED office — Slack and Telegram
+present in `connection_health` — and that distinction decides the remedy: a
+fresh install genuinely does not have those rows until somebody connects
+something, so the scaffold supplies labels and no credential material, which
+the table's own `connection_health_carries_no_credential` constraint enforces.
+
+Nothing scaffolded invents business data. Every row is named as scaffolding in
+each column that can carry a name, every job is `cancelled` with a reason
+saying it never ran, and the migrations' substantive assertions are all still
+decided by the product: 0583 must still FIND its escapes through
+`app.harness_job`, 0585's cross-project control still fails if one project
+silences another, and 0590's two controls both move rows the precondition
+created and require the answer to flip.
 
 ### The finding, stated precisely
 
@@ -295,3 +332,38 @@ deployed in front of it, and never will. The doctor reported all five as
 **todo**, so it counted down to a number it could not reach — and a progress
 report that cannot finish is one nobody follows. Those entries now report
 `n/a` with the reason, and the count says how many do not apply.
+
+## F-013 — A `pg_proc` scan written as a JOIN calls `pg_get_functiondef` on aggregates
+
+**Status:** SCAFFOLDED (precondition before 0573) · **Journey:** C · **Severity:** blocks zero-state on some plans
+
+Migration `0573` asks its property of the WRITERS rather than of the recorded
+rows, which is the good design the file exists to argue for. It asks it like
+this:
+
+```sql
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'app'
+  and pg_get_functiondef(p.oid) ~ 'undo_offer\s*\('
+```
+
+`nspname = 'app'` is a qual on the OTHER side of a join, so whether
+`pg_get_functiondef` is called on a catalogue row at all is a matter of the
+PLAN. On a fresh database the planner drives from `pg_proc`, evaluates the
+regex against all 3,300 rows of it, and raises `42809: "array_agg" is an
+aggregate function` — an aggregate has no definition to get.
+
+**This is not a data assumption.** It is plan luck, and it is the only
+migration in the corpus that scans `pg_proc` through a join: the other twenty
+filter `pronamespace` directly, which is a scan-level qual and therefore safe
+by construction.
+
+The precondition tells the planner the truth rather than touching the
+migration — `alter function pg_catalog.pg_get_functiondef(oid) cost 10000` —
+after which `pronamespace` becomes an index condition and the expensive
+function is only called on the rows 0573 meant.
+
+**The rule for new work:** filter `pronamespace` on the scan
+(`where p.pronamespace = 'app'::regnamespace`), never through a join to
+`pg_namespace`. The next one written as a join will do this again on somebody
+else's machine.

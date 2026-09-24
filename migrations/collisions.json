@@ -1,0 +1,101 @@
+{
+  "_why": [
+    "Migration numbers that two branches took at the same time, and BOTH applied to the shared database.",
+    "",
+    "This is history, not a mistake waiting to be made. `app.schema_migrations` is keyed on the migration's NAME, so both files are recorded and both ran; renaming either would make the repository claim a number it did not run under, which is rewriting history to make a check green.",
+    "",
+    "The check already refuses a duplicate whose files are not all applied — that is the case somebody can still fix by taking a free number. It could not tell the two apart on an EMPTY database, where nothing is applied by definition, so a fresh install was refused by the collisions of a history it had not lived through. This file is that evidence, written down once.",
+    "",
+    "It cannot rot into permission: a collision that is not listed here still fails, and a listed file that no longer exists is reported. Adding to it is a deliberate act that says two numbers really did both run."
+  ],
+  "collisions": [
+    {
+      "n": "0534",
+      "files": [
+        "0534_a_contact_can_be_corrected.sql",
+        "0534_the_harness_can_ask_to_see_its_own_projects.sql"
+      ]
+    },
+    {
+      "n": "0535",
+      "files": [
+        "0535_a_drive_file_can_be_a_project_document.sql",
+        "0535_a_job_that_dies_says_so_wherever_it_died.sql"
+      ]
+    },
+    {
+      "n": "0536",
+      "files": [
+        "0536_a_linked_document_speaks_the_stored_vocabulary.sql",
+        "0536_a_resumption_is_not_a_retry.sql"
+      ]
+    },
+    {
+      "n": "0537",
+      "files": [
+        "0537_a_reference_keeps_its_provider_identity.sql",
+        "0537_the_reading_can_see_the_backup.sql"
+      ]
+    },
+    {
+      "n": "0538",
+      "files": [
+        "0538_one_linked_document_per_file.sql",
+        "0538_the_health_reading_carries_the_backup.sql"
+      ]
+    },
+    {
+      "n": "0539",
+      "files": [
+        "0539_a_lesson_a_harness_taught_is_not_a_lesson.sql",
+        "0539_a_linked_document_can_be_opened.sql"
+      ]
+    },
+    {
+      "n": "0543",
+      "files": [
+        "0543_a_failed_backup_reaches_grant.sql",
+        "0543_an_offer_a_harness_made_is_not_an_offer.sql"
+      ]
+    },
+    {
+      "n": "0577",
+      "files": [
+        "0577_a_suggestion_he_can_act_on_and_read.sql",
+        "0577_signing_in_without_pasting_a_credential.sql"
+      ]
+    },
+    {
+      "n": "0580",
+      "files": ["0580_a_person_the_office_recognises.sql", "0580_a_reaction_slack_never_reads.sql"]
+    },
+    {
+      "n": "0581",
+      "files": [
+        "0581_a_thumbs_up_teaches_nothing.sql",
+        "0581_the_pairing_table_was_the_wrong_answer.sql"
+      ]
+    },
+    {
+      "n": "0582",
+      "files": [
+        "0582_a_suite_that_labels_itself_in_the_second_segment.sql",
+        "0582_an_arrangement_belongs_to_its_surface_too.sql"
+      ]
+    },
+    {
+      "n": "0583",
+      "files": [
+        "0583_acknowledging_what_the_guard_could_not_see.sql",
+        "0583_the_order_he_put_them_in.sql"
+      ]
+    },
+    {
+      "n": "0584",
+      "files": [
+        "0584_a_duty_may_not_say_the_same_thing_every_hour.sql",
+        "0584_an_output_can_be_read.sql"
+      ]
+    }
+  ]
+}

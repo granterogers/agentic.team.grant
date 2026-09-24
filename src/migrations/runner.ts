@@ -20,6 +20,7 @@
 import type { SqlExecutor } from '../db/executor.ts'
 import type { MigrationFile, RecordedChecksums } from './check.ts'
 import { checkMigrations } from './check.ts'
+import { recordedCollisions } from './collisions.ts'
 
 export interface AppliedMigration {
   readonly name: string
@@ -112,7 +113,7 @@ export async function runMigrations(
     duplicate is still an error here, so a migration still cannot reach the
     database by bypassing the check.
   */
-  const findings = checkMigrations(files, recorded, hash)
+  const findings = checkMigrations(files, recorded, hash, await recordedCollisions())
   const blocking = findings.filter((f) => f.severity !== 'note')
   if (blocking.length > 0) {
     const summary = blocking.map((f) => `${f.file ?? '(migrations/)'} [${f.rule}] ${f.message}`)

@@ -1,0 +1,39 @@
+-- ---------------------------------------------------------------------------
+-- HISTORICAL PRECONDITION, applied immediately before migration 0573
+--
+-- This one is NOT a data assumption. 0573 asks its property of the WRITERS
+-- rather than of the recorded rows -- which is the good design the file exists
+-- to argue for -- and it asks it like this:
+--
+--     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+--    where n.nspname = 'app'
+--      and pg_get_functiondef(p.oid) ~ 'undo_offer\s*\('
+--
+-- `nspname = 'app'` is a qual on the OTHER side of a join, so whether
+-- `pg_get_functiondef` is called on a catalogue row at all is a matter of the
+-- plan. Every other migration in this corpus that scans `pg_proc` filters
+-- `pronamespace` directly, which is a scan-level qual and therefore safe by
+-- construction; 0573 is the only one that joins. Here the planner puts
+-- `pg_proc` on the outside, the regex is evaluated against all 3,300 rows of
+-- it, and `pg_get_functiondef(array_agg)` raises 42809 -- because an aggregate
+-- has no definition to get.
+--
+-- It is plan luck, not data. So the precondition tells the planner the truth
+-- rather than touching the migration: `pg_get_functiondef` reconstructs an
+-- entire function definition and is nothing like the default cost of 1. With
+-- a cost that reflects that, the planner drives from `pg_namespace`, the
+-- `pronamespace` equality becomes an index condition, and the expensive
+-- function is only ever called on the rows 0573 meant.
+--
+-- Nothing about the migration's meaning changes: it still reads every writer
+-- in `app`, and it still raises if `hq_undo` cannot perform one of them. The
+-- control for that is the migration's own `if v_seen = 0 then raise` -- if
+-- this precondition narrowed the scan wrongly, 0573 would fail rather than
+-- pass quietly.
+--
+-- Filed as a finding against the migration, not merely worked around here:
+-- the next `pg_proc` scan written as a join will do this again on somebody's
+-- machine, and the cure is to filter `pronamespace` on the scan.
+-- ---------------------------------------------------------------------------
+
+alter function pg_catalog.pg_get_functiondef(oid) cost 10000;
