@@ -2,7 +2,13 @@
   0596 - two answers to one question perform it once.
 
   Behavioural remediation, 24 September 2026, ledger R17. Spliced from the
-  LIVE definition of app.hq_answer_blocker; only the row lock is new.
+  LIVE definitions; only the row lock is new in each.
+
+  app.decide_suggestion has the same shape - read, check 'open', act,
+  update - and a double press on Accept there would call app.learn twice
+  into public.lessons, which refuses UPDATE and DELETE, so the duplicate
+  standing rule would be permanent. app.hq_undo is NOT changed: claim_undo
+  already serialises on a unique insert.
 */
 
 CREATE OR REPLACE FUNCTION app.hq_answer_blocker(p_blocker_id uuid, p_answer text)
@@ -193,5 +199,63 @@ begin
     -- promised is the point (0350's rule about a claim with nothing
     -- behind it).
     'started', v_started);
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION app.decide_suggestion(p_suggestion_id uuid, p_accept boolean, p_by text DEFAULT 'grant'::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_catalog'
+AS $function$
+declare
+  s      public.suggestions;
+  v_did  jsonb;
+begin
+  -- 0596: locked, for the reason hq_answer_blocker is. A double press on
+  -- Accept would otherwise call app.learn twice, and lessons are append-only.
+  select * into s from public.suggestions where suggestion_id = p_suggestion_id for update;
+  if s.suggestion_id is null then
+    return jsonb_build_object('error', 'there is no such suggestion');
+  end if;
+  if s.state <> 'open' then
+    return jsonb_build_object('already', s.state);
+  end if;
+
+  if not p_accept then
+    /*
+      Dismissed is a decision, and the count is the office being told it is not
+      taking a hint. `raise_suggestions` reads it; so does the page, loudly,
+      above zero.
+    */
+    update public.suggestions
+       set state = 'dismissed', settled_at = app.now_utc(),
+           dismissals = coalesce(dismissals, 0) + 1
+     where suggestion_id = p_suggestion_id;
+    return jsonb_build_object('accepted', false, 'state', 'dismissed');
+  end if;
+
+  if s.offer_kind = 'learn' then
+    -- The only path by which a correction becomes a rule, and it is reachable
+    -- only from a press. `app.learn` answers in JSONB, not with an id.
+    v_did := app.learn(
+      (s.offer_args ->> 'scope')::lesson_scope,
+      s.body,
+      p_by,
+      nullif(s.offer_args ->> 'project_id', '')::uuid,
+      nullif(s.offer_args ->> 'staff', ''),
+      null,
+      nullif(s.offer_args ->> 'from_job', '')::uuid,
+      0.9,
+      null);
+  end if;
+
+  update public.suggestions
+     set state = 'acted', settled_at = app.now_utc()
+   where suggestion_id = p_suggestion_id;
+
+  return jsonb_build_object('accepted', true, 'state', 'acted',
+                            'lesson_id', v_did -> 'lesson_id',
+                            'did', coalesce(s.offer_kind, 'nothing but noting it'));
 end;
 $function$;
