@@ -28,9 +28,7 @@
   place the rules live.
 */
 
-const API =
-  window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
-
+import { HQ_API as API, UNCONFIGURED } from './backend.js'
 import * as session from './session.js'
 
 /*
@@ -146,7 +144,25 @@ export function onWrite(fn) {
   afterWrite = typeof fn === 'function' ? fn : () => {}
 }
 
+/*
+  NO OFFICE NAMED IS A STATE, AND IT IS NOT THE SAME AS ONE THAT WOULD NOT
+  ANSWER.
+
+  `backend.js` returns the empty string when nothing has told this deployment
+  which office it belongs to (ADR-0048), and `fetch('')` is not an error -- it
+  resolves against the page's own origin, fetches the HTML back, and fails as a
+  JSON parse. So the page would report "the server returned nothing sensible"
+  about a server it never called, which is the found-nothing shape on the one
+  question the page can answer precisely.
+
+  Both doors ask first, and say the step that is missing.
+*/
+const refuseUnconfigured = () => {
+  if (API === '') throw new Error(UNCONFIGURED)
+}
+
 export async function act(action, args = {}) {
+  refuseUnconfigured()
   const r = await fetch(API, {
     method: 'POST',
     headers: {
@@ -194,6 +210,7 @@ export async function read(section, id, extra) {
     building one is a caller that will forget to encode a space — and the
     first thing anybody searches for has a space in it.
   */
+  refuseUnconfigured()
   const parts = [`section=${encodeURIComponent(section)}`]
   if (id !== undefined) parts.push(`id=${encodeURIComponent(id)}`)
   for (const [k, v] of Object.entries(extra ?? {})) {

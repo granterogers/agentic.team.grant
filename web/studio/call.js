@@ -34,11 +34,8 @@ import { presented } from './office.js'
   can stop it, and `callIsLive()` so any button can show the truth.
 */
 
-const API =
-  window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
+import { HQ_API as API, VOICE, VOICE_TOKEN as MINT } from './backend.js'
 const KEY = 'hq.token'
-const MINT = API.replace(/\/hq-api$/, '/voice-token')
-const VOICE = window.HQ_VOICE || API.replace(/\/hq-api(-[a-z]+)?$/, '/voice')
 
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) =>

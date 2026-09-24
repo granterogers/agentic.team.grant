@@ -42,11 +42,7 @@
   that, and `office.js` clears what the office refuses.
 */
 
-const API =
-  window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
-
-/** The sign-in endpoint sits beside the gateway, whatever the gateway is. */
-const ENDPOINT = window.HQ_SIGNIN || API.replace(/\/hq-api\/?$/, '/signin')
+import { HQ_API as API, SIGNIN as ENDPOINT } from './backend.js'
 
 const KEY = 'hq.session'
 

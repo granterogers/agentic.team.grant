@@ -382,6 +382,22 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'every bare var() names a token :root actually declares — #124 shipped square corners for a day',
   ],
   /*
+    And the same question about the OFFICE the page talks to.
+
+    Six modules under `web/studio` each fell back to one project's gateway, so
+    a dashboard somebody else deployed pointed at an office that was not
+    theirs and was refused with a 401 and no explanation (IR-1). `backend.js`
+    resolves it once and `npm run config:site` supplies it at deploy time.
+
+    The fallback is tempting to bring back, because a hardcoded address makes a
+    local page work. This is what stops it, and it can be asked to prove it can
+    fail: `npm run check:backend-ref -- --prove-it`.
+  */
+  [
+    'check:backend-ref',
+    'nothing served to a browser names a particular office — a clone must resolve its own (IR-1)',
+  ],
+  /*
     And the question the whole second half of #282 is about.
 
     Telegram, Slack and Team HQ are three doors into one office, and §5 says an

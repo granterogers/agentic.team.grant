@@ -77,9 +77,36 @@
   Temporary by construction: when the two copies are one file again this block
   and the slug go together. ADR-0043.
 -->
+<!--
+  WHICH OFFICE THIS DEPLOYMENT BELONGS TO.
+
+  `config.js` is generated -- `npm run config:site` writes it, and both deploy
+  paths run that before uploading. It is NOT in the repository, deliberately:
+  a committed default is one person's office shipped to everybody who clones
+  this, and six modules used to carry exactly that. See `backend.js`.
+
+  A 404 here is not an error. It means nothing has configured this copy, the
+  globals stay undefined, and `backend.js` resolves to the empty string so the
+  page can say the true thing rather than ask a guessed address.
+
+  It is loaded as a CLASSIC script so it runs before the module below, which is
+  deferred by definition.
+-->
+<script src="/config.js"></script>
 <script>
-  if (location.hostname.indexOf('agentic-team-hq-basecamp') === 0) {
-    const base = 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1'
+  /*
+    The experiment runs its own copies of the gateway and the voice function
+    under different slugs, so that the default Team HQ cannot be affected by
+    anything this branch deploys (ADR-0043). Derived from whatever `config.js`
+    named, never written down again -- the base belongs to the deployment and
+    only the SLUG belongs to this branch.
+
+    Temporary by construction: when the two copies are one function again, this
+    block and the slugs go together.
+  */
+  if (location.hostname.indexOf('agentic-team-hq-basecamp') === 0
+      && typeof window.HQ_API === 'string' && window.HQ_API !== '') {
+    const base = window.HQ_API.replace(/\/[^/]*$/, '')
     window.HQ_API = base + '/hq-api-basecamp'
     window.HQ_SIGNIN = base + '/signin'
     window.HQ_VOICE = base + '/voice-basecamp'

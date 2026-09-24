@@ -32,7 +32,7 @@ const inDays = (n) => {
   return d.toISOString().slice(0, 10)
 }
 
-const FACES = 'https://baujwlzcziasnfhhkchg.supabase.co/storage/v1/object/public/avatars'
+import { AVATARS as FACES } from './backend.js'
 
 /*
   Eight people, eight hues (#40 idea 4).

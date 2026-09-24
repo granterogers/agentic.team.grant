@@ -25,6 +25,7 @@
   button is bad; a lying button is worse.
 */
 
+import { HQ_API, VOICE } from './backend.js'
 import { CREW, PROJECTS } from './data.js'
 
 const KEY = 'studio.chat'
@@ -248,16 +249,18 @@ const staffSlug = (short) => {
   return found?.staffSlug ?? found?.slug ?? null
 }
 
-const API = () =>
-  window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
+const API = () => HQ_API
 /*
   WHERE A TURN GOES. Derived from the gateway, with an override, because the
   experiment runs its own copy of both under different slugs (ADR-0043) and
   a regex anchored on `/hq-api` quietly returns the GATEWAY url when the slug
   is `hq-api-basecamp` -- so every turn would have been posted to the wrong
   function with no error to read.
+
+  That derivation lives in `backend.js` now, with the rest of them, so there is
+  one base and no second place to drift.
 */
-const TURN = () => window.HQ_VOICE || API().replace(/\/hq-api(-[a-z]+)?$/, '/voice')
+const TURN = () => VOICE
 
 /**
  * Where the voice surface lives, for anything that needs it besides a turn.

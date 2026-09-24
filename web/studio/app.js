@@ -13874,12 +13874,10 @@ if (backFromGoogle) {
   The token is the same one Team HQ uses. No new auth system: one bearer token,
   and the studio reads it from the same place rather than asking again.
 */
-const API =
-  window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
-// Same derivation the old page used: one base, and the OAuth start is a sibling
-// function. Hardcoding a second URL is how the two drift on the day the project
-// reference changes.
-const GOOGLE_START = API.replace(/\/hq-api$/, '/google-oauth/start')
+// One base for every address this page uses, resolved in backend.js. See the
+// header there for why a fallback to a particular office is the defect rather
+// than the convenience it looks like.
+import { HQ_API as API, GOOGLE_START } from './backend.js'
 
 /*
   Re-read the office and repaint.
