@@ -339,8 +339,29 @@ export const planAndPursue = async (
         definition — that is what taking the other door means.
       */
       if (deliberate !== null) return { created: true }
-      return (typeof raw === 'string' ? JSON.parse(raw) : raw) as { created?: boolean } | null
+      return (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+        created?: boolean
+        job_id?: string
+      } | null
     })
+
+  /*
+    THE CHILD THIS JOB'S OWN EARLIER ATTEMPT MADE IS NOT SOMEBODY ELSE'S
+    (ledger R31). A retry of this same job reaches enqueue_child_once with the
+    same obligation key, finds the pursuit its first attempt started, and was
+    answered "That is already in hand - I handed exactly this on a moment
+    ago" - in a brand-new chat, about a request made once. It is this
+    request's own work, so it is described as this request's plan.
+  */
+  const ownEarlierAttempt =
+    handed?.created === false && typeof handed.job_id === 'string'
+      ? await db
+          .execute(
+            `select parent_job_id::text as p from public.jobs where job_id = ${lit(handed.job_id)}::uuid`,
+          )
+          .then((r) => String((r.rows[0] as { p?: string } | undefined)?.p ?? '') === job.jobId)
+          .catch(() => false)
+      : false
 
   /*
     ALREADY RUNNING IS SAID, NOT SILENTLY REPEATED AND NOT SILENTLY DROPPED.
@@ -350,7 +371,7 @@ export const planAndPursue = async (
     quiet instead would be worse: he asked twice because the first answer had
     not arrived.
   */
-  if (handed?.created === false) {
+  if (handed?.created === false && !ownEarlierAttempt) {
     return (
       'That is already in hand — I handed exactly this on a moment ago and it ' +
       'is still running, so I have not started it a second time. ' +

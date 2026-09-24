@@ -1695,6 +1695,22 @@ export const claimsToHaveRead = (body: string): string | null => {
   return null
 }
 
+/**
+ * Did this turn read NOTHING it could cite? (ledger R30)
+ *
+ * The claimed-read check equated evidence "inferred" with "nothing was read",
+ * and the instruction handler labels every model-written answer "inferred" -
+ * correctly, because the answer is the model's even when it rests on a
+ * document. So an honest "I've pulled the booking terms for Holloway Barn",
+ * written over a document the turn had retrieved and cites, was refused;
+ * the job retried; and the retry reported its own first attempt as "already
+ * in hand - I handed exactly this on a moment ago". A read is disproved when
+ * the answer cites no source at all. NOT when no domain was "consulted": the
+ * handler lists documents and projects as consulted on every turn, so that
+ * test would have switched the gate off entirely (the first draft did).
+ */
+const readNothing = (m: OutputMetadata): boolean => (m.sources ?? []).length === 0
+
 export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] => {
   const problems: MetadataProblem[] = []
 
@@ -1980,7 +1996,11 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
   }
 
   const readClaim = claimsToHaveRead(m.body ?? '')
-  if (readClaim !== null && (m.evidence === 'inferred' || m.evidence === 'speculative')) {
+  if (
+    readClaim !== null &&
+    (m.evidence === 'inferred' || m.evidence === 'speculative') &&
+    readNothing(m)
+  ) {
     problems.push({
       field: 'body',
       problem:
@@ -2112,7 +2132,11 @@ export const unresolvableSources = (sources: readonly string[]): readonly string
 
 export const refuseToSend = (m: OutputMetadata): SendRefusal | null => {
   const readClaim = claimsToHaveRead(m.body ?? '')
-  if (readClaim !== null && (m.evidence === 'inferred' || m.evidence === 'speculative')) {
+  if (
+    readClaim !== null &&
+    (m.evidence === 'inferred' || m.evidence === 'speculative') &&
+    readNothing(m)
+  ) {
     return {
       needed: 'evidence for a claimed read',
       reason:
