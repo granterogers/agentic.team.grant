@@ -889,3 +889,54 @@ export function pickByName<T extends { readonly title: string }>(
   })
   return fits.length === 1 ? (fits[0] ?? null) : null
 }
+
+/**
+ * "Add checking the figures as a subtask under it" (ledger R6).
+ *
+ * The conversation had no subtask reading, so that sentence filed a flat
+ * task titled "checking the figures as a subtask under the 'Review the
+ * Hartley proposal'" — his whole sentence as a name, and no parent. The
+ * writer has taken a parent all along (`my_task_add(p_parent)`).
+ *
+ * Two shapes, both explicit about the word "subtask" (or "sub-task", "sub
+ * item"), because a relationship guessed from word order is a filing error
+ * that looks deliberate:
+ *
+ *   add X as a subtask (under|of|to|on) PARENT
+ *   add a subtask (under|to|on|for) PARENT (to|:) X
+ *
+ * PARENT is a referent ("it", "that", "that one") or "the NAME one/task"; the
+ * handler resolves it among the tasks this conversation made, exactly as a
+ * completion is resolved, and asks when that is not exactly one.
+ */
+export interface SubtaskRequest {
+  readonly title: string
+  /** Distinguishing words of the parent, or null for a bare referent. */
+  readonly parentName: string | null
+}
+
+const SUB = String.raw`sub-?\s?(?:task|item|to-?do)`
+const PARENT = String.raw`(?:it|that|this|that\s+one|this\s+one|the\s+last\s+one|the\s+(?<pname>[a-z0-9'’ -]{2,60}?)(?:\s+(?:one|task|to-?do|item))?)`
+const SUB_AFTER = new RegExp(
+  String.raw`\b(?:add|put|make|create|stick|include)\s+(?<title>.{3,120}?)\s+as\s+(?:a\s+|another\s+)?${SUB}\s+(?:under|of|to|on|for|beneath)\s+${PARENT}\s*[.!]?\s*$`,
+  'i',
+)
+const SUB_BEFORE = new RegExp(
+  String.raw`\b(?:add|put|make|create|stick)\s+(?:a\s+|another\s+)?${SUB}\s+(?:under|to|on|for|beneath)\s+${PARENT}\s*(?::|—|-|to|for|called|,)\s*(?<title>.{3,120}?)\s*[.!]?\s*$`,
+  'i',
+)
+
+export function subtaskRequest(text: string): SubtaskRequest | null {
+  const said = withoutOpeningAffirmation(String(text ?? '').trim())
+  if (said === '' || said.endsWith('?')) return null
+  for (const re of [SUB_AFTER, SUB_BEFORE]) {
+    const hit = re.exec(said)
+    if (hit === null) continue
+    const raw = (hit.groups?.title ?? '').trim().replace(/^(?:the\s+)?(?:job\s+of\s+)?/i, '')
+    if (raw.length < 3) continue
+    const title = raw.charAt(0).toUpperCase() + raw.slice(1)
+    const pname = hit.groups?.pname?.trim().toLowerCase() ?? null
+    return { title, parentName: pname === '' ? null : pname }
+  }
+  return null
+}

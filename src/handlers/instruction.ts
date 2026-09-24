@@ -106,6 +106,7 @@ import {
   personalTaskChange,
   personalTaskRequest,
   pickByName,
+  subtaskRequest,
   taskStateChange,
 } from '../agents/mine.ts'
 import { groundedIn, namedColleague } from '../agents/named.ts'
@@ -3980,7 +3981,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         the artifact veto above consults; assembling it twice is how the
         command bar's renderer and its keyboard picker came to disagree.
       */
-      const forGrant = wantsFile !== null || isBranch || changesHis !== null ? null : deferred
+      /*
+        A SUBTASK IS NOT A NEW TASK (ledger R6). Read first, from his words,
+        so "add checking the figures as a subtask under it" can veto both
+        flat-task readers - which otherwise filed his whole sentence as the
+        title of a task with no parent.
+      */
+      const subOf = isBranch ? null : (firstOfHis(subtaskRequest) ?? subtaskRequest(asSaid))
+      const forGrant =
+        wantsFile !== null || isBranch || changesHis !== null || subOf !== null ? null : deferred
       const noted =
         forGrant === null
           ? null
@@ -4118,7 +4127,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // sentence, `taskRequest` must not also file one from the same words —
       // and neither must it file one the personal-task path has already taken.
       const asked =
-        pullOut !== null || noted !== null || isBranch
+        pullOut !== null || noted !== null || isBranch || subOf !== null
           ? null
           : changesHis !== null
             ? null
@@ -4395,6 +4404,71 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 return null
               })
 
+      /*
+        The press for subOf: the parent is resolved among the tasks THIS
+        conversation made, as a completion is, and the child written through
+        app.my_task_add with p_parent, which checks the parent is one a task
+        may sit under. Nothing is created when the parent is not exactly one.
+      */
+      const subbed: { text: string; did: boolean } | null =
+        subOf === null
+          ? null
+          : await deps.db
+              .execute(
+                `select app.my_task_referent(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid, p_any_task => true) as t`,
+              )
+              .then(async (r) => {
+                const raw = (r.rows[0] as { t?: unknown })?.t
+                const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  candidates?: { id: string; title: string }[]
+                } | null
+                const candidates = subject?.candidates ?? []
+                const parent =
+                  subOf.parentName === null
+                    ? candidates.length === 1
+                      ? (candidates[0] ?? null)
+                      : null
+                    : pickByName(subOf.parentName, candidates)
+                if (parent === null) {
+                  return {
+                    did: false,
+                    text:
+                      candidates.length === 0
+                        ? `I have not added it — there is no task in this conversation to put "${subOf.title}" under. Which task is it part of?`
+                        : `I have not added it yet. Which one should "${subOf.title}" go under — ${candidates
+                            .slice(0, 4)
+                            .map((c) => `"${c.title}"`)
+                            .join(', ')}?`,
+                  }
+                }
+                const made = await deps.db.execute(`
+                  select app.my_task_add(
+                    p_title => ${lit(subOf.title.slice(0, 200))},
+                    p_parent => ${lit(parent.id)},
+                    p_job => ${lit(job.jobId)}::uuid) as r`)
+                const out = (made.rows[0] as { r?: unknown })?.r
+                const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
+                  ok?: boolean
+                  error?: string
+                } | null
+                return got?.ok === true
+                  ? { did: true, text: `Added "${subOf.title}" under "${parent.title}".` }
+                  : {
+                      did: false,
+                      text: `I could not put "${subOf.title}" under "${parent.title}"${got?.error === undefined ? '' : `: ${got.error}`}.`,
+                    }
+              })
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'add a subtask', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
+
       const filed =
         asked !== null
           ? await addTask(deps.db, job, asked, instruction, deps.now?.() ?? new Date())
@@ -4467,6 +4541,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         noted,
         changed,
         settledTask?.text ?? null,
+        subbed?.text ?? null,
         stopped,
         whoIsOn,
         alreadyOn,
@@ -4506,6 +4581,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           noted,
           changed,
           settledTask?.text ?? null,
+          subbed?.text ?? null,
           stopped,
           whoIsOn,
           alreadyOn,
@@ -4599,6 +4675,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         */
         (changed === null ? 0 : 1) +
         (settledTask?.did === true ? 1 : 0) +
+        (subbed?.did === true ? 1 : 0) +
         who.alsoConvened.length
 
       /*
@@ -6132,6 +6209,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           (noted === null ? 0 : 1) +
           (changed === null ? 0 : 1) +
           (settledTask?.did === true ? 1 : 0) +
+          (subbed?.did === true ? 1 : 0) +
           (filed === null ? 0 : 1) +
           (stopped === null ? 0 : 1),
         /*
