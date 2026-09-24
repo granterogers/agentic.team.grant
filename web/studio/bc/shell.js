@@ -2530,7 +2530,17 @@ const waitingRecord = (p) => {
     { name: 'Agentic Team', to: at(`/p/${p.slug}/team`) },
     { name: w.what },
   ])}
-    <div class="bcrecordhead">
+    <!--
+      A SENTENCE, NOT A TITLE. Every other record here is headed by a name: a
+      person, a document, a task. A blocker is headed by its requested action,
+      which is free text the raising agent wrote and which the table allows up
+      to two thousand characters of. At the record scale of 800 weight and
+      36px, an ordinary one took four lines of a phone and pushed the facts,
+      the cost and both answers below the fold -- the modifier gives it the
+      scale a sentence wants at every width, rather than making phones a
+      special case for something that is wrong on a desktop too.
+    -->
+    <div class="bcrecordhead bcrecordhead--ask">
       <h1>${esc(w.what)}</h1>
       <span class="bcactions">
         ${w.overdue === true ? status('Overdue', 'blocked') : status('Waiting for you', 'waiting')}

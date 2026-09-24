@@ -142,6 +142,18 @@ for (const size of sizes) {
     await shot('board', `${slug}/board`)
     await shot('schedule', `${slug}/schedule`)
     await shot('team', `${slug}/team`)
+    /*
+      WAITING FOR YOU, OPEN (§18). The screen where a decision is actually
+      made, and a screen with no capture is a screen nobody is watching -- so
+      it gets one in the same commit as the route. The prototype carries a
+      waiting item on purpose (#151), which is what makes this capturable
+      without a live blocker on somebody's real project.
+    */
+    await shot('waiting-record', `${slug}/team`, async () => {
+      await page.locator('[data-bc-waitopen]').first().click()
+      await page.waitForSelector('[data-bc-waitform]', { timeout: 5000 })
+      await page.waitForTimeout(300)
+    })
     await shot('documents', `${slug}/documents`)
     await shot('documents-list', `${slug}/documents`, async () => {
       await page.locator('[data-bc-docview="list"]').click()

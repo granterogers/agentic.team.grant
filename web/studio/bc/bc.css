@@ -1681,7 +1681,15 @@
 }
 .bcwaitfacts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  /*
+    150px rather than 180px so a 390px phone gets TWO columns instead of four
+    stacked rows. The four facts are short -- a name, a relative time, a
+    deadline, one clause -- and stacking them cost about a hundred pixels,
+    which on a phone is the difference between the answer buttons being on the
+    first screen and being scrolled to. The desktop is unaffected: at 1088px
+    four columns fit either way.
+  */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--bc-3);
   margin: var(--bc-4) 0 0;
   padding: var(--bc-3);
@@ -1700,6 +1708,18 @@
   color: var(--bc-text);
   overflow-wrap: anywhere;
 }
+/*
+  MEASURED, NOT EYEBALLED. The facts box ended at 498 and "Your answer" began
+  at 498 -- a section heading flush against the box above it, because
+  `.bcsubhead` carries no top margin and the record gave it none. The capture
+  showed something was wrong there and could not have said what; the measure
+  named it in one run.
+*/
+[data-experience='basecamp'] .bcrecordhead--ask h1 {
+  font: var(--bc-title-mobile);
+  max-width: var(--bc-measure);
+}
+[data-experience='basecamp'] .bcwaitfacts + .bcsubhead { margin-top: var(--bc-8); }
 .bcwaitanswer { display: grid; gap: var(--bc-3); margin-top: var(--bc-3); }
 /*
   The options WRAP rather than scroll. A blocker may offer two answers or five,

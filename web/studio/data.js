@@ -116,6 +116,17 @@ const FALLBACK_PROJECTS = [
         at: null,
         overdue: false,
         blocks: false,
+        /*
+          THE COST AND THE DEADLINE, because §18's record shows both and a
+          capture of a record with two of its five facts missing is a capture
+          of a screen nobody ships. The live payload carries
+          `consequences_of_delay` and `real_deadline` on every blocker --
+          `blockers_consequences_substantive` makes the first mandatory -- so
+          leaving them out here would make the prototype the ONLY place the
+          empty case exists.
+        */
+        cost: 'The window resets at midnight and the allowance goes with it.',
+        due: null,
         options: ['Go ahead', 'Not now'],
       },
     ],
