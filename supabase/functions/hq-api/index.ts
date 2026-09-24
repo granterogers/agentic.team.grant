@@ -214,6 +214,14 @@ const SECTIONS: Readonly<
   */
   document: { fn: 'studio_document', arg: 'p_document_id' },
   /*
+    ONE OUTPUT, so the thing the team made can be READ (§19).
+
+    The office has written thousands and there has never been a way to open
+    one: importing it and deciding on it were both verdicts on something
+    nobody could see.
+  */
+  output: { fn: 'hq_output', arg: 'p_output_id' },
+  /*
     One project's conversation, both sides, in order (#192).
 
     Takes `?id=<project uuid>` through the same `arg` door as `document`, and

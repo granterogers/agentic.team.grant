@@ -415,6 +415,47 @@ for (const where of surfaces) {
   )
 }
 
+/* --- §20: no way out of the new interface -------------------------------- */
+/*
+  Grant, 24 September: *"Audit the entire new Basecamp experience... The new
+  product should not unexpectedly dump Grant into the old Team HQ interface."*
+  He found four -- Running work, Active jobs, Team chat, Team board -- and the
+  instruction is explicit that fixing those four is not the job: *"Do not
+  simply patch these four examples. Create/extend an automated route/navigation
+  check that identifies Basecamp UI actions which resolve into legacy
+  surfaces."*
+
+  So this walks every surface and asks of every link and every navigating
+  control: does it stay inside `/basecamp`? A project path without that prefix
+  IS the old interface -- that is what `toolPath` returned for a tool this
+  experience did not serve, and it is how all four escapes were spelled.
+
+  The hash addressing the review build uses is allowed for, because a capture
+  deployment rewrites addresses and an audit that failed on that would be
+  reporting the harness.
+*/
+for (const where of surfaces) {
+  await open(where)
+  await page.waitForTimeout(900)
+  const out = (await page.evaluate(`(() => {
+    const leaves = []
+    const inside = (u) => u === '' || u.indexOf('/basecamp') === 0 || u.indexOf('#/basecamp') >= 0
+    for (const a of document.querySelectorAll('a[href]')) {
+      const raw = a.getAttribute('href') || ''
+      if (raw.indexOf('http') === 0 || raw.indexOf('mailto:') === 0 || raw[0] === '#') continue
+      if (!inside(raw)) leaves.push('link ' + raw + ' — ' + (a.textContent || '').trim().slice(0, 24))
+    }
+    for (const el of document.querySelectorAll('[data-bc-go], [data-bc-leave]')) {
+      const to = el.getAttribute('data-bc-leave') || el.getAttribute('data-bc-go') || ''
+      if (to !== '' && !inside(to)) {
+        leaves.push('control ' + to + ' — ' + (el.textContent || '').trim().slice(0, 24))
+      }
+    }
+    return leaves
+  })()`)) as string[]
+  check(`${where}: nothing here leads back to the old interface`, out.length === 0, out.join(' | '))
+}
+
 check('nothing was thrown on any route', thrown.length === 0, thrown.join(' | '))
 
 await browser.close()

@@ -2796,3 +2796,24 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   outline-offset: 2px;
   border-radius: var(--bc-r-control);
 }
+
+/* ---------------------------------------------------------------------- *
+ * A HEADER FULL OF CONTROLS HAS TO WRAP.
+ *
+ * The documents header carries Thumbnails, List, the ordering control and Add
+ * a file. Adding the fourth took the row to 406px inside a 390px phone and
+ * `verify:basecamp-states` caught the overflow on two screens -- `.bcactions`
+ * is `display: flex` with no wrapping, so a row that does not fit does not
+ * fold, it protrudes.
+ *
+ * Measured rather than guessed: the widest element was the actions span at
+ * right: 422 against a 390 viewport. Wrapping is the fix rather than hiding a
+ * control, because every one of the four is something Grant asked for.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcrecordhead .bcactions { flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 520px) {
+  /* And at phone width the head itself stacks, so the controls get a full
+     line rather than a column beside a heading. */
+  [data-experience='basecamp'] .bcrecordhead { flex-wrap: wrap; }
+  [data-experience='basecamp'] .bcrecordhead .bcactions { margin-left: 0; width: 100%; }
+}

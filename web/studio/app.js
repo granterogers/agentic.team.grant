@@ -13494,6 +13494,24 @@ const bcContext = {
     the tool's — the record is a state of the tool rather than a route of its
     own, which keeps §10.8's two-levels-never-three true of tasks as well.
   */
+  /*
+    Opening what the team made. The id goes into the shell's state and the
+    record surface asks for the body; §19's "clicking an output should allow
+    Grant to OPEN and VIEW the artifact directly".
+  */
+  openOutput: (id) => {
+    state.bcOutput = id
+    void needOutput(id)
+    render()
+  },
+  outputBody: (id) => {
+    if (madeBodies[id] === undefined) void needOutput(id)
+    return madeBodies[id]
+  },
+  closeOutput: () => {
+    state.bcOutput = null
+    render()
+  },
   openTask: (id) => {
     state.bcTask = id
     /*
@@ -14065,6 +14083,38 @@ const SITE_SAID = {
   site, which is the one kind of fiction a screenshot of this page must never
   contain — somebody reading it would believe a login exists.
 */
+/*
+  ONE OUTPUT'S BODY, fetched once and then drawn (§19).
+
+  The same guard as every other lazy read here: the null is written BEFORE the
+  await, so a second render while the first request is in flight does not start
+  a second one.
+
+  A failure leaves `null` rather than falling back to anything invented. An
+  output is the team's actual work; showing a plausible substitute for one
+  would be the fabrication this office spends most of its rules preventing.
+*/
+/*
+  Three states, not two. `undefined` is "nobody has asked", the string
+  `asking` is "in flight", and null is "the office did not answer" -- and
+  conflating the last two is how the first version of this drew "Could not
+  open it" over a request that was still travelling. 0304's asymmetry in a
+  store: the absence of an answer is not the presence of a failure.
+*/
+const madeBodies = {}
+
+async function needOutput(id) {
+  if (madeBodies[id] !== undefined) return
+  madeBodies[id] = 'asking'
+  try {
+    const got = await read('output', id)
+    madeBodies[id] = got === undefined || got === null ? null : got
+  } catch {
+    madeBodies[id] = null
+  }
+  render()
+}
+
 async function needSites(slug) {
   if (browserSites[slug] !== undefined) return
   const p = byId(slug)

@@ -597,6 +597,108 @@ if (pick !== '') {
   )
 }
 
+/* --- what the team made, opened (§19) ------------------------------------ */
+/*
+  "Interaction must NOT be limited to `Add to project`. Clicking an output
+  should allow Grant to OPEN and VIEW the artifact directly." It could not be
+  opened at all: the office has written thousands and importing or deciding on
+  one were both verdicts on something nobody could see.
+*/
+/*
+  ON A PROJECT THAT HAS SOME. The write subject is a test project with no
+  outputs, and a check that demands what the data cannot supply is a check
+  somebody switches off. The office is asked which project has the most.
+*/
+/*
+  ON A PROJECT THAT ACTUALLY SHOWS SOME.
+
+  Two queries were tried and both picked a project whose team surface listed
+  nothing: counting `outputs` found one with a thousand, and asking
+  `studio_requests` found three tied at twenty. The page applies its own filter
+  on top of either -- so rather than model the filter in SQL and get a third
+  answer, the suite opens the candidates and uses the first that really lists
+  one. What the page shows is the only authority on what the page shows.
+*/
+const candidates = (
+  await db.execute(
+    `select p.slug
+       from public.projects p
+      where p.status = 'active' and not p.is_fixture
+        and jsonb_path_exists(app.studio_requests(p.project_id), '$[*].output.id')
+      limit 4`,
+  )
+).rows.map((r) => String((r as { slug: string }).slug))
+check(
+  'the office has projects that might have outputs',
+  candidates.length > 0,
+  candidates.join(','),
+)
+
+let madeOn = ''
+let madeOffered = 0
+for (const slug of candidates) {
+  await page.goto(`${SITE}/basecamp/p/${slug}/team`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 45000,
+  })
+  await page.waitForSelector('.bcmain', { timeout: 30000 })
+  await page.waitForTimeout(2200)
+  const n = (await page.evaluate(
+    inPage("return document.querySelectorAll('[data-bc-output-open]').length"),
+  )) as number
+  if (n > 0) {
+    madeOn = slug
+    madeOffered = n
+    break
+  }
+}
+
+check(
+  'the team surface lists what the team has made',
+  madeOffered > 0,
+  `looked at ${candidates.join(', ')}`,
+)
+if (madeOffered > 0) {
+  await page.click('[data-bc-output-open]')
+  const opened = await page
+    .waitForSelector('.bcoutputbody', { timeout: 25000 })
+    .then(() => true)
+    .catch(() => false)
+  check(`and one of them opens (${madeOn}, ${String(madeOffered)} listed)`, opened)
+  const read_ = (await page.evaluate(
+    inPage(`
+      const body = document.querySelector('.bcoutputbody')
+      const h = document.querySelector('.bcrecordhead h1')
+      const meta = document.querySelector('.bcpmeta')
+      return {
+        heading: h === null ? '' : (h.textContent || '').trim(),
+        paragraphs: body === null ? 0 : body.querySelectorAll('p').length,
+        chars: body === null ? 0 : (body.innerText || '').length,
+        meta: meta === null ? '' : (meta.textContent || '').replace(/\\s+/g, ' ').trim(),
+        addable: document.querySelector('[data-bc-addtoproject]') !== null,
+      }
+    `),
+  )) as { heading: string; paragraphs: number; chars: number; meta: string; addable: boolean }
+  check(
+    'with the words the team actually wrote',
+    read_.chars > 20,
+    `${String(read_.chars)} characters`,
+  )
+  /*
+    Paragraphs, not one run-together block. CLAUDE.md records that HTML
+    collapses whitespace, so a body rendered in a single tag loses every
+    newline -- and #186's whole outcome was invisible on the dashboard for
+    weeks while Telegram and Slack showed it correctly.
+  */
+  check('drawn as paragraphs rather than one block', read_.paragraphs >= 1)
+  check(
+    'and it says who wrote it and on what',
+    /written by/i.test(read_.meta),
+    read_.meta.slice(0, 70),
+  )
+  check('while Add to project is still offered where it means something', read_.addable)
+}
+
 /* --- 9. and signing out leaves nothing behind --------------------------- */
 
 await page.evaluate(

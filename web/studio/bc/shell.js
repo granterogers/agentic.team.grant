@@ -35,6 +35,7 @@ import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
 import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
+import * as when from '../when.js'
 import * as bcDocOrder from './docorder.js'
 import * as contacts from './contacts.js'
 import * as bcDrive from './drive.js'
@@ -624,9 +625,18 @@ const overview = (p) => {
                   written when everything here was a hand-off.
                 */
                 `<a href="${esc(at(`/p/${p.slug}/${t.id}`))}" data-bc-go="${esc(at(`/p/${p.slug}/${t.id}`))}">${esc(t.name)}</a>`
-              : `<a href="${esc(toolPath(p.slug, t.id))}" data-bc-leave="${esc(
-                  toolPath(p.slug, t.id),
-                )}">${esc(t.name)}</a>`,
+              : /*
+                  AND THERE IS NO OTHER BRANCH ANY MORE (§20).
+
+                  This was a hand-off: a tool without its own surface here got
+                  a link into the current Team HQ. Every tool in the list is
+                  owned now, so it had not fired in weeks -- but it is exactly
+                  the shape §20 forbids, waiting for the next tool somebody
+                  adds without a surface. A tool with nowhere to go is not
+                  offered, which makes building the surface the only way to put
+                  one on this list.
+                */
+                '',
           )
           .join('')}
       </div>
@@ -1182,13 +1192,12 @@ const taskRecord = (p) => {
 
     <h2 class="bcsubhead">Discussion and history</h2>
     <p class="bcpmeta bcprose">
-      Comments on a task, and its relations to documents and jobs, live in the
-      current Team HQ. This experience has not built its own surface for them,
-      so it sends you there rather than showing a copy that could disagree.
-    </p>
-    <div class="bcinline-list">
-      <a href="/p/${esc(p.slug)}/tasks" data-bc-leave="/p/${esc(p.slug)}/tasks">Open in the current Team HQ</a>
-    </div>`
+      Comments on a task, and its relations to documents and jobs, are not
+      built here yet. They are the next thing this surface needs rather than
+      somewhere else to be sent: §20 asks that this experience never hand you
+      back to the old interface, so it says what is missing instead of
+      pretending a link is a feature.
+    </p>`
 }
 
 /*
@@ -1253,18 +1262,31 @@ const teamSurface = (p) => {
         : `<div class="bclist">${outputsOf(p).map((r) => outputRow(r)).join('')}</div>`
     }
     <h2 class="bcsubhead">Running work</h2>
-    <p class="bcpmeta bcprose bcgap">
-      The team board, the team chat, running jobs with their stop controls and
-      the outputs they produce are all in the current Team HQ. This experience
-      has not built its own surface for them yet, so it sends you to the real
-      one rather than showing a copy.
-    </p>
+    <!--
+      NO WAY OUT OF THE NEW INTERFACE (§20).
+
+      This block used to be four links into the current Team HQ, with a
+      paragraph admitting it: "This experience has not built its own surface
+      for them yet, so it sends you to the real one rather than showing a
+      copy." Grant read that as unacceptable, and he is right -- a product that
+      hands you to its predecessor four times on one screen is not a product.
+
+      Two of the four were never missing. Team chat is the Chat tool and Team
+      board is the Card Table, both of which this experience has had all along;
+      the links were simply pointing at the old addresses. Outputs is the block
+      directly above this one, and opening one now works (§19).
+
+      Active jobs is the one that is genuinely not built here yet, and it says
+      so in its own words rather than being dressed as a link somewhere.
+    -->
     <div class="bcinline-list">
-      ${TEAM_SUBVIEWS.map(
-        (v) =>
-          `<a href="/p/${esc(p.slug)}/team" data-bc-leave="/p/${esc(p.slug)}/team">${esc(v.name)}</a>`,
-      ).join('')}
-    </div>`
+      <a href="${esc(at(`/p/${p.slug}/chat`))}" data-bc-go="${esc(at(`/p/${p.slug}/chat`))}">Team chat</a>
+      <a href="${esc(at(`/p/${p.slug}/board`))}" data-bc-go="${esc(at(`/p/${p.slug}/board`))}">Team board</a>
+    </div>
+    <p class="bcpmeta bcprose bcgap">
+      Everything the team has made is above, and opens here. Running jobs with
+      their stop controls are the one thing this experience has not built yet.
+    </p>`
 }
 
 /**
@@ -1286,10 +1308,21 @@ const teamSurface = (p) => {
 const outputRow = (r) => {
   const done = r.output.imported === true
   const ready = r.state === 'review' && !done
+  /*
+    THE TITLE OPENS IT (§19).
+
+    "Interaction must NOT be limited to `Add to project`. Clicking an output
+    should allow Grant to OPEN and VIEW the artifact directly." It could not be
+    opened at all: importing it and deciding on it were both verdicts on
+    something nobody could see. 0584 is the reader and this is the way in.
+
+    Add to project stays where it is meaningful, which is §19's other half.
+  */
   return `<div class="bcitem" data-bc-output="${esc(r.output.id)}">
     <span></span>
     <div class="bcitembody">
-      <span class="bcitemtitle">${esc(r.output.title)}</span>
+      <button type="button" class="bcitemtitle bcitemlink" data-bc-output-open="${esc(r.output.id)}"
+        aria-label="${esc(`Open ${r.output.title}`)}">${esc(r.output.title)}</button>
       <span class="bcitemmeta">${esc(
         [r.who, r.output.kind, r.output.size, r.delivered].filter(Boolean).join(' · '),
       )}</span>
@@ -2229,6 +2262,80 @@ const chatSurface = (p) => {
      to do nothing, which is what "some assets cannot be clicked" actually
      was.
 */
+/*
+  WHAT THE TEAM MADE, OPEN (§19).
+
+  The provenance is beside the body rather than under it, because §9's argument
+  is that an output naming only its title loses the trail at the moment it
+  becomes a document -- and this is the last screen before that happens.
+
+  The body is drawn as paragraphs. CLAUDE.md records what one tag does to it:
+  HTML collapses whitespace, so a body rendered in a single element loses every
+  newline, and #186's whole outcome was invisible on the dashboard for weeks
+  because of it while Telegram and Slack showed it correctly the entire time.
+*/
+const outputRecord = (p) => {
+  const id = state().bcOutput
+  const got = ctx.outputBody?.(id)
+  const back = button('Back to the team', { 'data-bc-output-close': '1' })
+
+  if (got === undefined || got === 'asking') {
+    return `${crumbFor(p, 'team')}
+      <div class="bcrecordhead"><h1>Opening…</h1><span class="bcactions">${back}</span></div>
+      <p class="bcpmeta">Reading what the team wrote.</p>`
+  }
+  if (got === null) {
+    return `${crumbFor(p, 'team')}
+      <div class="bcrecordhead"><h1>Could not open it</h1><span class="bcactions">${back}</span></div>
+      <p class="bcpmeta">The office did not answer for that one. Nothing here is a guess at
+        what it said.</p>`
+  }
+
+  const said = String(got.body ?? '')
+  const paras = said.split(/\n{2,}/).filter((x) => x.trim() !== '')
+  const sources = Array.isArray(got.sources) ? got.sources : []
+  return `${crumbFor(p, 'team')}
+    <div class="bcrecordhead">
+      <h1>${esc(String(got.title ?? 'What the team made'))}</h1>
+      <span class="bcactions">
+        ${
+          got.imported === true
+            ? status('In the project', 'done')
+            : button('Add to project', { kind: 'primary', 'data-bc-addtoproject': esc(String(got.id)) })
+        }
+        ${back}
+      </span>
+    </div>
+    <p class="bcpmeta">${esc(
+      [
+        got.who ? `Written by ${String(got.who)}` : '',
+        got.made ? when.words(String(got.made)) : '',
+        got.evidence ? `Evidence: ${String(got.evidence)}` : '',
+        typeof got.confidence === 'number' ? `Confidence ${String(got.confidence)}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    )}</p>
+    ${
+      got.asked === null || got.asked === undefined || String(got.asked) === ''
+        ? ''
+        : `<p class="bcpmeta bcprose">Asked for: ${esc(String(got.asked))}</p>`
+    }
+    <div class="bcprose bcoutputbody">
+      ${
+        paras.length === 0
+          ? `<p class="bcpmeta">This one has no body. The office recorded the work and not
+              the words, which is a real state rather than a failure to load.</p>`
+          : paras.map((x) => `<p>${esc(x)}</p>`).join('')
+      }
+    </div>
+    ${
+      sources.length === 0
+        ? `<p class="bcpmeta">Nothing cited.</p>`
+        : `<p class="bcpmeta">Read: ${esc(sources.map((x) => String(x)).join(', '))}</p>`
+    }`
+}
+
 const documentRecord = (p) => {
   const want = state().bcDoc
   const docs = p.documents ?? []
@@ -2327,7 +2434,7 @@ const settingsSurface = (p) => {
 const SURFACE = {
   overview,
   tasks: (p) => (state().bcTask === null || state().bcTask === undefined ? tasksSurface(p) : taskRecord(p)),
-  team: teamSurface,
+  team: (p) => (state().bcOutput === null || state().bcOutput === undefined ? teamSurface(p) : outputRecord(p)),
   documents: documentsSurface,
   contacts: contactsSurface,
   sources: sourcesSurface,
@@ -2336,6 +2443,7 @@ const SURFACE = {
   schedule: scheduleSurface,
   chat: chatSurface,
   document: documentRecord,
+  output: outputRecord,
   settings: settingsSurface,
 }
 

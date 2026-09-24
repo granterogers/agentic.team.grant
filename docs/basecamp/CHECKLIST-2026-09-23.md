@@ -155,20 +155,20 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 19.1 | Concept kept; outputs/artifacts shown | TODO |
-| 19.2 | Clicking an output opens/views it | TODO |
-| 19.3 | "Add to project" kept where meaningful | TODO |
+| 19.1 | Concept kept; outputs/artifacts shown | **VERIFIED** — the block stays; it is the only place the team's work is listed |
+| 19.2 | Clicking an output opens/views it | **VERIFIED** — 0584 is the reader and the title opens it: body, provenance, what was asked, what was read |
+| 19.3 | "Add to project" kept where meaningful | **VERIFIED** — Add to project is still offered, and only where it means something |
 
 ## 20 — Legacy escape hatches
 
 | # | Requirement | State |
 |---|---|---|
-| 20.1 | Running work → Outputs implemented in the new design | TODO |
-| 20.2 | Active jobs implemented in the new design | TODO |
-| 20.3 | Team chat implemented in the new design | TODO |
-| 20.4 | Team board implemented in the new design | TODO |
-| 20.5 | Every visible link/action reachable from the new project UI audited | TODO |
-| 20.6 | Automated route/navigation check for legacy escapes | TODO |
+| 20.1 | Running work → Outputs implemented in the new design | **VERIFIED** — Outputs open here; the block is the surface |
+| 20.2 | Active jobs implemented in the new design | BLOCKED — running jobs with stop controls are not built in the new design. The escape is gone and the surface says so plainly rather than linking out; `stop_job` exists at the gateway with nothing pressing it |
+| 20.3 | Team chat implemented in the new design | **VERIFIED** — Team chat now links to the experiment's own Chat tool, which existed all along |
+| 20.4 | Team board implemented in the new design | **VERIFIED** — Team board links to the Card Table, likewise |
+| 20.5 | Every visible link/action reachable from the new project UI audited | **VERIFIED** — every surface walked; the dead hand-off branch in the tool list is gone, and so is the task record's |
+| 20.6 | Automated route/navigation check for legacy escapes | **VERIFIED** — `verify:basecamp-routes` fails on any link or navigating control that leaves `/basecamp`; proved by putting one on the page |
 
 ## 21–24 — Sources
 

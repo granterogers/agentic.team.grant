@@ -2339,6 +2339,17 @@ const wireTasks = (root) => {
     }
   }
 
+  for (const b of root.querySelectorAll('[data-bc-output-open]')) {
+    b.addEventListener('click', () => {
+      ctx.openOutput?.(b.dataset.bcOutputOpen)
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-output-close]')) {
+    b.addEventListener('click', () => {
+      ctx.closeOutput?.()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-bc-task-open]')) {
     b.addEventListener('click', () => {
       ctx.openTask(b.dataset.bcTaskOpen)
