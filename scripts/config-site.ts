@@ -56,9 +56,15 @@ export const siteConfig = (): string =>
     '',
     '  Nothing here is a credential. The gateway address is public -- the browser',
     '  calls it -- and every authorization decision is made server-side.',
+    '',
+    '  A value already set wins. `window.HQ_API` is the seam every harness in',
+    '  this repository already uses to point a page at a stand-in office, and a',
+    '  generated file that clobbered it would break them all -- silently, and',
+    '  only where the file happens to exist, since it is not in the repository.',
+    '  A deployment names the office when nothing else has.',
     '*/',
-    `window.HQ_API = '${base}/${slug}'`,
-    ...(voice === '' ? [] : [`window.HQ_VOICE = '${base}/${voice}'`]),
+    `window.HQ_API = window.HQ_API || '${base}/${slug}'`,
+    ...(voice === '' ? [] : [`window.HQ_VOICE = window.HQ_VOICE || '${base}/${voice}'`]),
     '',
   ].join('\n')
 
