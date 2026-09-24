@@ -515,10 +515,28 @@ const putBack = (p) => {
     ${
       off.length > 0
         ? `<span class="bclabel">Not on this page</span>
-           ${off.map((id) => button(NAMES[id] ?? id, { 'data-bc-arr-on': esc(id) })).join('')}`
+           <!--
+             CHIPS THAT SAY "ADD". A module's name as a bare word read as a
+             label, not as the way to bring it back.
+           -->
+           ${off
+             .map(
+               (id) => `<button type="button" class="bcbtn bcaddback" data-bc-arr-on="${esc(id)}"
+                 aria-label="${esc(`Put ${NAMES[id] ?? id} back on this page`)}">
+                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                 <span>${esc(NAMES[id] ?? id)}</span>
+               </button>`,
+             )
+             .join('')}`
         : ''
     }
     ${button('Put it back the way it was', { 'data-bc-arr-reset': '1' })}
+    <!--
+      Said once, where the fear arises: taking a module off is about this
+      page, not about the work in it.
+    -->
+    <p class="bcputbacknote">Taking a module off only hides it here. Nothing in it is deleted.</p>
   </section>`
 }
 

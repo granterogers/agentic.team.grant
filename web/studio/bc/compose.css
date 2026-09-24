@@ -3368,3 +3368,28 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 }
 
 [data-experience='basecamp'] .bcbdue--late { color: var(--bc-danger); font-weight: 600; }
+
+/* The way back onto the page: chips that read as additions. */
+[data-experience='basecamp'] .bcputback { align-items: center; flex-wrap: wrap; gap: 10px; }
+[data-experience='basecamp'] .bcaddback {
+  min-height: 40px;
+  gap: 6px;
+  padding: 0 14px 0 10px;
+  border: 1px dashed color-mix(in srgb, var(--bc-accent) 55%, transparent);
+  border-radius: 999px;
+  color: var(--bc-accent);
+  background: color-mix(in srgb, var(--bc-accent) 8%, transparent);
+}
+[data-experience='basecamp'] .bcaddback:hover {
+  border-style: solid;
+  background: color-mix(in srgb, var(--bc-accent) 16%, transparent);
+}
+[data-experience='basecamp'] .bcputbacknote {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--bc-text-muted);
+}
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcaddback { min-height: 44px; }
+}
