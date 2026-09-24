@@ -3323,6 +3323,40 @@ self-serving one.
 **Gates:** lint 0, typecheck 0, test **3066/3066 across 190 files**, and the
 thirteen standing checks above.
 
+---
+
+# PROGRAMME COMPLETE — 24 September 2026
+
+The stopping criteria are satisfied and the final completion gate has run.
+`BACKEND_BEHAVIOURAL_COMPLETION.md` is the verdict document; this is the
+operational record behind it.
+
+| step | result |
+|---|---|
+| 5 consecutive qualifying clean passes | **passes 60–64**, each a materially different territory, each with its own positive control |
+| final adversarial synthesis pass | **clean** — one latent coupling closed as hardening, no wrong product behaviour |
+| final tests and gates | lint 0, typecheck 0, **3,066 tests across 190 files**, thirteen standing checks green |
+| migrations reconciled | **604** applied; `npm run migrate` reports *"Applied 0, skipped 604"*; no sibling migration outstanding |
+| containment verified | `app.harness_escapes()` → **`new: []`**, 22 known (20 × #354, 2 × #298), **291 refused** |
+| synthetic debris swept | `purge:fixtures` → *"no active fixture projects"*; `check:leaks` exit 0 |
+| deployed worker verified | **v835** ACTIVE, liveness ok, unauthenticated kick 401, authenticated kick 200 |
+| working tree and branch | `claude/human-simulation-harness`, **clean**, 250 commits ahead of `main`, **not merged** |
+| deferred items documented | eight, each with why it does not block — see the completion document |
+
+**What remains open is open on purpose.** Two human-only maintenance items
+(the Slack config token, the Google OAuth app's testing mode), one filed
+finding whose fix needs a sweeper rather than a predicate (#365), one latent
+column (#358), two provenance phrasings whose fix carries real
+false-positive risk (#362), permanent debris that cannot be deleted because a
+job cannot be deleted, three cross-branch wrappers that self-heal on merge,
+and the preserved escapes that exist to be evidence.
+
+**Not done, deliberately:** no merge to `main`, no frontend or UX work, and
+nothing of Grant's real data deleted to tidy historical residue — including
+the one personal task carrying a run token, which is his to remove.
+
+The programme stops here.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
