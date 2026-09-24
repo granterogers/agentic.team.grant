@@ -158,6 +158,29 @@ merge — each names the branch it really belongs to:
 fresh-install workstream in its own words, because a precondition staged by
 NAME cannot live on a branch that does not have the migration it is named for.
 
+## The one thing only a browser at the real origin could say
+
+A server-side fetch sends no `Origin`, so it cannot detect a CORS
+misconfiguration — CLAUDE.md records the voice call being dead for weeks while
+every probe passed. The gateway this pass deployed is a new slug and the
+preview is a new hostname, so neither had ever been asked from a browser.
+
+From the deployed page, in real Chromium, with a real `Origin`:
+
+```
+gateway, no credential     401   (CORS fine)
+gateway, a bad bearer      401   (CORS fine)
+voice                      401   (CORS fine)
+signin, from this origin   BLOCKED — TypeError: Failed to fetch
+```
+
+The last line is the point. `signin` keeps an allow-list of origins it will
+mint a magic link for, the preview is not on it, and **it was not put on it**:
+widening a production authorization boundary to make an integration pass is the
+one thing this pass is forbidden to do. The ceremony happens at the allowed
+origin instead and the session travels, which grants nothing the office did not
+already grant.
+
 ## What is deliberately still standing
 
 - `hq-api-integration` (v6) — the isolated gateway this pass drove. Nothing
