@@ -94,13 +94,30 @@ const QUERIES: readonly { table: string; column: string; sql: string; why: strin
     table: 'blockers',
     column: 'job_id',
     why: 'a blocker is raised BY a turn; one without a job cannot be answered back into it',
+    /*
+      AND A FIXTURE PROJECT'S BLOCKER IS NOT ONE OF HIS.
+
+      A suite that writes blockers directly has no job to attribute them to,
+      correctly -- 452 of them, every one on a fixture project, none open, none
+      reachable from anything Grant looks at. Counted as a gap they read as the
+      office raising 54 questions in a day that cannot be answered back into
+      anything, which is harness traffic reported as the office failing: the
+      pattern CLAUDE.md records five times, and the worst place for it is
+      inside a check built to make the office legible.
+
+      The project is the witness, the same one 0355 gave the three readers that
+      report to him. It can only ever EXCLUDE, which is 0304's asymmetry and
+      why it is safe: a blocker on a real project is still counted whatever
+      else is true of it.
+    */
     sql: `select count(*)::int total,
                  count(*) filter (where b.job_id is null)::int unattributed,
-                 count(*) filter (where b.job_id is null
+                 count(*) filter (where b.job_id is null and not coalesce(p.is_fixture, false)
                    and b.created_at > now() - interval '7 days')::int gap,
-                 count(*) filter (where b.job_id is null
+                 count(*) filter (where b.job_id is null and not coalesce(p.is_fixture, false)
                    and b.created_at > now() - interval '24 hours')::int recent
-            from public.blockers b`,
+            from public.blockers b
+            left join public.projects p on p.project_id = b.project_id`,
   },
   {
     table: 'lessons',
@@ -210,6 +227,29 @@ if (healed.length > 0) {
   console.log('  HISTORICAL, and not counted: the path is fixed and the old rows remain.')
   for (const f of healed) console.log(`    ${f.table}.${f.column}: ${String(f.gap)}`)
   console.log()
+}
+
+/*
+  WHAT THE HARNESS FILTER ACTUALLY REMOVED, printed rather than assumed.
+
+  The blockers row excludes rows on a fixture project, and a filter nobody can
+  see the effect of is one that could be matching everything or nothing. This
+  says which, in the report, every run -- so a day when it reads 0 is a day
+  somebody can ask why, rather than a silent pass.
+*/
+{
+  const [excluded] = (
+    await db.execute(
+      `select count(*)::int as n
+       from public.blockers b
+       join public.projects p on p.project_id = b.project_id
+      where b.job_id is null and p.is_fixture
+        and b.created_at > now() - interval '7 days'`,
+    )
+  ).rows as { n: number }[]
+  console.log(`  EXCLUDED as harness: ${String(excluded?.n ?? 0)} job-less blocker(s) on a fixture`)
+  console.log('  project in the last week. They have no turn because a suite wrote them,')
+  console.log('  and none of them is reachable from anything Grant looks at.\n')
 }
 
 if (real.length === 0) {
