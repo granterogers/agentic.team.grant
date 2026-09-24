@@ -229,6 +229,8 @@ export interface HandlerOutput {
    * caller, which is why the check that reads it could never fire.
    */
   readonly acted?: number
+  /** Task rows this job created or changed itself; see `OutputMetadata.tasksChanged`. */
+  readonly tasksChanged?: number
   /**
    * Send this output as a playable audio file rather than as text (#66).
    *
@@ -903,6 +905,7 @@ export const runJob = async (
     ...(output.toolNames === undefined ? {} : { toolNames: output.toolNames }),
     ...(output.standingRules === undefined ? {} : { standingRules: output.standingRules }),
     ...(output.acted === undefined ? {} : { acted: output.acted }),
+    ...(output.tasksChanged === undefined ? {} : { tasksChanged: output.tasksChanged }),
     // The text as well as the labels, so a body claiming a database read from
     // an output whose evidence says nothing was read is caught here rather
     // than on Grant's phone (#185).

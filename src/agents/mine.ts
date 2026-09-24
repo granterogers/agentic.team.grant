@@ -778,3 +778,89 @@ export function personalTaskChange(
   if (matched.length === 0) return null
   return { due, priority, title: title === '' ? null : title, matched }
 }
+
+/**
+ * "Mark it done", "bin the minibus one" — a task completed or called off.
+ *
+ * Behavioural remediation, 24 September 2026 (ledger R3). The conversation
+ * could rename and re-date a task and could not finish or cancel one, so
+ * "Mark the Hartley one done" was answered "…is now marked as done" over a
+ * row still reading `todo`. This is the missing reading; the handler resolves
+ * WHICH task among the ones this conversation made, and only acts when exactly
+ * one fits.
+ *
+ * The object must be a REFERENT — "it", "that", "that one", or "the X one /
+ * the X task / the X reminder" — never an open noun phrase, so "delete the
+ * email", "remove the paragraph about pricing" and "cancel the booking" are
+ * not read as touching a to-do at all. That restriction is the whole safety
+ * argument: a wrong completion looks exactly like a right one.
+ *
+ * Cancelled rather than deleted for "bin" and friends: `hq_task_state` records
+ * an undo offer, and a to-do list you cannot take a mistaken removal back from
+ * is one he will stop dictating to.
+ */
+export interface TaskStateChange {
+  readonly state: 'done' | 'cancelled'
+  /** The distinguishing words ("hartley", "minibus"), or null for a bare referent. */
+  readonly name: string | null
+}
+
+const REFERENT_OBJECT = String.raw`(?:(?:it|that|this|that\s+one|this\s+one|the\s+last\s+one)|the\s+(?<name>[a-z0-9'’ -]{2,60}?)\s+(?:one|task|to-?do|reminder|item))`
+const DONE_FORMS: readonly RegExp[] = [
+  new RegExp(
+    String.raw`\b(?:mark|tick|cross|check|set)\s+${REFERENT_OBJECT}\s+(?:as\s+)?(?:done|complete|completed|finished|off)\b`,
+    'i',
+  ),
+  new RegExp(String.raw`\b(?:tick|cross|check)\s+off\s+${REFERENT_OBJECT}(?=[\s.,!;]|$)`, 'i'),
+  new RegExp(String.raw`\b(?:complete|finish|close)\s+${REFERENT_OBJECT}(?=[\s.,!;]|$)`, 'i'),
+]
+const CANCEL_FORMS: readonly RegExp[] = [
+  new RegExp(
+    String.raw`\b(?:bin|delete|remove|scrap|drop|cancel|ditch|kill|lose|get\s+rid\s+of|take\s+off)\s+${REFERENT_OBJECT}(?=[\s.,!;]|$)`,
+    'i',
+  ),
+]
+
+export function taskStateChange(text: string): TaskStateChange | null {
+  const said = withoutOpeningAffirmation(String(text ?? '').trim())
+  if (said === '') return null
+  // A question about it is not a request — unless it is the polite imperative.
+  if (said.endsWith('?') && !/^(?:can|could|would|will)\s+you\b/i.test(said)) return null
+  // A prohibition is not a request: "don't delete that one yet".
+  if (/\b(?:don'?t|do\s+not|never|not\s+yet|no\s+need\s+to)\b/i.test(said)) return null
+  for (const [forms, state] of [
+    [DONE_FORMS, 'done'],
+    [CANCEL_FORMS, 'cancelled'],
+  ] as const) {
+    for (const re of forms) {
+      const hit = re.exec(said)
+      if (hit === null) continue
+      const name = hit.groups?.name?.trim().toLowerCase() ?? null
+      return { state, name: name === '' ? null : name }
+    }
+  }
+  return null
+}
+
+/**
+ * Which candidate a name picks, or null when it picks none or several.
+ *
+ * Every distinguishing word must appear in the title. Deliberately strict:
+ * "the minibus one" picks "Book the minibus for the away day" and nothing
+ * else; a name matching two titles is asked about, never guessed.
+ */
+export function pickByName<T extends { readonly title: string }>(
+  name: string,
+  candidates: readonly T[],
+): T | null {
+  const words = name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2 && !['the', 'and', 'for', 'one'].includes(w))
+  if (words.length === 0) return null
+  const fits = candidates.filter((c) => {
+    const title = c.title.toLowerCase()
+    return words.every((w) => title.includes(w))
+  })
+  return fits.length === 1 ? (fits[0] ?? null) : null
+}

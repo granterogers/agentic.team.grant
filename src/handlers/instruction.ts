@@ -102,7 +102,12 @@ import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.t
 import { type Handoff, handoffIn } from '../agents/handoff.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
-import { personalTaskChange, personalTaskRequest } from '../agents/mine.ts'
+import {
+  personalTaskChange,
+  personalTaskRequest,
+  pickByName,
+  taskStateChange,
+} from '../agents/mine.ts'
 import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
 import type { CanonicalOutcome } from '../agents/outcome.ts'
 import { contractFor, sayWhatHappened } from '../agents/outcome.ts'
@@ -4101,8 +4106,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         pass by reading the two paths against each other rather than by running
         one of them.
       */
+      /*
+        FINISHED OR CALLED OFF (ledger R3, 0593).
+
+        The conversation could rename and re-date a task and had no way to
+        complete or cancel one, so "Mark the Hartley one done" was answered
+        "...is now marked as done" over a row still reading todo. Read from HIS
+        words, never the rewrite, for #322's reason. Resolved below against the
+        tasks THIS conversation made, and acted on only when exactly one fits.
+      */
+      const settles =
+        noted !== null || wantsFile !== null || isBranch ? null : firstOfHis(taskStateChange)
       const change =
-        noted !== null || wantsFile !== null || namedLater !== null || isBranch ? null : changesHis
+        noted !== null || wantsFile !== null || namedLater !== null || isBranch || settles !== null
+          ? null
+          : changesHis
       const changed =
         change === null
           ? null
@@ -4188,6 +4206,85 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 return null
               })
 
+      /*
+        The press for settles, above. Its answer says what canonical state now
+        holds and nothing else: a task is only called finished when
+        app.hq_task_state returned it in that state, and a name that fits no
+        task, or several, is asked about with the candidates named, never
+        guessed.
+      */
+      const settledTask: { text: string; did: boolean } | null =
+        settles === null
+          ? null
+          : await deps.db
+              .execute(
+                `select app.my_task_referent(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid, p_any_task => true) as t`,
+              )
+              .then(async (r) => {
+                const raw = (r.rows[0] as { t?: unknown })?.t
+                const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  candidates?: { id: string; title: string }[]
+                } | null
+                const candidates = subject?.candidates ?? []
+                const verb = settles.state === 'done' ? 'tick off' : 'take off the list'
+                if (candidates.length === 0) {
+                  return {
+                    did: false,
+                    text:
+                      'I have not changed anything — no task has been added in this ' +
+                      `conversation for me to ${verb}. Tell me which one, or tick it ` +
+                      'off on the dashboard task list.',
+                  }
+                }
+                const target =
+                  settles.name === null
+                    ? candidates.length === 1
+                      ? (candidates[0] ?? null)
+                      : null
+                    : pickByName(settles.name, candidates)
+                if (target === null) {
+                  const names = candidates
+                    .slice(0, 4)
+                    .map((c) => `"${c.title}"`)
+                    .join(', ')
+                  return {
+                    did: false,
+                    text: `I have not changed anything yet. Which one should I ${verb} — ${names}?`,
+                  }
+                }
+                const set = await deps.db.execute(
+                  `select app.hq_task_state(${lit(target.id)}, ${lit(settles.state)}) as r`,
+                )
+                const out = (set.rows[0] as { r?: unknown })?.r
+                const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
+                  state?: string
+                  error?: string
+                } | null
+                if (got?.state !== settles.state) {
+                  return {
+                    did: false,
+                    text: `I could not ${verb} "${target.title}"${got?.error === undefined ? '' : `: ${got.error}`}.`,
+                  }
+                }
+                return {
+                  did: true,
+                  text:
+                    settles.state === 'done'
+                      ? `Done — "${target.title}" is ticked off.`
+                      : `Taken off the list — "${target.title}" is cancelled.`,
+                }
+              })
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'finish or cancel a task', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
+
       const filed =
         asked !== null
           ? await addTask(deps.db, job, asked, instruction, deps.now?.() ?? new Date())
@@ -4259,6 +4356,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         filed,
         noted,
         changed,
+        settledTask?.text ?? null,
         stopped,
         whoIsOn,
         alreadyOn,
@@ -4297,6 +4395,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           filed,
           noted,
           changed,
+          settledTask?.text ?? null,
           stopped,
           whoIsOn,
           alreadyOn,
@@ -4389,6 +4488,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           it and the sentence becomes unbacked narration (0516).
         */
         (changed === null ? 0 : 1) +
+        (settledTask?.did === true ? 1 : 0) +
         who.alsoConvened.length
 
       /*
@@ -5892,6 +5992,20 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         // What this turn actually did, so #248's check has a number to compare
         // the answer against.
         acted,
+        /*
+          And how many TASK rows it touched (ledger R3). A hand-off counts in
+          acted; it is not a task ticked off, and the claim that one was
+          is checked against this instead. Calling work off counts too:
+          the model says "the related tasks have been cancelled" about
+          stopped JOBS, and refusing a true stop confirmation fails the turn
+          into silence, which is the expensive direction.
+        */
+        tasksChanged:
+          (noted === null ? 0 : 1) +
+          (changed === null ? 0 : 1) +
+          (settledTask?.did === true ? 1 : 0) +
+          (filed === null ? 0 : 1) +
+          (stopped === null ? 0 : 1),
         /*
           And who continues (#128).
 

@@ -287,6 +287,7 @@
     "verify:ci": "tsx scripts/verify/ci.ts",
     "check:reachable": "tsx scripts/check-reachable.ts",
     "mapview": "tsx scripts/verify/mapview.ts",
+    "verify:task-state": "tsx scripts/verify/task-state.ts",
     "verify:retry-writes": "tsx scripts/verify/retry-writes.ts",
     "verify:tasks-ui": "tsx scripts/verify/tasks-ui.ts",
     "vikunja:dev": "bash scripts/vikunja-dev.sh",

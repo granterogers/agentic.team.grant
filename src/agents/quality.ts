@@ -154,6 +154,16 @@ export interface OutputMetadata {
    */
   readonly acted?: number
   /**
+   * How many TASK rows this job created or changed itself.
+   *
+   * Separate from `acted` because `acted` counts convened specialists too,
+   * and a hand-off is not a task being ticked off. Measured on 24 September:
+   * "Mark the Hartley one done" convened two specialists, `acted` was 2, and
+   * the answer "Task … is now marked as done" passed every gate over a row
+   * still reading `todo`. Absent means not counted and never accuses.
+   */
+  readonly tasksChanged?: number
+  /**
    * Whether this job had ANY earlier turn in its conversation.
    *
    * Supplied by the worker from `app.conversation_extent`. Absent means "not
@@ -601,6 +611,62 @@ export const claimsToHaveMade = (body: string): string | null => {
       continue
     if (/\byou (?:created|added|filed|logged|made|set up|drafted|saved)\b/i.test(sentence)) continue
     return phrase.slice(0, 80)
+  }
+  return null
+}
+
+/**
+ * Does this text say a TASK was completed, removed, moved or reassigned?
+ *
+ * The companion of `claimsToHaveMade`, for the other half of a to-do list.
+ * Behavioural remediation, 24 September 2026 (ledger R3): asked "Mark the
+ * Hartley one done", the office replied
+ *
+ *     Task "Review the Hartley proposal" is now marked as done.
+ *
+ * and the row was still `todo`. The conversation had no door that could mark
+ * anything done at all, so the sentence was false by construction — and it is
+ * the worst kind of false, because he stops looking at a task he believes is
+ * finished.
+ *
+ * Scoped to a sentence that names a task (the noun, or a quoted title) so a
+ * sentence about a meeting being moved is left alone; plans, offers,
+ * questions, denials and things HE did are not claims, exactly as in
+ * `claimsToHaveMade`. Checked only against `tasksChanged`, which counts rows,
+ * never against `acted`, which counts people.
+ */
+export const claimsToHaveChangedTask = (body: string): string | null => {
+  const text = straighten(String(body ?? ''))
+  if (text.trim() === '') return null
+  const CHANGE = new RegExp(
+    [
+      String.raw`\bmarked\s+(?:[^\s.!?]+\s+){0,5}?(?:as\s+)?(?:done|complete|completed|finished|closed)\b`,
+      String.raw`\b(?:is|was|are|were|'s|has\s+been|have\s+been)\s+(?:now\s+)?(?:done|completed|closed|ticked\s+off|crossed\s+off|deleted|removed|cancelled|canceled|binned|scrapped|archived|rescheduled|reassigned)\b`,
+      String.raw`\b(?:ticked|crossed)\s+(?:it\s+|that\s+|them\s+)?off\b`,
+      String.raw`\bI(?:'ve|\s+have)?\s+(?:just\s+)?(?:deleted|removed|cancelled|canceled|binned|scrapped|archived|completed|closed|moved|rescheduled|reassigned|assigned|changed|updated|renamed)\b`,
+      String.raw`\b(?:is|was|has\s+been|'s)\s+(?:now\s+)?(?:moved|pushed|changed|set|assigned|reassigned)\s+(?:to|as)\b`,
+    ].join('|'),
+    'i',
+  )
+  const TASKISH = /\b(?:tasks?|to-?dos?|subtasks?|reminders?)\b|["“][^"”]{3,}["”]/i
+  for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
+    const hit = CHANGE.exec(sentence)
+    if (hit === null || !TASKISH.test(sentence)) continue
+    if (sentence.trim().endsWith('?')) continue
+    if (
+      /\b(?:will|'ll|shall|can|could|should|would|want me to|happy to|about to|going to|once|if)\b/i.test(
+        sentence,
+      )
+    )
+      continue
+    if (/\b(?:not|never|no|nothing|none|n't|yet to)\b/i.test(sentence)) continue
+    if (
+      /\byou(?:'ve|\s+have)?\s+(?:already\s+)?(?:marked|ticked|deleted|removed|moved|completed|closed|changed)\b/i.test(
+        sentence,
+      )
+    )
+      continue
+    return hit[0].trim().slice(0, 80)
   }
   return null
 }
@@ -1760,6 +1826,25 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
           `the text says something was made ("${built}") and this job did ` +
           'nothing — no task, no document, no child job. Say what you would ' +
           'need in order to do it, or ask for it; do not report it as done.',
+      })
+    }
+  }
+
+  /*
+    A task completed, removed, moved or reassigned while this job changed no
+    task row (ledger R3). Keyed on rows, not on `acted`: a hand-off to two
+    specialists made `acted` 2 and let the claim through.
+  */
+  if (m.tasksChanged === 0) {
+    const claimed = claimsToHaveChangedTask(m.body ?? '')
+    if (claimed !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `the text says a task was changed ("${claimed}") and this job changed no ` +
+          'task at all. Say plainly that it has not been changed and how he can do ' +
+          'it (the task list on the dashboard), or ask which task he means; do not ' +
+          'report it as done.',
       })
     }
   }
