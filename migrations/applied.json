@@ -586,13 +586,19 @@
   "0577_signing_in_without_pasting_a_credential.sql": "a65a8e9541757b7d84304478de8251e87c4378e07c40428c7a391b130c34930a",
   "0578_the_pulse_had_no_public_wrapper.sql": "28098d0af9046a699b9100a2ab7091c3e5381380f71f9cd033b5cddfeacfbb2a",
   "0579_a_tick_is_not_a_reason_to_move.sql": "4dfeafd8c2a28c8cf5a6fe1034d5bd215869940f2b5f099df858abd7d2a6a84b",
+  "0580_a_person_the_office_recognises.sql": "590fe783e31ef45b45a3cb47bc48b1c63363d53f510f55d8bb00dcfae6ae6f18",
   "0580_a_reaction_slack_never_reads.sql": "5e1591cc97c07e3ac62f1e8eb9322f4d290ccf8b8a2edea3e793db7d869055a5",
   "0581_a_thumbs_up_teaches_nothing.sql": "910beda89b173f5d31cdcee39fe37c969b89e7d4f82d233c03880a77fa459fbe",
+  "0581_the_pairing_table_was_the_wrong_answer.sql": "2697e3225d5811ca2c55c0aee22d247b22906be3c15ee889cdeb29104efba384",
   "0582_a_suite_that_labels_itself_in_the_second_segment.sql": "7f7b77aacb3f6ec11d70e123196369f724c4f628078e8cf21a0a405beeb07421",
+  "0582_an_arrangement_belongs_to_its_surface_too.sql": "273979d32d6f79ae169271fd64793e35de4fa9482e0c444cc7defdc857707853",
   "0583_acknowledging_what_the_guard_could_not_see.sql": "7d85e961ef293e88afd896dc83b0a401e045f72d05aa67961affacd82bd0ab14",
+  "0583_the_order_he_put_them_in.sql": "5c8251c224724a554b3fd39a688f58b35d5d9196abfc42e3894245d36f2e625e",
   "0584_a_duty_may_not_say_the_same_thing_every_hour.sql": "8faa7b2e95ebe16345e4f949711a1ba3797fc9501e712c46f9125104aeedf75a",
+  "0584_an_output_can_be_read.sql": "0513f4816961ce6c7be5b3f94bb91c448fe01d98e5e00eae9214697c6dc3d5d8",
   "0585_two_projects_saying_the_same_thing_are_two_facts.sql": "e2e1bdf46e6027c7698f21d4177dc288518cc400e9e4d0847f19f5482bf2729c",
   "0586_his_activity_feed_was_mostly_test_traffic.sql": "fa7b980c433e7fb0db427d2c2ab7a45181c3f0a3506b73a01e34776f68c2dab5",
   "0587_an_autonomy_not_a_autonomy.sql": "0ffe8dc405093c9a186b392ab19dc473244e6cb1527c142c4b2b65969872e8a3",
-  "0588_a_failure_nobody_can_attribute_is_not_his.sql": "df4fe60dfca01e53792c28a7929bfbbf071a7a91b3ebd45241409459c2a2d311"
+  "0588_a_failure_nobody_can_attribute_is_not_his.sql": "df4fe60dfca01e53792c28a7929bfbbf071a7a91b3ebd45241409459c2a2d311",
+  "0589_dedupe_on_what_it_is_about.sql": "1601ea6831a936f956a2235d06f2d3ad0fdb59aa1d3570bed1224dd96704dde4"
 }
