@@ -3633,3 +3633,17 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 @media (min-width: 761px) {
   [data-experience='basecamp'] body.docked .bcexp { right: min(380px, 100vw); }
 }
+
+/*
+  SMALL TEXT IS TRACKED OPEN. The body carries Basecamp's -0.1px, which is
+  right at 16px and squeezes 12-13px meta until words nearly touch - visible
+  with the real Instrument Sans on the review deploy. Meta and captions get
+  a hair of positive tracking; the one-line intros under a page title are
+  reading text, so they move up to 13px.
+*/
+[data-experience='basecamp'] :is(.bcpmeta, .bcitemmeta, .bclabel, .bcmore, .bcsaidwhen, .bcsaidrole,
+  .bceventat, .bctaskwho, .bctaskdue, .bcdaywhen, .bclistcount, .bcmodmeta, .bccountw, .bcsayhint,
+  .bcsourcewhat, .bcsourcewhen, .bcagendawho) {
+  letter-spacing: 0.01em;
+}
+[data-experience='basecamp'] .bcpmeta.bcprose { font-size: 13px; line-height: 20px; }

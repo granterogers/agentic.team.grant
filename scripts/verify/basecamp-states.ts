@@ -233,6 +233,9 @@ for (const m of ['empty', 'huge'] as const) {
         inPage(`const out = []
            for (const el of document.querySelectorAll('.bcitemtitle, .bcptitle, .bcitemmeta, .bcpmeta, h1, h2')) {
              const cs = getComputedStyle(el)
+             /* Visually hidden ON PURPOSE (the project home's h1 for screen
+                readers): a 1px clipped box is not content that got clipped. */
+             if (el.classList.contains('bcvh')) continue
              if (cs.overflow === 'visible') continue
              /* An ellipsis or a line clamp is a DECISION to shorten, not a defect. */
              if (cs.textOverflow === 'ellipsis') continue
