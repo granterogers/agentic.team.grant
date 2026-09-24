@@ -3251,3 +3251,21 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bccount--open .bccountn { color: var(--bc-text-strong); }
 
 [data-experience='basecamp'] .bcrecordhead + .bccounts { margin-bottom: 10px; }
+
+/*
+  A RECORD'S FORM IS SIZED TO ITS CONTENT. Two fields each 1,240px wide
+  read as a database admin screen; a name and a date need a column each.
+*/
+[data-experience='basecamp'] form[data-bc-taskedit] {
+  max-width: 680px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 16px;
+  align-items: start;
+}
+[data-experience='basecamp'] form[data-bc-taskedit] > :not(.bcfield) { grid-column: 1 / -1; }
+[data-experience='basecamp'] form[data-bc-taskedit] .bcfield { margin: 0; }
+[data-experience='basecamp'] .bcselect { appearance: auto; cursor: pointer; }
+@media (max-width: 760px) {
+  [data-experience='basecamp'] form[data-bc-taskedit] { grid-template-columns: minmax(0, 1fr); }
+}

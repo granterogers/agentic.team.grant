@@ -1195,23 +1195,42 @@ const taskRecord = (p) => {
         }
       </span>
     </div>
-    <p class="bcpmeta bcprose bcgap-l">
-      A commitment on ${esc(p.name)}. Not a job the team is running, and not
-      an item on your own list — those are different things with different
-      owners.
-    </p>
-
     <h2 class="bcsubhead">Details</h2>
     <form class="bcaddform bcgap-l" data-bc-taskedit="${esc(key)}">
-      ${input({
-        id: 'bc-edit-who',
-        label: 'Assigned to',
-        name: 'who',
-        value: t.who ?? '',
-        autocomplete: 'off',
-        hint: 'A team member’s name, or leave it unassigned.',
-      })}
-      ${input({ id: 'bc-edit-due', label: 'Due date', name: 'due', type: 'date', value: isoDay(t.due) })}
+      <!--
+        A PICKER, NOT A SLUG BOX. It was free text pre-filled with the
+        database key ("emma"), so the field showed a developer's word and
+        accepted any typo as an assignee. The options are the team; each
+        carries the office's own name for the person, which is what a write
+        has to address. Anybody the row names who is not on the team stays
+        selectable, so opening a record can never silently reassign it.
+      -->
+      ${(() => {
+        const crew = ctx?.crew ?? []
+        const now = String(t.who ?? '')
+        const known = crew.some((c) => c.slug === now || c.staffSlug === now)
+        const opts = crew
+          .map((c) => {
+            const v = c.staffSlug ?? c.slug
+            const on = now !== '' && (c.slug === now || c.staffSlug === now)
+            return `<option value="${esc(v)}"${on ? ' selected' : ''}>${esc(c.role ? `${c.name} · ${c.role}` : c.name)}</option>`
+          })
+          .join('')
+        return `<div class="bcfield">
+          <label class="bclabel" for="bc-edit-who">Assigned to</label>
+          <select class="bcinput bcselect" id="bc-edit-who" name="who">
+            <option value=""${now === '' ? ' selected' : ''}>Nobody yet</option>
+            ${opts}
+            ${known || now === '' ? '' : `<option value="${esc(now)}" selected>${esc(now)}</option>`}
+          </select>
+        </div>`
+      })()}
+      <!--
+        The date the row actually carries. This read t.due, which is prose
+        ("Due 16 September") or absent, so a task due today opened with an
+        empty date field - and Save would then have CLEARED the date.
+      -->
+      ${input({ id: 'bc-edit-due', label: 'Due date', name: 'due', type: 'date', value: isoDay(String(t.due_on ?? t.due ?? '').slice(0, 10)) })}
       <!--
         NOT DISABLED FOR A PROTOTYPE ROW - the third and last instance of the
         same defect, found by grepping for the shape rather than by waiting
@@ -1245,11 +1264,8 @@ const taskRecord = (p) => {
 
     <h2 class="bcsubhead">Discussion and history</h2>
     <p class="bcpmeta bcprose">
-      Comments on a task, and its relations to documents and jobs, are not
-      built here yet. They are the next thing this surface needs rather than
-      somewhere else to be sent: §20 asks that this experience never hand you
-      back to the old interface, so it says what is missing instead of
-      pretending a link is a feature.
+      Comments and linked documents for a task aren't available yet.
+      To talk it through, use Chat with Team.
     </p>`
 }
 
