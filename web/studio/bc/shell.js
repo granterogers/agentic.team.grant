@@ -988,7 +988,8 @@ const filterBar = (p) => {
   if (f === undefined) return ''
   const n = bcMini.filtered(p, kind).length
   return `<div class="bcfilterbar" data-bc-filterbar="${esc(String(kind))}">
-    <span class="bcstatus bcstatus--waiting">${esc(`${f.name}: ${String(n)}`)}</span>
+    <!-- A sentence, not a key and a value: "Showing late · 1" reads; "Late:1" did not. -->
+    <span class="bcstatus bcstatus--waiting">${esc(`Showing ${f.name.charAt(0).toLowerCase()}${f.name.slice(1)} · ${String(n)}`)}</span>
     ${button('Show everything', { 'data-bc-filter-off': '1' })}
   </div>`
 }
@@ -2417,9 +2418,7 @@ const boardSurface = (p) => {
       <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      The same to-dos, by where the work has got to. Drag a card to another
-      column, or use the control on the card — either way the to-do itself
-      changes, because there is one set of records behind both views.
+      The same to-dos, by stage. Drag a card to another column to move it.
     </p>
     ${
       all.length === 0
@@ -2521,10 +2520,7 @@ const scheduleSurface = (p) => {
       <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      When this project's work is due. The office keeps no separate diary, so
-      everything here is scheduled work rather than an appointment — and a
-      to-do with no date is at the foot of the page rather than invented onto
-      one.
+      When this project's to-dos are due. Anything without a date is listed at the foot.
     </p>
     ${
       dated.length === 0 && undated.length === 0
