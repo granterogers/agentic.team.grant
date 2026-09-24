@@ -207,6 +207,84 @@ check(
   !(await page.locator('.bcmain').innerText()).includes('Add a list'),
 )
 
+/*
+ * --- THE WORD TOKEN IS NOT FOR A PERSON (§2, the 24 September correction) --
+ *
+ * "The normal user should not: see an office token; paste an office token;
+ * copy an office token; receive an office token... understand what an office
+ * token is."
+ *
+ * The sign-in that replaced it went in the same night, and a sentence saying
+ * "There is no office token in this browser" survived on the Add Source path
+ * -- the one place that tells somebody why their press did nothing. It was
+ * found by reading the handler, which is not a method that scales.
+ *
+ * So this walks the surfaces and asks the page, which cannot be fooled by a
+ * comment and does not care where the string was written. `data-` attributes
+ * and class names are not read: `hq.token` is what the machinery is called
+ * and renaming that is not what the correction asks for.
+ *
+ * `project-settings.js` is a DELIBERATE EXCEPTION, and the reason is worth
+ * writing down: it is shared with the default Team HQ, which still works the
+ * old way, so "Read-only — no token in this browser" is TRUE there. Changing
+ * it would make the default lie to make this experience tidy, and this branch
+ * may not damage the default. It is listed rather than quietly skipped.
+ */
+const TOKEN_FREE = ['', '/tasks', '/team', '/documents', '/contacts', '/sources', '/board']
+const saidToken: string[] = []
+for (const tab of TOKEN_FREE) {
+  await page.goto(url(`${slug}${tab}`), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcmain')
+  await page.waitForTimeout(400)
+  const words = (await page.evaluate(
+    inPage(`
+      const settings = document.querySelector('.bcsetframe')
+      if (settings !== null) settings.remove()
+      return document.body.innerText
+    `),
+  )) as string
+  if (/\btokens?\b/i.test(words)) {
+    const at = words.toLowerCase().indexOf('token')
+    saidToken.push(
+      `${tab === '' ? '(project)' : tab}: …${words.slice(Math.max(0, at - 60), at + 40).replace(/\s+/g, ' ')}…`,
+    )
+  }
+}
+check(
+  'no surface says the word token to a person',
+  saidToken.length === 0,
+  saidToken.join('\n        '),
+)
+
+/*
+  AND THE SENTENCES THAT ONLY APPEAR WHEN SOMETHING IS REFUSED.
+
+  The sweep above walks static text and was GREEN against the very defect it
+  was written for: "There is no office token in this browser" is not on any
+  surface until somebody presses Add it without being signed in. A check that
+  cannot see the thing it exists for is worse than none, and the only reason
+  this was caught is that the sabotage was run and printed nothing.
+
+  This subject has no office, so every write refuses -- which makes it exactly
+  the right place to read what a refusal SAYS.
+*/
+await page.goto(url(`${slug}/sources`), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.bcmain')
+await page.waitForTimeout(400)
+await page.locator('[data-bc-source-add]').first().click()
+await page.waitForSelector('[data-bc-sourceform]', { timeout: 10000 })
+await page.locator('#bc-src-url').fill('innergy.com/a-page-for-the-check')
+await page.locator('[data-bc-source-save]').first().click()
+await page.waitForTimeout(600)
+const refusal = (await page.evaluate(
+  inPage(`return (document.querySelector('[data-bc-source-said]')?.textContent ?? '').trim()`),
+)) as string
+check(
+  'a refused write says why without naming a token',
+  refusal !== '' && !/\btokens?\b/i.test(refusal),
+  refusal === '' ? '(it said nothing at all)' : refusal,
+)
+
 check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
 
 await browser.close()

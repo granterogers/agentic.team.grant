@@ -1268,9 +1268,18 @@ const wireSources = (root) => {
         return
       }
       if (canWrite() !== true) {
+        /*
+          THE WORD TOKEN DOES NOT BELONG IN FRONT OF A PERSON.
+
+          This said "There is no office token in this browser". The 24
+          September correction is explicit that the normal user should never
+          see, paste, copy, receive or understand an office token, and the
+          sign-in that replaced it went in the same night -- and this sentence
+          survived, on the one path that tells somebody why their press did
+          nothing. What is true for them is simply that they are not signed in.
+        */
         if (said !== null) {
-          said.textContent =
-            'There is no office token in this browser, so nothing was sent. Signed in, this adds the link to the project.'
+          said.textContent = 'Sign in first and this adds the link to the project.'
         }
         return
       }
