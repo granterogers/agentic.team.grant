@@ -54,6 +54,9 @@ continue at NEXT ACTION.**
 |---|---|---|---|
 | 69 | Saving a to-do record on the example projects redrew the page with no confirmation, and focus jumped to Close | the successor Save button takes focus and says *Saved in this browser.* in a status region | driven: `data-said role=status` present, focus on Save; todos 30/30, journey 55/55 |
 | 70 | Signed-in saves, uploads and ticks | already go through `attempt()`, which disables the control, says *Saving…* and then the office's own sentence | read `office.js` `attempt`; Docs upload signed out refuses with the sign-in sentence |
+| 71 | Schedule on a phone hid the month grid and with it the month's name, so September ran into October with only a gap | the agenda carries its own month heading, shown only where the grid is hidden | 390 capture |
+| 72 | Schedule's Overdue pill sat on the row's top edge while date, title and name were centred | centred with its row | probe: pill y 536 = name y 536 |
+| 73 | On touch widths the activity entry read "Olivermade the course one-pager": the 44px rule used inline-flex, which drops the space between the bold name and the sentence | padding instead of flex, same 44px | scratch scan of every flex/grid container with text beside an element, 13 routes x 2 widths: 0; with the old rule restored it flags the row on 7 routes, so the scan can fail |
 
 ## Harness notes
 

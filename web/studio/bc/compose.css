@@ -2705,9 +2705,11 @@
   sentence and a sentence at 44px would be a heading.
 */
 @media (max-width: 1180px) {
+  /* Padding rather than inline-flex: a flex container drops the space
+     between the bold name and the sentence, so it read "Olivermade". */
   [data-experience='basecamp'] .bceventwhat--press {
-    display: inline-flex;
-    align-items: center;
+    display: inline-block;
+    padding-block: 13px;
     min-height: 44px;
   }
 }
@@ -3706,3 +3708,29 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   background: color-mix(in srgb, var(--bc-danger) 12%, transparent);
 }
 [data-experience='basecamp'] .bcsaid--failed .bcsaidwho { color: var(--bc-danger); }
+
+/* ------------------------------------------------------------------------ *
+ * Schedule on a phone: the month grid is hidden there, and the month's name
+ * lived inside it, so the agenda ran September into October with only a gap
+ * to say so. The agenda carries its own heading, shown only where the grid
+ * is not. And the one header action sits at the start of its line rather
+ * than stranded at the far edge under the title.
+ * ------------------------------------------------------------------------ */
+[data-experience='basecamp'] .bcagendamonth { display: none; }
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcagendamonth {
+    display: block;
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--bc-text-muted);
+  }
+}
+@media (max-width: 520px) {
+  [data-experience='basecamp'] .bcrecordhead .bcactions { justify-content: flex-start; }
+}
+/* The Overdue pill sat on the row's top edge while the date, title and name
+   were centred: a status rule elsewhere starts it. Centred with its row. */
+[data-experience='basecamp'] .bcagendaitem > .bcstatus,
+[data-experience='basecamp'] .bcagendaitem > [class*='status'] { align-self: center; flex: 0 0 auto; }

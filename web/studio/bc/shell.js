@@ -2537,6 +2537,7 @@ const scheduleSurface = (p) => {
               return `<section class="bcmonth">
                 ${monthGrid(ym, marks, today)}
                 <div class="bcagenda">
+                  <h2 class="bcagendamonth">${esc(`${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`)}</h2>
                   ${
                     items.length === 0
                       ? `<p class="bcpmeta">Nothing is due this month.</p>`
