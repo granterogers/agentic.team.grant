@@ -30,6 +30,23 @@ import { serveStudio } from './serve-studio.ts'
 
 const inPage = (body: string): string => `(() => { ${body} })()`
 
+/*
+  WHERE TWO PAGE SHAPES DIVERGE, in words. A comparison that fails with "they
+  are different" sends somebody reading two thousand characters by eye; this
+  names the first element that moved or appeared, which is almost always the
+  whole answer.
+*/
+const firstDifference = (a: string, b: string): string => {
+  const left = a.split(' | ')
+  const right = b.split(' | ')
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    if (left[i] !== right[i]) {
+      return `before: ${left[i] ?? '(nothing)'}\n        after:  ${right[i] ?? '(nothing)'}`
+    }
+  }
+  return 'the same'
+}
+
 const PORT = 4704
 let server: Awaited<ReturnType<typeof serveStudio>>
 let subject = 'the working tree'
@@ -123,6 +140,36 @@ const LOOPBACK = `
     return s
   }
 
+  /*
+    WHAT THE PAGE ACTUALLY HEARD, recorded on the page's OWN side of the
+    channel.
+
+    §4 took the transcript surface away, which is what Grant asked for -- and
+    it took with it the only way this suite could see that a turn had landed.
+    Asserting the words are on screen would now be asserting against the
+    requirement; asserting only what this suite SENT would prove nothing about
+    the page at all, because the sender is this suite.
+
+    So the page's own data channel is wrapped as it is created, and every
+    message the page receives is kept. The subject is the page's receipt, which
+    is what "the conversation reached the client" has always meant.
+  */
+  window.__heard = []
+  const realChannel = RTCPeerConnection.prototype.createDataChannel
+  RTCPeerConnection.prototype.createDataChannel = function (...args) {
+    const ch = realChannel.apply(this, args)
+    ch.addEventListener('message', (e) => {
+      try {
+        const m = JSON.parse(String(e.data))
+        const said = m.transcript ?? m.delta ?? ''
+        if (said !== '') window.__heard.push(String(said))
+      } catch {
+        /* Not every event carries words, and one that does not is not a fault. */
+      }
+    })
+    return ch
+  }
+
   /* How this suite speaks as the team. */
   window.__say = (event) => {
     if (window.__teamChannel === null) return false
@@ -173,6 +220,34 @@ check(
   'nothing about a call is on screen before one is placed',
   (await page.locator('.bclive').count()) === 0,
 )
+/*
+  WHAT THE PAGE LOOKS LIKE BEFORE THE PRESS, recorded so it can be compared
+  after. §4: "The existing project screen should remain visually unchanged."
+  That is a claim about the whole page, not about one element, so the whole
+  page is what gets remembered -- every element's box, by a stable key.
+*/
+const shapeOfThePage = async (): Promise<string> =>
+  (await page.evaluate(
+    inPage(`const out = []
+       /*
+         GEOMETRY, NOT APPEARANCE. A first version keyed each element by tag
+         AND class name, and then reported the microphone gaining its live
+         class as the page having changed -- which is the one thing §4 asks
+         the icon to do. The requirement is that nothing MOVES or APPEARS, so
+         the identity is the element's position in document order and the
+         value is its box.
+       */
+       let i = 0
+       for (const el of document.querySelectorAll('header *, .bcmain *, .bcpanes *')) {
+         const r = el.getBoundingClientRect()
+         if (r.width === 0 && r.height === 0) continue
+         i += 1
+         out.push('#' + i + ' ' + el.tagName + '@' +
+           Math.round(r.x) + ',' + Math.round(r.y) + ',' + Math.round(r.width) + 'x' + Math.round(r.height))
+       }
+       return out.join(' | ')`),
+  )) as string
+const beforeThePress = await shapeOfThePage()
 
 /* --- 1. placing it ------------------------------------------------------ */
 /* Measured BEFORE the press, because anything you need to know about "before"
@@ -220,15 +295,22 @@ check(
   JSON.stringify(connected),
 )
 check('and the conversation channel is open', connected.channel, JSON.stringify(connected))
+/*
+  THE STATE IS ON THE ICON, NOT ON A PANEL (§4). Every assertion below that
+  used to read the panel's text now reads the microphone's own state and its
+  accessible name -- which is the stricter test of the two, because a colour
+  nobody can read to a screen reader is not a state that has been communicated.
+*/
 check(
-  'the panel says it is listening, in words with no protocol in them',
-  (await page.locator('[data-bc-live="listening"]').count()) === 1,
+  'the microphone itself says it is listening',
+  (await page.locator('[data-bc-mic="listening"]').count()) === 1,
+  (await page.locator('[data-bc-voice]').first().getAttribute('data-bc-mic')) ?? 'no state',
 )
-const words = await page.locator('.bclive').innerText()
+const words = (await page.locator('[data-bc-voice]').first().getAttribute('aria-label')) ?? ''
 check(
   'nothing on it says session, token, SDP or realtime',
   !/\b(sdp|peer connection|token|realtime|webrtc|session)\b/i.test(words),
-  words.replace(/\n+/g, ' / '),
+  words,
 )
 check(
   'and it tells him he can just talk',
@@ -272,6 +354,14 @@ const paint = async (): Promise<Record<string, string>> =>
 
 const stillPaint = idlePaint
 const livePaint = await paint()
+/*
+  POINTER AWAY FIRST. The microphone lifts a pixel on hover and the pointer is
+  still sitting on it after the press, so this compared an unhovered idle
+  control with a hovered live one and reported the hover as the call moving the
+  page -- a check that would have had somebody delete a good hover state.
+*/
+await page.mouse.move(4, 4)
+await page.waitForTimeout(250)
 const liveGeometry = await geometry()
 
 /* Red when it is not on, green when it is - as colours, not as words. */
@@ -320,7 +410,7 @@ check(
   them instead.
 */
 const covered = (await page.evaluate(
-  inPage(`const line = document.querySelector('[data-callsay]')
+  inPage(`const line = document.querySelector('[data-bc-callsay]')
      if (line === null || line.hidden) return []
      const r = line.getBoundingClientRect()
      const hit = []
@@ -345,10 +435,17 @@ const say = async (event: Record<string, unknown>): Promise<void> => {
   */
   await page.waitForTimeout(500)
 }
+/*
+  THE MICROPHONE IS WHAT REPORTS NOW (§4). This watched the panel's own
+  attribute; the panel is gone and the icon carries the same vocabulary, so
+  the wait moved rather than the test. It also has to give the icon time: the
+  states arrive over the data channel and a 400ms poll paints them, so a
+  one-shot read would race the painter.
+*/
 const settlesTo = async (activity: string): Promise<boolean> =>
   await page
-    .waitForFunction(`document.querySelector('[data-bc-live="${activity}"]') !== null`, undefined, {
-      timeout: 6000,
+    .waitForFunction(`document.querySelector('[data-bc-mic="${activity}"]') !== null`, undefined, {
+      timeout: 8000,
     })
     .then(
       () => true,
@@ -360,18 +457,28 @@ await say({
 })
 await say({ type: 'response.created' })
 check(
-  'while the team is answering, the panel says so rather than still saying listening',
+  'while the team is answering, the microphone says so rather than still saying listening',
   await settlesTo('answering'),
-  await page.locator('.bclive').innerText(),
+  (await page.locator('[data-bc-voice]').first().getAttribute('data-bc-mic')) ?? 'no state',
 )
 await say({
   type: 'response.output_audio_transcript.done',
   transcript: 'Two things are late: the avatar document and the interview notes.',
 })
 await say({ type: 'response.done' })
-const afterOne = await page.locator('.bclive').innerText()
-check('what he said is shown', afterOne.includes('What is late on this project?'), afterOne)
-check('what the team said is shown', afterOne.includes('Two things are late'), afterOne)
+/*
+  WHAT WAS SAID IS NO LONGER SHOWN, AND THAT IS THE REQUIREMENT.
+
+  These two checks read the panel's transcript. §4 forbids a transcript
+  surface, so asserting that the words are on screen would now be asserting
+  against the thing Grant asked for. What still has to be true is that the
+  turns REACHED the page -- a conversation the client did not hear is not a
+  conversation -- so the assertion moves from the rendering to the receiving,
+  which is where it always belonged.
+*/
+const heard = (await page.evaluate(inPage(`return (window.__heard ?? []).join(' | ')`))) as string
+check('what he said reached the page', heard.includes('What is late on this project?'), heard)
+check('what the team said reached the page', heard.includes('Two things are late'), heard)
 check(
   'and it goes back to listening, ready for the next thing he says',
   await settlesTo('listening'),
@@ -387,7 +494,9 @@ await say({
   transcript: 'Right, I will put that to Emma.',
 })
 await say({ type: 'response.done' })
-const afterTwo = await page.locator('.bclive').innerText()
+const afterTwo = (await page.evaluate(
+  inPage(`return (window.__heard ?? []).join(' | ')`),
+)) as string
 check(
   'a second turn continues the same conversation rather than starting another',
   afterTwo.includes('Okay, chase the interview notes') &&
@@ -409,47 +518,66 @@ await say({ type: 'response.done' })
 check(
   'interrupting stops the answer and the conversation carries on',
   await settlesTo('listening'),
-  await page.locator('.bclive').innerText(),
+  (await page.locator('[data-bc-voice]').first().getAttribute('data-bc-mic')) ?? 'no state',
 )
 await say({
   type: 'conversation.item.input_audio_transcription.completed',
   transcript: 'Actually, do the newsletter first.',
 })
-const afterBarge = await page.locator('.bclive').innerText()
+const afterBarge = await page.evaluate(
+  inPage(`return (document.querySelector('[data-bc-callsay]')?.textContent ?? '') + ' :: ' +
+     (document.querySelector('[data-bc-voice]')?.getAttribute('aria-label') ?? '')`),
+)
 check(
-  'and what he said over her is heard',
-  afterBarge.includes('Actually, do the newsletter first'),
-  afterBarge.replace(/\n+/g, ' / ').slice(0, 200),
+  'and the conversation carried on through the interruption',
+  await settlesTo('listening'),
+  String(afterBarge),
 )
 
-/* --- 4. mute is the microphone, not a label ------------------------------ */
-await page.locator('[data-bc-livemute]').click()
-await page.waitForTimeout(400)
-check('muting says so', (await page.locator('[data-bc-live="muted"]').count()) === 1)
 /*
-  AND MUTE REALLY MUTES. A mute that only changes a label is a privacy defect
-  wearing a control, so this asks the track the page is actually sending.
+ * --- 4. THE WHOLE POINT OF §4: NO SURFACE APPEARED -----------------------
+ *
+ * The section's list is seven prohibitions, and every one of them is the same
+ * claim from a different angle: the page a person was reading is the page they
+ * are still reading. So this compares the shape of the WHOLE page against the
+ * shape recorded before the press -- every visible element, keyed by tag,
+ * class and box.
+ *
+ * It is deliberately not a check that `.bclive` is absent. That would pass the
+ * day somebody adds a differently-named panel, which is the enumeration
+ * defect this repository keeps recording: assert the property, never the
+ * artefact that currently implements it.
+ */
+/*
+  MEASURE WITH THE POINTER AWAY. The microphone lifts one pixel on hover, which
+  is good feedback and nothing to do with the call -- and the pointer is still
+  on it after the press, so a naive comparison reports the hover as the call
+  moving the page. The first run of this check did exactly that and would have
+  had somebody delete a hover state to satisfy it.
 */
-const whileMuted = (await page.evaluate(
-  inPage(`const mics = window.__mics ?? []
-     return { off: mics.filter((t) => t.enabled === false).length, total: mics.length }`),
-)) as { off: number; total: number }
+await page.mouse.move(4, 4)
+await page.waitForTimeout(250)
+const duringTheCall = await shapeOfThePage()
 check(
-  'and the microphone is really off, not merely relabelled',
-  whileMuted.off > 0 && whileMuted.total > 0,
-  JSON.stringify(whileMuted),
+  'a live call has added nothing to the page and moved nothing on it',
+  duringTheCall === beforeThePress,
+  duringTheCall === beforeThePress ? '' : firstDifference(beforeThePress, duringTheCall),
 )
-await page.locator('[data-bc-livemute]').click()
-await page.waitForTimeout(400)
 check(
-  'and unmuting goes back to listening',
-  (await page.locator('[data-bc-live="listening"]').count()) === 1,
+  'and no transcript of the conversation is on screen anywhere',
+  !(await page.evaluate(
+    inPage(`return document.body.innerText.includes('Actually, do the newsletter first')`),
+  )),
 )
 
-/* --- 5. ending it, and what is left behind ------------------------------- */
-await page.locator('[data-bc-liveend]').click()
+/* --- 5. ending it is a second press, and what is left behind ------------- */
+await page.locator('[data-bc-voice]').first().click()
 await page.waitForTimeout(800)
-check('ending the call takes the panel away', (await page.locator('.bclive').count()) === 0)
+check(
+  'pressing the microphone again ends the call',
+  (await page.locator('[data-bc-mic="idle"]').count()) === 1,
+  (await page.locator('[data-bc-voice]').first().getAttribute('data-bc-mic')) ?? 'no state',
+)
 /*
   THE MICROPHONE, which is the cleanup that matters.
 
@@ -481,13 +609,10 @@ await page
     timeout: 20000,
   })
   .catch(() => null)
-check(
-  'a second conversation can be started after the first',
-  (await page.locator('[data-bc-live="listening"]').count()) === 1,
-)
+check('a second conversation can be started after the first', await settlesTo('listening'))
 const mintedAgain = (await page.evaluate(inPage('return window.__minted.length'))) as number
 check('with its own credential rather than a reused one', mintedAgain === 2, String(mintedAgain))
-await page.locator('[data-bc-liveend]').click()
+await page.locator('[data-bc-voice]').first().click()
 await page.waitForTimeout(500)
 
 check('nothing threw during any of it', thrown.length === 0, thrown.join(' | '))

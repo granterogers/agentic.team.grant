@@ -33,131 +33,39 @@
   speaking, muted and ended, because those are the six things a person waiting
   on a conversation actually needs to know.
 */
-import { esc } from './parts.js'
-import {
-  callActivity,
-  callMuted,
-  callPhase,
-  callSays,
-  callTurns,
-  endCall,
-  setCallMuted,
-} from '../call.js'
-
-/*
-  WHAT IS HAPPENING, in a sentence and a word.
-
-  The word drives the dot; the sentence is what somebody reads. They come from
-  one place so they can never disagree - a status light that says one thing
-  while the line beneath it says another is worse than either alone.
-*/
-const SAYS = {
-  connecting: {
-    dot: 'connecting',
-    line: 'Connecting you…',
-    under: 'Your browser will ask for the microphone.',
-  },
-  listening: {
-    dot: 'listening',
-    line: 'Listening',
-    under: 'Just talk. Interrupt whenever you like.',
-  },
-  answering: {
-    dot: 'answering',
-    line: 'The team is talking',
-    under: 'Speak over them if you want to change tack.',
-  },
-  muted: {
-    dot: 'muted',
-    line: 'Muted',
-    under: 'They cannot hear you until you unmute.',
-  },
-  idle: { dot: 'idle', line: 'Not on a call', under: '' },
-}
+import { callActivity, callMuted, callPhase } from '../call.js'
 
 /**
- * The panel, as a string, or '' when there is no call to draw.
+ * WHAT THE MICROPHONE SHOULD BE SAYING, in one word and one sentence.
  *
- * Drawn only while a call is up, because a conversation surface with no
- * conversation on it is furniture. The one exception is a call that has just
- * failed: the sentence saying why outlives the call by design, and is drawn by
- * the head's own line rather than here.
+ * This module used to draw a panel. Section 4 of the 23 September review
+ * removed it: pressing the microphone must not open a window, a panel, a
+ * modal, a drawer or a transcript surface, and the states belong on the icon.
+ *
+ * So what survives is the part that was always the useful half -- the mapping
+ * from what the call is doing to words a person understands -- and the mapping
+ * lives here rather than in the painter, because the painter is in `wire.js`
+ * and the vocabulary is this module's whole subject. §5 still holds: nothing
+ * here says session, token, WebRTC or realtime.
+ *
+ * `state` is what the call layer can actually distinguish. It does not report
+ * Grant speaking, so nothing here claims to know it -- a status light that
+ * lies about who is talking is worse than one that says "listening" and means
+ * "your turn".
  */
-export const panel = (project) => {
+export const state = () => {
   const phase = callPhase()
-  if (phase === 'idle') return ''
-  const activity = callActivity()
-  const mood = SAYS[activity] ?? SAYS.idle
-  const said = callSays()
-  const turns = callTurns().slice(0, 6)
-  return `<section class="bclive" data-bc-live="${esc(activity)}" aria-live="polite">
-    <div class="bcliverow">
-      <span class="bclivedot" data-dot="${esc(mood.dot)}" aria-hidden="true"></span>
-      <div class="bclivewhat">
-        <strong class="bcliveline">${esc(mood.line)}</strong>
-        <span class="bcliveunder">${esc(mood.under)}</span>
-      </div>
-      <div class="bcliveacts">
-        <button type="button" class="bcbtn" data-bc-livemute
-          aria-pressed="${callMuted() ? 'true' : 'false'}">
-          ${callMuted() ? 'Unmute' : 'Mute'}
-        </button>
-        <button type="button" class="bcbtn bcbtn--danger" data-bc-liveend>End</button>
-      </div>
-    </div>
-    ${
-      project === '' || project === undefined
-        ? ''
-        : `<p class="bclivewhere">About ${esc(project)}. Say another project's name to
-            move to it.</p>`
-    }
-    ${
-      said === '' || phase !== 'connecting'
-        ? ''
-        : `<p class="bclivesaid">${esc(said)}</p>`
-    }
-    <!--
-      WHO IS SPEAKING, which is the one place in this product where a name and
-      a face belong. Grant's rule is that the roster, presence and workload
-      stay out of the interface; inside a conversation, knowing who said a
-      thing is the whole point.
-    -->
-    ${
-      turns.length === 0
-        ? `<p class="bclivehint">What is late? What needs me? What is happening with the
-            newsletter? Ask it the way you would ask a person.</p>`
-        : `<ol class="bcliveturns">${turns
-            .map(
-              (t) => `<li class="bcliveturn${t.who === 'You' ? ' bcliveturn--mine' : ''}">
-                <span class="bcliveturnwho">${esc(t.who)}</span>
-                <span class="bcliveturntext">${esc(t.text)}</span>
-              </li>`,
-            )
-            .join('')}</ol>`
-    }
-  </section>`
+  if (phase === 'idle') return 'idle'
+  if (phase === 'connecting') return 'connecting'
+  if (callMuted()) return 'muted'
+  return callActivity() === 'answering' ? 'answering' : 'listening'
 }
 
-/**
- * Wire the panel's two controls.
- *
- * Delegated on a container that is not replaced, because the panel redraws
- * itself several times a call - the trap that made the voice note's Stop
- * button inert on its first run.
- */
-export const wire = (root, { redraw }) => {
-  for (const host of root.querySelectorAll('[data-bc-livehost]')) {
-    host.addEventListener('click', (e) => {
-      const pressed = e.target?.closest?.('[data-bc-livemute], [data-bc-liveend]')
-      if (pressed === null || pressed === undefined) return
-      e.preventDefault()
-      if (pressed.hasAttribute('data-bc-liveend')) {
-        endCall('')
-        redraw()
-        return
-      }
-      setCallMuted()
-      redraw()
-    })
-  }
+/** The accessible name and tooltip for the microphone, per state. */
+export const SAID = {
+  idle: 'Talk to the team out loud',
+  connecting: 'Connecting you — your browser will ask for the microphone. Press to cancel',
+  listening: 'Listening — just talk. Press to end the call',
+  answering: 'The team is talking — speak over them to change tack. Press to end the call',
+  muted: 'Muted — they cannot hear you. Press to end the call',
 }

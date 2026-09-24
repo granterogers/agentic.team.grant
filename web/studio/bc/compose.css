@@ -2836,3 +2836,65 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   color: var(--bc-text);
 }
 [data-experience='basecamp'] .bcoutputbody p:last-child { margin-bottom: 0; }
+
+/* ---------------------------------------------------------------------- *
+ * THE MICROPHONE SAYS EVERYTHING NOW  (§4)
+ *
+ * Section 4 of the 23 September review, after Grant used it: pressing the
+ * microphone must not open a window, a panel, a modal, a drawer or a
+ * transcript surface, and the states belong on the icon, through restrained
+ * colour, glow, animation, pulse and accessible text.
+ *
+ * The panel that carried them is gone, so these rules carry the two the old
+ * `.ringing` class could not tell apart -- your turn against theirs -- and
+ * muted, which had lived only as a word on the panel.
+ *
+ * NOTHING HERE CHANGES THE ICON'S BOX. Not its width, its height, its border
+ * width or its margin: the section says the project screen should remain
+ * visually unchanged, and a control that grows by two pixels when a call
+ * connects moves everything beside it. Only colour and a shadow, and the
+ * shadow is outside the layout by definition.
+ *
+ * These sit at the end of the file deliberately. `.bcmic` is redefined twice
+ * above, and a state rule that loses to a base rule is a state that never
+ * appears -- which this stylesheet has already paid for once, in the phone
+ * overrides that were written above the rules they meant to override.
+ * ---------------------------------------------------------------------- */
+
+/* YOUR TURN. Steady, not animated: nothing is happening except that the room
+   is open, and a pulsing light says "wait" when the truth is "go ahead". */
+[data-experience='basecamp'] .bcmic[data-bc-mic='listening'] {
+  background: var(--bc-success);
+  border-color: var(--bc-success);
+  color: #06210f;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bc-success) 22%, transparent);
+}
+
+/* THEIR TURN. The same hue, so it is plainly the same call, and a slow breath
+   so it is plainly not waiting on you. */
+[data-experience='basecamp'] .bcmic[data-bc-mic='answering'] {
+  background: color-mix(in srgb, var(--bc-success) 30%, transparent);
+  border-color: var(--bc-success);
+  color: var(--bc-success);
+  animation: bcmicbreath 2.4s ease-in-out infinite;
+}
+@keyframes bcmicbreath {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--bc-success) 16%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--bc-success) 8%, transparent); }
+}
+
+/* MUTED. A live call they cannot hear, which is the one state where the
+   difference has to be legible at a glance rather than pretty. */
+[data-experience='basecamp'] .bcmic[data-bc-mic='muted'] {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--bc-text-muted) 70%, transparent);
+  color: var(--bc-text-muted);
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcmic[data-bc-mic='answering'] {
+    animation: none;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--bc-success) 14%, transparent);
+  }
+}

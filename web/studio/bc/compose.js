@@ -309,12 +309,26 @@ const head = (p) => {
           call PANEL, which this experience never opens. So the mic was
           pressed, several things happened, and not one of them was on screen:
           which is the whole of "the microphone control appears to do
-          nothing". The data-callsay attribute is painted on any element that
-          asks for it, so asking is all this needs to be. Plain words in here:
-          a backtick inside an HTML comment inside a template literal ends the
-          string, and that is the seventh time in this repository.
+          nothing".
+
+          IT NO LONGER ASKS call.js TO PAINT IT. The shared painter writes
+          every sentence the call produces, routine progress included --
+          Connecting, Listening, On a call with Claire -- and section 4 of the
+          23 September review puts those on the icon and asks that the project
+          screen stay visually unchanged. A line that appears to say what the
+          microphone is already saying is the surface that section forbids,
+          arriving one sentence at a time.
+
+          So the attribute is this experience's own and the microphone's
+          painter fills it, with the rule that the icon speaks while the call
+          is up and the words speak when it is not: a refusal, a dropped
+          connection, the browser declining the microphone. Changing the
+          shared painter instead would have changed the default Team HQ, which
+          this branch may not touch. Plain words in here: a backtick inside an
+          HTML comment inside a template literal ends the string, and that is
+          the seventh time in this repository.
         -->
-        <span class="bccallsay" data-callsay role="status" aria-live="polite" hidden></span>
+        <span class="bccallsay" data-bc-callsay role="status" aria-live="polite" hidden></span>
         <!--
           A three-dot menu, which is where page-level things live now: how this
           page is arranged, where the material comes from, and the project's
@@ -377,14 +391,28 @@ const head = (p) => {
       </span>
     </div>
     <!--
-      THE LIVE CONVERSATION, when there is one.
+      THERE IS NO LIVE CONVERSATION PANEL ANY MORE.
 
-      Under the head rather than in a modal, because a conversation is not a
-      dialog: Grant can keep reading the project, open a task, scroll the
-      board, and the conversation carries on beside it. It draws nothing at all
-      when no call is up, so it is never furniture.
+      Section 4 of the 23 September review, after Grant used it: pressing the
+      microphone must not open a window, a panel, a modal, a drawer or a
+      transcript surface, must not rearrange the project and must not navigate
+      away, and the project screen should remain visually unchanged. What was
+      here was a strip under the head carrying a status line, a mute button, an
+      end button and the last six turns of the conversation, which is four of
+      those seven at once.
+
+      Every state it carried is now carried by the microphone itself, and the
+      one thing that genuinely needs words on the page - a refusal, a dropped
+      connection, the browser declining the microphone - already had somewhere
+      to go: the callsay line above, which is hidden until there is something
+      to say and is one line rather than a surface.
+
+      WHAT WENT WITH IT: mute. It was a button on the panel and there is now no
+      panel to put it on, and inventing a second control beside the microphone
+      would be the surface this section forbids by another name. Ending is a
+      second press. If Grant wants mute back the smallest honest form is a
+      long press, and that is his call to make rather than mine to assume.
     -->
-    ${live.panel(p.name)}
   </header>`
 }
 

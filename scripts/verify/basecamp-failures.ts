@@ -438,13 +438,13 @@ for (const d of drives) {
   await page.waitForTimeout(2500)
   const told = await visibleText(page)
   /*
-    WHERE THE CALL SPEAKS is `[data-callsay]`, beside the control, which is
+    WHERE THE CALL SPEAKS is the experience's own callsay line, beside the control, which is
     where `verify:basecamp-voice` reads it too. Asking the whole shell for the
     word "microphone" found the activity feed instead - a check looking
     somewhere other than where the product speaks passes, or fails, for the
     wrong reason.
   */
-  const saidMic = await page.locator('[data-callsay]').first().innerText()
+  const saidMic = await page.locator('[data-bc-callsay]').first().innerText()
   check(
     'the microphone being refused is said beside the control that asked for it',
     saidMic.trim() !== '',
@@ -487,7 +487,7 @@ for (const d of drives) {
   await page.locator('[data-bc-voice]').first().click()
   await page.waitForTimeout(2500)
   const told = await visibleText(page)
-  const saidVoice = await page.locator('[data-callsay]').first().innerText()
+  const saidVoice = await page.locator('[data-bc-callsay]').first().innerText()
   check(
     'a voice session that cannot be established is said beside the control',
     saidVoice.trim() !== '' && told !== quiet,

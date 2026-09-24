@@ -907,19 +907,47 @@ document.addEventListener('keydown', (e) => {
   audit correctly read as dead. So it paints itself from the same source of
   truth the shared painter uses.
 */
+/*
+  THE MICROPHONE IS THE WHOLE INTERFACE NOW (§4).
+
+  It used to say three things -- idle, connecting, live -- because a panel
+  underneath said the rest. The panel is gone, so the icon carries all of it:
+  connecting, listening, the team talking, muted. `data-bc-mic` is what the
+  stylesheet reads, and the accessible name says the same thing in words,
+  because a state expressed only as a colour is a state a screen reader
+  cannot report. Both come from `live.state()` and `live.SAID` so the two can
+  never disagree -- a light that says one thing while the label says another is
+  worse than either alone.
+*/
 const paintMic = (b) => {
-  const phase = callPhase()
-  b.classList.toggle('ringing', phase === 'live')
-  b.classList.toggle('connecting', phase === 'connecting')
-  b.setAttribute('aria-pressed', phase === 'idle' ? 'false' : 'true')
-  const label =
-    phase === 'live'
-      ? 'End the call'
-      : phase === 'connecting'
-        ? 'Connecting the call — press to cancel'
-        : 'Talk to the team out loud'
+  const state = live.state()
+  b.setAttribute('data-bc-mic', state)
+  /*
+    The two classes stay because the shared stylesheet and the default studio
+    both know them. Removing them here would be changing a control the other
+    experience draws, which this branch may not do.
+  */
+  b.classList.toggle('ringing', state === 'listening' || state === 'answering')
+  b.classList.toggle('connecting', state === 'connecting')
+  b.setAttribute('aria-pressed', state === 'idle' ? 'false' : 'true')
+  const label = live.SAID[state] ?? live.SAID.idle
   b.setAttribute('aria-label', label)
   b.title = label
+  /*
+    AND THE WORDS, WHICH SPEAK ONLY WHEN THE ICON CANNOT.
+
+    While a call is up the icon says what is happening, so a line repeating it
+    is the surface §4 forbids, appearing one sentence at a time and shifting
+    the header as it goes. What the icon cannot say is why a call did not
+    happen -- a refusal, a dropped connection, the browser declining the
+    microphone -- and those arrive when the call is over, which is exactly
+    when this shows them.
+  */
+  for (const el of document.querySelectorAll('[data-bc-callsay]')) {
+    const words = state === 'idle' ? callSays() : ''
+    el.textContent = words
+    el.hidden = words === ''
+  }
 }
 
 /*
@@ -1096,23 +1124,24 @@ const wireSources = (root) => {
 }
 
 const wireVoice = (root) => {
-  const said = root.querySelector('[data-callsay]')
-  if (said !== null) {
-    /*
-      A RENDER LOSES WHAT THE CALL SAID, because the element is new every
-      paint - so the sentence is put back from the call's own memory rather
-      than waiting for the next thing to happen. #197's rule: anything that
-      must survive a redraw has to be put back after it.
-    */
-    const words = callSays()
-    said.textContent = words
-    said.hidden = words === ''
-  }
   /*
-    THE LIVE CONVERSATION'S OWN CONTROLS - mute and end - delegated on the head,
-    which is not replaced while the panel inside it redraws.
+    A RENDER LOSES WHAT THE CALL SAID, because the element is new every paint
+    - so the sentence is put back rather than waiting for the next thing to
+    happen. #197's rule: anything that must survive a redraw has to be put
+    back after it.
+
+    `paintMic` is what puts it back now, because the rule for WHEN there
+    should be words at all belongs with the rule for what the icon is saying:
+    two places deciding that is two places to disagree, and this one used to
+    restore a routine sentence the icon had already made redundant.
   */
-  live.wire(root, { redraw: () => ctx.render() })
+  /*
+    THE LIVE PANEL'S OWN CONTROLS ARE GONE WITH THE PANEL (§4). Mute and End
+    were delegated here; neither renders any more, so the delegation was a
+    listener bound to attributes no renderer emits -- the dead-control shape
+    with the sign reversed, and this file removed two of those this morning.
+    Ending a call is a second press on the microphone.
+  */
 
   for (const b of root.querySelectorAll('[data-bc-voice]')) {
     paintMic(b)
@@ -1137,19 +1166,38 @@ const wireVoice = (root) => {
         settles either way.
       */
       /*
-        AND THE PANEL WITH IT. The call's own states - connecting, listening,
-        the team answering, a transcript landing - arrive over the data channel
-        and nothing repaints this page, so the panel would freeze on whatever
-        it said when it was drawn. The poll runs for as long as the call does
-        and stops the moment it ends, which is what makes the conversation feel
-        live rather than logged.
+        AND THE ICON WITH IT. The call's own states - connecting, listening,
+        the team answering - arrive over the data channel and nothing repaints
+        this page, so the microphone would freeze on whatever it said when it
+        was drawn.
+
+        IT NO LONGER RE-RENDERS ON EVERY TURN. It used to, because a panel
+        under the head was showing the last six of them, and the key it
+        compared included the turn count and the status sentence. With the
+        panel gone (§4) that is a full redraw of the project every time
+        somebody finishes a sentence -- on a screen the section says must
+        remain visually unchanged, and a redraw is what takes the keyboard
+        with it. Painting the icon needs no render at all, and the one
+        remaining reason to redraw is the PHASE changing, which is what the
+        rest of the head reads.
+      */
+      /*
+        LOOK THE BUTTON UP LIVE, do not paint the one captured at wiring time.
+
+        A render REPLACES the header, so the node this handler closed over is
+        detached the first time the phase changes -- and painting a detached
+        node changes nothing while looking exactly like a state machine that
+        stopped working. The suite caught it as "the team is speaking" never
+        arriving. #197 is the same lesson in four attempts: anything consulted
+        after a redraw has to be looked up after the redraw.
       */
       let ticks = 0
       let was = ''
       const watch = globalThis.setInterval(() => {
         ticks += 1
-        paintMic(b)
-        const now = `${callPhase()}:${callActivity()}:${String(callTurns().length)}:${callSays()}`
+        const mic = document.querySelector('[data-bc-voice]')
+        if (mic !== null) paintMic(mic)
+        const now = callPhase()
         if (now !== was) {
           was = now
           ctx.render()
