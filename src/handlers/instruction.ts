@@ -95,6 +95,7 @@ import { clauses, split } from '../agents/clauses.ts'
 import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
+import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
 import { extractionRequest } from '../agents/extract.ts'
 import { type Capability, planFor, planningCatalogue } from '../agents/goal.ts'
@@ -137,7 +138,13 @@ import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
 import { nameSubjects } from '../agents/subject.ts'
-import { NEEDS_A_TITLE, type TaskRequest, taskRequest, titleReply } from '../agents/tasks.ts'
+import {
+  NEEDS_A_TITLE,
+  type TaskRequest,
+  taskRequest,
+  taskTitle,
+  titleReply,
+} from '../agents/tasks.ts'
 import { readTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import { oneReading, type ReadingKind, understand } from '../agents/understand.ts'
@@ -2064,6 +2071,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         heardText = `🎧 Heard: “${instruction}”`
       }
       if (instruction === '') throw new Error('the command carried no instruction')
+      /*
+        Without the noise speech puts into it (ledger R27): fillers, a word
+        said twice, a date or time corrected in place. "Heard:" above still
+        quotes the transcript exactly; this is what the readers are given.
+      */
+      instruction = cleanDictation(instruction)
 
       // Two messages that are one instruction. Grant shares a video and then
       // says what to do with it, or the reverse; both halves are correct alone
@@ -3774,7 +3787,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         : firstOfHis((text) => {
             // Grounded in his words, for the reason given at the project-task reader.
             const got = personalTaskRequest(text)
-            return got === null || groundedIn(got.title, asSaid) ? got : null
+            if (got === null || !groundedIn(got.title, asSaid)) return null
+            /*
+              And a change of mind inside the sentence names the task by what
+              SURVIVED it (ledger R27): "add a task to chase kevin, no
+              actually, email kevin about the quote" was titled with the whole
+              sentence. The project reader already consults the retraction
+              reader when it composes a title; this one never did.
+            */
+            const kept = readRetraction(text)?.kept?.trim() ?? ''
+            if (kept === '') return got
+            const named = taskTitle(kept) ?? kept
+            return { ...got, title: named.charAt(0).toUpperCase() + named.slice(1) }
           })
       /*
         AND IT DOES NOT MAKE A SECOND ONE WHILE SAYING IT HAS NOT.
