@@ -61,6 +61,9 @@ const OPENS = [
   /^please (?:don'?t|stop)\b/i,
 ]
 
+/* The openers that ARE the instruction: "don't X", "stop X", "please don't X". */
+const NEGATING = /^(?:please\s+)?(?:don'?t|do\s+not|stop)\b/i
+
 /*
   And the forms that are corrective without opening with a rejection.
 
@@ -106,7 +109,19 @@ export function readCorrection(instruction: string, hadAnswer: boolean): Correct
   let opened = false
   for (const re of OPENS) {
     if (re.test(rest)) {
-      rest = rest.replace(re, '').trim()
+      /*
+        A NEGATING opener is the instruction, not a rejection of the last
+        answer (behavioural remediation, 24 September 2026). Stripping it
+        drafted "Don't use bullet points" as "From now on, use bullet points."
+        and "Stop sending me updates every hour" as "From now on, sending me
+        updates every hour." - the opposite of what he said, on the page where
+        one press makes it permanent. So the opener stays in the rule; only
+        "stop THAT" (calling work off, handled by the referent strip below)
+        loses it.
+      */
+      const negating = NEGATING.test(rest)
+      const stripped = rest.replace(re, '').trim()
+      rest = negating && !/^(?:that|this|it)\b/i.test(stripped) ? rest : stripped
       opened = true
       because.push('it opens with a rejection')
       break
@@ -127,8 +142,31 @@ export function readCorrection(instruction: string, hadAnswer: boolean): Correct
     question it cannot act on. #237's lesson about contentless rejections, in
     the place where it would do the most damage.
   */
-  const fragment = rest.replace(/^[,.\s]+/, '').trim()
+  /*
+    "Stop THAT, I've sorted the coach myself" is calling work off, and the
+    rest is his reason (behavioural remediation, 24 September 2026). The
+    referent belongs to the rejection, so it comes off with it; and what is
+    left - a report of something HE did - is not an instruction to the
+    office. It was offered back to him as the standing rule "From now on,
+    that, I've sorted the coach myself." A first-person report is declined,
+    except the verbs that restate what he asked for ("I said", "I wanted"),
+    because those are exactly how he corrects.
+  */
+  const fragment = rest
+    .replace(/^[,.\s]+/, '')
+    .replace(/^(?:that|this|it)\b(?:\s+(?:one|bit|part))?\s*[,.!;:\u2014-]+\s*/i, '')
+    .trim()
   if (fragment.length < 8 || !/[a-z]{3}/i.test(fragment)) return null
+  if (
+    /^(?:i|we)(?:['\u2019](?:ve|d|m)|\s+(?:have|had|am|was|were|did|already|just|sorted|done|fixed|booked|found|got|made|handled|dealt))\b/i.test(
+      fragment,
+    ) &&
+    !/^(?:i|we)\s+(?:(?:have|had|just|already)\s+)?(?:said|asked|told|wanted|meant|mean|want|need|prefer)\b/i.test(
+      fragment,
+    )
+  ) {
+    return null
+  }
 
   return { fragment, rule: asRule(fragment), because }
 }

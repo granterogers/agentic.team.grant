@@ -113,6 +113,7 @@ describe('and an honest answer is still honest', () => {
   */
   for (const said of [
     'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.',
+    'I have not done this yet, and nothing has been changed.',
     "I haven't created any tasks yet.",
     "I've not created anything yet.",
     'I did not add anything, so nothing is on the list.',

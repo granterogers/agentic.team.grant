@@ -74,3 +74,39 @@ describe('what is not', () => {
     expect(readCorrection('what did Emma find?', true)).toBeNull()
   })
 })
+
+describe('behavioural remediation 2026-09-24: a negating correction keeps its negation', () => {
+  it.each([
+    ["Don't use bullet points", "From now on, don't use bullet points."],
+    ['Stop sending me updates every hour', 'From now on, stop sending me updates every hour.'],
+    [
+      "please don't put a summary at the top",
+      "From now on, please don't put a summary at the top.",
+    ],
+  ])('%s', (said, rule) => {
+    expect(readCorrection(said, true)?.rule).toBe(rule)
+  })
+
+  it('NEGATIVE CONTROL: the drafted rule never loses the "not" it was given', () => {
+    for (const said of ["Don't use bullet points", 'Stop sending me updates every hour']) {
+      expect(readCorrection(said, true)?.rule ?? '').toMatch(/\b(?:don't|stop)\b/i)
+    }
+  })
+})
+
+describe('behavioural remediation 2026-09-24: calling work off is not a rule', () => {
+  it.each([
+    "Stop that, I've sorted the coach myself.",
+    "Stop that one, we've booked a minibus instead",
+    'No, I did it myself already this morning',
+  ])('%s', (said) => {
+    expect(readCorrection(said, true)).toBeNull()
+  })
+
+  it('NEGATIVE CONTROL: restating what he asked for is still a correction', () => {
+    expect(readCorrection('No, I said bullet points at the end', true)).not.toBeNull()
+    expect(readCorrection('no, use the British spelling', true)?.rule).toBe(
+      'From now on, use the British spelling.',
+    )
+  })
+})

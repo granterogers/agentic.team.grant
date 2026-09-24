@@ -230,8 +230,7 @@ const SABOTAGES: readonly Sabotage[] = [
       passing control, and this is the sixth time that rule has earned its
       place.
     */
-    anchor:
-      "'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.'",
+    anchor: "'I have not done this yet, and nothing has been changed.'",
     replacement: "'(no sentence)'",
     check: 'tests/agents/outcome-contract.test.ts',
   },

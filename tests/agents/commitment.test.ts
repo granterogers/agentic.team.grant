@@ -148,6 +148,7 @@ describe('the live reproductions, verbatim from the deployed worker', () => {
         'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.',
       ),
     ).toBe(false)
+    expect(fires('I have not done this yet, and nothing has been changed.')).toBe(false)
   })
 })
 
@@ -291,6 +292,7 @@ describe('the past tense, which the contract permitted and nothing enforced', ()
     [
       'the composed sentence itself',
       'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.',
+      'I have not done this yet, and nothing has been changed.',
     ],
     ['the honest denial', "I haven't created any tasks yet, so there's nothing to list."],
     ['no record', 'I have no record of the insurance being sorted.'],

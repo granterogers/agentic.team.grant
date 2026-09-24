@@ -371,7 +371,17 @@ export const sayWhatHappened = (c: CanonicalOutcome): string | null => {
         by announcing that it has not.
       */
       if (!c.asked) return null
-      return 'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.'
+      /*
+        No promise in it (behavioural remediation, 24 September 2026). The
+        earlier sentence ended "say it again in a sentence and I will", which
+        is false whenever the reason was a missing capability or a remark
+        misread as a request - 290 harness turns carried it in front of
+        answers that went on to say, correctly, "I can't send WhatsApp
+        messages" or "no further action needed". Repeating a sentence does
+        not make a capability exist. What is always true here is that nothing
+        was done and nothing changed; the answer after it says why.
+      */
+      return 'I have not done this yet, and nothing has been changed.'
     case 'blocked_capability':
       return 'I have not done this, and it is not something I can do — so there is nothing to wait for.'
     case 'pending_approval':
