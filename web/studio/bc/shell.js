@@ -3420,8 +3420,34 @@ const body = () => {
  * retrying can help - there is nothing to try with on the prototype state, and
  * a control that cannot do its job is a false affordance the gate would catch.
  */
+/*
+  SIGNED IN AND STILL CONNECTING IS NOT "PROTOTYPE DATA".
+
+  With a credential in the browser and the first answer not back yet,
+  `source.state` is still 'prototype' (nothing has been asked yet), so a
+  person on a slow connection was shown the invented projects under
+  "Prototype data - sign in to see your office", with a sign-in form - while
+  their own office was simply loading. This experience can tell the two
+  apart, because canWrite() knows a credential is present: it says it is
+  connecting and draws a neutral outline of the page until the answer lands.
+*/
+const connecting = () => source.live !== true && source.state === 'prototype' && canWrite() === true
+
+const connectingOutline = () => `<div class="bcconnecting" aria-busy="true" aria-live="polite">
+    <span class="bcvh">Loading your office</span>
+    <div class="bcskel bcskel--head"></div>
+    <div class="bcskelgrid">${'<div class="bcskel bcskel--pane"></div>'.repeat(6)}</div>
+  </div>`
+
 const notLive = () => {
   if (source.live === true) return ''
+  if (connecting()) {
+    return `<div class="bcnotlive bcnotlive--wait" role="status">
+      <span class="bcspin" aria-hidden="true"></span>
+      <b>Connecting to your office</b>
+      <span>Your projects appear here the moment it answers.</span>
+    </div>`
+  }
   const s = SOURCE_STATE[source.state] ?? SOURCE_STATE.prototype
   const canRetry = source.state === 'unreachable' || source.state === 'stale'
   /*
@@ -3468,5 +3494,5 @@ export const html = () =>
   `<a class="bcskip" href="#bcmain">Skip to main content</a>
   ${topRow()}
   ${notLive()}
-  <main class="bcmain" id="bcmain" tabindex="-1">${body()}</main>
+  <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>
   ${tray()}`

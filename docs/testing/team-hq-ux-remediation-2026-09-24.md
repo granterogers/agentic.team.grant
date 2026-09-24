@@ -105,3 +105,5 @@ Trap I hit and recovered from: `git checkout -p` on an uncommitted file reverted
 | 40 | Outage copy said "the prototype standing in"; refused copy said "token" | **fixed** in shared `SOURCE_STATE` sentences (labels untouched; `verify:offline` locks those) |
 | — | `verify:offline` 22/23 ("a first failure shows the outage strip") | **pre-existing on `main`** (proved in a pristine worktree at `d1c9247`); legacy studio surface — out of scope, recorded |
 | — | Huge data (200 tasks, long names, 1.2M-word docs): no overflow, no clipping at 3 widths | `verify:basecamp-states` 64/64 |
+| 41 | **Slow connection, signed in: invented projects shown under "Prototype data — Sign in", with a sign-in form, while the real office was loading** | **fixed** — "Connecting to your office" + spinner + neutral page outline, only when a credential is present and nothing has answered yet |
+| — | My first rewording ("nothing here is…") tripped `verify:basecamp-failures`' empty-claim guard; reworded ("none of this is…"), 39/39 | recorded |

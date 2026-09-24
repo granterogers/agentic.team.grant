@@ -3422,3 +3422,38 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bcmptyact:hover { background: color-mix(in srgb, var(--bc-accent) 16%, transparent); }
 [data-experience='basecamp'] .bcmptyact:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 2px; }
 @media (pointer: coarse) { [data-experience='basecamp'] .bcmptyact { min-height: 44px; } }
+
+/* Connecting: a spinner in the strip and an outline of the page. */
+[data-experience='basecamp'] .bcnotlive--wait { align-items: center; gap: 10px; }
+[data-experience='basecamp'] .bcspin {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--bc-accent) 25%, transparent);
+  border-top-color: var(--bc-accent);
+  animation: bc-spin 0.9s linear infinite;
+}
+@keyframes bc-spin { to { transform: rotate(360deg); } }
+[data-experience='basecamp'] .bcconnecting { display: grid; gap: 20px; }
+[data-experience='basecamp'] .bcskelgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+[data-experience='basecamp'] .bcskel {
+  border-radius: var(--bc-r-sheet);
+  background: linear-gradient(100deg,
+    color-mix(in srgb, var(--bc-text) 5%, transparent) 30%,
+    color-mix(in srgb, var(--bc-text) 10%, transparent) 50%,
+    color-mix(in srgb, var(--bc-text) 5%, transparent) 70%);
+  background-size: 300% 100%;
+  animation: bc-shimmer 1.6s ease-in-out infinite;
+}
+[data-experience='basecamp'] .bcskel--head { height: 52px; max-width: 420px; border-radius: 14px; }
+[data-experience='basecamp'] .bcskel--pane { height: 260px; }
+@keyframes bc-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcspin { animation-duration: 2.4s; }
+  [data-experience='basecamp'] .bcskel { animation: none; }
+}

@@ -597,7 +597,7 @@ export const SOURCE_STATE = {
   },
   unreachable: {
     label: 'The office did not answer',
-    say: 'Showing example projects until it is back — nothing here is your office’s own data.',
+    say: 'Showing example projects until it is back — none of this is your office’s own data.',
     tone: 'bad',
   },
   stale: {
