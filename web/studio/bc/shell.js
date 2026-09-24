@@ -456,7 +456,10 @@ const tasksPreview = (p) => {
       .map((t) =>
         row(
           t.title,
-          [t.who, t.due, t.note].filter((x) => x !== undefined && x !== null && x !== '').join(' · '),
+          /* A name and a date, not a database key and a stale sentence: this
+             printed the slug ("claire") and t.due, which disagreed with the
+             same task's date on the project home. */
+          [whoName(t.who), bcMini.dueWords(t), t.note].filter((x) => x !== undefined && x !== null && x !== '').join(' · '),
           t.blocked ? status('Blocked', 'blocked') : '',
         ),
       )
@@ -501,7 +504,7 @@ const teamPreview = (p) => {
     bits.push(
       waiting
         .slice(0, 2)
-        .map((w) => row(w.what, [w.who, w.when].filter(Boolean).join(' · '), status('Waiting for you', 'waiting')))
+        .map((w) => row(w.what, [whoName(w.who), w.when].filter(Boolean).join(' · '), status('Waiting for you', 'waiting')))
         .join(''),
     )
   }
@@ -516,7 +519,7 @@ const teamPreview = (p) => {
     bits.push(
       row(
         made.output.title,
-        [made.who, made.delivered].filter(Boolean).join(' · '),
+        [whoName(made.who), made.delivered].filter(Boolean).join(' · '),
         made.output.imported === true ? status('In the project', 'done') : status('Ready for you', 'waiting'),
       ),
     )
@@ -570,7 +573,7 @@ const activityPreview = (p) => {
   if (acts.length === 0) return nothing('Nothing has happened here yet.')
   return acts
     .slice(0, 6)
-    .map((a) => row(`${a.who ?? 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(), a.when ?? ''))
+    .map((a) => row(`${whoName(a.who) || 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(), a.when ?? ''))
     .join('')
 }
 
@@ -738,7 +741,7 @@ const projectHeader = (p, latest) => {
     ${
       latest
         ? `<p class="bcpmeta bclatest">Latest: ${esc(
-            `${latest.who ?? 'the team'} ${latest.verb ?? 'changed'} ${latest.what ?? ''}`.trim(),
+            `${whoName(latest.who) || 'the team'} ${latest.verb ?? 'changed'} ${latest.what ?? ''}`.trim(),
           )} · ${esc(latest.when ?? '')}</p>`
         : ''
     }
@@ -1063,7 +1066,8 @@ const taskKey = (t) => todos.keyOf(t)
 const whoName = (slug) =>
   slug === null || slug === undefined || slug === ''
     ? ''
-    : ((ctx?.crew ?? []).find((c) => c.slug === slug)?.name ?? slug)
+    : /* Either slug: the office names people by role slug, the design by short slug. */
+      ((ctx?.crew ?? []).find((c) => c.slug === slug || c.staffSlug === slug)?.name ?? slug)
 
 const norm = (x) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 const repeatsList = (note, listName) => {
@@ -2708,7 +2712,7 @@ const outputRecord = (p) => {
     </div>
     <p class="bcpmeta">${esc(
       [
-        got.who ? `Written by ${String(got.who)}` : '',
+        got.who ? `Written by ${whoName(String(got.who))}` : '',
         got.made ? when.words(String(got.made)) : '',
         got.evidence ? `Evidence: ${String(got.evidence)}` : '',
         typeof got.confidence === 'number' ? `Confidence ${String(got.confidence)}` : '',
@@ -3099,7 +3103,7 @@ const allActivity = () => {
                 <span></span>
                 <div class="bcitembody">
                   <span class="bcitemtitle">${esc(
-                    `${a.who ?? 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(),
+                    `${whoName(a.who) || 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(),
                   )}</span>
                   <span class="bcitemmeta">${esc([a.project, a.when].filter(Boolean).join(' · '))}</span>
                 </div>
@@ -3152,7 +3156,7 @@ const searchHits = (q, kind, only) => {
     if (want('Tasks')) {
       for (const t of p.tasks ?? []) {
         if (!match(t.title, t.note, t.who)) continue
-        hits.push({ kind: 'Task', project: p.name, title: t.title, excerpt: t.note ?? '', who: t.who ?? '', when: t.due ?? '', to: at(`/p/${p.slug}/tasks`) })
+        hits.push({ kind: 'Task', project: p.name, title: t.title, excerpt: t.note ?? '', who: whoName(t.who), when: bcMini.dueWords(t), to: at(`/p/${p.slug}/tasks`) })
       }
     }
     if (want('Documents')) {
@@ -3177,7 +3181,7 @@ const searchHits = (q, kind, only) => {
     if (want('Outputs')) {
       for (const r of outputsOf(p)) {
         if (!match(r.output.title, r.ask, r.who)) continue
-        hits.push({ kind: 'Output', project: p.name, title: r.output.title, excerpt: r.ask ?? '', who: r.who ?? '', when: r.delivered ?? '', to: at(`/p/${p.slug}/team`) })
+        hits.push({ kind: 'Output', project: p.name, title: r.output.title, excerpt: r.ask ?? '', who: whoName(r.who), when: r.delivered ?? '', to: at(`/p/${p.slug}/team`) })
       }
     }
   }

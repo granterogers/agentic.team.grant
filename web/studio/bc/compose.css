@@ -2611,6 +2611,10 @@
   padding: 0;
   text-align: left;
   font: inherit;
+  /* font: inherit took the body's 16px, so the one pressable entry in a
+     day read as a heading among 13px neighbours. The same text size. */
+  font-size: 13px;
+  line-height: 1.4;
   color: inherit;
   cursor: pointer;
   border-bottom: 1px solid transparent;
