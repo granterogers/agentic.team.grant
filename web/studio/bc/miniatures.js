@@ -1260,12 +1260,34 @@ const countChip = (kind, label, tone) =>
 
 /** The team's finished work, waiting to be read. Not a to-do count. */
 export const needsYouLine = (p) => {
-  const waiting = p.waiting ?? []
-  if (waiting.length === 0) return ''
-  return `<div class="bcstate">
-    <button type="button" class="bcstatus bcstatus--waiting bcstatus--press" data-bc-waiting="1"><span class="bcdot" aria-hidden="true"></span>${esc(
-      waiting.length === 1 ? '1 thing needs you' : `${waiting.length} things need you`,
-    )}</button>
+  /*
+    THREE COUNTERS, AND NONE OF THEM IS "OPEN TASKS".
+
+    Grant, 23 September, removed "1 late - 1 stuck - 8 open tasks" from this
+    header because the open count repeated the To-dos panel beneath it. His
+    24 September brief then names Needs you, Late and Stuck as the counters
+    that matter at the top of a project: readable at a glance, each one
+    pressable, calm at zero. Both are honoured by what is here - the
+    redundant open count stays gone; late and stuck come back, because
+    nothing else on the home says either.
+
+    A zero is drawn, muted and NOT a button: "0 late" is reassurance, and a
+    press that can only open an empty list is a dead end. A large count caps
+    at 99+ so the group keeps its width.
+  */
+  const waiting = (p.waiting ?? []).length
+  const late = filtered(p, 'late').length
+  const stuck = filtered(p, 'stuck').length
+  const shown = (n) => (n > 99 ? '99+' : String(n))
+  const one = (n, word, tone, attr) => {
+    const inner = `<span class="bccountn">${esc(shown(n))}</span><span class="bccountw">${esc(word)}</span>`
+    if (n === 0) return `<span class="bccount bccount--zero">${inner}</span>`
+    return `<button type="button" class="bccount bccount--${esc(tone)}" ${attr}>${inner}</button>`
+  }
+  return `<div class="bcstate bccounts" role="group" aria-label="What needs attention on this project">
+    ${one(waiting, waiting === 1 ? 'needs you' : 'need you', 'waiting', 'data-bc-waiting="1"')}
+    ${one(late, 'late', 'late', 'data-bc-filter="late"')}
+    ${one(stuck, 'stuck', 'stuck', 'data-bc-filter="stuck"')}
   </div>`
 }
 

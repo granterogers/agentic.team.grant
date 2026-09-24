@@ -187,6 +187,8 @@
 }
 .bctray a:hover,
 .bctray button:hover { background: var(--bc-hover); color: var(--bc-text); }
+.bctray button > span[aria-hidden='true'] { display: inline-grid; place-items: center; line-height: 0; }
+.bctray svg { display: block; }
 
 /* ========================================================================
    2. Primitives (§17 phase 1)
@@ -938,7 +940,9 @@
     min-width: 44px;
     min-height: 44px;
     padding: 0 var(--bc-1);
-    font: 500 10px/14px var(--bc-font);
+    /* 12px: the type floor. It was 10px, the smallest text in the product. */
+    font: 600 12px/14px var(--bc-font);
+    letter-spacing: 0.01em;
   }
 
   .bcwide-only { display: none; }

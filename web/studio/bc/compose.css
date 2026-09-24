@@ -79,6 +79,55 @@
 }
 [data-experience='basecamp'] .bcstatecount { color: var(--bc-text-muted); font-size: 13px; }
 
+/*
+  NEEDS YOU / LATE / STUCK. One group, three counters, the number leading.
+  Tone is carried by the number and a hairline under it only when the count
+  is not zero; a zero is muted ink, so a calm project reads calm. Each live
+  counter is a 44px-tall button (touch floor) whose face is a quiet chip.
+*/
+[data-experience='basecamp'] .bccounts {
+  gap: 2px;
+  padding: 3px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bc-text) 4%, transparent);
+  box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
+  flex-wrap: nowrap;
+}
+[data-experience='basecamp'] .bccount {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 11px;
+  color: var(--bc-text-muted);
+  white-space: nowrap;
+  line-height: 38px;
+}
+[data-experience='basecamp'] .bccountn {
+  font-size: 17px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--bc-text);
+}
+[data-experience='basecamp'] .bccountw { font-size: 13px; font-weight: 550; }
+[data-experience='basecamp'] .bccount--zero .bccountn { color: var(--bc-text-muted); font-weight: 600; }
+[data-experience='basecamp'] .bccount--zero { opacity: 0.78; }
+[data-experience='basecamp'] button.bccount { cursor: pointer; transition: background 140ms ease, color 140ms ease; }
+[data-experience='basecamp'] button.bccount:hover { background: var(--bc-hover); color: var(--bc-text); }
+[data-experience='basecamp'] button.bccount:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
+[data-experience='basecamp'] .bccount--waiting .bccountn { color: var(--bc-section-accent); }
+[data-experience='basecamp'] .bccount--late .bccountn { color: var(--bc-danger); }
+[data-experience='basecamp'] .bccount--stuck .bccountn { color: #f2c46d; }
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bccount { min-height: 44px; line-height: 44px; }
+}
+
 /* ----------------------------------------------------------- a module --- */
 
 [data-experience='basecamp'] .bcmod {
@@ -944,6 +993,17 @@
     padding-right: 8px;
     margin: -12px 0;
   }
+  /*
+    A task title keeps its ellipsis. inline-flex makes the text an anonymous
+    flex item, and text-overflow does nothing on a flex container - so on a
+    phone the title ran under the assignee instead of ending in "...". Block,
+    with the same 44px built from line-height, keeps both.
+  */
+  [data-experience='basecamp'] .bctask .bctasktitle {
+    display: block;
+    line-height: 20px;
+    padding-block: 12px;
+  }
   [data-experience='basecamp'] .bcitemtitle,
   [data-experience='basecamp'] .bcagendawhat {
     min-height: 44px;
@@ -1066,7 +1126,8 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 14px;
+  /* The surface's own padding is the space above; 14px more was a dead band. */
+  margin-top: 0;
 }
 [data-experience='basecamp'] .bcheadrow .bcstate { margin-top: 0; }
 [data-experience='basecamp'] .bcheadacts { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -1111,6 +1172,29 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
+  /*
+    MORE BELOW SAYS SO. A pane that clips its last row mid-line with nothing
+    at the edge reads as broken, not as scrollable - the thin thumb is 22%
+    ink on a dark surface and invisible until hovered. The fade is driven by
+    the pane's own scroll position: 32px while there is more below, easing
+    to nothing at the end. A pane that does not overflow has an INACTIVE
+    scroll timeline, so the animation does not apply and there is no fade -
+    nothing to announce, nothing drawn. No JavaScript, so a redraw cannot
+    lose it. Browsers without scroll timelines simply get no fade.
+  */
+  --bcfade: 0px;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--bcfade)), transparent);
+  animation: bc-more-below linear both;
+  animation-timeline: scroll(self block);
+}
+@property --bcfade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes bc-more-below {
+  0%, 88% { --bcfade: 32px; }
+  100% { --bcfade: 0px; }
 }
 [data-experience='basecamp'] .bcmod--dragging {
   z-index: 3;
@@ -1355,6 +1439,14 @@
   font: inherit;
   color: var(--bc-accent);
   cursor: pointer;
+  /*
+    A BUTTON THAT READS AS A LINK ALIGNS LIKE TEXT. The UA default for a
+    button is text-align: center, so any .bclinky given flex: 1 (a to-do
+    title, a schedule entry) floated its words into the middle of the row,
+    away from the checkbox they belong to. Eight rules had been patching this
+    one selector at a time; this is the class.
+  */
+  text-align: start;
 }
 [data-experience='basecamp'] .bclinky:hover,
 [data-experience='basecamp'] .bclinky:focus-visible { text-decoration: underline; }
@@ -1606,7 +1698,26 @@
   min-width: 44px;
   min-height: 44px;
   padding: 0 12px;
+  /*
+    A FACE, so it reads as a control before the pointer finds it. Bare dots
+    on the surface measured as a 12px smudge on the phone - present, and
+    indistinguishable from decoration. The same round, ringed family as the
+    microphone beside it, in neutral ink because it is not a communication
+    action.
+  */
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--bc-border-control);
+  background: color-mix(in srgb, var(--bc-text) 5%, transparent);
+  color: var(--bc-text);
 }
+[data-experience='basecamp'] .bcbtn.bcpagemenu:hover,
+[data-experience='basecamp'] .bcbtn.bcpagemenu[aria-expanded='true'] {
+  background: var(--bc-hover);
+  border-color: color-mix(in srgb, var(--bc-text) 32%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcbtn.bcpagemenu svg { flex: 0 0 auto; width: 18px; height: 18px; }
 [data-experience='basecamp'] .bcpagemenuword {
   font: 600 14px/1 var(--bc-font);
   white-space: nowrap;
@@ -1812,6 +1923,13 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /*
+    Clip at the CONTENT box. overflow: hidden clips at the padding box, so
+    the third line of a clamped title showed through the 6px of bottom
+    padding - a sliver of text under every card at tablet width.
+  */
+  overflow: clip;
+  overflow-clip-margin: content-box;
   text-align: left;
   font: 500 12px/1.35 var(--bc-font);
   color: var(--bc-text);

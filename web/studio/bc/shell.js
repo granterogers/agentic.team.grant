@@ -208,10 +208,26 @@ const toolPath = (slug, id) => {
  * Shell
  * ======================================================================== */
 
+/*
+  THE TRAY'S MARKS ARE ONE DRAWN SET, not four characters from four fonts.
+  They were the text glyphs for a pencil, a house, a tick and a triple bar:
+  each a different weight and optical size, 8px tall on a phone, and the
+  pencil stood for Chat. Same geometry as icons.js - 24 grid, stroked,
+  currentColor, round joins - so the tray reads as one object.
+*/
+const trayMark = (d) =>
+  `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`
+const TRAY_MARKS = {
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/>',
+  home: '<path d="M3.5 10.5 12 3.8l8.5 6.7"/><path d="M5.5 9.2V20h13V9.2"/><path d="M10 20v-5.5h4V20"/>',
+  tasks: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8.2 12.2 2.6 2.6 5-5.4"/>',
+  activity: '<path d="M3 12h4l2.5-6.5 5 13L17 12h4"/>',
+}
 const trayItems = () => [
-  { name: 'Home', to: at('/'), glyph: '⌂' },
-  { name: 'My Tasks', to: at('/tasks'), glyph: '✓' },
-  { name: 'Activity', to: at('/activity'), glyph: '≡' },
+  { name: 'Home', to: at('/'), glyph: trayMark(TRAY_MARKS.home) },
+  { name: 'My Tasks', to: at('/tasks'), glyph: trayMark(TRAY_MARKS.tasks) },
+  { name: 'Activity', to: at('/activity'), glyph: trayMark(TRAY_MARKS.activity) },
 ]
 
 /*
@@ -395,7 +411,7 @@ const tray = () =>
       removing a duplicate.
     -->
     <button type="button" class="bcnarrow-only" data-bc-dock>
-      <span aria-hidden="true">✎</span><span>Chat</span>
+      <span aria-hidden="true">${trayMark(TRAY_MARKS.chat)}</span><span>Chat</span>
     </button>
     ${trayItems()
       .map(

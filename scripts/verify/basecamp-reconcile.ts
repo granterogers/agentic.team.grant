@@ -316,6 +316,24 @@ const EXPECTED = [
     re: /blocked by CORS policy|Access-Control-Allow-Origin/,
   },
 ]
+/*
+  THE HARNESS'S OWN UNREACHABLE OFFICE. serve-studio.ts points the page at
+  office.invalid - reserved by RFC 2606 so that nothing can ever answer - and
+  behind the sandbox's agent proxy a request there fails as a TUNNEL failure
+  rather than as a name that did not resolve. Allowed on the network only for
+  that host; and on the console, where Chromium prints no URL, only while
+  every tunnel failure the network saw was to that host - so a tunnel failure
+  to a real origin still fails the pass.
+*/
+const TUNNEL = /ERR_TUNNEL_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED/
+const tunnels = netFail.filter((m) => TUNNEL.test(m))
+const onlyTheHarness = tunnels.every((m) => /^https?:\/\/office\.invalid\//.test(m))
+EXPECTED.push({
+  why: 'the harness office at office.invalid, which is unreachable by design',
+  re: onlyTheHarness
+    ? TUNNEL
+    : /^https?:\/\/office\.invalid\/\S* net::(ERR_TUNNEL_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED)/,
+})
 const unexplained = (s: string): boolean => !EXPECTED.some((e) => e.re.test(s))
 
 const badConsole = consoleErrs.filter(unexplained)
