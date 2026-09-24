@@ -39,6 +39,12 @@ import { writeFile } from 'node:fs/promises'
 
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const slug = process.env.HQ_API_SLUG ?? 'hq-api'
+/*
+  The voice function is derived from the gateway by `backend.js` and can be
+  named here, because the experiment runs its own copy under a slug the
+  derivation cannot guess (ADR-0043). Empty means derive it.
+*/
+const voice = process.env.HQ_VOICE_SLUG ?? ''
 const base = process.env.SUPABASE_FUNCTIONS_URL ?? `https://${ref}.supabase.co/functions/v1`
 
 export const siteConfig = (): string =>
@@ -52,6 +58,7 @@ export const siteConfig = (): string =>
     '  calls it -- and every authorization decision is made server-side.',
     '*/',
     `window.HQ_API = '${base}/${slug}'`,
+    ...(voice === '' ? [] : [`window.HQ_VOICE = '${base}/${voice}'`]),
     '',
   ].join('\n')
 
@@ -62,5 +69,5 @@ if (process.argv.includes('--print')) {
   console.log(body)
 } else {
   await writeFile(out, body)
-  console.log(`wrote ${out} -> ${base}/${slug}`)
+  console.log(`wrote ${out} -> ${base}/${slug}${voice === '' ? '' : ` (voice: ${voice})`}`)
 }

@@ -67,16 +67,55 @@ export async function signIn(
   { ref, origin, back }: { ref: string; origin: string; back: string },
 ): Promise<SignedIn> {
   const email = await anOfficeMember(db)
+  /*
+    WHICH OFFICE THIS BROWSER TALKS TO.
+
+    The page resolves its gateway from `config.js` (ADR-0048), and a
+    merge-readiness preview needs it pointed at the INTEGRATED gateway rather
+    than at whichever one the deployment names. Set before anything on the page
+    runs, so `backend.js` reads it as the deployment's own -- which is what the
+    override has always been for.
+  */
+  const override = process.env.HQ_API_OVERRIDE ?? ''
+  if (override !== '') {
+    await page.addInitScript(`window.HQ_API = ${JSON.stringify(override)}`)
+  }
+
   const key = await officeKey(db)
+
+  /*
+    WHERE THE CEREMONY HAPPENS, when it cannot happen where the page is.
+
+    `signin` keeps an allow-list of origins it will mint a link for, and it is
+    right to: a magic link is a credential and the redirect target decides who
+    receives it. A merge-readiness preview has a hostname nobody has ever seen,
+    so it is not on that list -- and WIDENING THE LIST IS NOT AN OPTION. It is
+    a production authorization boundary, and changing production to make an
+    integration pass is the thing this pass is forbidden to do.
+
+    So the ceremony happens at the allowed origin, exactly as a person's does,
+    and the SESSION it produces is carried to the preview. Nothing is weakened
+    by that: the session is a real Supabase Auth session for a real member of
+    the office, the gateway still verifies it with Supabase and still checks
+    its own membership list, and it is no more usable at the preview than at
+    any other origin -- the office decides, not the hostname.
+
+    What it does NOT prove is the redirect leg at the preview's own origin.
+    That is covered where it can be: `verify:basecamp-signin` drives the whole
+    ceremony at the allowed origin, including the link landing.
+  */
+  const ceremonyOrigin = process.env.SIGNIN_ORIGIN ?? ''
+  const elsewhere = ceremonyOrigin !== '' && !back.startsWith(ceremonyOrigin)
+  const landing = elsewhere ? `${ceremonyOrigin}${new URL(back).pathname}` : back
 
   const asked = await fetch(`https://${ref}.supabase.co/functions/v1/signin`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      Origin: origin,
+      Origin: elsewhere ? ceremonyOrigin : origin,
       Authorization: `Bearer ${key}`,
     },
-    body: JSON.stringify({ action: 'link_for_operator', email, back }),
+    body: JSON.stringify({ action: 'link_for_operator', email, back: landing }),
   })
   const body = (await asked.json().catch(() => ({}))) as {
     ok?: boolean
@@ -98,6 +137,16 @@ export async function signIn(
     undefined,
     { timeout: 40000 },
   )
+  if (elsewhere) {
+    const held = (await page.evaluate(
+      "(() => { try { return localStorage.getItem('hq.session') || '' } catch { return '' } })()",
+    )) as string
+    if (held === '') throw new Error('the ceremony left no session to carry')
+    await page.addInitScript(
+      `try { localStorage.setItem('hq.session', ${JSON.stringify(held)}) } catch {}`,
+    )
+    await page.goto(back, { waitUntil: 'domcontentloaded', timeout: 45000 })
+  }
   return { email, landedOn: page.url() }
 }
 

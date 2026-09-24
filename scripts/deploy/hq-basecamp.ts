@@ -36,7 +36,16 @@ if (supabaseToken === undefined || supabaseToken === '') {
   process.exit(2)
 }
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
-const SLUG = 'hq-api-basecamp'
+/*
+  WHICH COPY OF THE GATEWAY.
+
+  The experiment runs its own so the default Team HQ cannot be affected by
+  anything this branch deploys (ADR-0043). A merge-readiness pass needs a
+  THIRD: the integrated gateway, isolated and authenticated, with production
+  and the stable Basecamp slug both left alone. `HQ_API_SLUG` is how.
+*/
+const slugOverride = process.env.HQ_API_SLUG ?? ''
+const SLUG = slugOverride === '' ? 'hq-api-basecamp' : slugOverride
 const api = `https://api.supabase.com/v1/projects/${ref}`
 const db = new ManagementApiExecutor(ref, supabaseToken)
 

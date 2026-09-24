@@ -104,8 +104,17 @@
     Temporary by construction: when the two copies are one function again, this
     block and the slugs go together.
   */
+  /*
+    AND ONLY WHEN config.js NAMED THE SHARED GATEWAY.
+
+    This block exists to keep a basecamp deployment off the default Team HQ's
+    function. A deployment that has already been told which slug to use -- an
+    integration preview, say -- has been told deliberately, and overwriting it
+    here would point the thing being proved at the thing it is being compared
+    with. So it acts on the DEFAULT and stands aside for anything else.
+  */
   if (location.hostname.indexOf('agentic-team-hq-basecamp') === 0
-      && typeof window.HQ_API === 'string' && window.HQ_API !== '') {
+      && typeof window.HQ_API === 'string' && /\/hq-api$/.test(window.HQ_API)) {
     const base = window.HQ_API.replace(/\/[^/]*$/, '')
     window.HQ_API = base + '/hq-api-basecamp'
     window.HQ_SIGNIN = base + '/signin'
