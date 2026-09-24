@@ -68,6 +68,7 @@ const isMention = (sentence: string): boolean =>
 export function mentionsWithoutAsking(text: string): boolean {
   const sentences = String(text ?? '')
     .split(/(?<=[.!?;])\s+/)
-    .filter((x) => MAKES.test(x))
+    // A counterfactual sentence counts even with no making verb in it.
+    .filter((x) => MAKES.test(x) || COUNTERFACTUAL.test(x))
   return sentences.length > 0 && sentences.every(isMention)
 }
