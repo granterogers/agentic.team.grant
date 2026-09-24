@@ -378,6 +378,40 @@ export const taskRequest = (
   const permitted = parts.filter((c) => !FORBIDDEN.test(c))
   if (permitted.length === 0) return null
   const instructionText = permitted.join('. ')
+  /*
+    THE task is one that already exists (ledger R4).
+
+    "And put it down as mine" was rewritten by the thread resolver as "put
+    the task down as belonging to Grant", and both the bare-noun shape and
+    the fallback below took it as a request for a NEW task — filed as
+    "down as belonging to Grant". A definite article (or this/that/my) on a
+    singular task noun, with nothing after it that introduces a title and no
+    indefinite task noun anywhere, is a reference to a task, not a request
+    for one. Returning null hands it to the readers that change tasks, and to
+    prose, which is the cheap direction: a missed creation costs him one
+    retyped sentence, a phantom one sits on his list.
+  */
+  if (
+    /\b(?:the|this|that|my|our|his|your)\s+(?:task|to-?do|reminder)\b(?!\s+(?:to\s+(?!(?:(?:mon|tues|wednes|thurs|fri|satur|sun)day|the|my|next|this|tomorrow|today|me|him|her)\b)|for|about|called|named|titled|that|which)\b)/i.test(
+      instructionText,
+    ) &&
+    /*
+      "Create the task." after the office proposed one is a creation of THE
+      task it proposed, so a verb that can only mean making something keeps
+      it — when the sentence ends there. "Make the task urgent" goes on, and
+      is a change. Put, add, move, mark and assign are what people say to a
+      task that exists.
+    */
+    !/\b(?:create|make|raise|log|open|set\s+up)\s+(?:me\s+)?(?:the|that|this)\s+(?:task|to-?do|reminder)\s*(?:now|then|please|for\s+me)?\s*(?:[.!]|$)/i.test(
+      instructionText,
+    ) &&
+    !/\b(?:a|an|another|new|one\s+more)\s+(?:[a-z-]+\s+){0,2}?(?:task|to-?do|reminder)s?\b/i.test(
+      instructionText,
+    ) &&
+    !/\btasks\b/i.test(instructionText)
+  ) {
+    return null
+  }
 
   for (const shape of SHAPES) {
     const hit = shape.exec(instructionText)
