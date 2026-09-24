@@ -12,6 +12,26 @@
 <link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="/skins.css">
 <link rel="stylesheet" href="/studio.css">
+<!--
+  The experimental Basecamp-inspired Team HQ (basecamp_clone.md), reached only
+  at the /basecamp path prefix.
+
+  Loaded on every page and SCOPED to [data-experience="basecamp"] on the root
+  element, which app.js sets only on that branch. One link rather than an
+  injected stylesheet: a style sheet added at navigation time paints one frame
+  late, and the flash is on the experimental experience's first impression.
+  Last in the chain so its own scope wins inside itself, and scoped throughout
+  so it cannot reach the default studio at all.
+-->
+<link rel="stylesheet" href="/bc/tokens.css">
+<link rel="stylesheet" href="/bc/bc.css">
+<!--
+  The two composition experiments. Loaded after bc.css so its phone block
+  wins on source order; scoped to the experiment, so it cannot reach the
+  default Team HQ.
+-->
+<link rel="stylesheet" href="/bc/compose.css">
+<link rel="stylesheet" href="/bc/settings.css">
 </head>
 <body>
 <div id="root" class="shell"></div>
@@ -45,6 +65,26 @@
     <span class="t-meta">It joins this project's documents, and the team can read it.</span>
   </div>
 </div>
+<!--
+  THE EXPERIMENT TALKS TO ITS OWN COPY OF THE GATEWAY.
+
+  This branch's gateway source is ahead of main and behind the backend branch,
+  so deploying it over the shared one would drop somebody else's work. The
+  experiment runs its own deployment of the same file instead, and picks it by
+  HOSTNAME - so the identical page served at the real address is untouched and
+  the default Team HQ cannot be affected by anything this branch deploys.
+
+  Temporary by construction: when the two copies are one file again this block
+  and the slug go together. ADR-0043.
+-->
+<script>
+  if (location.hostname.indexOf('agentic-team-hq-basecamp') === 0) {
+    const base = 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1'
+    window.HQ_API = base + '/hq-api-basecamp'
+    window.HQ_SIGNIN = base + '/signin'
+    window.HQ_VOICE = base + '/voice-basecamp'
+  }
+</script>
 <script type="module" src="/app.js"></script>
 </body>
 </html>

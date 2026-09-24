@@ -7,8 +7,35 @@
   is not, that is evidence for React and this file becomes the specification.
 */
 
-import { CREW, FROM_OFFICE, PROJECTS, WAITING, byId, crewBy, health, hydrate, source } from './data.js'
-import { act, attempt, canWrite, onWrite, read, say, sure, token, why } from './office.js'
+import {
+  CREW,
+  FROM_OFFICE,
+  PROJECTS,
+  SOURCE_STATE,
+  WAITING,
+  byId,
+  crewBy,
+  health,
+  hydrate,
+  source,
+} from './data.js'
+import { act, attempt, canWrite, onWrite, read, say, sure, token, why, presented, presentedFresh} from './office.js'
+/*
+  The experimental Basecamp-inspired Team HQ (basecamp_clone.md).
+
+  Imported unconditionally and rendered only at the /basecamp prefix. Three
+  small modules rather than another few thousand lines in this file: the spec
+  warns by name against appending a second all-screen implementation to a file
+  that is already 600 KB, and a separate module is also the only way the two
+  presentations can be diffed against one another.
+*/
+import * as bc from './bc/shell.js'
+import * as bcJump from './bc/jump.js'
+import * as bcNotes from './bc/notestore.js'
+import * as bcSession from './session.js'
+import * as bcGrid from './bc/layout.js'
+import * as bcDocOrder from './bc/docorder.js'
+import * as bcWire from './bc/wire.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
 import { DENSITIES, PALETTES, TEXTURES, SCHEMES, appearance, apply, hydrate as hydrateAppearance, readTexture, saveWith, toggleScheme, activeScheme } from './appearance.js'
@@ -173,6 +200,18 @@ const notebookMade = {}
 const reviewing = {}
 /* Signed-in sites, and what the office opened on them (#135, #16). */
 const browserSites = {}
+/*
+  WHICH SPECIALISTS ARE ASSIGNED TO EACH PROJECT, by slug (§16).
+
+  UP HERE, beside the other stores, and not beside the function that fills it.
+  `assignedFor` is reached from the ctx object during the first draw, and a
+  `const` declared three hundred lines below it throws "Cannot access before
+  initialization" -- which the studio catches, prints once as "could not draw
+  this screen", and recovers from on the next draw. CLAUDE.md records the same
+  defect in `tickWaiting`, months old and invisible because it recovers. The
+  console said it within a second of this feature working.
+*/
+const assignedTo = {}
 const browserSeen = {}
 const browserNow = {}
 let browserLeft = null
@@ -268,6 +307,84 @@ const unseen = {}
 const teamWork = {}
 
 const state = {
+  /*
+    WHICH PRESENTATION OF THE OFFICE IS ON SCREEN.
+
+    'default' is everything this studio has always been. 'basecamp' is the
+    experimental Basecamp-inspired Team HQ described by the top-level
+    basecamp_clone.md, reached only at the /basecamp path prefix.
+
+    A FLAG ON THE STATE RATHER THAN A SECOND FRONTEND. Same state object, same
+    data adapters, same mutations, same canonical records - only the renderer
+    differs. Two frontends is the thing ADR-0019 was spent removing, and a
+    forked copy of a 607 KB file would drift from the real one within a day.
+
+    It is deliberately NOT a query parameter: keepUrl() writes the path and
+    discards the query on every paint, so an experience carried in the query
+    string would be erased by the first render after arrival.
+  */
+  experience: 'default',
+  /*
+    The experiment's full-search query and its two filters (§7.4).
+
+    On the state rather than in the address for the same reason the drafts
+    are: `keepUrl()` writes the path from the state on every paint and drops
+    the query string, so anything held there is gone at the next render.
+  */
+  bcQuery: '',
+  bcKind: 'Everything',
+  bcOnly: null,
+  /*
+    Which task's record page is open, or null for the list (§9, §17 phase 4).
+
+    Cleared by goToPath on every navigation rather than by each caller, so a
+    stale id cannot survive a move to another project and open a record that
+    belongs to somebody else's list.
+  */
+  bcTask: null,
+  // Which module is open as an expanded view over the project home (v2).
+  bcExpanded: null,
+  /*
+    Which person the Contacts tool is showing, and whether it is showing the
+    form that adds one. Both live here for the same reason bcTask does: the
+    miniature and the expanded view are two presentations of one tool, so the
+    thing being looked at belongs to the tool rather than to either of them.
+  */
+  bcContact: null,
+  bcContactAdd: false,
+  // Which document the detail view is showing (audio, or one with no file).
+  bcDoc: null,
+  /*
+    Which filter the to-dos are under, from the counts at the top of the
+    project, and which half of Mine / The team's is on. Both are places -
+    they go in the address - because a count that opens a filtered list and
+    then loses the filter on a reload is a count that lied.
+  */
+  bcFilter: null,
+  bcMine: null,
+  // Which source is open, and whether the Add Source surface is showing.
+  bcSource: null,
+  bcSourceAdd: false,
+  /*
+    WHICH OUTPUT AND WHICH WAITING ITEM ARE OPEN (§19, §18).
+
+    Declared here rather than sprung into existence by the opener, because
+    §21's one-level dismissal asks whether anything is open inside the sheet --
+    and `undefined !== null` is true, so an undeclared key would have meant
+    "something is open" for ever and the sheet could never be closed at all.
+    A state machine that reads absence as presence is 0304's asymmetry in a
+    plain object.
+  */
+  bcOutput: null,
+  bcWaiting: null,
+  /*
+    WHICH SPECIALIST IS BEING CONFIGURED, and whether the hire form is open
+    (§16). Declared rather than sprung into existence, for the reason the two
+    above are: §21 asks whether anything is open inside a sheet, and an
+    undeclared key reads as "yes" for ever.
+  */
+  bcPerson: null,
+  bcHire: false,
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
@@ -1314,35 +1431,12 @@ function paintSchemeButtons() {
   other direction -- real breakage mistaken for a normal prototype -- and it is
   how an outage goes unnoticed.
 */
-const MOCK_STATE = {
-  prototype: {
-    label: 'Prototype data',
-    say: 'Showing the design on invented projects. Sign in to see your office.',
-    tone: '',
-  },
-  unreachable: {
-    label: 'The office did not answer',
-    say: 'Nothing on this page is your office. This is the prototype standing in.',
-    tone: 'bad',
-  },
-  stale: {
-    label: 'Out of date',
-    say: 'The office answered once and has stopped. What you can see was real then.',
-    tone: 'bad',
-  },
-  refused: {
-    label: 'Signed out',
-    say: 'That token was not accepted, so it has been cleared. Sign in again.',
-    tone: 'bad',
-  },
-}
-
 function markMock(root) {
   const existing = $('.mockbar')
   if (existing) existing.remove()
   if (source.live) return
 
-  const state = MOCK_STATE[source.state] ?? MOCK_STATE.prototype
+  const state = SOURCE_STATE[source.state] ?? SOURCE_STATE.prototype
   const bar = document.createElement('div')
   bar.className = `mockbar${state.tone === '' ? '' : ' bad'}`
 
@@ -1626,10 +1720,30 @@ function paintDock() {
   for (const b of el.querySelectorAll('[data-chat-retry]')) {
     b.addEventListener('click', () => {
       if (!p) return
-      void chat.retry(p.slug, b.dataset.chatRetry, token.get(), () => { paintDock() })
+      void chat.retry(p.slug, b.dataset.chatRetry, presented(), () => { paintDock() })
         .then(() => { paintDock() })
     })
   }
+
+  /*
+    ENTER SENDS. SHIFT+ENTER MAKES A NEWLINE.
+
+    Grant, 23 September, listing it with the Send button as a separate
+    requirement - because a textarea does neither on its own: Enter inserts a
+    newline and nothing sends, so the keyboard could not send a message at all
+    and the only way was the mouse.
+
+    `requestSubmit`, not `submit`: the form's own listener below is where
+    sending lives, and `submit()` bypasses listeners entirely. And the newline
+    case is simply left alone, which is what a textarea already does well.
+  */
+  box?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return
+    const form = e.currentTarget.closest('form')
+    if (form === null) return
+    e.preventDefault()
+    form.requestSubmit()
+  })
 
   $('[data-dockform]', el)?.addEventListener('submit', (e) => {
     e.preventDefault()
@@ -1638,7 +1752,7 @@ function paintDock() {
     if (box) box.value = ''
     chat.send(p.slug, text, null)
     paintDock()
-    void chat.ask(p.slug, text, null, token.get(), undefined, () => { paintDock() })
+    void chat.ask(p.slug, text, null, presented(), undefined, () => { paintDock() })
       .then(() => { paintDock() })
   })
 }
@@ -8520,14 +8634,81 @@ function restoreFocus(key) {
   relative `./app.js` is a different file as far as a static host is concerned.
 */
 function pathNow() {
+  /*
+    The experimental experience keeps its own addresses under one prefix, so a
+    link into it stays in it across a reload, a Back and a bookmark - and the
+    default addresses below are byte-for-byte what they have always been.
+  */
+  const at = state.experience === 'basecamp' ? '/basecamp' : ''
   if (state.view === 'project' && state.project !== null) {
-    return state.tab === 'overview'
-      ? `/p/${state.project}`
-      : `/p/${state.project}/${state.tab}`
+    /*
+      AN EXPANDED VIEW IS A PLACE TOO.
+
+      Grant, 22 September: *"using the browser Back button or a mouse Back
+      button while inside an expanded module can immediately throw the user
+      back to Project Selection... Where technically appropriate, use browser
+      history/state correctly rather than hijacking the Back button in a
+      brittle way."*
+
+      It was held only on the state, so opening a modal wrote no history entry
+      and Back walked out of the project entirely - the same defect, and the
+      same fix, as the task record three comments down. With the modal in the
+      address the browser does the work: Back returns to the entry without the
+      suffix, `goToPath` reads no expanded view, and the dialog closes. No
+      popstate special case, and Forward reopens it.
+    */
+    /*
+      AND WHAT IS OPEN INSIDE IT. A record opened within an expanded view is
+      one level deeper, and without it in the address the two levels collapse
+      into one history entry - so Back closed the whole dialog from inside a
+      task, which is level 2 of Grant's hierarchy skipped. One suffix, one
+      optional argument, whichever kind of thing the dialog is showing.
+    */
+    const inside =
+      state.bcExpanded === 'document'
+        ? (state.bcDoc?.ref ?? '')
+        : state.bcExpanded === 'tasks'
+          ? /*
+              A FILTER IS A PLACE TOO, and it travels where the record does.
+              `~` cannot begin a task key - the port's keys are a uuid or
+              `p:<title>` - so the two cannot be confused, and a count that
+              opens a filtered list keeps that filter through a reload and a
+              Back.
+            */
+            (state.bcTask ?? (state.bcFilter === null ? '' : `~${state.bcFilter}`))
+          : state.bcExpanded === 'contacts'
+            ? (state.bcContactAdd === true ? 'new' : (state.bcContact ?? ''))
+            : state.bcExpanded === 'sources'
+              ? (state.bcSourceAdd === true ? 'new' : (state.bcSource ?? ''))
+              : ''
+    const x =
+      state.experience === 'basecamp' &&
+      state.bcExpanded !== null &&
+      state.bcExpanded !== undefined &&
+      state.bcExpanded !== ''
+        ? `/x/${encodeURIComponent(String(state.bcExpanded))}${
+            inside === '' || inside === null ? '' : `/${encodeURIComponent(String(inside))}`
+          }`
+        : ''
+    if (state.tab === 'overview') return `${at}/p/${state.project}${x}`
+    /*
+      A RECORD IS A PLACE, so it goes in the address.
+
+      It was held only on the state, which cost three things at once: the
+      record could not be linked or bookmarked, a reload lost it, and Back
+      out of one left the app entirely rather than returning to the list —
+      §18 requires the record-to-tool return path to always be clear, and
+      Back is the commonest way anybody takes it.
+    */
+    if (state.tab === 'tasks' && state.bcTask !== null && state.bcTask !== undefined) {
+      return `${at}/p/${state.project}/tasks/${encodeURIComponent(String(state.bcTask))}${x}`
+    }
+    return `${at}/p/${state.project}/${state.tab}${x}`
   }
-  if (state.view === 'tasks') return '/tasks'
-  if (state.view === 'lately') return '/activity'
-  return '/'
+  if (state.view === 'bcsearch') return `${at}/search`
+  if (state.view === 'tasks') return `${at}/tasks`
+  if (state.view === 'lately') return `${at}/activity`
+  return at === '' ? '/' : at
 }
 
 /**
@@ -8539,8 +8720,44 @@ function pathNow() {
  * to it should not look like a broken product.
  */
 function goToPath(path) {
-  const bits = String(path ?? '/').split('/').filter((x) => x !== '')
+  let bits = String(path ?? '/').split('/').filter((x) => x !== '')
+  /*
+    THE EXPERIMENTAL EXPERIENCE, read off the front of the path (basecamp_clone.md).
+
+    A prefix rather than a separate deployment: vercel.json already rewrites any
+    dotless path outside api/, studio/, samples/ and fonts/ to index.html, and
+    index.html asks for root-absolute assets - so /basecamp and /basecamp/p/x
+    boot the same page with the same stylesheets and need no routing change at
+    all. Everything after the prefix is then parsed exactly as it always was,
+    which is what keeps the two experiences one router rather than two.
+
+    Sticky within a visit and nowhere else: the flag is set only by the address,
+    so a default URL always lands in the default experience even after the
+    experiment has been open in the same tab.
+  */
+  state.experience = bits[0] === 'basecamp' ? 'basecamp' : 'default'
+  if (state.experience === 'basecamp') bits.shift()
+  // Cleared here, once, rather than at each of the callers that navigate.
+  state.bcTask = null
+  // An expanded module does not survive a navigation: the page underneath it
+  // has changed, so the dialog over it is about somewhere else.
+  state.bcExpanded = null
+  state.bcContact = null
+  state.bcContactAdd = false
+  state.bcDoc = null
+  state.bcFilter = null
+  state.bcSource = null
+  state.bcSourceAdd = false
+  state.bcOutput = null
+  state.bcWaiting = null
+  state.bcPerson = null
+  state.bcHire = false
   if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
+  /*
+    The experiment's full search (§7.4). Its own view, reachable only under
+    the prefix, so the default studio's router is untouched by it.
+  */
+  if (state.experience === 'basecamp' && bits[0] === 'search') { state.view = 'bcsearch'; return true }
   if (bits[0] === 'tasks') { state.view = 'tasks'; return true }
   if (bits[0] === 'activity') { state.view = 'lately'; return true }
   if (bits[0] === 'p' && bits[1] !== undefined) {
@@ -8548,8 +8765,79 @@ function goToPath(path) {
     if (p === undefined) { state.view = 'portfolio'; state.project = null; return false }
     state.view = 'project'
     state.project = p.slug
+    /*
+      THE EXPANDED VIEW COMES OFF THE END OF THE ADDRESS FIRST, so everything
+      below parses the page the dialog is over rather than tripping on the
+      suffix. `x` is not a tool and cannot collide with one: the router's list
+      of tools is `bc.TOOLS`, and nothing in it is one character long.
+    */
+    const cut = bits.indexOf('x', 2)
+    if (state.experience === 'basecamp' && cut !== -1) {
+      state.bcExpanded = bits[cut + 1] === undefined ? null : decodeURIComponent(bits[cut + 1])
+      const inside = bits[cut + 2] === undefined ? '' : decodeURIComponent(bits[cut + 2])
+      if (inside !== '') {
+        if (state.bcExpanded === 'document') state.bcDoc = { ref: inside, title: '' }
+        if (state.bcExpanded === 'tasks') {
+          if (inside.startsWith('~')) state.bcFilter = inside.slice(1)
+          else state.bcTask = inside
+        }
+        if (state.bcExpanded === 'contacts') {
+          if (inside === 'new') state.bcContactAdd = true
+          else state.bcContact = inside
+        }
+        if (state.bcExpanded === 'sources') {
+          if (inside === 'new') state.bcSourceAdd = true
+          else state.bcSource = inside
+        }
+      }
+      bits = bits.slice(0, cut)
+    }
     const tab = bits[2] === undefined ? 'overview' : decodeURIComponent(bits[2])
-    state.tab = SECTIONS.some((x) => x.id === tab) ? tab : 'overview'
+    /*
+      WHICH TAB LIST DECIDES depends on which experience you are in.
+
+      This validated against SECTIONS alone, which is the DEFAULT studio's
+      list — and Activity was removed from it in #222. The experiment has an
+      Activity tool with a heading, a preview and a link, so
+      /basecamp/p/:slug/activity was accepted by the rewrite, rejected here,
+      and silently rewritten to the overview: a link that took you back to
+      the page you pressed it on. Four capture runs photographed the overview
+      under the name "activity" without anybody noticing, and it surfaced
+      only because two published files had identical byte counts.
+
+      An offer may only promise what the press can perform, and a link is an
+      offer. The experiment's own tools decide its own routes.
+    */
+    /*
+      ONLY THE TOOLS THIS EXPERIENCE ACTUALLY RENDERS.
+
+      The first fix here used the whole of `bc.TOOLS`, and that list answers a
+      DIFFERENT question: what the overview links to. It includes Project
+      Settings, which is a hand-off into the current Team HQ rather than a
+      surface this experience draws — so /basecamp/p/:slug/settings was
+      accepted by the router, found no renderer, fell back to the overview,
+      and left the address saying `/settings`.
+
+      Worse than the Activity defect it was written to fix: that one at least
+      corrected the URL on the way past. This one rendered one page while the
+      address named another, so a bookmark to it was permanently wrong.
+
+      One list, two questions, and they differ for exactly one entry. The
+      router asks the narrower one.
+    */
+    const known =
+      state.experience === 'basecamp'
+        ? bc.TOOLS.filter((t) => t.own).map((t) => t.id)
+        : SECTIONS.map((x) => x.id)
+    state.tab = known.includes(tab) ? tab : 'overview'
+    /*
+      And the record after it, if the address names one. Only under the
+      experiment and only under its Tasks tool, so the default studio's
+      four-segment addresses are unaffected.
+    */
+    if (state.experience === 'basecamp' && state.tab === 'tasks' && bits[3] !== undefined) {
+      state.bcTask = decodeURIComponent(bits[3])
+    }
     return true
   }
   state.view = 'portfolio'
@@ -8578,8 +8866,14 @@ function keepUrl() {
   const first = shownPath === null
   shownPath = path
   try {
-    if (first) history.replaceState({ path }, '', path)
-    else history.pushState({ path }, '', path)
+    /*
+      In a review build the address goes in the hash, so the page URL itself
+      never changes and a reload comes back to the same screen rather than to
+      a path the host has never heard of.
+    */
+    const to = REVIEW ? `#${path}` : path
+    if (first) history.replaceState({ path }, '', to)
+    else history.pushState({ path }, '', to)
   } catch {
     /* A page opened from a file has no history to write to. It still works. */
   }
@@ -9035,6 +9329,35 @@ function wirePlane(root) {
 
 function drawShell() {
   const root = $('#root')
+  /*
+    THE EXPERIMENTAL EXPERIENCE, and the only branch into it in this file.
+
+    Everything below this point is the default studio and is untouched by the
+    experiment. The early return is what makes that true structurally rather
+    than by inspection: there is no path on which both shells draw, and no way
+    for the experiment to half-apply to the product Grant uses.
+
+    The document attribute is what scopes bc/*.css. It is REMOVED rather than
+    set to 'default' on the other branch, because an attribute that is present
+    with a different value still matches an attribute-presence selector, and
+    somebody will eventually write one.
+  */
+  if (state.experience === 'basecamp') {
+    document.documentElement.dataset.experience = 'basecamp'
+    root.classList.remove('shut')
+    root.innerHTML = bc.html()
+    bcWire.wire(root)
+    /*
+      Returns WITHOUT calling keepUrl or restoreFocus: render() does both after
+      drawShell in every case, and a redraw that replaces every node takes the
+      keyboard with it unless restoreFocus runs. Doing the address here and
+      skipping the focus restore is exactly the defect #147 records - a
+      keyboard user returned to the top of the document after every action,
+      with nothing anywhere reporting a fault.
+    */
+    return
+  }
+  delete document.documentElement.dataset.experience
   root.classList.toggle('shut', railShut())
   root.innerHTML = commandBar() + rail() + (
     state.view === 'project' ? dashboard()
@@ -10276,7 +10599,7 @@ function drawShell() {
     const open = PROJECTS.find((x) => x.slug === state.project)
     if (open !== undefined) {
       void projectSettings.need(open, render)
-      projectSettings.wire(root, open, people, render)
+      projectSettings.wire(root, open, people, render, () => { lookSheet(open) })
     }
   }
 
@@ -10321,7 +10644,7 @@ function drawShell() {
   */
   for (const b of root.querySelectorAll('[data-chat-retry]')) {
     b.addEventListener('click', () => {
-      void chat.retry(state.project, b.dataset.chatRetry, token.get(), () => {
+      void chat.retry(state.project, b.dataset.chatRetry, presented(), () => {
         keepingPlace(() => { render() })
       }).then(() => { keepingPlace(() => { render() }) })
     })
@@ -10807,7 +11130,7 @@ function drawShell() {
   */
   if (state.sub === 'chat' && !chat.isReal(state.project)) {
     void chat
-      .load(state.project, byId(state.project)?.id, token.get())
+      .load(state.project, byId(state.project)?.id, presented())
       .then((got) => { if (got !== null) render() })
   }
 
@@ -11101,7 +11424,7 @@ function drawShell() {
       const t = $('[data-thread]')
       if (t) t.scrollTop = t.scrollHeight
       $('[data-say]')?.focus()
-      void chat.ask(state.project, text, about, token.get(), to, also, () => {
+      void chat.ask(state.project, text, about, presented(), to, also, () => {
         // Sending -> waiting -> no answer yet. Each of those is a repaint, and
         // without this the row would say "Sending" until the answer landed.
         keepingPlace(() => { render() })
@@ -11115,7 +11438,7 @@ function drawShell() {
           Reading it back is what makes this thread the record rather than a
           transcript of this browser.
         */
-        await chat.load(state.project, byId(state.project)?.id, token.get())
+        await chat.load(state.project, byId(state.project)?.id, presented())
         /*
           Through `keepingPlace`, not a bare render (#205).
 
@@ -12945,7 +13268,52 @@ function cameBackFromGoogle() {
   return true
 }
 
-let wantedPath = typeof location === 'undefined' ? '/' : location.pathname
+/*
+  WHERE THE ADDRESS LIVES, and the one case where it is not the path.
+
+  This studio is addressed by path, because it is served by a host that
+  rewrites every dotless path to index.html (ADR-0002, vercel.json). That is
+  the product and it does not change.
+
+  A REVIEW BUILD has no such host. Published as a static bundle - to give Grant
+  something he can click while a deploy is unreachable - there is no rewrite,
+  so `/basecamp/p/x` would be a 404 rather than the page. `window.STUDIO_REVIEW`
+  moves the address into the hash, which every static host serves correctly
+  because it never reaches the host at all.
+
+  It is a SECOND ADDRESSING VOCABULARY, which this repository has paid for
+  before, so it is confined to three functions and set by nothing but that one
+  global: with the flag unset, every line below behaves exactly as it did.
+*/
+const REVIEW = typeof window !== 'undefined' && window.STUDIO_REVIEW === true
+
+/*
+  WHERE A REVIEW BUILD STARTS, so the one screen it exists to show is the one
+  it opens on rather than one click away.
+*/
+const START =
+  typeof window !== 'undefined' && typeof window.STUDIO_START === 'string' && window.STUDIO_START !== ''
+    ? window.STUDIO_START
+    : '/basecamp'
+
+const addressNow = () => {
+  if (typeof location === 'undefined') return '/'
+  if (!REVIEW) return location.pathname
+  const h = location.hash.slice(1)
+  /*
+    ONLY A FRAGMENT THAT IS ONE OF OURS, which means it begins with a slash.
+
+    A host may put its own fragment on the page - the artifact host does - and
+    the first version returned whatever it found. `#artifact-abc` was therefore
+    read as a route, matched nothing, and fell through to the DEFAULT studio:
+    the review build opened on today's Team HQ and Grant reasonably said he was
+    being shown the old interface. Anything that is not our shape is not an
+    address, and the page starts where it was told to.
+  */
+  return h.startsWith('/') ? h : START
+}
+
+let wantedPath = addressNow()
 if (goToPath(wantedPath)) wantedPath = null
 
 if (typeof window !== 'undefined') {
@@ -12957,7 +13325,7 @@ if (typeof window !== 'undefined') {
       that follows does not immediately push the entry we have just walked back
       out of — which would make Back appear not to work at all.
     */
-    const path = e.state?.path ?? location.pathname
+    const path = e.state?.path ?? addressNow()
     shownPath = path
     goToPath(path)
     render()
@@ -12978,6 +13346,511 @@ if (typeof window !== 'undefined') {
   `connection_health`, which is the card underneath.
 */
 const backFromGoogle = cameBackFromGoogle()
+
+/*
+  HAND THE EXPERIMENTAL EXPERIENCE WHAT IT NEEDS, once, before the first paint.
+
+  Dependency injection rather than an import back into this file: bc/* already
+  imports office.js and data.js directly, and the only things it cannot reach
+  on its own are this module's state, its repaint and its navigation. Passing
+  them keeps the dependency one-way and keeps the branch in drawShell the only
+  coupling in the other direction.
+*/
+const bcContext = {
+  state,
+  projects: () => PROJECTS,
+  /*
+    The project's conversation, from the studio's own chat module (#192).
+
+    Exposed rather than reimplemented: `chat.js` holds the office's copy, the
+    optimistic tail and the rule that the office's copy wins. A second reader
+    in the experiment would be a second thing to keep in step.
+  */
+  /*
+    Project home v2's expanded views. One flag, read by the shell, so opening
+    and closing is a repaint rather than a navigation - which is what makes
+    closing return "naturally to the underlying project homepage".
+  */
+  openExpanded: (id) => {
+    state.bcExpanded = id
+    render()
+  },
+  /*
+    DISMISSING GOES BACK EXACTLY ONE LEVEL (§21).
+
+    Grant, 23 September: "Sources -> Notion -> dismiss individual source popup
+    by clicking outside" returned all the way to project Home, and it should
+    have returned to Sources. "Closing a child surface should return exactly
+    ONE level. Preserve navigation context."
+
+    This cleared the expanded sheet AND every record inside it in one go, so
+    every child surface in the experience behaved that way -- a source, a
+    contact, a document, a task. Dismissing a detail threw away the list you
+    opened it from, and the way back was to find the module and open it again.
+
+    So it is a step now, not a reset: if something is open INSIDE the sheet,
+    that is what closes, and the sheet stays. The reset it used to do is still
+    right when the sheet itself is what you are dismissing, and still right on
+    a navigation -- the router clears all of it, because the page underneath
+    has changed and a dialog over it is about somewhere else.
+  */
+  closeExpanded: () => {
+    /*
+      A SHEET THAT IS ITSELF THE RECORD HAS NO LEVEL TO GO BACK TO.
+
+      The step above is right for a record inside a LIST -- a contact in
+      Contacts, a source in Sources, a to-do in To-dos -- and wrong for the
+      document viewer, whose whole sheet exists to show one document. Stepping
+      there leaves `bcExpanded = 'document'` with no document in it: a dialog
+      showing nothing, which `verify:basecamp-docs` found within minutes by
+      being unable to click through its own backdrop.
+
+      The discriminator is derived rather than listed: `bc.TOOLS` is the set of
+      things with a list behind them, and the viewer is not one of them. A
+      hand-kept list of exceptions here would be the next thing to fall out of
+      step with the tools.
+    */
+    const isTool = (bc.TOOLS ?? []).some((t) => t.id === state.bcExpanded)
+    const inside =
+      isTool &&
+      (state.bcTask !== null ||
+        state.bcContact !== null ||
+        state.bcContactAdd === true ||
+        state.bcDoc !== null ||
+        state.bcSource !== null ||
+        state.bcSourceAdd === true ||
+        state.bcWaiting !== null ||
+        state.bcOutput !== null ||
+        state.bcPerson !== null ||
+        state.bcHire === true)
+    if (inside) {
+      state.bcTask = null
+      state.bcContact = null
+      state.bcContactAdd = false
+      state.bcDoc = null
+      state.bcSource = null
+      state.bcSourceAdd = false
+      state.bcWaiting = null
+      state.bcOutput = null
+      state.bcPerson = null
+      state.bcHire = false
+      render()
+      return
+    }
+    state.bcExpanded = null
+    render()
+  },
+  /*
+    PROJECT SETTINGS, RENDERED AND WIRED BY ITS OWN MODULE.
+
+    The experiment draws the same `project-settings.js` the default studio
+    does - same renderer, same wiring, same writes - so there is no second
+    implementation to drift, which is what "preserve existing settings
+    functionality; avoid regressions" actually requires. Only the frame and
+    the stylesheet are the experiment's.
+  */
+  needProjectSettings: (p) => {
+    void projectSettings.need(p, render)
+  },
+  projectSettingsBody: (p) => projectSettings.section(p, state.setpane, people),
+  wireProjectSettings: (root, p) => {
+    projectSettings.wire(root, p, people, render, () => { lookSheet(p) })
+  },
+  setPane: (id) => {
+    state.setpane = id
+    render()
+  },
+  /*
+    HOW THIS PROJECT LOOKS: the picker that already exists.
+
+    `lookSheet` is the default studio's, it writes through `project_look`, and
+    it holds 451 icons, the hues and an image upload. Rebuilding it here would
+    be a second picker writing the same three columns - the settings decision
+    again, for the same reason.
+  */
+  openLook: () => {
+    const p = PROJECTS.find((x) => x.slug === state.project)
+    if (p === undefined) return
+    lookSheet(p)
+  },
+  /* The office's own settings, in the sheet that already holds them. */
+  openGlobalSettings: (tab) => {
+    if (typeof tab === 'string' && tab !== '') state.setting = tab
+    settingsSheet()
+    sheet($('#settings'), true)
+  },
+  chatFor: (slug) => chat.thread(slug),
+  chatIsReal: (slug) => chat.isReal(slug),
+  chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, presented()),
+  chatSend: (slug, text) => chat.send(slug, text, null),
+  /*
+    WHERE THE VOICE NOTE IS TRANSCRIBED, and the token to do it with.
+
+    Handed over rather than derived in the experience, because the endpoint and
+    the token are this module's business and there must not be a second idea of
+    either. `chat.js` already derives the voice endpoint from the API base the
+    same way, which is why `/note` lands on the function the conversation
+    already talks to.
+  */
+  voiceEndpoint: () => chat.endpoint(),
+  /* The project's own name, for the transcriber's spelling hint. */
+  projectName: (slug) => PROJECTS.find((x) => x.slug === slug)?.name ?? '',
+  /* The office's own id for a project, which storage paths are filed under. */
+  projectId: (slug) => PROJECTS.find((x) => x.slug === slug)?.id ?? '',
+  officeToken: () => presented(),
+  chatAsk: (slug, text, onState) => chat.ask(slug, text, null, presented(), undefined, undefined, onState),
+  crew: CREW,
+  tools: bc.TOOLS,
+  /*
+    Who is actually on a project, derived from its rows rather than stored.
+
+    The payload carries no per-project roster, and the studio's own team
+    surface derives it the same way (from who appears in the work). Deriving
+    it twice is better than a second place for it to rot, which is the lesson
+    0310 was spent on.
+  */
+  /*
+    THE ASSIGNED TEAM (§16), and the honest three-way answer.
+
+    `null` means the office has not been asked yet or the read failed, and the
+    surface says so rather than drawing an empty team -- "you have nobody on
+    this project" is a claim, and a failed read is not evidence for it.
+  */
+  assignedFor: (slug) => {
+    const held = assignedTo[slug]
+    if (held === undefined) {
+      void needAssigned(slug)
+      return 'asking'
+    }
+    return held
+  },
+  /* Everybody the office employs, for the list of who can be added. */
+  roster: () => CREW,
+  forgetAssigned,
+  crewFor: (slug) => {
+    const p = PROJECTS.find((x) => x.slug === slug)
+    if (p === undefined) return []
+    const slugs = new Set(
+      [
+        ...(p.tasks ?? []).map((t) => t.who),
+        ...(p.activity ?? []).map((a) => a.who),
+        ...(p.waiting ?? []).map((w) => w.who),
+      ].filter((x) => typeof x === 'string' && x !== ''),
+    )
+    const seen = new Set()
+    const out = []
+    for (const s2 of slugs) {
+      const person = crewBy(s2)
+      if (person === undefined || seen.has(person.slug)) continue
+      seen.add(person.slug)
+      out.push(person)
+    }
+    return out
+  },
+  /*
+    The personal list, or null while it is still coming.
+
+    NULL AND EMPTY ARE DIFFERENT ANSWERS and the difference is the whole point:
+    null draws a skeleton, an empty array says there is nothing on your list.
+    `mine.trouble` is the third case - a read that FAILED - and it must never
+    render as "nothing due", which is the defect #?? records about this exact
+    store. The experience asks for the trouble flag and says it could not look.
+  */
+  myTasks: () => {
+    // `mineKey()` takes no arguments — it reads `mine.bucket`, the query and
+    // the sort, because the cache is keyed on the whole request (#259).
+    const key = mineKey()
+    const rows = mine.lists[key]
+    if (mine.trouble[key] === true) return []
+    return Array.isArray(rows) ? rows : null
+  },
+  myTasksTrouble: () => mine.trouble[mineKey()] === true,
+  /*
+    START THE FETCH, from the renderer, the way the default studio's review
+    block does.
+
+    Without this, opening /basecamp/tasks directly showed a skeleton that
+    never resolved: `goAnywhere` kicked the read when you NAVIGATED there and
+    nothing kicked it when you ARRIVED there, so a reload or a pasted link sat
+    on shimmering bars for ever. CLAUDE.md is blunt about it — a skeleton that
+    never resolves is broken, and the page has no way to tell a slow office
+    from a dead one except by somebody having asked.
+
+    `needMine` guards on the cache key and repaints when it lands, so calling
+    it from a render is safe and cannot loop.
+  */
+  askForMyTasks: () => {
+    void needMine(mine.bucket)
+  },
+  canWrite: () => canWrite(),
+  refresh: () => refresh(),
+  render,
+  /*
+    THE TEAM CONVERSATION (#103), reachable from the experiment too.
+
+    The dock lives outside #root, so it already SURVIVES the experimental
+    render — but surviving is not the same as being reachable, and a
+    capability that exists in code and cannot be found is the regression the
+    run's pre-mortem calls Failure E. The experience gets the same door the
+    default rail has rather than a second conversation.
+  */
+  /*
+    Open one task's record page. The tab stays `tasks`, so the address stays
+    the tool's — the record is a state of the tool rather than a route of its
+    own, which keeps §10.8's two-levels-never-three true of tasks as well.
+  */
+  /*
+    Opening what the team made. The id goes into the shell's state and the
+    record surface asks for the body; §19's "clicking an output should allow
+    Grant to OPEN and VIEW the artifact directly".
+  */
+  openOutput: (id) => {
+    state.bcOutput = id
+    void needOutput(id)
+    render()
+  },
+  outputBody: (id) => {
+    if (madeBodies[id] === undefined) void needOutput(id)
+    return madeBodies[id]
+  },
+  closeOutput: () => {
+    state.bcOutput = null
+    render()
+  },
+  /*
+    §18: one waiting item, open. It clears `bcOutput` on the way in because the
+    team surface shows one thing at a time and two ids set at once would make
+    which-one-you-see depend on the order of the checks in SURFACE.team.
+  */
+  openWaiting: (id) => {
+    state.bcOutput = null
+    state.bcWaiting = id
+    render()
+  },
+  closeWaiting: () => {
+    state.bcWaiting = null
+    render()
+  },
+  /*
+    CONFIGURING ONE SPECIALIST (§16). Opening the editor closes the hire form
+    and the other way round: they occupy the same place on the screen, and two
+    forms open at once is two Cancel buttons and no way to tell which is which.
+  */
+  openPerson: (slug) => {
+    state.bcHire = false
+    state.bcPerson = slug
+    render()
+  },
+  openHire: () => {
+    state.bcPerson = null
+    state.bcHire = true
+    render()
+  },
+  closePerson: () => {
+    state.bcPerson = null
+    state.bcHire = false
+    render()
+  },
+  openTask: (id) => {
+    state.bcTask = id
+    /*
+      ON THE PROJECT HOME A RECORD HAS NOWHERE TO DRAW, and that is how eight
+      dead controls shipped in one afternoon: the To-dos miniature's task
+      titles and the Schedule miniature's agenda items both set the record and
+      repainted a page that draws the board, so every one of them was a press
+      that changed nothing. v2's rule is that a miniature acts, and the
+      expanded view is where the record lives - so opening one from the home
+      opens To-dos over the page with that record in it.
+    */
+    if (state.tab !== 'tasks') state.bcExpanded = 'tasks'
+    // `keepUrl()` pushes from the state on the next paint, so opening a
+    // record becomes a history entry and Back returns to the list.
+    render()
+  },
+  /*
+    One person, and the form that adds one. Both open the Contacts tool over
+    the home for the same reason a task does.
+  */
+  openContact: (key) => {
+    state.bcContact = key
+    state.bcContactAdd = false
+    if (state.tab !== 'contacts') state.bcExpanded = 'contacts'
+    render()
+  },
+  openContactAdd: () => {
+    state.bcContact = null
+    state.bcContactAdd = true
+    if (state.tab !== 'contacts') state.bcExpanded = 'contacts'
+    render()
+  },
+  closeContact: () => {
+    state.bcContact = null
+    state.bcContactAdd = false
+    render()
+  },
+  /*
+    One document, as a record over the page. Used where a new tab is the wrong
+    answer - a recording, or a document with no file behind it at all.
+  */
+  /*
+    A COUNT, PRESSED. The filter and the expanded view are set together, so
+    there is no state in which the to-dos are open under a filter the page
+    cannot name.
+  */
+  openFiltered: (kind) => {
+    state.bcFilter = kind
+    state.bcTask = null
+    state.bcExpanded = 'tasks'
+    render()
+  },
+  clearFilter: () => {
+    state.bcFilter = null
+    render()
+  },
+  /* Mine / The team's. Pressing the half that is on clears it. */
+  setMine: (kind) => {
+    state.bcMine = kind === null || state.bcMine === kind ? null : kind
+    render()
+  },
+  openSource: (key) => {
+    state.bcSource = key
+    state.bcSourceAdd = false
+    if (state.tab !== 'sources') state.bcExpanded = 'sources'
+    render()
+  },
+  openSourceAdd: () => {
+    state.bcSource = null
+    state.bcSourceAdd = true
+    if (state.tab !== 'sources') state.bcExpanded = 'sources'
+    render()
+  },
+  closeSource: () => {
+    state.bcSource = null
+    state.bcSourceAdd = false
+    render()
+  },
+  openDocDetail: (ref, title) => {
+    state.bcDoc = { ref, title }
+    state.bcExpanded = 'document'
+    render()
+  },
+  openDock: () => {
+    rememberDock(true)
+    paintDock()
+  },
+  /*
+    A TOGGLE, because Grant asked for one in those words: *"Clicking it should
+    open the team chat sidebar. Clicking the same button again should close the
+    sidebar. The control therefore behaves as a genuine toggle."* The state is
+    the dock's own, not a variable the button keeps, so a dock closed by its
+    own X leaves the button telling the truth.
+  */
+  toggleDock: () => {
+    const open = !dockOpen()
+    rememberDock(open)
+    paintDock()
+    return open
+  },
+  dockIsOpen: () => dockOpen(),
+  go: (path) => {
+    goToPath(path)
+    render()
+  },
+  /*
+    Navigate anywhere, in or out of the experience.
+
+    A path that does not carry the prefix leaves the experiment, and leaving is
+    a real page load rather than a router hop - the two presentations put
+    different attributes on the document root and the default studio expects to
+    boot into its own shell.
+  */
+  goAnywhere: (path) => {
+    if (String(path).startsWith('/basecamp')) {
+      goToPath(path)
+      if (state.view === 'tasks') void needMine(mine.bucket)
+      render()
+      return
+    }
+    window.location.assign(path)
+  },
+  /*
+    Full search (§7.3, Shift+Enter).
+
+    Promotes into the default studio's search rather than building a second
+    one: search already spans documents, tasks, contacts, sources and outputs
+    with access controls applied, and a parallel implementation would be a
+    second answer to one question.
+  */
+  /*
+    §7.3: Shift+Enter promotes the typed text into full search.
+
+    This used to navigate to `/?q=…` in the default studio. NOTHING THERE
+    READS `q` — and `keepUrl()` strips the query on the first paint anyway —
+    so the keystroke went home and dropped what had been typed, which looks
+    exactly like a search that found nothing. The experiment has its own
+    search surface now and the query is carried on the state rather than in
+    the address, because the address is rewritten from the state on every
+    paint.
+  */
+  fullSearch: (q) => {
+    state.bcQuery = q
+    state.view = 'bcsearch'
+    state.project = null
+    render()
+  },
+}
+bc.mount(bcContext)
+bcJump.mount(bcContext)
+bcWire.mount(bcContext)
+/*
+  WHICH MESSAGES HAVE A RECORDING, learned once.
+
+  The thread renderer is synchronous and IndexedDB is not, so the keys are read
+  at boot and the play control is drawn from that. A browser that cannot keep
+  audio resolves false and simply never draws one, which is the honest state
+  rather than a control that cannot work.
+*/
+void bcNotes.ready().then((ok) => {
+  if (ok) render()
+})
+
+/*
+  THE SIGN-IN LINK COMING BACK, TAKEN BEFORE ANYTHING IS DRAWN.
+
+  Supabase returns the session in the URL fragment. It has to be adopted before
+  the first render, or the page draws itself signed out, fires its reads with
+  no credential, and only then notices -- which is a flash of "you are not
+  signed in" on the one journey where the person demonstrably is.
+
+  It also takes the token out of the address bar, because a URL with a session
+  in it is a URL somebody pastes into a chat.
+*/
+/*
+  WHERE THE BOARD'S ARRANGEMENT IS KEPT. The grid does the geometry and knows
+  nothing about the office; this is the one place that joins them, the same
+  shape as `onWrite` in `office.js`.
+*/
+/*
+  THE DOCUMENT ORDER, kept where the person is (§§29-31, §22). Same shape as
+  the board's: the domain does the ordering and knows nothing about the office,
+  and this is the one place that joins them.
+*/
+bcDocOrder.persistence({
+  save: (slug, ids) =>
+    act('document_order_set', { p_slug: slug, p_ids: ids }).catch(() => undefined),
+  reset: (slug) => act('document_order_reset', { p_slug: slug }).catch(() => undefined),
+})
+
+bcGrid.persistence({
+  save: (slug, panels) =>
+    act('dashboard_layout_set', { p_slug: slug, p_panels: panels, p_surface: 'basecamp' }).catch(
+      () => undefined,
+    ),
+  reset: (slug) =>
+    act('dashboard_layout_reset', { p_slug: slug, p_surface: 'basecamp' }).catch(() => undefined),
+})
+
+bcSession.adopt()
 
 render()
 
@@ -13349,6 +14222,105 @@ const SITE_SAID = {
   site, which is the one kind of fiction a screenshot of this page must never
   contain — somebody reading it would believe a login exists.
 */
+/*
+  ONE OUTPUT'S BODY, fetched once and then drawn (§19).
+
+  The same guard as every other lazy read here: the null is written BEFORE the
+  await, so a second render while the first request is in flight does not start
+  a second one.
+
+  A failure leaves `null` rather than falling back to anything invented. An
+  output is the team's actual work; showing a plausible substitute for one
+  would be the fabrication this office spends most of its rules preventing.
+*/
+/*
+  Three states, not two. `undefined` is "nobody has asked", the string
+  `asking` is "in flight", and null is "the office did not answer" -- and
+  conflating the last two is how the first version of this drew "Could not
+  open it" over a request that was still travelling. 0304's asymmetry in a
+  store: the absence of an answer is not the presence of a failure.
+*/
+const madeBodies = {}
+
+/*
+  WHO IS ASSIGNED TO THIS PROJECT, from the table that decides it  (§16)
+
+  `crewFor` derives a roster from whoever appears in the project's tasks,
+  activity and waiting items. That is a record of ACTIVITY wearing the name of
+  a team: a specialist assigned and not yet used is invisible, and one who
+  answered once and was removed is still shown. Section 16 makes the Team
+  screen the place the team is CONFIGURED, and a configuration screen that
+  cannot see the thing it configures is the dial-with-no-reader defect with
+  the parts swapped.
+
+  `public.staff_on_project` reads `project_staff`, which is the table
+  `set_project_staff` writes and the one the office means by "on this project".
+  It comes back as a list of slugs; the names, titles, subject words and
+  responsibilities are already in the roster the page holds.
+
+  Null while it is still coming, and null if the read FAILED -- the surface
+  says it could not look rather than drawing an empty team, which is the
+  distinction `mine.trouble` exists for and the one this repository keeps
+  paying for when a reader collapses the two.
+*/
+async function needAssigned(slug) {
+  if (assignedTo[slug] !== undefined) return
+  const p = byId(slug)
+  /*
+    NOTHING TO ASK WITH YET, so do not remember that as an answer.
+
+    The office is addressed by the project's uuid, and the page holds the
+    prototype's projects until the payload lands -- which have no uuid. A first
+    version cached the resulting failure, so the screen said "asking the
+    office" for ever on a signed-in browser where everything worked. Leaving
+    the key unset is what lets the next draw try again once there is an id.
+  */
+  if (p === undefined || typeof p.id !== 'string' || p.id === '') return
+  assignedTo[slug] = 'asking'
+  try {
+    /*
+      BOTH HALVES, because neither answers §16 alone. `assigned` is the list of
+      slugs the office considers to be on this project; `team` is who those
+      slugs are -- title, subject words, responsibilities, pronouns, style --
+      and the studio payload's own crew carries a lighter shape than the
+      configuration screen needs. Fetched together so the screen never draws
+      half of itself.
+    */
+    const [who, all] = await Promise.all([read('assigned', p.id), read('team')])
+    const people = Array.isArray(all?.staff) ? all.staff : []
+    assignedTo[slug] = {
+      on: Array.isArray(who) ? who.map(String) : [],
+      people,
+    }
+  } catch {
+    /*
+      A FAILED READ IS NOT AN EMPTY TEAM, and it is not "still asking" either.
+      Three states, three answers -- the distinction `mine.trouble` exists for,
+      and the one this repository keeps paying for when a reader collapses
+      them.
+    */
+    assignedTo[slug] = 'failed'
+  }
+  render()
+}
+
+/** Forget it, so the next draw asks again. Used after every assignment write. */
+function forgetAssigned(slug) {
+  delete assignedTo[slug]
+}
+
+async function needOutput(id) {
+  if (madeBodies[id] !== undefined) return
+  madeBodies[id] = 'asking'
+  try {
+    const got = await read('output', id)
+    madeBodies[id] = got === undefined || got === null ? null : got
+  } catch {
+    madeBodies[id] = null
+  }
+  render()
+}
+
 async function needSites(slug) {
   if (browserSites[slug] !== undefined) return
   const p = byId(slug)
@@ -13758,13 +14730,7 @@ async function refresh() {
   */
   for (const k of Object.keys(progress)) delete progress[k]
   await Promise.all([
-    hydrate(API, (() => {
-      try {
-        return localStorage.getItem('hq.token') ?? ''
-      } catch {
-        return ''
-      }
-    })()),
+    hydrate(API, await presentedFresh()),
     // Both, together. Settings is a separate payload because it is a separate
     // screen and most visits never open it — but a write can change either, so
     // a refresh re-reads both rather than leaving one stale behind a tab.
@@ -13790,13 +14756,9 @@ async function refresh() {
   keepingPlace(() => { render() })
 }
 
-/** The token, read the way every other caller here reads it. */
+/** What this browser presents: a person's session if there is one. */
 function tokenNow() {
-  try {
-    return localStorage.getItem('hq.token') ?? ''
-  } catch {
-    return ''
-  }
+  return presented()
 }
 
 /**
@@ -14039,12 +15001,16 @@ function forgetArrivals() {
 }
 
 async function live() {
-  let token = ''
-  try {
-    token = localStorage.getItem('hq.token') ?? ''
-  } catch {
-    // Private browsing, or storage blocked. The mock stands.
-  }
+  /*
+    WHAT THIS BROWSER CAN PRESENT, not what is in one particular storage key.
+
+    This read `hq.token` directly, so a browser holding a PERSON'S SESSION and
+    no office key was read as holding nothing: the page drew the prototype and
+    never asked the office at all -- no request, no 401, nothing in the network
+    panel to explain it. The seam is `office.js`, which knows about both and
+    refreshes a session that is nearly out.
+  */
+  const token = await presentedFresh()
   if (token === '') {
     /*
       Not a failure, and it must not read as one (#119). `state` stays
@@ -14088,6 +15054,24 @@ async function live() {
     on every single page load.
   */
   hydrateAppearance(FROM_OFFICE.appearance)
+  /*
+    THE BOARD HE ARRANGED, FROM THE OFFICE (#341, ADR-0021, 0582).
+
+    It was kept in `localStorage` only, so arranging the board on the desk and
+    opening it on the phone showed two different boards -- and the panel that
+    explained it said so out loud, because one row per (owner, project) was
+    already taken by the default dashboard. 0582 put `surface` in the key and
+    this is the reader.
+
+    After the payload and before the redraw, and a project this session has
+    already rearranged keeps what this session did: adopting the office's copy
+    over a drop that has not landed yet is how a panel snaps back to where it
+    was, which is ADR-0021's third rule and was a bug before it was one.
+  */
+  for (const p_ of PROJECTS) {
+    if (Array.isArray(p_?.layout_board)) bcGrid.adopt(p_.slug, p_.layout_board)
+    if (Array.isArray(p_?.doc_order)) bcDocOrder.adopt(p_.slug, p_.doc_order)
+  }
   /*
     Second attempt at the address the browser arrived with (#157).
 
@@ -14235,6 +15219,18 @@ if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
     without a door, and the block would then ship unlooked-at.
   */
   globalThis.__shots = {
+    /*
+      A REDRAW, for a check that needs one that nobody clicked.
+
+      The experience rebuilds its whole shell for reasons that have nothing to
+      do with what somebody is looking at - a lazy read landing, the call
+      painter ticking, a store filling - and a rebuilt node is a fresh one. A
+      check that wants to prove an open menu SURVIVES that cannot use a resize,
+      because a resize does not redraw anything here; it has to cause the real
+      thing. Exposed beside the other capture hooks rather than invented for
+      one suite.
+    */
+    render,
     browserSites,
     browserSeen,
     reviewing,

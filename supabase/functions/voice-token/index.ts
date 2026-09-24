@@ -215,6 +215,56 @@ Deno.serve(async (request: Request): Promise<Response> => {
     taking voice down — but it is NOT silent, because a Claire who has
     forgotten the office should say so rather than improvise.
   */
+  /*
+    WHICH PROJECT HE IS LOOKING AT.
+
+    Grant, 23 September: *"Both voice modes must know which project they belong
+    to. If Grant is inside Project A, a voice interaction must not accidentally
+    become Project B conversation."*
+
+    The page says which one, and it is the only thing that can - it is the
+    surface he is on. It is a HINT and not an instruction: `voice_lookup` is
+    asked about it and whatever comes back is put in front of Claire as the
+    project in view, so a call opened on the Legacy Coaching Course starts
+    knowing what "this project" means. She still has the same tools and can
+    still be asked about anything else, which is why this narrows nothing.
+
+    Shaped, never trusted: a slug only, capped, and it reaches the database as
+    an argument to a canonical read that takes free text anyway.
+  */
+  let inView = ''
+  const asked = (await request.json().catch(() => ({}))) as { project?: unknown }
+  const slug =
+    typeof asked.project === 'string'
+      ? asked.project
+          .trim()
+          .slice(0, 120)
+          .replace(/[^a-z0-9-]/gi, '')
+      : ''
+  if (slug !== '') {
+    try {
+      const look = await fetch(`${DB_URL}/rest/v1/rpc/voice_lookup`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_about: slug }),
+      })
+      if (look.ok) {
+        inView =
+          `\n\n--- THE PROJECT HE IS LOOKING AT ---\nHe opened this call from ` +
+          `"${slug}". Unless he names another one, "this project", "it" and "here" ` +
+          `mean that one.\n${JSON.stringify(await look.json())}`
+      } else {
+        console.error(`voice_lookup for the project in view came back ${look.status}`)
+      }
+    } catch (error) {
+      console.error(`voice_lookup unreachable: ${(error as Error).message}`)
+    }
+  }
+
   let stateBrief = ''
   try {
     const read = await fetch(`${DB_URL}/rest/v1/rpc/voice_state`, {
@@ -235,11 +285,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
     console.error(`voice_state unreachable: ${(error as Error).message}`)
   }
   const instructions =
-    stateBrief === ''
+    (stateBrief === ''
       ? `${INSTRUCTIONS}\n\nYou could not read the office's state when this call ` +
         'started. Say so if he asks about anything current, and use look_up — that ' +
         'may still work.'
-      : INSTRUCTIONS + stateBrief
+      : INSTRUCTIONS + stateBrief) + inView
 
   const session = {
     type: 'realtime',
@@ -315,6 +365,23 @@ Deno.serve(async (request: Request): Promise<Response> => {
       // knowing about before you ask her to do something.
       tools: degraded ? [] : TOOLS.map((t) => t.name),
       degraded,
+      /*
+        WHAT THE SESSION WAS GIVEN, as facts rather than as its contents.
+
+        The instructions are not echoed and must not be - they are minted here
+        precisely so the page cannot see or rewrite them. But a session that
+        silently lost its project brief or its state of play is indistinguishable
+        from one that has both, and "it is probably fine" is not a verification.
+        So this says WHETHER each was attached, and repeats the project slug the
+        caller itself sent. Nothing here is a secret and nothing here is the
+        brief; it is enough for a check to prove the office knew which project
+        the call was about.
+      */
+      context: {
+        project: slug,
+        project_brief: inView !== '',
+        state_of_play: stateBrief !== '',
+      },
     },
     { headers: cors },
   )

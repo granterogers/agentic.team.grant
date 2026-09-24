@@ -173,3 +173,4 @@ web/studio/textures/raw/
 # The disposable local database the fresh-install harness uses. Never a real
 # credential: loopback only, invented data, generated on first use.
 .fresh-install/
+.vercel

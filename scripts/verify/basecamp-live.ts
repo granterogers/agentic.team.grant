@@ -1,0 +1,730 @@
+/*
+ * THE DEPLOYED PAGE, IN A REAL BROWSER, SIGNED IN TO THE REAL OFFICE.
+ *
+ * This is the leg every previous report had to mark "could not be verified
+ * here". The reason was never a policy boundary: Chromium in this sandbox read
+ * an EMPTY NSS trust store, so every request to a public origin died with
+ * ERR_CERT_AUTHORITY_INVALID while the identical request from Node succeeded.
+ * `npm run trust:proxy-ca` puts the sandbox's own CA where the browser looks,
+ * with verification left on - a bad certificate is still refused - and this
+ * suite is what that buys.
+ *
+ * WHAT ONLY THIS CAN SEE, and it is not a small list:
+ *
+ *  - CORS. CLAUDE.md records the voice call being dead for weeks while every
+ *    probe passed, because a server-side fetch sends no `Origin` and therefore
+ *    cannot detect a CORS misconfiguration. `voice-token` takes NO
+ *    authentication, so its origin allowlist is the entire security boundary
+ *    around a credential minted on Grant's OpenAI key. Only a browser at the
+ *    real deployed origin can test it, and only against the DEPLOYED function.
+ *  - Real assets over real TLS: the staff avatars and the document thumbnails
+ *    come from private Supabase storage through signed URLs. A local capture
+ *    has never once loaded one.
+ *  - That signing in actually flips the page from the prototype to HIS office.
+ *
+ * SECRETS. The office token is read from the vault, typed into the page and
+ * never printed, never written to a file and never put in a URL. The minted
+ * voice credential is asserted on its SHAPE and its value is never read into a
+ * variable that anything logs. Nothing here is committed but the code.
+ *
+ * SIDE EFFECTS. Reads only. Nothing is enqueued, nothing is written, no job is
+ * created. One ephemeral voice credential is minted, which is what proves the
+ * allowlist works, and it expires on its own.
+ *
+ * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
+ */
+import { readFile } from 'node:fs/promises'
+import { chromium } from 'playwright'
+import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { signIn } from './lib/sign-in.ts'
+
+const inPage = (body: string): string => `(() => { ${body} })()`
+
+/*
+  WHAT THE BROWSER PRESENTS, as the page itself decides it.
+
+  These legs used to read `hq.token` straight out of storage. A browser signed
+  in as a PERSON holds a session and no office key, so every one of them sent
+  an empty bearer and the office answered 401 -- the suite reporting a working
+  product as broken, and for exactly the reason the product had to be fixed:
+  two ideas of what this browser presents. One expression, used everywhere.
+*/
+/*
+  AND THE GATEWAY THE PAGE ITSELF USES. The experiment runs its own copy while
+  this branch's gateway source is ahead of main and behind the backend branch
+  (ADR-0043), so a probe aimed at the hardcoded shared one is aimed at a
+  deployment that knows nothing about sessions -- which read as 401 from a page
+  that was working perfectly.
+*/
+const GATEWAY_IN_PAGE =
+  "(window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api')"
+const VOICE_IN_PAGE =
+  "(window.HQ_VOICE || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/voice')"
+
+const PRESENTS =
+  "(() => { try { const s = JSON.parse(localStorage.getItem('hq.session') || 'null'); " +
+  "return (s && s.access_token) || localStorage.getItem('hq.token') || '' } catch { return '' } })()"
+
+let pass = 0
+let fail = 0
+const check = (what: string, ok: boolean, detail = ''): void => {
+  if (ok) {
+    pass += 1
+    console.log(`ok    ${what}`)
+  } else {
+    fail += 1
+    console.log(`FAIL  ${what}${detail === '' ? '' : `\n        ${detail}`}`)
+  }
+}
+
+const SITE =
+  process.env.BASECAMP_SITE ?? 'https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app'
+
+const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
+const accessToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
+if (accessToken === '') {
+  console.error('SUPABASE_ACCESS_TOKEN is not set')
+  process.exit(1)
+}
+const db = new ManagementApiExecutor(ref, accessToken)
+
+const token = String(
+  (
+    await db.execute(
+      `select decrypted_secret as v from vault.decrypted_secrets where name = 'hq.api_token'`,
+    )
+  ).rows[0]?.v ?? '',
+)
+check('the office has a token in the vault', token !== '')
+if (token === '') process.exit(1)
+
+/* What HIS office actually holds, so "live" is checked against the office. */
+const realProjects = (
+  await db.execute(
+    `select name from public.projects where status = 'active' and not is_fixture order by name`,
+  )
+).rows.map((r) => String((r as { name: string }).name))
+check(
+  'the office has real projects to recognise',
+  realProjects.length > 0,
+  String(realProjects.length),
+)
+
+const browser = await chromium.launch({ args: ['--lang=en-GB'] })
+const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
+const page = await ctx.newPage()
+
+/*
+  EVERY GATEWAY ANSWER THIS PAGE GETS, WATCHED.
+
+  #340: `hq-api?section=pulse` answered 502 on every single page load, for the
+  life of the deployment, because `app.hq_pulse` had no `public` wrapper and
+  PostgREST only exposes `public`. Two suites were green over it — one called
+  the function in SQL, the other checked a hardcoded list the section was not
+  on — and only a browser at the real deployed origin ever saw it. So the
+  browser is what watches now: every response, by section, with the failures
+  named rather than counted.
+*/
+const gatewayFailures: string[] = []
+page.on('response', (response) => {
+  const url = response.url()
+  if (!url.includes('/functions/v1/hq-api')) return
+  if (response.status() < 400) return
+  const section = new URL(url).searchParams.get('section') ?? '(action)'
+  gatewayFailures.push(`${section}: http ${String(response.status())}`)
+})
+const thrown: string[] = []
+page.on('pageerror', (e) => {
+  thrown.push(e.message)
+})
+
+/* --- 1. the deployed page is reachable, over real TLS -------------------- */
+
+const landed = await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 40000 })
+check(
+  `the deployed page answers at ${SITE}`,
+  landed !== null && landed.status() < 400,
+  landed === null ? 'no response' : `http ${String(landed.status())}`,
+)
+await page.waitForSelector('.bcpanes, .bchome, .bcmain', { timeout: 30000 })
+await page.waitForTimeout(1200)
+
+/* --- 2. without a token it says so, rather than inventing an office ------ */
+
+const strip = await page
+  .locator('.bcnotlive')
+  .innerText()
+  .catch(() => '')
+check(
+  'with no token the deployed page says it is showing the prototype',
+  /prototype|sign in/i.test(strip),
+  strip.replace(/\n/g, ' / ').slice(0, 120),
+)
+
+/* --- 3. signing in flips it to HIS office ------------------------------- */
+
+/*
+  WHAT THE PROTOTYPE SAYS, BEFORE ANY OF IT IS REAL.
+
+  Read first, because the prototype has a project called "Legacy Coaching
+  Course" and so does Grant's office - the first version of the check below
+  looked for any real project name and passed while the page was still showing
+  invented data. A name in BOTH lists proves nothing. The discriminator has to
+  be a project the prototype cannot produce, and taking it from the page itself
+  means it cannot go stale when either list changes.
+*/
+const inventedBody = (await page.evaluate(
+  inPage(`return (document.body.innerText ?? '').replace(/\\s+/g, ' ')`),
+)) as string
+const onlyReal = realProjects.filter((n) => !inventedBody.includes(n))
+check(
+  'the office holds a project the prototype does not, to tell them apart by',
+  onlyReal.length > 0,
+  `real: ${realProjects.join(' | ')}`,
+)
+
+/*
+  SIGNED IN THE WAY A PERSON IS, through the product's own login.
+
+  §47: twenty-nine suites here once wrote a made-up token into storage and
+  passed only because Chromium could not reach the office. This one used the
+  REAL office key, which was never that defect -- but the office key is not
+  what a person presents any more, and a suite that keeps presenting it stops
+  testing the thing Grant uses.
+
+  `signIn` asks the office to PRODUCE the link rather than email it, then opens
+  it. Everything either side of the SMTP hop is genuinely exercised; the mail
+  arriving is not, and nothing here claims it is.
+*/
+/*
+  Back to where the suite already was. The review build opens the root on a
+  project, which is where the document tiles live -- sending the link to
+  `/basecamp` instead landed on the home board and the tile check reported
+  zero tiles as a defect on a page that simply was not the one with tiles.
+*/
+const who = await signIn(page, db, { ref, origin: SITE, back: SITE })
+check(`signed in as ${who.email}, with no credential typed anywhere`, true)
+
+/*
+  WAIT FOR THE STRIP TO GO, NOT FOR A DURATION. Four seconds was enough against
+  a local server and not against the real office, which fetches a studio
+  payload and then a document for every thumbnail - so the first run reported a
+  signed-in page still claiming to show invented projects, and the defect was
+  the stopwatch.
+*/
+const wentLive = await page
+  .waitForFunction("document.querySelector('.bcnotlive') === null", undefined, { timeout: 40000 })
+  .then(() => true)
+  .catch(() => false)
+check(
+  'signing in clears the prototype strip',
+  wentLive,
+  await page
+    .locator('.bcnotlive')
+    .innerText()
+    .catch(() => '(gone)'),
+)
+
+await page.waitForTimeout(2500)
+
+/*
+  ON THE PAGE IT IS ACTUALLY SHOWING. The site opens on ONE project, so the
+  other project names live in the switcher and are not in the document - the
+  first version of this looked for them in the body and failed against a page
+  that had gone live perfectly. What IS on this page is the project's own
+  material, so the discriminator is a document title the office holds and the
+  prototype does not.
+*/
+const realDocs = (
+  await db.execute(
+    `select d.title
+       from public.documents d
+       join public.projects p on p.project_id = d.project_id
+      where p.status = 'active' and not p.is_fixture and d.state = 'approved'
+      order by d.created_at desc
+      limit 40`,
+  )
+).rows.map((r) => String((r as { title: string }).title))
+const onlyRealDocs = realDocs.filter((t) => t.length > 8 && !inventedBody.includes(t))
+check(
+  'the office holds documents the prototype does not',
+  onlyRealDocs.length > 0,
+  `${String(realDocs.length)} real document title(s)`,
+)
+
+const body = (await page.evaluate(
+  inPage(`return (document.body.innerText ?? '').replace(/\\s+/g, ' ')`),
+)) as string
+check(
+  'and the page now shows material only the real office has',
+  onlyReal.some((n) => body.includes(n)) || onlyRealDocs.some((t) => body.includes(t)),
+  `looked for a project in [${onlyReal.join(' | ')}] or a document in [${onlyRealDocs.slice(0, 6).join(' | ')}]`,
+)
+
+/* --- 4. real assets, over real TLS, from private storage ---------------- */
+
+/*
+  The avatars are the thing that failed for the whole life of this branch. An
+  `<img>` that 404s or is refused has `naturalWidth` 0, and a decoded one does
+  not - which is the property, rather than counting the tags.
+*/
+await page.waitForTimeout(2500)
+const imgs = (await page.evaluate(
+  inPage(`const out = { total: 0, decoded: 0, broken: [] }
+     for (const i of document.querySelectorAll('img')) {
+       const src = i.currentSrc || i.src || ''
+       if (!src.startsWith('http')) continue
+       out.total += 1
+       if (i.complete && i.naturalWidth > 0) out.decoded += 1
+       else out.broken.push(src.slice(0, 90))
+     }
+     return out`),
+)) as { total: number; decoded: number; broken: string[] }
+check(
+  'no remote image on the page is broken',
+  imgs.broken.length === 0,
+  `${String(imgs.decoded)}/${String(imgs.total)} decoded — ${imgs.broken.slice(0, 3).join(', ')}`,
+)
+
+/*
+  AND WHAT THE OFFICE ACTUALLY HOLDS DECIDES WHAT CAN BE ASSERTED HERE.
+
+  The first version demanded a painted thumbnail and reported "0 painted of 9"
+  as a failure. It is not one: NOT ONE approved document in the live office has
+  a file behind it - all of them are connector records from NotebookLM, Notion
+  and uploads whose text lives in the row - so there is no first page to
+  render and the drawn page is the correct answer. A check that demands
+  something the data cannot supply is a check that will be switched off.
+
+  So it asks the office first, and asserts the half that is true today: every
+  tile drew SOMETHING, and the gateway really did answer for these documents
+  over real TLS from this origin, which is the signed-URL path working as far
+  as the data allows it to be exercised.
+*/
+const withFiles = Number(
+  (
+    await db.execute(
+      `select count(*) as n
+         from public.documents d
+         join public.projects p on p.project_id = d.project_id
+        where p.status = 'active' and not p.is_fixture and d.state = 'approved'
+          and coalesce(d.storage_path, '') <> ''`,
+    )
+  ).rows[0]?.n ?? 0,
+)
+
+const painted = (await page.evaluate(
+  inPage(`const tiles = [...document.querySelectorAll('[data-bc-thumb]')]
+     return {
+       tiles: tiles.length,
+       real: tiles.filter((t) => t.classList.contains('has-real')).length,
+       blank: tiles.filter((t) => t.querySelector('.bcpline, .bcglyph, .realpage') === null).length,
+     }`),
+)) as { tiles: number; real: number; blank: number }
+
+check(
+  'every document tile on the live page drew something',
+  painted.tiles > 0 && painted.blank === 0,
+  `${String(painted.tiles)} tile(s), ${String(painted.blank)} blank`,
+)
+if (withFiles > 0) {
+  check(
+    'a document thumbnail painted from a real signed URL out of private storage',
+    painted.real > 0,
+    `${String(painted.real)} painted of ${String(painted.tiles)}, with ${String(withFiles)} file-backed document(s) in the office`,
+  )
+} else {
+  console.log(
+    `note  the office holds NO approved document with a file behind it, so there is no first page to render and none of the ${String(painted.tiles)} tiles can paint one. Not a defect; the drawn page is the right answer.`,
+  )
+}
+
+/*
+  The gateway answering for a real document, from this origin, over real TLS.
+  That is the half of the signed-URL path the data can exercise today.
+*/
+const asked = (await page.evaluate(
+  inPage(`return fetch(${GATEWAY_IN_PAGE} + '?section=studio', {
+       headers: { Authorization: 'Bearer ' + ${PRESENTS} },
+     })
+       .then((r) => r.status)
+       .catch(() => 0)`),
+)) as number
+check(
+  'the gateway answers this origin with the office token',
+  asked === 200,
+  `http ${String(asked)}`,
+)
+
+/* --- 5. CORS on the credential minter, from the real page origin -------- */
+
+/*
+  `voice-token` has no authentication, so this allowlist is the whole of the
+  security around minting against Grant's OpenAI key. Run IN the page, so the
+  browser sends the real `Origin` - which is the one thing a server-side probe
+  can never do, and the reason this was dead for weeks the last time.
+
+  The response is inspected for SHAPE. Its value is never returned to Node.
+*/
+const mint = (await page.evaluate(
+  inPage(`return fetch('https://${ref}.supabase.co/functions/v1/voice-token', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ about: 'harness: origin allowlist check' }),
+     })
+       .then(async (r) => {
+         try {
+           const j = await r.json()
+           /*
+             The client secret comes back as a STRING here, not as the object
+             the OpenAI documentation shows - reading a value property off it
+             found nothing and reported a working minter as broken. No
+             backticks in this comment: it is inside a template literal.
+           */
+           const secret = typeof j.client_secret === 'string' ? j.client_secret : (j.client_secret && j.client_secret.value) || ''
+           return {
+             ok: r.ok,
+             status: r.status,
+             keys: Object.keys(j || {}).sort().join(','),
+             credential: typeof secret === 'string' && secret.length > 20,
+             degraded: j.degraded === true,
+           }
+         } catch (e) {
+           return { ok: false, status: r.status, keys: 'unreadable', credential: false, degraded: false }
+         }
+       })
+       .catch((e) => ({ ok: false, status: 0, keys: String(e).slice(0, 90), credential: false, degraded: false }))`),
+)) as { ok: boolean; status: number; keys: string; credential: boolean; degraded: boolean }
+
+/*
+  WHETHER THIS ORIGIN IS SUPPOSED TO BE ALLOWED, read from the deploy script
+  rather than decided here.
+
+  `voice-token` takes no authentication, so its origin allowlist is the entire
+  security boundary around minting on Grant's OpenAI key - and `deploy/voice.ts`
+  deliberately lists STABLE ALIASES only, saying why: a per-deployment URL would
+  make an allowlist that grows without bound and never shrinks. So a trial
+  integration preview, which has its own hostname, MUST be refused.
+
+  Run against the alias, the right answer is a credential. Run against a preview
+  URL, the right answer is a refusal - and a suite that called that a failure
+  would be reporting the security boundary working as a defect.
+*/
+const allowlisted = (await readFile('scripts/deploy/voice.ts', 'utf8').catch(() => ''))
+  .split('PAGE_ORIGINS')[1]
+  ?.split(']')[0]
+  ?.includes(new URL(SITE).host)
+if (allowlisted === true) {
+  check(
+    'the credential minter allows the real deployed origin (CORS)',
+    mint.status !== 0,
+    `a zero status is the browser refusing the response, which is what a CORS failure looks like: ${mint.keys}`,
+  )
+} else {
+  check(
+    'a deployment that is NOT on the origin allowlist is refused a credential',
+    mint.status === 0,
+    `this origin is not in PAGE_ORIGINS, so minting must fail — it answered http ${String(mint.status)}`,
+  )
+  console.log(
+    'note  this subject is a preview URL, not the stable alias, so a refusal is the correct answer',
+  )
+}
+/*
+  ASKED AS FIELDS, NOT AS A STRING. The first version folded everything into
+  one label and tested it with `includes('degraded')` - which matched the word
+  in the KEY LIST rather than the flag, so a healthy mint read as a degraded
+  one. A substring check satisfied by a superstring, which this repository
+  already has a rule about.
+*/
+if (allowlisted === true) {
+  check(
+    'and it mints a real credential for this page',
+    mint.ok && mint.credential,
+    `http ${String(mint.status)} — keys ${mint.keys}`,
+  )
+  check('and the minter is not answering in a degraded mode', !mint.degraded)
+}
+
+/* --- 6. and a stranger's origin is refused ------------------------------ */
+
+/*
+  THE CONTROL. An allowlist that lets everybody through would pass every check
+  above. A page on another origin asks for the same thing, and must not get it.
+*/
+const other = await ctx.newPage()
+await other.goto('https://example.com/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+const stranger = (await other.evaluate(
+  inPage(`return fetch('https://${ref}.supabase.co/functions/v1/voice-token', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ about: 'harness: a stranger' }),
+     })
+       .then((r) => ({ reached: true, status: r.status }))
+       .catch(() => ({ reached: false, status: 0 }))`),
+)) as { reached: boolean; status: number }
+check(
+  'a page on another origin cannot mint one',
+  !stranger.reached,
+  `it got http ${String(stranger.status)} — the allowlist is not holding`,
+)
+await other.close()
+
+/* --- 7. the chat path, from the real deployed origin --------------------- */
+
+/*
+  `verify:chat-live` already proves this endpoint over the network from Node.
+  What Node cannot prove is that the DEPLOYED PAGE can reach it: a fetch from a
+  script sends no Origin, and CORS is the failure this repository has paid for
+  twice. So the same request is made from inside the page.
+
+  NOTHING IS ENQUEUED. The office answers this kind of question from its own
+  state and says so in `did` - the check asserts that, so a run of this suite
+  can never leave work in Grant's queue, and the session id names the harness.
+*/
+const turn = (await page.evaluate(
+  inPage(`return fetch(${VOICE_IN_PAGE} + '/turn', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         Authorization: 'Bearer ' + ${PRESENTS},
+       },
+       body: JSON.stringify({ said: 'what projects have we got', session: 'verify-basecamp-live-' + Date.now() }),
+     })
+       .then(async (r) => {
+         const j = await r.json().catch(() => ({}))
+         return { status: r.status, did: String(j.did || ''), spoke: String(j.speak || '') }
+       })
+       .catch((e) => ({ status: 0, did: 'threw', spoke: String(e).slice(0, 90) }))`),
+)) as { status: number; did: string; spoke: string }
+
+check(
+  'the office answers the deployed page over CORS',
+  turn.status === 200,
+  `http ${String(turn.status)} — ${turn.spoke.slice(0, 90)}`,
+)
+check('and the answer is a real sentence', turn.spoke.length > 20, turn.spoke.slice(0, 120))
+check(
+  'and it answered from its own state rather than starting work',
+  turn.did === 'answered',
+  turn.did,
+)
+check(
+  'and it names a project that is really in the database',
+  realProjects.some((n) => turn.spoke.includes(n)),
+  `said: ${turn.spoke.slice(0, 140)}`,
+)
+
+/* --- 8. how a project looks, written through the real picker ------------- */
+
+/*
+  ITEM 9'S LAST GAP. Everything else about the appearance controls was verified
+  against the prototype and against the office separately; what was never shown
+  is a PRESS in the real picker changing the real row, because a browser here
+  could not reach the office.
+
+  THE SUBJECT IS THE TEST PROJECT, by name, and it is put back exactly as it
+  was - read first, restored through the sanctioned writer afterwards, and the
+  restore is asserted. Changing how one of Grant's projects looks and leaving
+  it changed would be a suite redecorating his office.
+*/
+const SUBJECT = 'ai-team-hq-test'
+const lookOf = async (): Promise<{ icon: string | null; hue: string | null }> => {
+  const row = (
+    await db.execute(
+      `select icon, icon_hue from public.projects where slug = ${JSON.stringify(SUBJECT).replace(/"/g, "'")}`,
+    )
+  ).rows[0] as { icon: string | null; icon_hue: string | null } | undefined
+  return { icon: row?.icon ?? null, hue: row?.icon_hue ?? null }
+}
+
+const was = await lookOf()
+check(`the test project ${SUBJECT} is there to write to`, true, JSON.stringify(was))
+
+await page.goto(`${SITE}/basecamp/p/${SUBJECT}`, { waitUntil: 'domcontentloaded', timeout: 40000 })
+await page.waitForSelector('.bcpanes, .bcmain', { timeout: 30000 })
+await page.waitForTimeout(2000)
+await page.locator('[data-bc-pagemenu]').first().click()
+await page.waitForTimeout(400)
+await page.locator('[data-bc-look]').first().click()
+await page.waitForSelector('#viewer [data-look-hue]', { timeout: 20000 })
+await page.waitForTimeout(600)
+
+const offered = (await page.evaluate(
+  inPage(
+    `return [...document.querySelectorAll('#viewer [data-look-hue]')].map((b) => b.dataset.lookHue)`,
+  ),
+)) as string[]
+const pick = offered.find((h) => h !== was.hue) ?? ''
+check(
+  'the picker offers a colour this project is not already wearing',
+  pick !== '',
+  offered.join(','),
+)
+
+if (pick !== '') {
+  await page.locator(`#viewer [data-look-hue="${pick}"]`).first().click()
+  /*
+    Poll the OFFICE, not the page. The page redraws optimistically - CLAUDE.md
+    records a press that looked applied while the write never completed - so
+    the row is what decides.
+  */
+  let stored: string | null = null
+  for (let i = 0; i < 20; i += 1) {
+    await page.waitForTimeout(1000)
+    stored = (await lookOf()).hue
+    if (stored === pick) break
+  }
+  check(
+    'pressing a colour in the real picker writes it to the office',
+    stored === pick,
+    `asked for ${pick}, the row says ${String(stored)}`,
+  )
+
+  /* And it is back exactly as it was, through the sanctioned writer. */
+  if (was.hue === null) {
+    await db.execute(`select app.hq_project_look('${SUBJECT}', null, null, null, array['hue'])`)
+  } else {
+    await db.execute(
+      `select app.hq_project_look('${SUBJECT}', null, '${was.hue}', null, array[]::text[])`,
+    )
+  }
+  const now = await lookOf()
+  check(
+    'and the suite puts the project back exactly as it found it',
+    now.hue === was.hue && now.icon === was.icon,
+    `was ${JSON.stringify(was)}, now ${JSON.stringify(now)}`,
+  )
+}
+
+/* --- what the team made, opened (§19) ------------------------------------ */
+/*
+  "Interaction must NOT be limited to `Add to project`. Clicking an output
+  should allow Grant to OPEN and VIEW the artifact directly." It could not be
+  opened at all: the office has written thousands and importing or deciding on
+  one were both verdicts on something nobody could see.
+*/
+/*
+  ON A PROJECT THAT HAS SOME. The write subject is a test project with no
+  outputs, and a check that demands what the data cannot supply is a check
+  somebody switches off. The office is asked which project has the most.
+*/
+/*
+  ON A PROJECT THAT ACTUALLY SHOWS SOME.
+
+  Two queries were tried and both picked a project whose team surface listed
+  nothing: counting `outputs` found one with a thousand, and asking
+  `studio_requests` found three tied at twenty. The page applies its own filter
+  on top of either -- so rather than model the filter in SQL and get a third
+  answer, the suite opens the candidates and uses the first that really lists
+  one. What the page shows is the only authority on what the page shows.
+*/
+const candidates = (
+  await db.execute(
+    `select p.slug
+       from public.projects p
+      where p.status = 'active' and not p.is_fixture
+        and jsonb_path_exists(app.studio_requests(p.project_id), '$[*].output.id')
+      limit 4`,
+  )
+).rows.map((r) => String((r as { slug: string }).slug))
+check(
+  'the office has projects that might have outputs',
+  candidates.length > 0,
+  candidates.join(','),
+)
+
+let madeOn = ''
+let madeOffered = 0
+for (const slug of candidates) {
+  await page.goto(`${SITE}/basecamp/p/${slug}/team`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 45000,
+  })
+  await page.waitForSelector('.bcmain', { timeout: 30000 })
+  await page.waitForTimeout(2200)
+  const n = (await page.evaluate(
+    inPage("return document.querySelectorAll('[data-bc-output-open]').length"),
+  )) as number
+  if (n > 0) {
+    madeOn = slug
+    madeOffered = n
+    break
+  }
+}
+
+check(
+  'the team surface lists what the team has made',
+  madeOffered > 0,
+  `looked at ${candidates.join(', ')}`,
+)
+if (madeOffered > 0) {
+  await page.click('[data-bc-output-open]')
+  const opened = await page
+    .waitForSelector('.bcoutputbody', { timeout: 25000 })
+    .then(() => true)
+    .catch(() => false)
+  check(`and one of them opens (${madeOn}, ${String(madeOffered)} listed)`, opened)
+  const read_ = (await page.evaluate(
+    inPage(`
+      const body = document.querySelector('.bcoutputbody')
+      const h = document.querySelector('.bcrecordhead h1')
+      const meta = document.querySelector('.bcpmeta')
+      return {
+        heading: h === null ? '' : (h.textContent || '').trim(),
+        paragraphs: body === null ? 0 : body.querySelectorAll('p').length,
+        chars: body === null ? 0 : (body.innerText || '').length,
+        meta: meta === null ? '' : (meta.textContent || '').replace(/\\s+/g, ' ').trim(),
+        addable: document.querySelector('[data-bc-addtoproject]') !== null,
+      }
+    `),
+  )) as { heading: string; paragraphs: number; chars: number; meta: string; addable: boolean }
+  check(
+    'with the words the team actually wrote',
+    read_.chars > 20,
+    `${String(read_.chars)} characters`,
+  )
+  /*
+    Paragraphs, not one run-together block. CLAUDE.md records that HTML
+    collapses whitespace, so a body rendered in a single tag loses every
+    newline -- and #186's whole outcome was invisible on the dashboard for
+    weeks while Telegram and Slack showed it correctly.
+  */
+  check('drawn as paragraphs rather than one block', read_.paragraphs >= 1)
+  check(
+    'and it says who wrote it and on what',
+    /written by/i.test(read_.meta),
+    read_.meta.slice(0, 70),
+  )
+  check('while Add to project is still offered where it means something', read_.addable)
+}
+
+/* --- 9. and signing out leaves nothing behind --------------------------- */
+
+await page.evaluate(
+  inPage(
+    "try { localStorage.removeItem('hq.session'); localStorage.removeItem('hq.token') } catch {} return true",
+  ),
+)
+const gone = (await page.evaluate(inPage(`return ${PRESENTS} === '' ? null : 'still here'`))) as
+  | string
+  | null
+check('signing out leaves this browser holding nothing', gone === null)
+
+/*
+  #340, from the seat that found it. A 502 on a section the page asks for on
+  every load is invisible to a server-side probe with the right token, and
+  invisible to a suite that calls the function in SQL.
+*/
+check(
+  'every section the page asked the gateway for came back',
+  gatewayFailures.length === 0,
+  gatewayFailures.join(' | '),
+)
+
+check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
+
+await ctx.clearCookies()
+await browser.close()
+console.log(`\n${String(pass)}/${String(pass + fail)} passed — subject: ${SITE}`)
+process.exit(fail === 0 ? 0 : 1)
