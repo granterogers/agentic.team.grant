@@ -451,10 +451,24 @@ export function taskSpine(
   today: readonly HisTask[],
   upcoming: readonly HisTask[],
   counts: { readonly overdue?: number; readonly today?: number; readonly all?: number },
+  /*
+    The undated ones, NAMED (ledger R8). Every open task on his real list has
+    no due date, so the three dated buckets were all empty and the spine said
+    only "holds 9 item(s), none of them due" - a count with no names, which
+    cannot answer "what are my tasks". Optional so an older caller keeps its
+    exact sentence.
+  */
+  unscheduled: readonly HisTask[] = [],
 ): string {
   const say = (t: HisTask): string => (t.due_on === null ? t.title : `${t.title} (${t.due_on})`)
   const total = Number(counts.all ?? 0)
-  if (total === 0 && overdue.length === 0 && today.length === 0 && upcoming.length === 0) {
+  if (
+    total === 0 &&
+    overdue.length === 0 &&
+    today.length === 0 &&
+    upcoming.length === 0 &&
+    unscheduled.length === 0
+  ) {
     return 'His own to-do list is empty right now. Nothing is on it.'
   }
   const parts: string[] = []
@@ -464,6 +478,10 @@ export function taskSpine(
     parts.push(`Due today or earlier, ${String(today.length)}: ${today.map(say).join('; ')}.`)
   if (upcoming.length > 0)
     parts.push(`Coming up, ${String(upcoming.length)}: ${upcoming.map(say).join('; ')}.`)
+  if (unscheduled.length > 0)
+    parts.push(
+      `No date set, ${String(unscheduled.length)}: ${unscheduled.map((t) => t.title).join('; ')}.`,
+    )
   if (parts.length === 0) {
     return `His own to-do list holds ${String(total)} item(s), none of them due or overdue.`
   }
@@ -5006,10 +5024,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ? ''
         : await deps.db
             .execute(`
-              select app.my_tasks('overdue', 15, null, 'smart') as overdue,
-                     app.my_tasks('today', 15, null, 'smart') as today,
-                     app.my_tasks('upcoming', 10, null, 'smart') as upcoming,
-                     app.my_tasks_counts() as counts`)
+              select app.my_tasks('overdue', 15, null, 'smart', h.harness) as overdue,
+                     app.my_tasks('today', 15, null, 'smart', h.harness) as today,
+                     app.my_tasks('upcoming', 10, null, 'smart', h.harness) as upcoming,
+                     app.my_tasks('unscheduled', 15, null, 'smart', h.harness) as unscheduled,
+                     app.my_tasks_counts() as counts
+                /*
+                  A harness turn sees its own world (ledger R8), the rule the
+                  project spine above already follows: without it every test
+                  of "what is on my list" answered "nothing" about the task
+                  the same session had just made. False for every message a
+                  person sends, so byte-identical for Grant.
+                */
+                from (select app.harness_job(${lit(job.jobId)}::uuid) as harness) h`)
             .then((r) => {
               /*
                 The executor hands a jsonb column back as an OBJECT, and
@@ -5028,6 +5055,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 read(row.today, [] as HisTask[]),
                 read(row.upcoming, [] as HisTask[]),
                 read(row.counts, {} as { overdue?: number; today?: number; all?: number }),
+                read(row.unscheduled, [] as HisTask[]),
               )
             })
             /*
