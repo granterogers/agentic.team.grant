@@ -3235,6 +3235,94 @@ completed. Nineteen is small and it is the right nineteen.
 Clean-pass count after pass 64: **5 of 5.** The final adversarial synthesis
 pass is now due.
 
+---
+
+## FINAL ADVERSARIAL SYNTHESIS PASS — CLEAN
+
+**Method:** deliberately combine the systems this repository has broken most
+often, and the long-lived state they write, rather than testing any of them
+alone. Three combinations.
+
+### 1. The announcement dedupe against the apology a dead turn owes him
+
+0571 guarantees a turn that dies says so. 0074 lets a job declare its own
+output not worth a message, and 0584/0585/0589's dedupe rides the same flag.
+Both travel through `public.jobs.announce` — the COLUMN, which the combined
+notifier reads because it runs after the worker that wrote it.
+
+`lastWord` builds a FRESH output carrying `announce: true` and calls that
+notifier directly, **without writing the column**. So the apology is judged
+by a flag written for a different output, and answered with *"nothing worth
+announcing"*.
+
+**NOT A LIVE PRODUCT DEFECT, and the evidence says so precisely.** 77 jobs
+already have the exact shape — failed, `office.instruction`, an inbound
+command, `announce = false` — and every one is a verify suite suppressing its
+own traffic. Every handler that returns `announce: false` is a DUTY
+(`tasks-sync`, `job-traces`, `briefing`, `pursue`, `build-shots`,
+`reminders`), and `app.owed_a_word` requires an inbound command, which a duty
+has not got. **The invariant holds by the accident of which handlers exist**,
+and is one quiet confirmation away from not holding.
+
+Closed anyway, because the cost is one statement and the failure mode is the
+worst in this file's record. The first draft of the fix would have been
+WRONG: reading `output.announce` in the notifier instead would have defeated
+`app.say_once` entirely, since the column is exactly how the worker's
+decision reaches a later notifier. Checked before changing production.
+
+Regression added with a control asserting the notifier still reads the
+COLUMN, so a future "simplification" cannot silently switch 0584 off. **The
+first sabotage did not apply** — biome had reformatted the call and my anchor
+was stale, and the 14 green tests were the sabotage failing, not the check
+working; eighth instance. Re-anchored: 0 occurrences, **2 checks red**,
+restored.
+
+### 2. Every filter this programme narrowed, audited as a set
+
+The question CLAUDE.md sets for exactly this: *what of HIS does each of these
+no longer show?* Four filters, one query each:
+
+| filter | of his now hidden |
+|---|---|
+| 0582 widened `harness_job` | **0** |
+| 0586 filtered activity feed | 0 |
+| 0588 narrowed failure reader | 0 |
+| 0590 `connection_health.purpose` | 0 |
+
+The first came back **23** and needed chasing. All 23 are `voice:turn:
+scenario-a-…` on the fixture project `ledger-proof-mtyyk8qn`, classified by
+0355's PROJECT signal which predates 0582 — **23 of 23 explained, 0
+unexplained**. My own filter had enumerated `verify|fixture|probe` and not
+`scenario-a`, which is this file's own rule about chasing harness traffic by
+name, turned on me.
+
+### 3. Long-lived state
+
+Every standing check over state that cannot be taken back: `check:standing`,
+`chatter`, `believes`, `answerable`, `undo`, `capabilities`, `consumed`,
+`pressable`, `icons`, `secrets`, `templates`, `migrations`, `leaks` — all
+green, with `check:leaks` at 22 known escapes and 0 new.
+
+`check:callers` failed on three public wrappers and the cause is
+**cross-branch, verified rather than assumed**: `hq_document_order_set`,
+`hq_document_order_reset` and `hq_output` arrive from 0583/0584, two of the
+five sibling migrations recovered here so 0589 could apply, and their caller
+is that branch's `supabase/functions/hq-api/index.ts` — confirmed with
+`git grep -l … origin/claude/basecamp-team-hq`. The file is in this checkout
+and the code that calls it is not: CLAUDE.md's ownership rule with the sign
+flipped. Baselined with that reason and the command that checks it, to be
+removed when that branch merges.
+
+**Verdict: synthesis found no meaningful systemic product defect.** One
+latent coupling closed as hardening, one cross-branch gate gap baselined
+truthfully. Neither is a wrong behaviour of the product today, so the streak
+is NOT reset — stated explicitly because the alternative reading would be the
+self-serving one.
+
+**Deployed:** worker **v835**, healthy.
+**Gates:** lint 0, typecheck 0, test **3066/3066 across 190 files**, and the
+thirteen standing checks above.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

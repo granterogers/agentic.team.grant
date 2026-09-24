@@ -145,3 +145,57 @@ describe('the seam', () => {
     expect(worker.slice(from, from + 220)).toMatch(/catch/)
   })
 })
+
+/*
+  THE SEAM BETWEEN TWO CORRECT MECHANISMS, found by combining them rather
+  than by testing either.
+
+  0571 guarantees a turn that dies says so. 0074 lets a job declare its own
+  output not worth a message, and 0584's dedupe rides the same flag — both
+  through `public.jobs.announce`, the COLUMN, which the combined notifier
+  reads because it runs after the worker that wrote it.
+
+  `lastWord` builds a fresh output carrying `announce: true` and calls that
+  notifier directly, so without a correction the apology is judged by a flag
+  written for a DIFFERENT output, and answered with "nothing worth
+  announcing".
+
+  Not reachable today: 77 jobs already have the exact shape (failed,
+  `office.instruction`, an inbound command, `announce = false`) and every one
+  is a verify suite suppressing itself. Every handler that returns
+  `announce: false` is a DUTY, and `app.owed_a_word` requires an inbound
+  command, which a duty has not got. The invariant holds by which handlers
+  happen to exist.
+*/
+describe('the apology is not judged by a flag written for another output', () => {
+  const lastword = readFileSync('src/jobs/lastword.ts', 'utf8')
+
+  it('corrects the column before the notifier reads it', () => {
+    const at = lastword.indexOf('set announce = true')
+    expect(at).toBeGreaterThan(-1)
+    /* Bounded at BOTH ends, per CLAUDE.md's slice trap. */
+    const window = lastword.slice(at, lastword.indexOf('await notify(', at))
+    expect(window.length).toBeGreaterThan(0)
+    expect(window).toMatch(/job\.jobId/)
+  })
+
+  it('does it BEFORE notifying, which is the whole property', () => {
+    expect(lastword.indexOf('set announce = true')).toBeLessThan(lastword.indexOf('await notify('))
+  })
+
+  it('cannot turn the correction into a second failure', () => {
+    const at = lastword.indexOf('set announce = true')
+    expect(lastword.slice(at, at + 200)).toMatch(/catch/)
+  })
+
+  it('CONTROL: the notifier still suppresses on the COLUMN, so 0584 is intact', () => {
+    /*
+      If this ever reads the OUTPUT instead, `app.say_once` is defeated and
+      every deduped duty starts speaking again. The column is right; the
+      correction above is the one caller that arrives without having written
+      it.
+    */
+    const notify = readFileSync('src/channels/notify.ts', 'utf8')
+    expect(notify).toMatch(/select announce from public\.jobs where job_id/)
+  })
+})

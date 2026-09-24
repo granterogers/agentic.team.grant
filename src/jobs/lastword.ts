@@ -197,6 +197,38 @@ export async function lastWord(
     sources: [],
   }
 
+  /*
+    AND THE COLUMN IS CORRECTED BEFORE THE NOTIFIER READS IT.
+
+    `announce: true` above is on the OUTPUT; the combined notifier suppresses
+    on `public.jobs.announce`, the COLUMN, because that is how the worker's
+    dedupe seam (0584/0585/0589) reaches a notifier that runs later. Reading
+    the output there instead would defeat `app.say_once` entirely, so the
+    column is right and this is the one caller that arrives without having
+    written it.
+
+    Left alone, a job whose earlier attempt set the column false and which
+    then died would have its apology answered with "nothing worth
+    announcing" — the 0074 gate, correct for an interim poll, swallowing the
+    one message 0571 exists to guarantee.
+
+    NOT REACHABLE TODAY, and that is the reason to close it rather than to
+    leave it: 77 jobs already have exactly this shape (failed,
+    `office.instruction`, an inbound command, `announce = false`) and every
+    one is a verify suite suppressing its own traffic. No product path sets
+    the flag on a job `app.owed_a_word` can select, because every handler
+    that returns `announce: false` is a DUTY and a duty carries no inbound
+    command. The invariant therefore holds by the accident of which handlers
+    exist, and is one quiet confirmation away from not holding.
+
+    Safe in the other direction too: `owed_a_word` requires an inbound
+    command and `parent_job_id is null`, so this can never resurrect a duty's
+    muted chatter — the rows 0584 silences are not rows this function returns.
+  */
+  await db
+    .execute(`update public.jobs set announce = true where job_id = ${lit(job.jobId)}::uuid`)
+    .catch(() => undefined)
+
   try {
     await notify(job, output, outputId)
     return 'told'
