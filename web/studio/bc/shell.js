@@ -908,7 +908,7 @@ const taskList = (p, g, whole = false) => {
       ${
         done.length === 0
           ? ''
-          : `<h4 class="bcdonehead">${esc(
+          : `<h3 class="bcdonehead">${esc(
               /*
                 THE NOUN FIRST, AND A REAL HEADING.
 
@@ -920,7 +920,7 @@ const taskList = (p, g, whole = false) => {
                 navigate to rather than a paragraph in bold.
               */
               done.length === 1 ? 'Done (1)' : `Done (${String(done.length)})`,
-            )}</h4>
+            )}</h3>
             <div class="bcdonelist">
               ${done.map((t) => taskRow(t, all.indexOf(t), g.name)).join('')}
             </div>`

@@ -129,9 +129,19 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
       ? ''
       : ` style="grid-column:${String(rect.x + 1)}/span ${String(rect.w)};grid-row:${String(rect.y + 1)}/span ${String(rect.h)}"`
   return `<section class="bcmod${wide ? ' bcmod--wide' : ''}${rect === null ? '' : ' bcmod--placed'}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}"${style}>
-    <header class="bcmodhead" data-bc-expand="${esc(id)}" role="button" tabindex="0"
-      aria-label="${esc(`${name} — open, or drag to move`)}">
-      <h2 class="bcmodtitle">${esc(name)}</h2>
+    <!--
+      THE HEADER IS STILL THE WHOLE POINTER TARGET (Grant, 22 September), but
+      it is no longer pretending to be one button. As role=button it held
+      other buttons - the Mine / The team's switch and the close cross - and
+      a control inside a control is something a screen reader cannot present:
+      axe flagged every module header as nested-interactive. The keyboard stop
+      is a real button on the title; its keys bubble to the header's own
+      handler, so Enter opens and Alt with the arrows still moves and resizes.
+    -->
+    <header class="bcmodhead" data-bc-expand="${esc(id)}">
+      <h2 class="bcmodtitle"><button type="button" class="bcmodopen"
+        aria-label="${esc(`Open ${name}`)}"
+        aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown">${esc(name)}</button></h2>
       <!--
         THE META IS MARKUP NOW, not a string. It was escaped as text, which
         was right while it was a sentence and wrong the moment Mine and The
@@ -158,8 +168,15 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
     ${
       rect === null
         ? ''
-        : `<span class="bcresize" data-bc-resize="${esc(id)}" role="separator"
-            aria-label="${esc(`Resize ${name}`)}" tabindex="0" aria-orientation="horizontal">
+        : /*
+            A focusable separator must say where it is (axe: aria-valuenow is
+            required). The value is the module's width in board columns, and
+            the keyboard resize on the header changes it.
+          */
+          `<span class="bcresize" data-bc-resize="${esc(id)}" role="separator"
+            aria-label="${esc(`Resize ${name}`)}" tabindex="0" aria-orientation="vertical"
+            aria-valuemin="1" aria-valuemax="12" aria-valuenow="${esc(String(rect.w))}"
+            aria-valuetext="${esc(`${String(rect.w)} of 12 columns wide`)}">
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none"
               stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
               <path d="M13 6L6 13M13 10.5l-2.5 2.5"></path>
@@ -263,7 +280,14 @@ export const setPageMenuOpen = (want) => {
   controls of 44px do not fit across 390px beside a sentence.
 */
 const head = (p) => {
-  return `<header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}" data-bc-livehost>
+  return `<!--
+      The page's name, for anyone navigating by headings. Grant took the
+      VISIBLE title away (the top bar's chip already names the project), and
+      that left the page with no level-one heading at all. Outside the header,
+      which verify:basecamp-home reads to prove nothing is said twice.
+    -->
+    <h1 class="bcvh">${esc(p.name)}</h1>
+    <header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}" data-bc-livehost>
     <div class="bcheadrow">
       ${needsYouLine(p)}
       <span class="bcheadacts">

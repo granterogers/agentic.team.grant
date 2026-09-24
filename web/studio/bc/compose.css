@@ -211,6 +211,7 @@
   gap: 10px;
   margin-bottom: 6px;
 }
+[data-experience='basecamp'] .bclisthead h3,
 [data-experience='basecamp'] .bclisthead h4 { margin: 0; font-size: 15px; color: var(--bc-text-strong); }
 [data-experience='basecamp'] .bclistcount {
   font-variant-numeric: tabular-nums;
@@ -1978,7 +1979,8 @@
 */
 [data-experience='basecamp'] .bcminiboard,
 [data-experience='basecamp'] .bcboard {
-  --stage-todo: #7f8c99;
+  /* Lifted from #7f8c99, which was 4.01:1 as 13px column-heading text (axe). */
+  --stage-todo: #95a1ad;
   --stage-doing: #6ab3fd;
   --stage-blocked: #ef8f6b;
   --stage-done: #63c295;
@@ -2842,7 +2844,13 @@
   text-transform: uppercase;
   color: var(--bc-text-muted);
 }
-[data-experience='basecamp'] .bcdonelist .bcitem { opacity: .72; }
+/*
+  Finished work recedes through its strike-through and muted ink - not also
+  through opacity, which compounded with the muted colour to 4.19:1 against
+  the surface, under AA for 15px text (axe). .86 keeps a visible step back
+  and clears 4.5:1.
+*/
+[data-experience='basecamp'] .bcdonelist .bcitem { opacity: .86; }
 [data-experience='basecamp'] .bcdonelist .bcitem:hover,
 [data-experience='basecamp'] .bcdonelist .bcitem:focus-within { opacity: 1; }
 /*
@@ -3493,3 +3501,20 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   [data-experience='basecamp'] .bcattbell { display: block; }
   [data-experience='basecamp'] .bcattword { display: none; }
 }
+
+/* The module title's button looks exactly like the title it replaced. */
+[data-experience='basecamp'] .bcmodopen {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: start;
+  cursor: pointer;
+  border-radius: 4px;
+}
+[data-experience='basecamp'] .bcmodopen:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 3px; }

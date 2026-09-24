@@ -869,7 +869,9 @@ const wireExpanded = (root) => {
         reference captured before the redraw - #197's lesson, which cost four
         attempts the first time.
       */
-      document.querySelector(`[data-bc-expand="${lastOpener}"]`)?.focus()
+      const back = document.querySelector(`[data-bc-expand="${lastOpener}"]`)
+      /* A module header is not focusable; its title button is. */
+      ;(back?.querySelector?.('.bcmodopen') ?? back)?.focus()
     })
   }
   const box = root.querySelector('.bcexpbox')
@@ -938,7 +940,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return
   if (document.querySelector('[data-bc-expanded]') === null) return
   ctx?.closeExpanded?.()
-  document.querySelector(`[data-bc-expand="${lastOpener}"]`)?.focus()
+  const back = document.querySelector(`[data-bc-expand="${lastOpener}"]`)
+  ;(back?.querySelector?.('.bcmodopen') ?? back)?.focus()
 })
 
 /*
@@ -1823,7 +1826,9 @@ const wireBoard = (root) => {
         this: "Do not allow interactive controls within the header, such as
         three-dot menus, to accidentally trigger expansion."
       */
-      if (e.target.closest('button, a, input, select, [data-bc-modoff]') !== null) return
+      /* The title's own button IS the header's target (its keyboard stop), so
+         a press on the title still drags; every other control does not. */
+      if (e.target.closest('button:not(.bcmodopen), a, input, select, [data-bc-modoff]') !== null) return
       begin('move', h, e)
     })
     h.addEventListener('pointermove', during)
@@ -1872,7 +1877,7 @@ const wireBoard = (root) => {
         : { x: now.x + step[0], y: Math.max(0, now.y + step[1]) }
       grid.place(slug, id, want)
       ctx.render()
-      document.querySelector(`[data-mod="${id}"] .bcmodhead`)?.focus()
+      document.querySelector(`[data-mod="${id}"] .bcmodopen`)?.focus()
     })
   }
 

@@ -353,7 +353,7 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
         const first = g.items.slice(0, per)
         return `<section class="bclist">
           <header class="bclisthead">
-            <h4>${esc(g.name)}</h4>
+            <h3>${esc(g.name)}</h3>
             <span class="bclistcount">${esc(`${done}/${g.items.length}`)}</span>
           </header>
           <ul class="bctasks">${first.map(taskLine).join('')}</ul>

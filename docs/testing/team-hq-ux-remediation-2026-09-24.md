@@ -118,3 +118,19 @@ Trap I hit and recovered from: `git checkout -p` on an uncommitted file reverted
 | 44 | **320–360px: page 43px/3px wider than the phone** — the To-dos module header (title + Mine/Team switch + close) needed 336px; one overflowing header widens a phone's layout viewport, so the fixed tray ran off-screen. **Pre-existing on `main`** (measured in the pristine worktree) | **fixed** — header meta wraps under the title below 400px; 0 overflow at 320/360/390 |
 | 45 | 320px: project chip truncated to one letter | **fixed** — "Attention" becomes a bell below 380px (accessible name unchanged) |
 | — | 1280 (12-col board) → 1180 (2-col) → 820 (1-col) transitions | inspected; no overlap, header row wraps cleanly at 820 |
+
+## Pass 7 — accessibility (axe-core on 14 routes × desktop + phone, plus a manual Tab walk)
+
+Before: 6 rules failing (serious nested-interactive ×12, serious contrast ×18, critical aria-required-attr ×6, moderate heading-order, page-has-heading-one, minor aria-allowed-role). **After: 0 violations.**
+
+| # | Finding | State |
+|---|---|---|
+| 46 | Module header was `role=button` containing buttons (switch, ×) | **fixed** — header keeps the pointer (Grant, 22 Sep: whole header is the target); keyboard stop is a real `<button>` in the `<h2>`; Enter/Alt+arrows still bubble to the header handler |
+| 47 | That change broke drag-by-title (caught by `verify:basecamp-board`) | **fixed** — the title button is exempt from the "control inside the header" rule |
+| 48 | Completed rows 4.19:1 (muted ink × 0.72 opacity) | **fixed** — opacity .86 |
+| 49 | Card Table "Not started" heading 4.01:1 | **fixed** — slate lifted |
+| 50 | Resize handle: focusable separator without aria-valuenow | **fixed** — value in columns |
+| 51 | No `<h1>` on the project home; h2→h4 jumps | **fixed** — visually hidden h1 (visible title stays removed per Grant); h3 |
+| 52 | Tab walk: logical order, visible focus on every stop | verified |
+| 53 | **`verify:basecamp-controls` silently skipped half the home** (a pressed × persisted; the loop broke at index 33 of 65 on both legs) — pre-existing | **fixed** — layout storage cleared per visit: 375 → **439 pressed**, 0 findings |
+| 54 | `verify:basecamp-journey` asserted the slug `oliver` on screen (locked the defect in) and typed into the old assignee box | **updated** to the name and to the picker; the picker sends the staff slug `hq_task_update` requires — the old box only worked if someone typed a role slug |
