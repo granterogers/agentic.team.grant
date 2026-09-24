@@ -69,3 +69,12 @@ button families, portfolio home) → final gates → final screenshot set →
 report. Pristine baseline worktree for comparisons: `/tmp/basewt` at
 `d1c9247` (recreate with `git worktree add /tmp/basewt d1c9247` and symlink
 node_modules if the container was recycled).
+
+## Pass 8 — visual critique loop 1
+
+| # | Finding | State |
+|---|---|---|
+| 55 | Signed-out strip 108px (sign-in stacked as a column) — largest thing above the fold on the deployed preview | **fixed** — one row, 65px, 44px field and button |
+| 56 | "Sea of blue": every to-do and schedule title was accent link text, so real actions had nothing to stand out against | **fixed** — titles in strong ink, accent on hover/focus |
+| 57 | Timeline dots floated beside the rule (#7) | **fixed** — nodes on the rule, level with the first line |
+| 58 | `basecamp:measure` caught the new title buttons at 24px and the framed select at 42px on touch | **fixed** — hit areas grown without moving layout |

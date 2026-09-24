@@ -3518,3 +3518,64 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   border-radius: 4px;
 }
 [data-experience='basecamp'] .bcmodopen:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 3px; }
+
+/*
+  THE SIGNED-OUT STRIP IS ONE LINE ON A DESKTOP. The sign-in form was stacked
+  as a column (an address above a button, right-aligned), which made the strip
+  108px tall - the largest thing above the fold on the page a signed-out
+  visitor sees first. A row: the sentence, then the address and the button
+  beside it. The status line only takes room when it has something to say.
+*/
+@media (min-width: 721px) {
+  [data-experience='basecamp'] .bcsignin { flex-direction: row; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  [data-experience='basecamp'] .bcsigninsaid { flex-basis: 100%; text-align: right; }
+  [data-experience='basecamp'] .bcsigninsaid:empty { display: none; }
+  [data-experience='basecamp'] .bcnotlive { padding-block: 10px; }
+}
+[data-experience='basecamp'] .bcsignin .bcbtn { min-height: 44px; padding-inline: 16px; }
+
+/*
+  CONTENT READS AS CONTENT. Every to-do and every schedule entry on the home
+  was accent-blue link text, so a board of eight tasks was eight equally loud
+  blue lines and the one blue that meant "act here" (Chat with Team, Add a
+  to-do) had nothing to stand out against. The titles are the content of the
+  pane: strong ink, and the accent arrives on hover and focus, where it says
+  "this opens".
+*/
+[data-experience='basecamp'] .bcmodbody .bctasktitle,
+[data-experience='basecamp'] .bcmodbody .bcagendawhat {
+  color: var(--bc-text-strong);
+  transition: color 120ms ease;
+}
+[data-experience='basecamp'] .bcmodbody .bctasktitle:hover,
+[data-experience='basecamp'] .bcmodbody .bctasktitle:focus-visible,
+[data-experience='basecamp'] .bcmodbody .bcagendawhat:hover,
+[data-experience='basecamp'] .bcmodbody .bcagendawhat:focus-visible {
+  color: var(--bc-accent);
+}
+[data-experience='basecamp'] .bcmodbody .bctask--done .bctasktitle { color: var(--bc-text-muted); }
+
+/*
+  THE TIMELINE'S NODES SIT ON ITS LINE. The dot floated 15px to the right of
+  the rule it belongs to, centred on a multi-line entry, so it read as a
+  stray bullet rather than a point in time. On the rule, level with the
+  entry's first line, ringed in the surface so it cuts the line.
+*/
+@media (min-width: 721px) {
+  [data-experience='basecamp'] .bcevent { position: relative; align-items: flex-start; }
+  [data-experience='basecamp'] .bcevent > .bcdot {
+    position: absolute;
+    left: calc(-14px - 4.5px);
+    top: 6px;
+    width: 8px;
+    height: 8px;
+    background: color-mix(in srgb, var(--bc-mod-activity) 70%, var(--bc-text-muted));
+    box-shadow: 0 0 0 3px var(--bc-surface);
+  }
+  [data-experience='basecamp'] .bcevent:first-child > .bcdot { background: var(--bc-mod-activity); }
+}
+/* Touch: the title button and the framed sort select meet 44px without moving. */
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcmodopen { padding-block: 10px; margin-block: -10px; }
+  [data-experience='basecamp'] .bcdocsort .bcdocsortpick { min-height: 44px; }
+}
