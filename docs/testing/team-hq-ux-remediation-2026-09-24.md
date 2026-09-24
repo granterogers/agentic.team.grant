@@ -75,3 +75,16 @@ Fix pass-1 findings, recapture, compare.
 | — | Idle mic is red | **kept** — Grant's explicit 23 Sep instruction ("Inactive = red, active = green") |
 
 Trap I hit and recovered from: `git checkout -p` on an uncommitted file reverted the whole new function, not only the sabotage — CLAUDE.md's first trap. Restored from the text written; tests green.
+
+## Pass 4 — tool pages
+
+| # | Surface | Finding | State |
+|---|---|---|---|
+| 23 | To-dos page | rows read `t.due` (rarely present): no row showed a date; overdue looked undated | **fixed** — shared `dueWords`/`isLate` |
+| 24 | To-dos page | Late/Stuck as 12px pills; home had counters | **fixed** — one counter design |
+| 25 | Task record | **due field empty for a task due today; Save would have cleared the date** | **fixed** — reads `due_on` |
+| 26 | Task record | assignee a free-text box showing slug `emma` | **fixed** — team picker; `verify:basecamp-todos` updated to drive it, proved red under sabotage |
+| 27 | Task record | copy quoted "§20" to the user | **fixed**; swept every route for §/#nnn/slug/undefined/NaN/Invalid Date: none |
+| 28 | Docs toolbar | 44px select beside 32px buttons; select said only "Custom" | **fixed** |
+| 29 | Docs | prototype `venue.png` was a 206-byte stripe pattern (hazard tape on the deployed preview) | **fixed** — generated 16 KB illustration |
+| 30 | **Sources** | **`.bcsources` defined twice (upload picker grid + sources list): list laid out as 5 × 200px columns, names truncated, each logo beside the wrong name** | **fixed** — picker renamed `.bcpickfrom`; full page redesigned as integration cards |

@@ -3296,3 +3296,69 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 }
 [data-experience='basecamp'] .bcdocsortword { font-size: 13px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcdocsort .bcdocsortpick { border: 0; color: var(--bc-text-strong); min-height: 42px; }
+
+/*
+  SOURCES AS INTEGRATIONS. The full page was the miniature's ruled list at
+  page width: 1,270px rows with a 22px mark and the status at the far edge.
+  A card each - the service's mark in a rounded tile, its name, what it is
+  for, and a state line with a dot - which is how a connected service looks
+  in any product that has them. The words stay: state is never colour alone.
+*/
+[data-experience='basecamp'] .bcsources--full {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+[data-experience='basecamp'] .bcsources--full .bcsource.bcsource--press {
+  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-areas: 'mark name' 'mark what' 'mark when';
+  align-items: center;
+  gap: 2px 14px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bc-text) 3%, var(--bc-surface));
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 6px 18px rgb(0 0 0 / 0.14);
+  transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+}
+[data-experience='basecamp'] .bcsources--full .bcsource.bcsource--press:hover {
+  border-color: var(--bc-border-control);
+  background: color-mix(in srgb, var(--bc-text) 6%, var(--bc-surface));
+  transform: translateY(-1px);
+}
+[data-experience='basecamp'] .bcsources--full .bcsrcmark {
+  width: 44px;
+  height: 44px;
+  align-self: start;
+  padding: 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bc-text) 8%, transparent);
+  box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcsources--full .bcsrcmark--letter { font-size: 16px; padding: 0; }
+[data-experience='basecamp'] .bcsources--full .bcsourcename { font-size: 15px; font-weight: 600; }
+[data-experience='basecamp'] .bcsources--full .bcsourcewhat { font-size: 13px; line-height: 1.4; white-space: normal; }
+[data-experience='basecamp'] .bcsources--full .bcsourcewhen {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+[data-experience='basecamp'] .bcsources--full .bcsourcewhen[data-tone='on']::before,
+[data-experience='basecamp'] .bcsources--full .bcsourcewhen[data-tone='link']::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bc-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bc-success) 18%, transparent);
+}
+[data-experience='basecamp'] .bcsources--full .bcsourcewhen[data-tone='link']::before {
+  background: var(--bc-text-muted);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcsources--full .bcsource.bcsource--press { transition: none; }
+  [data-experience='basecamp'] .bcsources--full .bcsource.bcsource--press:hover { transform: none; }
+}

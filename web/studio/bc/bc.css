@@ -1543,7 +1543,12 @@
  * Two tiles rather than a bare file input, because "add a file" has more than
  * one answer now. Only sources that really work are offered.
  * ---------------------------------------------------------------------- */
-[data-experience="basecamp"] .bcsources {
+/*
+  .bcpickfrom, renamed from .bcsources: the same class was the Sources LIST
+  in compose.css, and this grid rule laid that list out as five 200px
+  columns - names truncated to "Noteb...", each logo beside the wrong name.
+*/
+[data-experience="basecamp"] .bcpickfrom {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--bc-3);

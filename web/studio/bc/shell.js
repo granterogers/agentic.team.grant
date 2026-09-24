@@ -1777,7 +1777,9 @@ const documentsSurface = (p) => {
       connector does.
     -->
     <form class="bcaddform" data-bc-uploadform hidden>
-      <div class="bcsources">
+      <!-- bcpickfrom, not bcsources: that name is the Sources list, and one
+           class for both made the list lay itself out as this picker grid. -->
+      <div class="bcpickfrom">
         <button type="button" class="bcsourcepick" data-bc-from="computer">
           <span class="bcsourcepickname">From this computer</span>
           <span class="bcsourcepickwhat">A file you have here</span>
@@ -2085,13 +2087,13 @@ const sourceRow = (s, i) => {
     ${bcMini.sourceMark(s)}
     <span class="bcsourcename">${esc(s.name ?? s.title ?? 'A source')}</span>
     <span class="bcsourcewhat">${esc(sourceSays(s))}</span>
-    <span class="bcsourcewhen">${
+    <span class="bcsourcewhen" data-tone="${trouble ? 'trouble' : connected ? 'on' : 'link'}">${
       trouble
         ? status(esc(s.problem ?? 'Needs attention'), 'blocked')
         : esc(
             connected
               ? ['Connected', s.last ? `last read ${s.last}` : 'not read yet'].join(' · ')
-              : 'Something to read',
+              : 'A link to read',
           )
     }</span>
   </button>`
@@ -2111,8 +2113,8 @@ const sourcesSurface = (p) => {
       <span class="bcactions">${button('Add Source', { kind: 'primary', 'data-bc-source-add': '1' })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      Where this project's material comes from. A connected service is one the
-      team can read; something to read is a link somebody left for it.
+      Where this project's material comes from: services the team can read,
+      and links left for it.
     </p>
     ${
       ss.length === 0
