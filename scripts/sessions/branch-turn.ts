@@ -85,7 +85,8 @@ for (const say of says) {
     const st = String(
       (await one(`select state::text as s from public.jobs where job_id = ${lit(jobId)}::uuid`)).s,
     )
-    if (st !== 'retrying') break
+    // No attempt left to run: dequeuing again would claim it and strand it.
+    if (st !== 'retrying' || attempt === 3) break
     await db.execute(`select app.requeue_retrying()`)
     job = null
     for (let t = 0; t < 6 && job === null; t++) {

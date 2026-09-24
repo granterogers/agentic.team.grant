@@ -33,6 +33,7 @@
 import { type Domain, howComposed } from '../agents/provenance.ts'
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
+import { withoutStrayQuotes } from '../agents/stray-quotes.js'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
@@ -762,6 +763,7 @@ export const runJob = async (
   await recordPlan(db, job, handler)
   try {
     output = await handler.handle(job, db)
+    output = { ...output, body: withoutStrayQuotes(output.body) }
   } catch (error) {
     const retryable = job.attempt < 4
     /*
