@@ -13,7 +13,7 @@
   second mechanism would be a second set of words for one thing.
 */
 
-import { act, attempt, canWrite, read, token } from '../office.js'
+import { act, attempt, canWrite, read, say, token } from '../office.js'
 import * as session from '../session.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
@@ -2855,6 +2855,17 @@ const wireTasks = (root) => {
           due: String(root.querySelector('#bc-edit-due')?.value ?? '').trim(),
         })
         ctx.render()
+        /*
+          The redraw replaced the button that was pressed, so the confirmation
+          goes on its successor, and focus with it: without this the save
+          looked like nothing had happened and the keyboard landed on Close.
+        */
+        const again = document.querySelector(`[data-bc-tasksave-edit="${CSS.escape(String(id))}"]`)
+        if (again instanceof HTMLElement) {
+          again.focus()
+          say(again, 'Saved in this browser.')
+          again.parentElement?.querySelector('[data-said]')?.setAttribute('role', 'status')
+        }
         return
       }
       const who = String(root.querySelector('#bc-edit-who')?.value ?? '').trim()

@@ -47,6 +47,14 @@ continue at NEXT ACTION.**
 | 18 | Recording meter = 14 equal 22px capsules | **fixed** — graduated level meter |
 | 19 | Textarea `field-sizing:content` + auto grid track pushed phone to 461px | found by my own capture, **fixed** before commit |
 
+
+### Pass 11 — working states beyond chat
+
+| # | Finding | Fix | Evidence |
+|---|---|---|---|
+| 69 | Saving a to-do record on the example projects redrew the page with no confirmation, and focus jumped to Close | the successor Save button takes focus and says *Saved in this browser.* in a status region | driven: `data-said role=status` present, focus on Save; todos 30/30, journey 55/55 |
+| 70 | Signed-in saves, uploads and ticks | already go through `attempt()`, which disables the control, says *Saving…* and then the office's own sentence | read `office.js` `attempt`; Docs upload signed out refuses with the sign-in sentence |
+
 ## Harness notes
 
 - `verify:basecamp-reconcile` was 19/21 in this sandbox (office.invalid → proxy tunnel failure). Taught the reason, tied to that host. 21/21.
