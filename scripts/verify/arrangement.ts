@@ -35,6 +35,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { namesAnOffice } from './lib/office-seam.ts'
 
 const PORT = 4621
 const TYPES: Record<string, string> = {
@@ -168,6 +169,10 @@ const page = await context.newPage()
   `window.__SENT` is the whole point of the suite: the question is not whether
   the arrangement is on screen, it is whether it left the browser.
 */
+// The page has to know which office it belongs to before its first line
+// runs, or the shim below never sees a URL with hq-api in it. ADR-0048.
+await page.addInitScript(namesAnOffice())
+
 await page.addInitScript(`
   window.__SECTIONS = ${JSON.stringify({ studio })};
   window.__SENT = [];

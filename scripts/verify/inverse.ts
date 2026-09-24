@@ -53,6 +53,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { namesAnOffice } from './lib/office-seam.ts'
 
 const PORT = 4637
 const TYPES: Record<string, string> = {
@@ -553,6 +554,10 @@ page.on('pageerror', (e) => crashes.push(e.message.slice(0, 120)))
   the point: the property under test is that `act` offers a strip for EVERY
   write without any button having to know, so the check has to go through `act`.
 */
+// The page has to know which office it belongs to before its first line
+// runs, or the shim below never sees a URL with hq-api in it. ADR-0048.
+await page.addInitScript(namesAnOffice())
+
 await page.addInitScript(`
   window.__S = ${JSON.stringify({ studio })};
   window.__ASKED = [];
@@ -668,6 +673,8 @@ check('and the strip goes once it is done', gone.up ? 'still up' : 'gone', !gone
 */
 const phone = await browser.newContext({ viewport: { width: 390, height: 844 } })
 const small = await phone.newPage()
+// The phone context is a second browser and needs the office named too.
+await small.addInitScript(namesAnOffice())
 await small.addInitScript(`
   window.__S = ${JSON.stringify({ studio })};
   window.__ASKED = [];

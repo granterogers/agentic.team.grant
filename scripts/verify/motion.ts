@@ -38,6 +38,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { namesAnOffice } from './lib/office-seam.ts'
 
 const PORT = 4633
 const TYPES: Record<string, string> = {
@@ -149,6 +150,10 @@ const sweep = async (reduce: boolean): Promise<Moving> => {
     reducedMotion: reduce ? 'reduce' : 'no-preference',
   })
   const page = await context.newPage()
+  // The page has to know which office it belongs to before its first line
+  // runs, or the shim below never sees a URL with hq-api in it. ADR-0048.
+  await page.addInitScript(namesAnOffice())
+
   await page.addInitScript(`
     window.__S = ${JSON.stringify(sections)};
     try { localStorage.setItem('hq.token', 'verify-motion'); } catch (e) {}

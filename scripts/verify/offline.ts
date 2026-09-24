@@ -31,6 +31,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { namesAnOffice } from './lib/office-seam.ts'
 
 const PORT = 4631
 const TYPES: Record<string, string> = {
@@ -113,6 +114,10 @@ const open = async (
 }> => {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
+  // The page has to know which office it belongs to before its first line
+  // runs, or the shim below never sees a URL with hq-api in it. ADR-0048.
+  await page.addInitScript(namesAnOffice())
+
   await page.addInitScript(`
     window.__S = ${JSON.stringify({ studio })};
     window.__HEALTH = ${JSON.stringify(healthOverride)};

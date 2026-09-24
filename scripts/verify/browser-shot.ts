@@ -28,6 +28,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { namesAnOffice } from './lib/office-seam.ts'
 
 const CHROMIUM = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 const PORT = Number(process.env.SHOT_BROWSER_PORT ?? 8973)
@@ -192,6 +193,10 @@ for (const [label, device] of [
   for (const scheme of ['dark', 'light'] as const) {
     const context = await browser.newContext({ ...(device as Record<string, unknown>) })
     const page = await context.newPage()
+    // The page has to know which office it belongs to before its first line
+    // runs, or the shim below never sees a URL with hq-api in it. ADR-0048.
+    await page.addInitScript(namesAnOffice())
+
     await page.addInitScript(`
       window.__SECTIONS = ${JSON.stringify(SECTIONS)};
       try {
