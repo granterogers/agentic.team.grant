@@ -56,11 +56,11 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 4.1 | Top mic opens no window/panel/modal/drawer | TODO |
-| 4.2 | Top mic shows no transcript surface | TODO |
-| 4.3 | Top mic does not rearrange the project or navigate away | TODO |
-| 4.4 | Project screen remains visually unchanged | TODO |
-| 4.5 | State shown through the mic icon itself: idle, connecting, ready/listening, Grant speaking, team thinking, team speaking, muted/error | TODO |
+| 4.1 | Top mic opens no window/panel/modal/drawer | **VERIFIED** — the live panel is deleted. `verify:basecamp-livevoice` compares the shape of the whole page before the press with the shape during a live call, and was proved by making a panel appear |
+| 4.2 | Top mic shows no transcript surface | **VERIFIED** — asserted on the page's own text, not on a class name; the turns are proved to have reached the client by wrapping the page's data channel instead |
+| 4.3 | Top mic does not rearrange the project or navigate away | **VERIFIED** — and the per-turn full redraw is gone: with no panel to refresh, the page now redraws only when the call's phase changes |
+| 4.4 | Project screen remains visually unchanged | **VERIFIED** — every visible element's box, identical. The status line no longer appears for routine progress; it speaks only when the call is over and something needs explaining |
+| 4.5 | State shown through the mic icon itself | **DONE, with one honest gap** — idle, connecting, listening, the team talking and muted are on the icon as colour, glow and accessible name. **Grant speaking is not**: the call layer does not report it, and a light that claims to know who is talking when nothing tells it would be a status light that lies. Error is words, not colour, because a reason cannot be a hue |
 | 4.6 | No new interface surface created | TODO |
 
 ## 5 — Physical live voice

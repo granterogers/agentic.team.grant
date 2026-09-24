@@ -18,7 +18,8 @@
  * the Realtime API sends.
  *
  * What is therefore proved: the whole client path, the conversational states,
- * multi-turn, interruption handling, mute, end, and cleanup.
+ * multi-turn, interruption handling, ending, and cleanup. NOT mute: §4 removed
+ * the panel its control lived on, and nothing replaced it.
  * What is NOT: OpenAI. The far end is a loopback, not a model, and no human
  * spoke. Said again at the end, where it cannot be missed.
  *
@@ -623,7 +624,7 @@ console.log(`\n${String(pass)}/${String(pass + fail)} passed — subject: ${subj
 console.log(
   '\nWHAT THIS DOES NOT PROVE: OpenAI. The far end of that connection is a second\n' +
     'peer in the same page, not a model, and nobody spoke into a microphone. The\n' +
-    'client path, the states, multi-turn, interruption, mute, end and cleanup are\n' +
+    'client path, the states, multi-turn, interruption, ending and cleanup are\n' +
     'all real; the intelligence at the other end is not.',
 )
 process.exit(fail === 0 ? 0 : 1)
