@@ -58,6 +58,7 @@ continue at NEXT ACTION.**
 | 72 | Schedule's Overdue pill sat on the row's top edge while date, title and name were centred | centred with its row | probe: pill y 536 = name y 536 |
 | 73 | On touch widths the activity entry read "Olivermade the course one-pager": the 44px rule used inline-flex, which drops the space between the bold name and the sentence | padding instead of flex, same 44px | scratch scan of every flex/grid container with text beside an element, 13 routes x 2 widths: 0; with the old rule restored it flags the row on 7 routes, so the scan can fail |
 | 74 | Card Table told a phone user to drag a card, a gesture a touch browser does not do with HTML drag | *Drag a card to another column, or choose its stage on the card* — true on both, since each card carries the stage menu | 390 capture |
+| 75 | My own portfolio signals (#portfolio pass) dimmed zero counts to 4.07:1 — found by the final axe sweep, 12 nodes | opacity 0.8 — about 4.8:1 | axe, 14 routes x desk and phone: 0 violations |
 
 ## Harness notes
 
