@@ -28,6 +28,7 @@
  * someone wrote a second caller.
  */
 
+import { datesIn, isoForMention } from './derivable.ts'
 import type { Domain } from './provenance.ts'
 
 /** How an output was produced. The only input the exemption is allowed to read. */
@@ -732,11 +733,20 @@ export const promisesToReachOut = (body: string): string | null => {
  * fire on an answer that is doing arithmetic, quoting a document, or repeating
  * something Grant said, because all three are in the grounding.
  */
-export const fabricatedWhen = (body: string, grounding: string): string | null => {
+export const fabricatedWhen = (
+  body: string,
+  grounding: string,
+  now: Date = new Date(),
+): string | null => {
   const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   const flat = (v: string): string => v.toLowerCase().replace(/[^a-z0-9]/g, '')
   const known = flat(grounding)
+  /*
+    The dates the grounding DERIVES, not only the ones it spells (see
+    `derivable.ts`). Computed lazily: most answers mention no date at all.
+  */
+  let derived: ReadonlySet<string> | null = null
   const MONTH = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec'
   const shapes: RegExp[] = [
     /*
@@ -775,6 +785,17 @@ export const fabricatedWhen = (body: string, grounding: string): string | null =
         stripping punctuation leaves two digits that could be anything.
       */
       if (/^\d{1,2}$/.test(token)) continue
+      /*
+        A calendar date that one of his relative expressions resolves to is
+        arithmetic, not invention: "by the 30th" said on the 24th IS the 30th
+        of September. Only calendar dates — `isoForMention` resolves no clock
+        time, so a time is never excused by this.
+      */
+      const on = isoForMention(hit[0], now)
+      if (on !== null) {
+        derived ??= datesIn(grounding, now)
+        if (derived.has(on)) continue
+      }
       return hit[0].trim().slice(0, 40)
     }
   }

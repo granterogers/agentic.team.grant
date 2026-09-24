@@ -341,7 +341,7 @@ export function whenFor(said: string, now: Date = new Date()): string | null {
       return iso(base)
     }
   }
-  const dayOfMonth = /\bon\s+the\s+(\d{1,2})(?:st|nd|rd|th)?\b/i.exec(said)
+  const dayOfMonth = /\b(?:on|by|before|until)\s+the\s+(\d{1,2})(?:st|nd|rd|th)?\b/i.exec(said)
   if (dayOfMonth !== null) {
     const day = Number(dayOfMonth[1])
     if (day >= 1 && day <= 31) {
@@ -431,7 +431,7 @@ const stripFraming = (said: string): string =>
     .replace(/^\s*(?:add|to-?do|todo|task)\s*:\s*/i, ' ')
     .replace(MAKE_SURE_I, ' ')
     .replace(
-      /\b(?:for\s+|by\s+|until\s+|before\s+|on\s+|next\s+|this\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi,
+      /\b(?:for\s+|by\s+|until\s+|before\s+|on\s+|next\s+|this\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|(?:on|by|before|until)\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi,
       ' ',
     )
     /*
@@ -629,7 +629,7 @@ export interface PersonalTaskChange {
   disagree about what counts as a date.
 */
 const WHEN_WORDS =
-  /\b(?:on\s+|next\s+|this\s+|to\s+|until\s+|by\s+|for\s+|before\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi
+  /\b(?:on\s+|next\s+|this\s+|to\s+|until\s+|by\s+|for\s+|before\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|(?:on|by|before|until)\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi
 
 const BARE_REFERENT =
   /\b(?:that|this|it|that\s+one|the\s+task|the\s+reminder)\b(?!\s+[a-z]{3,}(?:\s|$))|\b(?:that|this|it)\b\s*$/i
