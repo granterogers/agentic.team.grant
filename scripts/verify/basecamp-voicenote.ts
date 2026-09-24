@@ -113,7 +113,17 @@ const openWith = async (sound: string) => {
     actually reach the office" is the first thing a drive has to establish.
   */
   const calls: string[] = []
-  await ctx.route('**/voice/note**', async (route) => {
+  /*
+    THE STAR IS LOAD-BEARING.
+
+    The experiment runs its own copy of the voice function under a different
+    slug (ADR-0043), so a deployment that names it posts to
+    `/voice-basecamp/note` and a pattern anchored on `/voice/` matches nothing
+    -- the stub never fires, the page really tries to send, and eight checks
+    fail describing a product that is working. `basecamp-chat.ts` already
+    writes it this way and its comment says the same thing about the gateway.
+  */
+  await ctx.route('**/voice*/note**', async (route) => {
     calls.push('note')
     const post = route.request().postData() ?? ''
     await route.fulfill({
@@ -126,7 +136,7 @@ const openWith = async (sound: string) => {
       }),
     })
   })
-  await ctx.route('**/voice/turn**', async (route) => {
+  await ctx.route('**/voice*/turn**', async (route) => {
     calls.push('turn')
     await route.fulfill({
       status: 200,
@@ -392,7 +402,7 @@ const slugOf = async (page: Awaited<ReturnType<typeof openWith>>['page']): Promi
   await ctx.addInitScript(
     `try { localStorage.setItem('hq.token', 'not-a-credential-local-test-only') } catch {}`,
   )
-  await ctx.route('**/voice/note**', (r) =>
+  await ctx.route('**/voice*/note**', (r) =>
     r.fulfill({
       status: 503,
       headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
@@ -400,7 +410,7 @@ const slugOf = async (page: Awaited<ReturnType<typeof openWith>>['page']): Promi
     }),
   )
   let turns = 0
-  await ctx.route('**/voice/turn**', (r) => {
+  await ctx.route('**/voice*/turn**', (r) => {
     turns += 1
     return r.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*' }, body: '{}' })
   })
