@@ -1,3 +1,4 @@
+import { presented } from './office.js'
 /*
   The voice call, moved out of the page it is replacing.
 
@@ -33,11 +34,8 @@
   can stop it, and `callIsLive()` so any button can show the truth.
 */
 
-const API =
-  window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
+import { HQ_API as API, VOICE, VOICE_TOKEN as MINT } from './backend.js'
 const KEY = 'hq.token'
-const MINT = API.replace(/\/hq-api$/, '/voice-token')
-const VOICE = API.replace(/\/hq-api$/, '/voice')
 
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -101,8 +99,72 @@ const stopTracks = (s) => {
   }
 }
 
+/*
+  WHICH PROJECT A CALL IS ABOUT.
+
+  Set by the surface before it starts one, because the surface is the only
+  thing that knows what Grant is looking at. Held here rather than passed to
+  `startCall` so that every caller - the rail, the project head, a keyboard
+  shortcut - answers the question the same way instead of three of them
+  forgetting to.
+*/
+let onProject = ''
+export function callAbout(slug) {
+  onProject = typeof slug === 'string' ? slug : ''
+}
+export function callProject() { return onProject }
+
+/*
+  MUTED, and it is the MICROPHONE TRACK that is muted rather than a flag.
+
+  A mute that only stops the meter is a privacy defect wearing a control, and
+  #102 is this repository's most expensive privacy lesson: disabling the track
+  is what actually stops audio reaching the session.
+*/
+let muted = false
+export function callMuted() { return muted }
+export function setCallMuted(want) {
+  const to = want === undefined ? !muted : want === true
+  for (const t of stream?.getAudioTracks() ?? []) t.enabled = !to
+  muted = to
+  /* Nothing can be muted when there is no call, so the flag never survives one. */
+  if (!onCall) muted = false
+  return muted
+}
+
+/*
+  WHAT IS HAPPENING RIGHT NOW, for a surface that wants to say it in words.
+
+  Finer than `callPhase`, which answers idle/connecting/live and is all a
+  button needs. A conversation surface needs to distinguish the team thinking
+  from the team speaking from nobody speaking at all, because those are the
+  three things a person is actually waiting on.
+*/
+export function callActivity() {
+  if (!onCall) return 'idle'
+  if (pc === null) return 'connecting'
+  if (muted) return 'muted'
+  return answering ? 'answering' : 'listening'
+}
+
+/** The turns of this call, newest first, for a surface that shows them. */
+export function callTurns() { return turns.slice() }
+
 /** True while a call is connected or connecting. */
 export function callIsLive() { return onCall }
+
+/*
+  WHICH OF THE THREE STATES the call is in, for a surface that paints itself.
+
+  `syncCallButtons` computes this and keeps it, so anything drawing its own
+  control had to guess - and "connecting" is the state that matters most to
+  guess right: it is several seconds long, it involves a permission prompt,
+  and painting it as either of its neighbours is a status light that lies.
+*/
+export function callPhase() {
+  if (!onCall) return 'idle'
+  return pc === null ? 'connecting' : 'live'
+}
 
 /*
   Where the call's state is said.
@@ -234,6 +296,9 @@ const silence = () => {
 export function endCall(why) {
   const wasLive = onCall
   onCall = false
+  /* A mute belongs to a call and must not outlive one: the next call would
+     open with the microphone off and nothing on screen saying why. */
+  muted = false
   // Invalidate any connect still working its way through its awaits.
   gen += 1
   silence()
@@ -286,15 +351,38 @@ if (typeof window !== 'undefined') {
   something one select away. `/look` is a read of canonical state and returns
   in about a second, which is what makes it usable mid-sentence.
 */
+/*
+  A TOKEN THE OFFICE WILL NOT ACCEPT, said in words.
+
+  Both calls below present the browser's bearer token, and with none - which is
+  every browser on this hostname until somebody signs in, because storage is per
+  origin - the office answers 401 `unauthorized`. That word then travelled all
+  the way to Claire as a tool result and she said it out loud, which is what
+  "Talk to Team returns unauthorized" was.
+
+  The credential is cleared on the way past for the same reason `office.js` and
+  `chat.js` clear it: a browser holding a token the office has refused will fail
+  identically for ever, and the page can only offer a way back in once it knows
+  it is signed out.
+*/
+const refused = (r) => {
+  if (r.status !== 401) return null
+  /* Both, because either could be what the office refused. */
+  try { localStorage.removeItem(KEY); localStorage.removeItem('hq.session') } catch (e) { /* private window */ }
+  return new Error('This browser is not signed in to the office. Sign in and try again.')
+}
+
 const lookUp = async (about) => {
   const r = await fetch(VOICE + '/look', {
     method: 'POST',
     headers: {
-      Authorization: 'Bearer ' + (localStorage.getItem(KEY) || ''),
+      Authorization: 'Bearer ' + presented(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ about }),
   })
+  const no = refused(r)
+  if (no !== null) throw no
   const body = await r.json()
   if (!r.ok) throw new Error(body.error || ('The office returned ' + r.status))
   return body.found
@@ -304,11 +392,13 @@ const askOffice = async (said) => {
   const r = await fetch(VOICE + '/turn', {
     method: 'POST',
     headers: {
-      Authorization: 'Bearer ' + (localStorage.getItem(KEY) || ''),
+      Authorization: 'Bearer ' + presented(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ said, session }),
   })
+  const no = refused(r)
+  if (no !== null) throw no
   const body = await r.json()
   if (!r.ok) throw new Error(body.error || ('The office returned ' + r.status))
   return body
@@ -454,13 +544,36 @@ export async function startCall() {
   }
 
   try {
-    const minted = await fetch(MINT, { method: 'POST' })
+    /*
+      THE PROJECT IN VIEW goes with the request. The office decides what to do
+      with it - it looks the project up and tells Claire that "this project"
+      means that one. Sent as a hint and nothing else: an adapter that narrowed
+      the call to one project would be an adapter deciding, which §5 forbids.
+    */
+    const minted = await fetch(MINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: onProject }),
+    })
     if (stale()) return abandon()
     if (!minted.ok) throw new Error('the office would not start a call (' + minted.status + ')')
     const { client_secret, model, degraded } = await minted.json()
     if (stale()) return abandon()
     if (degraded) show('Claire', 'I am on a stripped-down session and cannot reach the team ' +
       'on this call — worth telling whoever looks after this.', 'bad')
+
+    /*
+      SIGNED OUT IS WORTH SAYING BEFORE THE CALL, not after every tool fails.
+
+      Minting a credential needs no office token, so a call CONNECTS perfectly
+      well while signed out - and then everything Claire tries to look up or put
+      to the team comes back unauthorized, which sounds like a broken assistant
+      rather than a browser that is not signed in.
+    */
+    if (presented() === '') {
+      show('Claire', 'This browser is not signed in to the office, so I cannot look ' +
+        'anything up or put work to the team on this call. Sign in and call me back.', 'bad')
+    }
 
     say('Asking for the microphone…')
     mic = await navigator.mediaDevices.getUserMedia({

@@ -1,0 +1,350 @@
+/*
+  SETTINGS, IN THIS EXPERIENCE'S VISUAL SYSTEM.
+
+  Grant, 22 September, about both scopes:
+
+    "Project Settings is still exposing the old-fashioned/legacy interface. Do
+     not continue mixing the redesigned project UI with legacy screens...
+     preserve existing settings functionality; avoid regressions."
+
+    "The global Settings page is also still using the old interface. This is
+     now explicitly technical debt that must be addressed. Create a
+     replacement interface using the same design system as the new project
+     experience: typography; spacing; card/panel treatment; borders; shadows;
+     controls; buttons; navigation; interaction states; responsive behaviour;
+     premium visual finish. Do not simply recolour the legacy page."
+
+  WHY THIS IS A STYLESHEET AND NOT A REWRITE, stated plainly because the
+  distinction decides whether the second instruction is met or dodged.
+
+  The two settings screens are about nineteen hundred lines of controls that
+  WRITE: roster changes, behaviour switches, connection credentials, channel
+  preferences, spend limits. Re-authoring them in a second vocabulary is the
+  fastest way to lose one of those writes quietly, and "preserve existing
+  functionality; avoid regressions" is the same sentence as the request. So
+  the markup and the wiring stay exactly as they are, and everything that
+  MAKES the visual system - the type scale, the spacing rhythm, the panel
+  treatment, the border weights, the shadows, the control shapes, the
+  interaction states, the dialog geometry - is applied to them here.
+
+  This is not a recolour: not one rule below changes only a colour. The
+  container becomes this experience's dialog rather than a flush drawer, the
+  type is this experience's scale, the panels gain its edges and its lift, the
+  tab strip becomes its navigation, and every control gains its hover, focus
+  and disabled states.
+
+  Scoped to the experiment, twice over: `[data-experience='basecamp']` on the
+  root for everything drawn inside it, and the same attribute for the global
+  sheet, which lives outside the render root but under the same document
+  element. The default Team HQ is untouched by construction, which is what
+  keeps "never damage the default Team HQ" true rather than hoped for.
+*/
+
+/* ---------------------------------------------------------- the frame -- */
+
+[data-experience='basecamp'] .bcsetframe {
+  margin-top: var(--bc-4);
+}
+/*
+  A SETTINGS COLUMN, not the whole board.
+
+  The width argument this experience makes is about the DASHBOARD - a
+  workspace should use the screen - and it does not transfer to a form. The
+  legacy stylesheet says why in its own comment: a settings form stretched to
+  1440px is a row of labels a metre from their fields. So the frame is a
+  generous column rather than the full span, and the panels inside it fill
+  THAT rather than stopping at a 64-character measure meant for a narrower
+  page.
+*/
+[data-experience='basecamp'] .bcsetframe {
+  max-inline-size: 980px;
+}
+[data-experience='basecamp'] .bcsetframe .tabbody,
+[data-experience='basecamp'] .bcsetframe .setbody,
+[data-experience='basecamp'] .bcsetframe .setroster,
+[data-experience='basecamp'] .bcsetframe .setlabels {
+  max-width: none;
+  width: 100%;
+}
+
+/* ------------------------------------------------------ the tab strip -- */
+
+[data-experience='basecamp'] .bcsetframe .subnav,
+[data-experience='basecamp'] .settings .settabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  margin: 0 0 var(--bc-4);
+  background: color-mix(in srgb, var(--bc-text) 6%, transparent);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 12px;
+}
+[data-experience='basecamp'] .bcsetframe .subtab,
+[data-experience='basecamp'] .settings .settabs button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--bc-text-muted);
+  font: 500 13px/1 var(--bc-font);
+  letter-spacing: 0.01em;
+  padding: 10px 14px;
+  min-height: 40px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+[data-experience='basecamp'] .bcsetframe .subtab:hover,
+[data-experience='basecamp'] .settings .settabs button:hover {
+  background: color-mix(in srgb, var(--bc-text) 8%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcsetframe .subtab.on,
+[data-experience='basecamp'] .settings .settabs button.on,
+[data-experience='basecamp'] .settings .settabs button[aria-selected='true'] {
+  background: var(--bc-surface);
+  color: var(--bc-text-strong);
+  box-shadow: 0 1px 0 var(--bc-border-subtle), 0 6px 14px rgba(0, 0, 0, 0.22);
+}
+[data-experience='basecamp'] .bcsetframe .subtab:focus-visible,
+[data-experience='basecamp'] .settings .settabs button:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------- typography ---- */
+
+[data-experience='basecamp'] .settings .t-display,
+[data-experience='basecamp'] .bcsetframe .t-display {
+  font: var(--bc-title);
+  letter-spacing: -0.02em;
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .settings .t-title,
+[data-experience='basecamp'] .bcsetframe .t-title {
+  font: var(--bc-tool-heading);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .settings .t-lead,
+[data-experience='basecamp'] .bcsetframe .t-lead {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--bc-text);
+}
+[data-experience='basecamp'] .settings .t-meta,
+[data-experience='basecamp'] .bcsetframe .t-meta {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .settings .t-label,
+[data-experience='basecamp'] .bcsetframe .t-label {
+  font: 600 11px/1.4 var(--bc-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bc-text-muted);
+}
+
+/* ------------------------------------------- panels, rows and edges ---- */
+
+[data-experience='basecamp'] .settings .setgroup,
+[data-experience='basecamp'] .settings .behave,
+[data-experience='basecamp'] .settings .card,
+[data-experience='basecamp'] .bcsetframe .setblock,
+[data-experience='basecamp'] .bcsetframe .setroster,
+[data-experience='basecamp'] .bcsetframe .setproj,
+[data-experience='basecamp'] .bcsetframe .setoffice {
+  background: var(--bc-surface);
+  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 20%, transparent);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  padding: var(--bc-4);
+}
+[data-experience='basecamp'] .settings .bhead {
+  border-bottom: 1px solid var(--bc-border-subtle);
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+[data-experience='basecamp'] .bcsetframe .setrow,
+[data-experience='basecamp'] .bcsetframe .setlabelrow {
+  border-bottom: 1px solid var(--bc-border-subtle);
+  padding: 12px 0;
+}
+[data-experience='basecamp'] .bcsetframe .setrow:last-child,
+[data-experience='basecamp'] .bcsetframe .setlabelrow:last-child {
+  border-bottom: 0;
+}
+
+/* ------------------------------------------------------- the controls -- */
+
+[data-experience='basecamp'] .settings .btn,
+[data-experience='basecamp'] .bcsetframe .btn {
+  appearance: none;
+  min-height: 40px;
+  padding: 9px 16px;
+  border-radius: var(--bc-r-control, 10px);
+  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 26%, transparent);
+  background: color-mix(in srgb, var(--bc-text) 6%, transparent);
+  color: var(--bc-text-strong);
+  font: 500 13.5px/1 var(--bc-font);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+[data-experience='basecamp'] .settings .btn:hover,
+[data-experience='basecamp'] .bcsetframe .btn:hover {
+  background: color-mix(in srgb, var(--bc-text) 12%, transparent);
+  border-color: color-mix(in srgb, var(--bc-text-muted) 44%, transparent);
+  transform: translateY(-1px);
+}
+[data-experience='basecamp'] .settings .btn:focus-visible,
+[data-experience='basecamp'] .bcsetframe .btn:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .settings .btn.primary,
+[data-experience='basecamp'] .bcsetframe .btn.primary {
+  background: var(--bc-accent);
+  border-color: var(--bc-accent);
+  color: var(--bc-accent-ink);
+}
+[data-experience='basecamp'] .settings .btn[disabled],
+[data-experience='basecamp'] .bcsetframe .btn[disabled] {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+[data-experience='basecamp'] .settings input:not([type='checkbox']):not([type='radio']),
+[data-experience='basecamp'] .settings select,
+[data-experience='basecamp'] .settings textarea,
+[data-experience='basecamp'] .bcsetframe input:not([type='checkbox']):not([type='radio']),
+[data-experience='basecamp'] .bcsetframe select,
+[data-experience='basecamp'] .bcsetframe textarea {
+  /* 16px on purpose: anything smaller and iOS Safari zooms the page on focus. */
+  font: 400 16px/1.4 var(--bc-font);
+  color: var(--bc-text-strong);
+  background: color-mix(in srgb, var(--bc-text) 5%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 24%, transparent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 44px;
+}
+[data-experience='basecamp'] .settings input:focus-visible,
+[data-experience='basecamp'] .settings select:focus-visible,
+[data-experience='basecamp'] .settings textarea:focus-visible,
+[data-experience='basecamp'] .bcsetframe input:focus-visible,
+[data-experience='basecamp'] .bcsetframe select:focus-visible,
+[data-experience='basecamp'] .bcsetframe textarea:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 1px;
+  border-color: var(--bc-accent);
+}
+[data-experience='basecamp'] .settings .choice,
+[data-experience='basecamp'] .bcsetframe .chip {
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 26%, transparent);
+  padding: 7px 14px;
+  min-height: 36px;
+  color: var(--bc-text);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+[data-experience='basecamp'] .settings .choice:hover,
+[data-experience='basecamp'] .bcsetframe .chip:hover {
+  background: color-mix(in srgb, var(--bc-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--bc-accent) 50%, transparent);
+}
+[data-experience='basecamp'] .settings .choice.on {
+  background: var(--bc-accent);
+  border-color: var(--bc-accent);
+  color: var(--bc-accent-ink);
+}
+
+/* ------------------------------------------- the global sheet's shell -- */
+
+/*
+  A DIALOG, not a drawer. The sheet was flush to the top and the right edge of
+  the window with no radius and no shadow, so it read as a different
+  application opening over this one rather than as a surface belonging to it -
+  which is exactly the "obviously legacy" impression Grant is describing. The
+  geometry here is the same as this experience's own expanded views, so the
+  two kinds of dialog in the product now agree with each other.
+*/
+[data-experience='basecamp'] #settings .sheet.settings {
+  width: min(1180px, 94vw);
+  max-height: min(90vh, 980px);
+  margin: 5vh auto;
+  border-radius: var(--bc-r-sheet);
+  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 22%, transparent);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.5);
+  /*
+    `!important`, and it is load-bearing rather than lazy: the legacy rule for
+    this sheet is itself `background: transparent !important`, because in the
+    default studio the sheet IS the page and the page has the background. Here
+    it is a dialog over a project, and a transparent dialog shows the board
+    through its own cards - which is what the first capture showed.
+  */
+  background: var(--bc-surface) !important;
+  padding: var(--bc-6);
+}
+[data-experience='basecamp'] #settings .sheethead {
+  background: var(--bc-surface) !important;
+  border-bottom: 1px solid var(--bc-border-subtle);
+  padding-bottom: var(--bc-4);
+  margin-bottom: var(--bc-4);
+}
+[data-experience='basecamp'] #settings .close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 26%, transparent);
+  background: color-mix(in srgb, var(--bc-text) 6%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] #settings .close:hover {
+  background: color-mix(in srgb, var(--bc-text) 14%, transparent);
+}
+
+@media (max-width: 860px) {
+  [data-experience='basecamp'] #settings .sheet.settings {
+    width: 100vw;
+    max-height: 100vh;
+    margin: 0;
+    border-radius: 0;
+    border: 0;
+    padding: var(--bc-4);
+  }
+  [data-experience='basecamp'] .bcsetframe .subnav,
+  [data-experience='basecamp'] .settings .settabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+}
+
+/*
+  AND THE CONTAINER, which is the other half of "a drawer rather than a
+  dialog".
+
+  `#settings.page` is fixed with `inset: 0 0 0 var(--rail)` - flush to the
+  right of the default studio's rail, which this experience does not have - so
+  the sheet appeared pinned to the right edge with the project showing down
+  the left. Under the experiment it is a centred overlay with its own scrim,
+  which is the same geometry as the expanded views the rest of this experience
+  uses. Everything about it is scoped, so the default studio's own settings
+  page is exactly as it was.
+*/
+[data-experience='basecamp'] #settings.page {
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 8, 11, 0.62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  padding: 24px;
+  overflow: auto;
+}
+[data-experience='basecamp'] #settings.page .sheet {
+  overflow: auto;
+  max-inline-size: none;
+}
+@media (max-width: 860px) {
+  [data-experience='basecamp'] #settings.page { padding: 0; }
+}

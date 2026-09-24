@@ -12,6 +12,26 @@
 <link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="/skins.css">
 <link rel="stylesheet" href="/studio.css">
+<!--
+  The experimental Basecamp-inspired Team HQ (basecamp_clone.md), reached only
+  at the /basecamp path prefix.
+
+  Loaded on every page and SCOPED to [data-experience="basecamp"] on the root
+  element, which app.js sets only on that branch. One link rather than an
+  injected stylesheet: a style sheet added at navigation time paints one frame
+  late, and the flash is on the experimental experience's first impression.
+  Last in the chain so its own scope wins inside itself, and scoped throughout
+  so it cannot reach the default studio at all.
+-->
+<link rel="stylesheet" href="/bc/tokens.css">
+<link rel="stylesheet" href="/bc/bc.css">
+<!--
+  The two composition experiments. Loaded after bc.css so its phone block
+  wins on source order; scoped to the experiment, so it cannot reach the
+  default Team HQ.
+-->
+<link rel="stylesheet" href="/bc/compose.css">
+<link rel="stylesheet" href="/bc/settings.css">
 </head>
 <body>
 <div id="root" class="shell"></div>
@@ -45,6 +65,53 @@
     <span class="t-meta">It joins this project's documents, and the team can read it.</span>
   </div>
 </div>
+<!--
+  THE EXPERIMENT TALKS TO ITS OWN COPY OF THE GATEWAY.
+
+  This branch's gateway source is ahead of main and behind the backend branch,
+  so deploying it over the shared one would drop somebody else's work. The
+  experiment runs its own deployment of the same file instead, and picks it by
+  HOSTNAME - so the identical page served at the real address is untouched and
+  the default Team HQ cannot be affected by anything this branch deploys.
+
+  Temporary by construction: when the two copies are one file again this block
+  and the slug go together. ADR-0043.
+-->
+<!--
+  WHICH OFFICE THIS DEPLOYMENT BELONGS TO.
+
+  `config.js` is generated -- `npm run config:site` writes it, and both deploy
+  paths run that before uploading. It is NOT in the repository, deliberately:
+  a committed default is one person's office shipped to everybody who clones
+  this, and six modules used to carry exactly that. See `backend.js`.
+
+  A 404 here is not an error. It means nothing has configured this copy, the
+  globals stay undefined, and `backend.js` resolves to the empty string so the
+  page can say the true thing rather than ask a guessed address.
+
+  It is loaded as a CLASSIC script so it runs before the module below, which is
+  deferred by definition.
+-->
+<script src="/config.js"></script>
+<script>
+  /*
+    The experiment runs its own copies of the gateway and the voice function
+    under different slugs, so that the default Team HQ cannot be affected by
+    anything this branch deploys (ADR-0043). Derived from whatever `config.js`
+    named, never written down again -- the base belongs to the deployment and
+    only the SLUG belongs to this branch.
+
+    Temporary by construction: when the two copies are one function again, this
+    block and the slugs go together.
+  */
+  if (location.hostname.indexOf('agentic-team-hq-basecamp') === 0
+      && typeof window.HQ_API === 'string' && window.HQ_API !== '') {
+    const base = window.HQ_API.replace(/\/[^/]*$/, '')
+    window.HQ_API = base + '/hq-api-basecamp'
+    window.HQ_SIGNIN = base + '/signin'
+    window.HQ_VOICE = base + '/voice-basecamp'
+  }
+</script>
 <script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -521,7 +521,24 @@ const piles = await db.execute(`
     (select count(*)
        from jsonb_array_elements(app.hq_studio_lately(200) -> 'office') e,
             jsonb_to_record(e) as x(who text)
-      where app.harness_label(x.who)) as harness_on_his_activity_panel
+      where app.harness_label(x.who)) as harness_on_his_activity_panel,
+      HARNESS CONTACTS, which had no witness until 24 September.
+
+      A contact is the one row on this board that is a PERSON, and the office
+      held five of them named "Acceptance contact <run> (corrected)" on one of
+      Grant's real projects -- an acceptance run's subjects, archived rather
+      than removed, so the board said "Nobody is recorded against this project
+      yet" while the table said five. Archived is not swept: it is debris the
+      UI happens to hide, and the next reader that does not filter the
+      archived_at column puts strangers on his screen.
+
+      Named by CLASS rather than by a run's own prefix, because a teardown
+      keyed on its own token can never collect an earlier crashed run's -- the
+      defect that let five accumulate. The real project's people are named
+      after people.
+    */
+    (select count(*) from public.contacts
+      where name ~* '^(acceptance|face|fixture|probe|verify)[ ._-]') as harness_contacts
 `)
 const pile = (piles.rows[0] ?? {}) as Record<string, number>
 const noisy: string[] = []
@@ -573,6 +590,12 @@ if (Number(pile.harness_tools ?? 0) > 0) {
       'capabilityBrief, which goes in front of every answer',
   )
 }
+if (Number(pile.harness_contacts ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.harness_contacts)} harness contact(s) in public.contacts — a suite ` +
+      'left a person behind on a real project; archiving one is not sweeping it',
+  )
+}
 if (Number(pile.probe_providers ?? 0) > 0) {
   noisy.push(
     `${String(pile.probe_providers)} probe provider(s) in provider_health — a circuit ` +
@@ -612,6 +635,7 @@ console.log(
     `harness tasks on his list: ${String(pile.harness_tasks_on_his_list)} · ` +
     `personal tasks carrying a run token: ${String(pile.tasks_with_a_run_token)} · ` +
     `probe providers: ${String(pile.probe_providers)} · ` +
+    `harness contacts: ${String(pile.harness_contacts)} · ` +
     `fixture connectors: ${String(pile.fixture_connectors)} · ` +
     `stranded autonomy rows: ${String(pile.stranded_autonomy)} · ` +
     `test destinations registered: ${String(pile.registered_test_destinations)} · ` +

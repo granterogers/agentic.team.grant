@@ -19,7 +19,20 @@ import * as people from './people.js'
   human team as possible"* than any amount of surface polish, and the work was
   already done.
 */
-const FACES = 'https://baujwlzcziasnfhhkchg.supabase.co/storage/v1/object/public/avatars'
+/*
+  A prototype date, relative to now.
+
+  Hard-coded dates go stale, and a prototype whose "overdue" work is overdue
+  because the file is a year old is a prototype that misrepresents the product
+  every time somebody opens a capture. Offsets in days from today instead.
+*/
+const inDays = (n) => {
+  const d = new Date()
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+import { AVATARS as FACES } from './backend.js'
 
 /*
   Eight people, eight hues (#40 idea 4).
@@ -62,6 +75,21 @@ const FALLBACK_CREW = [
     hue: 'p-slate', tone: 196, state: 'idle' },
 ]
 
+/*
+  An instant this many minutes and seconds ago, as an ISO string.
+
+  The seconds are given explicitly rather than left to the clock so that two
+  events never share one, which is the whole point of showing them.
+
+  DECLARED ABOVE ITS FIRST USE, and the first attempt was not: a `const` is in
+  its temporal dead zone until the line that declares it runs, so putting this
+  helper below the array that calls it threw "Cannot access AGO before
+  initialization" and the whole page drew nothing. CLAUDE.md records the same
+  trap twice, both times in app.js.
+*/
+const AGO = (minutes, seconds = 0) =>
+  new Date(Date.now() - minutes * 60_000 - seconds * 1000).toISOString()
+
 const FALLBACK_PROJECTS = [
   {
     slug: 'legacy-coaching-course',
@@ -88,36 +116,105 @@ const FALLBACK_PROJECTS = [
         at: null,
         overdue: false,
         blocks: false,
+        /*
+          THE COST AND THE DEADLINE, because §18's record shows both and a
+          capture of a record with two of its five facts missing is a capture
+          of a screen nobody ships. The live payload carries
+          `consequences_of_delay` and `real_deadline` on every blocker --
+          `blockers_consequences_substantive` makes the first mandatory -- so
+          leaving them out here would make the prototype the ONLY place the
+          empty case exists.
+        */
+        cost: 'The window resets at midnight and the allowance goes with it.',
+        due: null,
         options: ['Go ahead', 'Not now'],
       },
     ],
     modules: [
-      { n: 1, name: 'Legacy Opening Assessment', state: 'done', docs: 2, tasks: 4 },
-      { n: 2, name: 'Ideal Client Avatar', state: 'doing', docs: 3, tasks: 4 },
-      { n: 3, name: 'Client Vision & Journey', state: 'todo', docs: 2, tasks: 4 },
-      { n: 4, name: 'Coaching Interview Execution', state: 'todo', docs: 2, tasks: 4 },
-      { n: 5, name: 'Three-Layer Wellness Impact', state: 'todo', docs: 2, tasks: 4 },
-      { n: 6, name: 'Legacy Interview Roadmap', state: 'todo', docs: 1, tasks: 4 },
+      { id: 'm1', n: 1, name: 'Legacy Opening Assessment', state: 'done', docs: 2, tasks: 4 },
+      { id: 'm2', n: 2, name: 'Ideal Client Avatar', state: 'doing', docs: 3, tasks: 4 },
+      { id: 'm3', n: 3, name: 'Client Vision & Journey', state: 'todo', docs: 2, tasks: 4 },
+      { id: 'm4', n: 4, name: 'Coaching Interview Execution', state: 'todo', docs: 2, tasks: 4 },
+      { id: 'm5', n: 5, name: 'Three-Layer Wellness Impact', state: 'todo', docs: 2, tasks: 4 },
+      { id: 'm6', n: 6, name: 'Legacy Interview Roadmap', state: 'todo', docs: 1, tasks: 4 },
     ],
     documents: [
-      { title: 'WS01 — Legacy Opening Assessment', kind: 'pdf', origin: 'Yours', size: '34,606 words', file: './samples/ws01.pdf', lines: [78, 100, 94, 97, 62, 88, 91, 74] },
+      { title: 'WS01 — Legacy Opening Assessment', kind: 'pdf', origin: 'Yours', size: '34,606 words', file: '/samples/ws01.pdf', lines: [78, 100, 94, 97, 62, 88, 91, 74] },
       { title: 'Grant Rogers Avatar Document', kind: 'doc', origin: 'Yours', size: '27,841 words', lines: [66, 100, 90, 96, 71, 93] },
-      { title: 'WS02 — Creating Client Vision', kind: 'pdf', origin: 'Yours', size: '21,370 words', lines: [84, 98, 86, 92, 58, 79] },
+      { title: 'WS02 — Creating Client Vision', kind: 'pdf', origin: 'Yours', size: '21,370 words', file: '/samples/journey.pdf', lines: [84, 98, 86, 92, 58, 79] },
       { title: 'Grant Interview Questions', kind: 'pdf', origin: 'Yours', size: '11,616 words', lines: [70, 96, 88, 60] },
-      { title: 'Journey VS Destination', kind: 'pdf', origin: 'Yours', size: '8,683 words', file: './samples/journey.pdf', lines: [82, 94, 90, 68, 86] },
-      { title: 'Course one-pager', kind: 'made', origin: 'Oliver · 2 days ago', size: 'A4', file: './samples/one-pager.pdf', lines: [70, 100, 88] },
+      { title: 'Journey VS Destination', kind: 'pdf', origin: 'Yours', size: '8,683 words', file: '/samples/journey.pdf', lines: [82, 94, 90, 68, 86] },
+      { title: 'Course one-pager', kind: 'made', origin: 'Oliver · 2 days ago', size: 'A4', file: '/samples/one-pager.pdf', lines: [70, 100, 88] },
       { title: 'Legacy Questionnaire', kind: 'pdf', origin: 'Yours', size: '3,370 words', lines: [74, 92, 84] },
-      { title: 'Whats App Audio From Ben', kind: 'audio', origin: 'Yours', size: '4 min · transcribed' },
+      /*
+        A REAL FILE ON THE AUDIO ROW. Grant, 22 September: "audio files not
+        being clickable/useful... audio should have usable playback". The
+        prototype's audio document had no file at all, so there was nothing to
+        play and nothing to draw - and the same absence is what made it
+        unclickable. The sample is three seconds long and is here for the same
+        reason the sample PDFs are: a file type nobody can see the handling of
+        is a file type nobody is checking.
+      */
+      { title: 'Whats App Audio From Ben', kind: 'audio', origin: 'Yours', size: '4 min · transcribed', file: '/samples/voice-note.wav' },
+      /*
+        THE FOUR WORDS THE OFFICE ACTUALLY EMITS. `app.studio_documents` maps
+        every document onto `audio`, `made`, `pdf` or `doc` - so a photograph,
+        a spreadsheet and a zip all arrive as `doc`, and these three say `doc`
+        on purpose. Before the face was derived from the file itself, all three
+        were drawn as pages of written text: a picture of a document that does
+        not exist, over a photograph, a table of numbers and an archive.
+
+        Real files, of real types, because a file type nobody can see the
+        handling of is a file type nobody is checking.
+      */
+      { title: 'The venue, from the balcony', kind: 'doc', origin: 'Yours', size: '48 KB', file: '/samples/venue.png' },
+      { title: 'Course budget', kind: 'doc', origin: 'Yours', size: '4 KB', file: '/samples/budget.csv' },
+      { title: 'Course artwork', kind: 'doc', origin: 'Yours', size: '2.1 MB', file: '/samples/assets.zip' },
+      /*
+        A RECORDING THE OFFICE FILED AS A PLAIN DOCUMENT. `studio_documents`
+        only says `audio` when the media type is already known to be audio, and
+        an upload that arrives without one is a `doc` - so this is the ordinary
+        case, not an odd one. It used to reach a details page with no player on
+        it, because two of the three places that ask "is this a recording?"
+        asked the kind and only the third read the file.
+      */
+      { title: 'Ben, second message', kind: 'doc', origin: 'Yours', size: '1 min', file: '/samples/voice-note.wav' },
     ],
+    /*
+      The fields `app.studio_tasks` actually returns (0222, 0530): `state_raw`,
+      `due_on`, `parent` and `milestone` alongside the display fields. Invented
+      like everything else in this file, and shaped like the real reader,
+      because a prototype missing the fields a tool is made of cannot be used
+      to judge that tool. `parent` names a module id, which is how
+      PROJECT -> LIST -> TASK is derived rather than stored twice.
+    */
     tasks: [
-      { title: 'Conduct first five interviews', due: 'Due 16 September', who: 'claire', state: 'due' },
-      { title: 'Prepare interview questions', note: 'Coaching Interview Execution', who: 'emma' },
-      { title: 'List 20 real and prospective clients', note: 'Client Vision & Journey Mapping', who: 'emma' },
-      { title: 'Map client answers to the three layers', note: 'Wellness Impact Analysis', who: 'oliver',
-        blocked: 'Waiting on the first five interviews' },
-      { title: 'Draft the avatar document', note: 'Ideal Client Avatar', who: 'emma', state: 'doing' },
-      { title: 'Complete the Success Identity Quiz', state: 'done' },
-      { title: 'Review the Zoom Call interview notes', state: 'done' },
+      { title: 'Conduct first five interviews', due: 'Due 16 September', due_on: inDays(-5),
+        who: 'claire', state: 'due', state_raw: 'doing', parent: 'm4' },
+      { title: 'Prepare interview questions', who: 'emma', state_raw: 'todo', due_on: inDays(2), parent: 'm4' },
+      { title: 'Book the remaining interview slots', who: 'claire', state_raw: 'todo', parent: 'm4' },
+      { title: 'List 20 real and prospective clients', who: 'emma', state_raw: 'todo', due_on: inDays(9), parent: 'm3' },
+      { title: 'Map the journey for the three named clients', who: 'oliver', state_raw: 'todo', parent: 'm3' },
+      { title: 'Map client answers to the three layers', who: 'oliver', blocked: 'Waiting on the first five interviews', state_raw: 'blocked',
+        parent: 'm5' },
+      { title: 'Draft the avatar document', who: 'emma',
+        state: 'doing', state_raw: 'doing', due_on: inDays(0), parent: 'm2' },
+      { title: 'Agree the avatar with Grant', who: 'claire',
+        state_raw: 'todo', parent: 'm2' },
+      { title: 'Complete the Success Identity Quiz', state: 'done', state_raw: 'done',
+        parent: 'm1' },
+      { title: 'Review the Zoom Call interview notes', state: 'done', state_raw: 'done',
+        who: 'emma', parent: 'm1' },
+    ],
+    /*
+      What has been said on this project. The real surface reads
+      `conversation_history`, which is project-scoped; this stands in for it so
+      the chat grammar can be judged before a token exists.
+    */
+    chat: [
+      { who: 'grant', text: 'Can we get the first five interviews booked this week?', when: 'Fri 09:12' },
+      { who: 'claire', text: 'Three are booked. Ben has not come back on a time yet, so I have put a nudge on Monday.', when: 'Fri 09:40' },
+      { who: 'emma', text: 'The avatar draft is with you - I have left the two segments I was unsure about marked.', when: 'Yesterday 16:05' },
     ],
     /*
       Contacts.
@@ -238,6 +335,24 @@ const FALLBACK_PROJECTS = [
       the same shape that "talk to the team about this" attaches to a message.
     */
     requests: [
+      /*
+        WORK IN FLIGHT, in the prototype too (§20.2).
+
+        Same argument as the waiting item above it (#151): a state that only
+        appears against the live office is a state no capture run has ever
+        looked at, and Running work is drawn only while something is actually
+        running -- which on a healthy queue is almost never. `state: 'working'`
+        is the word `app.studio_requests` folds every non-terminal job into,
+        so the prototype speaks the payload's own vocabulary rather than a
+        neighbouring one.
+      */
+      {
+        id: 'r0', ask: 'Draft the module three workbook', kind: 'artifact.report',
+        from: 'Grant · chat', who: 'oliver', asked: 'today',
+        askedAt: new Date(Date.now() - 22 * 60 * 1000).toISOString(),
+        context: { kind: 'project', title: 'Legacy Coaching Course' },
+        state: 'working',
+      },
       {
         id: 'r1', ask: 'Turn the six modules into a one-page course outline I can send out',
         from: 'Grant · chat', who: 'oliver', asked: '2 days ago',
@@ -249,7 +364,7 @@ const FALLBACK_PROJECTS = [
           the card is showing one of them. Without an id here the mock renders
           the old single-press button and the sheet cannot be captured at all.
         */
-        output: { id: 'o1', imported: false, title: 'Course one-pager', kind: 'made', size: 'A4', file: './samples/one-pager.pdf', lines: [70, 100, 88] },
+        output: { id: 'o1', imported: false, title: 'Course one-pager', kind: 'made', size: 'A4', file: '/samples/one-pager.pdf', lines: [70, 100, 88] },
         derived: ['WS01 — Legacy Opening Assessment', 'Journey VS Destination'],
       },
       {
@@ -286,10 +401,19 @@ const FALLBACK_PROJECTS = [
         derived: ['Whats App Audio From Ben'],
       },
     ],
+    /*
+      WITH AN INSTANT, like the office's own payload (0288's `at`).
+
+      It carried relative phrases and nothing else, so the prototype held a
+      second vocabulary in the one place every capture looks - the same trap
+      this file already records about a Drive source's last-read. Computed
+      from now rather than written down, because a fixed date drifts into
+      absurdity and the point of these rows is that they are recent.
+    */
     activity: [
-      { who: 'emma', verb: 'pulled', what: 'the WS02 client list into the vision map', when: '2h ago' },
-      { who: 'oliver', verb: 'made', what: 'the course one-pager', when: '2d ago' },
-      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', when: '2d ago' },
+      { who: 'emma', verb: 'pulled', what: 'the WS02 client list into the vision map', at: AGO(2 * 60 + 12, 41), when: '2h ago' },
+      { who: 'oliver', verb: 'made', what: 'the course one-pager', at: AGO(2 * 24 * 60 + 95, 7), when: '2d ago' },
+      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', at: AGO(2 * 24 * 60 + 340, 19), when: '2d ago' },
     ],
   },
   {
@@ -316,7 +440,7 @@ const FALLBACK_PROJECTS = [
         from: 'Grant · voice', who: 'emma', asked: '6 hours ago',
         context: null, state: 'working', delivered: '', output: null, derived: [] },
     ],
-    activity: [{ who: 'tom', verb: 'summarised', what: 'two sources', when: '1d ago' }],
+    activity: [{ who: 'tom', verb: 'summarised', what: 'two sources', at: AGO(24 * 60 + 18, 3), when: '1d ago' }],
   },
   {
     slug: 'wellness',
@@ -370,6 +494,7 @@ const FALLBACK_WAITING = {
   here — one place, and the direction of travel is obvious if the slugs are ever
   reconciled.
 */
+
 export const DESIGN = {
   'chief-of-staff':          { slug: 'claire', hue: 'p-moss',  tone: 152 },
   'research-director':       { slug: 'emma',   hue: 'p-rust',  tone: 28 },
@@ -455,6 +580,38 @@ export const WAITING = { ...FALLBACK_WAITING }
   `live` stays a boolean and stays true only for the good case, so every
   existing reader keeps working.
 */
+/*
+  WHAT TO SAY WHEN WHAT IS ON SCREEN IS NOT THE OFFICE.
+
+  Beside `source` rather than beside the one page that happened to render it
+  first: two surfaces now tell somebody the same four things, and two copies of
+  a sentence about whether data is real is exactly the shape 0311 spent a
+  migration undoing. The page decides where the words go; this decides what
+  they are.
+*/
+export const SOURCE_STATE = {
+  prototype: {
+    label: 'Prototype data',
+    say: 'Showing the design on invented projects. Sign in to see your office.',
+    tone: '',
+  },
+  unreachable: {
+    label: 'The office did not answer',
+    say: 'Nothing on this page is your office. This is the prototype standing in.',
+    tone: 'bad',
+  },
+  stale: {
+    label: 'Out of date',
+    say: 'The office answered once and has stopped. What you can see was real then.',
+    tone: 'bad',
+  },
+  refused: {
+    label: 'Signed out',
+    say: 'That token was not accepted, so it has been cleared. Sign in again.',
+    tone: 'bad',
+  },
+}
+
 export const source = {
   live: false,
   at: null,
