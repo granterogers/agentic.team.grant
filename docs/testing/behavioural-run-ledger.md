@@ -3171,6 +3171,43 @@ and a clean sweep (0 documents left, 0 projects left, 0 jobs still running).
 
 Clean-pass count after pass 62: **3 of 5.**
 
+---
+
+## Pass 63 — cancellation: CLEAN, and one gate gap closed
+
+**Territory:** calling off work — a named high-trust invariant.
+
+**Real frequency is essentially nil, which is exactly where a defect waits
+for its first user.** `stop_requested_at` has **never** been set on a real
+job, and exactly ONE real turn of his contains a call-off word: *"Okay, never
+mind about that. Tell me, what are my still tasks to do across all
+projects?"* (15 September) — already analysed, and already fixed on two
+counts (0567's wrongly-stored rule, and the question-read-as-task).
+
+So the territory was driven rather than queried. `verify:stop` — **19/19**,
+covering the whole path: a stop accepted on an unfinished job, the runner
+halting before doing anything, a step already in flight finishing while the
+NEXT does not start, the finished step and its outcome preserved so resuming
+would not redo it, the gateway binding `stop_job` to `request_stop`, a studio
+control that calls it, progress readable from the page, and three controls
+(a job nobody stopped runs every step; a finished job cannot be stopped and
+says why; an unknown id is an error, not a silent success). Containment
+asserted, teardown clean.
+
+**One instrument error of mine:** I reported `verify:stop` as outside the
+gate, having grepped for the FILE PATH rather than the script name. It is in
+the gate. Grep for the call, not the noun — recorded in this file already,
+and paid for again.
+
+**The real gap it turned up:** `verify:another-go`, the regression suite for
+#337's duplicate execution, was NOT in the gate. It was written on 23
+September, guards one of the named invariants, and spends model calls exactly
+as `verify:delegation`, `verify:collaborates` and `verify:handoff` do — all
+three already in the list. A suite outside the gate is one that goes red
+unnoticed, which this file names. Added.
+
+Clean-pass count after pass 63: **4 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

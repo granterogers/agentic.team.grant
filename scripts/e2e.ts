@@ -312,6 +312,18 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ],
   ['verify:handoff', 'delegation that leaves a trace'],
   /*
+    Duplicate execution (#337). He asked the same thing twice three minutes
+    apart and got two reports; the guard that stops the second landed on 23
+    September and its regression suite was left outside this list — which is
+    the shape CLAUDE.md already names, a suite that will be red and unnoticed.
+    It spends model calls, like the three entries above it, and it guards one
+    of the invariants a person notices immediately.
+  */
+  [
+    'verify:another-go',
+    'asking twice starts one piece of work, and saying "give it another go" starts a second (#337)',
+  ],
+  /*
     What the office does when things go wrong, at the level of the JOB rather
     than the integration. `verify:chaos` proves the rest of the system stays up
     and `verify:failures` proves a failure is classified; neither asserts that
@@ -524,10 +536,7 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:believes',
     'no service the office is delivering through is described to its agents as unreachable',
   ],
-  [
-    'check:answerable',
-    'every question open on his dashboard has somewhere for an answer to go',
-  ],
+  ['check:answerable', 'every question open on his dashboard has somewhere for an answer to go'],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 
