@@ -15,7 +15,12 @@ vi.mock('../../web/studio/call.js', () => ({
   callMuted: () => false,
   callPhase: () => 'idle',
 }))
-const { plainly } = await import('../../web/studio/bc/livevoice.js')
+/* A variable specifier, as docorder.test.ts does: the module is hand-written
+   JavaScript with no declarations, and the shape below is the contract. */
+const WHERE = '../../web/studio/bc/livevoice.js'
+const { plainly } = (await import(WHERE)) as {
+  plainly: (raw: string) => { words: string; tone: string }
+}
 
 const RAW = [
   'Failed to fetch',
