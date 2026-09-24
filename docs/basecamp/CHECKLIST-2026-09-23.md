@@ -106,10 +106,10 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 11.1 | Real contact image appears in the minimised Contacts module | TODO |
-| 11.2 | Graceful fallback when there is none | TODO |
-| 11.3 | Verified: photo stored → miniature renders → refresh → still renders | TODO |
-| 11.4 | Signed/private image architecture used correctly | TODO |
+| 11.1 | Real contact image appears in the minimised Contacts module | **VERIFIED** — it always did; the record read the wrong key (`image` not `photo`) and now reads either. `verify:basecamp-photo` |
+| 11.2 | Graceful fallback when there is none | **VERIFIED** — initials, asserted on a second contact the suite deliberately leaves unphotographed |
+| 11.3 | Verified: photo stored → miniature renders → refresh → still renders | **VERIFIED** — driven through the file picker on the deployed page, not through the gateway; proved by deploying the old key and watching the record go red while the miniature stayed green |
+| 11.4 | Signed/private image architecture used correctly | **VERIFIED** — asserted to be an `/object/sign/` URL carrying a token, not a public path |
 
 ## 12–15 — Settings
 
@@ -146,10 +146,10 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 18.1 | Opening a waiting item explains exactly what is required | TODO |
-| 18.2 | Decision / information / approval / answer can be given and submitted | TODO |
-| 18.3 | Waiting state resolves and project state updates | TODO |
-| 18.4 | Built on the canonical waiting/decision/approval architecture | TODO |
+| 18.1 | Opening a waiting item explains exactly what is required | **VERIFIED** — the ask, the reason, the cost of delay, who asked (by name), the deadline and whether work has stopped. `verify:basecamp-waiting` |
+| 18.2 | Decision / information / approval / answer can be given and submitted | **VERIFIED** — the office's own `approval_options` as buttons. No free-text field: `blockers_has_an_option` means the empty case cannot exist, so a field would be a control nothing could reach |
+| 18.3 | Waiting state resolves and project state updates | **VERIFIED** — the canonical row moves to `resolved` carrying the answer pressed, and the item leaves the list without a reload. A second, unanswered blocker is the control |
+| 18.4 | Built on the canonical waiting/decision/approval architecture | **VERIFIED** — `public.blockers` + `hq_answer_blocker`, unchanged. Nothing new was invented; the boundary is asserted by sending an answer the blocker never offered and being refused by name |
 
 ## 19 — What the team has made
 
