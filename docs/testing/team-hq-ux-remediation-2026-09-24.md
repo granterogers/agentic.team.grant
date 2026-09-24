@@ -63,74 +63,9 @@ continue at NEXT ACTION.**
 
 ## NEXT ACTION
 
-Fix pass-1 findings, recapture, compare.
-
-## Pass 3 — Live voice (header microphone)
-
-| # | Finding | State |
-|---|---|---|
-| 20 | A failed call explained itself as **"Failed to fetch"** (raw exception from shared `call.js`) in 12.5px muted text | **fixed** — `livevoice.plainly()` translates at this experience's edge; `call.js` untouched. Unit-tested with a sabotage that turned it red |
-| 21 | Copy said "press the phone"; this experience's control is a microphone | **fixed** in the same translation |
-| 22 | A problem line had the weight of a caption | **fixed** — legible warm chip that retires after ~12s (paused on hover) |
-| — | Idle mic is red | **kept** — Grant's explicit 23 Sep instruction ("Inactive = red, active = green") |
-
-Trap I hit and recovered from: `git checkout -p` on an uncommitted file reverted the whole new function, not only the sabotage — CLAUDE.md's first trap. Restored from the text written; tests green.
-
-## Pass 4 — tool pages
-
-| # | Surface | Finding | State |
-|---|---|---|---|
-| 23 | To-dos page | rows read `t.due` (rarely present): no row showed a date; overdue looked undated | **fixed** — shared `dueWords`/`isLate` |
-| 24 | To-dos page | Late/Stuck as 12px pills; home had counters | **fixed** — one counter design |
-| 25 | Task record | **due field empty for a task due today; Save would have cleared the date** | **fixed** — reads `due_on` |
-| 26 | Task record | assignee a free-text box showing slug `emma` | **fixed** — team picker; `verify:basecamp-todos` updated to drive it, proved red under sabotage |
-| 27 | Task record | copy quoted "§20" to the user | **fixed**; swept every route for §/#nnn/slug/undefined/NaN/Invalid Date: none |
-| 28 | Docs toolbar | 44px select beside 32px buttons; select said only "Custom" | **fixed** |
-| 29 | Docs | prototype `venue.png` was a 206-byte stripe pattern (hazard tape on the deployed preview) | **fixed** — generated 16 KB illustration |
-| 30 | **Sources** | **`.bcsources` defined twice (upload picker grid + sources list): list laid out as 5 × 200px columns, names truncated, each logo beside the wrong name** | **fixed** — picker renamed `.bcpickfrom`; full page redesigned as integration cards |
-| 31 | Portfolio, waiting, outputs, activity, search | assignee printed as database slug in 8 places | **fixed** — roster lookup, either slug |
-| 32 | Activity | pressable entry 16px among 13px neighbours (`font: inherit` on a button) | **fixed** |
-| 33 | Card table, My Tasks | stale `t.due` again ("Due 16 September" for a 19 Sep overdue) | **fixed** — class closed: no `t.due` reader remains in bc/ |
-| 34 | My Tasks (signed out) | "This browser has no token… the projects above" | **fixed** copy; swept all routes for token/API/RPC/payload/JSON/SDP/fixture/schema/gateway/job: none |
-| 35 | Settings, dock, chat | failed face image paints the broken-image glyph over the initial | **fixed** — capture-phase `error` listener hides failed face images (scoped) |
-| 36 | Settings roster, dock | names in the studio's display face (Anybody) inside Instrument Sans panes | **fixed** — `--display` mapped to `--bc-font` on the Basecamp root |
-| 37 | Team (signed out) | "Asking the office who is on this project…" for ever (example projects have no uuid, so nothing is asked) | **fixed** — example team drawn read-only, labelled |
-
-## Pass 5 — states (fake office: empty, huge, slow, refusing, unreachable, offline)
-
-| # | Finding | State |
-|---|---|---|
-| 38 | Empty project: six boxes of one grey sentence, no next step anywhere | **fixed** — each empty module offers the one action that fills it |
-| 39 | Assignee not on the roster rendered as a raw lowercase key (`priya`, `marcus`) | **fixed** — `pretty()` fallback |
-| 40 | Outage copy said "the prototype standing in"; refused copy said "token" | **fixed** in shared `SOURCE_STATE` sentences (labels untouched; `verify:offline` locks those) |
-| — | `verify:offline` 22/23 ("a first failure shows the outage strip") | **pre-existing on `main`** (proved in a pristine worktree at `d1c9247`); legacy studio surface — out of scope, recorded |
-| — | Huge data (200 tasks, long names, 1.2M-word docs): no overflow, no clipping at 3 widths | `verify:basecamp-states` 64/64 |
-| 41 | **Slow connection, signed in: invented projects shown under "Prototype data — Sign in", with a sign-in form, while the real office was loading** | **fixed** — "Connecting to your office" + spinner + neutral page outline, only when a credential is present and nothing has answered yet |
-| — | My first rewording ("nothing here is…") tripped `verify:basecamp-failures`' empty-claim guard; reworded ("none of this is…"), 39/39 | recorded |
-| 42 | **Network drop with the page open: nothing said; the page looked current and changes looked saved** | **fixed** — `offline`/`online` listeners; strip at once; reconnect re-asks the office only when signed in. 4 new checks in `verify:basecamp-failures` (43/43), 3 proved red under sabotage |
-| 43 | Phone list count "67/200" wrapped mid-number | **fixed** |
-| — | Offline **reload** is a blank browser error page: no offline shell/service worker | **not changed** — a cache on this static deploy can serve stale builds; architectural, recorded as UX debt |
-
-## Pass 6 — responsive sweep (1280 → 320, ten widths)
-
-| # | Finding | State |
-|---|---|---|
-| 44 | **320–360px: page 43px/3px wider than the phone** — the To-dos module header (title + Mine/Team switch + close) needed 336px; one overflowing header widens a phone's layout viewport, so the fixed tray ran off-screen. **Pre-existing on `main`** (measured in the pristine worktree) | **fixed** — header meta wraps under the title below 400px; 0 overflow at 320/360/390 |
-| 45 | 320px: project chip truncated to one letter | **fixed** — "Attention" becomes a bell below 380px (accessible name unchanged) |
-| — | 1280 (12-col board) → 1180 (2-col) → 820 (1-col) transitions | inspected; no overlap, header row wraps cleanly at 820 |
-
-## Pass 7 — accessibility (axe-core on 14 routes × desktop + phone, plus a manual Tab walk)
-
-Before: 6 rules failing (serious nested-interactive ×12, serious contrast ×18, critical aria-required-attr ×6, moderate heading-order, page-has-heading-one, minor aria-allowed-role). **After: 0 violations.**
-
-| # | Finding | State |
-|---|---|---|
-| 46 | Module header was `role=button` containing buttons (switch, ×) | **fixed** — header keeps the pointer (Grant, 22 Sep: whole header is the target); keyboard stop is a real `<button>` in the `<h2>`; Enter/Alt+arrows still bubble to the header handler |
-| 47 | That change broke drag-by-title (caught by `verify:basecamp-board`) | **fixed** — the title button is exempt from the "control inside the header" rule |
-| 48 | Completed rows 4.19:1 (muted ink × 0.72 opacity) | **fixed** — opacity .86 |
-| 49 | Card Table "Not started" heading 4.01:1 | **fixed** — slate lifted |
-| 50 | Resize handle: focusable separator without aria-valuenow | **fixed** — value in columns |
-| 51 | No `<h1>` on the project home; h2→h4 jumps | **fixed** — visually hidden h1 (visible title stays removed per Grant); h3 |
-| 52 | Tab walk: logical order, visible focus on every stop | verified |
-| 53 | **`verify:basecamp-controls` silently skipped half the home** (a pressed × persisted; the loop broke at index 33 of 65 on both legs) — pre-existing | **fixed** — layout storage cleared per visit: 375 → **439 pressed**, 0 findings |
-| 54 | `verify:basecamp-journey` asserted the slug `oliver` on screen (locked the defect in) and typed into the old assignee box | **updated** to the name and to the picker; the picker sends the staff slug `hq_task_update` requires — the old box only worked if someone typed a role slug |
+Passes 1–7 done (home, chat, live voice, tool pages, states, responsive, a11y).
+Next: full re-capture → visual critique loop (typography, colour, depth,
+button families, portfolio home) → final gates → final screenshot set →
+report. Pristine baseline worktree for comparisons: `/tmp/basewt` at
+`d1c9247` (recreate with `git worktree add /tmp/basewt d1c9247` and symlink
+node_modules if the container was recycled).
