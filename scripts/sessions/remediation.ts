@@ -263,4 +263,35 @@ export const REMEDIATION: readonly Session[] = [
       },
     ],
   },
+
+  {
+    name: 'rem-propagate',
+    about: "a later specialist can only succeed with the earlier one's result",
+    /*
+      The gamma project holds ONE document, planted by hand before the run
+      (see the ledger): Holloway Barn, deposit £4,317. Nothing in the
+      conversation says the figure, so a correct share of £20,000 (21.6%)
+      proves the retrieval reached the arithmetic.
+    */
+    projects: ['gamma'],
+    turns: [
+      {
+        say: 'Get Emma to dig out what the Holloway Barn deposit is from our documents, and then have Daniel work out what share of a £20,000 event budget that deposit is.',
+        inProject: 'gamma',
+        why: 'retrieve -> calculate, two specialists, the second needs the first',
+      },
+      {
+        say: 'So what did Daniel make of it?',
+        inProject: 'gamma',
+        why: 'the child result is reachable from the conversation',
+        expect: { saysAny: ['21.6', '21.59', '21.58', '22%'], noWrite: true },
+      },
+      {
+        say: 'And if the budget went up to £25,000 instead?',
+        inProject: 'gamma',
+        why: 'a correction that needs the propagated figure: 17.3%',
+        expect: { saysAny: ['17.3', '17.27', '17%'], noWrite: true },
+      },
+    ],
+  },
 ]

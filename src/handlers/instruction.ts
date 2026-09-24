@@ -240,13 +240,17 @@ export const planAndPursue = async (
     planningCatalogue(db),
     db
       .execute(
-        `select slug, coalesce(title, '') as title
+        `select slug, coalesce(title, '') as title, coalesce(name, '') as name
            from public.staff where active order by slug`,
       )
       .then(({ rows }) =>
         rows.map((r) => {
-          const row = r as { slug?: unknown; title?: unknown }
-          return { slug: String(row.slug ?? ''), title: String(row.title ?? '') }
+          const row = r as { slug?: unknown; title?: unknown; name?: unknown }
+          return {
+            slug: String(row.slug ?? ''),
+            title: String(row.title ?? ''),
+            name: String(row.name ?? ''),
+          }
         }),
       ),
   ])

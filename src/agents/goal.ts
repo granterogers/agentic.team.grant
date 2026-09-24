@@ -302,6 +302,8 @@ export function validate(
   raw: RawPlan,
   catalogue: readonly Capability[],
   known: ReadonlySet<string>,
+  /** The roster's first names, so a task handed to a colleague can be recognised. */
+  names: readonly string[] = [],
 ): GoalPlan {
   const byName = new Map(catalogue.map((c) => [c.tool, c]))
   const goal = typeof raw.goal === 'string' ? raw.goal.trim().slice(0, 400) : ''
@@ -394,6 +396,32 @@ export function validate(
       substituting a different action is how an approved plan stops matching
       what runs.
     */
+    /*
+      A TASK IS GRANT'S LIST, SO A TASK FOR A COLLEAGUE IS DELEGATION MISFILED.
+
+      Rule 3c in the prompt says so and the model broke it on the first try
+      (behavioural remediation, 24 September 2026): "Get Emma to dig out the
+      Holloway Barn deposit, and then have Daniel work out what share of
+      £20,000 it is" was planned as two task.create steps - "Emma locate…",
+      "Daniel compute…" - so the office asked Grant to approve putting its own
+      colleagues' work on HIS to-do list, promised "I will come back with what
+      each one found", and started nothing.
+
+      Keyed on the step NAMING A COLLEAGUE, not on its audience: the model
+      labels real tasks for Grant ("book the venue", "write the welcome pack")
+      as audience "office" too - 30 of 87 historical task.create steps - and
+      refusing those would lose requests he made. The roster's first names are
+      a closed set read from the database, so this needs no word list.
+    */
+    const colleague = names.find((n) =>
+      new RegExp(`(?:^|\\b(?:get|have|ask|for)\\s+)${n}\\b`, 'i').test(why),
+    )
+    if (capability === 'task.create' && colleague !== undefined) {
+      refused.push(
+        `${id} is work for ${colleague}, and task.create only puts things on Grant's own list`,
+      )
+      continue
+    }
     if (audience === 'outside' && DELIVERS_TO_PEOPLE.has(capability)) {
       refused.push(
         `${capability} would put this in front of people outside the office — ` +
@@ -520,7 +548,7 @@ export interface Again {
 export async function planFor(
   request: string,
   catalogue: readonly Capability[],
-  roster: readonly { readonly slug: string; readonly title: string }[],
+  roster: readonly { readonly slug: string; readonly title: string; readonly name?: string }[],
   router: ProviderRouter | undefined,
   trace: { readonly jobId?: string; readonly correlationId?: string } = {},
   again?: Again,
@@ -608,6 +636,11 @@ export async function planFor(
     return fellBack('the answer was not valid JSON')
   }
 
-  const checked = validate(raw, catalogue, new Set(roster.map((r) => r.slug)))
+  const checked = validate(
+    raw,
+    catalogue,
+    new Set(roster.map((r) => r.slug)),
+    roster.map((r) => (r.name ?? '').trim()).filter((n) => /^[A-Za-z]{2,}$/.test(n)),
+  )
   return checked.how === 'fallback' ? checked : { ...checked, model: result.model ?? null }
 }

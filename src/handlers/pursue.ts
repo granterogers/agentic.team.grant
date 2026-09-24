@@ -92,11 +92,15 @@ const planAgain = async (
   const granted = await planningCatalogue(db)
   const roster = (
     await db.execute(
-      `select slug, coalesce(title, '') as title from public.staff where active order by slug`,
+      `select slug, coalesce(title, '') as title, coalesce(name, '') as name from public.staff where active order by slug`,
     )
   ).rows.map((r) => {
-    const row = r as { slug?: unknown; title?: unknown }
-    return { slug: String(row.slug ?? ''), title: String(row.title ?? '') }
+    const row = r as { slug?: unknown; title?: unknown; name?: unknown }
+    return {
+      slug: String(row.slug ?? ''),
+      title: String(row.title ?? ''),
+      name: String(row.name ?? ''),
+    }
   })
   const canDo = new Set(performable())
   const catalogue: readonly Capability[] = granted.map((c) => ({

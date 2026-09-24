@@ -77,6 +77,7 @@ describe('validate — the capability vocabulary is closed', () => {
       { goal: 'g', steps: [step({ capability: 'web.search' })] },
       CATALOGUE,
       ROSTER,
+      NAMES,
     )
     expect(got.how).toBe('fallback')
     expect(got.why).toContain('web.search')
@@ -87,6 +88,7 @@ describe('validate — the capability vocabulary is closed', () => {
       { goal: 'g', steps: [step({ capability: 'db.write' })] },
       CATALOGUE,
       ROSTER,
+      NAMES,
     )
     expect(got.how).toBe('fallback')
   })
@@ -114,6 +116,7 @@ describe('validate — the capability vocabulary is closed', () => {
       },
       CATALOGUE,
       ROSTER,
+      NAMES,
     )
     expect(got.how).toBe('fallback')
   })
@@ -272,6 +275,7 @@ describe('validate — level 3 can never be proposed', () => {
       { goal: 'g', steps: [step({ capability: 'gmail.send' })] },
       CATALOGUE,
       ROSTER,
+      NAMES,
     )
     expect(got.how).toBe('fallback')
     expect(got.why).toContain('gmail.send')
@@ -431,5 +435,80 @@ describe('the sheet tells the planner what has code behind it', () => {
   it('still lists it, because a deleted gap can never become a proposal', () => {
     const sheet = catalogueSheet([cap('db.read', true), cap('notebook.write', false)])
     expect(sheet.split('\n')).toHaveLength(2)
+  })
+})
+
+const NAMES = ['Emma', 'Daniel', 'Claire']
+
+describe('validate — a task for a colleague is delegation misfiled (remediation 2026-09-24)', () => {
+  it('the measured plan: two task.create steps for colleagues fall back to the cascade', () => {
+    const got = validate(
+      {
+        goal: 'find the deposit and work out its share',
+        steps: [
+          step({
+            id: 's1',
+            capability: 'task.create',
+            why: 'Emma locate the deposit',
+            audience: 'office',
+          }),
+          step({
+            id: 's2',
+            capability: 'task.create',
+            why: 'Daniel compute the share',
+            audience: 'office',
+            needs: ['s1'],
+          }),
+        ],
+      },
+      CATALOGUE,
+      ROSTER,
+      NAMES,
+    )
+    expect(got.how).toBe('fallback')
+  })
+
+  it('NEGATIVE CONTROL: a task for Grant labelled office is still a task (30 of 87 real steps)', () => {
+    const got = validate(
+      {
+        goal: 'g',
+        steps: [
+          step({ id: 's1', capability: 'db.read', audience: 'office' }),
+          step({
+            id: 's2',
+            capability: 'task.create',
+            why: 'book venue',
+            audience: 'office',
+            needs: ['s1'],
+          }),
+        ],
+      },
+      CATALOGUE,
+      ROSTER,
+      NAMES,
+    )
+    expect(got.steps.map((s) => s.capability)).toEqual(['db.read', 'task.create'])
+  })
+
+  it('and only the misfiled step goes, not the work beside it', () => {
+    const got = validate(
+      {
+        goal: 'g',
+        steps: [
+          step({ id: 's1', capability: 'db.read', audience: 'office' }),
+          step({
+            id: 's2',
+            capability: 'task.create',
+            why: 'Emma look into it',
+            audience: 'office',
+          }),
+        ],
+      },
+      CATALOGUE,
+      ROSTER,
+      NAMES,
+    )
+    expect(got.steps.map((s) => s.id)).toEqual(['s1'])
+    expect(got.refused.join(' ')).toContain("Grant's own list")
   })
 })
