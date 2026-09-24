@@ -1535,6 +1535,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
       if (!/^[0-9a-f-]{36}$/i.test(projectId)) return json({ error: 'which project?' }, 400)
 
       /* Removing one is the same action with nothing attached. */
+      /*
+        Whether the RPC accepted the write. The response below is unchanged
+        whatever it says; this only decides whether to kick the worker, which
+        must follow a successful write and never a refused one (the rule the
+        generic dispatch below follows).
+      */
+      let wrote = false
       const callRpc = async (fn: string, body: unknown): Promise<unknown> => {
         const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
           method: 'POST',
@@ -1545,16 +1552,17 @@ Deno.serve(async (request: Request): Promise<Response> => {
           },
           body: JSON.stringify(body),
         })
+        wrote = r.ok
         return await r.json().catch(() => ({}))
       }
 
       if (b64 === '') {
-        return json({
-          result: await callRpc('hq_contact_photo_set', {
-            p_contact_id: contactId,
-            p_path: null,
-          }),
+        const removed = await callRpc('hq_contact_photo_set', {
+          p_contact_id: contactId,
+          p_path: null,
         })
+        if (wrote) kickWorker()
+        return json({ result: removed })
       }
 
       if (!/^image\/(jpeg|png|webp|gif|avif)$/.test(mime)) {
@@ -1613,6 +1621,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         body: JSON.stringify({ expiresIn: 600 }),
       })
       const { signedURL } = (await sign.json().catch(() => ({}))) as { signedURL?: string }
+      if (wrote) kickWorker()
       return json({
         result: recorded,
         photo: signedURL === undefined ? null : `${DB_URL}/storage/v1${signedURL}`,
