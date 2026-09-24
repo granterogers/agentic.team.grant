@@ -41,3 +41,31 @@ describe('NEGATIVE CONTROL: rules are still rules, names are still names', () =>
     expect(callsItOff('forget the coach hire')).toEqual({ target: 'coach hire', pivot: 'forget' })
   })
 })
+
+import { classifyIntent } from '../../src/agents/intent.ts'
+import { taskRequest } from '../../src/agents/tasks.ts'
+
+describe('an elliptical "one" is a task when a task was just mentioned (R7/R26)', () => {
+  const whole =
+    'Add a task to ring the printers. Actually scrap that and add one to ring the venue instead.'
+  it.each([
+    'add one to ring the venue instead',
+    'Actually scrap that and add one to ring the venue instead.',
+  ])('%s', (clause) => {
+    expect(taskRequest(clause, classifyIntent(clause), whole)?.title).toBe('ring the venue')
+  })
+  it('NEGATIVE CONTROL: with no task mentioned, "one" is not a task', () => {
+    expect(
+      taskRequest(
+        'add one to ring the venue',
+        classifyIntent('add one to ring the venue'),
+        'ring the venue',
+      ),
+    ).toBeNull()
+  })
+  it('NEGATIVE CONTROL: "one of them" is not a request', () => {
+    expect(
+      taskRequest('one of them is late', classifyIntent('one of them is late'), whole),
+    ).toBeNull()
+  })
+})

@@ -175,7 +175,8 @@ const OBJECT_NOUN =
 const LINKING =
   /^\s*(?:to|for|about|that|which|and|then|called|named|titled|saying|which\s+is)\b\s*/i
 /** Politeness at the end, which the opening strip cannot reach. */
-const TRAILING_PLEASE = /\s*\b(?:please|pls|thanks|ta|if\s+you\s+(?:can|could|would))\b[\s,.]*$/i
+const TRAILING_PLEASE =
+  /\s*\b(?:please|pls|thanks|ta|instead|if\s+you\s+(?:can|could|would))\b[\s,.]*$/i
 
 /*
   WHAT ELSE IS FRAME, established from the rows rather than from reading.
@@ -255,7 +256,8 @@ export const taskTitle = (clause: string): string | null => {
     clause he took back in the same breath. #291's reader exists for exactly
     this and was never consulted when a title was composed.
   */
-  const kept = readRetraction(clause)?.kept
+  // The survivor can begin with the word that joined it: "…scrap that AND add one…".
+  const kept = readRetraction(clause)?.kept?.replace(/^\s*(?:and|then|so|but)\s+/i, '')
   const said = kept !== undefined && kept.trim() !== '' ? kept : clause
   const withoutTopic = TOPIC_FIRST.test(said) ? said.replace(TOPIC_FIRST, '') : said
   const framed = requestBody(withoutTopic)
@@ -346,10 +348,28 @@ const wasAsked = (instruction: string, classification: Classification): boolean 
   return readRequest(instruction, clauses).some((r) => r.mood === 'ask' && TASK_OBJECT.test(r.text))
 }
 
+/*
+  "Add ONE to ring the venue" is a task when a task has just been mentioned
+  (ledger R7/R26). "Add a task to ring the printers. Actually scrap that and
+  add one to ring the venue instead." filed nothing: the surviving clause
+  says "one", and "one" is only a task because the clause he withdrew said
+  "task". The antecedent is the whole of what he said; the elliptical noun is
+  rewritten to the noun it stands for, and only after a verb of making, so
+  "one of them is late" is untouched.
+*/
+const ELLIPTICAL =
+  /\b(add|make|create|put|raise|log|stick|set\s+up|do)\s+(?:me\s+)?(?:another(?:\s+one)?|one\s+more|one)\s+(?=(?:to|for|about|called|on)\b)/i
+const withElliptical = (text: string, antecedent: string): string =>
+  TASK_OBJECT.test(antecedent) && !TASK_OBJECT.test(text)
+    ? text.replace(ELLIPTICAL, '$1 a task ')
+    : text
+
 export const taskRequest = (
-  rawInstruction: string,
+  rawText: string,
   classification: Classification,
+  antecedent = '',
 ): TaskRequest | null => {
+  const rawInstruction = withElliptical(rawText, antecedent)
   /*
     The same cut `classifyIntent` makes, and for the same measurement.
 
@@ -424,7 +444,21 @@ export const taskRequest = (
       the title, so the title now comes from `taskTitle` and the capture is the
       fallback for a sentence subtraction cannot read.
     */
-    const raw = (taskTitle(instructionText) ?? hit.groups?.title ?? '').trim().replace(/\s+/g, ' ')
+    /*
+      A subtracted title that still opens with a conjunction and a request for
+      a task ("and add a task to ring the venue") is the framing of a second
+      clause, not a name; the shape's own capture holds the name.
+    */
+    const subtracted = taskTitle(instructionText)
+    const framing =
+      subtracted !== null &&
+      /^(?:that\s+)?(?:and|then|so|but)\s+\w+\s+(?:me\s+)?(?:a|an|another)?\s*(?:task|to-?do)/i.test(
+        subtracted,
+      )
+    const raw = ((framing ? null : subtracted) ?? hit.groups?.title ?? '')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(TRAILING_PLEASE, '')
     const title = raw === '' || NOT_A_TITLE.test(raw) ? null : raw
     return { title, matched: hit[0].slice(0, 80) }
   }

@@ -83,9 +83,10 @@ describe('one clause is either a change or a new thing', () => {
     expect(withoutComments).toMatch(
       /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\(text\)\s*\n/,
     )
-    const asked = /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)\)/.exec(
-      withoutComments,
-    )?.[1]
+    const asked =
+      /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)(?:, asSaid)?\)/.exec(
+        withoutComments,
+      )?.[1]
     expect(asked).toContain('changesHis !== null')
   })
 

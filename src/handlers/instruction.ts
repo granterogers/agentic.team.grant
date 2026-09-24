@@ -3348,7 +3348,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               })
               .catch(() => null)
 
-      const calledOff = isBranch || changesHis !== null ? null : firstOfHis(callsItOff)
+      /*
+        And his literal words, when nothing survived the reading (ledger R26).
+        hisRequests holds the pre-rewrite text only when the resolver CHANGED
+        it, plus the model's surviving intents - and a pure withdrawal has no
+        surviving intent, because the model rightly files it as abandoned. So
+        "Actually forget it, don't bother with that." never reached this
+        reader and prose asked him again for what he had withdrawn.
+        callsItOff is anchored to the whole message, so the literal text is
+        exactly what it was written for.
+      */
+      const calledOff =
+        isBranch || changesHis !== null ? null : (firstOfHis(callsItOff) ?? callsItOff(asSaid))
       const stopped =
         calledOff === null
           ? null
@@ -4119,7 +4130,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   time. His literal reading comes first in hisRequests, so a
                   request he made himself is unaffected.
                 */
-                const got = taskRequest(text, classifyIntent(text))
+                // His whole message is the antecedent for an elliptical "add one to…".
+                const got = taskRequest(text, classifyIntent(text), asSaid)
                 return got === null || got.title === null || groundedIn(got.title, asSaid)
                   ? got
                   : null
