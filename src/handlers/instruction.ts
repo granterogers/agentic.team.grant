@@ -4602,6 +4602,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                      and c.command_id <> me.command_id
                      and c.job_id is not null
                      and c.received_at >= app.now_utc() - interval '12 hours'
+                   /*
+                     The turn IMMEDIATELY before only. "ok" is also how people
+                     acknowledge, so a question raised three turns back, with
+                     other answers since, must not be approved by an "ok,
+                     thanks" meant for the latest reply.
+                   */
+                   order by c.received_at desc
+                   limit 1
                 ), tree as (
                   select job_id from ours
                   union
