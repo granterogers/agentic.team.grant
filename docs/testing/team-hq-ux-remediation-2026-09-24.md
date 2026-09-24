@@ -95,3 +95,13 @@ Trap I hit and recovered from: `git checkout -p` on an uncommitted file reverted
 | 35 | Settings, dock, chat | failed face image paints the broken-image glyph over the initial | **fixed** — capture-phase `error` listener hides failed face images (scoped) |
 | 36 | Settings roster, dock | names in the studio's display face (Anybody) inside Instrument Sans panes | **fixed** — `--display` mapped to `--bc-font` on the Basecamp root |
 | 37 | Team (signed out) | "Asking the office who is on this project…" for ever (example projects have no uuid, so nothing is asked) | **fixed** — example team drawn read-only, labelled |
+
+## Pass 5 — states (fake office: empty, huge, slow, refusing, unreachable, offline)
+
+| # | Finding | State |
+|---|---|---|
+| 38 | Empty project: six boxes of one grey sentence, no next step anywhere | **fixed** — each empty module offers the one action that fills it |
+| 39 | Assignee not on the roster rendered as a raw lowercase key (`priya`, `marcus`) | **fixed** — `pretty()` fallback |
+| 40 | Outage copy said "the prototype standing in"; refused copy said "token" | **fixed** in shared `SOURCE_STATE` sentences (labels untouched; `verify:offline` locks those) |
+| — | `verify:offline` 22/23 ("a first failure shows the outage strip") | **pre-existing on `main`** (proved in a pristine worktree at `d1c9247`); legacy studio surface — out of scope, recorded |
+| — | Huge data (200 tasks, long names, 1.2M-word docs): no overflow, no clipping at 3 widths | `verify:basecamp-states` 64/64 |

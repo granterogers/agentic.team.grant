@@ -1067,7 +1067,7 @@ const whoName = (slug) =>
   slug === null || slug === undefined || slug === ''
     ? ''
     : /* Either slug: the office names people by role slug, the design by short slug. */
-      ((ctx?.crew ?? []).find((c) => c.slug === slug || c.staffSlug === slug)?.name ?? slug)
+      ((ctx?.crew ?? []).find((c) => c.slug === slug || c.staffSlug === slug)?.name ?? bcMini.pretty(slug))
 
 const norm = (x) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 const repeatsList = (note, listName) => {

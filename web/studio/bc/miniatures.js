@@ -96,9 +96,15 @@ export const face = (person, size = 'sm') => {
   `crewBy` in data.js has matched both all along; this is the copy that did
   not.
 */
+/* Somebody not on the roster is still a name, not a key: "priya" reads as
+   Priya and "finance-director" as Finance director. */
+export const pretty = (slug) => {
+  const t = String(slug ?? '').replace(/[-_]+/g, ' ').trim()
+  return t === '' ? '' : t.charAt(0).toUpperCase() + t.slice(1)
+}
 const person = (slug) =>
   (ctx?.crew ?? []).find((c) => c.slug === slug || c.staffSlug === slug) ??
-  (slug ? { slug, name: slug } : null)
+  (slug ? { slug, name: pretty(slug) } : null)
 
 /*
   Exported because §18's waiting record needs the same answer the miniatures
@@ -304,7 +310,7 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
         return `<p class="bcmpty">Nothing here under ${esc(f.name)}.
           <button type="button" class="bclinky" data-bc-filter-off="1">Show everything</button></p>`
       }
-      return `<p class="bcmpty">No to-dos on this project yet.</p>`
+      return emptyWith('No to-dos on this project yet.', 'Add a to-do', `/basecamp/p/${whole.slug}/tasks`)
     }
     return `<ul class="bctasks">${flat.slice(0, per * lists).map(taskLine).join('')}</ul>`
   }
@@ -406,7 +412,7 @@ export const cardsCount = (p) => {
 
 export const cardsMini = (p) => {
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
-  if (tasks.length === 0) return `<p class="bcmpty">Nothing on the board yet.</p>`
+  if (tasks.length === 0) return emptyWith('Nothing on the board yet.', 'Add a to-do', `/basecamp/p/${p.slug}/tasks`)
   const at = (id) =>
     tasks.filter((t) => {
       const st = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
@@ -509,7 +515,7 @@ export const calendarMini = (p, { items = 4 } = {}) => {
     <div class="bcagenda">
       ${
         dated.length === 0
-          ? `<p class="bcmpty">Nothing on this project has a date yet.</p>`
+          ? emptyWith('Nothing on this project has a date yet.', 'Give a to-do a date', `/basecamp/p/${p.slug}/schedule`)
           : dated
               .slice(0, items)
               .map(
@@ -1037,13 +1043,27 @@ const thumb = (d, i) => {
  * covers under a heading is a sample rather than a section.
  */
 /** The thumbnails alone, so the full workspace and the pane share one drawing. */
+/*
+  AN EMPTY MODULE OFFERS THE ONE THING THAT WOULD FILL IT. A box with a single
+  grey sentence in it is calm and says nothing about what to do next; six of
+  them on a new project read as a page that has not loaded. One link each, to
+  the place that adds the thing, drawn with the same data-bc-go the docs pane
+  already uses so the wiring is the router's own.
+*/
+const emptyWith = (line, label, to) =>
+  `<div class="bcmptywrap"><p class="bcmpty">${esc(line)}</p>
+    <a class="bcmptyact" href="${esc(to)}" data-bc-go="${esc(to)}">${esc(label)}</a></div>`
+
 export const docThumbs = (docs) => docs.map((d, i) => thumb(d, i)).join('')
 
 export const docsMini = (p, { items = 6 } = {}) => {
   const docs = p.documents ?? []
   if (docs.length === 0) {
-    return `<p class="bcmpty">Nothing filed on this project yet. A document you upload, or one
-      the team writes, appears here as itself.</p>`
+    return emptyWith(
+      'Nothing filed on this project yet. What you upload, or the team writes, appears here.',
+      'Add a file',
+      `/basecamp/p/${p.slug}/documents`,
+    )
   }
   /*
     §21 asks the pane for an obvious route to ALL of them, in those words. The
@@ -1376,7 +1396,7 @@ const face_ = (c) => {
 
 export const contactsMini = (p, { items = 4 } = {}) => {
   const cs = p.contacts ?? []
-  if (cs.length === 0) return `<p class="bcmpty">Nobody is recorded against this project yet.</p>`
+  if (cs.length === 0) return emptyWith('Nobody is recorded against this project yet.', 'Add a contact', `/basecamp/p/${p.slug}/contacts`)
   /*
     v2: *"Clicking a contact should show useful information/details... The user
     should be able to add a new contact directly from the miniature."* So each

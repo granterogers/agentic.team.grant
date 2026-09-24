@@ -3403,3 +3403,22 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bcexpbox:has(form[data-bc-contactform]):not(:has(.bclist)) {
   width: min(680px, 100%);
 }
+
+/* An empty module: the sentence, then the one way to fill it. */
+[data-experience='basecamp'] .bcmptywrap { display: grid; gap: 10px; justify-items: start; }
+[data-experience='basecamp'] .bcmptyact {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--bc-accent) 8%, transparent);
+  color: var(--bc-accent);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+[data-experience='basecamp'] .bcmptyact:hover { background: color-mix(in srgb, var(--bc-accent) 16%, transparent); }
+[data-experience='basecamp'] .bcmptyact:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 2px; }
+@media (pointer: coarse) { [data-experience='basecamp'] .bcmptyact { min-height: 44px; } }

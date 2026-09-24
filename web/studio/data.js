@@ -597,7 +597,7 @@ export const SOURCE_STATE = {
   },
   unreachable: {
     label: 'The office did not answer',
-    say: 'Nothing on this page is your office. This is the prototype standing in.',
+    say: 'Showing example projects until it is back — nothing here is your office’s own data.',
     tone: 'bad',
   },
   stale: {
@@ -607,7 +607,7 @@ export const SOURCE_STATE = {
   },
   refused: {
     label: 'Signed out',
-    say: 'That token was not accepted, so it has been cleared. Sign in again.',
+    say: 'Your sign-in was not accepted any more, so it has been cleared. Sign in again.',
     tone: 'bad',
   },
 }
