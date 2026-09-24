@@ -51,8 +51,43 @@ const scripts = globSync('web/**/*.js')
 
 /** Every `--name:` that is a DECLARATION rather than a use. */
 const defined = new Set<string>()
-/** Every `var(--name)` with the file and line it was asked for on. */
-const used: { token: string; file: string; line: number }[] = []
+/*
+  AND THE SECOND BASE: an EXPERIENCE.
+
+  `web/studio/bc` declares its `--bc-*` tokens under
+  `:root[data-experience='basecamp']`, which is not unconditional and is not a
+  skin or a density either. It is a whole alternative experience, and every
+  rule that reads those tokens is itself scoped to it -- so within basecamp
+  they are as reliable as a `:root` token, and outside it they are correctly
+  nothing.
+
+  Modelled rather than exempted. A declaration counts as an experience base
+  only when its selector is EXACTLY that experience: `[data-experience='x']`
+  or `:root[data-experience='x']`, with nothing narrowing it further. A token
+  declared on a component inside an experience is still component-scoped, so
+  #124's defect -- a token declared under a narrower block and read by rules
+  that apply more widely -- is still caught, one level in.
+
+  And a use only counts as satisfied when the use is inside the SAME
+  experience -- by its own selector, or by living in that experience's own
+  stylesheets. The second half is not a loosening for convenience: `.bcskip` is
+  a rule with no `[data-experience]` on it at all, and it is nonetheless
+  basecamp-only, because the only thing that ever renders an element with that
+  class is the basecamp shell. The directory is DERIVED rather than listed --
+  it is wherever the file declaring that experience's base tokens lives -- so
+  a second experience added tomorrow is covered tomorrow.
+
+  A `--bc-*` read from the default studio's stylesheet computes to nothing, and
+  this still says so.
+*/
+const experienceBase = new Map<string, Set<string>>()
+/** Where each experience declares its base, so its own stylesheets are known. */
+const experienceHome = new Map<string, Set<string>>()
+const EXPERIENCE_BASE = /^(?::root)?\[data-experience='([a-z0-9-]+)'\]$/
+const NAMES_EXPERIENCE = /\[data-experience='([a-z0-9-]+)'\]/
+
+/** Every `var(--name)` with the file, line, and the experiences it sits in. */
+const used: { token: string; file: string; line: number; within: Set<string> }[] = []
 
 /**
  * The tokens a block declares, and whether that block always applies.
@@ -87,6 +122,7 @@ for (const file of files) {
   /** The selector of each open block, outermost first. */
   const stack: string[] = []
   let token = ''
+  let line = 1
   for (let i = 0; i < text.length; i++) {
     const c = text[i]
     if (c === '{') {
@@ -105,27 +141,46 @@ for (const file of files) {
         const inAtRule = stack.some((sel) => sel.startsWith('@'))
         const here = stack[stack.length - 1] ?? ''
         const named = decl[1]
-        if (!inAtRule && named !== undefined && BASE_SELECTOR.test(here)) defined.add(named)
+        if (!inAtRule && named !== undefined) {
+          if (BASE_SELECTOR.test(here)) defined.add(named)
+          else {
+            const asExperience = EXPERIENCE_BASE.exec(here)
+            const which = asExperience?.[1]
+            if (which !== undefined) {
+              const set = experienceBase.get(which) ?? new Set<string>()
+              set.add(named)
+              experienceBase.set(which, set)
+              const home = experienceHome.get(which) ?? new Set<string>()
+              home.add(file.slice(0, file.lastIndexOf('/')))
+              experienceHome.set(which, home)
+            }
+          }
+        }
       }
       token = ''
       continue
     }
+    if (c === '\n') line += 1
+    /*
+      Uses are collected HERE rather than line-wise, because the enclosing
+      selector is the thing that decides whether an experience token is
+      legitimately in reach, and only the brace walk knows it.
+    */
+    if (c === ')') {
+      const m = /var\(\s*(--[a-z0-9-]+)\s*$/i.exec(token)
+      const named = m?.[1]
+      if (named !== undefined) {
+        const within = new Set<string>()
+        for (const sel of stack) {
+          for (const e of sel.matchAll(new RegExp(NAMES_EXPERIENCE, 'g'))) {
+            if (e[1] !== undefined) within.add(e[1])
+          }
+        }
+        used.push({ file, line, token: named, within })
+      }
+    }
     token += c
   }
-  /*
-    Uses are read line-wise, which is safe: a use cannot be conditional in the
-    way a declaration can, and its line number is what the report needs.
-  */
-  raw0.split('\n').forEach((raw, i) => {
-    /*
-      A bare use only: `var(--x)` with no comma before its closing paren.
-      A nested `var(--a, var(--b))` is read as having a fallback, which it does.
-    */
-    for (const m of raw.matchAll(/var\(\s*(--[a-z0-9-]+)\s*\)/gi)) {
-      const named = m[1]
-      if (named !== undefined) used.push({ file, line: i + 1, token: named })
-    }
-  })
 }
 
 // A token the page sets on an element at runtime is defined, just not here.
@@ -154,9 +209,30 @@ for (const file of scripts) {
 const BASELINE: Record<string, string> = {
   '--tex-ink': 'declared by every skin in skins.css; the root always carries a skin',
   '--tex-src': 'declared by every texture block in skins.css, beside --tex',
+  '--stage':
+    "declared per stage by [data-experience='basecamp'] [data-stage='…'] in compose.css and read by that element's own rules",
+  '--stage-todo':
+    'declared on .bcboard and .bcminiboard in compose.css; the stage rows that read it are descendants and inherit it',
+  '--stage-doing': 'declared beside --stage-todo, on the same two boards',
+  '--stage-blocked': 'declared beside --stage-todo, on the same two boards',
+  '--stage-done': 'declared beside --stage-todo, on the same two boards',
+  '--bc-mod':
+    "declared on [data-experience='basecamp'] .bcmod in compose.css, per module kind, and read by that element and its own descendants",
+  '--bc-mod-ink': 'declared beside --bc-mod on the same element, and re-declared on hover',
 }
 
-const missing = used.filter((u) => !defined.has(u.token) && BASELINE[u.token] === undefined)
+const inReach = (u: { token: string; within: Set<string>; file: string }): boolean => {
+  if (defined.has(u.token)) return true
+  for (const [experience, tokens] of experienceBase) {
+    if (!tokens.has(u.token)) continue
+    if (u.within.has(experience)) return true
+    const home = experienceHome.get(experience)
+    if (home !== undefined && [...home].some((dir) => u.file.startsWith(`${dir}/`))) return true
+  }
+  return false
+}
+
+const missing = used.filter((u) => !inReach(u) && BASELINE[u.token] === undefined)
 
 /*
   A found-nothing check needs a control, because a check that has only ever
@@ -168,7 +244,9 @@ const CONTROL = '--a-token-nothing-defines'
 const controlWorks = !defined.has(CONTROL) && /var\(\s*--[a-z0-9-]+/.test('var(--x)')
 
 console.log(
-  `${String(defined.size)} tokens defined, ${String(used.length)} bare use(s) across ` +
+  `${String(defined.size)} base token(s) defined, ` +
+    `${[...experienceBase].map(([e, t]) => `${String(t.size)} for ${e}`).join(', ')}, ` +
+    `${String(used.length)} bare use(s) across ` +
     `${String(files.length)} stylesheet(s) and ${String(scripts.length)} script(s)`,
 )
 

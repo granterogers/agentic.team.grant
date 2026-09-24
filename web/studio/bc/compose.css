@@ -1939,7 +1939,9 @@
   audio element is 300px wide by default and sits in the corner of any
   container wider than that, reading as a control somebody forgot to lay out.
 */
-[data-experience='basecamp'] .bcplayer { margin: 0 0 var(--bc-5); }
+/* The scale is 1 2 3 4 6 8 -- there is no 5, so this resolved to nothing and
+   the player sat flush against whatever followed it. */
+[data-experience='basecamp'] .bcplayer { margin: 0 0 var(--bc-4); }
 [data-experience='basecamp'] .bcplayer audio {
   width: 100%;
   min-height: 44px;

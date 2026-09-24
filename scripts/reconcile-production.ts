@@ -41,13 +41,17 @@ const disagree = [...recorded.entries()]
 console.log(`production ledger:        ${String(ledger.length)} row(s)`)
 console.log(`candidate migrations/:    ${String(files.length)} file(s)`)
 console.log('')
-console.log(`UNEXPLAINED (applied in production, absent from the candidate): ${String(appliedNotInRepo.length)}`)
+console.log(
+  `UNEXPLAINED (applied in production, absent from the candidate): ${String(appliedNotInRepo.length)}`,
+)
 for (const n of appliedNotInRepo) console.log(`  ${n}`)
 console.log('')
 console.log(`CHECKSUM DISAGREEMENTS: ${String(disagree.length)}`)
 for (const n of disagree) console.log(`  ${n}`)
 console.log('')
-console.log(`PENDING (in the candidate, never applied to production): ${String(inRepoNotApplied.length)}`)
+console.log(
+  `PENDING (in the candidate, never applied to production): ${String(inRepoNotApplied.length)}`,
+)
 for (const n of inRepoNotApplied) console.log(`  ${n}`)
 
 const bad = appliedNotInRepo.length + disagree.length

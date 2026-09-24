@@ -1693,7 +1693,9 @@
   gap: var(--bc-3);
   margin: var(--bc-4) 0 0;
   padding: var(--bc-3);
-  background: var(--bc-surface-raised);
+  /* --bc-surface is the raised face; --bc-surface-raised was never declared
+     and resolved to nothing, so this panel had no background at all. */
+  background: var(--bc-surface);
   border: 1px solid var(--bc-border-subtle);
   border-radius: var(--bc-r-row);
 }
@@ -1759,7 +1761,9 @@
 [data-experience='basecamp'] .bcword {
   padding: 1px 7px;
   border-radius: 999px;
-  background: var(--bc-sunken, var(--bc-surface-raised));
+  /* Neither --bc-sunken nor --bc-surface-raised is declared anywhere, so the
+     fallback chain resolved to nothing and the pill had no fill at all. */
+  background: var(--bc-surface);
   border: 1px solid var(--bc-border-subtle);
   font: var(--bc-compact);
   color: var(--bc-text);
