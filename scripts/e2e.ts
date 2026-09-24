@@ -524,6 +524,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:believes',
     'no service the office is delivering through is described to its agents as unreachable',
   ],
+  [
+    'check:answerable',
+    'every question open on his dashboard has somewhere for an answer to go',
+  ],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 

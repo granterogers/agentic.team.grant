@@ -386,7 +386,8 @@
     "verify:basecamp-running": "tsx scripts/verify/basecamp-running.ts",
     "verify:basecamp-sources": "tsx scripts/verify/basecamp-sources.ts",
     "verify:basecamp-team": "tsx scripts/verify/basecamp-team.ts",
-    "verify:basecamp-addsource": "tsx scripts/verify/basecamp-addsource.ts"
+    "verify:basecamp-addsource": "tsx scripts/verify/basecamp-addsource.ts",
+    "check:answerable": "tsx scripts/check-answerable.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

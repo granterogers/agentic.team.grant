@@ -4011,6 +4011,46 @@ Each of these cost real time. They are here so they cost it once.
   ARE the list a browser can reach — and it found the one bad entry among 147.
   Only a browser at the real deployed origin ever saw it (#340).
 
+
+- **A CALLER'S PRE-CHECK WAS STRICTER THAN THE CALLEE'S OWN TOLERANCE, SO THE
+  CASE THE CALLEE WAS WRITTEN FOR COULD NEVER REACH IT.**
+  `app.answer_generation_approval` handles a missing `approval_next` in its own
+  body — *"notebook.generate when the job did not say, which is every approval
+  created before this migration"* — and `app.hq_answer_blocker` routes to it
+  only `if v_next is not null`. So three of the four questions open on Grant's
+  dashboard were notebook generation approvals where pressing **Go ahead**
+  returned `ok=true, state=resolved, started=0`: the office says yes, marks the
+  question answered, and queues nothing. Fifteen days live, on the mechanism
+  his *"always check before making any destructive action"* depends on, and
+  worse than a refusal because the answer was accepted. **0282/0293's shape,
+  fourth instance** — when you write a tolerant default in a function, grep for
+  the guard that decides whether anything calls it.
+- **Fix it in the WRITER when the router's alternatives are both unsafe.**
+  `app.request_generation_approval` never recorded what answering performs.
+  Widening the router by JOB KIND would let a plan step's approval — raised by
+  `perform.ts` on a PAUSED job and answered by RESUMING it — be turned into a
+  duplicate generation; widening it by OPTION TEXT is #130's parsing defect on
+  a path that enqueues work. The writer already knows what it is raising.
+- **"An offer may only promise what the press can perform" appears NINE times
+  in this file and was never a check until #366.** Nine controls, nine
+  hand-drives months after each shipped. `npm run check:answerable` asks it
+  structurally: a question must RESUME (its job is still parked) or START
+  (`blockers.on_answer`, or the job's `approval_next`) — neither means the
+  answer has nowhere to go, and no English is read, because deciding it from
+  the option text is the defect it guards. **When a lesson in this file reaches
+  three instances, it wants a check, not a fourth paragraph.**
+- **A `sed -n '6p'` over a query result grabs the table separator, and the
+  update it feeds then errors and changes nothing.** The check passed, exit 0,
+  and that zero was the SABOTAGE failing rather than the check working —
+  seventh instance of that class. Extract a uuid with a pattern
+  (`grep -oE '[0-9a-f]{8}-...'`), never by line number.
+- **A `grep` over a command's output matches the ECHOED SQL as well as the
+  result.** Verifying a restore with `grep -oE 'GONE|notebook.generate'`
+  matched the literal `'GONE'` inside `coalesce(..., 'GONE')` in the echoed
+  query, so a restore that had worked read as a failure and nearly sent me to
+  repair live data that was fine. Verify with the canonical READER — here
+  `check:answerable` itself — not with a grep over a shell transcript.
+
 ---
 
 ## Visual standard

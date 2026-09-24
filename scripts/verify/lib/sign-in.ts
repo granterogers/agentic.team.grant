@@ -67,6 +67,27 @@ export async function signIn(
   { ref, origin, back }: { ref: string; origin: string; back: string },
 ): Promise<SignedIn> {
   const email = await anOfficeMember(db)
+  /*
+    DRIVING ONE GATEWAY FROM ANOTHER'S PAGE, for the merge-readiness pass.
+
+    `HQ_API_OVERRIDE` points the page at a different gateway before any of its
+    scripts run. It exists because proving the INTEGRATED gateway needed a page
+    on an origin the sign-in function already trusts: that function keeps an
+    explicit origin allow-list and refuses anything else with a 403, which is
+    the control working, and widening it for a throwaway preview would be
+    weakening an auth surface to make a test convenient.
+
+    The frontend is not the variable here -- the integration candidate's `web/`
+    is byte-identical to the branch's -- so the page is the same product and
+    only the office behind it changes, which is exactly the question.
+
+    Unset, nothing happens and every suite behaves as it always did.
+  */
+  const override = process.env.HQ_API_OVERRIDE ?? ''
+  if (override !== '') {
+    await page.addInitScript(`window.HQ_API = ${JSON.stringify(override)}`)
+  }
+
   const key = await officeKey(db)
 
   const asked = await fetch(`https://${ref}.supabase.co/functions/v1/signin`, {

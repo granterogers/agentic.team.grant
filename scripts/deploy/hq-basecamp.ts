@@ -36,7 +36,14 @@ if (supabaseToken === undefined || supabaseToken === '') {
   process.exit(2)
 }
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
-const SLUG = 'hq-api-basecamp'
+/*
+  WHICH EDGE FUNCTION, and why it can be overridden.
+
+  The merge-readiness pass of 24 September needed the INTEGRATED gateway
+  deployed somewhere a browser could reach it, without changing what the live
+  Basecamp experiment talks to. Unset, this is exactly what it was.
+*/
+const SLUG = process.env.HQ_API_SLUG ?? 'hq-api-basecamp'
 const api = `https://api.supabase.com/v1/projects/${ref}`
 const db = new ManagementApiExecutor(ref, supabaseToken)
 

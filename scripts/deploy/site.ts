@@ -27,7 +27,15 @@ if (token === undefined || token === '') {
 }
 
 const ROOT = '.out/site'
-const NAME = 'agentic-team-hq-basecamp'
+/*
+  WHICH VERCEL PROJECT, and why it can be overridden.
+
+  The merge-readiness pass of 24 September needed the integrated candidate
+  deployed somewhere a real browser could drive it, WITHOUT moving the stable
+  Basecamp alias that Grant opens. An env var is the smallest thing that does
+  that: unset, this is exactly what it was.
+*/
+const NAME = process.env.VERCEL_PROJECT ?? 'agentic-team-hq-basecamp'
 const TEAM = 'agentic-team-grant'
 const AUTH = { Authorization: `Bearer ${token}` }
 
@@ -90,7 +98,7 @@ const made = await tryHard('create the deployment', async () => {
     headers: { ...AUTH, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: NAME,
-      target: 'production',
+      ...(process.env.VERCEL_PREVIEW === '1' ? {} : { target: 'production' as const }),
       // No framework and no build step: these are the files, served as they are.
       projectSettings: { framework: null },
       files,
