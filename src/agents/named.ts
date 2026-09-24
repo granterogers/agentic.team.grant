@@ -1,0 +1,42 @@
+/**
+ * A colleague named as the one to do the work (behavioural remediation,
+ * 24 September 2026, ledger R21).
+ *
+ * "Right, can you ask Emma to pull together everything we have on the
+ * Holloway Barn booking" was routed by SUBJECT to the quality director —
+ * "risky" is in her expertise — and Emma was never convened. Nothing read the
+ * name. The office then promised to "create a task for Emma", the promise was
+ * refused as unbacked, and Grant received a bare "I have not done this".
+ *
+ * A name is the strongest routing signal a sentence can carry, stronger than
+ * any subject word, because it is Grant choosing the person himself. But only
+ * in a DELEGATION FRAME: "ask Emma to", "get Daniel to", "have Oliver draft",
+ * "Emma, can you…". "Emma said the deposit was high" names her as a source,
+ * not as the one to do the work, and is left to the subject reading.
+ *
+ * The names are the roster's own, read from `public.staff`, so this needs no
+ * word list and follows the roster when it changes.
+ */
+
+export interface Colleague {
+  readonly slug: string
+  readonly name: string
+}
+
+const VERBS = String.raw`(?:ask|get|have|let|tell|put|send|give|pass\s+(?:it|this|that)\s+to|hand\s+(?:it|this|that)\s+(?:over\s+)?to|loop\s+in|bring\s+in)`
+
+export function namedColleague(clause: string, staff: readonly Colleague[]): string | null {
+  const text = String(clause ?? '')
+  for (const s of staff) {
+    const name = s.name.trim()
+    if (!/^[A-Za-z]{2,}$/.test(name)) continue
+    const delegated = new RegExp(String.raw`\b${VERBS}\s+${name}\b`, 'i')
+    // Vocative at the start: "Emma, can you…", "Emma - have a look at…".
+    const vocative = new RegExp(
+      String.raw`^\s*(?:(?:ok|right|so|and)\s*,?\s*)?${name}\s*[,:—-]\s*\S`,
+      'i',
+    )
+    if (delegated.test(text) || vocative.test(text)) return s.slug
+  }
+  return null
+}

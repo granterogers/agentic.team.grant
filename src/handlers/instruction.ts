@@ -108,6 +108,7 @@ import {
   pickByName,
   taskStateChange,
 } from '../agents/mine.ts'
+import { namedColleague } from '../agents/named.ts'
 import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
 import type { CanonicalOutcome } from '../agents/outcome.ts'
 import { contractFor, sayWhatHappened } from '../agents/outcome.ts'
@@ -836,7 +837,7 @@ export async function speaker(
   // Nothing to look up. `withoutNegated` can empty a message that was entirely
   // a withdrawal, and an empty VALUES list is a syntax error rather than an
   // empty answer.
-  const found =
+  const matched =
     asks.length === 0
       ? []
       : await db
@@ -852,6 +853,33 @@ export async function speaker(
             })),
           )
           .catch(() => undefined)
+
+  /*
+    A COLLEAGUE HE NAMED IS THE ONE HE MEANT (ledger R21).
+
+    "Ask Emma to pull together everything on the Holloway Barn booking" went
+    to the quality director by subject and Emma was never convened. A clause
+    that names a roster member in a delegation frame belongs to that person,
+    ahead of any subject match; everything else about routing is unchanged,
+    so the per-clause handoff below turns "get Emma to X and then have Daniel
+    do Y" into Emma first, Daniel with her result.
+  */
+  const colleagues = await db
+    .execute(`select slug, coalesce(name, '') as name from public.staff where active`)
+    .then((r) => r.rows as { slug: string; name: string }[])
+    .catch(() => [] as { slug: string; name: string }[])
+  const named = asks.map((t) => namedColleague(t, colleagues))
+  const found =
+    matched === undefined
+      ? named.every((n) => n === null)
+        ? undefined
+        : named.flatMap((slug, i) => (slug === null ? [] : [{ i, slug }]))
+      : named.some((n) => n !== null)
+        ? asks.flatMap((_t, i) => {
+            const n = named[i] ?? null
+            return n !== null ? [{ i, slug: n }] : matched.filter((x) => x.i === i)
+          })
+        : matched
 
   // Order matters and duplicates do not: `pickRoster`'s contested branch takes
   // the first name, so the first ask has to come first.

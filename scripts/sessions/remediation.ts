@@ -294,4 +294,29 @@ export const REMEDIATION: readonly Session[] = [
       },
     ],
   },
+
+  {
+    name: 'rem-status',
+    about: 'hand work on, ask how it is going, then ask what came back',
+    projects: ['gamma'],
+    turns: [
+      {
+        say: 'Right, can you ask Emma to pull together everything we have on the Holloway Barn booking and flag anything that looks risky for us?',
+        inProject: 'gamma',
+        why: 'delegation to research with real material to read',
+      },
+      {
+        say: "how's that going?",
+        inProject: 'gamma',
+        why: 'status from job state, not invention',
+        expect: { noWrite: true },
+      },
+      {
+        say: 'ok what did she find',
+        inProject: 'gamma',
+        why: 'the result, with the planted specifics (deposit, cancellation terms)',
+        expect: { saysAny: ['4,317', '4317', '30%', 'non-refundable', 'Marta'], noWrite: true },
+      },
+    ],
+  },
 ]
