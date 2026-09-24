@@ -319,4 +319,23 @@ export const REMEDIATION: readonly Session[] = [
       },
     ],
   },
+
+  {
+    name: 'rem-stop-inflight',
+    about: 'call off work while the specialists are still on it',
+    projects: ['alpha'],
+    turns: [
+      {
+        say: 'Find out roughly what the other big coaching providers charge for a twelve week course, and then tell me whether our price of £450 looks high or low next to them.',
+        inProject: 'alpha',
+        why: 'two-domain work that convenes somebody and runs on after the reply',
+      },
+      {
+        say: "Actually forget it, don't bother with that.",
+        inProject: 'alpha',
+        why: 'calling off in-flight children; nothing further should run or be sent',
+        expect: { noWrite: true },
+      },
+    ],
+  },
 ]

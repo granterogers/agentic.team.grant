@@ -90,8 +90,15 @@ const WORK_ONLY = [
   describing something rather than pointing at it, and the referent is better
   found from the conversation than parsed out of the sentence.
 */
-const NAMED = String.raw`(?:the\s+)?([a-z0-9][a-z0-9'’\- ]{0,40}?)`
-const PRO = String.raw`(?:that|it|this|those|these|the lot|all (?:of )?(?:that|it))`
+/*
+  A named target may not span a coordinator (ledger R26). "scrap that and
+  book the barn instead" read as calling off something called "that and book
+  the barn instead", so the REPLACEMENT - the thing he actually asked for -
+  was swallowed by the call-off. What follows "and", "then", "but" or
+  "instead" is another request, and the match must end before it.
+*/
+const NAMED = String.raw`(?:the\s+)?([a-z0-9](?:(?!\s(?:and|then|but|instead|so|or)\b)[a-z0-9'’\- ]){0,40}?)`
+const PRO = String.raw`(?:that one|this one|that|it|this|those|these|the lot|all (?:of )?(?:that|it))`
 
 /*
   The tail he is allowed to add. "I do not need it any more", "please",
@@ -99,7 +106,20 @@ const PRO = String.raw`(?:that|it|this|those|these|the lot|all (?:of )?(?:that|i
   verb of its own that is not a negation ends the match, which is what keeps
   a replacement out.
 */
-const TAIL = String.raw`(?:[,.!\s]+(?:please|now|for now|i (?:do not|don't|dont) need (?:it|that|them)(?: any ?more)?|i (?:no longer|don't|do not) need (?:it|that|them)|no longer needed|it(?:'s| is) not needed(?: any ?more)?|never ?mind|thanks?(?: you)?))*`
+/*
+  And two more kinds of tail (behavioural remediation, 24 September 2026,
+  ledger R26): a SECOND withdrawal - "forget it, don't bother with that",
+  "never mind, leave it" - and a report of what HE did instead - "stop that,
+  I've sorted the coach myself", "we've booked a minibus instead". Neither is
+  a replacement request: one repeats the call-off, the other has a subject
+  of its own and a past tense, and asks the office for nothing. Both were
+  missed, so the turn was answered by prose that asked again for the data he
+  had just said he did not want, and the correction reader offered his
+  withdrawal back to him as a standing rule.
+*/
+const AGAIN = String.raw`(?:forget (?:it|that|about it)|(?:do(?:n'?t| not) bother)(?: with (?:it|that|this))?|leave it|never ?mind|scrap (?:it|that)|no need)`
+const DID_IT_MYSELF = String.raw`(?:i|we)(?:'ve|'ll| have| will)? (?:already |just )?(?:sorted|done|handled|fixed|booked|found|got|dealt with|arranged|organised|organized|decided|do)\b[^.!?]{0,60}`
+const TAIL = String.raw`(?:[,.!;\s\u2014-]+(?:please|now|for now|i (?:do not|don't|dont) need (?:it|that|them)(?: any ?more)?|i (?:no longer|don't|do not) need (?:it|that|them)|no longer needed|it(?:'s| is) not needed(?: any ?more)?|never ?mind|thanks?(?: you)?|${AGAIN}|${DID_IT_MYSELF}))*`
 
 /*
   `String.raw` on every one of these, and the reason is a live scar: written
@@ -125,6 +145,12 @@ const POINTING = new RegExp(
   'i',
 )
 
+/*
+  A withdrawal with no object at all: "don't bother", "never mind", "leave
+  it", "no, forget it". The referent is the conversation's work, as for
+  "stop that".
+*/
+const BARE = new RegExp(String.raw`${OPENER}(?:no[,\s]+)?(${AGAIN})${TAIL}\s*[.!]?\s*$`, 'i')
 const BY_NAME = new RegExp(
   String.raw`${OPENER}(${WORK_ONLY.join('|')})\s+${NAMED}${TAIL}\s*[.!]?\s*$`,
   'i',
@@ -160,6 +186,9 @@ export function callsItOff(text: string): CalledOff | null {
 
   const pointing = POINTING.exec(said)
   if (pointing !== null) return { target: null, pivot: (pointing[1] ?? '').toLowerCase() }
+
+  const bare = BARE.exec(said)
+  if (bare !== null) return { target: null, pivot: (bare[1] ?? '').toLowerCase() }
 
   const byName = BY_NAME.exec(said)
   if (byName === null) return null

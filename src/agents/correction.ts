@@ -29,6 +29,8 @@
  * office's contribution is the framing — "From now on" — not the content.
  */
 
+import { callsItOff } from './calloff.ts'
+
 /** What a correction, once recognised, would become. */
 export interface Correction {
   /** His words with the rejection removed — the substance of the rule. */
@@ -102,6 +104,13 @@ const CONTRAST_TOO_LONG = 90
 export function readCorrection(instruction: string, hadAnswer: boolean): Correction | null {
   const said = String(instruction ?? '').trim()
   if (!hadAnswer) return null
+  /*
+    Calling the work off is not a rule about future work (ledger R26):
+    "Actually forget it, don't bother with that." was offered back as "From
+    now on, forget it, don't bother with that." Whatever the call-off reader
+    claims, this declines.
+  */
+  if (callsItOff(said) !== null) return null
   if (said === '' || said.length > TOO_LONG) return null
 
   const because: string[] = ['it followed an answer', 'it is short']
