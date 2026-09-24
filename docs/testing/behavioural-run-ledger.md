@@ -3138,6 +3138,39 @@ failed loudly.
 
 Clean-pass count after pass 61: **2 of 5.**
 
+---
+
+## Pass 62 — duplicate execution: CLEAN
+
+**Territory:** another named high-trust invariant. Did one request ever
+produce the same work twice?
+
+**Three candidates in real traffic, and the first two dissolved.**
+
+- **My first query grouped by THREAD** and reported *"10 notebook.generate in
+  one thread"* — `1386648496` is his whole Telegram chat over weeks, so that
+  is not duplication, it is his conversation. Re-asked per PARENT, which is
+  the obligation.
+- **`notebook.collect` ×10 under one parent** is the polling loop 0074's own
+  comment describes: an interim poll of a still-generating artifact is a real
+  output, and each carries its own idempotency key.
+- **Two `notebook.generate` one SECOND apart** under each of two parents read
+  exactly like a double-fire. They are `audio` and `slides` — two different
+  artifacts from one plan, which is the product working.
+
+**The one real instance is #337 and it is historical.** Two `artifact.report`
+jobs three minutes apart on 17 September, different parents — the measured
+shape #337 was filed on. The guard (`alreadyOn !== null` on the three
+branches that START work) landed in `07f9ddb` on **23 September**, six days
+after, and is deployed at v832.
+
+**Driven rather than read**: `verify:another-go` **10/10**, including
+*"repeating the request starts nothing — 0 child job(s)"* beside
+*"the first ask starts work — 1 child job"*, its own containment assertion,
+and a clean sweep (0 documents left, 0 projects left, 0 jobs still running).
+
+Clean-pass count after pass 62: **3 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
