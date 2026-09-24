@@ -3052,6 +3052,61 @@ check:migrations 0, check:believes clean, check:answerable clean.
 Clean-pass count after pass 59: **0 of 5** — reset by a systemic product
 defect, as the criteria specify.
 
+---
+
+## Pass 60 — what the office wrote to his real task list: CLEAN
+
+**Territory:** `public.tasks` — a surface the office WRITES to rather than
+answers on, and the one place a defect leaves a standing artefact rather than
+a sentence. Not previously swept.
+
+**Classification: NO DEFECT FOUND.** Two hypotheses died on the evidence and
+one historical defect proved already fixed.
+
+### The hypothesis that was wrong
+
+Ten non-fixture task rows, and five carry run tokens — *"The office drafts the
+note ulbo4g1u"* and three siblings, plus *"Chase the printers 1db56cwn"*. That
+reads as half his task list being test traffic, and `check:leaks` reports only
+ONE of them, which reads as a witness with a hole.
+
+Both readings are wrong. The four note tasks sit on `mytasks-proof-<token>`
+projects — fixture-shaped by name, `is_fixture = false` by #45's rule — and
+every one of those projects is **archived**, so `app.my_tasks` returns none of
+them. The witness's counter is named "personal tasks", meaning tasks with no
+project, and it is right: exactly one such row exists and it is the printers
+task Grant has said not to remove. **His visible list is five items with one
+known piece of debris on it**, which is what the witness already says.
+
+### The historical defect, which is not live
+
+One real row reads *"all of Grant's current tasks across all of Grant's
+projects"*, `todo`, added by the office on 15 September. The canonical
+evidence is worse than the title: he had asked a QUESTION —
+
+> *"What I was asking was, tell me about all my current tasks across all
+> projects."*
+
+— and the office CREATED A TASK from it and replied *"Added it: all of Grant's
+current tasks across all of Grant's projects."* A request to LIST read as a
+request to CREATE, written to his real list.
+
+**It is not live.** His exact sentence, and four neighbours of it, all return
+null from `personalTaskRequest` today, while *"Remind me tomorrow to ring the
+printers"* and *"add a task to chase the roofer"* still create correctly. The
+row is also invisible: `app.my_tasks('all')` returns five items and this is not
+one of them. CLAUDE.md's rule held — *an old output is not evidence about
+current code* — and running his real words through the real function before
+filing is what stopped a fixed defect being reported as a live one.
+
+**The stale row is left alone.** Deleting it is a destructive action on his
+real data and is his call, not mine; it is reported rather than swept.
+
+**Gates:** check:leaks exit 0 (22 known escapes, 0 new), check:answerable
+clean, check:believes clean.
+
+Clean-pass count after pass 60: **1 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
