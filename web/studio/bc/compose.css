@@ -3457,3 +3457,6 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   [data-experience='basecamp'] .bcspin { animation-duration: 2.4s; }
   [data-experience='basecamp'] .bcskel { animation: none; }
 }
+
+/* A progress count is one token: "67/200" never breaks after the 20. */
+[data-experience='basecamp'] .bclistcount { white-space: nowrap; }

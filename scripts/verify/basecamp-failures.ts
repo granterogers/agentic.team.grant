@@ -654,6 +654,61 @@ for (const d of drives) {
   }
 }
 
+/*
+ * --- THE CONNECTION DROPS WHILE THE PAGE IS OPEN ---------------------------
+ *
+ * Nothing listened for it: a page open when the network went kept looking
+ * current until a later read failed, and a change made in between looked
+ * saved. The strip must say so at once, and coming back must not relabel a
+ * visitor's example page as an outage (the negative control: the fix first
+ * re-asked the office with no credential and did exactly that).
+ */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-GB' })
+  const page = await ctx.newPage()
+  await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcmain')
+  await page.waitForTimeout(600)
+  const before = (
+    await page
+      .locator('.bcnotlive')
+      .first()
+      .innerText()
+      .catch(() => '')
+  ).replace(/\s+/g, ' ')
+  await ctx.setOffline(true)
+  await page.waitForTimeout(500)
+  const off = (
+    await page
+      .locator('.bcnotlive')
+      .first()
+      .innerText()
+      .catch(() => '')
+  ).replace(/\s+/g, ' ')
+  check('losing the connection is said at once', /offline/i.test(off), off.slice(0, 80))
+  check(
+    'and it says changes cannot reach the office',
+    /can.?t reach the office/i.test(off),
+    off.slice(0, 120),
+  )
+  await ctx.setOffline(false)
+  await page.waitForTimeout(900)
+  const back = (
+    await page
+      .locator('.bcnotlive')
+      .first()
+      .innerText()
+      .catch(() => '')
+  ).replace(/\s+/g, ' ')
+  check('coming back clears it', !/offline/i.test(back), back.slice(0, 80))
+  check(
+    'and a signed-out page returns to what it said before, not to an outage',
+    back.slice(0, 40) === before.slice(0, 40),
+    `before: ${before.slice(0, 40)} / after: ${back.slice(0, 40)}`,
+  )
+  await ctx.close()
+}
+
 await browser.close()
 server.close()
 console.log(`\n${String(pass)}/${String(pass + fail)} passed — subject: ${subject}`)

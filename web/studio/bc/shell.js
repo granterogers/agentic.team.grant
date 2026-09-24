@@ -3440,6 +3440,18 @@ const connectingOutline = () => `<div class="bcconnecting" aria-busy="true" aria
   </div>`
 
 const notLive = () => {
+  /*
+    OFFLINE FIRST, whatever the office last said. Nothing listened for the
+    browser losing its connection, so a page open when the network dropped
+    kept looking current until some later read failed - and a change made in
+    that window looked saved. The browser knows at once; so does this strip.
+  */
+  if (globalThis.navigator?.onLine === false) {
+    return `<div class="bcnotlive bcnotlive--bad" role="status">
+      <b>You're offline</b>
+      <span>What you see was current when the connection dropped. Changes can't reach the office until it's back.</span>
+    </div>`
+  }
   if (source.live === true) return ''
   if (connecting()) {
     return `<div class="bcnotlive bcnotlive--wait" role="status">

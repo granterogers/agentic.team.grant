@@ -107,3 +107,6 @@ Trap I hit and recovered from: `git checkout -p` on an uncommitted file reverted
 | — | Huge data (200 tasks, long names, 1.2M-word docs): no overflow, no clipping at 3 widths | `verify:basecamp-states` 64/64 |
 | 41 | **Slow connection, signed in: invented projects shown under "Prototype data — Sign in", with a sign-in form, while the real office was loading** | **fixed** — "Connecting to your office" + spinner + neutral page outline, only when a credential is present and nothing has answered yet |
 | — | My first rewording ("nothing here is…") tripped `verify:basecamp-failures`' empty-claim guard; reworded ("none of this is…"), 39/39 | recorded |
+| 42 | **Network drop with the page open: nothing said; the page looked current and changes looked saved** | **fixed** — `offline`/`online` listeners; strip at once; reconnect re-asks the office only when signed in. 4 new checks in `verify:basecamp-failures` (43/43), 3 proved red under sabotage |
+| 43 | Phone list count "67/200" wrapped mid-number | **fixed** |
+| — | Offline **reload** is a blank browser error page: no offline shell/service worker | **not changed** — a cache on this static deploy can serve stale builds; architectural, recorded as UX debt |

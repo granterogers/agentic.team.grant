@@ -891,6 +891,25 @@ let lastOpener = ''
   cannot stop the call it began is a control with no way out.
 */
 /*
+  THE CONNECTION, AS THE BROWSER REPORTS IT. Going offline redraws so the
+  strip says so at once; coming back asks the office again rather than
+  waiting for the next scheduled read, so the page stops saying "offline"
+  the moment it can prove otherwise.
+*/
+for (const [ev, then] of [
+  ['offline', () => ctx?.render?.()],
+  /* Only a signed-in page has an office to re-ask; a visitor's page is the
+     example projects, and asking with no credential would relabel it as an
+     outage. */
+  ['online', () => { ctx?.render?.(); if (canWrite()) void ctx?.refresh?.() }],
+]) {
+  globalThis.addEventListener?.(ev, () => {
+    if (document.documentElement.dataset.experience !== 'basecamp') return
+    then()
+  })
+}
+
+/*
   A FACE THAT DOES NOT LOAD IS A PERSON, NOT A BROKEN IMAGE.
 
   Every face in this experience draws the person's initial underneath the
