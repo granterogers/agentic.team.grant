@@ -317,7 +317,17 @@
     "check:chatter": "tsx scripts/check-chatter.ts",
     "verify:lastword": "tsx scripts/verify/lastword.ts",
     "check:undo": "tsx scripts/check-undo.ts",
-    "check:believes": "tsx scripts/check-believes.ts"
+    "check:believes": "tsx scripts/check-believes.ts",
+    "fresh:zero-state": "tsx scripts/fresh/zero-state.ts",
+    "fresh:baseline": "tsx scripts/fresh/baseline.ts",
+    "fresh:install": "tsx scripts/fresh/install.ts",
+    "fresh:doctor": "tsx scripts/fresh/doctor.ts",
+    "fresh:secret": "tsx scripts/fresh/secret.ts",
+    "fresh:configure": "tsx scripts/fresh/configure.ts",
+    "fresh:first-use": "tsx scripts/fresh/first-use.ts",
+    "fresh:accept": "tsx scripts/fresh/accept.ts",
+    "check:fresh": "tsx scripts/check-fresh.ts",
+    "fresh:docs": "tsx scripts/fresh/docs.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

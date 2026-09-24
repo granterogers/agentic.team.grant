@@ -1,0 +1,48 @@
+
+YOUR AGENTIC TEAM — SETUP
+
+No office named yet. Nothing below has been checked against a database.
+
+REQUIRED — 2 of 12 done
+
+  [  ok  ]  Node.js 22 and npm
+  [  ok  ]  The repository’s dependencies
+  [ todo ]  A Supabase project of your own
+            no project named — nothing to check
+  [ todo ]  Tell this repository which project is yours
+            not set
+  [ todo ]  A Supabase access token
+            not set
+  [ todo ]  The office’s database
+            no office to look in
+  [ todo ]  Tell the office its own address
+            no office to look in
+  [ todo ]  An OpenRouter API key
+            no office to look in
+  [ todo ]  The office’s own API token
+            no office to look in
+  [ todo ]  The worker
+            nothing deployed — no project named
+  [ todo ]  The office’s HTTP gateway
+            nothing deployed — no project named
+  [ todo ]  Your first real instruction
+            no office to ask
+
+NEXT: A Supabase project of your own
+
+  Why: This is where the office lives — every project, task, document, job and credential. The free tier is enough: 500MB of database and 1GB of files.
+
+  This one needs you — identity verification, which no software may do on your behalf.
+  About 5 minutes. Cost: free
+
+    1. Go to https://supabase.com/dashboard and sign in (GitHub sign-in is quickest).
+    2. Press “New project”.
+    3. Name it anything you like — “my-team” is fine.
+    4. Choose a region near you, and let it generate a database password. You do not need to keep the password: nothing in this setup asks for it.
+    5. Choose the Free plan.
+    6. Press “Create new project” and wait about two minutes for it to finish provisioning.
+    7. When it is ready, look at the browser address bar. It reads https://supabase.com/dashboard/project/XXXXXXXX — that XXXXXXXX is your project reference. Copy it.
+
+  10 step(s) left in total, of which 3 need you — about 10 minutes of your time.
+  Run npm run fresh:doctor again at any point to pick up where you left off.
+

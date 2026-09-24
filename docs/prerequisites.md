@@ -1,5 +1,25 @@
 # Prerequisites
 
+> **HISTORICAL — this is not the setup guide.**
+>
+> Written 2026-09-02, as a Phase 0 deliverable. It describes the accounts THIS
+> office was planned around, in the order that plan reached them. The current
+> required list is shorter: a Supabase project, an access token and an
+> OpenRouter key, about ten minutes, all free.
+>
+> **If you are setting up your own Agentic Team, read [`SETUP.md`](../SETUP.md).**
+> It is the one current starting point, it is generated from
+> `src/fresh/contract.ts` so it cannot drift from what the code actually
+> needs, and `npm run fresh:doctor` will tell you where you are in it at any
+> point.
+>
+> This page is kept because it records how THIS office was built, which is
+> worth having. It is not kept because it is current, and parts of it are not.
+
+---
+
+
+
 **Date:** 2026-09-02
 **Status:** Phase 0 deliverable, per spec §32 (First Action)
 

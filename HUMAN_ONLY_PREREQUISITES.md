@@ -1,5 +1,19 @@
 # HUMAN-ONLY PREREQUISITES FOR GRANT
 
+> **HISTORICAL — this is not the setup guide, and it is not about you.**
+>
+> This is Grant's own account list, from September 2026: which of HIS bots,
+> workspaces and credentials existed on which day. It is evidence about one
+> installation, not instructions for another.
+>
+> **If you are setting up your own Agentic Team, read [`SETUP.md`](SETUP.md).**
+> The genuinely human-only list there is three things for a working office —
+> a Supabase project, an access token and an OpenRouter key — about ten
+> minutes, all free, with a fourth if you want to talk to it on Telegram.
+
+---
+
+
 **Updated:** 2026-09-03 · Required by addendum §56.5
 
 Only actions you genuinely have to perform. Everything automatable has been

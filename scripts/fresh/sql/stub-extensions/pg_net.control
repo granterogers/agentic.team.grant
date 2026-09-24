@@ -1,0 +1,6 @@
+# STUB pg_net for the fresh-install zero-state harness. Records requests, sends
+# nothing. Not the real pg_net. See scripts/fresh/sql/supabase-shim.sql.
+comment = 'STUB pg_net (fresh-install harness) - records requests, sends nothing'
+default_version = '1.0'
+relocatable = false
+schema = 'net'
