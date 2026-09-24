@@ -527,6 +527,54 @@ const SYSTEM = (sheet: string, roster: string): string =>
   ].join('\n')
 
 /**
+ * Did he ask for something WRITTEN? Rule 3b's condition, checked in code.
+ *
+ * Behavioural remediation, 24 September 2026 (ledger R22). The prompt says
+ * draft.create is only for a document, a write-up, a message to prepare —
+ * "analysis he wants told to him is not a draft" — and the model breaks it:
+ * 93 of 118 historical draft.create steps came from requests with no word for
+ * anything written ("go through the onboarding material and tell me what is
+ * out of date" -> "summarize outdated items"). At `suggest`, which every one
+ * of Grant's projects is on, a draft needs his approval, so 28 of those plans
+ * parked on a question about a document he never asked for and then died.
+ * "Work out what share of £20,000 the deposit is" did the same on the first
+ * try.
+ *
+ * The answer that closes a plan already says what was found, so a step whose
+ * only job is to write the analysis down adds an approval and nothing else.
+ */
+export const asksForWriting = (request: string): boolean =>
+  /\b(?:write|written|writing|draft|drafts|document|doc|docs|write-?up|report|memo|letter|e-?mail|note|notes|summary|summari[sz]e|one-?pager|brief|briefing|proposal|post|copy|announcement|pdf|deck|slides|script|agenda|minutes|newsletter|message|reply|response|template)\b/i.test(
+    request,
+  )
+
+/**
+ * A plan without the drafts nobody asked for, and without anything that
+ * depended on them. Fewer than two steps left is not a plan: it falls back and
+ * the cascade answers, which is the path that retrieves and replies directly.
+ */
+export const withoutUnaskedDrafts = (plan: GoalPlan, request: string): GoalPlan => {
+  if (plan.how === 'fallback' || asksForWriting(request)) return plan
+  const dropped = new Set<string>()
+  const kept = plan.steps.filter((st) => {
+    if (st.capability === 'draft.create' || st.needs.some((n) => dropped.has(n))) {
+      dropped.add(st.id)
+      return false
+    }
+    return true
+  })
+  if (dropped.size === 0) return plan
+  const refused = [
+    ...plan.refused,
+    `${[...dropped].join(', ')} would have written a draft nobody asked for`,
+  ]
+  if (kept.length === 0 && plan.unreachable.length === 0) {
+    return fellBack(`only unasked drafts were proposed: ${[...dropped].join(', ')}`)
+  }
+  return { ...plan, steps: kept, refused }
+}
+
+/**
  * Ask what this goal requires. Never throws; every failure is today's behaviour.
  */
 /**
@@ -636,11 +684,12 @@ export async function planFor(
     return fellBack('the answer was not valid JSON')
   }
 
-  const checked = validate(
+  const validated = validate(
     raw,
     catalogue,
     new Set(roster.map((r) => r.slug)),
     roster.map((r) => (r.name ?? '').trim()).filter((n) => /^[A-Za-z]{2,}$/.test(n)),
   )
+  const checked = withoutUnaskedDrafts(validated, said)
   return checked.how === 'fallback' ? checked : { ...checked, model: result.model ?? null }
 }

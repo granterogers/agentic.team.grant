@@ -4639,7 +4639,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         One extra count in a query that was already being made.
       */
       const pendingChildren =
-        counted === undefined ? (pursuing === null ? 0 : 1) : Number(counted.kids ?? 0)
+        (counted === undefined ? (pursuing === null ? 0 : 1) : Number(counted.kids ?? 0)) +
+        /*
+          A HANDOFF IS PENDING WORK TOO (ledger R23). It is enqueued AFTER
+          this output is written, because it carries the output, so no count
+          of children can see it yet - and "get Emma to find X, and then have
+          Daniel work out Y" was answered "I have not done this yet" in front
+          of Emma's correct figure while Daniel's half sat queued.
+        */
+        (who.handoff === null ? 0 : 1)
 
       const outcome: CanonicalOutcome = {
         wanted: wantedWork,
