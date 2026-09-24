@@ -64,3 +64,14 @@ continue at NEXT ACTION.**
 ## NEXT ACTION
 
 Fix pass-1 findings, recapture, compare.
+
+## Pass 3 — Live voice (header microphone)
+
+| # | Finding | State |
+|---|---|---|
+| 20 | A failed call explained itself as **"Failed to fetch"** (raw exception from shared `call.js`) in 12.5px muted text | **fixed** — `livevoice.plainly()` translates at this experience's edge; `call.js` untouched. Unit-tested with a sabotage that turned it red |
+| 21 | Copy said "press the phone"; this experience's control is a microphone | **fixed** in the same translation |
+| 22 | A problem line had the weight of a caption | **fixed** — legible warm chip that retires after ~12s (paused on hover) |
+| — | Idle mic is red | **kept** — Grant's explicit 23 Sep instruction ("Inactive = red, active = green") |
+
+Trap I hit and recovered from: `git checkout -p` on an uncommitted file reverted the whole new function, not only the sabotage — CLAUDE.md's first trap. Restored from the text written; tests green.

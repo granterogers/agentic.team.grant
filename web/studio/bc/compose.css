@@ -3199,3 +3199,38 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bcnotebar:nth-child(12) { height: 20px; }
 [data-experience='basecamp'] .bcnotebar:nth-child(13) { height: 21px; }
 [data-experience='basecamp'] .bcnotebar:nth-child(14) { height: 22px; }
+
+/*
+  A CALL THAT DID NOT HAPPEN SAYS SO LEGIBLY. The line was 12.5px muted text
+  in a borderless chip over the header rule - the only explanation for a
+  failed call, in the quietest type on the page. A problem gets real ink, a
+  warm edge and room to wrap; an ordinary "Call ended." stays quiet.
+*/
+[data-experience='basecamp'] .bccallsay[data-tone='problem'] {
+  width: max-content;
+  max-width: min(360px, 92vw);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--bc-danger) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bc-danger) 10%, var(--bc-surface));
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.3);
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--bc-text-strong);
+  white-space: normal;
+  /* Above the board: the panes are positioned and later in the document. */
+  z-index: 30;
+  /*
+    It floats over the first pane's heading, so it does not stay for ever:
+    twelve seconds is long enough to read twice. Held while the pointer is on
+    the head, so somebody reading it is not interrupted.
+  */
+  animation: bc-callsay-retire 12.4s linear forwards;
+}
+.bchead:hover [data-experience='basecamp'] .bccallsay[data-tone='problem'],
+[data-experience='basecamp'] .bchead:hover .bccallsay[data-tone='problem'] { animation-play-state: paused; }
+@keyframes bc-callsay-retire {
+  0%, 97% { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}

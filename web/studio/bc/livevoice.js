@@ -69,3 +69,39 @@ export const SAID = {
   answering: 'The team is talking — speak over them to change tack. Press to end the call',
   muted: 'Muted — they cannot hear you. Press to end the call',
 }
+
+/**
+ * WHAT A FAILED CALL SAYS, in words a person can act on.
+ *
+ * call.js is the studio's and is shared, so it hands over whatever it has -
+ * including a raw exception message. On a network failure that was "Failed to
+ * fetch", under the microphone, as the whole explanation. It also says "press
+ * the phone", which is the studio's control; here the control is a
+ * microphone. This translates at this experience's edge and leaves call.js
+ * alone. `tone` is 'problem' for anything that stopped a call Grant wanted,
+ * 'ended' for an ordinary hang-up.
+ */
+export const plainly = (raw) => {
+  const s = String(raw ?? '').trim()
+  if (s === '') return { words: '', tone: '' }
+  const mic = (t) => t.replace(/press the phone/gi, 'press the microphone')
+  if (/^call ended/i.test(s)) return { words: 'Call ended.', tone: 'ended' }
+  if (/microphone was refused/i.test(s)) return { words: mic(s), tone: 'problem' }
+  if (/dropped/i.test(s)) return { words: mic(s), tone: 'problem' }
+  if (/failed to fetch|networkerror|load failed|network|offline/i.test(s)) {
+    return {
+      words: "Couldn't reach the team's voice line. Check your connection, then press the microphone to try again.",
+      tone: 'problem',
+    }
+  }
+  if (/\b(401|403)\b|sign in|not signed/i.test(s)) {
+    return { words: 'Talking live needs you signed in. Sign in, then press the microphone again.', tone: 'problem' }
+  }
+  if (/would not connect|\b5\d\d\b/i.test(s)) {
+    return { words: "The voice line didn't connect. Press the microphone to try again.", tone: 'problem' }
+  }
+  /* A sentence call.js composed for a person passes through; anything that
+     does not read as one is replaced rather than shown raw. */
+  if (/[.!?]$/.test(s) && /\s/.test(s)) return { words: mic(s), tone: 'problem' }
+  return { words: "The call couldn't start. Press the microphone to try again.", tone: 'problem' }
+}

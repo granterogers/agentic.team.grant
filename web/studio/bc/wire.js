@@ -945,9 +945,10 @@ const paintMic = (b) => {
     when this shows them.
   */
   for (const el of document.querySelectorAll('[data-bc-callsay]')) {
-    const words = state === 'idle' ? callSays() : ''
-    el.textContent = words
-    el.hidden = words === ''
+    const said = state === 'idle' ? live.plainly(callSays()) : { words: '', tone: '' }
+    el.textContent = said.words
+    el.dataset.tone = said.tone
+    el.hidden = said.words === ''
   }
 }
 
