@@ -1765,10 +1765,7 @@ const documentsSurface = (p) => {
       </span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      Everything filed on this project — what the team wrote, what you uploaded
-      and anything brought in from a connected source. A file opens in a new
-      tab, a recording plays here, and anything the office only has a record
-      of opens its details.
+      What the team wrote, what you uploaded, and what came in from connected sources.
     </p>
     <!--
       WHERE THE FILE IS COMING FROM.

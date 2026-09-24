@@ -3269,3 +3269,30 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 @media (max-width: 760px) {
   [data-experience='basecamp'] form[data-bc-taskedit] { grid-template-columns: minmax(0, 1fr); }
 }
+
+/*
+  ONE TOOLBAR, ONE HEIGHT. The record header mixed a 44px select with 32px
+  buttons, and the segmented view switch was two loose words of which only
+  the pressed one had a face. 44px for all of it (the touch floor, and what
+  the select already was), and the switch is one framed object.
+*/
+[data-experience='basecamp'] .bcrecordhead .bcactions { align-items: center; gap: 10px; }
+[data-experience='basecamp'] .bcrecordhead .bcactions > .bcbtn,
+[data-experience='basecamp'] .bcrecordhead .bcseg .bcbtn { min-height: 44px; padding-inline: 16px; }
+[data-experience='basecamp'] .bcrecordhead .bcseg {
+  padding: 3px;
+  border-radius: calc(var(--bc-r-control) + 3px);
+  box-shadow: inset 0 0 0 1px var(--bc-border-control);
+}
+[data-experience='basecamp'] .bcrecordhead .bcseg .bcbtn { min-height: 38px; border-radius: var(--bc-r-control); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcrecordhead .bcseg .bcbtn[aria-pressed='true'] { color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcdocsort {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 12px;
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-control);
+}
+[data-experience='basecamp'] .bcdocsortword { font-size: 13px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcdocsort .bcdocsortpick { border: 0; color: var(--bc-text-strong); min-height: 42px; }

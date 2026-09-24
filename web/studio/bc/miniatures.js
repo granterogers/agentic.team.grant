@@ -982,6 +982,12 @@ export const thumbFace = (d, i, extra = '') => {
   somebody reading the page aloud nothing about what it orders.
 */
 export const sortControl = (slug, how, where) => `<span class="bcdocsort">
+    <!--
+      A VISIBLE WORD before the value. The select said only "Custom", which
+      names a value and not the question; the full label stays for a screen
+      reader, and the eye gets "Order".
+    -->
+    <span class="bcdocsortword" aria-hidden="true">Order</span>
     <label class="bcvh" for="bc-docsort-${esc(where)}-${esc(slug)}">Order these documents by</label>
     <select class="bcdocsortpick" id="bc-docsort-${esc(where)}-${esc(slug)}"
       data-bc-docsort="${esc(slug)}">

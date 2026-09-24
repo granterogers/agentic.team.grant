@@ -167,7 +167,7 @@ const FALLBACK_PROJECTS = [
         Real files, of real types, because a file type nobody can see the
         handling of is a file type nobody is checking.
       */
-      { title: 'The venue, from the balcony', kind: 'doc', origin: 'Yours', size: '48 KB', file: '/samples/venue.png' },
+      { title: 'The venue, from the balcony', kind: 'doc', origin: 'Yours', size: '16 KB', file: '/samples/venue.png' },
       { title: 'Course budget', kind: 'doc', origin: 'Yours', size: '4 KB', file: '/samples/budget.csv' },
       { title: 'Course artwork', kind: 'doc', origin: 'Yours', size: '2.1 MB', file: '/samples/assets.zip' },
       /*
