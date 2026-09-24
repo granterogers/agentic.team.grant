@@ -186,7 +186,19 @@ try {
         ask: text.includes('${ASK}'),
         why: text.includes('three people need moving'),
         cost: text.includes('the venue needs the final plan') || text.includes('The venue needs the final plan'),
-        who: text.includes('Operations') || text.includes('operations'),
+        /*
+          THE PERSON'S NAME, AND NOT THEIR SLUG.
+
+          This asked whether the word "operations" appeared, which the SLUG
+          contains -- so it passed for the wrong reason for as long as the
+          lookup was broken, and went red the moment the lookup was fixed and
+          the record started saying "Marcus". A check satisfied by the defect
+          is worse than no check: it reports the question as asked.
+
+          Both halves now: a real name is present and the raw slug is not.
+        */
+        who: !text.includes('operations-director'),
+        whoText: (document.querySelector('.bcwaitfact dd')?.textContent ?? '').trim(),
         options: [...document.querySelectorAll('[data-bc-waitanswer]')].map((b) => b.getAttribute('data-bc-waitanswer')),
       })
     `),
@@ -196,12 +208,17 @@ try {
     why: boolean
     cost: boolean
     who: boolean
+    whoText: string
     options: string[]
   }
   check('the record states what is being asked', seen.ask)
   check('and why it is needed', seen.why)
   check('and what delay costs, which is what makes it urgent', seen.cost)
-  check('and who asked, by name rather than by slug', seen.who)
+  check(
+    'and who asked, by name rather than by slug',
+    seen.who && /^[A-Z][a-z]+$/.test(seen.whoText),
+    `Asked by: ${seen.whoText}${seen.who ? '' : ' (the raw slug is on the page)'}`,
+  )
   check(
     'and offers exactly the answers the office will accept',
     seen.options.length === 2 && seen.options.includes(YES) && seen.options.includes(NO),
