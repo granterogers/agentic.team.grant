@@ -11,7 +11,8 @@
   Both task writers the conversation uses. Spliced from their LIVE definitions;
   only the early returns are new. my_task_add also returns the task the SAME
   conversation made in the last ten minutes under the same title (ledger R18:
-  one message sent twice made two tasks).
+  one message sent twice made two tasks). And a harness job's personal task
+  is stamped verify:grant, so is_fixture is true for it (ledger R25).
 */
 
 CREATE OR REPLACE FUNCTION app.my_task_add(p_title text, p_detail text DEFAULT ''::text, p_due_on date DEFAULT NULL::date, p_remind_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_priority integer DEFAULT 100, p_project text DEFAULT NULL::text, p_labels text[] DEFAULT NULL::text[], p_parent text DEFAULT NULL::text, p_job uuid DEFAULT NULL::uuid)
@@ -121,7 +122,15 @@ begin
      assigned_to_human, added_by, labels, parent_task_id, job_id)
   values (v_project, v_title, coalesce(p_detail, ''), 'todo',
           greatest(coalesce(p_priority, 100), 1), p_due_on, p_remind_at,
-          true, 'grant',
+          true,
+          /*
+            Harness traffic names itself, here, once - the rule app.task_add
+            already follows (ledger R25). Every personal task a harness job
+            made read added_by 'grant', so is_fixture was false and every
+            reader that filters on it - reminders_due and tasks_to_push among
+            them - treated a test session's task as Grant's.
+          */
+          case when p_job is not null and app.harness_job(p_job) then 'verify:grant' else 'grant' end,
           coalesce((select array(select distinct lower(btrim(x))
                                    from unnest(p_labels) x
                                   where btrim(x) <> '' order by 1)), '{}'::text[]),
