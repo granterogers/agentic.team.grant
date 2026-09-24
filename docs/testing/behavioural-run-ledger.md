@@ -2702,6 +2702,109 @@ and the attribution — are both one query away and neither is in the count.
 
 Clean-pass count after pass 54: **1 of 5.**
 
+---
+
+## Pass 55 — resolution: the 0589 blockage, #363 and #364
+
+**Not a discovery pass.** Grant ordered anything safely resolvable to be
+resolved before discovery continued, so this pass is recorded as RESOLUTION
+and claims no clean pass. It does not reset the streak either: the one product
+defect it fixed (#363) was found and counted in an earlier pass.
+
+### 1. The 0589 blockage is CLEARED, by normal reconciliation
+
+The concurrent session on `claude/basecamp-team-hq` had applied five
+migrations to the shared database without pushing them, and
+`npm run migrate` refuses globally on one `checksum/missing`. It has since
+committed all five, so they were recovered verbatim from
+`origin/claude/basecamp-team-hq` — the same documented recovery already used
+for 0577/0578/0579 from `de5a448`:
+
+    0580_a_person_the_office_recognises
+    0581_the_pairing_table_was_the_wrong_answer
+    0582_an_arrangement_belongs_to_its_surface_too
+    0583_the_order_he_put_them_in
+    0584_an_output_can_be_read
+
+**Every checksum matched what was applied**, which is the proof the bodies are
+byte-identical to what ran. Nothing was reconstructed, guessed or rewritten;
+no applied history was altered; no sibling work was overwritten.
+`check:migrations` now reads all five as recorded cross-branch collisions
+rather than pending duplicates, which is what they are.
+
+0589 then applied. Driven inside a block that never commits: a **reworded**
+body on the same topic is refused, a **different topic** on the same job still
+speaks, and the two-arg body dedupe is intact. Worker deployed at **v832** so
+the topic path is live rather than merely migrated.
+
+### 2. #363 — a credential that administers is not one that acts: FIXED
+
+**SYSTEMIC PRODUCT DEFECT.** Maximal blast radius — every agent's prompt on
+every turn.
+
+`app.capability_index_core` took one `connection_health` row per service,
+worst-state-first, so the unhealthiest credential spoke for the whole service.
+Slack's config token has been dead since 18 September and its **bot token
+carried 268 messages**, 65 in the last 24 hours. Every agent was told it could
+not post while it was posting, and `capabilityLies` could not catch the false
+denial because, given the index, the denial was TRUE.
+
+The distinction was already in the repository —
+`src/slack/rotation.ts:158` *"the config token is how the app is
+administered"*, and the rotation handler's *"rotating a credential is
+maintenance"* and *"the existing access token keeps working"*. The finding was
+stated in advance and nothing carried it across.
+
+0590 adds `connection_health.purpose` (`acts` | `maintains`), read by
+`capability_index_core` alone. The surfaces that REPORT health to Grant are
+deliberately untouched — he still sees the dead config token, because it is a
+real problem he must act on. **Worst-state-wins is right, and it is right
+somewhere else.**
+
+Two design choices that are the point rather than detail:
+
+- `purpose` defaults to `'acts'`, so no existing row changes meaning and **no
+  service can become reachable by being reclassified**.
+- The preference is an `ORDER BY`, not a `WHERE`, so a service whose every
+  credential is `maintains` still surfaces its worst row instead of matching
+  nothing and falling through `coalesce(state,'ok')` to reachable. That is the
+  found-nothing shape on the one surface where it would read as SUCCESS.
+
+`npm run check:believes` is the missing witness, in the gate: it reads the
+index against **what the office actually delivered**, the one source that
+cannot be argued with. One direction only, by 0304's asymmetry — delivery
+evidence can prove a capability exists and can never prove one absent, so a
+quiet day is never a finding. Proved end to end by putting the defect back.
+
+### 3. #364 — measured, and DECLINED rather than fixed
+
+**NOT A DEFECT TO FIX BY WIDENING.** In **1,438 real turns, zero open with
+"stop"**; the only four mentions are *"which one should we stop spending
+on?"*, a question. The five conduct-shaped sentences his traffic does contain
+are **every one scoped to the turn or a question** — and three of them are
+imperatives that the proposed widening would store as PERMANENT rules.
+`public.lessons` refuses UPDATE, so *"actually do not contact anyone at all on
+this"* would silently disable outreach for ever.
+
+And the premise it was filed on does not hold: the 21 September complaint is
+the bullet-points one, whose cause was `guidanceFor` dropping `learned_by` —
+fixed, and never about a sentence nothing stored.
+
+What was missing was a CHECK, not recognition. The distinction lived only in a
+comment. `tests/agents/a-bare-imperative-is-not-a-standing-rule.test.ts` pins
+it with his real words, typos and all; landing exactly the proposed widening
+takes **5 of 14 red**, including all three of his imperatives.
+
+**Two of my own assertions were inventions the run corrected**: `callsItOff`
+claims neither *"Stop working on the venue report"* nor *"Cancel the venue
+report"*. Validate the test before believing the finding, twice in one file.
+
+**Gates:** lint 0, typecheck 0, test **3063/3063 across 190 files**,
+check:secrets 0, check:migrations 0, check:templates 0, check:believes clean.
+
+Clean-pass count after pass 55: **1 of 5** — unchanged; a resolution pass is
+neither a clean pass nor a reset.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

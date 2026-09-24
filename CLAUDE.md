@@ -3902,6 +3902,54 @@ Each of these cost real time. They are here so they cost it once.
   rule costs: eight days in every prompt at 0.95 confidence, permanent, because
   `public.lessons` refuses UPDATE.
 
+
+- **THE WORST CREDENTIAL SPOKE FOR THE SERVICE, AND ONE OF THEM WAS ONLY THERE
+  TO RENEW THE OTHER.** `app.capability_index_core` takes one
+  `connection_health` row per service ordered worst-state-first, so Slack's
+  **config token** — dead since 18 September, and only ever used to administer
+  the app — made the service read `reachable = false` in every agent's prompt
+  on every turn while the **bot token** carried 268 messages. Nothing
+  downstream could catch it: `capabilityLies` asks whether an answer
+  contradicts the index, so given the index the denial was TRUE. 0298 with the
+  sign reversed, and this file already says which direction is expensive.
+  **Worst-state-wins is correct and it is correct somewhere else**:
+  `app.project_connections` says so in its own comment, and a surface
+  REPORTING health to Grant must keep showing him the dead credential. Only
+  the reader that tells an AGENT what it can DO needed the other question —
+  not "is anything wrong with this service" but "is the credential the office
+  acts through alive". Two things make the fix safe rather than a blanket
+  "ignore dead credentials": `purpose` defaults to `'acts'`, so nothing
+  becomes reachable by being reclassified, and the preference is an ORDER BY
+  rather than a WHERE, so a service whose every credential is `maintains`
+  still surfaces its worst row instead of matching nothing and falling through
+  `coalesce(state, 'ok')` — the found-nothing shape, on the one surface where
+  it would read as success.
+- **Check a belief against what the office has DELIVERED, because every other
+  witness agreed with the thing that was wrong.** `check:believes` reads the
+  capability index against `public.deliveries`, and fires in one direction
+  only: delivery evidence can prove a capability exists and can never prove
+  one absent, so a quiet day is never a finding. 0304's asymmetry, sixth
+  application.
+
+- **A FINDING CAN BE ACCURATE AND ITS OBVIOUS FIX A REGRESSION — measure the
+  exposure before widening anything.** #364 correctly observed that *"Stop
+  sending me updates."* is stored by NOTHING. In **1,438 real turns, zero open
+  with "stop"**, and the five conduct-shaped sentences his traffic does
+  contain are every one scoped to the turn or a question. Widening `STANDING`
+  to admit a bare imperative would have stored *"actually do not contact
+  anyone at all on this"* as a PERMANENT rule, and `public.lessons` refuses
+  UPDATE. The structural observation was right and acting on it would have
+  disabled outreach for ever. What was missing was a CHECK, not recognition:
+  the distinction lived in a comment, and a comment claiming a property is
+  worth nothing without one — so the pin uses HIS real words, and landing the
+  proposed widening turns 5 of 14 red.
+- **And the issue's own premise did not survive one query.** #364 cited his
+  September complaints as evidence; *"You're still not respecting my
+  request…"* is the bullet-points complaint, whose cause was `guidanceFor`
+  dropping `learned_by` — already fixed, and never about a sentence nothing
+  stored. **A filed issue's stated cause is a claim about the product**, the
+  same as a baselined reason, and this file has now recorded three false ones.
+
 ---
 
 ## Visual standard
