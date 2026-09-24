@@ -202,8 +202,7 @@ export function checkMigrations(
       const sorted = [...names].sort()
       const known = history.some(
         (c) =>
-          c.files.length === sorted.length &&
-          [...c.files].sort().every((f, i) => f === sorted[i]),
+          c.files.length === sorted.length && [...c.files].sort().every((f, i) => f === sorted[i]),
       )
       const where = `sequence ${String(sequence).padStart(4, '0')} used by ${names.length} files: ${names.join(', ')}`
       if (allApplied || known) {
