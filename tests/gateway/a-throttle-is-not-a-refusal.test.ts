@@ -86,7 +86,9 @@ describe('the gateway separates refused from could-not-check', () => {
       anything else, so the status code IS the behaviour: 401 for a refusal,
       503 for "could not check".
     */
-    expect(SOURCE).toMatch(/if \(verdict === 'no'\) \{\s*\n\s*return json\(\{ error: 'unauthorized' \}, 401\)/)
+    expect(SOURCE).toMatch(
+      /if \(verdict === 'no'\) \{\s*\n\s*return json\(\{ error: 'unauthorized' \}, 401\)/,
+    )
     expect(SOURCE).toMatch(/if \(verdict === 'unknown'\)/)
     const at = SOURCE.indexOf("if (verdict === 'unknown')")
     expect(SOURCE.slice(at, at + 400)).toMatch(/\n\s*503,\n/)
