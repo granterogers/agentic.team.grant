@@ -3979,6 +3979,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   p_title => ${lit(forGrant.title.slice(0, 200))},
                   p_due_on => ${forGrant.due === null ? 'null' : `${lit(forGrant.due)}::date`},
                   /*
+                    The time he said, so the reminders duty sends it (ledger
+                    R24). Nothing in the conversation set remind_at before, so
+                    "remind me at 3pm" was a to-do nothing would ever raise.
+                  */
+                  p_remind_at => ${forGrant.remindAt == null ? 'null' : `${lit(forGrant.remindAt)}::timestamptz`},
+                  /*
                     The project he is IN, if any. #259: a personal task may
                     belong to an Agentic Team project, and one added from a
                     project's chat plainly does. Looked up here rather than
@@ -4044,6 +4050,20 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 */
                 if (got.repeated === true) {
                   return `That is already on your list from a moment ago — "${forGrant.title}". I have not added it twice.`
+                }
+                /*
+                  Said as the time it will arrive, in his zone, and "around"
+                  because the reminders duty runs every fifteen minutes: a
+                  promise to the minute would be one it cannot keep.
+                */
+                if (forGrant.remindAt != null) {
+                  const at = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Europe/Athens',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hourCycle: 'h23',
+                  }).format(new Date(forGrant.remindAt))
+                  return `That is on your list for ${String(forGrant.due)} — "${forGrant.title}". I will remind you around ${at}.`
                 }
                 return forGrant.due === null
                   ? `That is on your list — "${forGrant.title}", no date on it yet.`

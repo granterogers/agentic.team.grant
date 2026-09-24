@@ -58,6 +58,7 @@
   what he sends. The corpus caught it on its first run.
 */
 import { withoutOpeningAffirmation } from './intent.ts'
+import { REMIND_TIME_WORDS, remindAtFor } from './remind-at.ts'
 import { DANGLING_AFTER_A_DATE, PROJECT_ADJUNCT } from './request.ts'
 
 const APOS = "['\u2019\u02bc]?"
@@ -248,6 +249,11 @@ export interface PersonalTask {
   readonly due: string | null
   /** Which rule matched, so a caller can say why and a test can assert it. */
   readonly because: 'reminder' | 'commitment'
+  /**
+   * The instant to remind him, when he said a time (ledger R24). ISO, or
+   * null. Optional so every older reader of this shape is unchanged.
+   */
+  readonly remindAt?: string | null
 }
 
 /*
@@ -262,6 +268,15 @@ export interface PersonalTask {
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
 const iso = (d: Date): string => d.toISOString().slice(0, 10)
+
+/** The calendar day an instant falls on in Grant's zone. */
+const localIso = (instant: string, timeZone = 'Europe/Athens'): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(instant))
 
 const SMALL: Readonly<Record<string, number>> = {
   a: 1,
@@ -381,6 +396,8 @@ const stripFraming = (said: string): string =>
     week. A second list here would be two places for "Anyway" to be forgotten.
   */
   withoutOpeningAffirmation(said)
+    // The time of day comes out with the date (ledger R24): it is in remind_at.
+    .replace(REMIND_TIME_WORDS, ' ')
     .replace(REMIND_ME, ' ')
     .replace(I_MUST, ' ')
     /*
@@ -567,10 +584,18 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
   */
   if (title.length < 3) return null
 
+  /*
+    The time, when he said one (ledger R24), and the day it lands on when he
+    gave a time and no day: "remind me at 3pm" is a reminder TODAY, and a task
+    with no date sits in the Inbox where a reminder is the wrong place for it.
+  */
+  const day = whenFor(said, now)
+  const remindAt = remindAtFor(said, day, now)
   return {
     title: title.charAt(0).toUpperCase() + title.slice(1),
-    due: whenFor(said, now),
+    due: day ?? (remindAt === null ? null : localIso(remindAt)),
     because: remind ? 'reminder' : 'commitment',
+    remindAt,
   }
 }
 
