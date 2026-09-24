@@ -3107,6 +3107,37 @@ clean, check:believes clean.
 
 Clean-pass count after pass 60: **1 of 5.**
 
+---
+
+## Pass 61 — project/context isolation: CLEAN
+
+**Territory:** one of the high-trust invariants, never swept. Does the office
+ever read, or cite, a document belonging to a project other than the one the
+turn is scoped to?
+
+**Two independent questions, both driven against real data.**
+
+**1. The reader.** `app.search_documents(term, project, n, null)` driven over
+all five active real projects × seven terms: **125 hits, 0 cross-project.**
+And the positive control proves the scope NARROWS rather than the terms
+matching nothing — "coaching" returns 9 for `legacy-coaching-course`, 18 for
+`learning-my-ai-team`, **0 shared**, and 29 unscoped.
+
+**2. The answers he actually received.** Every citation in every real output
+that carries a document uuid, joined back to `public.documents`:
+**289 cited documents, 0 whose project differs from the job's.**
+
+Its own sabotage, in-query: comparing the same 289 against a deliberately
+wrong project flags **289 of 289**, so the zero is a fact about the product
+rather than a query that cannot fire.
+
+**Two instrument errors, both mine, both caught before they became findings:**
+`app.search_documents` RETURNS TABLE and is not jsonb, and `outputs.sources`
+IS jsonb and is not `text[]`. Neither changed a conclusion because both
+failed loudly.
+
+Clean-pass count after pass 61: **2 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
