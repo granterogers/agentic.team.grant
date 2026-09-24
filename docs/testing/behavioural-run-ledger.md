@@ -2986,6 +2986,72 @@ check:migrations 0, check:believes clean. Scratch script removed.
 
 Clean-pass count after pass 58: **2 of 5.**
 
+---
+
+## Pass 59 — the ask-and-answer loop: SYSTEMIC PRODUCT DEFECT (#366)
+
+**Territory:** blockers — the mechanism Grant's *"always check before making
+any destructive action"* depends on. Fresh, and chosen from evidence: only 14
+real blockers exist, 4 open, and **none raised since 11 September**.
+
+**Classification: SYSTEMIC PRODUCT DEFECT.** Live on his dashboard for
+fifteen days. Streak RESETS.
+
+### What he would have got
+
+Three of his four open questions are notebook generation approvals. Driven
+inside a rollback, answering one returns
+
+    ok=true   state=resolved   jobs_started=0
+
+The office says yes, marks the question answered, and queues nothing. He has
+no way to tell, because the answer was accepted — which is worse than a
+refusal.
+
+### Both halves right alone, only their disagreement wrong
+
+`app.answer_generation_approval` absorbs the missing key IN ITS OWN BODY and
+says so in a comment: *"notebook.generate when the job did not say, which is
+every approval created before this migration."* And `app.hq_answer_blocker`
+routes to it **only when that key is present**. The caller's pre-check is
+stricter than the callee's tolerance, so the exact case the callee was written
+for can never reach it. **0282/0293's shape, fourth instance.**
+
+### Fixed in the WRITER
+
+`app.request_generation_approval` never recorded what answering performs.
+Widening the ROUTER was wrong twice over: by job kind, a plan step's approval
+(raised on a PAUSED job, answered by RESUMING it) could be turned into a
+duplicate generation; by option text, it is #130's parsing defect on a path
+that enqueues work. His three live questions are repaired, scoped exactly, and
+re-driving the same press now returns `approved=true` with a real job id.
+
+### The witness that should have existed nine defects ago
+
+CLAUDE.md records *"an offer may only promise what the press can perform"*
+**nine times**, about nine different controls, every one found by driving a
+function by hand months after it shipped. It was never a check.
+`npm run check:answerable` is, and it is structural: a question must RESUME
+(its job is still parked) or START (`on_answer`, or `approval_next`). Neither
+means the answer has nowhere to go. No English is read.
+
+Proved end to end by putting the defect back on a real row — `DEAD OFFER`,
+naming the slide deck — then restoring and re-verifying.
+
+### Two instrument errors of mine
+
+- A `sed` grabbed a table separator, so **the first sabotage never applied**;
+  `exit 0` was the sabotage failing, not the check working.
+- A `grep` matched the literal `'GONE'` inside the ECHOED SQL rather than the
+  result, making a successful restore read as a failure and nearly sending me
+  to repair something that was not broken.
+
+**Gates:** lint 0, typecheck 0, test 3062/3062, check:secrets 0,
+check:migrations 0, check:believes clean, check:answerable clean.
+
+Clean-pass count after pass 59: **0 of 5** — reset by a systemic product
+defect, as the criteria specify.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
