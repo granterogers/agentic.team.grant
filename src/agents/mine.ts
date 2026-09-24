@@ -58,7 +58,7 @@
   what he sends. The corpus caught it on its first run.
 */
 import { withoutOpeningAffirmation } from './intent.ts'
-import { REMIND_TIME_WORDS, remindAtFor } from './remind-at.ts'
+import { REMIND_TIME_WORDS, remindAtFor, spokenToDigits } from './remind-at.ts'
 import { DANGLING_AFTER_A_DATE, PROJECT_ADJUNCT } from './request.ts'
 
 const APOS = "['\u2019\u02bc]?"
@@ -395,7 +395,7 @@ const stripFraming = (said: string): string =>
     because `classifyIntent` needed the same thing for the same reason last
     week. A second list here would be two places for "Anyway" to be forgotten.
   */
-  withoutOpeningAffirmation(said)
+  withoutOpeningAffirmation(spokenToDigits(said))
     // The time of day comes out with the date (ledger R24): it is in remind_at.
     .replace(REMIND_TIME_WORDS, ' ')
     .replace(REMIND_ME, ' ')

@@ -79,6 +79,40 @@ const PARTS_OF_DAY: Readonly<Record<string, readonly [number, number]>> = {
 }
 
 /** The phrases this reads, so a title can have them taken out. */
+/*
+  Spoken clock times, said as words (ledger R24): "at three", "at half past
+  four", "at quarter to nine", "at ten o'clock". Rewritten to digits before the
+  clock is read, and taken out of the title with the rest.
+*/
+const HOUR_WORDS: Readonly<Record<string, number>> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+}
+const HOUR_WORD = Object.keys(HOUR_WORDS).join('|')
+const SPOKEN = new RegExp(
+  String.raw`\bat\s+(?:(half|quarter)\s+(past|to)\s+)?(${HOUR_WORD})(?:\s+o'?clock)?\b`,
+  'i',
+)
+export const spokenToDigits = (text: string): string =>
+  text.replace(SPOKEN, (_m, part: string | undefined, dir: string | undefined, w: string) => {
+    const h = HOUR_WORDS[w.toLowerCase()] ?? 0
+    if (part === undefined) return `at ${String(h)}`
+    const minutes = part.toLowerCase() === 'half' ? 30 : 15
+    if ((dir ?? '').toLowerCase() === 'past') return `at ${String(h)}:${String(minutes)}`
+    const before = h === 1 ? 12 : h - 1
+    return `at ${String(before)}:${String(60 - minutes)}`
+  })
+
 export const REMIND_TIME_WORDS =
   /\b(?:at\s+(?:[01]?\d|2[0-3])(?:[:.][0-5]\d)?\s*(?:am|pm|a\.m\.|p\.m\.)?(?!\s*(?:%|percent|quid|pounds?|people|tickets))|in\s+(?:\d{1,3}|a|an|one|two|three|five|ten|fifteen|twenty|thirty|forty-?five)\s+(?:minutes?|mins?|hours?|hrs?)|(?:in\s+the\s+|this\s+|tomorrow\s+|on\s+\w+day\s+)?(?:morning|lunchtime|afternoon|evening)|tonight)\b/gi
 
@@ -110,7 +144,7 @@ export function remindAtFor(
   now: Date = new Date(),
   timeZone = 'Europe/Athens',
 ): string | null {
-  const text = String(said ?? '').toLowerCase()
+  const text = spokenToDigits(String(said ?? '')).toLowerCase()
 
   const inN =
     /\bin\s+(\d{1,3}|a|an|one|two|three|five|ten|fifteen|twenty|thirty|forty-?five)\s+(minutes?|mins?|hours?|hrs?)\b/.exec(
@@ -138,7 +172,9 @@ export function remindAtFor(
     const meridiem = clock[3]?.replace(/\./g, '')
     if (meridiem === 'pm' && h < 12) h += 12
     else if (meridiem === 'am' && h === 12) h = 0
-    else if (meridiem === undefined && clock[2] === undefined && h >= 1 && h <= 6) h += 12
+    // No am/pm and no leading zero: 1-6 is the afternoon, as an office means it.
+    else if (meridiem === undefined && !String(clock[1]).startsWith('0') && h >= 1 && h <= 6)
+      h += 12
     hh = h
   } else {
     for (const [word, [h, m]] of Object.entries(PARTS_OF_DAY)) {

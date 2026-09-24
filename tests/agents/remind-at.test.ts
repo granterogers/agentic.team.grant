@@ -63,3 +63,33 @@ describe('the time he said becomes remind_at', () => {
     expect(remindAtFor('at 12 people it breaks even', null, now)).toBeNull()
   })
 })
+
+describe('spoken clock times', () => {
+  it.each([
+    ['remind me at three to call sarah', 'Call sarah', '2026-09-24T12:00:00.000Z'],
+    [
+      'remind me at half past four to pick up the kids',
+      'Pick up the kids',
+      '2026-09-24T13:30:00.000Z',
+    ],
+    [
+      'remind me tomorrow at quarter to nine to send the deck',
+      'Send the deck',
+      '2026-09-25T05:45:00.000Z',
+    ],
+    ["remind me at ten o'clock to ring the bank", 'Ring the bank', '2026-09-25T07:00:00.000Z'],
+  ])('%s', (said, title, at) => {
+    expect(personalTaskRequest(said, now)).toMatchObject({ title, remindAt: at })
+  })
+  it('NEGATIVE CONTROL: a number word that is not a time stays in the title', () => {
+    expect(personalTaskRequest('remind me to buy three books', now)).toMatchObject({
+      title: 'Buy three books',
+      remindAt: null,
+    })
+  })
+  it('a leading zero is a 24-hour clock, not the afternoon', () => {
+    expect(personalTaskRequest('remind me at 04:30 to catch the flight', now)?.remindAt).toBe(
+      '2026-09-25T01:30:00.000Z',
+    )
+  })
+})
