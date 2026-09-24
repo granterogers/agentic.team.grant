@@ -163,7 +163,7 @@ check(
 /* --- 2. pressing it starts the real chain ------------------------------- */
 check(
   'the microphone says nothing before it is pressed',
-  await page.locator('[data-callsay]').isHidden(),
+  await page.locator('[data-bc-callsay]').isHidden(),
 )
 /*
   WATCHED FROM THE PRESS, not sampled afterwards.
@@ -175,13 +175,31 @@ check(
   is watched from the moment of the press.
 */
 const seenSaid: string[] = []
+/*
+  WHAT "IT SAYS SOMETHING" MEANS AFTER §4.
+
+  This sampled the status line sixty times a second and required the word
+  connecting to appear in it. §4 moved that onto the icon on purpose: while a
+  call is up the microphone carries the state and a line repeating it is the
+  surface the section forbids, so the line is empty by design until the call
+  settles. Requiring words there now would be requiring the defect back.
+
+  The claim is unchanged -- pressing it must not do nothing visible -- so the
+  sampler watches BOTH: the icon's own state and its accessible name, which is
+  where a person and a screen reader respectively now learn what is happening.
+*/
 let seenPressed = false
+const seenStates: string[] = []
 const watch = globalThis.setInterval(() => {
   void (async () => {
     seenPressed =
       seenPressed || (await mic.getAttribute('aria-pressed').catch(() => null)) === 'true'
+    const state = (await mic.getAttribute('data-bc-mic').catch(() => null)) ?? ''
+    if (state !== '' && !seenStates.includes(state)) seenStates.push(state)
+    const label = (await mic.getAttribute('aria-label').catch(() => null)) ?? ''
+    if (label !== '' && !seenSaid.includes(label)) seenSaid.push(label)
     const words = await page
-      .locator('[data-callsay]')
+      .locator('[data-bc-callsay]')
       .innerText()
       .catch(() => '')
     if (words !== '' && !seenSaid.includes(words)) seenSaid.push(words)
@@ -192,8 +210,9 @@ await page.waitForTimeout(1200)
 globalThis.clearInterval(watch)
 check(
   'pressing it says it is connecting, rather than doing nothing visible',
-  seenSaid.some((w) => /connect|microphone|session/i.test(w)),
-  seenSaid.join(' → ') || '(it said nothing at all)',
+  seenStates.some((w) => w !== 'idle') ||
+    seenSaid.some((w) => /connect|microphone|listening|talking/i.test(w)),
+  `states ${seenStates.join(' → ') || '(none)'} · words ${seenSaid.join(' → ') || '(nothing at all)'}`,
 )
 check('and the control showed it was no longer idle', seenPressed)
 
@@ -215,7 +234,7 @@ check(
 
 /* --- 5. a refusal is reported, not swallowed ---------------------------- */
 await page.waitForTimeout(2500)
-const after = await page.locator('[data-callsay]').innerText()
+const after = await page.locator('[data-bc-callsay]').innerText()
 check(
   'a session that cannot be established says so on screen',
   after.trim() !== '' && !/^connecting/i.test(after.trim()),

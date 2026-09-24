@@ -18,6 +18,7 @@ import * as session from '../session.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
 import * as live from './livevoice.js'
+import * as stopping from './stopping.js'
 import * as notes from './notestore.js'
 import * as recorder from './voicenote.js'
 import * as pdf from '../pdf.js'
@@ -1015,6 +1016,33 @@ const wireCounts = (root) => {
     options takes words, and an empty box is not an answer -- refusing it here
     is kinder than a round trip that comes back rejected.
   */
+  /*
+    STOPPING WORK THAT IS RUNNING (§20.2).
+
+    `stop_job` has been a gateway action all along with nothing pressing it --
+    CLAUDE.md records twenty-seven of those, and this is the one the team
+    surface was apologising for. It REQUESTS a stop rather than killing a job:
+    `request_stop` stamps the row and the worker notices, which is the only
+    honest thing a button in a browser can do to work running somewhere else.
+    So the confirmation says asked, not stopped.
+  */
+  for (const b of root.querySelectorAll('[data-bc-stopjob]')) {
+    b.addEventListener('click', async () => {
+      const id = b.dataset.bcStopjob ?? ''
+      if (id === '') return
+      const done = await attempt(
+        b,
+        'Asking it to stop…',
+        () => act('stop_job', { p_job: id }),
+        'Asked it to stop.',
+      )
+      if (done === null) return
+      stopping.remember(id)
+      await ctx.refresh?.()
+      ctx.render()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-bc-waitopen]')) {
     b.addEventListener('click', () => {
       const id = b.dataset.bcWaitopen ?? ''

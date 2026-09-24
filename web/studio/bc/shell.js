@@ -37,6 +37,7 @@ import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
 import * as when from '../when.js'
 import * as bcDocOrder from './docorder.js'
+import * as stopping from './stopping.js'
 import * as contacts from './contacts.js'
 import * as bcDrive from './drive.js'
 import * as todos from './todos.js'
@@ -506,6 +507,19 @@ const teamPreview = (p) => {
  */
 const outputsOf = (p) =>
   (p.requests ?? []).filter((r) => r.output !== undefined && r.output !== null && r.output.id)
+
+/**
+ * WORK IN FLIGHT, which is the other half of the same list (§20.2).
+ *
+ * `app.studio_requests` already folds every non-terminal state -- queued,
+ * running, waiting on something outside, waiting on a person, retrying,
+ * paused -- into one word, `working`. So the data for Active jobs has been in
+ * the payload all along; what the team surface said was that this experience
+ * had not built a surface for them, which was true and is the last of §20's
+ * four escapes to close.
+ */
+const runningOn = (p) => (p.requests ?? []).filter((r) => r.state === 'working')
+
 
 /** §8.3 Documents: latest document, title and what it is. */
 const documentsPreview = (p) => {
@@ -1267,6 +1281,46 @@ const teamSurface = (p) => {
         : `<div class="bclist">${outputsOf(p).map((r) => outputRow(r)).join('')}</div>`
     }
     <h2 class="bcsubhead">Running work</h2>
+    ${
+      runningOn(p).length === 0
+        ? `<p class="bcpmeta bcprose">Nothing is running on this project right now.</p>`
+        : `<div class="bclist">${runningOn(p)
+            .map(
+              (r) => `<div class="bcitem">
+                <span></span>
+                <div class="bcitembody">
+                  <span class="bcitemtitle">${esc(r.ask ?? 'Work')}</span>
+                  <span class="bcitemmeta">${esc(
+                    [
+                      bcMini.named(r.who) || r.who,
+                      typeof r.askedAt === 'string' ? `started ${when.words(r.askedAt)}` : r.asked,
+                      /*
+                        WHY IT IS NOT MOVING, when that is the answer. A job
+                        waiting on a person reads as a job that has stalled
+                        unless the reason is on the row -- and the reason is
+                        the blocker's own requested action, which is the same
+                        sentence §18's record is headed by.
+                      */
+                      typeof r.blocked === 'string' && r.blocked !== ''
+                        ? `waiting: ${r.blocked}`
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · '),
+                  )}</span>
+                </div>
+                <span class="bcactions">
+                  ${
+                    stopping.wasAsked(r.id)
+                      ? status('Asked to stop', 'blocked')
+                      : `${status('Running', 'running')}
+                         ${button('Stop', { 'data-bc-stopjob': esc(String(r.id)) })}`
+                  }
+                </span>
+              </div>`,
+            )
+            .join('')}</div>`
+    }
     <!--
       NO WAY OUT OF THE NEW INTERFACE (§20).
 
@@ -1289,8 +1343,7 @@ const teamSurface = (p) => {
       <a href="${esc(at(`/p/${p.slug}/board`))}" data-bc-go="${esc(at(`/p/${p.slug}/board`))}">Team board</a>
     </div>
     <p class="bcpmeta bcprose bcgap">
-      Everything the team has made is above, and opens here. Running jobs with
-      their stop controls are the one thing this experience has not built yet.
+      Everything the team has made is above, and opens here.
     </p>`
 }
 

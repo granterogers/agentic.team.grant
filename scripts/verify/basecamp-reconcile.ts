@@ -147,11 +147,55 @@ say(
   micBox === micBox2,
   `${micBox} then ${micBox2}`,
 )
+/*
+  AND IT SAYS WHAT HAPPENED -- on the icon while it is happening, in words once
+  it is over.
+
+  This read the status line a second after the press and required words in it.
+  §4 changed that contract deliberately: while a call is up the microphone
+  carries the state, and a line repeating it is the surface the section
+  forbids, so the line is empty by design until the call settles. Requiring
+  words there now would be requiring the defect.
+
+  What must still be true is that the press was ACKNOWLEDGED. So: the icon
+  leaves idle immediately, and when the call settles -- here it cannot connect,
+  because this subject has no office -- the reason arrives in words.
+*/
+/*
+  THE ICON'S OWN ACKNOWLEDGEMENT IS NOT ASSERTED HERE, deliberately. This
+  subject has no office, so the call fails in well under a second and the
+  connecting state has been and gone by the time anything can read it -- a
+  check on it would be a check on how fast this machine is. `basecamp-livevoice`
+  proves the states against a call that actually connects, which is the place
+  for it. What this subject CAN prove is the pair below: a call that failed
+  leaves no state stuck on the icon, and says why in words.
+*/
+const settled = await page
+  .waitForFunction(
+    `document.querySelector('[data-bc-callsay]') !== null &&
+     (document.querySelector('[data-bc-callsay]').textContent ?? '').trim() !== ''`,
+    undefined,
+    { timeout: 20000 },
+  )
+  .then(
+    () => true,
+    () => false,
+  )
 const said = (await page
-  .locator('[data-callsay]')
+  .locator('[data-bc-callsay]')
   .innerText()
   .catch(() => '')) as string
-say('3 and it says what happened rather than nothing', said.trim() !== '', said)
+say('3 and when it settles it says why, in words', settled && said.trim() !== '', said)
+const micAfter = (await page
+  .locator('[data-bc-voice]')
+  .first()
+  .getAttribute('data-bc-mic')
+  .catch(() => '')) as string
+say(
+  '3 and a call that failed leaves no state stuck on the microphone',
+  micAfter === 'idle',
+  micAfter ?? 'no state',
+)
 await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.bcpanes')
 await page.waitForTimeout(1200)

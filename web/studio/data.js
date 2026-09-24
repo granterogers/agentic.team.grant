@@ -335,6 +335,24 @@ const FALLBACK_PROJECTS = [
       the same shape that "talk to the team about this" attaches to a message.
     */
     requests: [
+      /*
+        WORK IN FLIGHT, in the prototype too (§20.2).
+
+        Same argument as the waiting item above it (#151): a state that only
+        appears against the live office is a state no capture run has ever
+        looked at, and Running work is drawn only while something is actually
+        running -- which on a healthy queue is almost never. `state: 'working'`
+        is the word `app.studio_requests` folds every non-terminal job into,
+        so the prototype speaks the payload's own vocabulary rather than a
+        neighbouring one.
+      */
+      {
+        id: 'r0', ask: 'Draft the module three workbook', kind: 'artifact.report',
+        from: 'Grant · chat', who: 'oliver', asked: 'today',
+        askedAt: new Date(Date.now() - 22 * 60 * 1000).toISOString(),
+        context: { kind: 'project', title: 'Legacy Coaching Course' },
+        state: 'working',
+      },
       {
         id: 'r1', ask: 'Turn the six modules into a one-page course outline I can send out',
         from: 'Grant · chat', who: 'oliver', asked: '2 days ago',
