@@ -364,4 +364,32 @@ export const REMEDIATION: readonly Session[] = [
       },
     ],
   },
+
+  {
+    name: 'rem-not-rules',
+    about: 'always/never sentences that are not rules for the office',
+    projects: ['alpha'],
+    turns: [
+      {
+        say: 'Emma never replies before ten, by the way.',
+        inProject: 'alpha',
+        why: 'a fact about a colleague is not a rule for the office',
+      },
+      {
+        say: 'Should you always use bullet points?',
+        inProject: 'alpha',
+        why: 'a question about a rule is not a rule',
+      },
+      {
+        say: 'I never said to use bullet points.',
+        inProject: 'alpha',
+        why: 'a denial is not a rule',
+      },
+      {
+        say: 'My accountant always sends invoices late.',
+        inProject: 'alpha',
+        why: 'a fact about somebody else is not a rule for the office',
+      },
+    ],
+  },
 ]
