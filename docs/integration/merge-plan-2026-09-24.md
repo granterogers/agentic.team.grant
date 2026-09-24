@@ -29,7 +29,7 @@ Five files, and only one of them needs a person to think.
 | `package.json` (×2) | two disjoint blocks of scripts | keep both; no key overlaps either time |
 | `.gitignore` | two disjoint blocks | keep both |
 | `CLAUDE.md` | both branches appended traps | keep both |
-| `scripts/check-leaks.ts` | two select-list items | keep both, with a comma between |
+| `scripts/check-leaks.ts` | two select-list items — **and a shared `/*`** | keep both, with a comma between, and RE-OPEN the comment (see below) |
 | `supabase/functions/hq-api/index.ts` | **the one to read** | see below |
 
 **The gateway conflict ends mid-function.** `HEAD`'s side finishes at
@@ -39,6 +39,17 @@ leaves `kickWorker` unterminated — which is exactly the damage the previous
 candidate took, and `tsc` cannot see it because it does not typecheck Deno edge
 functions. **Give `kickWorker` its own closing brace, then run
 `npx biome ci supabase/functions/hq-api/index.ts`.**
+
+**And `scripts/check-leaks.ts` has the same shape one layer down.** The line
+immediately above `<<<<<<<` is a bare `/*`, so both sides' comment bodies hang
+off one opening — and `HEAD`'s side closes it with `*/`. Concatenating them
+leaves the second side's prose as SQL. It parses perfectly as TypeScript,
+because it lives inside a template literal, and announces itself much later as
+`42601: syntax error at or near "no"` from a query nobody has changed. Re-open
+the comment before the second side.
+
+Both of these are the same lesson: a conflict marker is a TEXT boundary and the
+things it cuts through — a function body, a comment — do not care.
 
 ## The migration numbers
 
