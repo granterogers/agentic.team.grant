@@ -159,15 +159,42 @@ const arrangeByHand = (await page.evaluate(
   inPage(`const el = document.querySelector('[data-mod] .bcmodhead')
      return el === null ? '' : getComputedStyle(el).cursor`),
 )) as number | string
-await page.locator('[data-bc-pagemenu]').first().click()
-await page.waitForTimeout(300)
-const arrangeOffered = await page.locator('[data-bc-arrange]').count()
+/*
+  WHAT A PHONE CAN ACTUALLY DO TO THIS PAGE.
+
+  This used to open the page menu and look for an Arrange entry. §13 removed
+  that entry deliberately -- the board supports direct manipulation and the
+  panel was explaining it in prose -- so the check went red on a correct change
+  and would have sent somebody putting the menu back.
+
+  The affordance a phone genuinely has is the cross: dragging and resizing are
+  switched off at this width on purpose (one column, nothing to arrange), and
+  the cross is drawn at full opacity below 1180px precisely because a touch
+  device has no hover. Taking a module off then reveals the way back. That is
+  the property worth asserting -- the page can be changed and the change can be
+  undone -- rather than the existence of a particular control.
+*/
+const crosses = await page.locator('[data-bc-modoff]').count()
+const crossBox = await page.locator('[data-bc-modoff]').first().boundingBox()
 check(
-  'where dragging is switched off on a phone, the page still offers a way to arrange it',
-  arrangeByHand !== 'grab' ? arrangeOffered > 0 : true,
-  `header cursor is ${String(arrangeByHand)}, arrange control(s): ${String(arrangeOffered)}`,
+  'where dragging is switched off on a phone, a module can still be taken off the page',
+  crosses > 0 && (crossBox?.width ?? 0) >= 44 && (crossBox?.height ?? 0) >= 44,
+  `header cursor is ${String(arrangeByHand)}, ${String(crosses)} cross(es), first is ${String(Math.round(crossBox?.width ?? 0))}x${String(Math.round(crossBox?.height ?? 0))}`,
 )
-await page.keyboard.press('Escape')
+const took = await page.locator('[data-bc-modoff]').first().getAttribute('data-bc-modoff')
+await page.locator('[data-bc-modoff]').first().click()
+await page.waitForTimeout(400)
+check(
+  'and putting it back is offered on the page itself, with no menu to find',
+  (await page.locator(`[data-bc-arr-on="${String(took)}"]`).count()) > 0,
+  `took off ${String(took)}`,
+)
+await page
+  .locator(`[data-bc-arr-on="${String(took)}"]`)
+  .first()
+  .click()
+await page.waitForTimeout(400)
+check('and it comes back', (await page.locator(`[data-mod="${String(took)}"]`).count()) > 0)
 
 /* --- 4. the things a thumb has to hit ----------------------------------- */
 await go(slug)

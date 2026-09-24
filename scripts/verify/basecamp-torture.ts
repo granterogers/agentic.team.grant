@@ -486,11 +486,22 @@ check(
   `${String(stillThere)} document(s) on the tool's own surface`,
 )
 await home()
-await page.locator('[data-bc-pagemenu]').first().click()
-await page.waitForTimeout(200)
-await page.locator('[data-bc-arrange]').first().click()
-await page.waitForTimeout(250)
-await page.locator('[data-bc-arr-on="documents"]').click()
+/*
+  THE WAY BACK IS ON THE BOARD, NOT IN THE PAGE MENU.
+
+  §13 removed the Arrange entry and moved the restoring half onto the page, so
+  this opened a menu item that no renderer emits any more and timed out -- a
+  suite asserting a mechanism that was deliberately replaced, which reads as
+  the product having lost a control it had just been given. The offer appears
+  by itself when something is off, so it is asserted to be there and then
+  pressed.
+*/
+await page.waitForTimeout(300)
+check(
+  'taking a module off puts the way back on the page, unprompted',
+  (await page.locator('[data-bc-arr-on="documents"]').count()) > 0,
+)
+await page.locator('[data-bc-arr-on="documents"]').first().click()
 await page.waitForTimeout(400)
 check('and it can be put back', (await page.locator('[data-mod="documents"]').count()) === 1)
 
