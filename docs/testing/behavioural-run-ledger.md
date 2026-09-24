@@ -3208,6 +3208,33 @@ unnoticed, which this file names. Added.
 
 Clean-pass count after pass 63: **4 of 5.**
 
+---
+
+## Pass 64 — obligation fulfilment: CLEAN, honestly bounded
+
+**Territory:** the last unswept named invariant. Did what he asked for
+actually get DONE, or merely answered? `app.obligation_state` derives across
+the job tree, which is the distinction #312/#315/#316/#317 each rebuilt by
+hand.
+
+Across his real top-level turns: **137 fulfilled/complete, 74
+cancelled/cancelled, 3 failed/failed** — no row where the obligation and the
+job disagree.
+
+**The reader genuinely discriminates**, which is what makes that zero worth
+something: over ALL traffic there are **140 jobs `complete` at the job level
+and `partially_complete` at the obligation level**, plus 5 `failed` /
+`partially_complete`. Every one of the 140 is harness. So the function can
+say a completed parent left work unfinished, and it never says it about his.
+
+**And the bar is stated rather than inflated.** 118 of the 137 had NO
+children, so they are trivially fulfilled; the population that could actually
+have failed is the **19 turns where the office spawned work**, and all 19
+completed. Nineteen is small and it is the right nineteen.
+
+Clean-pass count after pass 64: **5 of 5.** The final adversarial synthesis
+pass is now due.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
