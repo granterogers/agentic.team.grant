@@ -6,31 +6,41 @@
  * sentence is "a rule about how the office behaves" and a false call-off
  * destroys work in flight — and hands it to the rule path; `readTeaching`
  * needs a standing marker (`from now on`, `always`, `never`), so a bare
- * imperative reaches neither. The office complies that turn, because the
- * sentence is in the prompt, and does not keep the rule.
+ * imperative reaches neither.
  *
- * THE OBVIOUS FIX IS THE DANGEROUS ONE, and his own traffic is what proves
- * it. In 1,438 real turns, ZERO open with "stop"; the only four mentions are
- * "which one should we stop spending on?", a question. What his traffic does
- * contain is five conduct-shaped sentences, and every one of them is scoped
- * to the turn or is a question — three of them are the sentences below.
- * Widening `STANDING` to admit a bare imperative about conduct would store
- * all three as PERMANENT rules, and `public.lessons` refuses UPDATE, so
- * "do not contact anyone at all on this" would silently disable outreach for
- * ever. 0567 records what one wrongly-stored rule already cost: eight days
- * in every prompt at 0.95 confidence, permanent.
+ * THE FIRST VERSION OF THIS FILE CITED FIVE SENTENCES AS HIS AND NOT ONE OF
+ * THEM WAS. They were filtered with `app.harness_label(dedupe_key)` alone,
+ * which does not see a suite whose dedupe key reads `teamhq:my_tasks:<run>`
+ * while its JOB is attributed `teamhq:verify-mytasks-<run>`. `app.harness_job`
+ * is the canonical predicate and says so. The corpus was 1,438 turns by the
+ * weak filter and **182** by the real one, and all five sentences were a
+ * suite's. The direction survived; the evidence did not. Same class as the
+ * measure that matched nothing and reported a perfect score, and the reason
+ * this file now names the predicate it was filtered with.
  *
- * The September complaints that #364 was filed against are NOT this defect.
- * "You're still not respecting my request…" (21 September) is the bullet
- * points complaint, whose cause was `guidanceFor` selecting `body`, `scope`
- * and `observations` and dropping `learned_by` — so an ORDER arrived in the
- * prompt as a belief to weigh. That is fixed, and it was never about a
- * sentence nothing stored.
+ * WHAT HIS 182 REAL TURNS ACTUALLY CONTAIN. Zero open with "stop" — the only
+ * mentions are "which one should we stop spending on?", a question. Seven are
+ * conduct-shaped; two are stored as rules and five are not, and none of the
+ * five is a standing rule that was lost:
  *
- * So there is nothing to widen here. What was missing is a check: the
- * distinction lived only in a comment, and a comment claiming a property is
- * worth nothing without one. These are his real words, so a future widening
- * cannot make them permanent rules without turning this red first.
+ *   - two are corrections about THIS piece of work ("Same job, not a second
+ *     one - do not run it twice");
+ *   - one is a factual correction about a Notion teamspace;
+ *   - two concern the bullet-point rule, which IS stored, live, at 0.95
+ *     confidence since 11 September. Their cause was `guidanceFor` selecting
+ *     `body`, `scope` and `observations` and dropping `learned_by`, so an
+ *     ORDER reached the prompt as a belief to weigh. Fixed, and never about a
+ *     sentence nothing stored.
+ *
+ * SO THE OBVIOUS FIX IS THE DANGEROUS ONE. Widening `STANDING` to admit a
+ * bare imperative about conduct would store "do not run it twice" as a
+ * PERMANENT rule — `public.lessons` refuses UPDATE — and the office would
+ * stop repeating work it was asked to repeat, for ever. 0567 records what one
+ * wrongly-stored rule already cost: eight days in every prompt.
+ *
+ * There is nothing to widen. What was missing is a check: the distinction
+ * lived only in a comment, and a comment claiming a property is worth nothing
+ * without one.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -40,10 +50,12 @@ import { readTeaching } from '../../src/agents/teaching.ts'
 /* Verbatim from public.inbound_commands, typos and all. Real words, because a
    sentence somebody invented for a test is a sentence tuned to the test. */
 const SCOPED_TO_THE_TURN = [
-  'actually do not contact anyone at all on this',
-  'um no,, um no, do not send it & what does knockinng ten percent off do to what we keep',
-  'so shorter, and lose the last paargraph',
-  'give me that as a list',
+  /* Verbatim from public.inbound_commands, filtered with app.harness_job —
+     his own words, typos and all. Each is about THIS piece of work and each
+     would become permanent under the widening #364 proposed. */
+  'here too. Same job, not a second one - do not run it twice.',
+  "I don't think you understood what I meant. I don't mean the emoticons of thumbs up thumbs down.",
+  "there is only one current notion teamspace you ahve access to already, so i don't hink you need the iD",
 ] as const
 
 /* Calling off particular work. `callsItOff` may claim these; a RULE may not. */

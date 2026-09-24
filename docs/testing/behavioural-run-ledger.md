@@ -2805,6 +2805,75 @@ check:secrets 0, check:migrations 0, check:templates 0, check:believes clean.
 Clean-pass count after pass 55: **1 of 5** — unchanged; a resolution pass is
 neither a clean pass nor a reset.
 
+**CORRECTED IN PASS 56.** The #364 corpus above was filtered with
+`app.harness_label(dedupe_key)` alone, which does not see a suite whose
+dedupe key reads `teamhq:my_tasks:<run>` while its JOB is attributed
+`teamhq:verify-mytasks-<run>`. The real corpus is **182 turns, not 1,438**,
+and **none of the five sentences cited as his was his.** See pass 56 for the
+re-derivation; the conclusion is unchanged and now rests on his actual words.
+
+---
+
+## Pass 56 — deliveries, and my own instrument: ONE INSTRUMENT DEFECT, MINE
+
+**Territory:** undelivered work, and the tasks/reminders path.
+
+### Deliveries: NO DEFECT
+
+**290 deliveries not sent in seven days** reads as the office failing to reach
+him. **289 are harness suppressions** — `app.claim_delivery` refusing a
+harness job a production destination, which is containment working exactly as
+0523 designed it. The one real failure is a Telegram `unknown_error` on 17
+September, and `app.undelivered()` shows it, and the other real one from 16
+September, saying *"The provider refused it."* Two genuine failed deliveries
+in the office's lifetime, both visible on the surface built for them. The
+other twelve in the table end `(injected)` and are fault-injection tests
+saying so in the data.
+
+### The instrument defect, and it is mine
+
+Probing the reminders path turned up *"Remind me tomorrow to ring the printers
+58cajf2u"* in what I had filtered as real traffic. The random suffix is a run
+token. `app.harness_job` returns **true** for it; my filter,
+`not app.harness_label(dedupe_key)`, returns **false** — because
+`harness_label` anchors on the dedupe key's namespace and that suite's key is
+`teamhq:my_tasks:<run>` while the JOB it created is
+`teamhq:verify-mytasks-<run>`.
+
+**The product does not make this mistake.** Every SQL reader of
+`inbound_commands` was checked: only `app.harness_job` uses either predicate,
+and the rest inherit the job's own attribution. There is no defect to fix.
+
+**What it cost was evidence I had already published.** Pass 55's #364 case
+cited five conduct-shaped sentences as his; not one was. Re-derived against
+`app.harness_job`:
+
+- the real corpus is **182 turns**, not 1,438;
+- **zero** open with "stop", unchanged;
+- **seven** are conduct-shaped, two stored as rules, five not — and none of
+  the five is a standing rule that was lost. Two are corrections about a
+  particular piece of work (*"Same job, not a second one - do not run it
+  twice"*), one is a factual correction about a Notion teamspace, and two
+  concern the bullet-point rule, which IS stored, live, at 0.95 confidence,
+  and whose failure had the already-fixed `learned_by` cause.
+
+The conclusion is unchanged and the case is stronger: widening `STANDING`
+would now make *"do not run it twice"* permanent, so the office would refuse
+to repeat work it was asked to repeat, for ever. The test is rewritten on his
+real words and the widening takes **6 of 13** red. #364's comment is
+corrected on the issue rather than quietly edited.
+
+**THE RULE THIS EARNS: a filter is part of the assertion.** A finding
+filtered with the weaker of two predicates is a finding about the filter. The
+canonical predicate is `app.harness_job`; `harness_label` answers a narrower
+question and is not a substitute for it.
+
+**Gates:** lint 0, typecheck 0, test green, check:believes clean.
+
+Clean-pass count after pass 56: **1 of 5** — the pass found no product defect,
+but it corrected published evidence of my own, so it is recorded as a
+correction rather than claimed as clean.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

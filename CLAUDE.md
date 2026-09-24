@@ -3949,6 +3949,21 @@ Each of these cost real time. They are here so they cost it once.
   dropping `learned_by` — already fixed, and never about a sentence nothing
   stored. **A filed issue's stated cause is a claim about the product**, the
   same as a baselined reason, and this file has now recorded three false ones.
+- **A FILTER IS PART OF THE ASSERTION, and the wrong one made me publish five
+  of a suite's sentences as Grant's.** `app.harness_label(dedupe_key)` anchors
+  on the dedupe key's NAMESPACE; `verify:mytasks` writes
+  `teamhq:my_tasks:<run>` there while the JOB it creates is
+  `teamhq:verify-mytasks-<run>`, so the label predicate says real and
+  `app.harness_job` — which reads four signals including that
+  `requested_by` — says harness. The corpus was **1,438 turns by the weak
+  filter and 182 by the canonical one**, and every sentence I had quoted as
+  his was a suite's. The product does NOT make this mistake: every SQL reader
+  of `inbound_commands` was checked and only `harness_job` uses either, the
+  rest inheriting the job's attribution. **`app.harness_job` is the canonical
+  predicate; `harness_label` answers a narrower question and is not a
+  substitute for it.** A finding filtered with the weaker of two predicates is
+  a finding about the filter — and the tell was a random run token sitting in
+  the middle of a sentence I was about to quote.
 
 ---
 
