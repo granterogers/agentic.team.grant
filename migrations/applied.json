@@ -600,5 +600,6 @@
   "0586_his_activity_feed_was_mostly_test_traffic.sql": "fa7b980c433e7fb0db427d2c2ab7a45181c3f0a3506b73a01e34776f68c2dab5",
   "0587_an_autonomy_not_a_autonomy.sql": "0ffe8dc405093c9a186b392ab19dc473244e6cb1527c142c4b2b65969872e8a3",
   "0588_a_failure_nobody_can_attribute_is_not_his.sql": "df4fe60dfca01e53792c28a7929bfbbf071a7a91b3ebd45241409459c2a2d311",
-  "0589_dedupe_on_what_it_is_about.sql": "1601ea6831a936f956a2235d06f2d3ad0fdb59aa1d3570bed1224dd96704dde4"
+  "0589_dedupe_on_what_it_is_about.sql": "1601ea6831a936f956a2235d06f2d3ad0fdb59aa1d3570bed1224dd96704dde4",
+  "0590_a_credential_that_administers_is_not_one_that_acts.sql": "88d9c060cd020a91268b0cef94220c785ece169728bc58d8e1cefb9526fa0ad6"
 }

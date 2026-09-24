@@ -520,6 +520,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   */
   ['check:chatter', 'no duty is sending Grant more than a hundred messages a day'],
   ['check:undo', 'every reversal the office offers, app.hq_undo can actually perform'],
+  [
+    'check:believes',
+    'no service the office is delivering through is described to its agents as unreachable',
+  ],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 
