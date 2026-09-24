@@ -13454,6 +13454,8 @@ const bcContext = {
   projectId: (slug) => PROJECTS.find((x) => x.slug === slug)?.id ?? '',
   officeToken: () => presented(),
   chatAsk: (slug, text, onState) => chat.ask(slug, text, null, presented(), undefined, undefined, onState),
+  /* The same retry the dock performs, for this experience's Chat page. */
+  chatRetry: (slug, id, onState) => chat.retry(slug, id, presented(), onState),
   crew: CREW,
   tools: bc.TOOLS,
   /*

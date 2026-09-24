@@ -562,6 +562,62 @@ export const said_ = (m) => {
   const who = m.who ?? m.from ?? ''
   const mine = who === 'grant'
   const when_ = m.when ?? m.at ?? ''
+  /*
+    THE TEAM IS WORKING, AND SAYS SO. While an answer is on its way chat.js
+    keeps a row for it - from the person it was routed to, with no text yet.
+    This page drew that row as a message: a name, a time and nothing, which
+    is exactly "I asked and nothing came back". The same three states the
+    dock shows, in the same words, with the elapsed time the studio's ticker
+    already keeps for any [data-waiting-since]; and a way to ask again when
+    it is slow.
+  */
+  /*
+    A FAILED ANSWER IS NOT A PERSON SPEAKING. chat.js writes the failure into
+    the row routed to an agent - "I could not reach the office: ..." - so the
+    page showed Claire, in the first person, reporting a network error. It is
+    drawn as what it is: a notice that no answer came, with the reason and
+    a way to ask again.
+  */
+  if (!mine && (m.waiting === 'failed' || m.bad === true)) {
+    const why = String(m.text ?? '').replace(/^I could not reach the office:\s*/i, '')
+    return `<div class="bcsaid bcsaid--failed" role="status">
+      <span class="bcsaidwarn" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>
+      </span>
+      <div class="bcsaidbody">
+        <span class="bcsaidwho">No answer came back</span>
+        <span class="bcsaidwhen">${when.stamp(when_, when_)}</span>
+        <p class="bcsaidtext">${esc(why === '' ? 'The office did not answer.' : `The office could not be reached: ${why}.`)}</p>
+        ${
+          typeof m.said === 'string'
+            ? `<button type="button" class="bcsaidplay" data-bc-chatretry="${esc(m.id ?? '')}">Try again</button>`
+            : ''
+        }
+      </div>
+    </div>`
+  }
+  if (!mine && typeof m.waiting === 'string' && m.waiting !== '' && m.waiting !== 'failed') {
+    const words =
+      {
+        sending: 'Sending to the office…',
+        thinking: 'With the team. They are working on it.',
+        slow: 'No answer yet. The office may still be working — it also answers in Slack and Telegram.',
+      }[m.waiting] ?? 'Waiting.'
+    return `<div class="bcsaid bcsaid--working" role="status" aria-live="polite">
+      <span class="bcsaidspin" aria-hidden="true"></span>
+      <div class="bcsaidbody">
+        <span class="bcsaidwho">The team</span>
+        ${typeof m.since === 'number' ? `<span class="bcsaidwhen" data-waiting-since="${esc(String(m.since))}"></span>` : ''}
+        <p class="bcsaidtext bcsaidtext--working">${esc(words)}</p>
+        ${
+          m.waiting === 'slow' && typeof m.said === 'string'
+            ? `<button type="button" class="bcsaidplay" data-bc-chatretry="${esc(m.id ?? '')}">Ask again</button>`
+            : ''
+        }
+      </div>
+    </div>`
+  }
   return `<div class="bcsaid${mine ? ' bcsaid--mine' : ''}">
     ${face(mine ? { name: 'Grant', slug: 'grant' } : person(who))}
     <div class="bcsaidbody">
@@ -590,6 +646,7 @@ export const said_ = (m) => {
         the studio uses: paragraphs, line breaks, and a real ordered list.
       -->
       <div class="bcsaidtext">${prose(m.text ?? '')}</div>
+
       <!--
         PLAY IT BACK, only where there is something to play.
 

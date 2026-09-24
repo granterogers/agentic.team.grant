@@ -103,3 +103,13 @@ node_modules if the container was recycled).
 | 63 | **PRIVACY: leaving the Chat page mid-recording left the microphone recording with no control on screen**; any re-render drew the panel into a detached node (pre-existing) | **fixed** — instances resolve their composer live and `resync()` after every render: restore the recording/review if the composer exists, **stop the microphone if it does not**. Same for closing the dock |
 | 64 | Opening a module while the dock was open covered the dock with the modal backdrop (Stop unreachable mid-recording) | **fixed** — on desktop the expanded view stops at the dock's edge |
 | — | 6 new checks in `verify:basecamp-voicenote` (43/43); 4 proved red by disabling the stop path | recorded |
+
+## Pass 10 — the Chat page while the team works
+
+| # | Finding | State |
+|---|---|---|
+| 65 | **In-flight answer drawn as an empty message** (name, time, no words) — "I asked and nothing came back" | **fixed** — a working row: spinner, the dock's words (sending / working / slow), live elapsed time, Ask again when slow |
+| 66 | A failure drawn as the **agent saying** "I could not reach the office…" | **fixed** — a notice from the office ("No answer came back"), with the reason |
+| 67 | No way to retry on the Chat page (the dock had one) | **fixed** — `ctx.chatRetry` = the dock's `chat.retry`; Try again resends once |
+| 68 | New answers landed under the sticky composer; the page did not follow | **fixed** — follows the thread when the reader was at the end (remembered on scroll, per #197) |
+| — | 7 new checks in `verify:basecamp-failures` (50/50). One was vacuous at first (`:empty` never matches `<p></p>`), then racing a 30s `innerText()` wait — both found by sabotage and fixed | recorded |

@@ -3679,3 +3679,30 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   border-radius: 3px;
   padding: 0 1px;
 }
+
+/* The team at work, on the Chat page. */
+[data-experience='basecamp'] .bcsaid--working .bcsaidtext--working { color: var(--bc-text-muted); font-style: italic; }
+[data-experience='basecamp'] .bcsaidspin {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--bc-accent) 22%, transparent);
+  border-top-color: var(--bc-accent);
+  animation: bc-spin 1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcsaidspin { animation-duration: 3s; }
+}
+
+[data-experience='basecamp'] .bcsaidwarn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--bc-danger);
+  background: color-mix(in srgb, var(--bc-danger) 12%, transparent);
+}
+[data-experience='basecamp'] .bcsaid--failed .bcsaidwho { color: var(--bc-danger); }

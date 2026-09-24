@@ -460,6 +460,39 @@ export const wireDockNote = (dock) => {
   dockNote.resync()
 }
 
+/*
+  Whether the reader is at the end of the thread is REMEMBERED on every
+  scroll, because by the time a render has run the page has already moved
+  (#197: anything you need to know about "before" has to be recorded before).
+*/
+let chatAtEnd = true
+let chatLastId = ''
+globalThis.addEventListener?.(
+  'scroll',
+  () => {
+    const d = document.documentElement
+    chatAtEnd = d.scrollHeight - (d.scrollTop + innerHeight) < 160
+  },
+  { passive: true },
+)
+const followChat = (root) => {
+  const thread = root.querySelector('.bcchat--full')
+  if (thread === null) {
+    chatLastId = ''
+    return
+  }
+  const rows = thread.querySelectorAll('.bcsaid')
+  const last = rows[rows.length - 1]
+  const id = `${String(rows.length)}:${last?.textContent?.length ?? 0}:${last?.className ?? ''}`
+  const changed = chatLastId !== '' && id !== chatLastId
+  chatLastId = id
+  if (!changed || !chatAtEnd) return
+  requestAnimationFrame(() => {
+    globalThis.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' })
+    chatAtEnd = true
+  })
+}
+
 export const wire = (root) => {
   rememberDialogScroll(root)
 
@@ -482,6 +515,27 @@ export const wire = (root) => {
     before the voice note was built, and it was found by building the voice
     note - two callers of one path, of which only one was being looked at.
   */
+  /*
+    THE CHAT PAGE FOLLOWS THE CONVERSATION. A new answer, a working row or a
+    failure with its Try again landed at the foot of the thread - which is
+    under the sticky composer, below the fold - and the page stayed where it
+    was: an answer had arrived and nothing on screen said so. When the last
+    message changes and the reader was at the end of the thread (or has just
+    sent), the page follows it. Someone scrolled back to read older messages
+    is left where they are.
+  */
+  followChat(root)
+  /* Asking again, from a slow or failed answer on the Chat page. */
+  for (const b of root.querySelectorAll('[data-bc-chatretry]')) {
+    b.addEventListener('click', async () => {
+      b.disabled = true
+      b.textContent = 'Asking again…'
+      await ctx.chatRetry?.(ctx.state.project, b.dataset.bcChatretry, () => {
+        ctx.render()
+      })
+      ctx.render()
+    })
+  }
   for (const form of root.querySelectorAll('[data-bc-sayform]')) {
     form.addEventListener('click', (e) => {
       void pageNote.press(e)
