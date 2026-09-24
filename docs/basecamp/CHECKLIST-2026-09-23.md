@@ -174,8 +174,8 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 21.1 | Dismissing a child surface returns exactly one level | TODO |
-| 21.2 | Outside click, Escape, Back and explicit close all tested | TODO |
+| 21.1 | Dismissing a child surface returns exactly one level | **VERIFIED** — one handler cleared the sheet *and* every record inside it, so this was wrong on every child surface, not only Sources. It steps now. `verify:basecamp-back`, 20/20 |
+| 21.2 | Outside click, Escape, Back and explicit close all tested | **VERIFIED** — all four, on Grant's own Sources → Notion example. Back was already right (real history); Escape and outside click were the two that were broken, and the sabotage proves exactly those two go red. A fifth check holds the other end: the Sources list must still be dismissable |
 | 22.1 | Useful connection identity shown (notebook/account/folder/workspace) | TODO |
 | 22.2 | No secrets, tokens or credentials exposed | TODO |
 | 23.1 | Add Source exercised through a real supported provider flow | TODO |

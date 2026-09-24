@@ -353,6 +353,18 @@ const state = {
   // Which source is open, and whether the Add Source surface is showing.
   bcSource: null,
   bcSourceAdd: false,
+  /*
+    WHICH OUTPUT AND WHICH WAITING ITEM ARE OPEN (§19, §18).
+
+    Declared here rather than sprung into existence by the opener, because
+    §21's one-level dismissal asks whether anything is open inside the sheet --
+    and `undefined !== null` is true, so an undeclared key would have meant
+    "something is open" for ever and the sheet could never be closed at all.
+    A state machine that reads absence as presence is 0304's asymmetry in a
+    plain object.
+  */
+  bcOutput: null,
+  bcWaiting: null,
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
@@ -8716,6 +8728,8 @@ function goToPath(path) {
   state.bcFilter = null
   state.bcSource = null
   state.bcSourceAdd = false
+  state.bcOutput = null
+  state.bcWaiting = null
   if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
   /*
     The experiment's full search (§7.4). Its own view, reachable only under
@@ -13339,18 +13353,48 @@ const bcContext = {
     state.bcExpanded = id
     render()
   },
+  /*
+    DISMISSING GOES BACK EXACTLY ONE LEVEL (§21).
+
+    Grant, 23 September: "Sources -> Notion -> dismiss individual source popup
+    by clicking outside" returned all the way to project Home, and it should
+    have returned to Sources. "Closing a child surface should return exactly
+    ONE level. Preserve navigation context."
+
+    This cleared the expanded sheet AND every record inside it in one go, so
+    every child surface in the experience behaved that way -- a source, a
+    contact, a document, a task. Dismissing a detail threw away the list you
+    opened it from, and the way back was to find the module and open it again.
+
+    So it is a step now, not a reset: if something is open INSIDE the sheet,
+    that is what closes, and the sheet stays. The reset it used to do is still
+    right when the sheet itself is what you are dismissing, and still right on
+    a navigation -- the router clears all of it, because the page underneath
+    has changed and a dialog over it is about somewhere else.
+  */
   closeExpanded: () => {
+    const inside =
+      state.bcTask !== null ||
+      state.bcContact !== null ||
+      state.bcContactAdd === true ||
+      state.bcDoc !== null ||
+      state.bcSource !== null ||
+      state.bcSourceAdd === true ||
+      state.bcWaiting !== null ||
+      state.bcOutput !== null
+    if (inside) {
+      state.bcTask = null
+      state.bcContact = null
+      state.bcContactAdd = false
+      state.bcDoc = null
+      state.bcSource = null
+      state.bcSourceAdd = false
+      state.bcWaiting = null
+      state.bcOutput = null
+      render()
+      return
+    }
     state.bcExpanded = null
-    /*
-      And the record with it. A modal closed on one task and reopened from the
-      To-dos heading would otherwise come back showing that task rather than
-      the list, which is the dialog remembering something the person has just
-      dismissed.
-    */
-    state.bcTask = null
-    state.bcContact = null
-    state.bcContactAdd = false
-    state.bcDoc = null
     render()
   },
   /*

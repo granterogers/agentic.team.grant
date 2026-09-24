@@ -106,6 +106,93 @@ check('the team opens from the page menu', (await dialogs()) === 1)
 await back()
 check('and Back closes that too', (await dialogs()) === 0, here())
 
+/*
+ * --- 3b. DISMISSING RETURNS EXACTLY ONE LEVEL (§21) ----------------------
+ *
+ * Grant, 23 September: "Sources -> Notion -> dismiss individual source popup
+ * by clicking outside" returned all the way to project Home. "Closing a child
+ * surface should return exactly ONE level. Preserve navigation context. Test:
+ * outside click, Escape, Back, explicit close."
+ *
+ * Back was already right, because it is real history and section 2 proves it.
+ * The other three went through one handler that cleared the sheet AND every
+ * record inside it, so dismissing a detail threw away the list it was opened
+ * from -- on every child surface in the experience, not only on Sources.
+ *
+ * All three are driven here against the source example he gave. Each one opens
+ * the detail again first, because a check that reuses the state the previous
+ * one left is asserting about a screen it did not set up.
+ */
+const openSourceDetail = async (): Promise<boolean> => {
+  await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcpanes')
+  await page.waitForTimeout(400)
+  await page.locator('[data-bc-pagemenu]').first().click()
+  await page.waitForTimeout(200)
+  await page.locator('[data-bc-pagemenu-panel] [data-bc-sources]').first().click()
+  await page.waitForTimeout(500)
+  const one = await page.locator('[data-bc-source]').first()
+  if ((await one.count()) === 0) return false
+  await one.click()
+  await page.waitForTimeout(400)
+  return true
+}
+/** Is a source DETAIL showing, as opposed to the list of them? */
+const onDetail = async (): Promise<boolean> =>
+  (await page.locator('[data-bc-source-close], [data-bc-source-save]').count()) > 0
+/** Is the Sources list still open behind it? */
+const onSources = async (): Promise<boolean> =>
+  (await dialogs()) === 1 && (await page.locator('[data-bc-source]').count()) > 0
+
+const opened = await openSourceDetail()
+check('a source detail opens from the Sources list', opened && (await onDetail()))
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+check(
+  'Escape returns to Sources, not to the project home',
+  !(await onDetail()) && (await onSources()),
+  `detail ${String(await onDetail())} · sources ${String(await onSources())} · dialogs ${String(await dialogs())}`,
+)
+
+await openSourceDetail()
+/*
+  OUTSIDE MEANS OUTSIDE THE DETAIL, and the sheet is what is around it, so the
+  press lands near the top-left of the viewport -- where the backdrop is and no
+  control of the detail's is.
+*/
+await page.mouse.click(8, 8)
+await page.waitForTimeout(400)
+check(
+  'clicking outside returns to Sources, not to the project home',
+  !(await onDetail()) && (await onSources()),
+  `detail ${String(await onDetail())} · sources ${String(await onSources())} · dialogs ${String(await dialogs())}`,
+)
+
+await openSourceDetail()
+const closer = page.locator('[data-bc-source-close]').first()
+if ((await closer.count()) > 0) {
+  await closer.click()
+  await page.waitForTimeout(400)
+  check(
+    'and the explicit close does the same',
+    !(await onDetail()) && (await onSources()),
+    `detail ${String(await onDetail())} · sources ${String(await onSources())}`,
+  )
+}
+
+/*
+  AND THE SHEET ITSELF STILL CLOSES. The one-level rule must not make the
+  Sources list undismissable: a second Escape, with nothing open inside it,
+  closes the sheet and leaves the project where it was.
+*/
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+check(
+  'a second dismissal closes Sources and leaves you on the project',
+  (await dialogs()) === 0 && here() === slug,
+  `dialogs ${String(await dialogs())} · ${here()}`,
+)
+
 /* --- 4. only then does Back leave the project --------------------------- */
 await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(400)
