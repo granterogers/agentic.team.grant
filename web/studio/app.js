@@ -1638,7 +1638,7 @@ function paintDock() {
            </div>`
         : messages.map(bubble).join('')
     }</div>
-    <form class="composer" data-dockform>
+    <form class="composer" data-dockform${bcNote && p ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
       <div class="crow">
         <textarea data-docksay rows="1" placeholder="Ask the team…"
                   aria-label="Message the team"></textarea>
@@ -13438,6 +13438,9 @@ const bcContext = {
   chatIsReal: (slug) => chat.isReal(slug),
   chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, presented()),
   chatSend: (slug, text) => chat.send(slug, text, null),
+  /* The Basecamp branch of drawShell returns before its paintDock call, so a
+     voice note sent from the dock repaints it through this. */
+  repaintDock: () => paintDock(),
   /*
     WHERE THE VOICE NOTE IS TRANSCRIBED, and the token to do it with.
 

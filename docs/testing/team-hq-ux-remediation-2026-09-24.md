@@ -48,27 +48,36 @@ continue at NEXT ACTION.**
 | 19 | Textarea `field-sizing:content` + auto grid track pushed phone to 461px | found by my own capture, **fixed** before commit |
 
 
-### Pass 11 — working states beyond chat
 
-| # | Finding | Fix | Evidence |
-|---|---|---|---|
-| 69 | Saving a to-do record on the example projects redrew the page with no confirmation, and focus jumped to Close | the successor Save button takes focus and says *Saved in this browser.* in a status region | driven: `data-said role=status` present, focus on Save; todos 30/30, journey 55/55 |
-| 70 | Signed-in saves, uploads and ticks | already go through `attempt()`, which disables the control, says *Saving…* and then the office's own sentence | read `office.js` `attempt`; Docs upload signed out refuses with the sign-in sentence |
-| 71 | Schedule on a phone hid the month grid and with it the month's name, so September ran into October with only a gap | the agenda carries its own month heading, shown only where the grid is hidden | 390 capture |
-| 72 | Schedule's Overdue pill sat on the row's top edge while date, title and name were centred | centred with its row | probe: pill y 536 = name y 536 |
-| 73 | On touch widths the activity entry read "Olivermade the course one-pager": the 44px rule used inline-flex, which drops the space between the bold name and the sentence | padding instead of flex, same 44px | scratch scan of every flex/grid container with text beside an element, 13 routes x 2 widths: 0; with the old rule restored it flags the row on 7 routes, so the scan can fail |
-| 74 | Card Table told a phone user to drag a card, a gesture a touch browser does not do with HTML drag | *Drag a card to another column, or choose its stage on the card* — true on both, since each card carries the stage menu | 390 capture |
-| 75 | My own portfolio signals (#portfolio pass) dimmed zero counts to 4.07:1 — found by the final axe sweep, 12 nodes | opacity 0.8 — about 4.8:1 | axe, 14 routes x desk and phone: 0 violations |
+## Passes 3–7 — live voice, tool pages, states, responsive, accessibility
+
+These passes were recorded in their commit messages as they landed and this
+table was written from those commits afterwards, so the finding numbers 20–54
+used in working notes are not repeated here. Each row names its commit.
+
+| Commit | Finding | Fix |
+|---|---|---|
+| `715652f` | A failed live call showed the shared `call.js`'s raw exception (*"Failed to fetch"*) in 12.5px muted type and said *"press the phone"* in an experience whose control is a microphone | `livevoice.plainly()` translates at this experience's edge; a legible chip that retires after ~12s; unit test proved red |
+| `cba5ca7` | The To-dos page read `t.due`, which rows rarely carry, so no row showed its date and the overdue one looked undated | the miniature's `dueWords`/`isLate`; late in the danger ink; one counter design |
+| `2bd182e` | The task record opened with an empty date (Save would have cleared it) and a free-text assignee showing the slug *emma* | reads `due_on`; the assignee is a picker valued with the office's staff slug; the spec reference and data-model copy removed |
+| `bd6d439` | Docs toolbar of mismatched heights; the venue sample was a 206-byte stripe that read as hazard tape | one 44px toolbar; a real 16 KB illustration |
+| `a165a04` | `.bcsources` was both the upload picker grid and the Sources list, so the list laid itself out as 200px columns with each logo beside the wrong name | picker renamed `.bcpickfrom`; Sources is a card grid |
+| `2032974` | Eight places printed a database slug (*claire*, *tom*) to the screen; the portfolio and home disagreed about one task's date; a 16px activity entry among 13px ones | roster lookup everywhere; the shared date reader; one text size |
+| `175ffc3` | Signed out, the Team page said *"Asking the office…"* for ever; failed face photos drew the broken-image glyph; embedded modules used the studio's display face | the example team drawn read-only; failed faces hidden; `--display` mapped |
+| `40ee426` | Removed modules were offered as bare words that read as labels | dashed *+* chips, and one sentence saying removing hides and deletes nothing |
+| `07f5543` | Add Contact dialog far larger than its five fields | sized to them |
+| `7fb3361` | Empty modules were dead ends; outage copy said *"prototype standing in"* and *"token"* | each empty module offers the action that fills it; plainer shared sentences |
+| `f5e9719` | **Signed in on a slow connection, the page said "Prototype data — sign in" and showed invented projects** | *"Connecting to your office"* with a spinner and a neutral outline |
+| `14570fa` | Nothing listened for the network dropping, so changes made offline looked saved | offline/online listeners redraw the strip; a signed-in page re-asks on reconnect; four checks proved red |
+| `b386af8` | At 320–360px a module header widened the layout viewport and the tray ran off the side (same on `main`) | meta wraps below 400px; the Attention word becomes a bell below 380px |
+| `55a6d59` | No suite measured below 390px, which is why the above was invisible | `verify:basecamp-states` gains a 320px leg, proved red without the fix |
+| `c5a3683` | axe: 6 failing rules (nested interactive headers, contrast, unlabelled separators, no h1, heading jumps); the controls audit silently skipped half the home after pressing a close cross | 0 violations; the audit clears layout storage per visit, 375 to 439 pressed |
 
 ## Harness notes
 
 - `verify:basecamp-reconcile` was 19/21 in this sandbox (office.invalid → proxy tunnel failure). Taught the reason, tied to that host. 21/21.
 - `verify:basecamp-voicenote` needs `espeak-ng` (installed). My 40px composer buttons were caught by its 44px floor — the detector working.
 - `basecamp:measure` caught my first counters at 39px on touch — detector working.
-
-## Changes
-
-(appended as they land)
 
 ## Isolated review deployment
 
@@ -77,6 +86,7 @@ continue at NEXT ACTION.**
 | URL | **https://team-hq-ux-review.vercel.app/basecamp/p/legacy-coaching-course** |
 | Vercel project | `team-hq-ux-review` — NEW, created by this branch; no existing project touched |
 | First deployment | `dpl_GUUYN8dUGpSZJmfRbkD7yG8TPyws` |
+| Latest deployment | `dpl_fYx3iPWCKsFkNT6H2JSVhhJov2c1`, from commit `8f3046c`+contrast fix; `bc/wire.js` byte-identical to the branch, `bc/compose.css` carries the last change; 4 routes x desk and iPhone 14 rendered from the sandbox, 0 page errors, 0 overflow |
 | How | `npm run deploy:ux-review` (`scripts/deploy/ux-review-preview.ts`): static `web/studio` by digest, rewrites-only `vercel.json` |
 | Not touched | `ai-team-hq`, `agentic-team-hq-basecamp` and every alias; no secret, env var, SSO setting, allow-list or edge function |
 | Office | none — `config.js` is deliberately absent (`index.html`: "a 404 here is not an error"), so the copy shows the example projects and cannot reach or write to any office |
@@ -85,16 +95,45 @@ continue at NEXT ACTION.**
 
 ## Behavioural branch handoffs
 
-(none yet)
+Nothing in this branch needs the backend branch in order to work. Two things
+belong to it, and both are handled here at the Basecamp edge only, so the
+shared modules are unchanged:
+
+**BEHAVIOURAL BRANCH HANDOFF 1 — `web/studio/call.js` passes a raw error
+message to the page.** A refused or failed live call surfaces `e.message`
+(a browser or network string) and says *"press the phone"*. The Basecamp
+microphone translates it (`bc/livevoice.js` `plainly()`, with four unit tests
+in `tests/bc/livevoice.test.ts`); the legacy studio still shows the raw text.
+The durable fix is for `call.js` to return a reason code and let each surface
+word it.
+
+**BEHAVIOURAL BRANCH HANDOFF 2 — `web/studio/chat.js` writes the failure text
+as the AGENT'S message.** When a turn fails, the row that comes back is
+attributed to the specialist, so a failure reads as something a person said.
+The Basecamp thread now draws a failed or unanswered turn as a notice
+(*"No answer came back"*, with Try again, via `chat.retry`) instead of a
+message; the underlying row shape is unchanged. Whether `chat.js` should stop
+attributing it at all is the backend branch's call.
+
+## Integration handoff
+
+| | |
+|---|---|
+| Branch | `claude/dazzling-dirac-acjwqf` (pushed; not merged; no PR opened) |
+| Merge base | `d1c9247adc78c840c953c10450c81225a097e62c` — `main` untouched |
+| Scope | the Basecamp experience, `web/studio/bc/*` — 11 files |
+| Shared files touched, and why | `web/studio/app.js` (imports `prose` from the new `prose.js`; dock gains the Basecamp-only voice note and `data-bc-noteproject`; `bcContext.chatRetry` and `repaintDock` — every addition behind `state.experience === 'basecamp'`, legacy `verify:ui` 54/54 and `verify:wired` clean) · `web/studio/data.js` (two shared outage sentences reworded, labels unchanged; one sample size label) · `web/studio/prose.js` (NEW, moved verbatim out of `app.js`) · `web/studio/samples/venue.png` · `package.json` (one script, `deploy:ux-review`) |
+| Suites changed | `scripts/verify/basecamp-{contacts,controls,failures,journey,reconcile,states,todos,voicenote}.ts` — every change strengthens or re-points a check; each new check was proved red |
+| New | `scripts/deploy/ux-review-preview.ts`, `tests/bc/livevoice.test.ts` |
+| Not touched | gateway, worker, edge functions, migrations, API contracts, secrets, allow-lists, aliases |
+| Likely conflicts | `web/studio/app.js` (large, shared: `paintDock` and the `bcContext` object) · `web/studio/data.js` (`SOURCE_STATE`) · any verify suite the backend branch also edits. `bc/*` is this workstream's alone |
+| Review copy | https://team-hq-ux-review.vercel.app/basecamp — its own Vercel project; delete that project to remove it |
 
 ## NEXT ACTION
 
-Passes 1–7 done (home, chat, live voice, tool pages, states, responsive, a11y).
-Next: full re-capture → visual critique loop (typography, colour, depth,
-button families, portfolio home) → final gates → final screenshot set →
-report. Pristine baseline worktree for comparisons: `/tmp/basewt` at
-`d1c9247` (recreate with `git worktree add /tmp/basewt d1c9247` and symlink
-node_modules if the container was recycled).
+Complete. The report is the last thing in this workstream; nothing is
+pending except Grant's review. Pristine baseline for comparisons: `git
+worktree add /tmp/basewt d1c9247`.
 
 ## Pass 8 — visual critique loop 1
 
@@ -126,3 +165,36 @@ node_modules if the container was recycled).
 | 67 | No way to retry on the Chat page (the dock had one) | **fixed** — `ctx.chatRetry` = the dock's `chat.retry`; Try again resends once |
 | 68 | New answers landed under the sticky composer; the page did not follow | **fixed** — follows the thread when the reader was at the end (remembered on scroll, per #197) |
 | — | 7 new checks in `verify:basecamp-failures` (50/50). One was vacuous at first (`:empty` never matches `<p></p>`), then racing a 30s `innerText()` wait — both found by sabotage and fixed | recorded |
+
+## Pass 11 — working states beyond chat
+
+| # | Finding | Fix | Evidence |
+|---|---|---|---|
+| 69 | Saving a to-do record on the example projects redrew the page with no confirmation, and focus jumped to Close | the successor Save button takes focus and says *Saved in this browser.* in a status region | driven: `data-said role=status` present, focus on Save; todos 30/30, journey 55/55 |
+| 70 | Signed-in saves, uploads and ticks | already go through `attempt()`, which disables the control, says *Saving…* and then the office's own sentence | read `office.js` `attempt`; Docs upload signed out refuses with the sign-in sentence |
+| 71 | Schedule on a phone hid the month grid and with it the month's name, so September ran into October with only a gap | the agenda carries its own month heading, shown only where the grid is hidden | 390 capture |
+| 72 | Schedule's Overdue pill sat on the row's top edge while date, title and name were centred | centred with its row | probe: pill y 536 = name y 536 |
+| 73 | On touch widths the activity entry read "Olivermade the course one-pager": the 44px rule used inline-flex, which drops the space between the bold name and the sentence | padding instead of flex, same 44px | scratch scan of every flex/grid container with text beside an element, 13 routes x 2 widths: 0; with the old rule restored it flags the row on 7 routes, so the scan can fail |
+| 74 | Card Table told a phone user to drag a card, a gesture a touch browser does not do with HTML drag | *Drag a card to another column, or choose its stage on the card* — true on both, since each card carries the stage menu | 390 capture |
+| 75 | My own portfolio signals (#portfolio pass) dimmed zero counts to 4.07:1 — found by the final axe sweep, 12 nodes | opacity 0.8 — about 4.8:1 | axe, 14 routes x desk and phone: 0 violations |
+
+## Pass 12 — final adversarial review
+
+A fresh reviewer read the whole diff against `d1c9247` without editing
+anything. Four findings, every one confirmed in the code before anything was
+changed, and three of them in this branch's own voice-note work:
+
+| # | Finding | Fix | Proof |
+|---|---|---|---|
+| 76 | **A voice note recorded in the dock on the portfolio went to no project**: the dock files a typed line under the thread it shows (open project, else Unnamed, else the first), the voice note used `state.project`, which is null there. And the Basecamp branch of `drawShell` returns before its `paintDock()`, so even a correctly filed note did not appear in the dock | the dock form carries the project it shows; the dock's voice note reads it; `askTheTeam` repaints the dock as well as the page (`ctx.repaintDock`) | new voicenote check, red on the pre-review `wire.js` |
+| 77 | **A render during transcription brought "Send to the team" back** — a second press sent the note twice — and a failure was written into the composer the render had thrown away; every resync also minted a new object URL, never revoked | the panel is always drawn through `paint()`, which remembers what it drew; resync restores exactly that; a failure paints on the live panel; a `sending` guard; one URL per recording, revoked on release | two new voicenote checks, one of which proves a redraw really replaced the composer; both red on the pre-review `wire.js` |
+| 78 | One recorder, two composers: pressing the page's microphone while the dock recorded stopped the dock's recording into the page's panel | an instance does not reach into a recording the other owns | read; covered by the ownership guard |
+| 79 | **A vacuous check of mine**: the journey suite's "assignee persisted" picked the first option, which was the task's current assignee (the fake office had one person), so an ignored edit passed | a second person in the fake roster; the pick must differ from the current value, asserted | sabotaging the save to drop the assignee turns two checks red (54/56) |
+
+Clean by the reviewer's reading: every new interpolation escapes; per-render
+listeners sit on nodes the redraw replaces, the rest are attached once; every
+`paintDock` addition is behind the Basecamp guard; new CSS is scoped; the
+review deploy touches only its own Vercel project and prints no secret.
+
+Suites after the fixes: voicenote 48/48, journey 56/56, failures 50/50, home
+45/45, todos 30/30; lint, typecheck, check:templates, check:secrets, smoke.

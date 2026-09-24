@@ -515,6 +515,111 @@ const slugOf = async (page: Awaited<ReturnType<typeof openWith>>['page']): Promi
   await browser.close()
 }
 
+/*
+ * --- A REDRAW WHILE THE NOTE IS BEING TRANSCRIBED ----------------------------
+ *
+ * Found by the final adversarial review: the panel's state was read off the
+ * panel node, a render replaces the Chat page's composer, and the replacement
+ * had no phase - so resync drew the REVIEW again, Send came back mid-
+ * transcription (a second press sent the note twice), and a failure was
+ * written into the node that had been thrown away. The dock, meanwhile, sent
+ * a note recorded on the portfolio to no project at all, while its typed
+ * lines went to the thread it was showing.
+ */
+{
+  const { browser, page, thrown } = await openWith('.out/voice/said.wav')
+  const slug = await slugOf(page)
+  await page.goto(url(`${slug}/chat`), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-sayform]')
+  await page.waitForTimeout(400)
+  await page.locator('[data-bc-sayform] [data-bc-note]').click()
+  await page.waitForTimeout(1500)
+  await page.locator('[data-bc-notestop]').click()
+  await page.waitForSelector('[data-bc-notepanel][data-bc-notephase="review"]')
+  /* A slow transcription that then fails: page routes outrank the context's. */
+  await page.route('**/voice*/note**', async (route) => {
+    await new Promise((r) => setTimeout(r, 2500))
+    await route.fulfill({
+      status: 503,
+      headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+      body: JSON.stringify({ error: 'The transcription service is busy.' }),
+    })
+  })
+  await page.locator('[data-bc-notesend]').click()
+  await page.waitForTimeout(300)
+  /* Mark the composer, so the check can prove a redraw really replaced it -
+     without that, a render that did nothing would pass this for free. */
+  await page.evaluate(
+    inPage(`document.querySelector('[data-bc-sayform]').dataset.vnMark = '1'; return true`),
+  )
+  /* Any render will do; coming back online is one this branch added. */
+  await page.evaluate(inPage(`window.dispatchEvent(new Event('online')); return true`))
+  await page.waitForTimeout(400)
+  const replaced = (await page.evaluate(
+    inPage(`return document.querySelector('[data-bc-sayform]')?.dataset.vnMark !== '1'`),
+  )) as boolean
+  const mid = (await page.evaluate(
+    inPage(`const p = document.querySelector('[data-bc-sayform] [data-bc-notepanel]')
+      return {
+        phase: p === null ? '' : (p.dataset.bcNotephase ?? ''),
+        send: document.querySelectorAll('[data-bc-sayform] [data-bc-notesend]').length,
+      }`),
+  )) as { phase: string; send: number }
+  check(
+    'a redraw mid-transcription still says it is working, and offers no second Send',
+    mid.phase === 'sending' && mid.send === 0 && replaced,
+    JSON.stringify(mid),
+  )
+  await page.waitForTimeout(3000)
+  const after = (await page.evaluate(
+    inPage(`const p = document.querySelector('[data-bc-sayform] [data-bc-notepanel]')
+      return {
+        phase: p === null ? '' : (p.dataset.bcNotephase ?? ''),
+        text: p === null ? '' : (p.innerText || ''),
+      }`),
+  )) as { phase: string; text: string }
+  check(
+    'and a failure after that redraw is shown on the panel that is on screen',
+    after.phase === 'failed' && /try sending again/i.test(after.text),
+    JSON.stringify(after),
+  )
+  check('nothing threw', thrown.length === 0, thrown.join(' | '))
+  await browser.close()
+}
+{
+  const { browser, page, calls, thrown } = await openWith('.out/voice/said.wav')
+  await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(600)
+  /* On the portfolio the dock's only opener is the phone tray's Chat, drawn
+     narrow-only; pressed here through its own handler at desktop size. */
+  await page.evaluate(inPage(`document.querySelector('[data-bc-dock]').click(); return true`))
+  await page.waitForSelector('#dock [data-bc-note]')
+  const filed = (await page.evaluate(
+    inPage(`return document.querySelector('#dock [data-dockform]')?.dataset.bcNoteproject ?? ''`),
+  )) as string
+  await page.locator('#dock [data-bc-note]').click()
+  await page.waitForTimeout(1500)
+  await page.locator('#dock [data-bc-notestop]').click()
+  await page.waitForSelector('#dock [data-bc-notepanel][data-bc-notephase="review"]')
+  await page.locator('#dock [data-bc-notesend]').click()
+  await page.waitForTimeout(2500)
+  const panelNow = (await page.evaluate(
+    inPage(
+      `const p = document.querySelector('#dock [data-bc-notepanel]'); return p === null ? 'none' : (p.dataset.bcNotephase ?? 'shut') + ':' + (p.innerText || '').slice(0, 80)`,
+    ),
+  )) as string
+  const thread = (await page.evaluate(
+    inPage(`return document.querySelector('#dock [data-dockthread]')?.innerText ?? ''`),
+  )) as string
+  check(
+    'a voice note sent from the dock on the portfolio lands in the thread the dock shows',
+    filed !== '' && thread.includes('What is late on this project'),
+    `filed under ${filed || '(nothing)'}; panel ${panelNow}; calls ${calls.join(',')}`,
+  )
+  check('nothing threw', thrown.length === 0, thrown.join(' | '))
+  await browser.close()
+}
+
 server.close()
 console.log(`\n${String(pass)}/${String(pass + fail)} passed — subject: ${subject}`)
 console.log(

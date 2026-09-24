@@ -96,6 +96,10 @@ const office = createServer((req, res) => {
               generated_at: new Date().toISOString(),
               crew: [
                 { slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' },
+                /* A second person, so the record's picker has somebody to
+                   change TO: with one, the persistence check below picked the
+                   current assignee and an ignored edit passed. */
+                { slug: 'research-director', name: 'Emma', role: 'Research', state: 'idle' },
               ],
               projects: [
                 {
@@ -513,9 +517,20 @@ check(
   replaced only worked if somebody typed a role slug. The option's value is
   what the office needs; the suite asserts that value reached it.
 */
-const person = page.locator('#bc-edit-who option:not([value=""])').first()
+/* Chosen as somebody the task is NOT already assigned to: the seeded task
+   is Claire's, and the first option is Claire, so picking the first one
+   was a no-op and an ignored edit would have passed. */
+const whoBefore = await page.locator('#bc-edit-who').inputValue()
+const person = page
+  .locator(`#bc-edit-who option:not([value=""]):not([value="${whoBefore}"])`)
+  .first()
 const emmaValue = (await person.getAttribute('value')) ?? ''
 const emmaName = ((await person.innerText()).split('·')[0] ?? '').trim()
+check(
+  'the edit picks a different person',
+  emmaValue !== '' && emmaValue !== whoBefore,
+  `${whoBefore} -> ${emmaValue}`,
+)
 await page.locator('#bc-edit-who').selectOption(emmaValue)
 await page.locator('#bc-edit-due').fill('2026-11-13')
 await page.locator('[data-bc-tasksave-edit]').click()
