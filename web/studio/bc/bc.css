@@ -1734,3 +1734,45 @@
   exactly the moment they are deciding.
 */
 .bcwaitoptions { display: flex; flex-wrap: wrap; gap: var(--bc-3); }
+
+
+/* ========================================================================
+   CONFIGURING THE TEAM  (§16)
+
+   Three small additions and no new colour. The subject words are the only
+   thing here that needed a shape of its own: they are what the office matches
+   a request against, so they read better as a set of small marks than as a
+   comma-separated sentence pretending to be prose.
+   ======================================================================== */
+
+[data-experience='basecamp'] .bcwords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bc-1);
+  margin-top: var(--bc-1);
+}
+/*
+  A fill AND a border, because the row's own background is the surface: a chip
+  distinguished only by fill disappears wherever the parent happens to match
+  it, which this stylesheet has already paid for once on the governance page.
+*/
+[data-experience='basecamp'] .bcword {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bc-sunken, var(--bc-surface-raised));
+  border: 1px solid var(--bc-border-subtle);
+  font: var(--bc-compact);
+  color: var(--bc-text);
+}
+/* The count is not one of the words, so it does not wear their border. */
+[data-experience='basecamp'] .bcword--more {
+  background: none;
+  border-color: transparent;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcformacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bc-3);
+  align-items: center;
+}

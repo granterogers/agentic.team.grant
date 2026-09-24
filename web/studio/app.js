@@ -200,6 +200,18 @@ const notebookMade = {}
 const reviewing = {}
 /* Signed-in sites, and what the office opened on them (#135, #16). */
 const browserSites = {}
+/*
+  WHICH SPECIALISTS ARE ASSIGNED TO EACH PROJECT, by slug (§16).
+
+  UP HERE, beside the other stores, and not beside the function that fills it.
+  `assignedFor` is reached from the ctx object during the first draw, and a
+  `const` declared three hundred lines below it throws "Cannot access before
+  initialization" -- which the studio catches, prints once as "could not draw
+  this screen", and recovers from on the next draw. CLAUDE.md records the same
+  defect in `tickWaiting`, months old and invisible because it recovers. The
+  console said it within a second of this feature working.
+*/
+const assignedTo = {}
 const browserSeen = {}
 const browserNow = {}
 let browserLeft = null
@@ -365,6 +377,14 @@ const state = {
   */
   bcOutput: null,
   bcWaiting: null,
+  /*
+    WHICH SPECIALIST IS BEING CONFIGURED, and whether the hire form is open
+    (§16). Declared rather than sprung into existence, for the reason the two
+    above are: §21 asks whether anything is open inside a sheet, and an
+    undeclared key reads as "yes" for ever.
+  */
+  bcPerson: null,
+  bcHire: false,
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
@@ -8730,6 +8750,8 @@ function goToPath(path) {
   state.bcSourceAdd = false
   state.bcOutput = null
   state.bcWaiting = null
+  state.bcPerson = null
+  state.bcHire = false
   if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
   /*
     The experiment's full search (§7.4). Its own view, reachable only under
@@ -13398,7 +13420,9 @@ const bcContext = {
         state.bcSource !== null ||
         state.bcSourceAdd === true ||
         state.bcWaiting !== null ||
-        state.bcOutput !== null)
+        state.bcOutput !== null ||
+        state.bcPerson !== null ||
+        state.bcHire === true)
     if (inside) {
       state.bcTask = null
       state.bcContact = null
@@ -13408,6 +13432,8 @@ const bcContext = {
       state.bcSourceAdd = false
       state.bcWaiting = null
       state.bcOutput = null
+      state.bcPerson = null
+      state.bcHire = false
       render()
       return
     }
@@ -13483,6 +13509,24 @@ const bcContext = {
     it twice is better than a second place for it to rot, which is the lesson
     0310 was spent on.
   */
+  /*
+    THE ASSIGNED TEAM (§16), and the honest three-way answer.
+
+    `null` means the office has not been asked yet or the read failed, and the
+    surface says so rather than drawing an empty team -- "you have nobody on
+    this project" is a claim, and a failed read is not evidence for it.
+  */
+  assignedFor: (slug) => {
+    const held = assignedTo[slug]
+    if (held === undefined) {
+      void needAssigned(slug)
+      return 'asking'
+    }
+    return held
+  },
+  /* Everybody the office employs, for the list of who can be added. */
+  roster: () => CREW,
+  forgetAssigned,
   crewFor: (slug) => {
     const p = PROJECTS.find((x) => x.slug === slug)
     if (p === undefined) return []
@@ -13585,6 +13629,26 @@ const bcContext = {
   },
   closeWaiting: () => {
     state.bcWaiting = null
+    render()
+  },
+  /*
+    CONFIGURING ONE SPECIALIST (§16). Opening the editor closes the hire form
+    and the other way round: they occupy the same place on the screen, and two
+    forms open at once is two Cancel buttons and no way to tell which is which.
+  */
+  openPerson: (slug) => {
+    state.bcHire = false
+    state.bcPerson = slug
+    render()
+  },
+  openHire: () => {
+    state.bcPerson = null
+    state.bcHire = true
+    render()
+  },
+  closePerson: () => {
+    state.bcPerson = null
+    state.bcHire = false
     render()
   },
   openTask: (id) => {
@@ -14177,6 +14241,73 @@ const SITE_SAID = {
   store: the absence of an answer is not the presence of a failure.
 */
 const madeBodies = {}
+
+/*
+  WHO IS ASSIGNED TO THIS PROJECT, from the table that decides it  (§16)
+
+  `crewFor` derives a roster from whoever appears in the project's tasks,
+  activity and waiting items. That is a record of ACTIVITY wearing the name of
+  a team: a specialist assigned and not yet used is invisible, and one who
+  answered once and was removed is still shown. Section 16 makes the Team
+  screen the place the team is CONFIGURED, and a configuration screen that
+  cannot see the thing it configures is the dial-with-no-reader defect with
+  the parts swapped.
+
+  `public.staff_on_project` reads `project_staff`, which is the table
+  `set_project_staff` writes and the one the office means by "on this project".
+  It comes back as a list of slugs; the names, titles, subject words and
+  responsibilities are already in the roster the page holds.
+
+  Null while it is still coming, and null if the read FAILED -- the surface
+  says it could not look rather than drawing an empty team, which is the
+  distinction `mine.trouble` exists for and the one this repository keeps
+  paying for when a reader collapses the two.
+*/
+async function needAssigned(slug) {
+  if (assignedTo[slug] !== undefined) return
+  const p = byId(slug)
+  /*
+    NOTHING TO ASK WITH YET, so do not remember that as an answer.
+
+    The office is addressed by the project's uuid, and the page holds the
+    prototype's projects until the payload lands -- which have no uuid. A first
+    version cached the resulting failure, so the screen said "asking the
+    office" for ever on a signed-in browser where everything worked. Leaving
+    the key unset is what lets the next draw try again once there is an id.
+  */
+  if (p === undefined || typeof p.id !== 'string' || p.id === '') return
+  assignedTo[slug] = 'asking'
+  try {
+    /*
+      BOTH HALVES, because neither answers §16 alone. `assigned` is the list of
+      slugs the office considers to be on this project; `team` is who those
+      slugs are -- title, subject words, responsibilities, pronouns, style --
+      and the studio payload's own crew carries a lighter shape than the
+      configuration screen needs. Fetched together so the screen never draws
+      half of itself.
+    */
+    const [who, all] = await Promise.all([read('assigned', p.id), read('team')])
+    const people = Array.isArray(all?.staff) ? all.staff : []
+    assignedTo[slug] = {
+      on: Array.isArray(who) ? who.map(String) : [],
+      people,
+    }
+  } catch {
+    /*
+      A FAILED READ IS NOT AN EMPTY TEAM, and it is not "still asking" either.
+      Three states, three answers -- the distinction `mine.trouble` exists for,
+      and the one this repository keeps paying for when a reader collapses
+      them.
+    */
+    assignedTo[slug] = 'failed'
+  }
+  render()
+}
+
+/** Forget it, so the next draw asks again. Used after every assignment write. */
+function forgetAssigned(slug) {
+  delete assignedTo[slug]
+}
 
 async function needOutput(id) {
   if (madeBodies[id] !== undefined) return

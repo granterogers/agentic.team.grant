@@ -129,18 +129,18 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 16.1 | Team screen is where the project's AI team is configured | TODO |
-| 16.2 | Shows agents assigned to this project | TODO |
-| 16.3 | Shows/edits role and specialty | TODO |
-| 16.4 | Shows/edits skills (add, remove, modify) | TODO |
-| 16.5 | Shows/edits responsibilities | TODO |
-| 16.6 | Add agent to project | TODO |
-| 16.7 | Remove agent from project | TODO |
-| 16.8 | Create/add an additional agent where supported | TODO |
-| 16.9 | Changes affect the canonical delegation/routing architecture | TODO |
+| 16.1 | Team screen is where the project's AI team is configured | **VERIFIED** — `verify:basecamp-team`, 12/12, signed in and reading every result back from the database rather than from the screen |
+| 16.2 | Shows agents assigned to this project | **VERIFIED** — from `project_staff` via `staff_on_project`, which is the table the office means. It used to derive a roster from whoever appeared in the project's tasks and activity, so somebody assigned and not yet used was invisible on the screen where you assign people |
+| 16.3 | Shows/edits role and specialty | **VERIFIED** — name, role, pronouns and style through `hq_staff_update` |
+| 16.4 | Shows/edits skills (add, remove, modify) | **VERIFIED** — the subject words, as a comma list because that is the shape the RPC takes. Eight on the row and a count; all of them in the editor |
+| 16.5 | Shows/edits responsibilities | **VERIFIED** — `p_remit`, in the same call as everything else so a correction cannot half-apply |
+| 16.6 | Add agent to project | **VERIFIED** — `set_project_staff(p_on: true)`, asserted against the table after the press |
+| 16.7 | Remove agent from project | **VERIFIED** — the same writer, and the suite puts the specialist back and asserts the restore |
+| 16.8 | Create/add an additional agent where supported | **DONE, not driven** — the form presses `hq_staff_hire` and asks for the end date the office requires. The suite checks the form and deliberately does not press it: a hire creates somebody who cannot be deleted, so a nightly run would build a roster of ghosts. **This is the one control on the screen a human has not pressed.** |
+| 16.9 | Changes affect the canonical delegation/routing architecture | **VERIFIED** — a subject word typed in the editor is read back out of `staff.expertise`, which is the column `who_knows_about` matches a request against. Proved by stopping the page sending it and watching that one check go red |
 | 16.10 | Canonical agent/expertise/routing architecture traced first; no parallel frontend model | TODO |
-| 17.1 | Agent names/avatars only in conversational UI and Team-management UI | TODO |
-| 17.2 | No agent-presence clutter elsewhere | TODO |
+| 17.1 | Agent names/avatars only in conversational UI and Team-management UI | **VERIFIED** — and the suite asserts a name is a NAME: `person()` matched only the design slug, so anything carrying the office's own (`chief-of-staff`) fell through raw. Fixed at the lookup, which every list shares |
+| 17.2 | No agent-presence clutter elsewhere | **VERIFIED** — nothing was added outside the Team screen; no header strip, no workload portraits, no presence widget |
 
 ## 18 — Waiting for you
 

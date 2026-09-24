@@ -370,6 +370,22 @@ const SECTIONS: Readonly<
   */
   review: { fn: 'awaiting_review', arg: 'p_project' },
   /*
+    WHO IS ASSIGNED TO A PROJECT, which is not the same question as who has
+    touched it (§16).
+
+    The Team screen derived its roster from whoever appeared in the project's
+    tasks, activity and waiting items -- so it showed a record of activity
+    wearing the name of a team, and a specialist assigned but not yet used was
+    invisible on the screen where you assign people.
+
+    `public.staff_on_project` reads `project_staff`, which is the table
+    `set_project_staff` writes and the one the office itself means by "on this
+    project". Section 16 asks for the Team screen to be where the team is
+    configured, and a configuration screen that cannot see the thing it
+    configures is the dial-with-no-reader defect with the parts swapped.
+  */
+  assigned: { fn: 'staff_on_project', arg: 'p_project_id' },
+  /*
     THE WAY BACK FROM ARCHIVING (#276, migration 0480).
 
     `project_unarchive` was a gateway action nothing could press, so a

@@ -1224,33 +1224,189 @@ const taskRecord = (p) => {
 const isoDay = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? String(v) : '')
 
 /** §10.8 Agentic Team, as a project tool. */
+/* ======================================================================== *
+ * THE TEAM SCREEN IS WHERE THE TEAM IS CONFIGURED  (§16)
+ * ======================================================================== *
+ *
+ * §16: "Grant's current requirement is that the Team screen IS the place where
+ * the AI team assigned to the project is configured... This must NOT merely be
+ * cosmetic profile editing. It needs to affect the underlying agentic system...
+ * Trace the existing canonical agent/expertise/routing architecture before
+ * implementing. Do NOT build a parallel frontend-only agent model."
+ *
+ * NOTHING HERE IS NEW. Every control writes through a function the office
+ * already had:
+ *
+ *   who is on the project   `set_project_staff`, which writes `project_staff`
+ *   their words             `hq_staff_update`, whose `p_skills` writes
+ *                           `staff.expertise` -- the column `who_knows_about`
+ *                           matches on, so this is the routing requirement and
+ *                           not a profile field
+ *   bringing somebody in    `hq_staff_hire`
+ *   standing somebody down  `hq_staff_retire`
+ *
+ * AND THE ROSTER IS READ FROM THE TABLE THAT DECIDES IT. `crewFor` derives one
+ * from whoever appears in the project's tasks, activity and waiting items --
+ * a record of activity wearing the name of a team. A specialist assigned and
+ * not yet used was invisible on the very screen where you assign people.
+ *
+ * §17 makes this screen an intentional exception to the identity restriction:
+ * names belong here. That is not licence to put them back anywhere else.
+ */
+
+/** Three answers, not two: 'asking', 'failed', or the roster itself. */
+const assignment = (p) => ctx.assignedFor?.(p.slug) ?? 'asking'
+
+const personRow = (p, c, on) => {
+  const words = Array.isArray(c.skills) ? c.skills : []
+  return `<div class="bcitem" data-bc-person="${esc(c.slug)}">
+    <span></span>
+    <div class="bcitembody">
+      <span class="bcitemtitle">${esc(c.name ?? c.slug)}</span>
+      <span class="bcitemmeta">${esc(c.title ?? '')}</span>
+      ${
+        words.length === 0
+          ? `<span class="bcitemmeta">No subject words yet, so nothing routes here by subject</span>`
+          : /*
+              THE FIRST EIGHT, AND A COUNT. Grace owns twenty subject words and
+              Daniel fifteen; drawn in full they are a wall of chips that makes
+              the roster unreadable and buries the controls beside it. The
+              editor shows every one, which is where you go to change them.
+            */
+            `<span class="bcitemmeta bcwords">${words
+              .slice(0, 8)
+              .map((w) => `<span class="bcword">${esc(w)}</span>`)
+              .join('')}${
+              words.length > 8
+                ? `<span class="bcword bcword--more">${esc(`+${String(words.length - 8)} more`)}</span>`
+                : ''
+            }</span>`
+      }
+    </div>
+    <span class="bcactions">
+      ${button('Edit', { 'data-bc-person-edit': esc(c.slug) })}
+      ${
+        on
+          ? button('Take off', { 'data-bc-person-off': esc(c.slug) })
+          : button('Put on', { kind: 'primary', 'data-bc-person-on': esc(c.slug) })
+      }
+    </span>
+  </div>`
+}
+
+/*
+  THE EDITOR. One form, and every field goes to `hq_staff_update` in one call,
+  because a person who corrects a title and adds a subject word should not have
+  to press twice.
+
+  Subject words are a comma-separated list on purpose: that is the shape the
+  RPC takes, and inventing a tag widget over it would put a parser between
+  Grant and the office for no gain -- #130's defect with a nicer surface.
+*/
+const personEditor = (c) => `<form class="bcaddform bcgap-l" data-bc-personform="${esc(c.slug)}">
+  <div class="bcformrow">
+    ${input({ id: 'bc-p-name', label: 'Name', name: 'name', value: esc(c.name ?? ''), maxlength: '40' })}
+    ${input({ id: 'bc-p-title', label: 'Role', name: 'title', value: esc(c.title ?? ''), maxlength: '80' })}
+  </div>
+  ${input({ id: 'bc-p-pronouns', label: 'Pronouns', name: 'pronouns', value: esc(c.pronouns ?? ''), maxlength: '24' })}
+  <label class="bclabel" for="bc-p-remit">What they are responsible for</label>
+  <textarea class="bcinput" id="bc-p-remit" name="remit" rows="3">${esc(c.responsibilities ?? '')}</textarea>
+  <label class="bclabel" for="bc-p-skills">Subject words</label>
+  <textarea class="bcinput" id="bc-p-skills" name="skills" rows="2"
+    >${esc((Array.isArray(c.skills) ? c.skills : []).join(', '))}</textarea>
+  <p class="bcpmeta bcprose">
+    Comma separated, and these are not decoration: the office matches what you
+    ask against these words to decide who the work reaches. Thirty is the most
+    one person can usefully own.
+  </p>
+  <label class="bclabel" for="bc-p-style">How they write</label>
+  <textarea class="bcinput" id="bc-p-style" name="style" rows="2">${esc(c.communication_style ?? '')}</textarea>
+  <div class="bcformacts">
+    ${button('Save', { kind: 'primary', 'data-bc-person-save': esc(c.slug) })}
+    ${button('Cancel', { 'data-bc-person-cancel': '1' })}
+    ${c.permanent === true ? '' : button('Stand them down', { 'data-bc-person-retire': esc(c.slug) })}
+  </div>
+  <span class="bcsaidhere" data-bc-person-said role="status" aria-live="polite"></span>
+</form>`
+
+const hireForm = () => `<form class="bcaddform bcgap-l" data-bc-hireform="1">
+  <div class="bcformrow">
+    ${input({ id: 'bc-h-name', label: 'First name', name: 'name', maxlength: '40', placeholder: 'Priya' })}
+    ${input({ id: 'bc-h-title', label: 'Role', name: 'title', maxlength: '80', placeholder: 'Partnerships Director' })}
+  </div>
+  <label class="bclabel" for="bc-h-why">What they are for</label>
+  <textarea class="bcinput" id="bc-h-why" name="why" rows="3"
+    placeholder="Why the team needs somebody this project does not already have."></textarea>
+  <!--
+    A HIRE CARRIES AN END, and that is the office's design rather than this
+    form's caution: the hire function requires one and so does the gateway, and
+    a scheduled sweep is what eventually acts on it. Somebody brought in
+    for a piece of work should stop being on the roster when the work is over,
+    or the roster becomes a list of everybody who was ever needed.
+
+    Ninety days is offered, not imposed -- it is a date field and Grant can put
+    any date in it.
+  -->
+  ${input({
+    id: 'bc-h-until',
+    label: 'Until',
+    name: 'until',
+    type: 'date',
+    value: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  })}
+  <p class="bcpmeta bcprose">
+    Somebody brought in this way is temporary. On that date they come off the
+    roster unless you say otherwise.
+  </p>
+  <div class="bcformacts">
+    ${button('Bring them in', { kind: 'primary', 'data-bc-hire-save': '1' })}
+    ${button('Cancel', { 'data-bc-person-cancel': '1' })}
+  </div>
+  <span class="bcsaidhere" data-bc-person-said role="status" aria-live="polite"></span>
+</form>`
+
 const teamSurface = (p) => {
-  const crew = ctx.crewFor?.(p.slug) ?? []
   const waiting = p.waiting ?? []
+  const held = assignment(p)
+  const ready = held !== 'asking' && held !== 'failed' && held !== null
+  const people = ready ? held.people : []
+  const on = ready ? held.on : []
+  const onProject = people.filter((c) => on.includes(c.slug) && c.active !== false)
+  const offProject = people.filter((c) => !on.includes(c.slug) && c.active !== false)
+  const editing = state().bcPerson
+  const person = editing === null || editing === undefined
+    ? undefined
+    : people.find((c) => c.slug === String(editing))
   return `${crumbFor(p, 'team')}
-    <div class="bcrecordhead"><h1>Agentic Team</h1></div>
+    <div class="bcrecordhead">
+      <h1>Agentic Team</h1>
+      <span class="bcactions">${button('Bring someone in', { 'data-bc-hire': '1' })}</span>
+    </div>
+    ${
+      state().bcHire === true
+        ? `<h2 class="bcsubhead">Somebody new</h2>${hireForm()}`
+        : person !== undefined
+          ? `<h2 class="bcsubhead">${esc(person.name ?? person.slug)}</h2>${personEditor(person)}`
+          : ''
+    }
     <h2 class="bcsubhead">Who is on this</h2>
     ${
-      crew.length === 0
-        ? empty({ title: 'Nobody assigned yet', body: 'Assign a specialist and their work appears here.' })
-        : `<div class="bclist">${crew
-            .map(
-              (c) => `<div class="bcitem">
-                <span></span>
-                <div class="bcitembody">
-                  <span class="bcitemtitle">${esc(c.name)}</span>
-                  <span class="bcitemmeta">${esc([c.role, c.doing].filter(Boolean).join(' · '))}</span>
-                </div>
-                <span>${
-                  c.state === 'working'
-                    ? status('Running', 'running')
-                    : c.state === 'blocked'
-                      ? status('Blocked', 'blocked')
-                      : status('Idle')
-                }</span>
-              </div>`,
-            )
-            .join('')}</div>`
+      held === 'failed'
+        ? errorState('The office could not say who is on this project.')
+        : !ready
+          ? `<p class="bcpmeta bcprose">Asking the office who is on this project…</p>`
+          : onProject.length === 0
+            ? empty({
+                title: 'Nobody is on this project yet',
+                body: 'Put a specialist on it and what you ask will start reaching them by subject.',
+              })
+            : `<div class="bclist">${onProject.map((c) => personRow(p, c, true)).join('')}</div>`
+    }
+    ${
+      !ready || offProject.length === 0
+        ? ''
+        : `<h2 class="bcsubhead">Everybody else in the office</h2>
+           <div class="bclist">${offProject.map((c) => personRow(p, c, false)).join('')}</div>`
     }
     <h2 class="bcsubhead">Waiting for you</h2>
     ${
@@ -1416,11 +1572,31 @@ const outputRow = (r) => {
       }
     </div>
     <span>${
+      /*
+        A PILL THAT SAYS RUNNING ABOUT FINISHED WORK IS A STATUS LIGHT THAT
+        LIES -- and this one said it about everything it did not recognise.
+
+        `studio_requests` returns four states: working, review, approved and
+        discarded. Only the first is running. The fallback painted the other
+        two as running as well, so the team page showed three outputs marked
+        Running directly above a Running work section correctly reporting that
+        nothing was. Two sections of one screen disagreeing, and the one that
+        was wrong was the one with the confident green dot.
+
+        An unrecognised state shows as itself rather than as a guess, because
+        a word nobody has styled is a smaller lie than the wrong word.
+      */
       done
         ? status('In the project', 'done')
         : ready
           ? button('Add to project', { kind: 'primary', 'data-bc-addtoproject': r.output.id })
-          : status('Running', 'running')
+          : r.state === 'working'
+            ? status('Running', 'running')
+            : r.state === 'approved'
+              ? status('Accepted', 'done')
+              : r.state === 'discarded'
+                ? status('Set aside')
+                : status(String(r.state ?? 'unknown'))
     }</span>
   </div>`
 }

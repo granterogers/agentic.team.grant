@@ -1017,6 +1017,153 @@ const wireCounts = (root) => {
     is kinder than a round trip that comes back rejected.
   */
   /*
+    CONFIGURING THE TEAM (§16).
+
+    Every one of these presses a function the office already had. Nothing here
+    keeps a frontend model of a specialist: the form is filled from the roster
+    the office returned and its values go straight back through
+    `hq_staff_update`, whose `p_skills` writes `staff.expertise` -- the column
+    routing matches on. That is the difference between configuring the team and
+    editing a profile, and it is the whole of §16.
+
+    After every write the assignment is FORGOTTEN rather than patched, so the
+    next draw asks the office. A local patch would be a second copy of the
+    roster, and this repository has a rule about the copy being the one that
+    rots.
+  */
+  const afterStaffWrite = async () => {
+    ctx.forgetAssigned?.(ctx.state.project)
+    await ctx.refresh?.()
+    ctx.render()
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-person-edit]')) {
+    b.addEventListener('click', () => ctx.openPerson?.(b.dataset.bcPersonEdit ?? ''))
+  }
+  for (const b of root.querySelectorAll('[data-bc-hire]')) {
+    b.addEventListener('click', () => ctx.openHire?.())
+  }
+  for (const b of root.querySelectorAll('[data-bc-person-cancel]')) {
+    b.addEventListener('click', () => ctx.closePerson?.())
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-person-on], [data-bc-person-off]')) {
+    b.addEventListener('click', async () => {
+      const on = b.dataset.bcPersonOn !== undefined
+      const who = (on ? b.dataset.bcPersonOn : b.dataset.bcPersonOff) ?? ''
+      if (who === '') return
+      const done = await attempt(
+        b,
+        on ? 'Putting them on…' : 'Taking them off…',
+        () =>
+          act('project_staff', {
+            p_slug: ctx.state.project,
+            p_staff_slug: who,
+            p_on: on,
+          }),
+        on ? 'On this project.' : 'Off this project.',
+      )
+      if (done === null) return
+      await afterStaffWrite()
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-person-save]')) {
+    b.addEventListener('click', async () => {
+      const form = b.closest('[data-bc-personform]')
+      const slug = form?.dataset.bcPersonform ?? ''
+      if (form === null || slug === '') return
+      const field = (n) => (form.querySelector(`[name="${n}"]`)?.value ?? '').trim()
+      const said = form.querySelector('[data-bc-person-said]')
+      /*
+        EVERY FIELD IN ONE CALL. `hq_staff_update` takes them all and leaves
+        alone whatever is null, so sending the form as it stands is both the
+        simplest thing and the one that cannot half-apply.
+      */
+      const done = await attempt(
+        b,
+        'Saving…',
+        () =>
+          act('staff_update', {
+            p_slug: slug,
+            p_name: field('name'),
+            p_title: field('title'),
+            p_pronouns: field('pronouns'),
+            p_remit: field('remit'),
+            p_skills: field('skills'),
+            p_style: field('style'),
+          }),
+        'Saved.',
+      )
+      if (done === null) return
+      if (said !== null) said.textContent = ''
+      ctx.closePerson?.()
+      await afterStaffWrite()
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-person-retire]')) {
+    b.addEventListener('click', async () => {
+      const who = b.dataset.bcPersonRetire ?? ''
+      if (who === '') return
+      const done = await attempt(
+        b,
+        'Standing them down…',
+        () => act('staff_retire', { p_slug: who, p_active: false }),
+        'Stood down.',
+      )
+      if (done === null) return
+      ctx.closePerson?.()
+      await afterStaffWrite()
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-hire-save]')) {
+    b.addEventListener('click', async () => {
+      const form = b.closest('[data-bc-hireform]')
+      if (form === null) return
+      const field = (n) => (form.querySelector(`[name="${n}"]`)?.value ?? '').trim()
+      const said = form.querySelector('[data-bc-person-said]')
+      /*
+        REFUSED HERE RATHER THAN ROUND-TRIPPED. The RPC requires a name, a
+        title and a justification, so sending an empty one is a refusal the
+        person has to wait for.
+      */
+      if (
+        field('name') === '' ||
+        field('title') === '' ||
+        field('why') === '' ||
+        field('until') === ''
+      ) {
+        if (said !== null) {
+          said.textContent = 'A first name, a role, what they are for, and until when.'
+        }
+        return
+      }
+      const done = await attempt(
+        b,
+        'Bringing them in…',
+        () =>
+          act('staff_hire', {
+            p_name: field('name'),
+            p_title: field('title'),
+            p_justification: field('why'),
+            /*
+              END OF THAT DAY, not the start of it. A bare date parses as
+              midnight UTC, so "until the 30th" would stand them down as the
+              30th begins -- a day short of what the words say.
+            */
+            p_expires_at: `${field('until')}T23:59:59Z`,
+          }),
+        'They are in the office.',
+      )
+      if (done === null) return
+      ctx.closePerson?.()
+      await afterStaffWrite()
+    })
+  }
+
+  /*
     STOPPING WORK THAT IS RUNNING (§20.2).
 
     `stop_job` has been a gateway action all along with nothing pressing it --

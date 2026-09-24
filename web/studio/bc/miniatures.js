@@ -83,8 +83,21 @@ export const face = (person, size = 'sm') => {
     title="${esc(name)}">${img}<span class="bcfacemono" aria-hidden="true">${esc(initial)}</span></span>`
 }
 
+/*
+  EITHER SLUG, because a person here has two.
+
+  The design gives each specialist a short slug (`claire`) and the office
+  answers to a role slug (`chief-of-staff`); `data.js` keeps the real one as
+  `staffSlug` precisely so a write can address it. This matched only the design
+  slug, so anything carrying the office's own name -- an output's author, a
+  waiting item's asker -- fell through to the raw string, and the team page
+  showed "chief-of-staff · made · 19 Sep" in a column of Claires and Emmas.
+  `crewBy` in data.js has matched both all along; this is the copy that did
+  not.
+*/
 const person = (slug) =>
-  (ctx?.crew ?? []).find((c) => c.slug === slug) ?? (slug ? { slug, name: slug } : null)
+  (ctx?.crew ?? []).find((c) => c.slug === slug || c.staffSlug === slug) ??
+  (slug ? { slug, name: slug } : null)
 
 /*
   Exported because §18's waiting record needs the same answer the miniatures
