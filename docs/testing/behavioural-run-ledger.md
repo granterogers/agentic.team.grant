@@ -2938,6 +2938,54 @@ real turn of his got silence; not a reset either, because the defect is local
 and latent rather than systemic, and the invariant it belongs to is already
 in place for the failure path.
 
+---
+
+## Pass 58 — every answer he actually received, through today's gates: CLEAN
+
+**Territory:** the 124 real delivered answers, swept retrospectively through
+the coherence gates as they stand now. Only measurable since pass 56
+established which traffic is genuinely his.
+
+**Classification: NO DEFECT FOUND.**
+
+Seven of the 124 fire a body-only detector. **A detector hit is not a
+refusal**, and treating the seven as findings would have been the pass's
+mistake: `claimsGrantSaid` is guarded by `m.hadHistory === false`,
+`claimsToHaveMade` by `m.acted === 0`, and neither input is in the row. Two
+of the seven are visibly correct on reading — one carries
+`evidence = verified`, and one is the honest disclaimer *"I don't have the
+context of what you mentioned or what Emma found, so I can't assess its
+relevance"*, which is the office saying it does not know and is exactly the
+answer the gates exist to protect.
+
+So only the read-claim rule was adjudicated, because it is the one whose
+inputs the row carries: `claimsToHaveRead` plus `evidence` in
+(`inferred`, `speculative`), which is what `refuseToSend` and
+`metadataProblems` both apply.
+
+**Three of 124 would be refused today, and all three are historical:**
+
+| date | evidence | the sentence |
+|---|---|---|
+| 14 Sep | inferred | *"I reviewed the calendar and db; there are no alerts…"* |
+| 13 Sep | inferred | *"I pulled the project records"* |
+| 9 Sep | inferred | *"I've pulled that from the Projects page"* |
+
+The 13 September row is the 03:45 fabrication CLAUDE.md records as the case
+#185 was written for. **The deployed gate catches all three**, which makes
+this sweep a regression proof rather than a finding — and gives it the
+positive control a found-nothing check needs, without which "no violations"
+would be indistinguishable from a sweep that cannot fire.
+
+**Zero among the 20 answers delivered since 16 September.** Twenty is a small
+sample and is stated as such; what it is not is zero, and what the three
+historical rows prove is that the instrument works.
+
+**Gates:** lint 0, typecheck 0, test 3062/3062, check:secrets 0,
+check:migrations 0, check:believes clean. Scratch script removed.
+
+Clean-pass count after pass 58: **2 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
