@@ -49,6 +49,30 @@ const walk = async (dir: string): Promise<string[]> => {
 
 const sha = (b: Buffer | Uint8Array): string => createHash('sha256').update(b).digest('hex')
 
+/*
+  WHAT A PREVIEW DEPLOYMENT ADDS, AND NOTHING ELSE.
+
+  Vercel injects its own feedback widget into a PREVIEW deployment's HTML and
+  not into a production one, so a preview's index.html is 163 bytes longer than
+  the bytes that were uploaded and the mirror reports it as different every
+  time. Left alone that turns a real check into one somebody learns to ignore.
+
+  So exactly that one tag is removed before comparing, and the report SAYS it
+  removed it. Anything else -- a byte of the page, a script of ours, a stale
+  file -- still fails, which is the whole reason the check exists.
+*/
+const VERCEL_FEEDBACK =
+  /<script async data-explicit-opt-in="true"[^>]*vercel\.live\/_next-live\/feedback[^>]*><\/script>\s*/g
+let strippedFeedback = 0
+const asUploaded = (b: Buffer): Buffer => {
+  const text = b.toString('utf8')
+  VERCEL_FEEDBACK.lastIndex = 0
+  if (!VERCEL_FEEDBACK.test(text)) return b
+  VERCEL_FEEDBACK.lastIndex = 0
+  strippedFeedback += 1
+  return Buffer.from(text.replace(VERCEL_FEEDBACK, ''), 'utf8')
+}
+
 const built = (await walk(FROM)).map((f) => relative(FROM, f)).sort()
 console.log(`${String(built.length)} file(s) in the deployment`)
 
@@ -65,7 +89,7 @@ for (const path of built) {
     missing.push(`${path} (${String(r.status)})`)
     continue
   }
-  const live = Buffer.from(await r.arrayBuffer())
+  const live = asUploaded(Buffer.from(await r.arrayBuffer()))
   if (sha(live) === sha(local)) same += 1
   else differ.push(`${path} (${String(local.length)} built, ${String(live.length)} live)`)
   await mkdir(dirname(join(TO, path)), { recursive: true })
@@ -73,6 +97,12 @@ for (const path of built) {
 }
 
 console.log(`identical: ${String(same)}`)
+if (strippedFeedback > 0) {
+  console.log(
+    `  (${String(strippedFeedback)} file(s) had Vercel's preview feedback widget removed ` +
+      'before comparing — a preview carries it and a production deployment does not)',
+  )
+}
 if (differ.length > 0) console.log(`DIFFERENT: ${differ.join(', ')}`)
 if (missing.length > 0) console.log(`NOT SERVED: ${missing.join(', ')}`)
 
@@ -83,7 +113,7 @@ console.log(`bare domain: ${String(root.status)} -> ${to}`)
 
 /* And that an unknown path is rewritten to the page rather than 404ing. */
 const deep = await fetch(`https://${HOST}/basecamp/p/legacy-coaching-course/tasks`)
-const deepBody = Buffer.from(await deep.arrayBuffer())
+const deepBody = asUploaded(Buffer.from(await deep.arrayBuffer()))
 const index = await readFile(join(FROM, 'index.html'))
 console.log(
   `deep link: ${String(deep.status)}, ${sha(deepBody) === sha(index) ? 'serves the page' : 'serves something else'}`,

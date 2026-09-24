@@ -107,7 +107,23 @@ try {
     nowHere.map((m) => m.id).join(','),
   )
 
-  const kept = await stored()
+  /*
+    POLL THE OFFICE, do not read it at a fixed pause.
+
+    The save is a request, and a fixed wait is a race with it. Read three
+    seconds after the press this said "0 panel(s)" -- while the second machine,
+    opened a minute later, showed the arrangement perfectly. Both cannot be
+    true of the same office, and the one that was wrong is the one that asked
+    too early: a suite that reports "the office is holding nothing" about an
+    office that is holding it is worse than no check, because the defect it
+    names does not exist.
+  */
+  const untilStored = Date.now() + 30_000
+  let kept = await stored()
+  while ((kept.length === 0 || kept.some((m) => m.id === victim)) && Date.now() < untilStored) {
+    await new Promise((r) => setTimeout(r, 500))
+    kept = await stored()
+  }
   check(
     'and the OFFICE is holding the arrangement, not just this browser',
     kept.length > 0 && !kept.some((m) => m.id === victim),

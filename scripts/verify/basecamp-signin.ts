@@ -201,7 +201,34 @@ try {
   const second = await restarted.newPage()
   second.on('pageerror', (e) => errors.push(String(e.message)))
   await second.goto(`${SITE}/basecamp`, { waitUntil: 'domcontentloaded', timeout: 45000 })
-  await second.waitForTimeout(3000)
+  /*
+    WAIT FOR ALL THREE, not for three seconds.
+
+    A fixed pause is a race with the network, and on a cold deployment it
+    loses. Three runs against identical bytes failed three different ways --
+    once the projects had not repainted, once the prototype strip had not gone,
+    once neither -- which is the signature of a timing assumption rather than a
+    defect, and of a wait that waits for only part of what is then asserted.
+
+    So the wait is the whole of what the two checks below read: the session
+    held, the strip gone, and one of his projects on the screen. A snapshot
+    taken before all three have settled describes a page that is still
+    arriving.
+  */
+  await second
+    .waitForFunction(
+      `(() => {
+         let held = false
+         try { held = (localStorage.getItem('hq.session') || '') !== '' } catch { held = false }
+         const t = document.body.innerText || ''
+         return held
+           && document.querySelector('.bcnotlive') === null
+           && ${JSON.stringify(realProjects)}.some((n) => t.includes(n))
+       })()`,
+      undefined,
+      { timeout: 30000 },
+    )
+    .catch(() => null)
   const afterRestart = (await second.evaluate(
     inPage(`
       return {
