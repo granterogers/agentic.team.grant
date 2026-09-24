@@ -57,6 +57,19 @@ continue at NEXT ACTION.**
 
 (appended as they land)
 
+## Isolated review deployment
+
+| | |
+|---|---|
+| URL | **https://team-hq-ux-review.vercel.app/basecamp/p/legacy-coaching-course** |
+| Vercel project | `team-hq-ux-review` — NEW, created by this branch; no existing project touched |
+| First deployment | `dpl_GUUYN8dUGpSZJmfRbkD7yG8TPyws` |
+| How | `npm run deploy:ux-review` (`scripts/deploy/ux-review-preview.ts`): static `web/studio` by digest, rewrites-only `vercel.json` |
+| Not touched | `ai-team-hq`, `agentic-team-hq-basecamp` and every alias; no secret, env var, SSO setting, allow-list or edge function |
+| Office | none — `config.js` is deliberately absent (`index.html`: "a 404 here is not an error"), so the copy shows the example projects and cannot reach or write to any office |
+| Verified | 5 files sha1-identical to the branch; rendered in Chromium from the sandbox at 1440 and 390, 0 overflow, real webfonts |
+| To remove | delete the `team-hq-ux-review` project in Vercel |
+
 ## Behavioural branch handoffs
 
 (none yet)
