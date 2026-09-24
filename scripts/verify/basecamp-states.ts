@@ -182,6 +182,11 @@ const SIZES = [
   { id: 'desktop', width: 1440, height: 900, touch: false },
   { id: 'tablet', width: 768, height: 1024, touch: true },
   { id: 'phone', width: 390, height: 844, touch: true },
+  /*
+    The smallest phones still sold. A module header that fit at 390 needed
+    336px at 320 and widened the whole layout viewport; nothing measured it.
+  */
+  { id: 'small', width: 320, height: 640, touch: true },
 ] as const
 
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
