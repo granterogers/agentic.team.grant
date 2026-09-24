@@ -3647,3 +3647,27 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   letter-spacing: 0.01em;
 }
 [data-experience='basecamp'] .bcpmeta.bcprose { font-size: 13px; line-height: 20px; }
+
+/*
+  THE CARD'S MOVE CONTROL IS QUIET UNTIL IT IS WANTED. A full-width bordered
+  select on every card, naming the column the card already sits in, was the
+  loudest thing on the board. It stays - it is how a keyboard moves a card -
+  but on a pointer device it is a light, borderless line until the card is
+  hovered or the control focused. Touch keeps it framed: there is no hover.
+*/
+@media (hover: hover) and (pointer: fine) {
+  [data-experience='basecamp'] .bcbcard .bcbmove .bcinput {
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--bc-text-muted);
+    padding-inline: 6px;
+    margin-inline: -6px;
+    transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+  }
+  [data-experience='basecamp'] .bcbcard:hover .bcbmove .bcinput,
+  [data-experience='basecamp'] .bcbcard .bcbmove .bcinput:focus-visible {
+    border-color: var(--bc-border-control);
+    background-color: color-mix(in srgb, var(--bc-text) 4%, transparent);
+    color: var(--bc-text);
+  }
+}
