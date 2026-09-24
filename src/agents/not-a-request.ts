@@ -23,7 +23,9 @@
  * supposed to trust.
  */
 
-const MAKING = String.raw`(?:add|put|make|create|set\s+up|raise|log|stick|file|remind)`
+// Writing verbs too, since the artifact door uses the same guard: "don't make
+// me a PDF", "should I write a report?".
+const MAKING = String.raw`(?:add|put|make|create|set\s+up|raise|log|stick|file|remind|write|draft|generate|produce|prepare|do\s+(?:me\s+)?a)`
 
 const NEGATED = new RegExp(
   String.raw`\b(?:don'?t|do\s+not|never|no\s+need\s+to|(?:there'?s\s+)?no\s+point\s+(?:in\s+)?|not)\s+(?:\w+\s+){0,2}?${MAKING}\b`,
@@ -39,7 +41,33 @@ const REPORTED = new RegExp(
   'i',
 )
 
+/*
+  A counterfactual about what he would have asked for: "If I wanted a PDF I'd
+  ask for one". Narrow on purpose: "If I'm not back by 3, remind me to call
+  Sarah" is a conditional REQUEST and must still file.
+*/
+const COUNTERFACTUAL =
+  /^\s*if\s+(?:i|we)\s+(?:wanted|needed|had\s+wanted|'d\s+wanted|was\s+after)\b/i
+
+const MAKES = new RegExp(String.raw`\b${MAKING}\b`, 'i')
+
+const isMention = (sentence: string): boolean =>
+  NEGATED.test(sentence) ||
+  ADVICE.test(sentence) ||
+  QUOTED.test(sentence) ||
+  REPORTED.test(sentence) ||
+  COUNTERFACTUAL.test(sentence)
+
+/**
+ * True only when EVERY sentence that mentions making something is a mention.
+ *
+ * Sentence by sentence, because a prohibition governs its own sentence: "Do
+ * not draft the plan. Create the tasks instead." is a request for tasks, and
+ * the first version read the "do not" across the full stop and refused both.
+ */
 export function mentionsWithoutAsking(text: string): boolean {
-  const said = String(text ?? '')
-  return NEGATED.test(said) || ADVICE.test(said) || QUOTED.test(said) || REPORTED.test(said)
+  const sentences = String(text ?? '')
+    .split(/(?<=[.!?;])\s+/)
+    .filter((x) => MAKES.test(x))
+  return sentences.length > 0 && sentences.every(isMention)
 }

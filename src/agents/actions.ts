@@ -31,6 +31,8 @@
  * would have the team quietly stop writing reports and start generating them.
  */
 
+import { mentionsWithoutAsking } from './not-a-request.ts'
+
 /** The artifact kinds `notebook.generate` accepts. Literals, not an import: */
 /** §7 keeps operational code free of the notebook module, and this is a table */
 /** of words, not a dependency on an adapter. */
@@ -424,6 +426,9 @@ function asksForAFile(said: string): boolean {
 }
 
 export function artifactRequest(text: string): ArtifactRequest | null {
+  // A prohibition, an advice question, a counterfactual or somebody else's
+  // words start no report (ledger R34): "Don't make me a PDF of that".
+  if (mentionsWithoutAsking(text)) return null
   const said = text.trim()
   return asksForAFile(said) ? { brief: said, format: 'pdf' } : null
 }

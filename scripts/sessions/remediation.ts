@@ -338,4 +338,30 @@ export const REMEDIATION: readonly Session[] = [
       },
     ],
   },
+
+  {
+    name: 'rem-mentions',
+    about: 'sentences that mention making a task without asking for one',
+    projects: ['alpha'],
+    turns: [
+      {
+        say: "Don't add a task to chase the roofer.",
+        inProject: 'alpha',
+        why: 'a prohibition must not create what it prohibits',
+        expect: { noWrite: true, tasks: 0 },
+      },
+      {
+        say: "Kevin said 'add a task to chase the roofer' but I think that's daft",
+        inProject: 'alpha',
+        why: "somebody else's words, relayed, are not an instruction",
+        expect: { noWrite: true, tasks: 0 },
+      },
+      {
+        say: 'Should I add a task to chase the roofer?',
+        inProject: 'alpha',
+        why: 'asking for advice is not asking for the act',
+        expect: { noWrite: true, tasks: 0 },
+      },
+    ],
+  },
 ]

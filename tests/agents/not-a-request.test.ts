@@ -42,3 +42,30 @@ describe('a completion taken back, or prohibited, does nothing', () => {
     expect(taskStateChange('Mark the Hartley one done')).toEqual({ state: 'done', name: 'hartley' })
   })
 })
+
+import { artifactRequest } from '../../src/agents/actions.ts'
+
+describe('the artifact door has the same guard', () => {
+  it.each([
+    "Don't make me a PDF of that, just tell me",
+    "Kevin asked 'can you write a PDF report on the venue' - what do you think?",
+    'Should I write a report on the venue?',
+    "If I wanted a PDF I'd ask for one",
+  ])('no report: %s', (s) => {
+    expect(artifactRequest(s)).toBeNull()
+  })
+  it('NEGATIVE CONTROL: a request for one still is one', () => {
+    expect(artifactRequest('Write me a PDF report on the venue')).not.toBeNull()
+  })
+  it('NEGATIVE CONTROL: a prohibition governs its own sentence only', () => {
+    expect(
+      taskRequest(
+        'Do not draft the plan. Create the tasks instead.',
+        classifyIntent('Do not draft the plan. Create the tasks instead.'),
+      ),
+    ).not.toBeNull()
+  })
+  it('NEGATIVE CONTROL: a conditional REQUEST still files', () => {
+    expect(personalTaskRequest("If I'm not back by 3, remind me to call Sarah", now)).not.toBeNull()
+  })
+})
