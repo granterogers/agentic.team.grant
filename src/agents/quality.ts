@@ -28,7 +28,7 @@
  * someone wrote a second caller.
  */
 
-import { datesIn, isoForMention, MONTH_WORD } from './derivable.ts'
+import { datesIn, isoForMention, MONTH_WORD, wrongWeekday } from './derivable.ts'
 import type { Domain } from './provenance.ts'
 
 /** How an output was produced. The only input the exemption is allowed to read. */
@@ -1902,6 +1902,22 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
           `the text gives a specific time or date ("${invented}") that appears nowhere in ` +
           'the request, the conversation or the documents that were retrieved, so it was ' +
           'made up. Say you have no record of it and ask where it is.',
+      })
+    }
+  }
+
+  /*
+    A weekday that contradicts its own date (ledger R39). No grounding needed:
+    the calendar is not evidence, so this runs on every answer.
+  */
+  {
+    const mismatch = wrongWeekday(m.body ?? '')
+    if (mismatch !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `the text pairs a weekday with a date it does not fall on ("${mismatch}"). ` +
+          'Give the date as it was given, or the weekday the calendar says.',
       })
     }
   }

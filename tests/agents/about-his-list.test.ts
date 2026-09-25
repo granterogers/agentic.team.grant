@@ -31,3 +31,33 @@ describe('a question about his own list is not an extraction (R38)', () => {
     expect(extractionRequest(said)?.from).toBeNull()
   })
 })
+
+import { asksAboutHisOwnList } from '../../src/agents/extract.js'
+
+describe('and the same questions reach his list (R38, one predicate)', () => {
+  it.each([
+    'What needs doing today?',
+    'What have I got on this week?',
+    "What's on my plate?",
+    "What's overdue?",
+    'What tasks do I have this week?',
+  ])('%s', (said) => {
+    expect(asksAboutHisOwnList(said)).toBe(true)
+  })
+  it.each([
+    'Pull out all the actions.',
+    'What needs doing on this project?',
+    'What are the actions in the venue contract?',
+    'Remind me to check what is due.',
+    'There are three tasks due today.',
+  ])('%s is not a question about his list', (said) => {
+    expect(asksAboutHisOwnList(said)).toBe(false)
+  })
+  it('the handler asks it of his words as well as the model reading', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync('src/handlers/instruction.ts', 'utf8')
+    expect(src).toMatch(
+      /r\.kind === 'task_query'\) \|\|\s*\/\/[^\n]*\n\s*asksAboutHisOwnList\(asSaid\)/,
+    )
+  })
+})

@@ -184,8 +184,42 @@ export function extractionRequest(instruction: string): ExtractRequest | null {
     if (hit === null) continue
     // An imperative to extract is an extraction whatever it is scoped to; a
     // question or a "list" about his own work is answered from his list.
-    if (!/^(?:pull|extract|lift|find)\b/i.test(hit[0]) && ABOUT_HIS_LIST.test(said)) return null
+    if (asksAboutHisOwnList(said)) return null
     return { from: null, matched: hit[0].slice(0, 80) }
   }
   return null
+}
+
+/*
+  ONE PREDICATE, TWO CALLERS (ledger R38). What extraction declines as a
+  question about his list is exactly what the list reader must answer: the
+  first fix made the extraction decline "What needs doing today?" and the
+  answer then fell to the model, which stated what his list held without it
+  having been read, and the coherence gate refused all three attempts. He got
+  nothing. The handler asks this as well as the model's reading, so a question
+  the model labelled differently still reaches his list.
+*/
+const HIS_LIST_WORDS =
+  /\bwhat\s+(?:have|'ve|\u2019ve)\s+i\s+got\b|\bwhat(?:'s|\u2019s|\s+is)\s+(?:on\s+)?my\s+(?:list|plate)\b|\bwhat(?:'s|\u2019s|\s+is)\s+(?:overdue|due|late)\b/i
+
+export function asksAboutHisOwnList(text: string): boolean {
+  const said = String(text ?? '').trim()
+  if (said === '' || FORBIDDEN.test(said) || NOT_ASKING.test(said)) return false
+  // Opening a sentence, after at most a discourse word: "remind me to check
+  // what is due" asks for a reminder, not for the list.
+  const opens = said
+    .split(/(?<=[.!?])\s+/)
+    .map((x) =>
+      x.replace(
+        /^(?:(?:so|and|ok|okay|right|fine|thanks|yes|perfect|great|also|anyway)\b[,\s]*)+/i,
+        '',
+      ),
+    )
+  if (opens.some((x) => HIS_LIST_WORDS.test(x) && x.search(HIS_LIST_WORDS) === 0)) return true
+  for (const shape of WHOLE_PROJECT) {
+    const hit = shape.exec(said)
+    if (hit !== null && !/^(?:pull|extract|lift|find)\b/i.test(hit[0]) && ABOUT_HIS_LIST.test(said))
+      return true
+  }
+  return false
 }

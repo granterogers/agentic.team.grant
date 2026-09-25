@@ -97,7 +97,7 @@ import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
-import { extractionRequest } from '../agents/extract.ts'
+import { asksAboutHisOwnList, extractionRequest } from '../agents/extract.ts'
 import { type Capability, planFor, planningCatalogue } from '../agents/goal.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { type Handoff, handoffIn } from '../agents/handoff.ts'
@@ -483,6 +483,19 @@ interface HisTask {
  * Overdue, today and upcoming are the three he asks about and all three are
  * named in the function's own case.
  */
+/** "Monday 28 September" for an ISO date, read as a calendar day. */
+export const onDay = (iso: string): string => {
+  const at = new Date(`${iso.slice(0, 10)}T12:00:00Z`)
+  return Number.isNaN(at.getTime())
+    ? iso
+    : at.toLocaleDateString('en-GB', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        timeZone: 'UTC',
+      })
+}
+
 export function taskSpine(
   overdue: readonly HisTask[],
   today: readonly HisTask[],
@@ -497,7 +510,15 @@ export function taskSpine(
   */
   unscheduled: readonly HisTask[] = [],
 ): string {
-  const say = (t: HisTask): string => (t.due_on === null ? t.title : `${t.title} (${t.due_on})`)
+  /*
+    With its weekday, computed here (ledger R39). Given a bare ISO date the
+    model supplied the weekday itself and got it wrong: "2026-09-26
+    (Tuesday)" for a Saturday, "2026-09-28 (Wednesday)" for a Monday, in an
+    answer to "what have I got on this week". A weekday is derivable, so it is
+    derived once, in code; the ISO date stays for the grounding check.
+  */
+  const say = (t: HisTask): string =>
+    t.due_on === null ? t.title : `${t.title} (due ${onDay(t.due_on)}, ${t.due_on})`
   const total = Number(counts.all ?? 0)
   if (
     total === 0 &&
@@ -5428,7 +5449,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         nothing. The fallback path never sets it, so a turn where the model was
         unavailable behaves exactly as it does today.
       */
-      const asksAboutHisList = understood.surviving.some((r) => r.kind === 'task_query')
+      const asksAboutHisList =
+        understood.surviving.some((r) => r.kind === 'task_query') ||
+        // His words, whatever the model labelled them (ledger R38).
+        asksAboutHisOwnList(asSaid)
       const hisList = !asksAboutHisList
         ? ''
         : await deps.db

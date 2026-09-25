@@ -117,3 +117,47 @@ export const datesIn = (grounding: string, now: Date = new Date()): ReadonlySet<
   }
   return out
 }
+
+/*
+  A WEEKDAY THAT CONTRADICTS ITS OWN DATE (ledger R39).
+
+  "Ring the caterers - due 2026-09-28 (Wednesday)": the 28th is a Monday. The
+  date came from his list and the weekday from the model's arithmetic, so the
+  answer was right about the day he wrote and wrong about the day he would
+  act on. A weekday next to a full date is checkable without a model and
+  without grounding, because the calendar is not evidence: this only reads a
+  weekday that sits DIRECTLY beside a date, in either order, and returns the
+  first pair that disagrees.
+*/
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+const WEEKDAY = '(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(?:day|nesday|sday|urday|rsday)?'
+const dayIndex = (w: string): number =>
+  WEEKDAYS.findIndex((d) => d.startsWith(w.toLowerCase().slice(0, 3)))
+
+export function wrongWeekday(body: string, now: Date = new Date()): string | null {
+  // The model writes dates with U+2011 and friends; a hyphen is a hyphen.
+  const text = String(body ?? '').replace(/[\u2010-\u2015\u2212]/g, '-')
+  const pairs: { said: string; iso: string | null; weekday: string }[] = []
+  // 2026-09-28 (Wednesday) · 2026-09-28, Wednesday
+  for (const m of text.matchAll(
+    new RegExp(String.raw`\b(\d{4}-\d{2}-\d{2})\s*[(,–-]?\s*${WEEKDAY}\b`, 'gi'),
+  ))
+    pairs.push({ said: m[0], iso: isoForMention(String(m[1]), now), weekday: String(m[2]) })
+  // Wednesday 28 September · Wed, 28 Sep · Wednesday 28th September · Wednesday, September 28
+  for (const m of text.matchAll(
+    new RegExp(
+      String.raw`\b${WEEKDAY}\b,?\s+(?:the\s+)?(?:(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(${MONTH_WORD})|(${MONTH_WORD})\s+(\d{1,2})(?:st|nd|rd|th)?)\b`,
+      'gi',
+    ),
+  )) {
+    const mention =
+      m[2] !== undefined ? `${String(m[2])} ${String(m[3])}` : `${String(m[5])} ${String(m[4])}`
+    pairs.push({ said: m[0], iso: isoForMention(mention, now), weekday: String(m[1]) })
+  }
+  for (const p of pairs) {
+    if (p.iso === null) continue
+    const actual = new Date(`${p.iso}T12:00:00Z`).getUTCDay()
+    if (dayIndex(p.weekday) !== -1 && dayIndex(p.weekday) !== actual) return p.said.trim()
+  }
+  return null
+}
