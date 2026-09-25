@@ -526,6 +526,24 @@ const SYSTEM = (sheet: string, roster: string): string =>
     '8. why is one short phrase for Grant, not an explanation to yourself.',
   ].join('\n')
 
+/*
+  An outcome he wants to KEEP is a written one (ledger R47).
+
+  R22 dropped every draft the model proposed for a request with no document
+  noun in it, and `verify:composes` went red on exactly the sentence that
+  shows the gap: "go through the onboarding material and work out what is out
+  of date, so that I have something concrete to pick up later". The model
+  proposed read -> draft, which is right: "to pick up later" asks for a result
+  that outlives the reply. With the draft dropped one step was left, no plan
+  ran, and the turn answered in prose without reading the material. The
+  class, not the phrase: a result for later, to pick up, to come back to, to
+  refer to, or "something concrete / on paper / I can use".
+  NOT a bare "to keep": measured on his real messages it fired once, on "whether
+  to keep building this system", which means continue, not retain.
+*/
+const KEPT_FOR_LATER =
+  /\b(?:(?:for|until)\s+later|to\s+(?:pick\s+up|come\s+back\s+to|return\s+to|refer\s+(?:back\s+)?to|hold\s+on\s+to|work\s+from|go\s+back\s+to)|something\s+(?:concrete|written|on\s+paper|tangible)|(?:something|somewhere)\s+(?:i|we)\s+can\s+(?:use|keep|pick\s+up|come\s+back\s+to|work\s+from|go\s+back\s+to|refer\s+(?:back\s+)?to))\b/i
+
 /**
  * Did he ask for something WRITTEN? Rule 3b's condition, checked in code.
  *
@@ -544,6 +562,7 @@ const SYSTEM = (sheet: string, roster: string): string =>
  * only job is to write the analysis down adds an approval and nothing else.
  */
 export const asksForWriting = (request: string): boolean =>
+  KEPT_FOR_LATER.test(request) ||
   /\b(?:write|written|writing|draft|drafts|document|doc|docs|write-?up|report|memo|letter|e-?mail|note|notes|summary|summari[sz]e|one-?pager|brief|briefing|proposal|post|copy|announcement|pdf|deck|slides|script|agenda|minutes|newsletter|message|reply|response|template)\b/i.test(
     request,
   )
