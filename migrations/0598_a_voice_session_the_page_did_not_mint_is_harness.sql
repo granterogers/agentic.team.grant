@@ -52,6 +52,15 @@ as $function$
                     where c.command_id = (j.pinned_config ->> 'command_id')::uuid
                       and (app.harness_label(c.dedupe_key)
                            or app.harness_voice_session(c.dedupe_key)))
+              /*
+                And work that harness work started (completion pass, R37). A
+                child carries no command of its own and inherits only
+                `synthetic` and `requested_by`, so a parent that is harness by
+                its dedupe key alone - the voice-session shape above - had
+                children that read as Grant's and could deliver. The isolated
+                containment proof found it; production held none yet.
+              */
+              or (j.parent_job_id is not null and app.harness_job(j.parent_job_id))
        from public.jobs j
        left join public.projects p on p.project_id = j.project_id
       where j.job_id = p_job_id),

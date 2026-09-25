@@ -49,6 +49,7 @@
  */
 
 import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { ADAPTER_SHAPE, harnessDocSql, offShapeSql } from './leak-witness.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -908,7 +909,6 @@ if (disagree.n > 0) {
   was not sent by Grant, whatever the attribution says. The eleven found when
   this was written are acknowledged below as evidence, never deleted.
 */
-const ADAPTER_SHAPE = String.raw`^telegram:(message:([A-Za-z0-9_-]+:)?-?[0-9]+:[0-9]+|callback:[A-Za-z0-9_-]+:[0-9]+)$|^slack:(message|reaction|action):[A-Z0-9]+:[0-9.]+$|^voice:turn:s[a-z0-9]{1,10}\.[a-z0-9]+$`
 const ACKNOWLEDGED_OFF_SHAPE = new Set([
   // #354 / R37 — verify:escapes' positive control, run by the deployed worker
   'telegram:message:escapes-37qp9xjj-real',
@@ -926,19 +926,34 @@ const ACKNOWLEDGED_OFF_SHAPE = new Set([
   // #354 / R37 — a hand probe
   'voice:turn:uxfix1.mue3aakx',
 ])
-const offShape = (
-  await db.execute(`
-    select distinct c.dedupe_key as key
-      from public.inbound_commands c
-      join public.jobs j on (j.pinned_config ->> 'command_id')::uuid = c.command_id
-      join public.deliveries d on d.job_id = j.job_id
-     where d.sent_at is not null
-       and d.created_at > app.harness_guard_since()
-       and split_part(c.dedupe_key, ':', 1) in ('telegram', 'slack', 'voice')
-       and not exists (select 1 from public.known_escapes k where k.delivery_id = d.delivery_id)
-       and c.dedupe_key !~ ${`'${ADAPTER_SHAPE}'`}
-  `)
-).rows as { key: string }[]
+const offShape = (await db.execute(offShapeSql)).rows as { key: string }[]
+// The second witness: a document a harness added, whose child delivered (R37).
+const ACKNOWLEDGED_HARNESS_DOC = new Set([
+  // R37: verify:scenario-a's knowledge.read_source child, 24 Sep 22:11, Slack
+  // C0BV7ULTCJ1. Found by this witness on its first run; kept as evidence.
+  'c8f7ea92-fc26-4391-9f14-a6149f660a0f',
+])
+const harnessDocAll = (await db.execute(harnessDocSql)).rows as {
+  key: string
+  delivery_id: string
+}[]
+const harnessDoc = harnessDocAll.filter((r) => !ACKNOWLEDGED_HARNESS_DOC.has(r.delivery_id))
+console.log(
+  `  delivered from a document a harness added: ${String(harnessDocAll.length)} (acknowledged: ${String(harnessDocAll.length - harnessDoc.length)} · new: ${String(harnessDoc.length)})`,
+)
+if (harnessDoc.length > 0) {
+  console.error(
+    [
+      ``,
+      `check:leaks FAILED — ${String(harnessDoc.length)} delivery(s) came from work a harness-added document started.`,
+      ...harnessDoc.slice(0, 6).map((r) => `  added_by ${r.key} -> delivery ${r.delivery_id}`),
+      '',
+      'The document insert trigger composes requested_by from the connector reference,',
+      'so label the reference :verify-... in the suite (R37).',
+    ].join('\n'),
+  )
+  process.exit(1)
+}
 // The control: the shape must still admit a real key of each door, and refuse an escaped one.
 const shapeRe = new RegExp(ADAPTER_SHAPE)
 if (
