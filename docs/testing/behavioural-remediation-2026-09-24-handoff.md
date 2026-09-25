@@ -7,7 +7,7 @@ Findings, evidence and verdicts: `docs/testing/behavioural-remediation-2026-09-2
 
 ## Deploy order — this matters
 
-1. **Apply the migrations first**, in order: `0592` → `0598`. They were proved
+1. **Apply the migrations first**, in order: `0592` → `0599`. They were proved
    inside transactions that rolled back; none is in `app.schema_migrations`.
 2. **Then deploy the worker** (`npm run deploy:worker`).
 3. **Then** deploy the voice function only if you also want the probe renames.
@@ -36,6 +36,7 @@ Why the order:
 | 0595 | `enqueue_child_once` reuses the same parent's complete child | proved in rollback |
 | 0596 | `FOR UPDATE` in `hq_answer_blocker` and `decide_suggestion` | `verify:approval-race` reproduces the double answer live |
 | 0597 | `reminders_due`, `tasks_to_push` ask `app.harness_task` | proved in rollback |
+| 0599 | `recover_stalled_jobs`: a stalled `committing` job goes to `retrying`/`failed`, and each row is contained | rollback: without it a synthetic stranded job reproduces the outage; with it, `retrying` |
 | 0598 | `app.harness_voice_session`, ORed into `app.harness_job`; the post-guard escapes recorded in `known_escapes` (#354) | rollback: known 22→38, new 0, 6 page sessions stay real; the sabotaged predicate is refused |
 
 ## Shared files changed
@@ -67,9 +68,14 @@ npm run check:voice-sessions && npm run check:leaks      # leaks: expect "N know
 ## Things a reviewer should know
 
 - **This session caused real contact once.** `verify:scenario-a`, run in-process
-  at 22:12 on 24 Sep, delivered 6 messages to Grant (4 Slack, 2 Telegram)
+  at 22:10–22:14 on 24 Sep, delivered 7 messages to Grant (5 Slack, 2 Telegram)
   before the class was understood (R37). No other run of this session reached
   anyone. The witness now counts it, and it is kept as evidence.
+- **This session also caused an 87-minute production stall** (02:20–03:47 UTC,
+  25 Sep): a harness job it left in `committing` made `recover_stalled_jobs`
+  raise, and every worker tick aborted before dequeuing (R48). Remediated by
+  settling that job; the queue drained by 03:55. 0599 and the worker change
+  are the systemic fix — **deploy them with R45**.
 - **`verify:latency` messages Grant as Grant, by design.** It now refuses
   without `--sends-to-grant` (R41).
 - Negative results are recorded rather than shipped: R40 (booking
