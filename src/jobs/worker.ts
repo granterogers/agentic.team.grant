@@ -1533,7 +1533,21 @@ export const drain = async (
   // Sweep first. A job held by a dead worker counts against capacity, so
   // skipping this makes a worker unable to dequeue for reasons that look
   // nothing like the cause.
-  if (options.recover !== false) await recoverStalled(db)
+  /*
+    NEVER FATAL (ledger R48). A throw here aborted the whole tick before the
+    dequeue: one job stranded in `committing` made `recover_stalled_jobs`
+    raise, and the production office dequeued nothing from 02:20 to 03:47 on
+    25 September. 0599 contains the refusal to its row in SQL; this is the
+    other half, so the drain survives a sweep that fails for any reason. The
+    stalled job itself is still reported where health is read.
+  */
+  if (options.recover !== false) {
+    await recoverStalled(db).catch((error: unknown) => {
+      console.error(
+        `recovery sweep failed, draining anyway: ${String((error as Error).message).slice(0, 300)}`,
+      )
+    })
+  }
 
   // And put back anything a previous worker parked for want of a handler THIS
   // one holds. Beside the stall sweep because it is the same kind of thing: a
