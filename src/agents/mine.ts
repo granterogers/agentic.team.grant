@@ -397,6 +397,17 @@ const stripFraming = (said: string): string =>
     week. A second list here would be two places for "Anyway" to be forgotten.
   */
   withoutOpeningAffirmation(spokenToDigits(said))
+    /*
+      "Put down THAT I need to send the insurers the claim form" (ledger R38):
+      a commitment introduced by "that" is the object of whatever came before
+      it — put down, note down, make a note, just so you know — so that part
+      is framing, however it is worded. Only when "that" is directly followed
+      by his first-person commitment, so a "that" inside the work is untouched.
+    */
+    .replace(
+      /^[^.?!]{0,60}?\bthat\s+(?=i(?:\s+|['\u2019])(?:need|have|want|ought|must|should|gotta|meant|ve|m|ll)\b)/i,
+      '',
+    )
     // The time of day comes out with the date (ledger R24): it is in remind_at.
     .replace(REMIND_TIME_WORDS, ' ')
     .replace(REMIND_ME, ' ')

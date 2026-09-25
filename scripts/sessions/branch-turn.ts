@@ -117,3 +117,23 @@ for (const say of says) {
   )
   ranHere = false
 }
+
+/*
+  Sweep what this run's jobs put on Grant's personal list, and say so. Until
+  0592 is applied a harness turn's task is stamped `added_by grant` and so is
+  not a fixture: 26 of them sat on his real list after one evening of these
+  drives (ledger R37 reconciliation). KEEP=1 leaves them for inspection.
+*/
+if (process.env.KEEP !== '1') {
+  const swept = await one(`
+    with x as (select t.task_id from public.tasks t join public.jobs j on j.job_id = t.job_id
+                where j.requested_by = ${lit(MINE)} and t.assigned_to_human and t.parent_task_id is null)
+    select count(*) filter (where (app.my_task_delete(task_id::text, 'branch driver sweep')) ->> 'ok' = 'true')::int as gone,
+           count(*)::int as n from x`)
+  const left =
+    await one(`select count(*)::int as n from public.tasks t join public.jobs j on j.job_id = t.job_id
+                           where j.requested_by = ${lit(MINE)} and t.assigned_to_human`)
+  console.log(
+    `\nswept ${String(swept.gone)} of ${String(swept.n)} personal task(s) this run made; ${String(left.n)} left`,
+  )
+}
