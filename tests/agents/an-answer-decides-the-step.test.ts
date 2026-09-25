@@ -65,7 +65,7 @@ describe('an answer already given decides the step (R45)', () => {
   })
   it('the approval binds what the step will DO, so a changed step is asked afresh', () => {
     expect(perform).toMatch(
-      /const binds = \{[^}]*why: step\.why,\s*needs: \[\.\.\.step\.needs\],\s*\}/,
+      /project: projectId,\s*why: step\.why,\s*needs: \[\.\.\.step\.needs\],\s*\}\s*const hisAnswer/,
     )
   })
   it("0592's idempotency never returns a question's own to-do as the step's work", () => {
