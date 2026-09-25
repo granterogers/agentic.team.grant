@@ -483,6 +483,8 @@ interface HisTask {
  * Overdue, today and upcoming are the three he asks about and all three are
  * named in the function's own case.
  */
+const NOTHING_TO_STOP = 'There was nothing still running on that, so there is nothing to stop.'
+
 /** "Monday 28 September" for an ISO date, read as a calendar day. */
 export const onDay = (iso: string): string => {
   const at = new Date(`${iso.slice(0, 10)}T12:00:00Z`)
@@ -3499,7 +3501,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   claim-with-no-row this repository keeps paying for.
                 */
                 if (n === 0 && finished === 0 && refused === 0) {
-                  return 'There was nothing still running on that, so there is nothing to stop.'
+                  return NOTHING_TO_STOP
                 }
                 const parts: string[] = []
                 if (n > 0) {
@@ -4359,7 +4361,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         tasks THIS conversation made, and acted on only when exactly one fits.
       */
       const settles =
-        noted !== null || wantsFile !== null || isBranch ? null : firstOfHis(taskStateChange)
+        noted !== null || wantsFile !== null || isBranch
+          ? null
+          : // His literal words too: a withdrawal has no surviving intent (R26, R42).
+            (firstOfHis(taskStateChange) ?? taskStateChange(asSaid))
       const change =
         noted !== null || wantsFile !== null || namedLater !== null || isBranch || settles !== null
           ? null
@@ -4818,7 +4823,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           settledTask?.text ?? null,
           subbed?.text ?? null,
           answeredQuestion?.text ?? null,
-          stopped,
+          /*
+            "Forget the printers one" is a task he has, not work in flight
+            (ledger R42): when it settled a named task, the call-off that
+            found nothing running is noise beside it.
+          */
+          settledTask?.did === true && stopped === NOTHING_TO_STOP ? null : stopped,
           whoIsOn,
           alreadyOn,
           secondOpinion,
@@ -5014,7 +5024,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         (who.handoff === null ? 0 : 1)
 
       const outcome: CanonicalOutcome = {
-        wanted: wantedWork,
+        /*
+          A call-off the office handled is not work that failed to land
+          (ledger R42): "don't bother with the florist, but remind me Friday
+          to chase the printers" filed the task, found nothing running on the
+          florist, said so — and opened with "partly done, 1 of 2, the rest
+          did not go through", because stopping writes no task row. `stopped`
+          is its own confirmation, so that clause leaves the count.
+        */
+        wanted: Math.max(0, wantedWork - (stopped === null ? 0 : 1)),
         /*
           Counted from ROWS, not from what the handler attempted.
 
@@ -5791,6 +5809,28 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               // has an answer that is both honest and useful.
               ...(projectList === '' ? [] : [{ role: 'system' as const, content: projectList }]),
               ...(hisList === '' ? [] : [{ role: 'system' as const, content: hisList }]),
+              /*
+                WHAT THIS TURN ALREADY DID (ledger R42). When a turn both acts
+                and asks, the confirmation goes above the answer — and the
+                model was never told it existed, so it answered the whole
+                message: "That is on your list for 2026-10-02 - Chase the
+                printers" followed, in the same reply, by "I can't set a
+                reminder for Friday until I know where to put it". Stated as
+                settled fact, so the answer covers only what is left.
+              */
+              ...(confirmation === null
+                ? []
+                : [
+                    {
+                      role: 'system' as const,
+                      content:
+                        'The office has ALREADY done the following parts of his message on this ' +
+                        'turn, and they are shown to him directly above your reply. Do not repeat ' +
+                        'them, do not say they could not be done, and do not ask for anything in ' +
+                        'order to do them. Answer only what he asked that this does not cover.\n\n' +
+                        confirmation,
+                    },
+                  ]),
               /*
                   What this chat said before the window, and what is out of
                   view (#238).

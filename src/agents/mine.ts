@@ -871,6 +871,12 @@ const CANCEL_FORMS: readonly RegExp[] = [
     String.raw`\b(?:bin|delete|remove|scrap|drop|cancel|ditch|kill|lose|get\s+rid\s+of|take\s+off)\s+${REFERENT_OBJECT}(?=[\s.,!;]|$)`,
     'i',
   ),
+  /*
+    "Actually, forget the printers one too" (ledger R42). Only with a NAMED
+    referent: a bare "forget it" withdraws what he is asking for right now,
+    and reading it as "cancel my last task" would delete something he wants.
+  */
+  /\bforget(?:\s+about)?\s+the\s+(?<name>[a-z0-9'’ -]{2,60}?)\s+(?:one|task|to-?do|reminder|item)(?=[\s.,!;]|$)/i,
 ]
 
 export function taskStateChange(text: string): TaskStateChange | null {
