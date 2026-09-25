@@ -252,8 +252,21 @@ check(
   'CONTROL: a command arriving through a production door is NOT stamped',
   `synthetic=${String(realCmd.synthetic)} — the guard does not break real traffic`,
 )
-const realEnq = (await one(`select app.enqueue_inbound(${lit(String(realCmd.id))}::uuid) as v`))
-  .v as { job_id?: string } | string
+/*
+  HELD IN THE SAME TRANSACTION THAT CREATES IT (ledger R37). This job is real
+  by construction — that is the point of the control — so the deployed worker,
+  which the enqueue wakes, would run it as Grant's turn and deliver the answer
+  to his real Slack. It did, twice, on 21 September, and no witness could see
+  it: the counter below is in this process and the worker is not. The job is
+  made unrunnable and silent before the transaction commits, so no worker ever
+  sees it as due; the claim under test (a PERMITTED delivery reaches the
+  transport) does not need it to run.
+*/
+const realEnq = (
+  await one(`select app.enqueue_inbound(${lit(String(realCmd.id))}::uuid) as v;
+  update public.jobs set announce = false, not_before = app.now_utc() + interval '1 day'
+   where pinned_config ->> 'command_id' = ${lit(String(realCmd.id))}`)
+).v as { job_id?: string } | string
 const realJob = String(
   (typeof realEnq === 'string' ? (JSON.parse(realEnq) as { job_id?: string }) : realEnq).job_id ??
     '',
@@ -285,6 +298,18 @@ check(
   Number(escaped.n ?? -1) === 0,
   'no harness delivery of this run reached a real destination',
   `${String(escaped.n)} escape(s)`,
+)
+
+// The control job itself never ran and never reached anybody (R37).
+const controlOut = await one(`
+  select (select state::text from public.jobs where job_id = ${lit(realJob)}::uuid) as st,
+         (select count(*)::int from public.deliveries
+           where job_id = ${lit(realJob)}::uuid and sent_at is not null
+             and target_ref <> '-9000000000001') as real_sends`)
+check(
+  controlOut.st === 'queued' && Number(controlOut.real_sends ?? -1) === 0,
+  'the real-looking control job was held: no worker ran it and it reached nobody',
+  `state=${String(controlOut.st)}, real sends=${String(controlOut.real_sends)}`,
 )
 
 // ── teardown, asserted ─────────────────────────────────────────────────────
