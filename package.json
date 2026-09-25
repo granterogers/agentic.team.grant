@@ -329,6 +329,7 @@
     "check:undo": "tsx scripts/check-undo.ts",
     "check:believes": "tsx scripts/check-believes.ts",
     "check:answerable": "tsx scripts/check-answerable.ts",
+    "check:voice-sessions": "tsx scripts/check-voice-sessions.ts",
     "verify:basecamp-routes": "tsx scripts/verify/basecamp-routes.ts",
     "verify:drive-live": "tsx scripts/verify/drive-live.ts",
     "verify:chat-live": "tsx scripts/verify/chat-live.ts",

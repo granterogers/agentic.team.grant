@@ -105,7 +105,7 @@ console.log(`voice v${String(result.version)} ${String(result.status)} — ${end
 const unauthorized = await fetch(`${endpoint}/turn`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ said: 'what projects have we got', session: 'deployprobe' }),
+  body: JSON.stringify({ said: 'what projects have we got', session: 'verify-deployprobe' }),
 })
 console.log(`  unauthenticated: http ${String(unauthorized.status)} (must be 401)`)
 
@@ -113,7 +113,10 @@ console.log(`  unauthenticated: http ${String(unauthorized.status)} (must be 401
 const asked = await fetch(`${endpoint}/turn`, {
   method: 'POST',
   headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  body: JSON.stringify({ said: 'what projects have we got', session: `deploy${Date.now()}` }),
+  body: JSON.stringify({
+    said: 'what projects have we got',
+    session: `verify-deploy-${Date.now()}`,
+  }),
 })
 const answer = (await asked.json()) as { speak?: string; did?: string }
 console.log(

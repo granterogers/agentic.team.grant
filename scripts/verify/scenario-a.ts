@@ -399,7 +399,7 @@ try {
       )
     )?.v ?? '',
   )
-  const session = `scenario-a-${run}`
+  const session = `verify-scenario-a-${run}`
   const say = async (said: string): Promise<{ speak?: string; did?: string; status: number }> => {
     const response = await fetch(`https://${ref}.supabase.co/functions/v1/voice/turn`, {
       method: 'POST',
