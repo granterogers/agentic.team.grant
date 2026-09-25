@@ -13,7 +13,9 @@ describe('a failing recovery sweep does not stop the queue', () => {
   })
   it('0599 sends a stalled committing job somewhere legal and contains each row', () => {
     const sql = readFileSync('migrations/0599_one_stalled_job_must_not_stop_the_office.sql', 'utf8')
-    expect(sql).toMatch(/if r\.state = 'committing' then/)
+    // Only a job past the commit point goes to notifying; an output existing is not a commit.
+    expect(sql).toMatch(/if r\.state in \('committed', 'notifying'\) then/)
+    expect(sql).not.toMatch(/if v_has_output or r\.state in/)
     expect(sql).toMatch(/exception when others then\s*raise warning 'recover_stalled_jobs:/)
   })
 })

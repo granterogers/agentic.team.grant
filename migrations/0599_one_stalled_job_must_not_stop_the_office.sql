@@ -11,8 +11,10 @@
 -- deploy for a day ("illegal job transition committing -> notifying").
 --
 -- Two changes, both local to the loop:
---   1. a job stalled in `committing` goes to `retrying` (or `failed` once its
---      attempts are spent) - both legal, both true;
+--   1. only a job past the commit point (committed, notifying) goes to
+--      `notifying`; a job stalled BEFORE it (running, output_created,
+--      quality_review, committing) takes the retry/fail rules whatever outputs
+--      its attempts left - the recovery matrix proved all four raised;
 --   2. each row's update runs in its own subtransaction, so a refused
 --      transition on one job is a warning about that job, not an outage.
 
@@ -66,22 +68,20 @@ begin
     );
 
     /*
-      0599: a job stalled in COMMITTING was never committed - the commit is the
-      step that did not finish - so it cannot be "committed work with delivery
-      outstanding", and committing -> notifying is refused by the state
-      machine. One such job made this whole function raise, every tick
-      aborted before dequeuing, and the office stopped for 86 minutes.
+      0599: ONLY A JOB PAST THE COMMIT POINT HAS DELIVERY OUTSTANDING.
+
+      This read `v_has_output or r.state in ('committed', 'notifying')`, and an
+      output existing does not mean anything was committed: every retried job
+      carries its earlier attempts' outputs, and a job stalled in running,
+      output_created, quality_review or committing has by definition not
+      committed. The state machine refuses all four -> notifying, so the
+      function raised, and because the worker calls it at the start of every
+      tick, EVERY tick aborted before dequeuing: the office stopped for 87
+      minutes on 25 September over one job stalled in committing. The
+      isolated recovery matrix found the other three. They take the retry and
+      fail rules below instead, which are legal from each of them.
     */
-    if r.state = 'committing' then
-      if r.attempt >= r.max_attempts then
-        v_to := 'failed';
-        v_reason := format('recovery: %s attempts exhausted while committing', r.max_attempts);
-      else
-        v_to := 'retrying';
-        v_reason := format('recovery: worker %s died while committing, before the commit landed',
-          coalesce(r.leased_by, '(unleased)'));
-      end if;
-    elsif v_has_output or r.state in ('committed', 'notifying') then
+    if r.state in ('committed', 'notifying') then
       -- Section 18's case. Two conditions, neither redundant: an output row
       -- means the work is durable wherever it stalled and retrying would redo
       -- it; and `committed`/`notifying` cannot legally go to `retrying` at

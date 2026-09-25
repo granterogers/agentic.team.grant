@@ -58,6 +58,12 @@ as $function$
     false)
 $function$;
 
+-- Counted before, so the check below asserts that evidence was only ever
+-- ADDED. Not a fixed number: on a fresh database there is none, and a floor
+-- written against production's count would stop every clean install.
+create temp table _0598_known_before on commit drop as
+  select count(*)::int as n from public.known_escapes;
+
 -- The evidence, kept: what the widened predicate can now see was delivered is
 -- acknowledged, never removed, so the witness can say "N known, 0 new".
 insert into public.known_escapes (delivery_id, issue, why, acknowledged_at)
@@ -79,7 +85,6 @@ declare
   v_page_harness int;
   v_named int;
   v_new int;
-  v_known int;
 begin
   -- The expensive direction: no page-minted session became harness by 0598.
   select count(*) filter (where not app.harness_voice_session(c.dedupe_key)),
@@ -87,7 +92,9 @@ begin
     into v_page_real, v_page_harness
     from public.inbound_commands c
    where c.dedupe_key ~ '^voice:turn:s[a-z0-9]{1,10}\.';
-  if v_page_harness > 0 or v_page_real = 0 then
+  -- Zero page sessions is a fresh database, not a failure: the pure-function
+  -- controls below are what prove the predicate can tell the two apart.
+  if v_page_harness > 0 then
     raise exception 'page sessions: % real, % harness — 0598 would silence his page', v_page_real, v_page_harness;
   end if;
 
@@ -106,13 +113,12 @@ begin
     raise exception 'harness_voice_session controls failed';
   end if;
 
-  select coalesce(jsonb_array_length(app.harness_escapes() -> 'new'), 0),
-         coalesce(jsonb_array_length(app.harness_escapes() -> 'known'), 0)
-    into v_new, v_known;
+  select coalesce(jsonb_array_length(app.harness_escapes() -> 'new'), 0)
+    into v_new;
   if v_new > 0 then
     raise exception '% escape(s) unaccounted for', v_new;
   end if;
-  if v_known < 22 then
-    raise exception 'known escapes fell to %, so evidence was lost', v_known;
+  if (select count(*) from public.known_escapes) < (select n from _0598_known_before) then
+    raise exception 'known escapes fell below what was recorded before 0598, so evidence was lost';
   end if;
 end $$;
