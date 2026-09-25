@@ -761,10 +761,20 @@ export const compile = (
           At `suggest`, where every project of his sits, no plan step could
           ever be performed by answering.
         */
+        /*
+          WHAT is approved, not only WHERE in the plan (R45 re-proof). The
+          binding was the step's id and capability, so an approval given for
+          "file 'Ring the venue'" also authorised whatever a re-plan later put
+          at the same position - a stale approval covering changed work. The
+          step's own description and inputs are what it will DO, so they are
+          bound too, and a changed step is asked about afresh.
+        */
         const binds = {
           step: `${step.id}:${step.capability}`,
           capability: step.capability,
           project: projectId,
+          why: step.why,
+          needs: [...step.needs],
         }
         const hisAnswer = decision.verdict === 'ask' ? await answerFor(db, jobId, binds) : null
         if (hisAnswer === 'no') {

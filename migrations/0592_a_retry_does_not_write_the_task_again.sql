@@ -79,6 +79,10 @@ begin
      where t.job_id = p_job
        and lower(btrim(t.title)) = lower(v_title)
        and t.state <> 'cancelled'
+       -- A question's own to-do is not this job's work (R45 re-proof): raiseBlocker
+       -- files each approval question as a task with the step's title, so without
+       -- this an approved step returned the QUESTION and put nothing on his list.
+       and t.satisfies_blocker is null
      order by t.created_at limit 1;
     if v_id is not null then
       return jsonb_build_object('ok', true, 'id', v_id, 'title', v_title,
@@ -104,6 +108,7 @@ begin
       join public.inbound_commands me on me.job_id = p_job
      where t.assigned_to_human
        and t.state not in ('done', 'cancelled')
+       and t.satisfies_blocker is null
        and lower(btrim(t.title)) = lower(v_title)
        and t.created_at >= app.now_utc() - interval '10 minutes'
        and c.origin_channel = me.origin_channel
@@ -200,6 +205,10 @@ begin
      where t.job_id = p_job
        and lower(btrim(t.title)) = lower(v_title)
        and t.state <> 'cancelled'
+       -- A question's own to-do is not this job's work (R45 re-proof): raiseBlocker
+       -- files each approval question as a task with the step's title, so without
+       -- this an approved step returned the QUESTION and put nothing on his list.
+       and t.satisfies_blocker is null
      order by t.created_at limit 1;
     if v is not null then
       return v;

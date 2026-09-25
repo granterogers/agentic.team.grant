@@ -63,4 +63,13 @@ describe('an answer already given decides the step (R45)', () => {
       /if \(stateNow === 'paused'\) \{\s*if \(!gate\.exempt\) \{\s*const verdict = await review\(output, job\)/,
     )
   })
+  it('the approval binds what the step will DO, so a changed step is asked afresh', () => {
+    expect(perform).toMatch(
+      /const binds = \{[^}]*why: step\.why,\s*needs: \[\.\.\.step\.needs\],\s*\}/,
+    )
+  })
+  it("0592's idempotency never returns a question's own to-do as the step's work", () => {
+    const sql = readFileSync('migrations/0592_a_retry_does_not_write_the_task_again.sql', 'utf8')
+    expect((sql.match(/and t\.satisfies_blocker is null/g) ?? []).length).toBe(3)
+  })
 })
