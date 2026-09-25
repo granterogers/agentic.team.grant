@@ -227,6 +227,8 @@ export function pursueHandler(deps: PursueDeps): Handler {
 
       while (
         outcome.worthAnotherRoute &&
+        // A step he declined ends the pursuit; another route to it is asking again (R45).
+        !Object.values(everySeen).some((o) => o.declined === true) &&
         round < MOST_ROUNDS &&
         Date.now() - startedAt < LONGEST_MS &&
         deps.router !== undefined

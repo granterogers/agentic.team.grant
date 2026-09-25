@@ -42,7 +42,7 @@
  */
 import type { SqlExecutor } from '../db/executor.ts'
 import { raiseBlocker } from '../inference/record.ts'
-import type { Outcome, Paused, Step } from '../jobs/checkpoint.ts'
+import { fingerprint, type Outcome, type Paused, type Step } from '../jobs/checkpoint.ts'
 import { isUntrusted, retrieve } from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { mayAct, refusalSentence } from './approval.ts'
@@ -87,6 +87,12 @@ export interface Observation extends Outcome {
   readonly saw: string
   /** Set when the step could not run at all. */
   readonly impediment?: string
+  /**
+   * He answered this step's question and did not say yes (ledger R45). Not a
+   * failure to route around: re-planning would put the same step back in
+   * front of him, which is what it did.
+   */
+  readonly declined?: boolean
 }
 
 /**
@@ -599,6 +605,47 @@ export const performable = (): readonly string[] => Object.keys(EXECUTORS)
  * needed. That is the second reason the validator refuses a forward reference:
  * not just cycles, but the ability to execute this as a loop.
  */
+/** The options a plan step offers, in order: the first is consent. */
+export const STEP_OPTIONS = ['Yes, do it', 'No, leave it'] as const
+
+/**
+ * What he answered to THIS step's question, if he has (ledger R45).
+ *
+ * The question is the blocker raised with the most recent approval pause
+ * bound to this step's fingerprint; the answer is its resolution. Consent is
+ * the FIRST option the writer offered, compared as data rather than read as
+ * English, and anything else that is not the second option is "unclear" —
+ * never taken as a yes.
+ */
+export async function answerFor(
+  db: SqlExecutor,
+  jobId: string,
+  binds: unknown,
+): Promise<'yes' | 'no' | 'unclear' | null> {
+  const fp = await fingerprint(binds)
+  const { rows } = await db.execute(`
+    with p as (
+      select at from public.job_pauses
+       where job_id = '${jobId.replace(/'/g, "''")}'::uuid and reason = 'awaiting_approval'
+         and binds_to = '${fp}'
+       order by at desc limit 1)
+    select b.resolution, b.approval_options from public.blockers b, p
+     where b.job_id = '${jobId.replace(/'/g, "''")}'::uuid and b.state = 'resolved'
+       and b.resolved_at >= p.at
+       and b.created_at between p.at - interval '10 seconds' and p.at + interval '10 seconds'
+     order by b.resolved_at desc limit 1`)
+  const row = rows[0] as { resolution?: string | null; approval_options?: unknown } | undefined
+  if (row === undefined) return null
+  const said = String(row.resolution ?? '').trim()
+  const options = Array.isArray(row.approval_options)
+    ? row.approval_options.map(String)
+    : [...STEP_OPTIONS]
+  const [yes, no] = [options[0] ?? STEP_OPTIONS[0], options[1] ?? STEP_OPTIONS[1]]
+  if (said.startsWith(yes)) return 'yes'
+  if (said.startsWith(no)) return 'no'
+  return 'unclear'
+}
+
 export const compile = (
   plan: GoalPlan,
   db: SqlExecutor,
@@ -702,7 +749,41 @@ export const compile = (
         if (decision.verdict === 'refuse') {
           return { outcome: nothing(step.capability, refusalSentence(decision)) }
         }
-        if (decision.verdict === 'ask') {
+        /*
+          AN ANSWER ALREADY GIVEN DECIDES THE STEP (ledger R45).
+
+          Without this, answering did nothing: the resume re-ran the step,
+          `mayAct` said "ask" again, and a second identical question went up —
+          also onto his task list, because `raiseBlocker` files it there. One
+          harness pursuit was asked, answered "Yes, do it", asked again,
+          answered "No, leave it", and asked a third time. `approvalStillBinds`
+          existed for the step to call after a resume and nothing called it.
+          At `suggest`, where every project of his sits, no plan step could
+          ever be performed by answering.
+        */
+        const binds = {
+          step: `${step.id}:${step.capability}`,
+          capability: step.capability,
+          project: projectId,
+        }
+        const hisAnswer = decision.verdict === 'ask' ? await answerFor(db, jobId, binds) : null
+        if (hisAnswer === 'no') {
+          return {
+            outcome: {
+              ...nothing(step.capability, 'the answer to this step was to leave it'),
+              declined: true,
+            },
+          }
+        }
+        if (hisAnswer === 'unclear') {
+          return {
+            outcome: {
+              ...nothing(step.capability, 'the answer to this step was not a yes'),
+              declined: true,
+            },
+          }
+        }
+        if (decision.verdict === 'ask' && hisAnswer !== 'yes') {
           /*
             The plan stops here rather than skipping ahead. A later step
             depending on this one would otherwise run against an absence and
@@ -721,11 +802,7 @@ export const compile = (
               of them — a clock cannot answer a question.
             */
             resumable: false,
-            binds: {
-              step: `${step.id}:${step.capability}`,
-              capability: step.capability,
-              project: projectId,
-            },
+            binds,
           }
           await raiseBlocker(db, {
             jobId,
@@ -748,7 +825,7 @@ export const compile = (
             requestedAction: (step.why === '' ? request : step.why).slice(0, 280),
             whyNeeded: decision.because,
             consequencesOfDelay: 'The rest of the plan waits until you answer.',
-            approvalOptions: ['Yes, do it', 'No, leave it'],
+            approvalOptions: [...STEP_OPTIONS],
             originatingAgent: 'chief-of-staff',
             workCanContinue: false,
           }).catch(() => undefined)

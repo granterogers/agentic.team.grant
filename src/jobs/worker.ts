@@ -1201,6 +1201,42 @@ export const runJob = async (
     )
   }
 
+  /*
+    PAUSED BY ITS OWN HANDLER (ledger R45).
+
+    A handler may pause its job — `office.pursue` does, to ask for approval —
+    and still return what it has to say. This line assumed the job was still
+    running: `moveTo('output_created')` from `paused` is an illegal transition,
+    so every such attempt THREW here, after its output was inserted and before
+    it was reviewed. 130 approval pauses left 130 outputs at `pending`, and the
+    first pursuit to be answered and resumed then could not commit: the §10
+    gate counts every unreviewed output of the job, so it stranded in
+    `committing`, which can only go to `failed`. The output is reviewed like
+    any other, and the job stays where its handler put it.
+  */
+  const stateNow = String(
+    (
+      (
+        await db.execute(
+          `select state::text as s from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
+        )
+      ).rows[0] as { s?: string } | undefined
+    )?.s ?? '',
+  )
+  if (stateNow === 'paused') {
+    if (!gate.exempt) {
+      const verdict = await review(output, job)
+      await db.execute(`
+        update public.outputs
+        set reviewer_status = ${lit(verdict.status)}::public.reviewer_status,
+            reviewed_at = app.now_utc(),
+            review_notes = ${lit(verdict.notes)}
+        where output_id = ${lit(outputId)}::uuid
+      `)
+    }
+    return { jobId: job.jobId, finalState: 'paused', note: 'paused by its handler' }
+  }
+
   await moveTo(db, job.jobId, 'output_created')
   await moveTo(db, job.jobId, 'quality_review')
 
