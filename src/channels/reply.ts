@@ -19,6 +19,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { deliveryKey } from '../jobs/delivery-key.ts'
 import type { HandlerOutput, Job, NotifyOutcome } from '../jobs/worker.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import { escapeHtml, inlineKeyboard } from '../telegram/message.ts'
@@ -119,7 +120,7 @@ export function replyChannel(db: SqlExecutor): {
       // speaking, and repeating it every message is what makes a bot feel like
       // a bot.
       const result = await service.deliver({
-        dedupeKey: `job:${job.jobId}:reply`,
+        dedupeKey: deliveryKey(job, output, 'reply'),
         accountRef: origin.botId,
         targetRef: origin.chatId,
         threadRef: origin.messageId,

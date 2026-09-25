@@ -144,6 +144,17 @@ export interface HandlerOutput {
    */
   readonly announce?: boolean
   /**
+   * Which delivery this output is, for every channel's dedupe key (ledger R46).
+   *
+   * Absent means THE job's result, `job:<id>`, which is one message per surface
+   * per job. A question a paused job asks is a different message: sent under
+   * the job's key it would take the job's only slot, and the answer given
+   * after approval would be deduplicated away. `blocker:<id>` makes a question
+   * one message per surface per QUESTION, idempotent across restarts because
+   * the blocker id does not change.
+   */
+  readonly deliveryScope?: string
+  /**
    * What this announcement is ABOUT, when a model writes the words (#360).
    *
    * `app.say_once` keeps a duty from repeating itself by fingerprinting what it
@@ -683,6 +694,103 @@ export const dequeue = async (
  * path: §16 exempts it from review, not from the pipeline, and running the
  * same states for both keeps one code path instead of two.
  */
+/**
+ * Deliver the question a paused job raised, once, under its blocker's scope.
+ * Returns what happened, or null when there was nothing to ask.
+ */
+export const askedOnPause = async (
+  db: SqlExecutor,
+  job: Job,
+  output: HandlerOutput,
+  outputId: string,
+  notify?: Notifier,
+): Promise<string | null> => {
+  if (output.announce !== true || notify === undefined) return null
+  const open = await db
+    .execute(
+      `select blocker_id::text as id from public.blockers
+        where job_id = ${lit(job.jobId)}::uuid and state = 'open'
+        order by created_at desc limit 1`,
+    )
+    .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+  const blocker = (open.rows[0] as { id?: string } | undefined)?.id
+  if (blocker === undefined) return null
+  try {
+    const sent = await notify(job, { ...output, deliveryScope: `blocker:${blocker}` }, outputId)
+    return `asked: ${sent.note}`.slice(0, 160)
+  } catch (error) {
+    return `asking failed: ${String((error as Error).message).slice(0, 120)}`
+  }
+}
+
+/**
+ * The recovery half of R46: a question whose job paused but whose worker died
+ * before asking. Only a question with NO delivery row at all under its scope -
+ * a sent one is done and a failed one is not retried in a loop, because a
+ * question re-sent every minute is the thing Grant must never receive. Older
+ * than two minutes, so the inline path has had its turn.
+ */
+export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): Promise<number> => {
+  if (notify === undefined) return 0
+  const { rows } = await db.execute(`
+    select j.job_id::text as job_id, j.kind, j.correlation_id::text as correlation_id,
+           j.project_id::text as project_id,
+           (select o.output_id::text from public.outputs o where o.job_id = j.job_id
+             order by o.created_at desc limit 1) as output_id
+      from public.jobs j
+      join public.blockers b on b.job_id = j.job_id and b.state = 'open'
+     where j.state = 'paused' and j.announce
+       and b.created_at < app.now_utc() - interval '2 minutes'
+       and not exists (select 1 from public.deliveries d
+                        where d.dedupe_key like 'blocker:' || b.blocker_id::text || ':%')
+     order by b.created_at
+     limit ${String(max)}`)
+  let asked = 0
+  for (const r of rows as {
+    job_id: string
+    kind: string
+    correlation_id: string
+    project_id: string | null
+    output_id: string | null
+  }[]) {
+    if (r.output_id === null) continue
+    const stored = await db.execute(
+      `select body, confidence::text as confidence, evidence::text as evidence,
+              deterministic, model, sources, contradictions
+         from public.outputs where output_id = ${lit(r.output_id)}::uuid`,
+    )
+    const o = stored.rows[0] as {
+      body: string
+      confidence: Confidence
+      evidence: Evidence
+      deterministic: boolean
+      model: string | null
+      sources: unknown
+      contradictions: string | null
+    }
+    const job: Job = {
+      jobId: r.job_id,
+      kind: r.kind,
+      correlationId: r.correlation_id,
+      projectId: r.project_id,
+      idempotencyKey: '',
+      attempt: 0,
+    }
+    const output = {
+      body: o.body,
+      confidence: o.confidence,
+      evidence: o.evidence,
+      sources: Array.isArray(o.sources) ? o.sources.map((x) => String(x)) : [],
+      contradictions: o.contradictions,
+      path: o.deterministic ? ('deterministic_retrieval' as const) : ('inference' as const),
+      model: o.model,
+      announce: true,
+    } satisfies HandlerOutput
+    if ((await askedOnPause(db, job, output, r.output_id, notify)) !== null) asked += 1
+  }
+  return asked
+}
+
 export const runJob = async (
   db: SqlExecutor,
   job: Job,
@@ -1234,7 +1342,24 @@ export const runJob = async (
         where output_id = ${lit(outputId)}::uuid
       `)
     }
-    return { jobId: job.jobId, finalState: 'paused', note: 'paused by its handler' }
+    /*
+      AND IF IT PAUSED TO ASK HIM SOMETHING, IT ASKS HIM (ledger R46).
+
+      `office.pursue` announces an approval pause precisely so the question
+      reaches him ("A PAUSE THAT ASKS HIM SOMETHING MUST REACH HIM"), and
+      delivery only ever happened from `notifying`, which a paused job never
+      reaches: 130 approval pauses, 0 deliveries. The question is delivered
+      under its BLOCKER's scope, so it cannot consume the job's own result
+      message. A notification failing leaves the pause and the blocker exactly
+      as they are - the approval is durable whether or not the message went.
+      Containment is `app.claim_delivery`'s, as for every other delivery.
+    */
+    const asked = await askedOnPause(db, job, output, outputId, notify)
+    return {
+      jobId: job.jobId,
+      finalState: 'paused',
+      note: asked === null ? 'paused by its handler' : `paused by its handler; ${asked}`,
+    }
   }
 
   await moveTo(db, job.jobId, 'output_created')
@@ -1643,6 +1768,11 @@ export const drain = async (
   // because a job whose output exists and whose owner never heard about it is
   // the most overdue thing in the system.
   const done: WorkerResult[] = [...(await deliverPending(db, workerId, options.notify, max))]
+  // And any question a paused job raised that never went out (ledger R46).
+  // Never fatal, for the same reason the recovery sweep is not.
+  await askUnasked(db, options.notify).catch((error: unknown) => {
+    console.error(`asking sweep failed: ${String((error as Error).message).slice(0, 200)}`)
+  })
   for (let i = 0; i < max; i++) {
     if (options.stopStartingAfter?.() === true) break
     const job = await dequeue(

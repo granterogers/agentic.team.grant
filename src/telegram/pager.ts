@@ -30,6 +30,7 @@
 
 import { DeliveryService } from '../channels/delivery.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { deliveryKey } from '../jobs/delivery-key.ts'
 import type { HandlerOutput, Job, NotifyOutcome } from '../jobs/worker.ts'
 import type { ActionId } from '../slack/blocks.ts'
 import type { TelegramClient } from './api.ts'
@@ -208,7 +209,7 @@ export class TelegramPager {
       // A different key from the Slack delivery of the same result: they are
       // two messages, and one key would mean the second channel silently
       // deduplicated against the first.
-      dedupeKey: `job:${input.job.jobId}:pager`,
+      dedupeKey: deliveryKey(input.job, input.output, 'pager'),
       accountRef: this.options.botId,
       targetRef: chatId,
       purpose: 'result',
