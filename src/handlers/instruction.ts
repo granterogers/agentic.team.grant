@@ -483,6 +483,40 @@ interface HisTask {
  * Overdue, today and upcoming are the three he asks about and all three are
  * named in the function's own case.
  */
+/*
+  THE REFERENT'S CANDIDATES, ON EITHER SIDE OF 0593 (ledger R42).
+
+  0593 gave `app.my_task_referent` a `p_any_task` argument and a `candidates`
+  list. A worker deployed before that migration would call a signature that
+  does not exist, the call would throw, and every settle and named change
+  would fall silent: worse than main, not merely unimproved. So a missing
+  function is answered with the old one-argument call, mapped to the same
+  shape; any other error still throws, because a failing query is not an
+  absent one.
+*/
+export async function referentCandidates(
+  db: SqlExecutor,
+  commandId: string,
+): Promise<{ readonly rows: readonly unknown[] }> {
+  const id = lit(commandId === '' ? '00000000-0000-0000-0000-000000000000' : commandId)
+  try {
+    return await db.execute(`select app.my_task_referent(${id}::uuid, p_any_task => true) as t`)
+  } catch (error) {
+    if (!/does not exist|42883|p_any_task/.test(String((error as Error).message))) throw error
+    const r = await db.execute(`select app.my_task_referent(${id}::uuid) as t`)
+    const raw = (r.rows[0] as { t?: unknown } | undefined)?.t
+    const old = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+      id?: string
+      title?: string
+    } | null
+    const candidates =
+      old !== null && typeof old?.id === 'string'
+        ? [{ id: old.id, title: String(old.title ?? '') }]
+        : []
+    return { rows: [{ t: { candidates } }] }
+  }
+}
+
 const NOTHING_TO_STOP = 'There was nothing still running on that, so there is nothing to stop.'
 
 /** "Monday 28 September" for an ISO date, read as a calendar day. */
@@ -4483,10 +4517,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const settledTask: { text: string; did: boolean } | null =
         settles === null
           ? null
-          : await deps.db
-              .execute(
-                `select app.my_task_referent(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid, p_any_task => true) as t`,
-              )
+          : await referentCandidates(deps.db, String(payload.command_id ?? ''))
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
                 const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
@@ -4567,10 +4598,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const subbed: { text: string; did: boolean } | null =
         subOf === null
           ? null
-          : await deps.db
-              .execute(
-                `select app.my_task_referent(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid, p_any_task => true) as t`,
-              )
+          : await referentCandidates(deps.db, String(payload.command_id ?? ''))
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
                 const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
