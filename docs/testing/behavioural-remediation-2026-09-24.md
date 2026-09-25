@@ -115,3 +115,21 @@ same-message withdrawal — no writes, no deliveries). `rem-baits` 3/3.
 ## Next
 
 R6/R7 (subtask, elliptical 'one to'); R20 class; cross-interface (task listing across channels is blocked until R5/R8 deploy); Slack/Telegram paths; voice notes; long-running status; documents; contacts; reminders. Approvals and duplicate submit have had a first pass (R17, R18). Reconciliation must sweep session tasks (`npm run session -- --sweep`) and the R14 debris.
+
+## Final state — reconciliation, 25 September 2026, ~04:05 UTC
+
+| check | result |
+|---|---|
+| `main` | untouched, `d1c9247` |
+| canonical production | nothing deployed, no migration applied, no secret or allow-list changed. **One intervention**: harness job `b6e834cd` moved `committing → failed` to end the R48 stall |
+| Grant's tasks | the 14 snapshot rows are byte-identical (`48bc6e07…`). 28 harness tasks this session left on his list were deleted through `my_task_delete` (26 branch drives, 2 `verify:anchors` controls). 5 pre-existing run-token tasks (R14) are left for him: not mine, and destructive |
+| autonomy_settings | `0f01f8ff…`, matching the snapshot, after removing 5 fixture-project rows from timed-out `verify:composes` runs |
+| contacts / active projects | 0 / 5, matching the snapshot |
+| lessons | 15 new, all fixtures, 0 real |
+| deliveries to real destinations since the snapshot | duties as normal, plus **this session's 7 `verify:scenario-a` escapes** (R37), which are now counted |
+| `check:leaks` | exit 0. Guard: 22 known, 0 new. Independent witness: 11 acknowledged, 0 new |
+| `app.office_health()` | 0 failing kinds, 0 stalled, 0 waiting. Real queue 0 |
+| unit / lint / typecheck | 3463 tests / 0 / 0 |
+| static and DB checks | check:migrations, secrets, templates, voice-sessions, standing, chatter, undo, answerable, consumed, callers, capabilities, pressable, gateway-wrappers, icons: all exit 0 |
+| harness jobs of this session | all settled (the pursuits cancelled, the queued suite debris cancelled). Their open blockers are harness-filtered and kept as record |
+| in-process suites at the end | verify:chief 8/8; verify:anchors 13/13 before a timeout in its cross-channel section; **verify:composes FAILED twice (R47, undiagnosed)** |
