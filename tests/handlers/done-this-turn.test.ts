@@ -22,6 +22,8 @@ describe('what this turn already did reaches the answering prompt (R42)', () => 
     expect(src).toMatch(/const answering = confirmation === null \|\| alsoAsked/)
   })
   it('a handled call-off leaves the count of wanted work', () => {
-    expect(src).toMatch(/wanted: Math\.max\(0, wantedWork - \(stopped === null \? 0 : 1\)\)/)
+    expect(src).toMatch(
+      /wantedWork - \(stopped === null \? 0 : 1\) - \(answersDelegation \? delegations : 0\)/,
+    )
   })
 })

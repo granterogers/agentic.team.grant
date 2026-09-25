@@ -111,7 +111,12 @@ import {
   taskStateChange,
 } from '../agents/mine.ts'
 import { groundedIn, namedColleague } from '../agents/named.ts'
-import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
+import {
+  asksWhatWasSaid,
+  closesWithoutAsking,
+  rejectsWithoutSaying,
+  withoutNegated,
+} from '../agents/negation.ts'
 import type { CanonicalOutcome } from '../agents/outcome.ts'
 import { contractFor, sayWhatHappened } from '../agents/outcome.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
@@ -2272,6 +2277,41 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           path: await howComposed(deps.db, job.jobId),
           model: null,
         } satisfies HandlerOutput
+      }
+
+      /*
+        A close that asks for nothing (ledger R43), answered before the
+        resolver turns it back into the previous request — unless the last
+        turn left a question of ours waiting on him, when it is an answer.
+      */
+      if (closesWithoutAsking(instruction)) {
+        const last = (
+          await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => [])
+        ).at(-1)
+        // A question of ours in prose, with no blocker behind it, is answered by
+        // "yes, thanks" too; only a turn that asked him nothing may be closed.
+        const weAsked = String(last?.answered ?? '')
+          .trim()
+          .endsWith('?')
+        if (last === undefined || (Number(last.waitingOnYou ?? 0) === 0 && !weAsked)) {
+          await deps.db
+            .execute(`
+              update public.jobs set recipient_agent = 'chief-of-staff'
+               where job_id = ${lit(job.jobId)}::uuid`)
+            .catch(() => undefined)
+          return {
+            body:
+              last !== undefined && Number(last.stillGoing ?? 0) > 0
+                ? 'Right. I will come back to you when what is still going on has finished.'
+                : 'Right — nothing else from me.',
+            confidence: 'high',
+            evidence: 'verified',
+            sources: [`job:${job.jobId}`],
+            contradictions: null,
+            path: await howComposed(deps.db, job.jobId),
+            model: null,
+          } satisfies HandlerOutput
+        }
       }
 
       /*
@@ -4890,9 +4930,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         is not authorization: the worst it can do is pay for a retrieval on a
         turn that did not need one.
       */
-      const alsoAsked = understood.surviving.some(
-        (r) => r.kind === 'question' || r.kind === 'task_query',
-      )
+      /*
+        Work handed to the office that nothing on this turn picked up (ledger
+        R43). "I need to call the council on Thursday and can you also ask
+        Emma what the venue said about accessibility" filed the task, and
+        because a task was filed `pursuing` never ran and the answering path
+        short-circuited: Emma was chosen as the speaker and never said
+        anything. A delegation is owed an answer as much as a question is,
+        unless something here already started it. Named, because a delegation
+        answered on the turn is also not work that failed to land (`wanted`).
+      */
+      const delegations = understood.surviving.filter((r) => r.kind === 'delegate').length
+      const answersDelegation =
+        delegations > 0 &&
+        pursuing === null &&
+        extracting === null &&
+        writingFile === null &&
+        reading === null &&
+        enumerating === null &&
+        who.handoff === null &&
+        who.alsoConvened.length === 0
+      const alsoAsked =
+        understood.surviving.some((r) => r.kind === 'question' || r.kind === 'task_query') ||
+        answersDelegation
       /*
         One name for "this turn owes him an answer", so the fourteen gates
         below cannot drift apart. CLAUDE.md records the cost of a list
@@ -5060,7 +5120,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           did not go through", because stopping writes no task row. `stopped`
           is its own confirmation, so that clause leaves the count.
         */
-        wanted: Math.max(0, wantedWork - (stopped === null ? 0 : 1)),
+        wanted: Math.max(
+          0,
+          wantedWork - (stopped === null ? 0 : 1) - (answersDelegation ? delegations : 0),
+        ),
         /*
           Counted from ROWS, not from what the handler attempted.
 
