@@ -81,10 +81,10 @@ describe('one clause is either a change or a new thing', () => {
     // Wrapped since ledger R4b (a title from a rewrite must be grounded in his
     // words), so the property is asserted rather than the exact expression.
     expect(withoutComments).toMatch(
-      /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\(text\)\s*\n/,
+      /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\((?:resolveElliptical\()?text\b[^\n]*\n/,
     )
     const asked =
-      /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)(?:, asSaid)?\)/.exec(
+      /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)(?:, asSaid|, `\$\{asSaid\} \$\{hisLastTurn\}`)?\)/.exec(
         withoutComments,
       )?.[1]
     expect(asked).toContain('changesHis !== null')

@@ -360,9 +360,27 @@ const wasAsked = (instruction: string, classification: Classification): boolean 
 */
 const ELLIPTICAL =
   /\b(add|make|create|put|raise|log|stick|set\s+up|do)\s+(?:me\s+)?(?:another(?:\s+one)?|one\s+more|one)\s+(?=(?:to|for|about|called|on)\b)/i
-const withElliptical = (text: string, antecedent: string): string =>
+/**
+ * Whether "add one to…" in `text` needs an antecedent it does not carry
+ * itself — so the caller can read the previous turn only when it matters
+ * (ledger R7: "Add a task to chase the printers." then "Also one to book the
+ * minibus." filed nothing, because the task noun was one turn back).
+ */
+export const wantsAntecedent = (text: string): boolean =>
+  (ELLIPTICAL.test(text) || BARE_ELLIPTICAL.test(text)) && !TASK_OBJECT.test(text)
+
+/*
+  The same thing with no verb, which is how it is said: "Also one to book the
+  minibus." "And another for the caterers." Only at the start of a clause and
+  only after also/and/plus, so "one to watch" mid-sentence is untouched.
+*/
+const BARE_ELLIPTICAL =
+  /(^|[.!?;]\s+|,\s*)((?:(?:and|also|plus|oh)\s+)+)(?:another(?:\s+one)?|one\s+more|one)\s+(?=(?:to|for|about)\b)/i
+
+/** "Also one to…" rewritten to the task it stands for, when the antecedent names one. */
+export const resolveElliptical = (text: string, antecedent: string): string =>
   TASK_OBJECT.test(antecedent) && !TASK_OBJECT.test(text)
-    ? text.replace(ELLIPTICAL, '$1 a task ')
+    ? text.replace(ELLIPTICAL, '$1 a task ').replace(BARE_ELLIPTICAL, '$1$2add a task ')
     : text
 
 export const taskRequest = (
@@ -370,7 +388,7 @@ export const taskRequest = (
   classification: Classification,
   antecedent = '',
 ): TaskRequest | null => {
-  const rawInstruction = withElliptical(rawText, antecedent)
+  const rawInstruction = resolveElliptical(rawText, antecedent)
   // A prohibition, an advice question or somebody else's words (ledger R34).
   if (mentionsWithoutAsking(rawInstruction)) return null
   /*

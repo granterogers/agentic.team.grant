@@ -141,10 +141,12 @@ import { optionFor, spokenAnswer } from '../agents/spoken-answer.ts'
 import { nameSubjects } from '../agents/subject.ts'
 import {
   NEEDS_A_TITLE,
+  resolveElliptical,
   type TaskRequest,
   taskRequest,
   taskTitle,
   titleReply,
+  wantsAntecedent,
 } from '../agents/tasks.ts'
 import { readTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
@@ -3179,7 +3181,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         no title of their own. This can only ever ADD a reading his own
         sentence supports; it never invents one from a paraphrase.
       */
+      /*
+        The turn before, read only for an elliptical "also one to…" (R7): the
+        main thread read is far below and hoisting it would put a query in
+        front of every message to serve this one.
+      */
+      const hisLastTurn = wantsAntecedent(asSaid)
+        ? // His last three turns, so "and another for the caterers" after "also one
+          // to book the minibus" still reaches the turn that said "task".
+          (await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => []))
+            .slice(-3)
+            .map((t) => t.said)
+            .join(' ')
+        : ''
+      /*
+        "Also one to book the minibus" resolved against his OWN previous turn
+        (R7). The model's reading of a thanks-plus-fragment surfaced no task
+        clause at all, so no reader below was ever shown it; this is his
+        sentence with "one" replaced by the noun his last message used, so it
+        is grounded in his words by construction and can only add a reading.
+      */
+      const hisElliptical = resolveElliptical(asSaid, `${asSaid} ${hisLastTurn}`)
       const hisRequests = [
+        ...(hisElliptical !== asSaid ? [hisElliptical] : []),
         ...(resolved.changed && resolved.from !== null ? [resolved.from] : []),
         ...understood.surviving.filter((r) => HIS_OWN.has(r.kind)).map((r) => r.text),
       ]
@@ -3840,7 +3864,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ? null
         : firstOfHis((text) => {
             // Grounded in his words, for the reason given at the project-task reader.
-            const got = personalTaskRequest(text)
+            const got = personalTaskRequest(resolveElliptical(text, `${asSaid} ${hisLastTurn}`))
             if (got === null || !groundedIn(got.title, asSaid)) return null
             /*
               And a change of mind inside the sentence names the task by what
@@ -4217,8 +4241,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   time. His literal reading comes first in hisRequests, so a
                   request he made himself is unaffected.
                 */
-                // His whole message is the antecedent for an elliptical "add one to…".
-                const got = taskRequest(text, classifyIntent(text), asSaid)
+                // His whole message is the antecedent for an elliptical "add one to…",
+                // and his previous turn when this one does not name a task (R7).
+                const got = taskRequest(text, classifyIntent(text), `${asSaid} ${hisLastTurn}`)
                 return got === null || got.title === null || groundedIn(got.title, asSaid)
                   ? got
                   : null
