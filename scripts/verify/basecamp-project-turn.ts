@@ -246,13 +246,26 @@ const dock = async (page: Page, text: string): Promise<void> => {
   await go(page, '/basecamp/p/provenance-b', '.bcmain')
   await dock(page, 'From the dock on B')
   await go(page, '/basecamp', '[data-bc-go^="/basecamp/p/"]')
+  /* What the open dock SHOWS, read before sending: the header and the note's project. */
+  const shows = (await page.evaluate(
+    inPage(
+      "return (document.querySelector('#dock [data-bc-noteproject]')?.getAttribute('data-bc-noteproject') ?? '') + ' | ' + (document.querySelector('#dock .dockhead')?.textContent ?? '').replace(/\\s+/g, ' ').trim()",
+    ),
+  )) as string
   await dock(page, 'From the dock on the portfolio')
   const docked = turns.slice(before)
   check('the dock on B states B', who(docked[0]?.project) === 'B', who(docked[0]?.project))
+  /*
+    Left open on the way back to the portfolio, the dock goes on SHOWING B's
+    thread - its header names B and its voice note files there - so B is what
+    it must state: the project on screen, never one the office has to infer.
+    (The portfolio draws no dock button of its own; #149's Unnamed rule is for
+    a surface with no thread open, which the backend proof covers.)
+  */
   check(
-    'the dock on the portfolio states Unnamed, where #149 files it — never the last project open',
-    who(docked[1]?.project) === 'Unnamed',
-    who(docked[1]?.project),
+    'the dock left open on the portfolio states the project whose thread it shows',
+    shows.startsWith('provenance-b |') && who(docked[1]?.project) === 'B',
+    `shows ${shows}, stated ${who(docked[1]?.project)}`,
   )
   check('nothing threw', thrown.length === 0, thrown.join(' | '))
   await ctx.close()

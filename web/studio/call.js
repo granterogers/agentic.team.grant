@@ -1,3 +1,4 @@
+import { projectIdOf } from './chat.js'
 import { presented } from './office.js'
 /*
   The voice call, moved out of the page it is replacing.
@@ -397,7 +398,12 @@ const askOffice = async (said) => {
       Authorization: 'Bearer ' + presented(),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ said, session }),
+    /*
+      The project the call was opened on, stated the way the Chat states its
+      own (#373): a call started on a project's page is about that project,
+      so what it hands the team is filed there rather than under Unnamed.
+    */
+    body: JSON.stringify({ said, session, project: projectIdOf(onProject) }),
   })
   const no = refused(r)
   if (no !== null) throw no

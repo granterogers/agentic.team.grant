@@ -272,6 +272,23 @@ const TURN = () => VOICE
  */
 export const endpoint = () => TURN()
 
+/**
+ * The project a thread belongs to, as the office knows it: its id (#373).
+ *
+ * Every caller already names the thread it writes into by slug, and the page
+ * reads that thread back by the project's id (`load`). The office was never
+ * told, so it had to guess where a message belonged and often filed it under
+ * Unnamed, where its answer never appeared in the project it was sent from.
+ * Only a real office id is ever sent: an example project has none, and a
+ * value that is not an id would be a claim the office cannot check.
+ */
+export const projectIdOf = (slug) => {
+  const id = PROJECTS.find((p) => p.slug === slug)?.id
+  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    ? id
+    : undefined
+}
+
 /** One session per visit, so the office can group the turns of a conversation. */
 const SESSION = `s${Math.random().toString(36).slice(2, 12)}`
 
@@ -422,6 +439,8 @@ export async function ask(slug, text, context, token, to, also, onState) {
       body: JSON.stringify({
         said: text,
         session: SESSION,
+        // The thread's project, so the office files it there and nowhere else.
+        project: projectIdOf(slug),
         to: staffSlug(to),
         also: (Array.isArray(also) ? also : [])
           .map((x) => staffSlug(x))

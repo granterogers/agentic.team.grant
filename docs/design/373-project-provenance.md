@@ -93,3 +93,80 @@ gates sign-in, not projects). There is no cross-user project boundary to
 enforce today. The invariant a future multi-user office needs is in the
 design already: the project is a claim the page makes and the office
 validates, never a fact the adapter trusts.
+
+## Evidence (28 September 2026)
+
+All of it was run on the isolated replica and a fake office, with production
+credentials stripped from the environment (`safe.sh`). Nothing was deployed.
+
+**Backend: the real `/voice/turn` door on the replica**
+(`scripts/isolated/project-provenance.ts`, now in `run-all.sh`).
+
+- Before the fix: **7/15**.
+- After the fix: **16/16** (one precondition was added, see below).
+
+**Frontend: the real page in Chromium**
+(`npm run verify:basecamp-project-turn`).
+
+- Before the fix: **3/10**.
+- After the fix: **10/10**.
+- It covers typed A/B with the same words, interleaved A B A B on one visit,
+  the dock, a voice note, a retry after a 502, and two tabs.
+
+**Sabotage.** Every control goes red when the part it protects is removed, and
+is green again once the part is restored.
+
+| Removed | Result |
+|---|---|
+| `project` in the page's body | frontend 3/10 |
+| the per-project conversation key | backend 11/16 (invariants 2, 3, 4, 6) |
+| the `project_id` write | backend 9/16 (1, 3, 4, 7, 8, 9) |
+| the foreign-key retry | backend 15/16 (6: status 503, the message lost) |
+
+**Two harness defects were found on the way. Both were fixed in the harness,
+not the product.**
+
+1. **Invariant 4 was vacuous at first.** The A turn before the Unnamed turn
+   was answered directly by `voice_answer`. It never reached
+   `enqueue_inbound`, so the conversation had nothing to remember, and
+   invariant 4 stayed green even with the talk key sabotaged. The fix: the A
+   turn is now work, and the check asserts that as a precondition.
+2. **"The dock on the portfolio states Unnamed" was the wrong expectation.**
+   A dock left open while navigating goes on showing the previous project's
+   thread: its header and its voice note name that project. So stating that
+   project is the page saying what is on screen, not a guess. The check now
+   reads what the dock shows *before* sending. The portfolio draws no dock
+   button of its own.
+
+**Readers of the conversation key, checked.** All of them become
+project-scoped, and none needed a change:
+
+- `conversation_before`
+- the #374 spoken-answer lookup
+- memory (0547)
+- 0556's obligation key: the same request in A and in B is now two
+  obligations, which is correct
+- 0571's `owed_a_word`: the voice destination is only a label, because the
+  dashboard reads answers by project
+
+Containment still reads the page's session from the `dedupe_key`, which is
+unchanged (`check:voice-sessions` passes, containment is 17/17).
+
+**Regression**, all green:
+
+- lint, typecheck, `check:templates`, `check:secrets`,
+  `check:voice-sessions`, `smoke`, `verify:wired`
+- `npm test`: 3562/3562 assertions. One file cannot load without production
+  credentials, which `safe.sh` strips on purpose.
+- basecamp: chat 30, voicenote 48, voice-session 6, stale-answer 8,
+  failures 50, voice 16, journey 56, states 80, home 45, routes 64,
+  torture 31
+- isolated `run-all.sh`: every proof passes
+
+**Found and not fixed here (out of scope):** after a send from a stale dock,
+the dock repaints to the current route's thread (Unnamed). The message was
+filed correctly, under the project the dock showed, but it then disappears
+from view. This is pre-existing and is filed separately.
+
+**Not yet validated in production.** That needs `deploy:voice` and
+`deploy:hq`. Both are for Grant to authorise.

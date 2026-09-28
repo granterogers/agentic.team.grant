@@ -120,7 +120,19 @@ const name = (id: unknown) =>
 /* 4. Unnamed stated after A in the same visit is Unnamed. */
 {
   const s = session()
-  await sent({ said: `Working on A ${run}`, session: s, project: A })
+  /* Work, so it passes through enqueue_inbound and the conversation has
+     something to remember: a turn voice_answer answers directly never
+     reaches memory, and then this check would be vacuous. */
+  const first = await sent({
+    said: `Please draft the agenda for the A workshop ${run}`,
+    session: s,
+    project: A,
+  })
+  check(
+    '4. (precondition) the turn on A became work on A',
+    first.project === A,
+    `job ${String(first.job)} on ${name(first.project)}`,
+  )
   /* A sentence that needs work, so a job exists: voice_answer answers some questions from state with no job at all. */
   const u = await sent({
     said: `Please draft a short note to the team about next week ${run}`,
