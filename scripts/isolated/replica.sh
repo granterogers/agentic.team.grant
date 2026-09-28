@@ -40,7 +40,12 @@ fi
 errors=0
 for f in $(cd "$ROOT/migrations" && ls [0-9][0-9][0-9][0-9]_*.sql | sort); do
   n=${f%%_*}; [ "$n" \< "0592" ] || break
-  if $P -d base -v ON_ERROR_STOP=0 -v ON_ERROR_ROLLBACK=on -f "$ROOT/migrations/$f" 2>&1 | grep -q ERROR; then errors=$((errors+1)); fi
+  # Captured, THEN searched. `psql … | grep -q ERROR` exits at the first match
+  # and psql dies of SIGPIPE mid-file, so every statement after a file's first
+  # error was never run: the replica silently lacked 33 app/public functions
+  # (public.enqueue_inbound among them) while this line reported success.
+  out=$($P -d base -v ON_ERROR_STOP=0 -v ON_ERROR_ROLLBACK=on -f "$ROOT/migrations/$f" 2>&1 || true)
+  if grep -q ERROR <<<"$out"; then errors=$((errors+1)); fi
 done
 echo "history replayed; $errors file(s) with data assertions that need production rows"
 $P -d base -c "create table public.isolated_replica_marker (built_at timestamptz default now())"
