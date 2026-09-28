@@ -13,7 +13,7 @@ read-only `select` (or `migrate --dry`).
 | backend `claude/jolly-darwin-8rwmp3` (verified) | `dcc03386` — 70 commits over `main` |
 | UX `claude/dazzling-dirac-acjwqf` (verified) | `a8ed7e87` — 35 commits over `main` |
 | merge base of the two | `d1c9247` |
-| integrated candidate | the head of this branch, which carries this report (the commit hash is given in the reply that accompanies it) |
+| integrated candidate | `373549b` at the first report; **changed** by the #374 fix (`6ee27d6`) and this update. The final hash is given in the reply that accompanies it |
 
 ## 2. Integration method and conflicts
 
@@ -45,8 +45,9 @@ Every proof was re-run on a replica that I first made faithful (§5.1).
 | R46: the question reaches him once; harness questions are suppressed; a failed send is not looped; a question answered elsewhere is not asked | `approval-delivery` 9/9 |
 | R37/0598: containment, including children of harness work | `containment` 17/17; **without the migrations 14/17** (control) |
 | 0596: overlapping answers perform once | PASS; **without 0596 two children** (control) |
+| #374: an acknowledgement never approves; an explicit yes or no does | `acknowledgement` 32/32 — the real `office.instruction` handler on teamhq, telegram, slack and voice |
 | 0598 on today's production data (read-only; the predicate evaluated inline, no DDL) | Every job it newly calls harness is a scripted shape (`scenario-a-*`, `deploy*`, `probe*`, `uxfix1`, `browserprobe`, and two developer probes of 7 Sep quoted in the voice door's own commit). **0 page-shaped sessions affected.** |
-| Unit, lint, typecheck | **3525/3525** (3505 backend + 4 UX + 16 integration); lint and typecheck clean |
+| Unit, lint, typecheck | **3567/3567** (3505 backend + 4 UX + 58 integration, of which 42 are from #374); lint and typecheck clean |
 | Static and DB checks | exit 0: `check:migrations`, `secrets`, `templates`, `voice-sessions`, `icons`, `leaks` (22 known / 0 new; witnesses 1/0 and 18/0), `callers`, `consumed`, `pressable`, `gateway-wrappers`, `capabilities`, `answerable`, `standing`, `undo`, `believes`, `chatter` |
 
 ## 4. UX guarantees verified
@@ -113,7 +114,12 @@ All of these come from the voicenote suite, 48/48 on the merged code. The transc
 3. **SYSTEMIC CROSS-BOUNDARY DEFECT: a question answered elsewhere was reported as answered by the press.**
    - Why it only exists after the merge: R46 and R33 put one question on Telegram and on the dashboard at once, and 0596 answers the second with `{already:true, resolution}`. Both pages said *"Answered."*, even when his real answer was the opposite.
    - Fix: `office.js` `alreadyAnswered()`. The Basecamp record stays open so the sentence can be read; the legacy page does not refresh it away. Withdrawn and expired questions are worded as such (`9733bf0`, `b0661c6`).
-4. **Proved cross-boundary, no defect.** Every session the Basecamp page actually sends is one 0598 calls real. Both composers share one session per visit (`8820ce7`).
+4. **Grant's decision, #374: an acknowledgement is not an authorisation** (`6ee27d6`).
+   - The defect: R46 delivers approval questions to his chat, and R33's `spokenAnswer` read `ok`, `fine` and `sure, thanks` as a yes. So "ok thanks" approved the one open question, including a step the autonomy policy had stopped to ask about.
+   - The fix, in the same interpreter that every channel uses: a short reply is read as phrases (authorise, decline, acknowledge, filler), and the strongest phrase decides. "ok, go ahead" is a yes; "ok thanks", "cheers" and 👍 are `unclear`.
+   - On `unclear`, the handler leaves the blocker open and replies *"I have not acted on … say yes to go ahead, or no to leave it"*.
+   - Dashboard and Telegram buttons send an explicit option, so they are unchanged.
+5. **Proved cross-boundary, no defect.** Every session the Basecamp page actually sends is one 0598 calls real. Both composers share one session per visit (`8820ce7`).
 
 ## 6. Migration verification
 
@@ -146,6 +152,10 @@ All of these come from the voicenote suite, 48/48 on the merged code. The transc
 | voice-session | page mints `sess-…` | 5/6 |
 | bundle-resolves | the defect itself | 2 red; its fixture control must be reported missing |
 | containment | no migrations | 14/17 |
+| acknowledgement (real handler, 4 channels) | pre-fix interpreter and handler | 12/32 — `ok` and `ok thanks` **approved** the question on every channel |
+| acknowledgement | only the handler guard removed | 12/32 |
+| spoken-answer unit | pre-fix interpreter | 29 of 58 red |
+| spoken-answer unit | only the handler guard removed | 1 red |
 | 0596 race | without 0596 | 2 children |
 
 ## 9. Production-safety reconciliation
@@ -160,9 +170,7 @@ All of these come from the voicenote suite, 48/48 on the merged code. The transc
 
 **No open blocker is a regression against `main` that the candidate ships unfixed.**
 
-Needs Grant's judgement before or at review:
-
-- **#374.** With R46 delivering questions to his chat, a reflexive *"ok thanks"* approves whatever was just asked, including a level-3 step.
+**Resolved:** #374, by Grant's decision (§5.4).
 
 Non-blocking:
 
@@ -196,6 +204,7 @@ Non-blocking:
 4. **The browser against the deployed pages,** after `npm run trust:proxy-ca`:
    - Answer one fixture-project question on the dashboard; see "Answered.".
    - Answer it a second time; see "already answered: …".
+   - On a fixture conversation, reply *"ok thanks"* to a pending approval and confirm the blocker stays open and the office asks. Then reply *"yes please"* and confirm it resolves.
 5. **Checks:** `check:leaks` expecting 0 new, `check:voice-sessions`, `check:answerable`, and `app.office_health()`.
 6. **Watch** the first hour of `job_impediments` for `the sending path` rows repeating (the #371 residual 2).
 
