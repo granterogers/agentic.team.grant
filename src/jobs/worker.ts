@@ -722,16 +722,18 @@ export const askedOnPause = async (
     return `asking failed: ${String((error as Error).message).slice(0, 120)}`
   } finally {
     /*
-      TRIED, whatever came of it (#371, 0600). A notifier that finds no
-      destination, or that the sending gate refuses, writes no delivery row,
-      and "no row" was the sweep's only evidence of never having asked - so it
-      asked again every tick, for ever. Stamped after the attempt, so a worker
-      that dies before asking leaves it null and the sweep still recovers it.
-      Best-effort: a failed stamp costs at most one repeat, never the question.
+      ATTEMPTED, whatever came of it (#371, 0600). This is not evidence of
+      delivery - that is a sent row under the blocker's key - it is what lets
+      the sweep tell a question never tried from one tried with nothing to
+      show for it, which "does any delivery row exist" could not. Stamped
+      after the attempt, so a worker that dies before asking leaves it
+      untouched and the sweep still recovers it. Best-effort: a failed stamp
+      costs at most one extra try, never the question.
     */
     await db
       .execute(
-        `update public.blockers set asked_at = app.now_utc() where blocker_id = ${lit(blocker)}::uuid`,
+        `update public.blockers set asked_at = app.now_utc(), ask_attempts = ask_attempts + 1
+          where blocker_id = ${lit(blocker)}::uuid`,
       )
       .catch(() => undefined)
   }
@@ -770,15 +772,36 @@ export const pausedQuestion = async (db: SqlExecutor, jobId: string): Promise<st
 }
 
 /**
- * The recovery half of R46: a question whose job paused but whose worker died
- * before asking. Only a question never TRIED (`blockers.asked_at`, 0600) and
- * with no delivery row under its scope - a sent one is done, and one tried
- * with nowhere to go is not retried in a loop, because a question re-sent
- * every minute is the thing Grant must never receive. Older than two minutes,
- * so the inline path has had its turn; younger than two days (#371).
+ * The recovery half of R46: a paused job's question that has not been
+ * delivered and still can be. Older than two minutes, so the inline path has
+ * had its turn; younger than two days (#371). The rule is in the query.
  */
 export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): Promise<number> => {
   if (notify === undefined) return 0
+  /*
+    ATTEMPTED IS NOT DELIVERED (#371). Each question is decided by what its
+    delivery rows say, never by whether one exists:
+
+      a sent row                  delivered, never asked again
+      a failed row (terminal,     never on that channel again - a second copy
+        gave up, indeterminate)   is the one harm the delivery layer prevents
+      a suppressed row            the containment guard's decision
+      a claimed row whose lease   re-driven under the same key, unless it was
+        has lapsed                sent on another channel: claim_delivery
+                                  reclaims it, dedupes every other channel,
+                                  and the layer's own max_attempts and backoff
+                                  bound the retry
+      no row, never tried         asked (the worker died before asking)
+      no row, tried               tried again with backoff, three tries in all
+                                  (nowhere to send, a refusal, a notifier that
+                                  threw before recording anything)
+
+    Without 0600's columns this query fails and the sweep asks nothing, the
+    safe direction: an unsent question is still on the dashboard; one re-sent
+    every minute is the thing he must never receive. Only open questions of
+    paused jobs, so a question answered anywhere stops here. Younger than two
+    days, so a deploy does not spring an old question on him.
+  */
   const { rows } = await db.execute(`
     select j.job_id::text as job_id, j.kind, j.correlation_id::text as correlation_id,
            j.project_id::text as project_id,
@@ -786,18 +809,25 @@ export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): 
              order by o.created_at desc limit 1) as output_id
       from public.jobs j
       join public.blockers b on b.job_id = j.job_id and b.state = 'open'
+      left join lateral (
+        select count(*) as n,
+               count(*) filter (where d.state = 'sent') as sent,
+               count(*) filter (where d.state = 'claimed' and d.lease_expires_at < app.now_utc()) as lapsed
+          from public.deliveries d
+         where d.dedupe_key like 'blocker:' || b.blocker_id::text || ':%'
+      ) d on true
      where j.state = 'paused' and j.announce
        and b.created_at < app.now_utc() - interval '2 minutes'
-       -- Never tried (0600). Without the column this query fails and the sweep
-       -- asks nothing, which is the safe direction: a question he is never
-       -- re-sent is still on the dashboard; one re-sent every minute is the
-       -- thing he must never receive.
-       and b.asked_at is null
-       -- And recent. A sweep is recovery from a worker that died a moment ago,
-       -- not a way for a deploy to spring a days-old question on him.
        and b.created_at > app.now_utc() - interval '2 days'
-       and not exists (select 1 from public.deliveries d
-                        where d.dedupe_key like 'blocker:' || b.blocker_id::text || ':%')
+       and (
+             -- a send the delivery layer can still make, and he has not had it anywhere
+             (d.lapsed > 0 and d.sent = 0)
+             -- or nothing was ever recorded, and a try is due
+          or (d.n = 0 and (b.asked_at is null
+                           or (b.ask_attempts < 3
+                               and b.asked_at < app.now_utc()
+                                     - interval '10 minutes' * power(6, greatest(b.ask_attempts, 1) - 1))))
+           )
      order by b.created_at
      limit ${String(max)}`)
   let asked = 0
