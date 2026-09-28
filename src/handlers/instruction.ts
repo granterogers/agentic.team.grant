@@ -4767,7 +4767,20 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   }
                 }
                 const q = open[0]
-                const option = q === undefined ? null : optionFor(spoken, q.options)
+                /*
+                  ACKNOWLEDGED, NOT AUTHORISED (#374). "ok thanks" or a thumbs
+                  up while a question is waiting answers nothing: the question
+                  stays open and he is asked, rather than it being approved
+                  or read as new work.
+                */
+                if (q !== undefined && spoken === 'unclear') {
+                  return {
+                    did: false,
+                    text: `I have not acted on "${q.what}" — I read that as an acknowledgement, not a go-ahead. Say yes to go ahead, or no to leave it.`,
+                  }
+                }
+                const option =
+                  q === undefined || spoken === 'unclear' ? null : optionFor(spoken, q.options)
                 if (q === undefined || option === null) return null
                 const res = await deps.db.execute(
                   `select app.hq_answer_blocker(${lit(q.id)}::uuid, ${lit(option)}) as r`,
