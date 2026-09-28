@@ -320,6 +320,9 @@ export async function attempt(el, working, run, done = 'Saved.') {
  */
 export function alreadyAnswered(result) {
   if (result?.already !== true) return null
+  /* `already` means "no longer open", which is three different things. */
+  if (result.state === 'withdrawn') return 'The team withdrew this question. Nothing was done.'
+  if (result.state === 'expired') return 'This question expired before it was answered. Nothing was done.'
   const held = typeof result.resolution === 'string' ? result.resolution.trim() : ''
   return held === ''
     ? 'This was already answered elsewhere. Nothing more was done.'

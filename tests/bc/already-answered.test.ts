@@ -29,6 +29,14 @@ describe('alreadyAnswered', () => {
   it('still says so when the office gives no resolution', () => {
     expect(alreadyAnswered({ ok: false, already: true })).toMatch(/already answered/i)
   })
+  it('does not call a withdrawn or expired question answered', () => {
+    for (const state of ['withdrawn', 'expired']) {
+      const said = alreadyAnswered({ ok: false, already: true, state, resolution: null })
+      expect(said).not.toMatch(/answered elsewhere/i)
+      expect(said).toMatch(state === 'withdrawn' ? /withdrew/ : /expired/)
+      expect(said).toMatch(/Nothing was done/)
+    }
+  })
   it('is silent for a press the office took, so the caller keeps its own sentence', () => {
     expect(alreadyAnswered({ ok: true, answer: 'Yes' })).toBeNull()
     expect(alreadyAnswered(null)).toBeNull()
