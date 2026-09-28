@@ -1,8 +1,8 @@
 /**
- * Integration pass (finding 4): askUnasked re-asks, every tick, a question whose
- * notifier found nowhere to send it and so wrote no delivery row. Reproduction only.
+ * #371 residual 2: askUnasked re-asked, every tick, a question whose notifier
+ * found nowhere to send it and so wrote no delivery row.
  *
- *   npx tsx scripts/isolated/approval-delivery.ts <replica-db>
+ *   npx tsx scripts/isolated/ask-unasked-loop.ts <replica-db>
  *
  * Runs the REAL worker (`runJob`, `askUnasked`), the real `DeliveryService` and
  * the real `app.claim_delivery` containment guard against an isolated replica.
@@ -131,30 +131,104 @@ const age = (jobId: string) =>
   db.execute(
     `update public.blockers set created_at = created_at - interval '3 minutes' where job_id = '${jobId}'`,
   )
-const answer = (blocker: string, a: string) =>
-  db.execute(`select app.hq_answer_blocker('${blocker}'::uuid, '${a}')`)
 
-let calls = 0
-const nowhere = async () => {
-  calls += 1
+const tried: string[] = []
+const nowhere = async (job: Job) => {
+  tried.push(job.jobId)
   return { delivered: false, note: 'no slack destination for this job; nothing delivered' }
 }
-const j = await make('telegram:grant')
-await runJob(db, j, [handler], review, nowhere as never)
-await age(j.jobId)
-const perTick: number[] = []
-for (let t = 0; t < 3; t += 1) {
-  const before = calls
-  await askUnasked(db, nowhere as never)
-  perTick.push(calls - before)
+/* What combinedNotifier does when refuseToSend says no: an impediment, no row. */
+const refusing = async (job: Job) => {
+  tried.push(job.jobId)
+  await db.execute(
+    `select app.cannot('${job.jobId}'::uuid, 'missing_data', 'a sendable answer', 'the sending path', 'isolated refusal', 'not sent')`,
+  )
+  return { delivered: false, note: 'not sent: isolated refusal' }
 }
-const rows = await one(
-  `select count(*)::int as n from public.deliveries where dedupe_key like 'blocker:' || '${await blockerOf(j.jobId)}' || ':%'`,
-)
-console.log(JSON.stringify({ inlineCalls: 1, sweepCallsPerTick: perTick, deliveryRows: rows.n }))
-await db.end()
+const impediments = async (jobId: string) =>
+  Number(
+    (await one(`select count(*)::int as n from public.job_impediments where job_id = '${jobId}'`))
+      .n,
+  )
+/** Sweep n times; how many attempts each tick made at THIS job's question. */
+const ticks = async (n: number, via: unknown, jobId: string) => {
+  const per: number[] = []
+  const b = await blockerOf(jobId)
+  const mine = () =>
+    tried.filter((x) => x === jobId).length +
+    sent.filter((x) => x.key.startsWith(`blocker:${b}:`)).length
+  for (let t = 0; t < n; t += 1) {
+    const before = mine()
+    await askUnasked(db, via as never)
+    per.push(mine() - before)
+  }
+  return per
+}
 
-// Reproduction only: helpers shared with approval-delivery.ts that this file does not call.
-void check
-void notify
-void answer
+// 1. Asked inline, and there was nowhere to send it: tried, so never re-asked.
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, nowhere as never)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  const stamped = await one(
+    `select asked_at is not null as t from public.blockers where blocker_id = '${b}'`,
+  )
+  check(
+    'an attempt that found nowhere to send is recorded as tried',
+    stamped.t === true,
+    String(stamped.t),
+  )
+  const per = await ticks(3, nowhere, j.jobId)
+  check(
+    'so the sweep does not re-ask it every tick',
+    per.every((x) => x === 0),
+    JSON.stringify(per),
+  )
+}
+
+// 2. Refused by the sending gate: tried once, and the ledger grows once.
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, refusing as never)
+  await age(j.jobId)
+  const before = await impediments(j.jobId)
+  const per = await ticks(3, refusing, j.jobId)
+  const after = await impediments(j.jobId)
+  check(
+    'a question the sending gate refused is not re-asked, and the ledger does not grow per tick',
+    per.every((x) => x === 0) && after === before,
+    `sweep ${JSON.stringify(per)}, impediments ${String(before)} -> ${String(after)}`,
+  )
+}
+
+// 3. The recovery still works: a worker that died before asking.
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, undefined)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  const per = await ticks(3, notify, j.jobId)
+  const toHim = sent.filter((x) => x.key.startsWith(`blocker:${b}:`)).length
+  check(
+    'a question never tried is asked by the sweep, exactly once over three ticks',
+    toHim === 1 && JSON.stringify(per) === '[1,0,0]',
+    `sent ${String(toHim)}, sweep ${JSON.stringify(per)}`,
+  )
+}
+
+// 4. Stale: a question days old is not sprung on him by a deploy.
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, undefined)
+  await db.execute(
+    `update public.blockers set created_at = created_at - interval '3 days' where job_id = '${j.jobId}'`,
+  )
+  const per = await ticks(1, notify, j.jobId)
+  check('a question three days old is not swept', per[0] === 0, JSON.stringify(per))
+}
+
+const failed = results.filter((r) => !r.ok).length
+console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
+await db.end()
+process.exit(failed === 0 ? 0 : 1)
