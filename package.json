@@ -340,6 +340,7 @@
     "verify:basecamp-chat": "tsx scripts/verify/basecamp-chat.ts",
     "verify:basecamp-drive": "tsx scripts/verify/basecamp-drive.ts",
     "verify:basecamp-voice-session": "tsx scripts/verify/basecamp-voice-session.ts",
+    "verify:basecamp-project-turn": "tsx scripts/verify/basecamp-project-turn.ts",
     "verify:basecamp-stale-answer": "tsx scripts/verify/basecamp-stale-answer.ts",
     "verify:basecamp-voicenote": "tsx scripts/verify/basecamp-voicenote.ts",
     "verify:basecamp-touch": "tsx scripts/verify/basecamp-touch.ts",
