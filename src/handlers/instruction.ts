@@ -153,7 +153,7 @@ import {
   titleReply,
   wantsAntecedent,
 } from '../agents/tasks.ts'
-import { readTeaching } from '../agents/teaching.ts'
+import { readTeaching, strongestTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import { oneReading, type ReadingKind, understand } from '../agents/understand.ts'
 import { asksWhatTheyFound, asksWhoIsOnIt } from '../agents/whoison.ts'
@@ -3656,20 +3656,24 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           stored anyway.
         */
         /*
-          And HIS words, never the resolver's paraphrase (completion pass;
-          #322's class). `instruction` is `resolved.instruction` by here, and a
-          rewrite keeps the request and drops the marker that makes it a rule:
-          "always give your information in clear bullet points. Also, tell me
-          my tasks" came back as "tell me my tasks, in clear bullet points",
-          `readTeaching` found nothing lasting, and on the turn the meaning
-          reader also missed the clause the rule was silently not kept. One
-          door of four in `verify:anchors`. Reading the paraphrase was also
-          the dangerous direction: a rewrite that adds an "always" would store
-          a rule he never gave.
+          His words, never the resolver's paraphrase (completion pass; #322's
+          class). `instruction` is `resolved.instruction` by here, and a
+          rewrite keeps the request and drops the marker: five plausible
+          rewrites of anchor A, five nulls from `readTeaching`. And reading a
+          paraphrase is the dangerous direction as well: one that adds an
+          "always" would store a rule he never gave.
+
+          And a MARKED reading wins (`strongestTeaching`). This was the defect
+          actually observed: the meaning reader's own wording of the clause
+          dropped the "always" ("Give your information in clear bullet
+          points."), and as the first reading it turned a rule he stated into
+          an OFFER on the Governance page — one door of four in one
+          `verify:anchors` run and two of four in the next.
         */
-        [...asRules.map((text) => readTeaching(text, true)), readTeaching(hisWords)].find(
-          (t) => t !== null,
-        ) ?? null
+        strongestTeaching([
+          ...asRules.map((text) => readTeaching(text, true)),
+          readTeaching(hisWords),
+        ])
 
       /*
         AND STORING IT DOES NOT END THE TURN.

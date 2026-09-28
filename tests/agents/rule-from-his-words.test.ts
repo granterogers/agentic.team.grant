@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { readTeaching } from '../../src/agents/teaching.js'
+import { readTeaching, strongestTeaching } from '../../src/agents/teaching.js'
 
 /*
   A standing rule is read from HIS words, never from the resolver's paraphrase
@@ -12,9 +12,9 @@ import { readTeaching } from '../../src/agents/teaching.js'
 const source = readFileSync('src/handlers/instruction.ts', 'utf8')
 
 describe('a standing rule is read from his words (completion pass)', () => {
-  it('the teaching union reads hisWords, and never the rewritten instruction', () => {
+  it('the teaching union reads hisWords, through strongestTeaching, and never the rewrite', () => {
     expect(source).toMatch(
-      /\[\.\.\.asRules\.map\(\(text\) => readTeaching\(text, true\)\), readTeaching\(hisWords\)\]/,
+      /strongestTeaching\(\[\s*\.\.\.asRules\.map\(\(text\) => readTeaching\(text, true\)\),\s*readTeaching\(hisWords\),\s*\]\)/,
     )
     expect(source).not.toMatch(/readTeaching\(instruction\)/)
   })
@@ -51,5 +51,35 @@ describe('a standing rule is read from his words (completion pass)', () => {
   ])('not a rule: %s', (said) => {
     const t = readTeaching(said)
     expect(t !== null && t.kind === 'lesson' && t.marked).toBe(false)
+  })
+
+  /*
+    The defect observed live: the meaning reader's own wording of the clause
+    dropped "always" and, first in the list, made his rule an offer. These are
+    the three clauses it actually produced across two runs.
+  */
+  const HIS =
+    "I've told you to always give your information in the form of clear bullet points. Also, I want you to tell me what my current tasks are."
+  it.each([
+    'Give your information in the form of clear bullet points.',
+    'Give information in the form of clear bullet points.',
+    'Give your information in clear bullet points.',
+  ])('his marked words outrank the reader\'s unmarked "%s"', (clause) => {
+    const t = strongestTeaching([readTeaching(clause, true), readTeaching(HIS)])
+    expect(t?.kind === 'lesson' && t.marked).toBe(true)
+  })
+  it('whichever order the readings come in', () => {
+    const clause = readTeaching('Give information in the form of clear bullet points.', true)
+    const t = strongestTeaching([readTeaching(HIS), clause])
+    expect(t?.kind === 'lesson' && t.marked).toBe(true)
+  })
+  // Controls: nothing marked stays unmarked (offered, #290), and nothing is nothing.
+  it('an unmarked reading alone is still offered, not promoted', () => {
+    const t = strongestTeaching([readTeaching('Give me that in bullet points.', true), null])
+    expect(t?.kind === 'lesson' && t.marked).toBe(false)
+    expect(t).not.toBeNull()
+  })
+  it('no reading is no teaching', () => {
+    expect(strongestTeaching([null, null])).toBeNull()
   })
 })

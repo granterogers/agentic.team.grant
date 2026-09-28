@@ -261,6 +261,24 @@ export function notARuleForTheOffice(text: string): boolean {
   return false
 }
 
+/**
+ * Which of several readings of one message is the rule he gave.
+ *
+ * A MARKED reading wins over an unmarked one: #290's line is what he said, and
+ * "always" means lasting, so it is stored. The meaning reader hands back a
+ * clause in its own words, and dropping the "always" ("Give information in
+ * clear bullet points.") made it an unmarked reading that, being first, turned
+ * a rule he stated into an offer. An unmarked reading still stands when
+ * nothing is marked (completion pass).
+ */
+export function strongestTeaching(readings: readonly (Teaching | null)[]): Teaching | null {
+  return (
+    readings.find((t) => t !== null && t.kind === 'lesson' && t.marked) ??
+    readings.find((t) => t !== null) ??
+    null
+  )
+}
+
 export function readTeaching(instruction: string, alreadyAPreference = false): Teaching | null {
   const text = instruction.trim()
   if (text.length < 20) return null
