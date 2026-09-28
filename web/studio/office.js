@@ -307,6 +307,26 @@ export async function attempt(el, working, run, done = 'Saved.') {
 }
 
 /**
+ * What to say after answering one of the office's questions.
+ *
+ * `app.hq_answer_blocker` answers a question that is no longer open with
+ * `{ ok: false, already: true, resolution }` rather than an error, because two
+ * surfaces answering one question is ordinary: the question reaches his chat
+ * as well as this page, and he can answer it there in a word. `attempt` says
+ * its done-sentence for any result that did not throw, so both pages said
+ * "Answered." to a press the office had not taken, sometimes about the
+ * opposite of what he had actually said. Returns null when the press WAS
+ * taken, so the caller keeps its own sentence (integration pass, 28 Sep).
+ */
+export function alreadyAnswered(result) {
+  if (result?.already !== true) return null
+  const held = typeof result.resolution === 'string' ? result.resolution.trim() : ''
+  return held === ''
+    ? 'This was already answered elsewhere. Nothing more was done.'
+    : `This was already answered elsewhere: “${held}”. Nothing more was done.`
+}
+
+/**
  * Confirm before anything destructive.
  *
  * Grant: *"You should always check before making any destructive action with

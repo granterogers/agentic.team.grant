@@ -19,7 +19,7 @@ import {
   hydrate,
   source,
 } from './data.js'
-import { act, attempt, canWrite, onWrite, read, say, sure, token, why, presented, presentedFresh} from './office.js'
+import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, token, why, presented, presentedFresh} from './office.js'
 /*
   The experimental Basecamp-inspired Team HQ (basecamp_clone.md).
 
@@ -10631,9 +10631,9 @@ function drawShell() {
           p_blocker_id: btn.dataset.answer,
           p_answer: btn.dataset.answerWith,
         }),
-        'Answered.',
+        (r) => alreadyAnswered(r) ?? 'Answered.',
       )
-      if (said) await refresh()
+      if (said && alreadyAnswered(said) === null) await refresh()
     })
   }
   for (const f of root.querySelectorAll('[data-answer-form]')) {
@@ -10646,9 +10646,9 @@ function drawShell() {
         go,
         'Sending…',
         () => act('answer_blocker', { p_blocker_id: f.dataset.answerForm, p_answer: answer }),
-        'Answered.',
+        (r) => alreadyAnswered(r) ?? 'Answered.',
       )
-      if (said) await refresh()
+      if (said && alreadyAnswered(said) === null) await refresh()
     })
   }
 

@@ -13,7 +13,7 @@
   second mechanism would be a second set of words for one thing.
 */
 
-import { act, attempt, canWrite, read, say, token } from '../office.js'
+import { act, alreadyAnswered, attempt, canWrite, read, say, token } from '../office.js'
 import * as session from '../session.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
@@ -1438,9 +1438,12 @@ const wireCounts = (root) => {
       el,
       'Sending your answer…',
       () => act('answer_blocker', { p_blocker_id: id, p_answer: text }),
-      'Answered. The team has it.',
+      (r) => alreadyAnswered(r) ?? 'Answered. The team has it.',
     )
     if (done === null) return
+    /* Answered somewhere else first: the sentence above says so, and closing
+       the record would take it off the screen before it could be read. */
+    if (alreadyAnswered(done) !== null) return
     /*
       Close only AFTER the office has taken it. Closing first would show the
       list without the item and imply a resolution that had not happened yet --
