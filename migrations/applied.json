@@ -602,5 +602,13 @@
   "0588_a_failure_nobody_can_attribute_is_not_his.sql": "df4fe60dfca01e53792c28a7929bfbbf071a7a91b3ebd45241409459c2a2d311",
   "0589_dedupe_on_what_it_is_about.sql": "1601ea6831a936f956a2235d06f2d3ad0fdb59aa1d3570bed1224dd96704dde4",
   "0590_a_credential_that_administers_is_not_one_that_acts.sql": "88d9c060cd020a91268b0cef94220c785ece169728bc58d8e1cefb9526fa0ad6",
-  "0591_go_ahead_that_started_nothing.sql": "5876ed8015870dc6e1f91277f0b11180ca4f7f5bc2cf262cf93d5a928827866b"
+  "0591_go_ahead_that_started_nothing.sql": "5876ed8015870dc6e1f91277f0b11180ca4f7f5bc2cf262cf93d5a928827866b",
+  "0592_a_retry_does_not_write_the_task_again.sql": "2ad9aac984d0fed1b6bf724935cb5e0234cabe1795e9a1a689277df5566ec6ed",
+  "0593_a_referent_names_its_candidates.sql": "a7be4232175e38992314b61e0b6fd2bf98d2f403fbe2ef3a72ed39a1173e2ece",
+  "0594_a_cancelled_task_is_not_on_his_list.sql": "e4974cf3e1159c0767b5d3e0b8f26caea66f0ad9f435ae67b0d61a79cf5b62bc",
+  "0595_a_retry_reuses_a_finished_child.sql": "2a43f82ecd08c7f9e74aaa11a257fcbceff914069a25ae174784c81dee11a74b",
+  "0596_one_answer_per_question.sql": "9ffa0c3b49cbd5484b118e56af5f7bb1705b7a76fdd018b310f8f6433d68a475",
+  "0597_a_harness_task_is_never_reminded.sql": "f0764d882f887400d3434fcd536ae65223742a58fb3ddecef07c31db909bb4ac",
+  "0598_a_voice_session_the_page_did_not_mint_is_harness.sql": "6d92bd3460bb5eae6c30dcf77c900d6ff26df1c153e559b082aa7b01d3df34fe",
+  "0599_one_stalled_job_must_not_stop_the_office.sql": "6cf30a12d0d62f2d207722e88543fb4936cdf6e10d29670364c3023381ce52c1"
 }
