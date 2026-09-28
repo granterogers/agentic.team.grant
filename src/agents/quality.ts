@@ -28,6 +28,7 @@
  * someone wrote a second caller.
  */
 
+import { datesIn, isoForMention, MONTH_WORD, wrongWeekday } from './derivable.ts'
 import type { Domain } from './provenance.ts'
 
 /** How an output was produced. The only input the exemption is allowed to read. */
@@ -152,6 +153,16 @@ export interface OutputMetadata {
    * CONSTRUCTION, plus the ones this number can disprove.
    */
   readonly acted?: number
+  /**
+   * How many TASK rows this job created or changed itself.
+   *
+   * Separate from `acted` because `acted` counts convened specialists too,
+   * and a hand-off is not a task being ticked off. Measured on 24 September:
+   * "Mark the Hartley one done" convened two specialists, `acted` was 2, and
+   * the answer "Task … is now marked as done" passed every gate over a row
+   * still reading `todo`. Absent means not counted and never accuses.
+   */
+  readonly tasksChanged?: number
   /**
    * Whether this job had ANY earlier turn in its conversation.
    *
@@ -605,6 +616,62 @@ export const claimsToHaveMade = (body: string): string | null => {
 }
 
 /**
+ * Does this text say a TASK was completed, removed, moved or reassigned?
+ *
+ * The companion of `claimsToHaveMade`, for the other half of a to-do list.
+ * Behavioural remediation, 24 September 2026 (ledger R3): asked "Mark the
+ * Hartley one done", the office replied
+ *
+ *     Task "Review the Hartley proposal" is now marked as done.
+ *
+ * and the row was still `todo`. The conversation had no door that could mark
+ * anything done at all, so the sentence was false by construction — and it is
+ * the worst kind of false, because he stops looking at a task he believes is
+ * finished.
+ *
+ * Scoped to a sentence that names a task (the noun, or a quoted title) so a
+ * sentence about a meeting being moved is left alone; plans, offers,
+ * questions, denials and things HE did are not claims, exactly as in
+ * `claimsToHaveMade`. Checked only against `tasksChanged`, which counts rows,
+ * never against `acted`, which counts people.
+ */
+export const claimsToHaveChangedTask = (body: string): string | null => {
+  const text = straighten(String(body ?? ''))
+  if (text.trim() === '') return null
+  const CHANGE = new RegExp(
+    [
+      String.raw`\bmarked\s+(?:[^\s.!?]+\s+){0,5}?(?:as\s+)?(?:done|complete|completed|finished|closed)\b`,
+      String.raw`\b(?:is|was|are|were|'s|has\s+been|have\s+been)\s+(?:now\s+)?(?:done|completed|closed|ticked\s+off|crossed\s+off|deleted|removed|cancelled|canceled|binned|scrapped|archived|rescheduled|reassigned)\b`,
+      String.raw`\b(?:ticked|crossed)\s+(?:it\s+|that\s+|them\s+)?off\b`,
+      String.raw`\bI(?:'ve|\s+have)?\s+(?:just\s+)?(?:deleted|removed|cancelled|canceled|binned|scrapped|archived|completed|closed|moved|rescheduled|reassigned|assigned|changed|updated|renamed)\b`,
+      String.raw`\b(?:is|was|has\s+been|'s)\s+(?:now\s+)?(?:moved|pushed|changed|set|assigned|reassigned)\s+(?:to|as)\b`,
+    ].join('|'),
+    'i',
+  )
+  const TASKISH = /\b(?:tasks?|to-?dos?|subtasks?|reminders?)\b|["“][^"”]{3,}["”]/i
+  for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
+    const hit = CHANGE.exec(sentence)
+    if (hit === null || !TASKISH.test(sentence)) continue
+    if (sentence.trim().endsWith('?')) continue
+    if (
+      /\b(?:will|'ll|shall|can|could|should|would|want me to|happy to|about to|going to|once|if)\b/i.test(
+        sentence,
+      )
+    )
+      continue
+    if (/\b(?:not|never|no|nothing|none|n't|yet to)\b/i.test(sentence)) continue
+    if (
+      /\byou(?:'ve|\s+have)?\s+(?:already\s+)?(?:marked|ticked|deleted|removed|moved|completed|closed|changed)\b/i.test(
+        sentence,
+      )
+    )
+      continue
+    return hit[0].trim().slice(0, 80)
+  }
+  return null
+}
+
+/**
  * Does this text PROMISE to contact somebody on a channel it cannot reach?
  *
  * #231, found by a voice-note session. The office told Grant:
@@ -732,12 +799,29 @@ export const promisesToReachOut = (body: string): string | null => {
  * fire on an answer that is doing arithmetic, quoting a document, or repeating
  * something Grant said, because all three are in the grounding.
  */
-export const fabricatedWhen = (body: string, grounding: string): string | null => {
+export const fabricatedWhen = (
+  body: string,
+  grounding: string,
+  now: Date = new Date(),
+): string | null => {
   const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   const flat = (v: string): string => v.toLowerCase().replace(/[^a-z0-9]/g, '')
   const known = flat(grounding)
-  const MONTH = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec'
+  /*
+    The dates the grounding DERIVES, not only the ones it spells (see
+    `derivable.ts`). Computed lazily: most answers mention no date at all.
+  */
+  let derived: ReadonlySet<string> | null = null
+  /*
+    WHOLE month words, never a prefix (behavioural remediation, 24 September
+    2026). This was `jan|feb|mar|...` followed by any letters, so "margin"
+    was March, "decision" December, "separate" September and "maybe" May:
+    "a £8 margin per head" read as "8 Mar…" and a correct
+    arithmetic answer was refused as an invented date. The retry then
+    re-enqueued the child work its first attempt had already finished.
+  */
+  const MONTH = MONTH_WORD
   const shapes: RegExp[] = [
     /*
       A clock time, and the hour has to be an HOUR.
@@ -759,8 +843,8 @@ export const fabricatedWhen = (body: string, grounding: string): string | null =
     /\b(?:1[0-2]|0?\d)[:.][0-5]\d\s*(?:am|pm)\b/gi,
     /\b(?:1[0-2]|0?\d)\s*(?:am|pm)\b/gi,
     // A calendar date: Oct 18, 18 October, 2026-10-18.
-    new RegExp(String.raw`\b(?:${MONTH})[a-z]*\.?\s+\d{1,2}\b`, 'gi'),
-    new RegExp(String.raw`\b\d{1,2}(?:st|nd|rd|th)?\s+(?:${MONTH})[a-z]*\b`, 'gi'),
+    new RegExp(String.raw`\b(?:${MONTH})\.?\s+\d{1,2}(?:st|nd|rd|th)?\b`, 'gi'),
+    new RegExp(String.raw`\b\d{1,2}(?:st|nd|rd|th)?\s+(?:${MONTH})\b`, 'gi'),
     /\b\d{4}-\d{2}-\d{2}\b/g,
   ]
   for (const re of shapes) {
@@ -775,6 +859,17 @@ export const fabricatedWhen = (body: string, grounding: string): string | null =
         stripping punctuation leaves two digits that could be anything.
       */
       if (/^\d{1,2}$/.test(token)) continue
+      /*
+        A calendar date that one of his relative expressions resolves to is
+        arithmetic, not invention: "by the 30th" said on the 24th IS the 30th
+        of September. Only calendar dates — `isoForMention` resolves no clock
+        time, so a time is never excused by this.
+      */
+      const on = isoForMention(hit[0], now)
+      if (on !== null) {
+        derived ??= datesIn(grounding, now)
+        if (derived.has(on)) continue
+      }
       return hit[0].trim().slice(0, 40)
     }
   }
@@ -1600,6 +1695,22 @@ export const claimsToHaveRead = (body: string): string | null => {
   return null
 }
 
+/**
+ * Did this turn read NOTHING it could cite? (ledger R30)
+ *
+ * The claimed-read check equated evidence "inferred" with "nothing was read",
+ * and the instruction handler labels every model-written answer "inferred" -
+ * correctly, because the answer is the model's even when it rests on a
+ * document. So an honest "I've pulled the booking terms for Holloway Barn",
+ * written over a document the turn had retrieved and cites, was refused;
+ * the job retried; and the retry reported its own first attempt as "already
+ * in hand - I handed exactly this on a moment ago". A read is disproved when
+ * the answer cites no source at all. NOT when no domain was "consulted": the
+ * handler lists documents and projects as consulted on every turn, so that
+ * test would have switched the gate off entirely (the first draft did).
+ */
+const readNothing = (m: OutputMetadata): boolean => (m.sources ?? []).length === 0
+
 export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] => {
   const problems: MetadataProblem[] = []
 
@@ -1743,6 +1854,25 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
     }
   }
 
+  /*
+    A task completed, removed, moved or reassigned while this job changed no
+    task row (ledger R3). Keyed on rows, not on `acted`: a hand-off to two
+    specialists made `acted` 2 and let the claim through.
+  */
+  if (m.tasksChanged === 0) {
+    const claimed = claimsToHaveChangedTask(m.body ?? '')
+    if (claimed !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `the text says a task was changed ("${claimed}") and this job changed no ` +
+          'task at all. Say plainly that it has not been changed and how he can do ' +
+          'it (the task list on the dashboard), or ask which task he means; do not ' +
+          'report it as done.',
+      })
+    }
+  }
+
   const promised = promisesToReachOut(m.body ?? '')
   if (promised !== null) {
     problems.push({
@@ -1772,6 +1902,22 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
           `the text gives a specific time or date ("${invented}") that appears nowhere in ` +
           'the request, the conversation or the documents that were retrieved, so it was ' +
           'made up. Say you have no record of it and ask where it is.',
+      })
+    }
+  }
+
+  /*
+    A weekday that contradicts its own date (ledger R39). No grounding needed:
+    the calendar is not evidence, so this runs on every answer.
+  */
+  {
+    const mismatch = wrongWeekday(m.body ?? '')
+    if (mismatch !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `the text pairs a weekday with a date it does not fall on ("${mismatch}"). ` +
+          'Give the date as it was given, or the weekday the calendar says.',
       })
     }
   }
@@ -1866,7 +2012,11 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
   }
 
   const readClaim = claimsToHaveRead(m.body ?? '')
-  if (readClaim !== null && (m.evidence === 'inferred' || m.evidence === 'speculative')) {
+  if (
+    readClaim !== null &&
+    (m.evidence === 'inferred' || m.evidence === 'speculative') &&
+    readNothing(m)
+  ) {
     problems.push({
       field: 'body',
       problem:
@@ -1998,7 +2148,11 @@ export const unresolvableSources = (sources: readonly string[]): readonly string
 
 export const refuseToSend = (m: OutputMetadata): SendRefusal | null => {
   const readClaim = claimsToHaveRead(m.body ?? '')
-  if (readClaim !== null && (m.evidence === 'inferred' || m.evidence === 'speculative')) {
+  if (
+    readClaim !== null &&
+    (m.evidence === 'inferred' || m.evidence === 'speculative') &&
+    readNothing(m)
+  ) {
     return {
       needed: 'evidence for a claimed read',
       reason:

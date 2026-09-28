@@ -72,3 +72,15 @@ describe('taskSpine', () => {
     expect(said.toLowerCase()).not.toMatch(/\bdo not\b|\bnever\b|\bmust\b|\byou should\b/)
   })
 })
+
+describe('ledger R8: undated tasks are named, not only counted', () => {
+  it('the measured shape: nine open, none dated', () => {
+    const said = taskSpine([], [], [], { all: 9 }, [t('Chase the printers'), t('Ring Kevin')])
+    expect(said).toContain('Chase the printers')
+    expect(said).toContain('Ring Kevin')
+    expect(said).toContain('No date set, 2')
+  })
+  it('NEGATIVE CONTROL: an older caller with no undated list keeps its sentence', () => {
+    expect(taskSpine([], [], [], { all: 4 })).toContain('none of them due')
+  })
+})

@@ -45,6 +45,7 @@
 import { readFollowUp } from './clarify.ts'
 import { clauses } from './clauses.ts'
 import { type Classification, withoutOpeningAffirmation } from './intent.ts'
+import { mentionsWithoutAsking } from './not-a-request.ts'
 import { PROJECT_ADJUNCT, readRequest, requestBody } from './request.ts'
 import { readRetraction } from './retraction.ts'
 
@@ -175,7 +176,8 @@ const OBJECT_NOUN =
 const LINKING =
   /^\s*(?:to|for|about|that|which|and|then|called|named|titled|saying|which\s+is)\b\s*/i
 /** Politeness at the end, which the opening strip cannot reach. */
-const TRAILING_PLEASE = /\s*\b(?:please|pls|thanks|ta|if\s+you\s+(?:can|could|would))\b[\s,.]*$/i
+const TRAILING_PLEASE =
+  /\s*\b(?:please|pls|thanks|ta|instead|if\s+you\s+(?:can|could|would))\b[\s,.]*$/i
 
 /*
   WHAT ELSE IS FRAME, established from the rows rather than from reading.
@@ -255,7 +257,8 @@ export const taskTitle = (clause: string): string | null => {
     clause he took back in the same breath. #291's reader exists for exactly
     this and was never consulted when a title was composed.
   */
-  const kept = readRetraction(clause)?.kept
+  // The survivor can begin with the word that joined it: "…scrap that AND add one…".
+  const kept = readRetraction(clause)?.kept?.replace(/^\s*(?:and|then|so|but)\s+/i, '')
   const said = kept !== undefined && kept.trim() !== '' ? kept : clause
   const withoutTopic = TOPIC_FIRST.test(said) ? said.replace(TOPIC_FIRST, '') : said
   const framed = requestBody(withoutTopic)
@@ -346,10 +349,48 @@ const wasAsked = (instruction: string, classification: Classification): boolean 
   return readRequest(instruction, clauses).some((r) => r.mood === 'ask' && TASK_OBJECT.test(r.text))
 }
 
+/*
+  "Add ONE to ring the venue" is a task when a task has just been mentioned
+  (ledger R7/R26). "Add a task to ring the printers. Actually scrap that and
+  add one to ring the venue instead." filed nothing: the surviving clause
+  says "one", and "one" is only a task because the clause he withdrew said
+  "task". The antecedent is the whole of what he said; the elliptical noun is
+  rewritten to the noun it stands for, and only after a verb of making, so
+  "one of them is late" is untouched.
+*/
+const ELLIPTICAL =
+  /\b(add|make|create|put|raise|log|stick|set\s+up|do)\s+(?:me\s+)?(?:another(?:\s+one)?|one\s+more|one)\s+(?=(?:to|for|about|called|on)\b)/i
+/**
+ * Whether "add one to…" in `text` needs an antecedent it does not carry
+ * itself — so the caller can read the previous turn only when it matters
+ * (ledger R7: "Add a task to chase the printers." then "Also one to book the
+ * minibus." filed nothing, because the task noun was one turn back).
+ */
+export const wantsAntecedent = (text: string): boolean =>
+  (ELLIPTICAL.test(text) || BARE_ELLIPTICAL.test(text)) && !TASK_OBJECT.test(text)
+
+/*
+  The same thing with no verb, which is how it is said: "Also one to book the
+  minibus." "And another for the caterers." Only at the start of a clause and
+  only after also/and/plus, so "one to watch" mid-sentence is untouched.
+*/
+const BARE_ELLIPTICAL =
+  /(^|[.!?;]\s+|,\s*)((?:(?:and|also|plus|oh)\s+)+)(?:another(?:\s+one)?|one\s+more|one)\s+(?=(?:to|for|about)\b)/i
+
+/** "Also one to…" rewritten to the task it stands for, when the antecedent names one. */
+export const resolveElliptical = (text: string, antecedent: string): string =>
+  TASK_OBJECT.test(antecedent) && !TASK_OBJECT.test(text)
+    ? text.replace(ELLIPTICAL, '$1 a task ').replace(BARE_ELLIPTICAL, '$1$2add a task ')
+    : text
+
 export const taskRequest = (
-  rawInstruction: string,
+  rawText: string,
   classification: Classification,
+  antecedent = '',
 ): TaskRequest | null => {
+  const rawInstruction = resolveElliptical(rawText, antecedent)
+  // A prohibition, an advice question or somebody else's words (ledger R34).
+  if (mentionsWithoutAsking(rawInstruction)) return null
   /*
     The same cut `classifyIntent` makes, and for the same measurement.
 
@@ -378,6 +419,40 @@ export const taskRequest = (
   const permitted = parts.filter((c) => !FORBIDDEN.test(c))
   if (permitted.length === 0) return null
   const instructionText = permitted.join('. ')
+  /*
+    THE task is one that already exists (ledger R4).
+
+    "And put it down as mine" was rewritten by the thread resolver as "put
+    the task down as belonging to Grant", and both the bare-noun shape and
+    the fallback below took it as a request for a NEW task — filed as
+    "down as belonging to Grant". A definite article (or this/that/my) on a
+    singular task noun, with nothing after it that introduces a title and no
+    indefinite task noun anywhere, is a reference to a task, not a request
+    for one. Returning null hands it to the readers that change tasks, and to
+    prose, which is the cheap direction: a missed creation costs him one
+    retyped sentence, a phantom one sits on his list.
+  */
+  if (
+    /\b(?:the|this|that|my|our|his|your)\s+(?:task|to-?do|reminder)\b(?!\s+(?:to\s+(?!(?:(?:mon|tues|wednes|thurs|fri|satur|sun)day|the|my|next|this|tomorrow|today|me|him|her)\b)|for|about|called|named|titled|that|which)\b)/i.test(
+      instructionText,
+    ) &&
+    /*
+      "Create the task." after the office proposed one is a creation of THE
+      task it proposed, so a verb that can only mean making something keeps
+      it — when the sentence ends there. "Make the task urgent" goes on, and
+      is a change. Put, add, move, mark and assign are what people say to a
+      task that exists.
+    */
+    !/\b(?:create|make|raise|log|open|set\s+up)\s+(?:me\s+)?(?:the|that|this)\s+(?:task|to-?do|reminder)\s*(?:now|then|please|for\s+me)?\s*(?:[.!]|$)/i.test(
+      instructionText,
+    ) &&
+    !/\b(?:a|an|another|new|one\s+more)\s+(?:[a-z-]+\s+){0,2}?(?:task|to-?do|reminder)s?\b/i.test(
+      instructionText,
+    ) &&
+    !/\btasks\b/i.test(instructionText)
+  ) {
+    return null
+  }
 
   for (const shape of SHAPES) {
     const hit = shape.exec(instructionText)
@@ -390,7 +465,21 @@ export const taskRequest = (
       the title, so the title now comes from `taskTitle` and the capture is the
       fallback for a sentence subtraction cannot read.
     */
-    const raw = (taskTitle(instructionText) ?? hit.groups?.title ?? '').trim().replace(/\s+/g, ' ')
+    /*
+      A subtracted title that still opens with a conjunction and a request for
+      a task ("and add a task to ring the venue") is the framing of a second
+      clause, not a name; the shape's own capture holds the name.
+    */
+    const subtracted = taskTitle(instructionText)
+    const framing =
+      subtracted !== null &&
+      /^(?:that\s+)?(?:and|then|so|but)\s+\w+\s+(?:me\s+)?(?:a|an|another)?\s*(?:task|to-?do)/i.test(
+        subtracted,
+      )
+    const raw = ((framing ? null : subtracted) ?? hit.groups?.title ?? '')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(TRAILING_PLEASE, '')
     const title = raw === '' || NOT_A_TITLE.test(raw) ? null : raw
     return { title, matched: hit[0].slice(0, 80) }
   }

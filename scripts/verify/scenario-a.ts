@@ -168,7 +168,14 @@ try {
        content, content_fingerprint, content_chars, fetched_at, added_by)
     values
       (${lit(projectId)}::uuid, 'notebooklm',
-       ${lit(`${source.remoteSourceId}#scenario-a-${run}`)},
+       /*
+         Labelled so the job this document starts is harness (ledger R37).
+         The AFTER INSERT trigger enqueues knowledge.read_source with
+         requested_by <connector>:<external_ref>, and '#scenario-a-' carried
+         no harness signal: on 24 Sep that job posted to a real Slack channel
+         in Grant's project. ':verify-' is what jobs.is_fixture reads.
+       */
+       ${lit(`${source.remoteSourceId}:verify-scenario-a-${run}`)},
        ${lit(source.remoteNotebookId)},
        ${lit(`${source.title ?? 'Untitled source'} (scenario A ${run})`)},
        'source',
@@ -399,7 +406,7 @@ try {
       )
     )?.v ?? '',
   )
-  const session = `scenario-a-${run}`
+  const session = `verify-scenario-a-${run}`
   const say = async (said: string): Promise<{ speak?: string; did?: string; status: number }> => {
     const response = await fetch(`https://${ref}.supabase.co/functions/v1/voice/turn`, {
       method: 'POST',

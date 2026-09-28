@@ -1,0 +1,125 @@
+import { describe, expect, it } from 'vitest'
+import { datesIn, isoForMention } from '../../src/agents/derivable.ts'
+import { fabricatedWhen } from '../../src/agents/quality.ts'
+
+// Thursday 24 September 2026, the day the defect was measured.
+const now = new Date('2026-09-24T10:00:00Z')
+
+describe('a date that follows from what he said is not invented', () => {
+  const asked =
+    'Couple of things. Add a task to renew the public liability insurance by the 30th, another to send the Brightwell invoice next week, and tell me roughly how long insurance renewals usually take.'
+
+  it('the measured case: "by the 30th" answered as "30 Sept"', () => {
+    expect(fabricatedWhen('Renewal is due 30 Sept, so start now.', asked, now)).toBeNull()
+  })
+
+  it('in every spelling a model writes a date', () => {
+    for (const body of [
+      'due Sept 30',
+      'due 30th September',
+      'due 2026-09-30',
+      'by September 30th',
+    ]) {
+      expect(fabricatedWhen(body, asked, now), body).toBeNull()
+    }
+  })
+
+  it('a weekday resolves to its date', () => {
+    expect(fabricatedWhen('I have put it down for 25 Sept.', 'review it on Friday', now)).toBeNull()
+    expect(fabricatedWhen('Moved to 28 September.', 'actually make that Monday', now)).toBeNull()
+    expect(fabricatedWhen('due Oct 1', 'send the invoice next week', now)).toBeNull()
+  })
+
+  it('NEGATIVE CONTROL: a date nothing resolves to is still refused', () => {
+    expect(fabricatedWhen('due Fri Oct 18', asked, now)).not.toBeNull()
+    expect(
+      fabricatedWhen('I have put it down for 26 Sept.', 'review it on Friday', now),
+    ).not.toBeNull()
+    expect(
+      fabricatedWhen('Renewal is due 30 Sept.', 'renew the insurance soon', now),
+    ).not.toBeNull()
+  })
+
+  it('NEGATIVE CONTROL: a clock time is never excused by a date expression', () => {
+    expect(
+      fabricatedWhen('Booked for 3.19 PM on Friday.', 'review it on Friday', now),
+    ).not.toBeNull()
+  })
+
+  it('the resolver itself', () => {
+    expect([...datesIn('by the 30th and next Tuesday', now)].sort()).toEqual([
+      '2026-09-30',
+      '2026-10-06',
+    ])
+    expect(isoForMention('5 Jan', new Date('2026-12-20T00:00:00Z'))).toBe('2027-01-05')
+    expect(isoForMention('31 Feb', now)).toBeNull()
+  })
+})
+
+import { personalTaskRequest } from '../../src/agents/mine.ts'
+
+describe('"by the 30th" is a due date, not part of the title', () => {
+  it('files the date and strips it from the name', () => {
+    expect(
+      personalTaskRequest('Add a task to renew the public liability insurance by the 30th', now),
+    ).toMatchObject({ title: 'Renew the public liability insurance', due: '2026-09-30' })
+  })
+  it('NEGATIVE CONTROL: "the 30th" with no preposition is not a deadline', () => {
+    expect(
+      personalTaskRequest('Add a task to read the 30th anniversary brief', now)?.due ?? null,
+    ).toBeNull()
+  })
+})
+
+describe('a word that begins like a month is not a month', () => {
+  // The measured refusal: a correct arithmetic answer failed as "8 margin".
+  it.each([
+    'That leaves a £8 margin per person.',
+    'We have 5 decisions still open.',
+    'Split it into 3 separate invoices.',
+    'Try 2 novel formats, maybe 4.',
+    'Build a 10 deck slide pack.',
+    'The margin 40 figure is what you gave me.',
+  ])('%s', (body) => {
+    expect(fabricatedWhen(body, 'tickets are 35, food 21, room 6', now)).toBeNull()
+  })
+
+  it.each(['due 18 Oct', 'due Oct 18', 'on 3 March', 'by September 12th', 'Sept 9'])(
+    'NEGATIVE CONTROL: a real month is still checked: %s',
+    (body) => {
+      expect(fabricatedWhen(body, 'tickets are 35, food 21, room 6', now)).not.toBeNull()
+    },
+  )
+})
+
+import { clauses } from '../../src/agents/clauses.ts'
+import { asksForWork, readClause } from '../../src/agents/request.ts'
+
+describe('the mood of a clause: numbers and discourse words', () => {
+  it('a clause opening with a number is not a command', () => {
+    expect(readClause('6 for the room').mood).not.toBe('ask')
+    expect(readClause('£35 per head for the dinner').mood).not.toBe('ask')
+    // the measured sentence: a question, not work
+    expect(
+      asksForWork(
+        'If tickets are 35 quid and each head costs us 21 in food and 6 for the room, what is our margin per person?',
+        clauses,
+      ),
+    ).toBe(false)
+  })
+  it.each([
+    'Now give me a numbered list of those five points',
+    'OK. Add a task to chase the caterers for the final headcount by Wednesday.',
+    'ok so give me the state of play on the funding one',
+    'Then just drop it in Slack for me, same thing.',
+  ])('a request after a discourse word is still a request: %s', (s) => {
+    expect(asksForWork(s, clauses)).toBe(true)
+  })
+  it.each([
+    'So what do you think about it?',
+    'Just thinking out loud here',
+    'Book 3 rooms for Friday',
+  ])('NEGATIVE CONTROL keeps its reading: %s', (s) => {
+    expect(asksForWork(s, clauses)).toBe(s.startsWith('Book'))
+  })
+})

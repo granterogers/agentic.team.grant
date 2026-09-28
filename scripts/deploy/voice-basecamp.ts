@@ -90,7 +90,10 @@ const ask = (auth: string | null) =>
       'Content-Type': 'application/json',
       ...(auth === null ? {} : { Authorization: `Bearer ${auth}` }),
     },
-    body: JSON.stringify({ said: 'what projects have we got', session: `deploy${Date.now()}` }),
+    body: JSON.stringify({
+      said: 'what projects have we got',
+      session: `verify-deploy-${Date.now()}`,
+    }),
   })
 
 const anonymous = await ask(null)

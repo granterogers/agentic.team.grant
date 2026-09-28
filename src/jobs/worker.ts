@@ -33,6 +33,7 @@
 import { type Domain, howComposed } from '../agents/provenance.ts'
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
+import { withoutStrayQuotes } from '../agents/stray-quotes.js'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
@@ -143,6 +144,17 @@ export interface HandlerOutput {
    */
   readonly announce?: boolean
   /**
+   * Which delivery this output is, for every channel's dedupe key (ledger R46).
+   *
+   * Absent means THE job's result, `job:<id>`, which is one message per surface
+   * per job. A question a paused job asks is a different message: sent under
+   * the job's key it would take the job's only slot, and the answer given
+   * after approval would be deduplicated away. `blocker:<id>` makes a question
+   * one message per surface per QUESTION, idempotent across restarts because
+   * the blocker id does not change.
+   */
+  readonly deliveryScope?: string
+  /**
    * What this announcement is ABOUT, when a model writes the words (#360).
    *
    * `app.say_once` keeps a duty from repeating itself by fingerprinting what it
@@ -229,6 +241,8 @@ export interface HandlerOutput {
    * caller, which is why the check that reads it could never fire.
    */
   readonly acted?: number
+  /** Task rows this job created or changed itself; see `OutputMetadata.tasksChanged`. */
+  readonly tasksChanged?: number
   /**
    * Send this output as a playable audio file rather than as text (#66).
    *
@@ -680,6 +694,103 @@ export const dequeue = async (
  * path: §16 exempts it from review, not from the pipeline, and running the
  * same states for both keeps one code path instead of two.
  */
+/**
+ * Deliver the question a paused job raised, once, under its blocker's scope.
+ * Returns what happened, or null when there was nothing to ask.
+ */
+export const askedOnPause = async (
+  db: SqlExecutor,
+  job: Job,
+  output: HandlerOutput,
+  outputId: string,
+  notify?: Notifier,
+): Promise<string | null> => {
+  if (output.announce !== true || notify === undefined) return null
+  const open = await db
+    .execute(
+      `select blocker_id::text as id from public.blockers
+        where job_id = ${lit(job.jobId)}::uuid and state = 'open'
+        order by created_at desc limit 1`,
+    )
+    .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+  const blocker = (open.rows[0] as { id?: string } | undefined)?.id
+  if (blocker === undefined) return null
+  try {
+    const sent = await notify(job, { ...output, deliveryScope: `blocker:${blocker}` }, outputId)
+    return `asked: ${sent.note}`.slice(0, 160)
+  } catch (error) {
+    return `asking failed: ${String((error as Error).message).slice(0, 120)}`
+  }
+}
+
+/**
+ * The recovery half of R46: a question whose job paused but whose worker died
+ * before asking. Only a question with NO delivery row at all under its scope -
+ * a sent one is done and a failed one is not retried in a loop, because a
+ * question re-sent every minute is the thing Grant must never receive. Older
+ * than two minutes, so the inline path has had its turn.
+ */
+export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): Promise<number> => {
+  if (notify === undefined) return 0
+  const { rows } = await db.execute(`
+    select j.job_id::text as job_id, j.kind, j.correlation_id::text as correlation_id,
+           j.project_id::text as project_id,
+           (select o.output_id::text from public.outputs o where o.job_id = j.job_id
+             order by o.created_at desc limit 1) as output_id
+      from public.jobs j
+      join public.blockers b on b.job_id = j.job_id and b.state = 'open'
+     where j.state = 'paused' and j.announce
+       and b.created_at < app.now_utc() - interval '2 minutes'
+       and not exists (select 1 from public.deliveries d
+                        where d.dedupe_key like 'blocker:' || b.blocker_id::text || ':%')
+     order by b.created_at
+     limit ${String(max)}`)
+  let asked = 0
+  for (const r of rows as {
+    job_id: string
+    kind: string
+    correlation_id: string
+    project_id: string | null
+    output_id: string | null
+  }[]) {
+    if (r.output_id === null) continue
+    const stored = await db.execute(
+      `select body, confidence::text as confidence, evidence::text as evidence,
+              deterministic, model, sources, contradictions
+         from public.outputs where output_id = ${lit(r.output_id)}::uuid`,
+    )
+    const o = stored.rows[0] as {
+      body: string
+      confidence: Confidence
+      evidence: Evidence
+      deterministic: boolean
+      model: string | null
+      sources: unknown
+      contradictions: string | null
+    }
+    const job: Job = {
+      jobId: r.job_id,
+      kind: r.kind,
+      correlationId: r.correlation_id,
+      projectId: r.project_id,
+      idempotencyKey: '',
+      attempt: 0,
+    }
+    const output = {
+      body: o.body,
+      confidence: o.confidence,
+      evidence: o.evidence,
+      sources: Array.isArray(o.sources) ? o.sources.map((x) => String(x)) : [],
+      contradictions: o.contradictions,
+      path: o.deterministic ? ('deterministic_retrieval' as const) : ('inference' as const),
+      model: o.model,
+      announce: true,
+    } satisfies HandlerOutput
+    if ((await askedOnPause(db, job, output, r.output_id, notify)) !== null) asked += 1
+  }
+  return asked
+}
+
 export const runJob = async (
   db: SqlExecutor,
   job: Job,
@@ -760,6 +871,7 @@ export const runJob = async (
   await recordPlan(db, job, handler)
   try {
     output = await handler.handle(job, db)
+    output = { ...output, body: withoutStrayQuotes(output.body) }
   } catch (error) {
     const retryable = job.attempt < 4
     /*
@@ -903,6 +1015,7 @@ export const runJob = async (
     ...(output.toolNames === undefined ? {} : { toolNames: output.toolNames }),
     ...(output.standingRules === undefined ? {} : { standingRules: output.standingRules }),
     ...(output.acted === undefined ? {} : { acted: output.acted }),
+    ...(output.tasksChanged === undefined ? {} : { tasksChanged: output.tasksChanged }),
     // The text as well as the labels, so a body claiming a database read from
     // an output whose evidence says nothing was read is caught here rather
     // than on Grant's phone (#185).
@@ -1194,6 +1307,59 @@ export const runJob = async (
       `update public.jobs set announce = ${announce ? 'true' : 'false'}
         where job_id = ${lit(job.jobId)}::uuid`,
     )
+  }
+
+  /*
+    PAUSED BY ITS OWN HANDLER (ledger R45).
+
+    A handler may pause its job — `office.pursue` does, to ask for approval —
+    and still return what it has to say. This line assumed the job was still
+    running: `moveTo('output_created')` from `paused` is an illegal transition,
+    so every such attempt THREW here, after its output was inserted and before
+    it was reviewed. 130 approval pauses left 130 outputs at `pending`, and the
+    first pursuit to be answered and resumed then could not commit: the §10
+    gate counts every unreviewed output of the job, so it stranded in
+    `committing`, which can only go to `failed`. The output is reviewed like
+    any other, and the job stays where its handler put it.
+  */
+  const stateNow = String(
+    (
+      (
+        await db.execute(
+          `select state::text as s from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
+        )
+      ).rows[0] as { s?: string } | undefined
+    )?.s ?? '',
+  )
+  if (stateNow === 'paused') {
+    if (!gate.exempt) {
+      const verdict = await review(output, job)
+      await db.execute(`
+        update public.outputs
+        set reviewer_status = ${lit(verdict.status)}::public.reviewer_status,
+            reviewed_at = app.now_utc(),
+            review_notes = ${lit(verdict.notes)}
+        where output_id = ${lit(outputId)}::uuid
+      `)
+    }
+    /*
+      AND IF IT PAUSED TO ASK HIM SOMETHING, IT ASKS HIM (ledger R46).
+
+      `office.pursue` announces an approval pause precisely so the question
+      reaches him ("A PAUSE THAT ASKS HIM SOMETHING MUST REACH HIM"), and
+      delivery only ever happened from `notifying`, which a paused job never
+      reaches: 130 approval pauses, 0 deliveries. The question is delivered
+      under its BLOCKER's scope, so it cannot consume the job's own result
+      message. A notification failing leaves the pause and the blocker exactly
+      as they are - the approval is durable whether or not the message went.
+      Containment is `app.claim_delivery`'s, as for every other delivery.
+    */
+    const asked = await askedOnPause(db, job, output, outputId, notify)
+    return {
+      jobId: job.jobId,
+      finalState: 'paused',
+      note: asked === null ? 'paused by its handler' : `paused by its handler; ${asked}`,
+    }
   }
 
   await moveTo(db, job.jobId, 'output_created')
@@ -1492,7 +1658,21 @@ export const drain = async (
   // Sweep first. A job held by a dead worker counts against capacity, so
   // skipping this makes a worker unable to dequeue for reasons that look
   // nothing like the cause.
-  if (options.recover !== false) await recoverStalled(db)
+  /*
+    NEVER FATAL (ledger R48). A throw here aborted the whole tick before the
+    dequeue: one job stranded in `committing` made `recover_stalled_jobs`
+    raise, and the production office dequeued nothing from 02:20 to 03:47 on
+    25 September. 0599 contains the refusal to its row in SQL; this is the
+    other half, so the drain survives a sweep that fails for any reason. The
+    stalled job itself is still reported where health is read.
+  */
+  if (options.recover !== false) {
+    await recoverStalled(db).catch((error: unknown) => {
+      console.error(
+        `recovery sweep failed, draining anyway: ${String((error as Error).message).slice(0, 300)}`,
+      )
+    })
+  }
 
   // And put back anything a previous worker parked for want of a handler THIS
   // one holds. Beside the stall sweep because it is the same kind of thing: a
@@ -1588,6 +1768,11 @@ export const drain = async (
   // because a job whose output exists and whose owner never heard about it is
   // the most overdue thing in the system.
   const done: WorkerResult[] = [...(await deliverPending(db, workerId, options.notify, max))]
+  // And any question a paused job raised that never went out (ledger R46).
+  // Never fatal, for the same reason the recovery sweep is not.
+  await askUnasked(db, options.notify).catch((error: unknown) => {
+    console.error(`asking sweep failed: ${String((error as Error).message).slice(0, 200)}`)
+  })
   for (let i = 0; i < max; i++) {
     if (options.stopStartingAfter?.() === true) break
     const job = await dequeue(

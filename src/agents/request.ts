@@ -636,6 +636,23 @@ export const readClause = (clause: string): ClauseReading => {
   */
   if (w.length < 3) return { text, mood: 'remark', why: 'too short to be an instruction' }
 
+  /*
+    A discourse word in front is not the verb. "NOW give me a numbered list"
+    read as unsure because "now" is not a verb; it was only counted as work
+    by accident, because the fragment "one line each" beside it was misread
+    as a command (behavioural remediation, 24 September 2026). Closed class,
+    and only when a clause is left behind it.
+  */
+  if (
+    /^(?:now|so|then|also|and|plus|just|right|ok|okay|anyway)$/.test(w[0] ?? '') &&
+    w.length > 3
+  ) {
+    const rest = text.replace(/^\s*\S+[\s,]+/, '')
+    const again = readClause(rest)
+    if (again.mood === 'ask')
+      return { text, mood: 'ask', why: `${again.why}, after "${String(w[0])}"` }
+  }
+
   const first = w[0] ?? ''
   const second = w[1] ?? ''
   /*
@@ -702,6 +719,24 @@ export const readClause = (clause: string): ClauseReading => {
     branch and being called unsure rather than a question. Found by the same
     run.)
   */
+  /*
+    A NUMBER is not a verb (behavioural remediation, 24 September 2026).
+
+    "If tickets are 35 quid and each head costs us 21 in food and 6 for the
+    room, what is our margin per person?" is segmented at the "and", and "6
+    for the room" arrived here opening with "6" - no subject, so it read as a
+    command. The office then said "I have not done this" in front of the
+    correct £8. A numeral, an amount or a number word is a closed class like
+    the function words above, and no imperative begins with one.
+  */
+  if (
+    /^[£$€]?\d/.test(first) ||
+    /^(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|half|quarter|twice)$/.test(
+      first,
+    )
+  ) {
+    return { text, mood: 'unsure', why: `opens with the number "${first}", so not an imperative` }
+  }
   if (first !== 'do' && NOT_IMPERATIVE_OPENERS.has(first)) {
     return {
       text,

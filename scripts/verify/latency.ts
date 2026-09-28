@@ -37,6 +37,25 @@ import { ManagementApiExecutor } from '../../src/db/executor.ts'
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const run = Date.now().toString(36)
 
+/*
+  IT MESSAGES GRANT, SO IT ASKS FIRST (ledger R41, #354).
+
+  The two probes are posted AS him, from his real chat and to the real
+  webhooks, on purpose (above). They are therefore indistinguishable from his
+  own turns by every witness this office has: the adapter composes the dedupe
+  key and a Telegram id must be numeric, so nothing can mark them harness. Run
+  by a sweep of verify suites it delivered ~30 messages to his Telegram and
+  Slack between 9 and 21 September and none was ever counted as a leak. The
+  design is kept; running it is now a deliberate act.
+*/
+if (!process.argv.includes('--sends-to-grant')) {
+  console.error(
+    'verify:latency sends two real messages to Grant (Telegram and Slack) and they cannot be told\n' +
+      'apart from his own. Run it only when he has asked: npm run verify:latency -- --sends-to-grant',
+  )
+  process.exit(2)
+}
+
 const supabase = process.env.SUPABASE_ACCESS_TOKEN
 if (supabase === undefined || supabase === '') {
   console.error('SUPABASE_ACCESS_TOKEN is required')

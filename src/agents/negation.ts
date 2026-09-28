@@ -236,3 +236,86 @@ export const rejectsWithoutSaying = (text: string): boolean => {
   */
   return left.length === 0
 }
+
+/*
+  A CLOSE THAT ASKS FOR NOTHING (ledger R43).
+
+  "And yeah that's it, thanks." is the same shape as a contentless rejection:
+  a message with no work of its own. Resolved against the thread it BECOMES
+  the previous request, so the office answered it with an invented intake form
+  about the two things it had just done ("Please confirm the exact date…,
+  Emma's preferred method of contact…"). Answered in code, before the
+  resolver, when nothing is left once the closing words are taken out — the
+  word count decides, exactly as for a rejection. The caller must not use it
+  while a question of the office's is waiting on him: "yeah, that's it" is
+  then an answer, and the spoken-answer path owns it.
+*/
+const CLOSES =
+  /\b(?:thanks|thank\s+you|cheers|ta|that'?s\s+(?:it|all|everything)|nothing\s+else|that\s+will\s+do|bye|speak\s+(?:soon|later)|all\s+good)\b/i
+const CLOSING_WORDS = new Set([
+  'and',
+  'yeah',
+  'yes',
+  'yep',
+  'ok',
+  'okay',
+  'right',
+  'so',
+  'great',
+  'perfect',
+  'lovely',
+  'brilliant',
+  'nice',
+  'good',
+  'fine',
+  'cool',
+  'thanks',
+  'thank',
+  'you',
+  'cheers',
+  'ta',
+  'thats',
+  'that',
+  'it',
+  'is',
+  'all',
+  'everything',
+  'for',
+  'now',
+  'nothing',
+  'else',
+  'will',
+  'do',
+  'bye',
+  'speak',
+  'soon',
+  'later',
+  'very',
+  'much',
+  'lot',
+  'the',
+  'moment',
+  'then',
+  'mate',
+  'again',
+  'oh',
+  'um',
+  'uh',
+  'er',
+  'just',
+  'think',
+  'i',
+  'reckon',
+  'sorted',
+])
+export const closesWithoutAsking = (text: string): boolean => {
+  const t = text.trim()
+  if (t.length === 0 || t.length > BRIEF || !CLOSES.test(t) || t.includes('?')) return false
+  return (
+    t
+      .toLowerCase()
+      .split(/[^a-z0-9']+/)
+      .map((w) => w.replace(/'/g, ''))
+      .filter((w) => w.length > 0 && !CLOSING_WORDS.has(w)).length === 0
+  )
+}

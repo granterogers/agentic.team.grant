@@ -49,6 +49,7 @@
  */
 
 import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { ADAPTER_SHAPE, harnessDocSql, offShapeSql } from './leak-witness.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -886,6 +887,102 @@ if (disagree.n > 0) {
       '#354: the two predicates must not disagree, or a suite delivers to his phone',
       'and this check reports clean. Teach app.harness_job the signal, do not',
       'narrow app.harness_label.',
+    ].join('\n'),
+  )
+  process.exit(1)
+}
+
+/*
+  A WITNESS THAT DOES NOT ASK app.harness_job (ledger R37).
+
+  Every check above, and the guard itself, decide "harness" with the same
+  predicate, so a harness it cannot see is invisible to all of them at once:
+  on 24 September this repository's own `verify:scenario-a` delivered six
+  messages to Grant while this check said "new escapes: 0", and on 21 September
+  `verify:escapes`' positive control was run by the deployed worker and
+  delivered twice to his Slack. Neither was ever counted.
+
+  So this asks something else: on the three external doors, a production
+  adapter writes a dedupe key of a KNOWN SHAPE (Telegram numeric chat and
+  message, Slack channel and timestamp, the dashboard page's own voice
+  session). A turn delivered to a real destination whose key no adapter writes
+  was not sent by Grant, whatever the attribution says. The eleven found when
+  this was written are acknowledged below as evidence, never deleted.
+*/
+const ACKNOWLEDGED_OFF_SHAPE = new Set([
+  // #354 / R37 — verify:escapes' positive control, run by the deployed worker
+  'telegram:message:escapes-37qp9xjj-real',
+  'telegram:message:escapes-h3cp3sg2-real',
+  // #354 / R37 — deploy:voice probes, sessions not named verify-
+  'voice:turn:deploy1790157906882.mudxspg1',
+  'voice:turn:deploy1790159346743.mudynkfx',
+  'voice:turn:deploy1790159389467.mudyohe2',
+  'voice:turn:deploy1790203507600.mueoy344',
+  // #354 / R37 — verify:scenario-a, 24 Sep 22:12, the remediation session's own run
+  'voice:turn:scenario-a-mug35frh.mug37s8n',
+  'voice:turn:scenario-a-mug35frh.mug37ud5',
+  'voice:turn:scenario-a-mug35frh.mug37vak',
+  'voice:turn:scenario-a-mug35frh.mug37vru',
+  // #354 / R37 — a hand probe
+  'voice:turn:uxfix1.mue3aakx',
+])
+const offShape = (await db.execute(offShapeSql)).rows as { key: string }[]
+// The second witness: a document a harness added, whose child delivered (R37).
+const ACKNOWLEDGED_HARNESS_DOC = new Set([
+  // R37: verify:scenario-a's knowledge.read_source child, 24 Sep 22:11, Slack
+  // C0BV7ULTCJ1. Found by this witness on its first run; kept as evidence.
+  'c8f7ea92-fc26-4391-9f14-a6149f660a0f',
+])
+const harnessDocAll = (await db.execute(harnessDocSql)).rows as {
+  key: string
+  delivery_id: string
+}[]
+const harnessDoc = harnessDocAll.filter((r) => !ACKNOWLEDGED_HARNESS_DOC.has(r.delivery_id))
+console.log(
+  `  delivered from a document a harness added: ${String(harnessDocAll.length)} (acknowledged: ${String(harnessDocAll.length - harnessDoc.length)} · new: ${String(harnessDoc.length)})`,
+)
+if (harnessDoc.length > 0) {
+  console.error(
+    [
+      ``,
+      `check:leaks FAILED — ${String(harnessDoc.length)} delivery(s) came from work a harness-added document started.`,
+      ...harnessDoc.slice(0, 6).map((r) => `  added_by ${r.key} -> delivery ${r.delivery_id}`),
+      '',
+      'The document insert trigger composes requested_by from the connector reference,',
+      'so label the reference :verify-... in the suite (R37).',
+    ].join('\n'),
+  )
+  process.exit(1)
+}
+// The control: the shape must still admit a real key of each door, and refuse an escaped one.
+const shapeRe = new RegExp(ADAPTER_SHAPE)
+if (
+  ![
+    'telegram:message:8412:1386648496:512',
+    'slack:message:C0C2DAPDN02:1790000000.1234',
+    'voice:turn:s9czo3u0fw2.mufvdj1',
+  ].every((k) => shapeRe.test(k)) ||
+  ['voice:turn:scenario-a-x.1', 'telegram:message:escapes-x-real'].some((k) => shapeRe.test(k))
+) {
+  console.error(
+    'check:leaks CANNOT RUN — the adapter-shape witness does not tell a real key from an escape.',
+  )
+  process.exit(2)
+}
+const offNew = offShape.filter((r) => !ACKNOWLEDGED_OFF_SHAPE.has(r.key))
+console.log(
+  `  delivered by a turn whose key no production adapter writes: ${String(offShape.length)} (acknowledged: ${String(offShape.length - offNew.length)} · new: ${String(offNew.length)})`,
+)
+if (offNew.length > 0) {
+  console.error(
+    [
+      ``,
+      `check:leaks FAILED — ${String(offNew.length)} turn(s) reached a real destination under a key no production adapter writes.`,
+      ...offNew.slice(0, 6).map((r) => `  ${r.key}`),
+      ``,
+      'Whatever app.harness_job says, Grant did not send these. Find the script that',
+      'posts to that door, name its identity verify-..., and teach app.harness_job',
+      'the signal (0583, 0598).',
     ].join('\n'),
   )
   process.exit(1)

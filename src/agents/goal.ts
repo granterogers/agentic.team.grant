@@ -302,6 +302,8 @@ export function validate(
   raw: RawPlan,
   catalogue: readonly Capability[],
   known: ReadonlySet<string>,
+  /** The roster's first names, so a task handed to a colleague can be recognised. */
+  names: readonly string[] = [],
 ): GoalPlan {
   const byName = new Map(catalogue.map((c) => [c.tool, c]))
   const goal = typeof raw.goal === 'string' ? raw.goal.trim().slice(0, 400) : ''
@@ -394,6 +396,32 @@ export function validate(
       substituting a different action is how an approved plan stops matching
       what runs.
     */
+    /*
+      A TASK IS GRANT'S LIST, SO A TASK FOR A COLLEAGUE IS DELEGATION MISFILED.
+
+      Rule 3c in the prompt says so and the model broke it on the first try
+      (behavioural remediation, 24 September 2026): "Get Emma to dig out the
+      Holloway Barn deposit, and then have Daniel work out what share of
+      £20,000 it is" was planned as two task.create steps - "Emma locate…",
+      "Daniel compute…" - so the office asked Grant to approve putting its own
+      colleagues' work on HIS to-do list, promised "I will come back with what
+      each one found", and started nothing.
+
+      Keyed on the step NAMING A COLLEAGUE, not on its audience: the model
+      labels real tasks for Grant ("book the venue", "write the welcome pack")
+      as audience "office" too - 30 of 87 historical task.create steps - and
+      refusing those would lose requests he made. The roster's first names are
+      a closed set read from the database, so this needs no word list.
+    */
+    const colleague = names.find((n) =>
+      new RegExp(`(?:^|\\b(?:get|have|ask|for)\\s+)${n}\\b`, 'i').test(why),
+    )
+    if (capability === 'task.create' && colleague !== undefined) {
+      refused.push(
+        `${id} is work for ${colleague}, and task.create only puts things on Grant's own list`,
+      )
+      continue
+    }
     if (audience === 'outside' && DELIVERS_TO_PEOPLE.has(capability)) {
       refused.push(
         `${capability} would put this in front of people outside the office — ` +
@@ -498,6 +526,73 @@ const SYSTEM = (sheet: string, roster: string): string =>
     '8. why is one short phrase for Grant, not an explanation to yourself.',
   ].join('\n')
 
+/*
+  An outcome he wants to KEEP is a written one (ledger R47).
+
+  R22 dropped every draft the model proposed for a request with no document
+  noun in it, and `verify:composes` went red on exactly the sentence that
+  shows the gap: "go through the onboarding material and work out what is out
+  of date, so that I have something concrete to pick up later". The model
+  proposed read -> draft, which is right: "to pick up later" asks for a result
+  that outlives the reply. With the draft dropped one step was left, no plan
+  ran, and the turn answered in prose without reading the material. The
+  class, not the phrase: a result for later, to pick up, to come back to, to
+  refer to, or "something concrete / on paper / I can use".
+  NOT a bare "to keep": measured on his real messages it fired once, on "whether
+  to keep building this system", which means continue, not retain.
+*/
+const KEPT_FOR_LATER =
+  /\b(?:(?:for|until)\s+later|to\s+(?:pick\s+up|come\s+back\s+to|return\s+to|refer\s+(?:back\s+)?to|hold\s+on\s+to|work\s+from|go\s+back\s+to)|something\s+(?:concrete|written|on\s+paper|tangible)|(?:something|somewhere)\s+(?:i|we)\s+can\s+(?:use|keep|pick\s+up|come\s+back\s+to|work\s+from|go\s+back\s+to|refer\s+(?:back\s+)?to))\b/i
+
+/**
+ * Did he ask for something WRITTEN? Rule 3b's condition, checked in code.
+ *
+ * Behavioural remediation, 24 September 2026 (ledger R22). The prompt says
+ * draft.create is only for a document, a write-up, a message to prepare —
+ * "analysis he wants told to him is not a draft" — and the model breaks it:
+ * 93 of 118 historical draft.create steps came from requests with no word for
+ * anything written ("go through the onboarding material and tell me what is
+ * out of date" -> "summarize outdated items"). At `suggest`, which every one
+ * of Grant's projects is on, a draft needs his approval, so 28 of those plans
+ * parked on a question about a document he never asked for and then died.
+ * "Work out what share of £20,000 the deposit is" did the same on the first
+ * try.
+ *
+ * The answer that closes a plan already says what was found, so a step whose
+ * only job is to write the analysis down adds an approval and nothing else.
+ */
+export const asksForWriting = (request: string): boolean =>
+  KEPT_FOR_LATER.test(request) ||
+  /\b(?:write|written|writing|draft|drafts|document|doc|docs|write-?up|report|memo|letter|e-?mail|note|notes|summary|summari[sz]e|one-?pager|brief|briefing|proposal|post|copy|announcement|pdf|deck|slides|script|agenda|minutes|newsletter|message|reply|response|template)\b/i.test(
+    request,
+  )
+
+/**
+ * A plan without the drafts nobody asked for, and without anything that
+ * depended on them. Fewer than two steps left is not a plan: it falls back and
+ * the cascade answers, which is the path that retrieves and replies directly.
+ */
+export const withoutUnaskedDrafts = (plan: GoalPlan, request: string): GoalPlan => {
+  if (plan.how === 'fallback' || asksForWriting(request)) return plan
+  const dropped = new Set<string>()
+  const kept = plan.steps.filter((st) => {
+    if (st.capability === 'draft.create' || st.needs.some((n) => dropped.has(n))) {
+      dropped.add(st.id)
+      return false
+    }
+    return true
+  })
+  if (dropped.size === 0) return plan
+  const refused = [
+    ...plan.refused,
+    `${[...dropped].join(', ')} would have written a draft nobody asked for`,
+  ]
+  if (kept.length === 0 && plan.unreachable.length === 0) {
+    return fellBack(`only unasked drafts were proposed: ${[...dropped].join(', ')}`)
+  }
+  return { ...plan, steps: kept, refused }
+}
+
 /**
  * Ask what this goal requires. Never throws; every failure is today's behaviour.
  */
@@ -520,7 +615,7 @@ export interface Again {
 export async function planFor(
   request: string,
   catalogue: readonly Capability[],
-  roster: readonly { readonly slug: string; readonly title: string }[],
+  roster: readonly { readonly slug: string; readonly title: string; readonly name?: string }[],
   router: ProviderRouter | undefined,
   trace: { readonly jobId?: string; readonly correlationId?: string } = {},
   again?: Again,
@@ -608,6 +703,12 @@ export async function planFor(
     return fellBack('the answer was not valid JSON')
   }
 
-  const checked = validate(raw, catalogue, new Set(roster.map((r) => r.slug)))
+  const validated = validate(
+    raw,
+    catalogue,
+    new Set(roster.map((r) => r.slug)),
+    roster.map((r) => (r.name ?? '').trim()).filter((n) => /^[A-Za-z]{2,}$/.test(n)),
+  )
+  const checked = withoutUnaskedDrafts(validated, said)
   return checked.how === 'fallback' ? checked : { ...checked, model: result.model ?? null }
 }

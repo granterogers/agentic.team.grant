@@ -213,6 +213,72 @@ const JUST_THIS_ONCE =
  *   The marker is how a preference is spotted when nothing can read
  *   meaning. It is the WEAKER evidence, and it was gating the stronger.
  */
+/**
+ * An "always" or "never" sentence that is about something other than how the
+ * office should behave (ledger R35). Structural, not a list of topics:
+ *
+ *   - a QUESTION ("should you always...?");
+ *   - a DENIAL or REPORT of what was said ("I never said...", "last time you
+ *     said you'd always...") - a correction of the record, not a rule;
+ *   - a THIRD PARTY's habit stated as fact ("Emma never replies before ten",
+ *     "my accountant always sends invoices late") - unless a modal makes it a
+ *     rule about them ("Oliver should always sign off as Oliver").
+ */
+export function notARuleForTheOffice(text: string): boolean {
+  const t = text.trim()
+  if (/\?\s*$/.test(t)) return true
+  if (
+    /^\s*(?:i|you|we)\s+(?:never|didn'?t|did\s+not)\s+(?:said|say|asked|ask|told|tell|wanted|want|meant|mean)\b/i.test(
+      t,
+    )
+  )
+    return true
+  if (
+    /\byou\s+(?:said|told\s+me|promised)\s+(?:that\s+)?(?:you'?d|you\s+would|you\s+will|you'?ll)\b/i.test(
+      t,
+    )
+  )
+    return true
+  const subject =
+    /^\s*(?:(?:by\s+the\s+way|btw|fyi|ok(?:ay)?|right|so)[,\s]+)?((?:my|our|his|her|their|the)\s+[a-z]+|[A-Z][a-z]+|he|she|they)\s+(?:\w+\s+){0,2}?(?:always|never)\b/.exec(
+      t,
+    )
+  if (subject !== null) {
+    const who = String(subject[1]).toLowerCase()
+    const isTheOffice = /^(?:the\s+(?:office|team|chief|agents?)|you|we)$/.test(who)
+    const aRuleAboutThem =
+      /\b(?:should|must|needs?\s+to|has\s+to|have\s+to|ought\s+to|is\s+to)\b/i.test(t)
+    if (
+      !isTheOffice &&
+      !aRuleAboutThem &&
+      !/^(?:always|never|from|going|in|whenever|every|as|by|remember|bear|keep|make|don't|do|please|just|also|and|but|so|then|now|and|ok|okay|right|thanks)$/i.test(
+        who,
+      )
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Which of several readings of one message is the rule he gave.
+ *
+ * A MARKED reading wins over an unmarked one: #290's line is what he said, and
+ * "always" means lasting, so it is stored. The meaning reader hands back a
+ * clause in its own words, and dropping the "always" ("Give information in
+ * clear bullet points.") made it an unmarked reading that, being first, turned
+ * a rule he stated into an offer. An unmarked reading still stands when
+ * nothing is marked (completion pass).
+ */
+export function strongestTeaching(readings: readonly (Teaching | null)[]): Teaching | null {
+  return (
+    readings.find((t) => t !== null && t.kind === 'lesson' && t.marked) ??
+    readings.find((t) => t !== null) ??
+    null
+  )
+}
+
 export function readTeaching(instruction: string, alreadyAPreference = false): Teaching | null {
   const text = instruction.trim()
   if (text.length < 20) return null
@@ -313,6 +379,21 @@ export function readTeaching(instruction: string, alreadyAPreference = false): T
     one of these phrases, and it opens with a standing marker instead.
   */
   if (opensByDroppingIt(text)) return null
+
+  /*
+    AN "ALWAYS" THAT IS NOT A RULE FOR THE OFFICE (ledger R35).
+
+    Driven on production: "Emma never replies before ten, by the way.",
+    "Should you always use bullet points?", "I never said to use bullet
+    points." and "My accountant always sends invoices late." were all STORED
+    as standing rules - permanent, append-only, and in every prompt after -
+    because the bare word was the whole of the test. Only when the word is the
+    ONLY evidence: an explicit "remember that...", a withdrawal and a meaning
+    the semantic reader already judged are untouched.
+  */
+  if (standing && !asked && !takingItBack && !alreadyAPreference && notARuleForTheOffice(text)) {
+    return null
+  }
 
   if (standing || asked || takingItBack || (alreadyAPreference && !JUST_THIS_ONCE.test(text))) {
     const body = firstSentence(text)

@@ -95,15 +95,28 @@ import { clauses, split } from '../agents/clauses.ts'
 import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
+import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
-import { extractionRequest } from '../agents/extract.ts'
+import { asksAboutHisOwnList, extractionRequest } from '../agents/extract.ts'
 import { type Capability, planFor, planningCatalogue } from '../agents/goal.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { type Handoff, handoffIn } from '../agents/handoff.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
-import { personalTaskChange, personalTaskRequest } from '../agents/mine.ts'
-import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
+import {
+  personalTaskChange,
+  personalTaskRequest,
+  pickByName,
+  subtaskRequest,
+  taskStateChange,
+} from '../agents/mine.ts'
+import { groundedIn, namedColleague } from '../agents/named.ts'
+import {
+  asksWhatWasSaid,
+  closesWithoutAsking,
+  rejectsWithoutSaying,
+  withoutNegated,
+} from '../agents/negation.ts'
 import type { CanonicalOutcome } from '../agents/outcome.ts'
 import { contractFor, sayWhatHappened } from '../agents/outcome.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
@@ -129,9 +142,18 @@ import { asksForWork } from '../agents/request.ts'
 import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
+import { optionFor, spokenAnswer } from '../agents/spoken-answer.ts'
 import { nameSubjects } from '../agents/subject.ts'
-import { NEEDS_A_TITLE, type TaskRequest, taskRequest, titleReply } from '../agents/tasks.ts'
-import { readTeaching } from '../agents/teaching.ts'
+import {
+  NEEDS_A_TITLE,
+  resolveElliptical,
+  type TaskRequest,
+  taskRequest,
+  taskTitle,
+  titleReply,
+  wantsAntecedent,
+} from '../agents/tasks.ts'
+import { readTeaching, strongestTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import { oneReading, type ReadingKind, understand } from '../agents/understand.ts'
 import { asksWhatTheyFound, asksWhoIsOnIt } from '../agents/whoison.ts'
@@ -235,13 +257,17 @@ export const planAndPursue = async (
     planningCatalogue(db),
     db
       .execute(
-        `select slug, coalesce(title, '') as title
+        `select slug, coalesce(title, '') as title, coalesce(name, '') as name
            from public.staff where active order by slug`,
       )
       .then(({ rows }) =>
         rows.map((r) => {
-          const row = r as { slug?: unknown; title?: unknown }
-          return { slug: String(row.slug ?? ''), title: String(row.title ?? '') }
+          const row = r as { slug?: unknown; title?: unknown; name?: unknown }
+          return {
+            slug: String(row.slug ?? ''),
+            title: String(row.title ?? ''),
+            name: String(row.name ?? ''),
+          }
         }),
       ),
   ])
@@ -321,8 +347,29 @@ export const planAndPursue = async (
         definition — that is what taking the other door means.
       */
       if (deliberate !== null) return { created: true }
-      return (typeof raw === 'string' ? JSON.parse(raw) : raw) as { created?: boolean } | null
+      return (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+        created?: boolean
+        job_id?: string
+      } | null
     })
+
+  /*
+    THE CHILD THIS JOB'S OWN EARLIER ATTEMPT MADE IS NOT SOMEBODY ELSE'S
+    (ledger R31). A retry of this same job reaches enqueue_child_once with the
+    same obligation key, finds the pursuit its first attempt started, and was
+    answered "That is already in hand - I handed exactly this on a moment
+    ago" - in a brand-new chat, about a request made once. It is this
+    request's own work, so it is described as this request's plan.
+  */
+  const ownEarlierAttempt =
+    handed?.created === false && typeof handed.job_id === 'string'
+      ? await db
+          .execute(
+            `select parent_job_id::text as p from public.jobs where job_id = ${lit(handed.job_id)}::uuid`,
+          )
+          .then((r) => String((r.rows[0] as { p?: string } | undefined)?.p ?? '') === job.jobId)
+          .catch(() => false)
+      : false
 
   /*
     ALREADY RUNNING IS SAID, NOT SILENTLY REPEATED AND NOT SILENTLY DROPPED.
@@ -332,7 +379,7 @@ export const planAndPursue = async (
     quiet instead would be worse: he asked twice because the first answer had
     not arrived.
   */
-  if (handed?.created === false) {
+  if (handed?.created === false && !ownEarlierAttempt) {
     return (
       'That is already in hand — I handed exactly this on a moment ago and it ' +
       'is still running, so I have not started it a second time. ' +
@@ -441,15 +488,86 @@ interface HisTask {
  * Overdue, today and upcoming are the three he asks about and all three are
  * named in the function's own case.
  */
+/*
+  THE REFERENT'S CANDIDATES, ON EITHER SIDE OF 0593 (ledger R42).
+
+  0593 gave `app.my_task_referent` a `p_any_task` argument and a `candidates`
+  list. A worker deployed before that migration would call a signature that
+  does not exist, the call would throw, and every settle and named change
+  would fall silent: worse than main, not merely unimproved. So a missing
+  function is answered with the old one-argument call, mapped to the same
+  shape; any other error still throws, because a failing query is not an
+  absent one.
+*/
+export async function referentCandidates(
+  db: SqlExecutor,
+  commandId: string,
+): Promise<{ readonly rows: readonly unknown[] }> {
+  const id = lit(commandId === '' ? '00000000-0000-0000-0000-000000000000' : commandId)
+  try {
+    return await db.execute(`select app.my_task_referent(${id}::uuid, p_any_task => true) as t`)
+  } catch (error) {
+    if (!/does not exist|42883|p_any_task/.test(String((error as Error).message))) throw error
+    const r = await db.execute(`select app.my_task_referent(${id}::uuid) as t`)
+    const raw = (r.rows[0] as { t?: unknown } | undefined)?.t
+    const old = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+      id?: string
+      title?: string
+    } | null
+    const candidates =
+      old !== null && typeof old?.id === 'string'
+        ? [{ id: old.id, title: String(old.title ?? '') }]
+        : []
+    return { rows: [{ t: { candidates } }] }
+  }
+}
+
+const NOTHING_TO_STOP = 'There was nothing still running on that, so there is nothing to stop.'
+
+/** "Monday 28 September" for an ISO date, read as a calendar day. */
+export const onDay = (iso: string): string => {
+  const at = new Date(`${iso.slice(0, 10)}T12:00:00Z`)
+  return Number.isNaN(at.getTime())
+    ? iso
+    : at.toLocaleDateString('en-GB', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        timeZone: 'UTC',
+      })
+}
+
 export function taskSpine(
   overdue: readonly HisTask[],
   today: readonly HisTask[],
   upcoming: readonly HisTask[],
   counts: { readonly overdue?: number; readonly today?: number; readonly all?: number },
+  /*
+    The undated ones, NAMED (ledger R8). Every open task on his real list has
+    no due date, so the three dated buckets were all empty and the spine said
+    only "holds 9 item(s), none of them due" - a count with no names, which
+    cannot answer "what are my tasks". Optional so an older caller keeps its
+    exact sentence.
+  */
+  unscheduled: readonly HisTask[] = [],
 ): string {
-  const say = (t: HisTask): string => (t.due_on === null ? t.title : `${t.title} (${t.due_on})`)
+  /*
+    With its weekday, computed here (ledger R39). Given a bare ISO date the
+    model supplied the weekday itself and got it wrong: "2026-09-26
+    (Tuesday)" for a Saturday, "2026-09-28 (Wednesday)" for a Monday, in an
+    answer to "what have I got on this week". A weekday is derivable, so it is
+    derived once, in code; the ISO date stays for the grounding check.
+  */
+  const say = (t: HisTask): string =>
+    t.due_on === null ? t.title : `${t.title} (due ${onDay(t.due_on)}, ${t.due_on})`
   const total = Number(counts.all ?? 0)
-  if (total === 0 && overdue.length === 0 && today.length === 0 && upcoming.length === 0) {
+  if (
+    total === 0 &&
+    overdue.length === 0 &&
+    today.length === 0 &&
+    upcoming.length === 0 &&
+    unscheduled.length === 0
+  ) {
     return 'His own to-do list is empty right now. Nothing is on it.'
   }
   const parts: string[] = []
@@ -459,6 +577,10 @@ export function taskSpine(
     parts.push(`Due today or earlier, ${String(today.length)}: ${today.map(say).join('; ')}.`)
   if (upcoming.length > 0)
     parts.push(`Coming up, ${String(upcoming.length)}: ${upcoming.map(say).join('; ')}.`)
+  if (unscheduled.length > 0)
+    parts.push(
+      `No date set, ${String(unscheduled.length)}: ${unscheduled.map((t) => t.title).join('; ')}.`,
+    )
   if (parts.length === 0) {
     return `His own to-do list holds ${String(total)} item(s), none of them due or overdue.`
   }
@@ -809,7 +931,7 @@ export async function speaker(
   // Nothing to look up. `withoutNegated` can empty a message that was entirely
   // a withdrawal, and an empty VALUES list is a syntax error rather than an
   // empty answer.
-  const found =
+  const matched =
     asks.length === 0
       ? []
       : await db
@@ -825,6 +947,33 @@ export async function speaker(
             })),
           )
           .catch(() => undefined)
+
+  /*
+    A COLLEAGUE HE NAMED IS THE ONE HE MEANT (ledger R21).
+
+    "Ask Emma to pull together everything on the Holloway Barn booking" went
+    to the quality director by subject and Emma was never convened. A clause
+    that names a roster member in a delegation frame belongs to that person,
+    ahead of any subject match; everything else about routing is unchanged,
+    so the per-clause handoff below turns "get Emma to X and then have Daniel
+    do Y" into Emma first, Daniel with her result.
+  */
+  const colleagues = await db
+    .execute(`select slug, coalesce(name, '') as name from public.staff where active`)
+    .then((r) => r.rows as { slug: string; name: string }[])
+    .catch(() => [] as { slug: string; name: string }[])
+  const named = asks.map((t) => namedColleague(t, colleagues))
+  const found =
+    matched === undefined
+      ? named.every((n) => n === null)
+        ? undefined
+        : named.flatMap((slug, i) => (slug === null ? [] : [{ i, slug }]))
+      : named.some((n) => n !== null)
+        ? asks.flatMap((_t, i) => {
+            const n = named[i] ?? null
+            return n !== null ? [{ i, slug: n }] : matched.filter((x) => x.i === i)
+          })
+        : matched
 
   // Order matters and duplicates do not: `pickRoster`'s contested branch takes
   // the first name, so the first ask has to come first.
@@ -966,6 +1115,38 @@ export async function speaker(
  * project — both right for something a person types and wrong for a job that
  * resolved its project several hundred lines ago.
  */
+/**
+ * A task NAMED by Grant, looked for on his whole open list (ledger R29).
+ *
+ * The conversation's own tasks are the referent set, deliberately: "mark it
+ * done" must not reach across chats. But the interfaces are entrances to ONE
+ * office, and a task made on Telegram and named on Slack - "mark the Hartley
+ * one done" - was answered "no task has been added in this conversation"
+ * although there is exactly one open task by that name on his list. A NAME is
+ * not a pronoun: when it picks exactly one of his open personal tasks, that
+ * is the one he means. A bare referent never comes here.
+ */
+async function hisTaskByName(
+  db: SqlExecutor,
+  jobId: string,
+  name: string,
+): Promise<{ id: string; title: string } | null> {
+  const r = await db.execute(`
+    select app.my_tasks('all', 200, null, 'smart', app.harness_job(${lit(jobId)}::uuid)) as t`)
+  const raw = (r.rows[0] as { t?: unknown })?.t
+  const all = ((typeof raw === 'string' ? JSON.parse(raw) : raw) ?? []) as {
+    id?: string
+    task_id?: string
+    title?: string
+    state?: string
+  }[]
+  const open = all
+    .filter((t) => t.state !== 'done' && t.state !== 'cancelled')
+    .map((t) => ({ id: String(t.id ?? t.task_id ?? ''), title: String(t.title ?? '') }))
+    .filter((t) => t.id !== '')
+  return pickByName(name, open)
+}
+
 async function addTask(
   db: SqlExecutor,
   job: Job,
@@ -2008,6 +2189,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         heardText = `🎧 Heard: “${instruction}”`
       }
       if (instruction === '') throw new Error('the command carried no instruction')
+      /*
+        Without the noise speech puts into it (ledger R27): fillers, a word
+        said twice, a date or time corrected in place. "Heard:" above still
+        quotes the transcript exactly; this is what the readers are given.
+      */
+      instruction = cleanDictation(instruction)
 
       // Two messages that are one instruction. Grant shares a video and then
       // says what to do with it, or the reverse; both halves are correct alone
@@ -2090,6 +2277,41 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           path: await howComposed(deps.db, job.jobId),
           model: null,
         } satisfies HandlerOutput
+      }
+
+      /*
+        A close that asks for nothing (ledger R43), answered before the
+        resolver turns it back into the previous request — unless the last
+        turn left a question of ours waiting on him, when it is an answer.
+      */
+      if (closesWithoutAsking(instruction)) {
+        const last = (
+          await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => [])
+        ).at(-1)
+        // A question of ours in prose, with no blocker behind it, is answered by
+        // "yes, thanks" too; only a turn that asked him nothing may be closed.
+        const weAsked = String(last?.answered ?? '')
+          .trim()
+          .endsWith('?')
+        if (last === undefined || (Number(last.waitingOnYou ?? 0) === 0 && !weAsked)) {
+          await deps.db
+            .execute(`
+              update public.jobs set recipient_agent = 'chief-of-staff'
+               where job_id = ${lit(job.jobId)}::uuid`)
+            .catch(() => undefined)
+          return {
+            body:
+              last !== undefined && Number(last.stillGoing ?? 0) > 0
+                ? 'Right. I will come back to you when what is still going on has finished.'
+                : 'Right — nothing else from me.',
+            confidence: 'high',
+            evidence: 'verified',
+            sources: [`job:${job.jobId}`],
+            contradictions: null,
+            path: await howComposed(deps.db, job.jobId),
+            model: null,
+          } satisfies HandlerOutput
+        }
       }
 
       /*
@@ -3056,7 +3278,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         no title of their own. This can only ever ADD a reading his own
         sentence supports; it never invents one from a paraphrase.
       */
+      /*
+        The turn before, read only for an elliptical "also one to…" (R7): the
+        main thread read is far below and hoisting it would put a query in
+        front of every message to serve this one.
+      */
+      const hisLastTurn = wantsAntecedent(asSaid)
+        ? // His last three turns, so "and another for the caterers" after "also one
+          // to book the minibus" still reaches the turn that said "task".
+          (await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => []))
+            .slice(-3)
+            .map((t) => t.said)
+            .join(' ')
+        : ''
+      /*
+        "Also one to book the minibus" resolved against his OWN previous turn
+        (R7). The model's reading of a thanks-plus-fragment surfaced no task
+        clause at all, so no reader below was ever shown it; this is his
+        sentence with "one" replaced by the noun his last message used, so it
+        is grounded in his words by construction and can only add a reading.
+      */
+      const hisElliptical = resolveElliptical(asSaid, `${asSaid} ${hisLastTurn}`)
       const hisRequests = [
+        ...(hisElliptical !== asSaid ? [hisElliptical] : []),
         ...(resolved.changed && resolved.from !== null ? [resolved.from] : []),
         ...understood.surviving.filter((r) => HIS_OWN.has(r.kind)).map((r) => r.text),
       ]
@@ -3293,7 +3537,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               })
               .catch(() => null)
 
-      const calledOff = isBranch || changesHis !== null ? null : firstOfHis(callsItOff)
+      /*
+        And his literal words, when nothing survived the reading (ledger R26).
+        hisRequests holds the pre-rewrite text only when the resolver CHANGED
+        it, plus the model's surviving intents - and a pure withdrawal has no
+        surviving intent, because the model rightly files it as abandoned. So
+        "Actually forget it, don't bother with that." never reached this
+        reader and prose asked him again for what he had withdrawn.
+        callsItOff is anchored to the whole message, so the literal text is
+        exactly what it was written for.
+      */
+      const calledOff =
+        isBranch || changesHis !== null ? null : (firstOfHis(callsItOff) ?? callsItOff(asSaid))
       const stopped =
         calledOff === null
           ? null
@@ -3320,7 +3575,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   claim-with-no-row this repository keeps paying for.
                 */
                 if (n === 0 && finished === 0 && refused === 0) {
-                  return 'There was nothing still running on that, so there is nothing to stop.'
+                  return NOTHING_TO_STOP
                 }
                 const parts: string[] = []
                 if (n > 0) {
@@ -3400,9 +3655,25 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           flag, so the union can only ever store a rule it would have
           stored anyway.
         */
-        [...asRules.map((text) => readTeaching(text, true)), readTeaching(instruction)].find(
-          (t) => t !== null,
-        ) ?? null
+        /*
+          His words, never the resolver's paraphrase (completion pass; #322's
+          class). `instruction` is `resolved.instruction` by here, and a
+          rewrite keeps the request and drops the marker: five plausible
+          rewrites of anchor A, five nulls from `readTeaching`. And reading a
+          paraphrase is the dangerous direction as well: one that adds an
+          "always" would store a rule he never gave.
+
+          And a MARKED reading wins (`strongestTeaching`). This was the defect
+          actually observed: the meaning reader's own wording of the clause
+          dropped the "always" ("Give your information in clear bullet
+          points."), and as the first reading it turned a rule he stated into
+          an OFFER on the Governance page — one door of four in one
+          `verify:anchors` run and two of four in the next.
+        */
+        strongestTeaching([
+          ...asRules.map((text) => readTeaching(text, true)),
+          readTeaching(hisWords),
+        ])
 
       /*
         AND STORING IT DOES NOT END THE TURN.
@@ -3702,7 +3973,24 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         for me", "on my list" or "I must", none of which a bare "write me a
         one-pager" carries.
       */
-      const deferred = isBranch ? null : firstOfHis(personalTaskRequest)
+      const deferred = isBranch
+        ? null
+        : firstOfHis((text) => {
+            // Grounded in his words, for the reason given at the project-task reader.
+            const got = personalTaskRequest(resolveElliptical(text, `${asSaid} ${hisLastTurn}`))
+            if (got === null || !groundedIn(got.title, asSaid)) return null
+            /*
+              And a change of mind inside the sentence names the task by what
+              SURVIVED it (ledger R27): "add a task to chase kevin, no
+              actually, email kevin about the quote" was titled with the whole
+              sentence. The project reader already consults the retraction
+              reader when it composes a title; this one never did.
+            */
+            const kept = readRetraction(text)?.kept?.trim() ?? ''
+            if (kept === '') return got
+            const named = taskTitle(kept) ?? kept
+            return { ...got, title: named.charAt(0).toUpperCase() + named.slice(1) }
+          })
       /*
         AND IT DOES NOT MAKE A SECOND ONE WHILE SAYING IT HAS NOT.
 
@@ -3908,7 +4196,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         the artifact veto above consults; assembling it twice is how the
         command bar's renderer and its keyboard picker came to disagree.
       */
-      const forGrant = wantsFile !== null || isBranch || changesHis !== null ? null : deferred
+      /*
+        A SUBTASK IS NOT A NEW TASK (ledger R6). Read first, from his words,
+        so "add checking the figures as a subtask under it" can veto both
+        flat-task readers - which otherwise filed his whole sentence as the
+        title of a task with no parent.
+      */
+      const subOf = isBranch ? null : (firstOfHis(subtaskRequest) ?? subtaskRequest(asSaid))
+      const forGrant =
+        wantsFile !== null || isBranch || changesHis !== null || subOf !== null ? null : deferred
       const noted =
         forGrant === null
           ? null
@@ -3917,6 +4213,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 select app.my_task_add(
                   p_title => ${lit(forGrant.title.slice(0, 200))},
                   p_due_on => ${forGrant.due === null ? 'null' : `${lit(forGrant.due)}::date`},
+                  /*
+                    The time he said, so the reminders duty sends it (ledger
+                    R24). Nothing in the conversation set remind_at before, so
+                    "remind me at 3pm" was a to-do nothing would ever raise.
+                  */
+                  p_remind_at => ${forGrant.remindAt == null ? 'null' : `${lit(forGrant.remindAt)}::timestamptz`},
                   /*
                     The project he is IN, if any. #259: a personal task may
                     belong to an Agentic Team project, and one added from a
@@ -3965,6 +4267,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 const answer = (r.rows[0] as { t?: unknown })?.t
                 const got = (typeof answer === 'string' ? JSON.parse(answer) : answer) as {
                   ok?: boolean
+                  repeated?: boolean
                 }
                 /*
                   An offer may only promise what the press can perform. If the
@@ -3974,6 +4277,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   cheaper to simply not make.
                 */
                 if (got?.ok !== true) return null
+                /*
+                  The same message twice (ledger R18, 0592): the writer
+                  returned the task this conversation made moments ago, so
+                  saying "that is on your list" again would read as a second
+                  one. Said plainly instead.
+                */
+                if (got.repeated === true) {
+                  return `That is already on your list from a moment ago — "${forGrant.title}". I have not added it twice.`
+                }
+                /*
+                  Said as the time it will arrive, in his zone, and "around"
+                  because the reminders duty runs every fifteen minutes: a
+                  promise to the minute would be one it cannot keep.
+                */
+                if (forGrant.remindAt != null) {
+                  const at = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Europe/Athens',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hourCycle: 'h23',
+                  }).format(new Date(forGrant.remindAt))
+                  return `That is on your list for ${String(forGrant.due)} — "${forGrant.title}". I will remind you around ${at}.`
+                }
                 return forGrant.due === null
                   ? `That is on your list — "${forGrant.title}", no date on it yet.`
                   : `That is on your list for ${forGrant.due} — "${forGrant.title}".`
@@ -4016,11 +4342,25 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // sentence, `taskRequest` must not also file one from the same words —
       // and neither must it file one the personal-task path has already taken.
       const asked =
-        pullOut !== null || noted !== null || isBranch
+        pullOut !== null || noted !== null || isBranch || subOf !== null
           ? null
           : changesHis !== null
             ? null
-            : firstOfHis((text) => taskRequest(text, classifyIntent(text)))
+            : firstOfHis((text) => {
+                /*
+                  A title from a REWRITE must be grounded in his words (ledger
+                  R4b): "And put it down as mine." became a creation in the
+                  paraphrase and filed the task he had just made a second
+                  time. His literal reading comes first in hisRequests, so a
+                  request he made himself is unaffected.
+                */
+                // His whole message is the antecedent for an elliptical "add one to…",
+                // and his previous turn when this one does not name a task (R7).
+                const got = taskRequest(text, classifyIntent(text), `${asSaid} ${hisLastTurn}`)
+                return got === null || got.title === null || groundedIn(got.title, asSaid)
+                  ? got
+                  : null
+              })
 
       /*
         And the ANSWER to "what should it be called?", which is the other half.
@@ -4101,8 +4441,24 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         pass by reading the two paths against each other rather than by running
         one of them.
       */
+      /*
+        FINISHED OR CALLED OFF (ledger R3, 0593).
+
+        The conversation could rename and re-date a task and had no way to
+        complete or cancel one, so "Mark the Hartley one done" was answered
+        "...is now marked as done" over a row still reading todo. Read from HIS
+        words, never the rewrite, for #322's reason. Resolved below against the
+        tasks THIS conversation made, and acted on only when exactly one fits.
+      */
+      const settles =
+        noted !== null || wantsFile !== null || isBranch
+          ? null
+          : // His literal words too: a withdrawal has no surviving intent (R26, R42).
+            (firstOfHis(taskStateChange) ?? taskStateChange(asSaid))
       const change =
-        noted !== null || wantsFile !== null || namedLater !== null || isBranch ? null : changesHis
+        noted !== null || wantsFile !== null || namedLater !== null || isBranch || settles !== null
+          ? null
+          : changesHis
       const changed =
         change === null
           ? null
@@ -4133,12 +4489,31 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               )
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
-                const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                const pointed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
                   id?: string
                   title?: string
                   ambiguous?: number
                   titles?: string[]
                 } | null
+                /*
+                  A task NAMED ("move the Hartley one to Monday") is found by
+                  its name on his list, never by proximity (ledger R29). A name
+                  that picks nothing, or several, is asked about below exactly
+                  as an empty referent is.
+                */
+                const byName =
+                  change.name == null
+                    ? null
+                    : await hisTaskByName(deps.db, job.jobId, change.name).catch(() => null)
+                const subject =
+                  change.name == null
+                    ? pointed
+                    : byName === null
+                      ? null
+                      : { id: byName.id, title: byName.title }
+                if (change.name != null && byName === null) {
+                  return `I have not changed anything — I could not find one open task matching "the ${change.name} one". Say its name as it is on the list.`
+                }
                 /*
                   SEVERAL things it could mean, so it asks which — and names
                   them, because "which one?" with no list is a question he
@@ -4187,6 +4562,235 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   .catch(() => undefined)
                 return null
               })
+
+      /*
+        The press for settles, above. Its answer says what canonical state now
+        holds and nothing else: a task is only called finished when
+        app.hq_task_state returned it in that state, and a name that fits no
+        task, or several, is asked about with the candidates named, never
+        guessed.
+      */
+      const settledTask: { text: string; did: boolean } | null =
+        settles === null
+          ? null
+          : await referentCandidates(deps.db, String(payload.command_id ?? ''))
+              .then(async (r) => {
+                const raw = (r.rows[0] as { t?: unknown })?.t
+                const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  candidates?: { id: string; title: string }[]
+                } | null
+                const candidates = subject?.candidates ?? []
+                const verb = settles.state === 'done' ? 'tick off' : 'take off the list'
+                // A named task can be found on his whole list (ledger R29).
+                const acrossChats =
+                  settles.name !== null && pickByName(settles.name, candidates) === null
+                    ? await hisTaskByName(deps.db, job.jobId, settles.name).catch(() => null)
+                    : null
+                if (candidates.length === 0 && acrossChats === null) {
+                  return {
+                    did: false,
+                    text:
+                      'I have not changed anything — no task has been added in this ' +
+                      `conversation for me to ${verb}. Tell me which one, or tick it ` +
+                      'off on the dashboard task list.',
+                  }
+                }
+                const target =
+                  acrossChats ??
+                  (settles.name === null
+                    ? candidates.length === 1
+                      ? (candidates[0] ?? null)
+                      : null
+                    : pickByName(settles.name, candidates))
+                if (target === null) {
+                  const names = candidates
+                    .slice(0, 4)
+                    .map((c) => `"${c.title}"`)
+                    .join(', ')
+                  return {
+                    did: false,
+                    text: `I have not changed anything yet. Which one should I ${verb} — ${names}?`,
+                  }
+                }
+                const set = await deps.db.execute(
+                  `select app.hq_task_state(${lit(target.id)}, ${lit(settles.state)}) as r`,
+                )
+                const out = (set.rows[0] as { r?: unknown })?.r
+                const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
+                  state?: string
+                  error?: string
+                } | null
+                if (got?.state !== settles.state) {
+                  return {
+                    did: false,
+                    text: `I could not ${verb} "${target.title}"${got?.error === undefined ? '' : `: ${got.error}`}.`,
+                  }
+                }
+                return {
+                  did: true,
+                  text:
+                    settles.state === 'done'
+                      ? `Done — "${target.title}" is ticked off.`
+                      : `Taken off the list — "${target.title}" is cancelled.`,
+                }
+              })
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'finish or cancel a task', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
+
+      /*
+        The press for subOf: the parent is resolved among the tasks THIS
+        conversation made, as a completion is, and the child written through
+        app.my_task_add with p_parent, which checks the parent is one a task
+        may sit under. Nothing is created when the parent is not exactly one.
+      */
+      const subbed: { text: string; did: boolean } | null =
+        subOf === null
+          ? null
+          : await referentCandidates(deps.db, String(payload.command_id ?? ''))
+              .then(async (r) => {
+                const raw = (r.rows[0] as { t?: unknown })?.t
+                const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  candidates?: { id: string; title: string }[]
+                } | null
+                const candidates = subject?.candidates ?? []
+                const parent =
+                  subOf.parentName === null
+                    ? candidates.length === 1
+                      ? (candidates[0] ?? null)
+                      : null
+                    : (pickByName(subOf.parentName, candidates) ??
+                      (await hisTaskByName(deps.db, job.jobId, subOf.parentName).catch(() => null)))
+                if (parent === null) {
+                  return {
+                    did: false,
+                    text:
+                      candidates.length === 0
+                        ? `I have not added it — there is no task in this conversation to put "${subOf.title}" under. Which task is it part of?`
+                        : `I have not added it yet. Which one should "${subOf.title}" go under — ${candidates
+                            .slice(0, 4)
+                            .map((c) => `"${c.title}"`)
+                            .join(', ')}?`,
+                  }
+                }
+                const made = await deps.db.execute(`
+                  select app.my_task_add(
+                    p_title => ${lit(subOf.title.slice(0, 200))},
+                    p_parent => ${lit(parent.id)},
+                    p_job => ${lit(job.jobId)}::uuid) as r`)
+                const out = (made.rows[0] as { r?: unknown })?.r
+                const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
+                  ok?: boolean
+                  error?: string
+                } | null
+                return got?.ok === true
+                  ? { did: true, text: `Added "${subOf.title}" under "${parent.title}".` }
+                  : {
+                      did: false,
+                      text: `I could not put "${subOf.title}" under "${parent.title}"${got?.error === undefined ? '' : `: ${got.error}`}.`,
+                    }
+              })
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'add a subtask', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
+
+      /*
+        HIS YES OR NO TO THE QUESTION THIS CONVERSATION ASKED (ledger R33).
+
+        Only for a short, unambiguous yes or no, only when this conversation's
+        own work - its jobs and everything they started - has exactly ONE open
+        question, and only onto that question's own option by its first word.
+        Several open questions are named and asked about; none, and this does
+        nothing. Answered through app.hq_answer_blocker, the same door the
+        dashboard button uses, so what answering performs is identical.
+      */
+      const spoken = isBranch ? null : spokenAnswer(asSaid)
+      const answeredQuestion: { text: string; did: boolean } | null =
+        spoken === null
+          ? null
+          : await deps.db
+              .execute(`
+                with recursive me as (
+                  select origin_channel, split_part(origin_ref, ':', 1) as chat,
+                         coalesce(subject, actor) as who, command_id
+                    from public.inbound_commands
+                   where command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid
+                ), ours as (
+                  select c.job_id from public.inbound_commands c, me
+                   where c.origin_channel = me.origin_channel
+                     and split_part(c.origin_ref, ':', 1) = me.chat
+                     and coalesce(c.subject, c.actor) = me.who
+                     and c.command_id <> me.command_id
+                     and c.job_id is not null
+                     and c.received_at >= app.now_utc() - interval '12 hours'
+                   /*
+                     The turn IMMEDIATELY before only. "ok" is also how people
+                     acknowledge, so a question raised three turns back, with
+                     other answers since, must not be approved by an "ok,
+                     thanks" meant for the latest reply.
+                   */
+                   order by c.received_at desc
+                   limit 1
+                ), tree as (
+                  select job_id from ours
+                  union
+                  select j.job_id from public.jobs j join tree t on j.parent_job_id = t.job_id
+                )
+                select b.blocker_id::text as id, b.requested_action as what,
+                       coalesce(b.approval_options, array[]::text[]) as options
+                  from public.blockers b
+                 where b.state = 'open' and b.job_id in (select job_id from tree)
+                 order by b.created_at desc limit 5`)
+              .then(async (r) => {
+                const open = r.rows as { id: string; what: string; options: string[] }[]
+                if (open.length === 0) return null
+                if (open.length > 1) {
+                  return {
+                    did: false,
+                    text: `I have not answered anything yet — there is more than one question waiting: ${open
+                      .map((o) => `"${o.what}"`)
+                      .join(', ')}. Which one is that for?`,
+                  }
+                }
+                const q = open[0]
+                const option = q === undefined ? null : optionFor(spoken, q.options)
+                if (q === undefined || option === null) return null
+                const res = await deps.db.execute(
+                  `select app.hq_answer_blocker(${lit(q.id)}::uuid, ${lit(option)}) as r`,
+                )
+                const out = (res.rows[0] as { r?: unknown })?.r
+                const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
+                  ok?: boolean
+                  error?: string
+                } | null
+                return got?.ok === true
+                  ? {
+                      did: true,
+                      text:
+                        spoken === 'yes'
+                          ? `Taken as a yes to "${q.what}" — it is going ahead now.`
+                          : `Taken as a no to "${q.what}" — I have left it.`,
+                    }
+                  : {
+                      did: false,
+                      text: `I could not record that answer to "${q.what}"${got?.error === undefined ? '' : `: ${got.error}`}.`,
+                    }
+              })
+              .catch(() => null)
 
       const filed =
         asked !== null
@@ -4259,6 +4863,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         filed,
         noted,
         changed,
+        settledTask?.text ?? null,
+        subbed?.text ?? null,
+        answeredQuestion?.text ?? null,
         stopped,
         whoIsOn,
         alreadyOn,
@@ -4297,7 +4904,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           filed,
           noted,
           changed,
-          stopped,
+          settledTask?.text ?? null,
+          subbed?.text ?? null,
+          answeredQuestion?.text ?? null,
+          /*
+            "Forget the printers one" is a task he has, not work in flight
+            (ledger R42): when it settled a named task, the call-off that
+            found nothing running is noise beside it.
+          */
+          settledTask?.did === true && stopped === NOTHING_TO_STOP ? null : stopped,
           whoIsOn,
           alreadyOn,
           secondOpinion,
@@ -4331,9 +4946,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         is not authorization: the worst it can do is pay for a retrieval on a
         turn that did not need one.
       */
-      const alsoAsked = understood.surviving.some(
-        (r) => r.kind === 'question' || r.kind === 'task_query',
-      )
+      /*
+        Work handed to the office that nothing on this turn picked up (ledger
+        R43). "I need to call the council on Thursday and can you also ask
+        Emma what the venue said about accessibility" filed the task, and
+        because a task was filed `pursuing` never ran and the answering path
+        short-circuited: Emma was chosen as the speaker and never said
+        anything. A delegation is owed an answer as much as a question is,
+        unless something here already started it. Named, because a delegation
+        answered on the turn is also not work that failed to land (`wanted`).
+      */
+      const delegations = understood.surviving.filter((r) => r.kind === 'delegate').length
+      const answersDelegation =
+        delegations > 0 &&
+        pursuing === null &&
+        extracting === null &&
+        writingFile === null &&
+        reading === null &&
+        enumerating === null &&
+        who.handoff === null &&
+        who.alsoConvened.length === 0
+      const alsoAsked =
+        understood.surviving.some((r) => r.kind === 'question' || r.kind === 'task_query') ||
+        answersDelegation
       /*
         One name for "this turn owes him an answer", so the fourteen gates
         below cannot drift apart. CLAUDE.md records the cost of a list
@@ -4389,6 +5024,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           it and the sentence becomes unbacked narration (0516).
         */
         (changed === null ? 0 : 1) +
+        (settledTask?.did === true ? 1 : 0) +
+        (subbed?.did === true ? 1 : 0) +
+        (answeredQuestion?.did === true ? 1 : 0) +
         who.alsoConvened.length
 
       /*
@@ -4479,10 +5117,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         One extra count in a query that was already being made.
       */
       const pendingChildren =
-        counted === undefined ? (pursuing === null ? 0 : 1) : Number(counted.kids ?? 0)
+        (counted === undefined ? (pursuing === null ? 0 : 1) : Number(counted.kids ?? 0)) +
+        /*
+          A HANDOFF IS PENDING WORK TOO (ledger R23). It is enqueued AFTER
+          this output is written, because it carries the output, so no count
+          of children can see it yet - and "get Emma to find X, and then have
+          Daniel work out Y" was answered "I have not done this yet" in front
+          of Emma's correct figure while Daniel's half sat queued.
+        */
+        (who.handoff === null ? 0 : 1)
 
       const outcome: CanonicalOutcome = {
-        wanted: wantedWork,
+        /*
+          A call-off the office handled is not work that failed to land
+          (ledger R42): "don't bother with the florist, but remind me Friday
+          to chase the printers" filed the task, found nothing running on the
+          florist, said so — and opened with "partly done, 1 of 2, the rest
+          did not go through", because stopping writes no task row. `stopped`
+          is its own confirmation, so that clause leaves the count.
+        */
+        wanted: Math.max(
+          0,
+          wantedWork - (stopped === null ? 0 : 1) - (answersDelegation ? delegations : 0),
+        ),
         /*
           Counted from ROWS, not from what the handler attempted.
 
@@ -4651,7 +5308,23 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         } satisfies HandlerOutput
       }
 
-      const hits = !answering ? [] : await retrieve(deps.db, instruction, job.projectId)
+      /*
+        A SHORT FOLLOW-UP SEARCHES WITH WHAT IT FOLLOWS (ledger R32).
+
+        "Yes, go ahead." retrieves nothing, so the answer to it had no
+        documents behind it, and the date the office had just read out of the
+        venue terms ("2 Oct") was refused four times as invented - the job
+        failed. A short message also searches with the words of the message
+        before it, which is what it is about; a long one stands on its own.
+        Only the SEARCH widens: the office's own earlier answer is still not
+        evidence, but the documents that answer came from are.
+      */
+      const lastSaid = turnsBefore.at(-1)?.said ?? ''
+      const searchFor =
+        instruction.split(/\s+/).length <= 8 && lastSaid !== ''
+          ? `${lastSaid} ${instruction}`
+          : instruction
+      const hits = !answering ? [] : await retrieve(deps.db, searchFor, job.projectId)
       const context = contextBlock(hits)
 
       /*
@@ -4901,15 +5574,27 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         nothing. The fallback path never sets it, so a turn where the model was
         unavailable behaves exactly as it does today.
       */
-      const asksAboutHisList = understood.surviving.some((r) => r.kind === 'task_query')
+      const asksAboutHisList =
+        understood.surviving.some((r) => r.kind === 'task_query') ||
+        // His words, whatever the model labelled them (ledger R38).
+        asksAboutHisOwnList(asSaid)
       const hisList = !asksAboutHisList
         ? ''
         : await deps.db
             .execute(`
-              select app.my_tasks('overdue', 15, null, 'smart') as overdue,
-                     app.my_tasks('today', 15, null, 'smart') as today,
-                     app.my_tasks('upcoming', 10, null, 'smart') as upcoming,
-                     app.my_tasks_counts() as counts`)
+              select app.my_tasks('overdue', 15, null, 'smart', h.harness) as overdue,
+                     app.my_tasks('today', 15, null, 'smart', h.harness) as today,
+                     app.my_tasks('upcoming', 10, null, 'smart', h.harness) as upcoming,
+                     app.my_tasks('unscheduled', 15, null, 'smart', h.harness) as unscheduled,
+                     app.my_tasks_counts() as counts
+                /*
+                  A harness turn sees its own world (ledger R8), the rule the
+                  project spine above already follows: without it every test
+                  of "what is on my list" answered "nothing" about the task
+                  the same session had just made. False for every message a
+                  person sends, so byte-identical for Grant.
+                */
+                from (select app.harness_job(${lit(job.jobId)}::uuid) as harness) h`)
             .then((r) => {
               /*
                 The executor hands a jsonb column back as an OBJECT, and
@@ -4928,6 +5613,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 read(row.today, [] as HisTask[]),
                 read(row.upcoming, [] as HisTask[]),
                 read(row.counts, {} as { overdue?: number; today?: number; all?: number }),
+                read(row.unscheduled, [] as HisTask[]),
               )
             })
             /*
@@ -5230,6 +5916,28 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               // has an answer that is both honest and useful.
               ...(projectList === '' ? [] : [{ role: 'system' as const, content: projectList }]),
               ...(hisList === '' ? [] : [{ role: 'system' as const, content: hisList }]),
+              /*
+                WHAT THIS TURN ALREADY DID (ledger R42). When a turn both acts
+                and asks, the confirmation goes above the answer — and the
+                model was never told it existed, so it answered the whole
+                message: "That is on your list for 2026-10-02 - Chase the
+                printers" followed, in the same reply, by "I can't set a
+                reminder for Friday until I know where to put it". Stated as
+                settled fact, so the answer covers only what is left.
+              */
+              ...(confirmation === null
+                ? []
+                : [
+                    {
+                      role: 'system' as const,
+                      content:
+                        'The office has ALREADY done the following parts of his message on this ' +
+                        'turn, and they are shown to him directly above your reply. Do not repeat ' +
+                        'them, do not say they could not be done, and do not ask for anything in ' +
+                        'order to do them. Answer only what he asked that this does not cover.\n\n' +
+                        confirmation,
+                    },
+                  ]),
               /*
                   What this chat said before the window, and what is out of
                   view (#238).
@@ -5892,6 +6600,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         // What this turn actually did, so #248's check has a number to compare
         // the answer against.
         acted,
+        /*
+          And how many TASK rows it touched (ledger R3). A hand-off counts in
+          acted; it is not a task ticked off, and the claim that one was
+          is checked against this instead. Calling work off counts too:
+          the model says "the related tasks have been cancelled" about
+          stopped JOBS, and refusing a true stop confirmation fails the turn
+          into silence, which is the expensive direction.
+        */
+        tasksChanged:
+          (noted === null ? 0 : 1) +
+          (changed === null ? 0 : 1) +
+          (settledTask?.did === true ? 1 : 0) +
+          (subbed?.did === true ? 1 : 0) +
+          (filed === null ? 0 : 1) +
+          (stopped === null ? 0 : 1),
         /*
           And who continues (#128).
 

@@ -61,7 +61,9 @@ const FROM = '(?:out of|from|in|inside|within)'
 const SHAPES: readonly RegExp[] = [
   // pull / extract / lift / get the tasks out of X
   new RegExp(
-    `\\b(?:pull|extract|lift|get|take|find|list)\\s+(?:all\\s+)?(?:the\\s+|any\\s+)?${PLURAL}\\s+${FROM}\\s+(?<from>.+)`,
+    // "pull out the tasks due this week from the minutes": a particle, and a
+    // short qualifier between the plural and the source (ledger R38).
+    `\\b(?:pull|extract|lift|get|take|find|list)\\s+(?:out\\s+)?(?:all\\s+)?(?:the\\s+|any\\s+)?${PLURAL}(?:\\s+(?!${FROM}\\b)\\w+){0,4}\\s+${FROM}\\s+(?<from>.+)`,
     'i',
   ),
   // what are the actions in X · what tasks are in X
@@ -131,6 +133,20 @@ const FORBIDDEN = /\b(?:do ?n[o']t|never|no need to|rather than|instead of|witho
 /** Something he is REPORTING, not asking for. */
 const NOT_ASKING = /\b(?:i (?:made|wrote|pulled|listed)|there (?:are|were)|here (?:are|is))\b/i
 
+/*
+  WHAT HE ALREADY HAS, NOT WHAT THE PROJECT HOLDS (ledger R38).
+
+  With no source named, an extraction reads the project's documents to find
+  work nobody has listed. "What tasks do I have this week?", "what needs doing
+  today", "what's overdue" ask about work that IS listed: a first-person
+  subject or a time scope says so. Read as extraction, the question started a
+  job that read the project and did not answer it. Only the unsourced shapes
+  consult this; "pull the tasks due this week out of the brief" names a source
+  and is still an extraction.
+*/
+const ABOUT_HIS_LIST =
+  /\b(?:do|have|did|got|need|should)\s+i\b|\bi(?:'ve|\s+have)?\s+(?:got|to\s+do|on)\b|\b(?:my|mine)\b|\b(?:today|tonight|tomorrow|this\s+(?:week|month|morning|afternoon)|next\s+week|overdue|late|due)\b/i
+
 /** Long enough that the source name is a sentence rather than a thing. */
 const SOURCE_MAX = 120
 
@@ -157,13 +173,53 @@ export function extractionRequest(instruction: string): ExtractRequest | null {
       ?.trim()
       .replace(/\s+/g, ' ')
       .replace(/^(?:the|that|this|our|my)\s+/i, '')
+      .replace(/[?!]+$/, '')
     if (raw === undefined || raw === '' || raw.length > SOURCE_MAX) continue
     return { from: raw, matched: hit[0].slice(0, 80) }
   }
 
+  // A question about HIS list is answered from the list (ledger R38).
   for (const shape of WHOLE_PROJECT) {
     const hit = shape.exec(said)
-    if (hit !== null) return { from: null, matched: hit[0].slice(0, 80) }
+    if (hit === null) continue
+    // An imperative to extract is an extraction whatever it is scoped to; a
+    // question or a "list" about his own work is answered from his list.
+    if (asksAboutHisOwnList(said)) return null
+    return { from: null, matched: hit[0].slice(0, 80) }
   }
   return null
+}
+
+/*
+  ONE PREDICATE, TWO CALLERS (ledger R38). What extraction declines as a
+  question about his list is exactly what the list reader must answer: the
+  first fix made the extraction decline "What needs doing today?" and the
+  answer then fell to the model, which stated what his list held without it
+  having been read, and the coherence gate refused all three attempts. He got
+  nothing. The handler asks this as well as the model's reading, so a question
+  the model labelled differently still reaches his list.
+*/
+const HIS_LIST_WORDS =
+  /\bwhat\s+(?:have|'ve|\u2019ve)\s+i\s+got\b|\bwhat(?:'s|\u2019s|\s+is)\s+(?:on\s+)?my\s+(?:list|plate)\b|\bwhat(?:'s|\u2019s|\s+is)\s+(?:overdue|due|late)\b/i
+
+export function asksAboutHisOwnList(text: string): boolean {
+  const said = String(text ?? '').trim()
+  if (said === '' || FORBIDDEN.test(said) || NOT_ASKING.test(said)) return false
+  // Opening a sentence, after at most a discourse word: "remind me to check
+  // what is due" asks for a reminder, not for the list.
+  const opens = said
+    .split(/(?<=[.!?])\s+/)
+    .map((x) =>
+      x.replace(
+        /^(?:(?:so|and|ok|okay|right|fine|thanks|yes|perfect|great|also|anyway)\b[,\s]*)+/i,
+        '',
+      ),
+    )
+  if (opens.some((x) => HIS_LIST_WORDS.test(x) && x.search(HIS_LIST_WORDS) === 0)) return true
+  for (const shape of WHOLE_PROJECT) {
+    const hit = shape.exec(said)
+    if (hit !== null && !/^(?:pull|extract|lift|find)\b/i.test(hit[0]) && ABOUT_HIS_LIST.test(said))
+      return true
+  }
+  return false
 }

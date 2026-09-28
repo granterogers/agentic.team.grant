@@ -58,6 +58,8 @@
   what he sends. The corpus caught it on its first run.
 */
 import { withoutOpeningAffirmation } from './intent.ts'
+import { mentionsWithoutAsking } from './not-a-request.ts'
+import { REMIND_TIME_WORDS, remindAtFor, spokenToDigits } from './remind-at.ts'
 import { DANGLING_AFTER_A_DATE, PROJECT_ADJUNCT } from './request.ts'
 
 const APOS = "['\u2019\u02bc]?"
@@ -248,6 +250,11 @@ export interface PersonalTask {
   readonly due: string | null
   /** Which rule matched, so a caller can say why and a test can assert it. */
   readonly because: 'reminder' | 'commitment'
+  /**
+   * The instant to remind him, when he said a time (ledger R24). ISO, or
+   * null. Optional so every older reader of this shape is unchanged.
+   */
+  readonly remindAt?: string | null
 }
 
 /*
@@ -262,6 +269,15 @@ export interface PersonalTask {
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
 const iso = (d: Date): string => d.toISOString().slice(0, 10)
+
+/** The calendar day an instant falls on in Grant's zone. */
+const localIso = (instant: string, timeZone = 'Europe/Athens'): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(instant))
 
 const SMALL: Readonly<Record<string, number>> = {
   a: 1,
@@ -341,7 +357,7 @@ export function whenFor(said: string, now: Date = new Date()): string | null {
       return iso(base)
     }
   }
-  const dayOfMonth = /\bon\s+the\s+(\d{1,2})(?:st|nd|rd|th)?\b/i.exec(said)
+  const dayOfMonth = /\b(?:on|by|before|until)\s+the\s+(\d{1,2})(?:st|nd|rd|th)?\b/i.exec(said)
   if (dayOfMonth !== null) {
     const day = Number(dayOfMonth[1])
     if (day >= 1 && day <= 31) {
@@ -380,7 +396,20 @@ const stripFraming = (said: string): string =>
     because `classifyIntent` needed the same thing for the same reason last
     week. A second list here would be two places for "Anyway" to be forgotten.
   */
-  withoutOpeningAffirmation(said)
+  withoutOpeningAffirmation(spokenToDigits(said))
+    /*
+      "Put down THAT I need to send the insurers the claim form" (ledger R38):
+      a commitment introduced by "that" is the object of whatever came before
+      it — put down, note down, make a note, just so you know — so that part
+      is framing, however it is worded. Only when "that" is directly followed
+      by his first-person commitment, so a "that" inside the work is untouched.
+    */
+    .replace(
+      /^[^.?!]{0,60}?\bthat\s+(?=i(?:\s+|['\u2019])(?:need|have|want|ought|must|should|gotta|meant|ve|m|ll)\b)/i,
+      '',
+    )
+    // The time of day comes out with the date (ledger R24): it is in remind_at.
+    .replace(REMIND_TIME_WORDS, ' ')
     .replace(REMIND_ME, ' ')
     .replace(I_MUST, ' ')
     /*
@@ -431,7 +460,7 @@ const stripFraming = (said: string): string =>
     .replace(/^\s*(?:add|to-?do|todo|task)\s*:\s*/i, ' ')
     .replace(MAKE_SURE_I, ' ')
     .replace(
-      /\b(?:for\s+|by\s+|until\s+|before\s+|on\s+|next\s+|this\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi,
+      /\b(?:for\s+|by\s+|until\s+|before\s+|on\s+|next\s+|this\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|(?:on|by|before|until)\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi,
       ' ',
     )
     /*
@@ -548,6 +577,8 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
   if (said === '') return null
   if (REMIND_ME_A_QUESTION.test(said)) return null
   if (ASKING_WHETHER_IT_EXISTS.test(said)) return null
+  // A prohibition, an advice question or somebody else's words (ledger R34).
+  if (mentionsWithoutAsking(said)) return null
   const remind = REMIND_ME.test(said) && !REMIND_SOMEBODY_ELSE.test(said)
   const commit =
     I_MUST.test(said) ||
@@ -567,10 +598,18 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
   */
   if (title.length < 3) return null
 
+  /*
+    The time, when he said one (ledger R24), and the day it lands on when he
+    gave a time and no day: "remind me at 3pm" is a reminder TODAY, and a task
+    with no date sits in the Inbox where a reminder is the wrong place for it.
+  */
+  const day = whenFor(said, now)
+  const remindAt = remindAtFor(said, day, now)
   return {
     title: title.charAt(0).toUpperCase() + title.slice(1),
-    due: whenFor(said, now),
+    due: day ?? (remindAt === null ? null : localIso(remindAt)),
     because: remind ? 'reminder' : 'commitment',
+    remindAt,
   }
 }
 
@@ -616,6 +655,12 @@ export interface PersonalTaskChange {
   readonly title: string | null
   /** Which words matched, so a caller can say why and a test can assert it. */
   readonly matched: readonly string[]
+  /**
+   * The task NAMED rather than pointed at - "move the Hartley one to Monday"
+   * (ledger R29). Null for a bare referent, which is the older, conversation-
+   * scoped case. Optional so older readers of this shape are unchanged.
+   */
+  readonly name?: string | null
 }
 
 /*
@@ -629,7 +674,7 @@ export interface PersonalTaskChange {
   disagree about what counts as a date.
 */
 const WHEN_WORDS =
-  /\b(?:on\s+|next\s+|this\s+|to\s+|until\s+|by\s+|for\s+|before\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi
+  /\b(?:on\s+|next\s+|this\s+|to\s+|until\s+|by\s+|for\s+|before\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|(?:on|by|before|until)\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi
 
 const BARE_REFERENT =
   /\b(?:that|this|it|that\s+one|the\s+task|the\s+reminder)\b(?!\s+[a-z]{3,}(?:\s|$))|\b(?:that|this|it)\b\s*$/i
@@ -767,7 +812,14 @@ export function personalTaskChange(
     none of them can be the subject the guard is protecting against.
   */
   residue = residue.replace(new RegExp(CHANGING.source, 'gi'), ' ')
-  if (!namedReferent && !BARE_REFERENT.test(residue)) return null
+  /*
+    Or a task NAMED: "the Hartley one", "the insurance task" (ledger R29). The
+    handler resolves the name among his tasks and asks when it is not exactly
+    one, so a name is safe where an open noun phrase would not be.
+  */
+  const namedTask = /\bthe\s+([a-z0-9'’ -]{2,40}?)\s+(?:one|task|to-?do|reminder)\b/i.exec(residue)
+  const taskName = namedTask === null ? null : String(namedTask[1]).trim().toLowerCase()
+  if (!namedReferent && !BARE_REFERENT.test(residue) && taskName === null) return null
 
   /*
     Nothing recognised is nothing to do. Returning an empty change would make
@@ -776,5 +828,162 @@ export function personalTaskChange(
     make it true by accident.
   */
   if (matched.length === 0) return null
-  return { due, priority, title: title === '' ? null : title, matched }
+  return { due, priority, title: title === '' ? null : title, matched, name: taskName }
+}
+
+/**
+ * "Mark it done", "bin the minibus one" — a task completed or called off.
+ *
+ * Behavioural remediation, 24 September 2026 (ledger R3). The conversation
+ * could rename and re-date a task and could not finish or cancel one, so
+ * "Mark the Hartley one done" was answered "…is now marked as done" over a
+ * row still reading `todo`. This is the missing reading; the handler resolves
+ * WHICH task among the ones this conversation made, and only acts when exactly
+ * one fits.
+ *
+ * The object must be a REFERENT — "it", "that", "that one", or "the X one /
+ * the X task / the X reminder" — never an open noun phrase, so "delete the
+ * email", "remove the paragraph about pricing" and "cancel the booking" are
+ * not read as touching a to-do at all. That restriction is the whole safety
+ * argument: a wrong completion looks exactly like a right one.
+ *
+ * Cancelled rather than deleted for "bin" and friends: `hq_task_state` records
+ * an undo offer, and a to-do list you cannot take a mistaken removal back from
+ * is one he will stop dictating to.
+ */
+export interface TaskStateChange {
+  readonly state: 'done' | 'cancelled'
+  /** The distinguishing words ("hartley", "minibus"), or null for a bare referent. */
+  readonly name: string | null
+}
+
+const REFERENT_OBJECT = String.raw`(?:(?:it|that|this|that\s+one|this\s+one|the\s+last\s+one)|the\s+(?<name>[a-z0-9'’ -]{2,60}?)\s+(?:one|task|to-?do|reminder|item))`
+const DONE_FORMS: readonly RegExp[] = [
+  new RegExp(
+    String.raw`\b(?:mark|tick|cross|check|set)\s+${REFERENT_OBJECT}\s+(?:as\s+)?(?:done|complete|completed|finished|off)\b`,
+    'i',
+  ),
+  new RegExp(String.raw`\b(?:tick|cross|check)\s+off\s+${REFERENT_OBJECT}(?=[\s.,!;]|$)`, 'i'),
+  new RegExp(String.raw`\b(?:complete|finish|close)\s+${REFERENT_OBJECT}(?=[\s.,!;]|$)`, 'i'),
+]
+const CANCEL_FORMS: readonly RegExp[] = [
+  new RegExp(
+    String.raw`\b(?:bin|delete|remove|scrap|drop|cancel|ditch|kill|lose|get\s+rid\s+of|take\s+off)\s+${REFERENT_OBJECT}(?=[\s.,!;]|$)`,
+    'i',
+  ),
+  /*
+    "Actually, forget the printers one too" (ledger R42). Only with a NAMED
+    referent: a bare "forget it" withdraws what he is asking for right now,
+    and reading it as "cancel my last task" would delete something he wants.
+  */
+  /\bforget(?:\s+about)?\s+the\s+(?<name>[a-z0-9'’ -]{2,60}?)\s+(?:one|task|to-?do|reminder|item)(?=[\s.,!;]|$)/i,
+]
+
+export function taskStateChange(text: string): TaskStateChange | null {
+  const said = withoutOpeningAffirmation(String(text ?? '').trim())
+  if (said === '') return null
+  // A question about it is not a request — unless it is the polite imperative.
+  if (said.endsWith('?') && !/^(?:can|could|would|will)\s+you\b/i.test(said)) return null
+  // A prohibition is not a request: "don't delete that one yet", "can you not
+  // delete that one" (ledger R34).
+  if (/\b(?:don'?t|do\s+not|never|not\s+yet|no\s+need\s+to|not)\b/i.test(said)) return null
+  for (const [forms, state] of [
+    [DONE_FORMS, 'done'],
+    [CANCEL_FORMS, 'cancelled'],
+  ] as const) {
+    for (const re of forms) {
+      const hit = re.exec(said)
+      if (hit === null) continue
+      /*
+        Taken back in the same breath: "mark the Hartley one done, actually
+        no, leave it" (ledger R34). A change of mind AFTER the request
+        withdraws it, whatever the retraction reader makes of the rest.
+      */
+      const after = said.slice(hit.index + hit[0].length)
+      if (
+        /^[\s,.;:\u2014-]*(?:actually|no|wait|hang\s+on|on\s+second\s+thoughts?|scratch\s+that|forget\s+(?:it|that))\b/i.test(
+          after,
+        )
+      ) {
+        return null
+      }
+      const name = hit.groups?.name?.trim().toLowerCase() ?? null
+      return { state, name: name === '' ? null : name }
+    }
+  }
+  return null
+}
+
+/**
+ * Which candidate a name picks, or null when it picks none or several.
+ *
+ * Every distinguishing word must appear in the title. Deliberately strict:
+ * "the minibus one" picks "Book the minibus for the away day" and nothing
+ * else; a name matching two titles is asked about, never guessed.
+ */
+export function pickByName<T extends { readonly title: string }>(
+  name: string,
+  candidates: readonly T[],
+): T | null {
+  const words = name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2 && !['the', 'and', 'for', 'one'].includes(w))
+  if (words.length === 0) return null
+  const fits = candidates.filter((c) => {
+    const title = c.title.toLowerCase()
+    return words.every((w) => title.includes(w))
+  })
+  return fits.length === 1 ? (fits[0] ?? null) : null
+}
+
+/**
+ * "Add checking the figures as a subtask under it" (ledger R6).
+ *
+ * The conversation had no subtask reading, so that sentence filed a flat
+ * task titled "checking the figures as a subtask under the 'Review the
+ * Hartley proposal'" — his whole sentence as a name, and no parent. The
+ * writer has taken a parent all along (`my_task_add(p_parent)`).
+ *
+ * Two shapes, both explicit about the word "subtask" (or "sub-task", "sub
+ * item"), because a relationship guessed from word order is a filing error
+ * that looks deliberate:
+ *
+ *   add X as a subtask (under|of|to|on) PARENT
+ *   add a subtask (under|to|on|for) PARENT (to|:) X
+ *
+ * PARENT is a referent ("it", "that", "that one") or "the NAME one/task"; the
+ * handler resolves it among the tasks this conversation made, exactly as a
+ * completion is resolved, and asks when that is not exactly one.
+ */
+export interface SubtaskRequest {
+  readonly title: string
+  /** Distinguishing words of the parent, or null for a bare referent. */
+  readonly parentName: string | null
+}
+
+const SUB = String.raw`sub-?\s?(?:task|item|to-?do)`
+const PARENT = String.raw`(?:it|that|this|that\s+one|this\s+one|the\s+last\s+one|the\s+(?<pname>[a-z0-9'’ -]{2,60}?)(?:\s+(?:one|task|to-?do|item))?)`
+const SUB_AFTER = new RegExp(
+  String.raw`\b(?:add|put|make|create|stick|include)\s+(?<title>.{3,120}?)\s+as\s+(?:a\s+|another\s+)?${SUB}\s+(?:under|of|to|on|for|beneath)\s+${PARENT}\s*[.!]?\s*$`,
+  'i',
+)
+const SUB_BEFORE = new RegExp(
+  String.raw`\b(?:add|put|make|create|stick)\s+(?:a\s+|another\s+)?${SUB}\s+(?:under|to|on|for|beneath)\s+${PARENT}\s*(?::|—|-|to|for|called|,)\s*(?<title>.{3,120}?)\s*[.!]?\s*$`,
+  'i',
+)
+
+export function subtaskRequest(text: string): SubtaskRequest | null {
+  const said = withoutOpeningAffirmation(String(text ?? '').trim())
+  if (said === '' || said.endsWith('?')) return null
+  for (const re of [SUB_AFTER, SUB_BEFORE]) {
+    const hit = re.exec(said)
+    if (hit === null) continue
+    const raw = (hit.groups?.title ?? '').trim().replace(/^(?:the\s+)?(?:job\s+of\s+)?/i, '')
+    if (raw.length < 3) continue
+    const title = raw.charAt(0).toUpperCase() + raw.slice(1)
+    const pname = hit.groups?.pname?.trim().toLowerCase() ?? null
+    return { title, parentName: pname === '' ? null : pname }
+  }
+  return null
 }

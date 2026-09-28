@@ -35,6 +35,7 @@ import type { ResultContext } from '../channels/notify.ts'
 import { combinedNotifier } from '../channels/notify.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { signedUrl } from '../files/store.ts'
+import { deliveryKey } from '../jobs/delivery-key.ts'
 import type { HandlerOutput, Job, Notifier, NotifyOutcome } from '../jobs/worker.ts'
 import type { SlackOffice } from './office.ts'
 
@@ -327,7 +328,7 @@ export function slackChannel(
             }
 
       const result = await office.deliver({
-        dedupeKey: `job:${job.jobId}:result`,
+        dedupeKey: deliveryKey(job, output, 'result'),
         teamId: options.teamId,
         channelId: target.channelId,
         threadTs: target.threadTs,

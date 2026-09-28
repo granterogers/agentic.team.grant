@@ -78,12 +78,15 @@ describe('one clause is either a change or a new thing', () => {
       And the reading it falls through to is his own words, wherever it is
       computed: `deferred` is `firstOfHis(personalTaskRequest)`.
     */
+    // Wrapped since ledger R4b (a title from a rewrite must be grounded in his
+    // words), so the property is asserted rather than the exact expression.
     expect(withoutComments).toMatch(
-      /const deferred = isBranch \? null : firstOfHis\(personalTaskRequest\)/,
+      /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\((?:resolveElliptical\()?text\b[^\n]*\n/,
     )
-    const asked = /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)\)/.exec(
-      withoutComments,
-    )?.[1]
+    const asked =
+      /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)(?:, asSaid|, `\$\{asSaid\} \$\{hisLastTurn\}`)?\)/.exec(
+        withoutComments,
+      )?.[1]
     expect(asked).toContain('changesHis !== null')
   })
 
@@ -134,11 +137,19 @@ describe('the rewrite is what loses them, which is why his words go first', () =
   const REWRITTEN: readonly (readonly [string, string])[] = [
     ['Call it Ring the venue', 'Call the reminder Ring the venue'],
     ['Call it Review the onboarding copy', 'Call the task Review the onboarding copy'],
-    ['Make that urgent', "Make the 'Ring the caterers' task urgent"],
   ]
 
   it.each(REWRITTEN)('"%s" is recognised and its rewrite "%s" is not', (his, rewrite) => {
     expect(personalTaskChange(his)).not.toBeNull()
     expect(personalTaskChange(rewrite)).toBeNull()
+  })
+
+  it('a rewrite that NAMES the task is read as a named change, resolved by name (ledger R29)', () => {
+    // "Make that urgent" still goes first as his words; the rewrite, if it is
+    // ever read, names the task rather than pointing at the newest one.
+    expect(personalTaskChange('Make that urgent')?.name ?? null).toBeNull()
+    expect(personalTaskChange("Make the 'Ring the caterers' task urgent")?.name).toBe(
+      "'ring the caterers'",
+    )
   })
 })

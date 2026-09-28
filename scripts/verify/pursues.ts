@@ -1055,13 +1055,19 @@ const question = await one(`
          coalesce(max(array_to_string(approval_options, ' | ')), '') as options
     from public.blockers where job_id = ${lit(askJobId)}::uuid`)
 check(
-  'and it raises a question he can actually answer, naming the capability',
+  /*
+    Naming the STEP, and with no internal id in front of it. This asserted
+    that the question contained `task.create` until #307 took the capability
+    out of every sentence Grant reads (it is kept in the blocker's structured
+    context), so it went red over the office doing what #242 asks.
+  */
+  'and it raises a question he can actually answer, naming the step and no internal id',
   Number(question.n) === 0
     ? 'no blocker — the sentence promised an answer nobody could give'
     : `"${String(question.action).slice(0, 60)}" → ${String(question.options)}`,
   Number(question.n) === 1 &&
-    String(question.action).includes('task.create') &&
-    String(question.action).includes(ASKED),
+    String(question.action).includes(ASKED) &&
+    !/\b[a-z]+\.[a-z_]+\b/.test(String(question.action)),
 )
 const boundTo = await one(`
   select coalesce(binds_to, '') as binds, resumable
@@ -1151,9 +1157,9 @@ check(
 )
 const rows = (
   await db.execute(`
-    select title from public.tasks
+    select title, satisfies_blocker is not null as asked from public.tasks
      where title like ${lit(`%${ASKED}%`)} or detail like ${lit(`%${ASKED}%`)}`)
-).rows as unknown as { title: string }[]
+).rows as unknown as { title: string; asked: boolean }[]
 /*
   TWO ROWS ARE POSSIBLE HERE AND ONLY ONE OF THEM IS A DEFECT.
 
@@ -1162,13 +1168,14 @@ const rows = (
   question SHOULD produce a task, and the first version of this check called
   that a write and went red over the office working.
 
-  They are told apart by their titles, which is not a wording lock but a
-  difference in what wrote them: the executor titles a task with the step's
-  `why` alone, and the blocker trigger titles one with `<capability> — <why>`.
+  They are told apart by WHAT WROTE THEM: the blocker trigger links its task
+  to the question (`satisfies_blocker`) and the executor does not. They were
+  once told apart by a `task.create —` title prefix, which #307 removed, and
+  from then on the question's own to-do counted as the plan's write.
   So the question reaching his list is asserted as a FEATURE, and the plan's
   own write is asserted absent.
 */
-const fromTheBlocker = rows.filter((r) => r.title.startsWith('task.create —')).length
+const fromTheBlocker = rows.filter((r) => r.asked === true).length
 const fromThePlan = rows.length - fromTheBlocker
 check(
   'the question reaches his list, and the plan writes nothing while it waits',
