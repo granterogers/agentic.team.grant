@@ -761,9 +761,21 @@ check(
 await db.execute(`
   update public.tasks set state = 'done', done_at = app.now_utc()
    where task_id = ${lit(String(made.id))}::uuid`)
+/*
+  "Let go" is a TRANSITION, not a state. The deployed worker ticks every
+  minute and took this fixture job 0.9s after it was queued (a job with no
+  instruction, so it threw and went to retrying), and a check reading the
+  job's CURRENT state then reported the product as broken. The history says
+  what the tick did, whatever ran afterwards.
+*/
 const afterTick = await one(`
   select (select state::text from public.blockers where blocker_id = ${lit(String(blocker.id))}::uuid) as blocker,
-         (select state::text from public.jobs where job_id = ${lit(String(blocked.id))}::uuid) as job`)
+         (select case when exists (
+                   select 1 from public.job_state_transitions t
+                    where t.job_id = ${lit(String(blocked.id))}::uuid and t.to_state = 'queued'
+                      and t.from_state in ('waiting_user', 'paused'))
+                 then 'queued' else (select state::text from public.jobs
+                                      where job_id = ${lit(String(blocked.id))}::uuid) end) as job`)
 check(
   'ticking it resolves the blocker',
   String(afterTick.blocker ?? '(none)'),
