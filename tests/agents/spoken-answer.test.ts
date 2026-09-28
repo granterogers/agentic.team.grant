@@ -113,6 +113,16 @@ describe("the handler answers only this conversation's ONE open question", () =>
     expect(j).toBeGreaterThan(i)
     expect(src.slice(i, j)).toContain('did: false')
   })
+  it('the clarification binds its turn to the question, and the next reply may answer only that one', () => {
+    const i = src.indexOf("if (q !== undefined && spoken === 'unclear') {")
+    expect(
+      src.indexOf("jsonb_build_object('awaiting_answer', ${lit(q.id)}::text)", i),
+    ).toBeGreaterThan(i)
+    // Read back from the turn immediately before (ours), never searched for across the chat.
+    expect(src).toMatch(
+      /or b\.blocker_id = \(select nullif\(j\.pinned_config ->> 'awaiting_answer', ''\)::uuid\s+from public\.jobs j\s+where j\.job_id = \(select job_id from ours\)\)/,
+    )
+  })
   it('asks when there is more than one', () => {
     expect(src).toMatch(/if \(open\.length > 1\) \{/)
   })

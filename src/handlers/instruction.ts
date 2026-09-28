@@ -4753,7 +4753,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 select b.blocker_id::text as id, b.requested_action as what,
                        coalesce(b.approval_options, array[]::text[]) as options
                   from public.blockers b
-                 where b.state = 'open' and b.job_id in (select job_id from tree)
+                 where b.state = 'open'
+                   and (b.job_id in (select job_id from tree)
+                        /*
+                          Or the ONE question the office's previous reply said
+                          it was still waiting on (#374): an acknowledgement
+                          answers nothing, and its turn records which blocker
+                          it asked about, so "yes please" after it binds to
+                          that question and no other - only while it is open,
+                          only from the turn immediately before, in this chat.
+                        */
+                        or b.blocker_id = (select nullif(j.pinned_config ->> 'awaiting_answer', '')::uuid
+                                             from public.jobs j
+                                            where j.job_id = (select job_id from ours)))
                  order by b.created_at desc limit 5`)
               .then(async (r) => {
                 const open = r.rows as { id: string; what: string; options: string[] }[]
@@ -4774,6 +4786,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   or read as new work.
                 */
                 if (q !== undefined && spoken === 'unclear') {
+                  // Bind this turn to the question it is asking about again.
+                  await deps.db.execute(`
+                    update public.jobs
+                       set pinned_config = coalesce(pinned_config, '{}'::jsonb)
+                                           || jsonb_build_object('awaiting_answer', ${lit(q.id)}::text)
+                     where job_id = ${lit(job.jobId)}::uuid`)
                   return {
                     did: false,
                     text: `I have not acted on "${q.what}" — I read that as an acknowledgement, not a go-ahead. Say yes to go ahead, or no to leave it.`,
