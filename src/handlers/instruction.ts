@@ -3655,7 +3655,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           flag, so the union can only ever store a rule it would have
           stored anyway.
         */
-        [...asRules.map((text) => readTeaching(text, true)), readTeaching(instruction)].find(
+        /*
+          And HIS words, never the resolver's paraphrase (completion pass;
+          #322's class). `instruction` is `resolved.instruction` by here, and a
+          rewrite keeps the request and drops the marker that makes it a rule:
+          "always give your information in clear bullet points. Also, tell me
+          my tasks" came back as "tell me my tasks, in clear bullet points",
+          `readTeaching` found nothing lasting, and on the turn the meaning
+          reader also missed the clause the rule was silently not kept. One
+          door of four in `verify:anchors`. Reading the paraphrase was also
+          the dangerous direction: a rewrite that adds an "always" would store
+          a rule he never gave.
+        */
+        [...asRules.map((text) => readTeaching(text, true)), readTeaching(hisWords)].find(
           (t) => t !== null,
         ) ?? null
 

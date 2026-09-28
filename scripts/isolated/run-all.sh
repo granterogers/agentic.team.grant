@@ -11,4 +11,5 @@ for t in approval-execution:r45 approval-delivery:r46 containment:r37; do
   f=${t%%:*}; db=${t##*:}; echo "== $f"; fresh $db post
   npx tsx scripts/isolated/$f.ts $db > /tmp/iso-$f.txt 2>&1; rc=$?; grep -E "passed|^FAIL" /tmp/iso-$f.txt | tail -3; [ $rc -eq 0 ] || status=1
 done
+echo "== 0596 overlapping answers"; bash scripts/isolated/approval-race.sh > /tmp/iso-race.txt 2>&1 && tail -1 /tmp/iso-race.txt || { cat /tmp/iso-race.txt; status=1; }
 exit $status
