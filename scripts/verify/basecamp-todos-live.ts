@@ -335,19 +335,42 @@ try {
       `),
     )) as string
     check('the drag carried the card it started on', dragged.startsWith('dropped'), dragged)
-    await page.waitForTimeout(4000)
+    /*
+      A BOUNDED EVENTUAL STATE, not a fixed pause (#375 item 10). The first
+      version read the task once, 4 s after the drop. On a freshly restarted
+      gateway the write takes 5-7 s, so it failed three checks while the
+      product was right. So it polls the canonical row until the move lands or
+      20 s pass, and says how long it took. A throttled read is a read that
+      has not happened yet, never an answer (CLAUDE.md: a 429 is not data).
+      Only then is "did not open the card" judged, because a card that opened
+      on the write would open after it.
+    */
+    type Moved = { state?: string; blocked_on?: string }
+    const dropAt = Date.now()
+    let moved: Moved | undefined
+    while (Date.now() - dropAt < 20000) {
+      moved = await db
+        .execute(
+          `select state, blocked_on from public.tasks where task_id = '${picked.key.replace(/'/g, "''")}'`,
+        )
+        .then((r) => r.rows[0] as Moved | undefined)
+        .catch(() => moved)
+      if (moved?.state === 'blocked') break
+      await page.waitForTimeout(500)
+    }
+    const tookMs = Date.now() - dropAt
+    await page.waitForTimeout(500)
 
     const expandedAfter = (await page.evaluate(
       inPage("return document.querySelector('.bcrecordhead') !== null"),
     )) as boolean
     check('dropping into Stuck does not open the card', !expandedAfter)
 
-    const moved = (
-      await db.execute(
-        `select state, blocked_on from public.tasks where task_id = '${picked.key.replace(/'/g, "''")}'`,
-      )
-    ).rows[0] as { state?: string; blocked_on?: string } | undefined
-    check('the office moved it to blocked', moved?.state === 'blocked', String(moved?.state))
+    check(
+      'the office moved it to blocked',
+      moved?.state === 'blocked',
+      `${String(moved?.state)} after ${String(tookMs)} ms`,
+    )
     /*
       PROVENANCE, NOT AN EXPLANATION. §10: the automatic reason may record that
       a person marked it, and must not invent why. Both halves are asserted --
