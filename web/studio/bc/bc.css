@@ -187,6 +187,8 @@
 }
 .bctray a:hover,
 .bctray button:hover { background: var(--bc-hover); color: var(--bc-text); }
+.bctray button > span[aria-hidden='true'] { display: inline-grid; place-items: center; line-height: 0; }
+.bctray svg { display: block; }
 
 /* ========================================================================
    2. Primitives (§17 phase 1)
@@ -938,7 +940,9 @@
     min-width: 44px;
     min-height: 44px;
     padding: 0 var(--bc-1);
-    font: 500 10px/14px var(--bc-font);
+    /* 12px: the type floor. It was 10px, the smallest text in the product. */
+    font: 600 12px/14px var(--bc-font);
+    letter-spacing: 0.01em;
   }
 
   .bcwide-only { display: none; }
@@ -1400,7 +1404,6 @@
 }
 [data-experience="basecamp"] .bcnotebar[data-lit="1"] {
   background: var(--bc-danger);
-  height: 100%;
 }
 [data-experience="basecamp"] .bcnotesaid {
   margin: var(--bc-2) 0 0;
@@ -1540,7 +1543,12 @@
  * Two tiles rather than a bare file input, because "add a file" has more than
  * one answer now. Only sources that really work are offered.
  * ---------------------------------------------------------------------- */
-[data-experience="basecamp"] .bcsources {
+/*
+  .bcpickfrom, renamed from .bcsources: the same class was the Sources LIST
+  in compose.css, and this grid rule laid that list out as five 200px
+  columns - names truncated to "Noteb...", each logo beside the wrong name.
+*/
+[data-experience="basecamp"] .bcpickfrom {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--bc-3);

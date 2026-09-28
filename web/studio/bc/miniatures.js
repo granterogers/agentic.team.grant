@@ -40,6 +40,7 @@ import * as contacts from './contacts.js'
 import * as notes from './notestore.js'
 import { MARKS } from '../logos/marks.js'
 import * as when from '../when.js'
+import { prose } from '../prose.js'
 import * as todos from './todos.js'
 import * as docorder from './docorder.js'
 import { esc, status } from './parts.js'
@@ -95,9 +96,15 @@ export const face = (person, size = 'sm') => {
   `crewBy` in data.js has matched both all along; this is the copy that did
   not.
 */
+/* Somebody not on the roster is still a name, not a key: "priya" reads as
+   Priya and "finance-director" as Finance director. */
+export const pretty = (slug) => {
+  const t = String(slug ?? '').replace(/[-_]+/g, ' ').trim()
+  return t === '' ? '' : t.charAt(0).toUpperCase() + t.slice(1)
+}
 const person = (slug) =>
   (ctx?.crew ?? []).find((c) => c.slug === slug || c.staffSlug === slug) ??
-  (slug ? { slug, name: slug } : null)
+  (slug ? { slug, name: pretty(slug) } : null)
 
 /*
   Exported because §18's waiting record needs the same answer the miniatures
@@ -114,7 +121,9 @@ export const named = (slug) => person(slug)?.name ?? ''
 const DONE = new Set(['done', 'cancelled'])
 const isDone = (t) => DONE.has(t.state_raw ?? t.state ?? '')
 
-const dueWords = (t) => {
+/* Exported: the To-dos page read t.due, which prototype and office rows
+   rarely carry, so its rows showed no date at all. One reader. */
+export const dueWords = (t) => {
   const iso = t.due_on ?? null
   if (iso === null || iso === undefined || iso === '') return t.due ?? ''
   const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`)
@@ -301,7 +310,7 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
         return `<p class="bcmpty">Nothing here under ${esc(f.name)}.
           <button type="button" class="bclinky" data-bc-filter-off="1">Show everything</button></p>`
       }
-      return `<p class="bcmpty">No to-dos on this project yet.</p>`
+      return emptyWith('No to-dos on this project yet.', 'Add a to-do', `/basecamp/p/${whole.slug}/tasks`)
     }
     return `<ul class="bctasks">${flat.slice(0, per * lists).map(taskLine).join('')}</ul>`
   }
@@ -344,7 +353,7 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
         const first = g.items.slice(0, per)
         return `<section class="bclist">
           <header class="bclisthead">
-            <h4>${esc(g.name)}</h4>
+            <h3>${esc(g.name)}</h3>
             <span class="bclistcount">${esc(`${done}/${g.items.length}`)}</span>
           </header>
           <ul class="bctasks">${first.map(taskLine).join('')}</ul>
@@ -403,7 +412,7 @@ export const cardsCount = (p) => {
 
 export const cardsMini = (p) => {
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
-  if (tasks.length === 0) return `<p class="bcmpty">Nothing on the board yet.</p>`
+  if (tasks.length === 0) return emptyWith('Nothing on the board yet.', 'Add a to-do', `/basecamp/p/${p.slug}/tasks`)
   const at = (id) =>
     tasks.filter((t) => {
       const st = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
@@ -506,7 +515,7 @@ export const calendarMini = (p, { items = 4 } = {}) => {
     <div class="bcagenda">
       ${
         dated.length === 0
-          ? `<p class="bcmpty">Nothing on this project has a date yet.</p>`
+          ? emptyWith('Nothing on this project has a date yet.', 'Give a to-do a date', `/basecamp/p/${p.slug}/schedule`)
           : dated
               .slice(0, items)
               .map(
@@ -553,10 +562,68 @@ export const said_ = (m) => {
   const who = m.who ?? m.from ?? ''
   const mine = who === 'grant'
   const when_ = m.when ?? m.at ?? ''
+  /*
+    THE TEAM IS WORKING, AND SAYS SO. While an answer is on its way chat.js
+    keeps a row for it - from the person it was routed to, with no text yet.
+    This page drew that row as a message: a name, a time and nothing, which
+    is exactly "I asked and nothing came back". The same three states the
+    dock shows, in the same words, with the elapsed time the studio's ticker
+    already keeps for any [data-waiting-since]; and a way to ask again when
+    it is slow.
+  */
+  /*
+    A FAILED ANSWER IS NOT A PERSON SPEAKING. chat.js writes the failure into
+    the row routed to an agent - "I could not reach the office: ..." - so the
+    page showed Claire, in the first person, reporting a network error. It is
+    drawn as what it is: a notice that no answer came, with the reason and
+    a way to ask again.
+  */
+  if (!mine && (m.waiting === 'failed' || m.bad === true)) {
+    const why = String(m.text ?? '').replace(/^I could not reach the office:\s*/i, '')
+    return `<div class="bcsaid bcsaid--failed" role="status">
+      <span class="bcsaidwarn" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>
+      </span>
+      <div class="bcsaidbody">
+        <span class="bcsaidwho">No answer came back</span>
+        <span class="bcsaidwhen">${when.stamp(when_, when_)}</span>
+        <p class="bcsaidtext">${esc(why === '' ? 'The office did not answer.' : `The office could not be reached: ${why}.`)}</p>
+        ${
+          typeof m.said === 'string'
+            ? `<button type="button" class="bcsaidplay" data-bc-chatretry="${esc(m.id ?? '')}">Try again</button>`
+            : ''
+        }
+      </div>
+    </div>`
+  }
+  if (!mine && typeof m.waiting === 'string' && m.waiting !== '' && m.waiting !== 'failed') {
+    const words =
+      {
+        sending: 'Sending to the office…',
+        thinking: 'With the team. They are working on it.',
+        slow: 'No answer yet. The office may still be working — it also answers in Slack and Telegram.',
+      }[m.waiting] ?? 'Waiting.'
+    return `<div class="bcsaid bcsaid--working" role="status" aria-live="polite">
+      <span class="bcsaidspin" aria-hidden="true"></span>
+      <div class="bcsaidbody">
+        <span class="bcsaidwho">The team</span>
+        ${typeof m.since === 'number' ? `<span class="bcsaidwhen" data-waiting-since="${esc(String(m.since))}"></span>` : ''}
+        <p class="bcsaidtext bcsaidtext--working">${esc(words)}</p>
+        ${
+          m.waiting === 'slow' && typeof m.said === 'string'
+            ? `<button type="button" class="bcsaidplay" data-bc-chatretry="${esc(m.id ?? '')}">Ask again</button>`
+            : ''
+        }
+      </div>
+    </div>`
+  }
   return `<div class="bcsaid${mine ? ' bcsaid--mine' : ''}">
     ${face(mine ? { name: 'Grant', slug: 'grant' } : person(who))}
     <div class="bcsaidbody">
-      <span class="bcsaidwho">${esc(mine ? 'You' : named(who) || who)}</span>
+      <span class="bcsaidwho">${esc(mine ? 'You' : named(who) || who)}</span>${
+        mine || !person(who)?.role ? '' : `<span class="bcsaidrole">${esc(person(who).role)}</span>`
+      }
       <!--
         THE TIME, as a person reads it.
 
@@ -572,7 +639,14 @@ export const said_ = (m) => {
         one here ends the string. That is how this file broke a moment ago.
       -->
       <span class="bcsaidwhen">${when.stamp(when_, when_)}</span>
-      <p class="bcsaidtext">${esc(m.text ?? '')}</p>
+      <!--
+        THE BODY KEEPS ITS SHAPE. One escaped string in one paragraph tag
+        collapsed every newline, so a reply written as three short paragraphs
+        or a numbered list read here as one run-on block. The same renderer
+        the studio uses: paragraphs, line breaks, and a real ordered list.
+      -->
+      <div class="bcsaidtext">${prose(m.text ?? '')}</div>
+
       <!--
         PLAY IT BACK, only where there is something to play.
 
@@ -971,6 +1045,12 @@ export const thumbFace = (d, i, extra = '') => {
   somebody reading the page aloud nothing about what it orders.
 */
 export const sortControl = (slug, how, where) => `<span class="bcdocsort">
+    <!--
+      A VISIBLE WORD before the value. The select said only "Custom", which
+      names a value and not the question; the full label stays for a screen
+      reader, and the eye gets "Order".
+    -->
+    <span class="bcdocsortword" aria-hidden="true">Order</span>
     <label class="bcvh" for="bc-docsort-${esc(where)}-${esc(slug)}">Order these documents by</label>
     <select class="bcdocsortpick" id="bc-docsort-${esc(where)}-${esc(slug)}"
       data-bc-docsort="${esc(slug)}">
@@ -1020,13 +1100,27 @@ const thumb = (d, i) => {
  * covers under a heading is a sample rather than a section.
  */
 /** The thumbnails alone, so the full workspace and the pane share one drawing. */
+/*
+  AN EMPTY MODULE OFFERS THE ONE THING THAT WOULD FILL IT. A box with a single
+  grey sentence in it is calm and says nothing about what to do next; six of
+  them on a new project read as a page that has not loaded. One link each, to
+  the place that adds the thing, drawn with the same data-bc-go the docs pane
+  already uses so the wiring is the router's own.
+*/
+const emptyWith = (line, label, to) =>
+  `<div class="bcmptywrap"><p class="bcmpty">${esc(line)}</p>
+    <a class="bcmptyact" href="${esc(to)}" data-bc-go="${esc(to)}">${esc(label)}</a></div>`
+
 export const docThumbs = (docs) => docs.map((d, i) => thumb(d, i)).join('')
 
 export const docsMini = (p, { items = 6 } = {}) => {
   const docs = p.documents ?? []
   if (docs.length === 0) {
-    return `<p class="bcmpty">Nothing filed on this project yet. A document you upload, or one
-      the team writes, appears here as itself.</p>`
+    return emptyWith(
+      'Nothing filed on this project yet. What you upload, or the team writes, appears here.',
+      'Add a file',
+      `/basecamp/p/${p.slug}/documents`,
+    )
   }
   /*
     §21 asks the pane for an obvious route to ALL of them, in those words. The
@@ -1260,33 +1354,58 @@ const countChip = (kind, label, tone) =>
 
 /** The team's finished work, waiting to be read. Not a to-do count. */
 export const needsYouLine = (p) => {
-  const waiting = p.waiting ?? []
-  if (waiting.length === 0) return ''
-  return `<div class="bcstate">
-    <button type="button" class="bcstatus bcstatus--waiting bcstatus--press" data-bc-waiting="1"><span class="bcdot" aria-hidden="true"></span>${esc(
-      waiting.length === 1 ? '1 thing needs you' : `${waiting.length} things need you`,
-    )}</button>
+  /*
+    THREE COUNTERS, AND NONE OF THEM IS "OPEN TASKS".
+
+    Grant, 23 September, removed "1 late - 1 stuck - 8 open tasks" from this
+    header because the open count repeated the To-dos panel beneath it. His
+    24 September brief then names Needs you, Late and Stuck as the counters
+    that matter at the top of a project: readable at a glance, each one
+    pressable, calm at zero. Both are honoured by what is here - the
+    redundant open count stays gone; late and stuck come back, because
+    nothing else on the home says either.
+
+    A zero is drawn, muted and NOT a button: "0 late" is reassurance, and a
+    press that can only open an empty list is a dead end. A large count caps
+    at 99+ so the group keeps its width.
+  */
+  const waiting = (p.waiting ?? []).length
+  const late = filtered(p, 'late').length
+  const stuck = filtered(p, 'stuck').length
+  const shown = (n) => (n > 99 ? '99+' : String(n))
+  const one = (n, word, tone, attr) => {
+    const inner = `<span class="bccountn">${esc(shown(n))}</span><span class="bccountw">${esc(word)}</span>`
+    if (n === 0) return `<span class="bccount bccount--zero">${inner}</span>`
+    return `<button type="button" class="bccount bccount--${esc(tone)}" ${attr}>${inner}</button>`
+  }
+  return `<div class="bcstate bccounts" role="group" aria-label="What needs attention on this project">
+    ${one(waiting, waiting === 1 ? 'needs you' : 'need you', 'waiting', 'data-bc-waiting="1"')}
+    ${one(late, 'late', 'late', 'data-bc-filter="late"')}
+    ${one(stuck, 'stuck', 'stuck', 'data-bc-filter="stuck"')}
   </div>`
 }
 
 /** Late, stuck and open - each a filter, beside the to-dos they narrow. */
 export const taskCounts = (p) => {
-  const late = filtered(p, 'late')
-  const stuck = filtered(p, 'stuck')
-  const open = filtered(p, 'open')
-  const bits = []
-  if (late.length > 0) bits.push(countChip('late', late.length === 1 ? '1 late' : `${late.length} late`, 'blocked'))
-  if (stuck.length > 0) bits.push(countChip('stuck', stuck.length === 1 ? '1 stuck' : `${stuck.length} stuck`, 'blocked'))
-  if (bits.length === 0 && open.length > 0) bits.push(status('On track', 'done'))
-  return `<div class="bcstate">
-    ${bits.join('')}
-    ${
-      open.length === 0
-        ? `<span class="bcstatecount">nothing open</span>`
-        : `<button type="button" class="bcstatecount bcstatecount--press" data-bc-filter="open">${esc(
-            open.length === 1 ? '1 open task' : `${open.length} open tasks`,
-          )}</button>`
-    }
+  /*
+    THE SAME COUNTER GROUP AS THE PROJECT HOME, so "late" looks like one
+    thing wherever it is counted. It was a pair of 12px pills beside a bare
+    count here and three weighted counters on the home. Open stays on this
+    page - it is the size of the list below, which the home does not show.
+  */
+  const late = filtered(p, 'late').length
+  const stuck = filtered(p, 'stuck').length
+  const open = filtered(p, 'open').length
+  const shown = (n) => (n > 99 ? '99+' : String(n))
+  const one = (n, word, tone, kind) => {
+    const inner = `<span class="bccountn">${esc(shown(n))}</span><span class="bccountw">${esc(word)}</span>`
+    if (n === 0) return `<span class="bccount bccount--zero">${inner}</span>`
+    return `<button type="button" class="bccount bccount--${esc(tone)}" data-bc-filter="${esc(kind)}">${inner}</button>`
+  }
+  return `<div class="bcstate bccounts" role="group" aria-label="How these to-dos stand">
+    ${one(late, 'late', 'late', 'late')}
+    ${one(stuck, 'stuck', 'stuck', 'stuck')}
+    ${one(open, 'open', 'open', 'open')}
   </div>`
 }
 
@@ -1334,7 +1453,7 @@ const face_ = (c) => {
 
 export const contactsMini = (p, { items = 4 } = {}) => {
   const cs = p.contacts ?? []
-  if (cs.length === 0) return `<p class="bcmpty">Nobody is recorded against this project yet.</p>`
+  if (cs.length === 0) return emptyWith('Nobody is recorded against this project yet.', 'Add a contact', `/basecamp/p/${p.slug}/contacts`)
   /*
     v2: *"Clicking a contact should show useful information/details... The user
     should be able to add a new contact directly from the miniature."* So each

@@ -182,6 +182,11 @@ const SIZES = [
   { id: 'desktop', width: 1440, height: 900, touch: false },
   { id: 'tablet', width: 768, height: 1024, touch: true },
   { id: 'phone', width: 390, height: 844, touch: true },
+  /*
+    The smallest phones still sold. A module header that fit at 390 needed
+    336px at 320 and widened the whole layout viewport; nothing measured it.
+  */
+  { id: 'small', width: 320, height: 640, touch: true },
 ] as const
 
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
@@ -228,6 +233,9 @@ for (const m of ['empty', 'huge'] as const) {
         inPage(`const out = []
            for (const el of document.querySelectorAll('.bcitemtitle, .bcptitle, .bcitemmeta, .bcpmeta, h1, h2')) {
              const cs = getComputedStyle(el)
+             /* Visually hidden ON PURPOSE (the project home's h1 for screen
+                readers): a 1px clipped box is not content that got clipped. */
+             if (el.classList.contains('bcvh')) continue
              if (cs.overflow === 'visible') continue
              /* An ellipsis or a line clamp is a DECISION to shorten, not a defect. */
              if (cs.textOverflow === 'ellipsis') continue

@@ -59,75 +59,12 @@ import * as icons from './icons.js'
 import { pageSvg } from './page.js'
 import { paint } from './pdf.js'
 import { SPRING, carry, pressable, spring } from './motion.js'
+import { prose } from './prose.js'
 
 const $ = (sel, root = document) => root.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
-/*
-  A message body, with its line breaks intact (#209).
-
-  HTML collapses whitespace, so a body rendered as one escaped string inside a
-  single paragraph tag loses every newline in it. That is what the studio did,
-  and it means #186's whole outcome — two or three short paragraphs, one
-  thought each, instead of a wall — has NEVER been visible here. The model was
-  writing it, Telegram and Slack were showing it, and this surface ran it all
-  together into one block.
-
-  Grant asked for numbered lists on 14 September and that is what made it
-  visible: a three-item list arrives as one line reading 1. first 2. second
-  3. third, which is worse than the prose it replaced.
-
-  Blank line starts a paragraph; a single newline is a line break inside one.
-  That is the whole rule, and it is deliberately NOT a markdown renderer — §5
-  says an adapter may only translate, and the three surfaces have three markup
-  languages. The model writes one plain-text body; each surface renders the
-  breaks in its own. Telegram and Slack already did.
-
-  Escaped first, then the tags are added, for the reason the Telegram escaper
-  gives: convert-then-escape turns the tags you just added into visible text.
-*/
-const NUMBERED = /^\s*(\d+)[.)]\s+(.*)$/
-const prose = (s) =>
-  String(s ?? '')
-    .replace(/\r\n?/g, '\n')
-    .trim()
-    .split(/\n{2,}/)
-    .map((para) => {
-      const lines = para.split('\n')
-      const items = lines.map((l) => NUMBERED.exec(l))
-      /*
-        A paragraph whose every line is numbered becomes a real list.
-
-        Line breaks alone were not enough, and the phone capture is what
-        showed it: with each item on its own line but wrapping at 390px, the
-        continuation of item 1 started in exactly the column item 2 started
-        in, so three items read as five and the shape Grant asked for was
-        gone at the width he reads on.
-
-        An ordered list gets the hanging indent for nothing, and it gets the
-        semantics too — a screen reader says "list, 3 items" before reading
-        them, which is the same affordance the thread itself gained in #200.
-
-        Still not a markdown renderer, and the distinction is the one in
-        section 5: this translates a line break into the markup THIS surface
-        uses for it. Telegram and Slack translate the same body into theirs.
-        Nothing here parses emphasis, links or headings.
-
-        The literal number is dropped and replaced by the start attribute, so
-        a model that begins at 1 gets 1 and a model that continues from 4
-        gets 4 — but a model that writes 1, 2, 2, 5 gets a list that counts
-        properly rather than a transcription of its mistake.
-      */
-      if (lines.length >= 2 && items.every((m) => m !== null)) {
-        const from = Number(items[0][1])
-        return `<ol class="msglist"${from === 1 ? '' : ` start="${from}"`}>${items
-          .map((m) => `<li>${esc(m[2])}</li>`)
-          .join('')}</ol>`
-      }
-      return `<p>${esc(para).replace(/\n/g, '<br>')}</p>`
-    })
-    .join('')
 
 /*
   Payloads that belong to one screen rather than to the whole shell.
@@ -1624,7 +1561,12 @@ function paintDock() {
   const open = dockOpen()
   el.hidden = !open
   document.body.classList.toggle('docked', open)
-  if (!open) { el.innerHTML = ''; return }
+  if (!open) {
+    el.innerHTML = ''
+    /* Closing the dock must also stop a voice note recording inside it. */
+    if (state.experience === 'basecamp') bcWire.wireDockNote(el)
+    return
+  }
 
   /*
     Asking from the portfolio, without a project (#149).
@@ -1648,6 +1590,14 @@ function paintDock() {
   const messages = p ? chat.thread(p.slug) : []
   const draft = $('[data-docksay]')?.value ?? ''
   const at = $('[data-dockthread]')?.scrollTop
+  /*
+    THE BASECAMP EXPERIENCE'S VOICE NOTE LIVES IN THIS COMPOSER, and a repaint
+    must not take a recording with it: the live microphone and panel nodes are
+    carried across the innerHTML below and put back where they were.
+  */
+  const bcNote = state.experience === 'basecamp'
+  const keptMic = bcNote ? el.querySelector('[data-bc-note]') : null
+  const keptPanel = bcNote ? el.querySelector('[data-bc-notepanel]') : null
 
   el.innerHTML = `<div class="dockhead">
       <span style="flex:1;min-width:0">
@@ -1688,13 +1638,18 @@ function paintDock() {
            </div>`
         : messages.map(bubble).join('')
     }</div>
-    <form class="composer" data-dockform>
+    <form class="composer" data-dockform${bcNote && p ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
       <div class="crow">
         <textarea data-docksay rows="1" placeholder="Ask the team…"
                   aria-label="Message the team"></textarea>
+        ${bcNote ? bc.dockNoteButton() : ''}
         <button class="btn primary" type="submit">Send</button>
       </div>
+      ${bcNote ? '<div class="bcnote" data-bc-notepanel hidden></div>' : ''}
     </form>`
+  if (keptMic !== null) el.querySelector('[data-bc-note]')?.replaceWith(keptMic)
+  if (keptPanel !== null) el.querySelector('[data-bc-notepanel]')?.replaceWith(keptPanel)
+  if (bcNote) bcWire.wireDockNote(el)
 
   const box = $('[data-docksay]', el)
   if (box) box.value = draft
@@ -13483,6 +13438,9 @@ const bcContext = {
   chatIsReal: (slug) => chat.isReal(slug),
   chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, presented()),
   chatSend: (slug, text) => chat.send(slug, text, null),
+  /* The Basecamp branch of drawShell returns before its paintDock call, so a
+     voice note sent from the dock repaints it through this. */
+  repaintDock: () => paintDock(),
   /*
     WHERE THE VOICE NOTE IS TRANSCRIBED, and the token to do it with.
 
@@ -13499,6 +13457,8 @@ const bcContext = {
   projectId: (slug) => PROJECTS.find((x) => x.slug === slug)?.id ?? '',
   officeToken: () => presented(),
   chatAsk: (slug, text, onState) => chat.ask(slug, text, null, presented(), undefined, undefined, onState),
+  /* The same retry the dock performs, for this experience's Chat page. */
+  chatRetry: (slug, id, onState) => chat.retry(slug, id, presented(), onState),
   crew: CREW,
   tools: bc.TOOLS,
   /*

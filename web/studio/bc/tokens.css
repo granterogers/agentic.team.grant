@@ -83,6 +83,13 @@
   */
   --bc-font: 'Instrument Sans', Inter, ui-sans-serif, -apple-system,
     BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  /*
+    ONE TYPE FAMILY. The studio's own modules this experience embeds (the
+    project settings roster, the dock) set names in the studio's display
+    face, Anybody - a second, wider typeface appearing inside panes that are
+    otherwise Instrument Sans. Scoped here, so the default studio keeps it.
+  */
+  --display: var(--bc-font);
 
   --bc-body: 400 16px/24px var(--bc-font);
   --bc-compact: 400 14px/21px var(--bc-font);
@@ -120,7 +127,12 @@
   --bc-row: 44px;
   --bc-nav-h: 40px;
   --bc-main-pad: 40px;
-  --bc-main-pad-bottom: 144px;
+  /*
+    144px was Basecamp's measured clearance for its floating footer. Here it
+    left a 140px empty band under the last row of the board on every page.
+    96px still clears the phone's fixed tab bar (52px) with room to spare.
+  */
+  --bc-main-pad-bottom: 96px;
 
   --bc-r-control: 8px;
   --bc-r-menu: 6px;

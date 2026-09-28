@@ -106,6 +106,24 @@ for (const size of sizes) {
     )) as string
 
   const open = async (p: string): Promise<void> => {
+    /*
+      THE BOARD FORGETS WHAT THE LAST PRESS DID TO IT.
+
+      A module's cross takes it off the page, and the page remembers that in
+      localStorage - correctly, for a person. For this sweep it meant the
+      first cross pressed on the home removed that module and every control
+      in it for the rest of the run, the index loop broke at the gap, and
+      half the home's controls (32 of 65) were never pressed at all while the
+      report said "0 findings". CLAUDE.md's shutDock / openRail trap, a fourth
+      time. Cleared before every visit so each press starts from the same
+      page the collector counted.
+    */
+    await page
+      .evaluate(() => {
+        for (const k of Object.keys(localStorage))
+          if (k.startsWith('bc.layout.')) localStorage.removeItem(k)
+      })
+      .catch(() => undefined)
     await page.goto(url(p), { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('.bcmain')
     await page.waitForTimeout(450)

@@ -13,7 +13,7 @@
   second mechanism would be a second set of words for one thing.
 */
 
-import { act, attempt, canWrite, read, token } from '../office.js'
+import { act, attempt, canWrite, read, say, token } from '../office.js'
 import * as session from '../session.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
@@ -126,6 +126,412 @@ const rememberDialogScroll = (root) => {
   )
 }
 
+const askTheTeam = async (project, text, { alreadySaid = false } = {}) => {
+  if (!alreadySaid) ctx.chatSend?.(project, text)
+  /* Both: the Chat page lives in #root and the dock outside it, and a render
+     of the one does not repaint the other. */
+  const redraw = () => {
+    ctx.render()
+    ctx.repaintDock?.()
+  }
+  redraw()
+  await ctx.chatAsk?.(project, text, redraw)
+  redraw()
+}
+
+/*
+  ONE VOICE NOTE PER SCOPE: the Chat page's composer, or the dock. `scope`
+  holds the microphone and the panel; the returned handler is attached to it.
+*/
+/*
+  WHICH INSTANCE HOLDS THE MICROPHONE. The recorder is one module for the
+  whole page; the Chat page's composer and the dock each drive it, and only
+  one can be recording.
+*/
+let micOwner = null
+
+const voiceNote = (getScope, projectOf = () => ctx.state.project) => {
+  const scopeNow = () => getScope() ?? null
+  /*
+    THE VOICE NOTE, end to end.
+
+    Record -> stop -> listen back -> send. The words then take the ORDINARY
+    typed path (`ctx.chatSend` and `ctx.chatAsk`, the same two calls the Send
+    button makes), which is Grant's "do not create a separate voice note
+    conversation" implemented rather than merely agreed with.
+
+    The panel holds three states and draws them here rather than in the shell,
+    because they change many times a second while recording and a shell redraw
+    would take the microphone with it.
+  */
+  const notePanel = () => scopeNow()?.querySelector('[data-bc-notepanel]') ?? null
+  const noteMic = () => scopeNow()?.querySelector('[data-bc-note]') ?? null
+  const clock = (n) =>
+    `${String(Math.floor(n / 60))}:${String(Math.floor(n % 60)).padStart(2, '0')}`
+  const meter = (lvl) => {
+    const bars = 14
+    /* A square root, so an ordinary speaking voice fills most of the meter -
+       a linear scale spends nine tenths of it on sounds nobody makes. */
+    const lit = Math.min(bars, Math.round(Math.sqrt(Math.min(1, lvl)) * bars))
+    let out = ''
+    for (let i = 0; i < bars; i += 1) out += `<i class="bcnotebar" data-lit="${i < lit ? 1 : 0}"></i>`
+    return `<div class="bcnotemeter" aria-hidden="true">${out}</div>`
+  }
+  const noteShut = () => {
+    shown = null
+    const panel = notePanel()
+    if (panel !== null) {
+      panel.hidden = true
+      panel.innerHTML = ''
+      delete panel.dataset.bcNotephase
+    }
+    const mic = noteMic()
+    if (mic !== null) {
+      mic.dataset.bcNote = 'idle'
+      mic.querySelector('.bcnotemictxt').textContent = 'Voice note'
+    }
+  }
+
+  let held = null
+  /*
+    WHAT THE PANEL IS SHOWING, remembered here rather than read off the panel.
+    A render replaces the Chat page's composer, so the panel node that said
+    "Working out what you said" is gone the moment an answer lands, and the
+    old resync read the NEW node's missing phase as "draw the review again" -
+    which put Send back on screen mid-transcription (a second press sent the
+    note twice) and dropped a failure written into the detached node. The
+    panel is now always drawn through paint(), and resync restores exactly
+    what was last painted.
+  */
+  let shown = null
+  let heldUrl = ''
+  let sending = false
+  const paint = (phase, html) => {
+    shown = { phase, html }
+    const panel = notePanel()
+    if (panel === null) return
+    panel.hidden = false
+    panel.dataset.bcNotephase = phase
+    panel.innerHTML = html
+  }
+  const letGo = () => {
+    if (heldUrl !== '') URL.revokeObjectURL(heldUrl)
+    heldUrl = ''
+    held = null
+  }
+
+  const drawRecording = ({ seconds, level }) => {
+    const panel = notePanel()
+    if (panel === null) return
+    const clockEl = panel.querySelector('.bcnoteclock')
+    if (clockEl === null) {
+      shown = null
+      panel.hidden = false
+      panel.dataset.bcNotephase = 'recording'
+      panel.innerHTML =
+        `<div class="bcnoterow">
+          <span class="bcnoteclock">${clock(seconds)}</span>
+          ${meter(level)}
+          <button type="button" class="bcbtn bcbtn--primary" data-bc-notestop>Stop</button>
+          <button type="button" class="bcbtn" data-bc-notecancel>Cancel</button>
+        </div>
+        <p class="bcnotesaid">Recording. Stop when you have finished and you can listen back before it goes.</p>`
+      return
+    }
+    clockEl.textContent = clock(seconds)
+    const bars = panel.querySelectorAll('.bcnotebar')
+    const lit = Math.min(bars.length, Math.round(Math.sqrt(Math.min(1, level)) * bars.length))
+    bars.forEach((b, i) => {
+      b.dataset.lit = i < lit ? '1' : '0'
+    })
+  }
+
+  const drawReview = async (kept) => {
+    if (notePanel() === null) return
+    if (held !== kept) {
+      letGo()
+      held = kept
+      heldUrl = URL.createObjectURL(kept.blob)
+    }
+    const url = heldUrl
+    paint(
+      'review',
+      `<div class="bcnoterow">
+        <span class="bcnoteclock">${clock(kept.seconds)}</span>
+        <audio class="bcnoteplayer" controls preload="metadata" src="${url}"
+          data-bc-noteplayback></audio>
+      </div>
+      <div class="bcnoterow">
+        <button type="button" class="bcbtn bcbtn--primary" data-bc-notesend>Send to the team</button>
+        <button type="button" class="bcbtn" data-bc-noteagain>Record again</button>
+        <button type="button" class="bcbtn" data-bc-notecancel>Delete</button>
+      </div>
+      <p class="bcnotesaid">The team is sent what you said, in words. The recording itself stays in this browser.</p>`,
+    )
+  }
+
+  const startNote = async () => {
+    const mic = noteMic()
+    try {
+      await recorder.start(drawRecording)
+      micOwner = self
+      if (mic !== null) {
+        mic.dataset.bcNote = 'recording'
+        mic.querySelector('.bcnotemictxt').textContent = 'Recording'
+      }
+      drawRecording({ seconds: 0, level: 0 })
+    } catch (e) {
+      noteShut()
+      paint(
+        'failed',
+        `<p class="bcnotesaid">${esc(e instanceof Error ? e.message : String(e))}</p>
+         <div class="bcnoterow">
+           <button type="button" class="bcbtn" data-bc-noteagain>Try again</button>
+           <button type="button" class="bcbtn" data-bc-notecancel>Close</button>
+         </div>`,
+      )
+    }
+  }
+
+  const stopNote = async () => {
+    const mic = noteMic()
+    if (mic !== null) {
+      mic.dataset.bcNote = 'idle'
+      mic.querySelector('.bcnotemictxt').textContent = 'Voice note'
+    }
+    const kept = await recorder.stop().catch(() => null)
+    micOwner = null
+    if (kept === null) {
+      noteShut()
+      return
+    }
+    /*
+      NOTHING WAS HEARD, and this is where that is settled rather than at the
+      speech service, which cannot tell: three seconds of digital silence comes
+      back from it as "Thank you.", with the same no-speech probability as real
+      speech. The browser measured the sound, so the browser is what knows.
+    */
+    if (!kept.heard) {
+      paint(
+        'failed',
+        `<p class="bcnotesaid">Nothing was picked up — the microphone stayed silent the whole
+           time. Nothing has been sent.</p>
+         <div class="bcnoterow">
+           <button type="button" class="bcbtn bcbtn--primary" data-bc-noteagain>Record again</button>
+           <button type="button" class="bcbtn" data-bc-notecancel>Close</button>
+         </div>`,
+      )
+      return
+    }
+    await drawReview(kept)
+  }
+
+  const sendNote = async () => {
+    if (held === null || sending) return
+    sending = true
+    paint('sending', '<p class="bcnotesaid">Working out what you said…</p>')
+    const project = projectOf()
+    const note = held
+    let heard = ''
+    try {
+      heard = await recorder.words(note.blob, {
+        endpoint: ctx.voiceEndpoint?.() ?? '',
+        token: ctx.officeToken?.() ?? '',
+        /* A spelling hint only: the project's name and the team's. */
+        vocabulary: [
+          ctx.projectName?.(project) ?? '',
+          ...(ctx.crew ?? []).map((c) => c.name ?? ''),
+        ],
+      })
+    } catch (e) {
+      sending = false
+      /* paint() resolves the panel NOW, so a redraw during the wait cannot
+         leave this sentence in a node that is no longer on screen. */
+      paint(
+        'failed',
+        `<p class="bcnotesaid">${esc(e instanceof Error ? e.message : String(e))}
+           Your recording is still here.</p>
+         <div class="bcnoterow">
+           <button type="button" class="bcbtn bcbtn--primary" data-bc-notesend>Try sending again</button>
+           <button type="button" class="bcbtn" data-bc-notecancel>Delete it</button>
+         </div>`,
+      )
+      return
+    }
+    sending = false
+    /*
+      AND FROM HERE IT IS AN ORDINARY MESSAGE. Same two calls as the Send
+      button, same thread, same office - the only difference is where the words
+      came from.
+    */
+    const said = ctx.chatSend?.(project, heard) ?? []
+    const mine = [...said].reverse().find((m) => (m.who ?? m.from) === 'grant')
+    if (mine !== undefined) await notes.keep(mine.id, note.blob, { seconds: note.seconds })
+    letGo()
+    noteShut()
+    await askTheTeam(project, heard, { alreadySaid: true })
+  }
+
+  /*
+    DELEGATED, on the form, because the panel replaces its own contents.
+
+    Stop, Cancel, Send and Record again are all drawn by `drawRecording` and
+    `drawReview` AFTER this runs, so a listener attached per button here would
+    be attached to nothing - which is exactly what the first run of
+    `verify:basecamp-voicenote` found: the meter moved, the clock ran, and
+    pressing Stop did nothing at all. CLAUDE.md records this trap three times
+    in one afternoon in one file; the cure is the same one: listen on the
+    element that does NOT get replaced.
+  */
+  /*
+    DELEGATED, on the scope, because the panel replaces its own contents.
+
+    Stop, Cancel, Send and Record again are all drawn by `drawRecording` and
+    `drawReview` AFTER wiring, so a listener attached per button would be
+    attached to nothing - which is exactly what the first run of
+    `verify:basecamp-voicenote` found: the meter moved, the clock ran, and
+    pressing Stop did nothing at all. Listen on the element that does NOT get
+    replaced.
+  */
+  /*
+    AFTER EVERY RENDER, AGREE WITH THE PAGE. A render replaces the composer,
+    so a recording in progress had its panel drawn into a node that was no
+    longer on screen - and when the composer was gone altogether (Grant left
+    the Chat page, or closed the dock) the MICROPHONE KEPT RECORDING with
+    nothing anywhere to show it or stop it. That is the one state this
+    control must never be in. So: if the composer is still here, put the
+    recording or review back on it; if it is not, stop the microphone.
+  */
+  const resync = () => {
+    const panel = notePanel()
+    const mine = micOwner === self && recorder.active()
+    if (panel === null) {
+      if (mine) {
+        recorder.cancel()
+        micOwner = null
+      }
+      /* A transcription already under way finishes and sends; only an
+         unsent recording with nowhere to live is let go. */
+      if (!sending) {
+        letGo()
+        shown = null
+      }
+      return
+    }
+    if (mine) {
+      const mic = noteMic()
+      if (mic !== null) {
+        mic.dataset.bcNote = 'recording'
+        const t = mic.querySelector('.bcnotemictxt')
+        if (t !== null) t.textContent = 'Recording'
+      }
+      if (panel.querySelector('.bcnoteclock') === null) drawRecording({ seconds: 0, level: 0 })
+      return
+    }
+    if (shown !== null && panel.dataset.bcNotephase !== shown.phase) {
+      panel.hidden = false
+      panel.dataset.bcNotephase = shown.phase
+      panel.innerHTML = shown.html
+    }
+  }
+  const press = async (e) => {
+    const pressed = e.target?.closest?.(
+      '[data-bc-note], [data-bc-notestop], [data-bc-noteagain], [data-bc-notecancel], [data-bc-notesend]',
+    )
+    if (pressed === null || pressed === undefined) return
+    e.preventDefault()
+    if (pressed.hasAttribute('data-bc-notestop')) {
+      await stopNote()
+      return
+    }
+    /* One recorder, two composers: while the other one is recording, this
+       one does not reach into it. */
+    if (micOwner !== null && micOwner !== self && recorder.active()) return
+    if (pressed.hasAttribute('data-bc-noteagain')) {
+      letGo()
+      await startNote()
+      return
+    }
+    if (pressed.hasAttribute('data-bc-notecancel')) {
+      letGo()
+      recorder.cancel()
+      micOwner = null
+      noteShut()
+      return
+    }
+    if (pressed.hasAttribute('data-bc-notesend')) {
+      await sendNote()
+      return
+    }
+    /* The microphone itself: press to start, press again to stop. */
+    if (recorder.active()) await stopNote()
+    else await startNote()
+  }
+  const self = { press, resync }
+  return self
+}
+
+/* One instance for the Chat page's composer, resolved live every time. */
+const pageNote = voiceNote(() => document.querySelector('#root [data-bc-sayform]'))
+
+/*
+  THE DOCK GETS THE VOICE NOTE TOO. "Chat with Team" opens the dock, so for
+  most people the dock IS Team Chat - and it had no microphone at all; the
+  voice note lived only on the separate Chat page. The dock is the studio's
+  (app.js paintDock), repainted on every render, so the listener sits on the
+  persistent #dock element and is attached once, and paintDock carries the
+  live microphone and panel across each repaint.
+*/
+const dockNote = voiceNote(
+  () => document.getElementById('dock'),
+  /* The dock files a message under the project it SHOWS - the open one, or
+     Unnamed on the portfolio (#149) - and a voice note must go to the same
+     thread as a typed line, so it reads the dock's own choice. */
+  () => document.querySelector('#dock [data-dockform]')?.dataset.bcNoteproject || ctx.state.project,
+)
+export const wireDockNote = (dock) => {
+  if (dock !== null && dock !== undefined && dock.dataset.bcNoteWired !== '1') {
+    dock.dataset.bcNoteWired = '1'
+    dock.addEventListener('click', (e) => {
+      void dockNote.press(e)
+    })
+  }
+  dockNote.resync()
+}
+
+/*
+  Whether the reader is at the end of the thread is REMEMBERED on every
+  scroll, because by the time a render has run the page has already moved
+  (#197: anything you need to know about "before" has to be recorded before).
+*/
+let chatAtEnd = true
+let chatLastId = ''
+globalThis.addEventListener?.(
+  'scroll',
+  () => {
+    const d = document.documentElement
+    chatAtEnd = d.scrollHeight - (d.scrollTop + innerHeight) < 160
+  },
+  { passive: true },
+)
+const followChat = (root) => {
+  const thread = root.querySelector('.bcchat--full')
+  if (thread === null) {
+    chatLastId = ''
+    return
+  }
+  const rows = thread.querySelectorAll('.bcsaid')
+  const last = rows[rows.length - 1]
+  const id = `${String(rows.length)}:${last?.textContent?.length ?? 0}:${last?.className ?? ''}`
+  const changed = chatLastId !== '' && id !== chatLastId
+  chatLastId = id
+  if (!changed || !chatAtEnd) return
+  requestAnimationFrame(() => {
+    globalThis.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' })
+    chatAtEnd = true
+  })
+}
+
 export const wire = (root) => {
   rememberDialogScroll(root)
 
@@ -148,258 +554,33 @@ export const wire = (root) => {
     before the voice note was built, and it was found by building the voice
     note - two callers of one path, of which only one was being looked at.
   */
-  const askTheTeam = async (project, text, { alreadySaid = false } = {}) => {
-    if (!alreadySaid) ctx.chatSend?.(project, text)
-    ctx.render()
-    await ctx.chatAsk?.(project, text, () => {
+  /*
+    THE CHAT PAGE FOLLOWS THE CONVERSATION. A new answer, a working row or a
+    failure with its Try again landed at the foot of the thread - which is
+    under the sticky composer, below the fold - and the page stayed where it
+    was: an answer had arrived and nothing on screen said so. When the last
+    message changes and the reader was at the end of the thread (or has just
+    sent), the page follows it. Someone scrolled back to read older messages
+    is left where they are.
+  */
+  followChat(root)
+  /* Asking again, from a slow or failed answer on the Chat page. */
+  for (const b of root.querySelectorAll('[data-bc-chatretry]')) {
+    b.addEventListener('click', async () => {
+      b.disabled = true
+      b.textContent = 'Asking again…'
+      await ctx.chatRetry?.(ctx.state.project, b.dataset.bcChatretry, () => {
+        ctx.render()
+      })
       ctx.render()
     })
-    ctx.render()
   }
-
-  /*
-    THE VOICE NOTE, end to end.
-
-    Record -> stop -> listen back -> send. The words then take the ORDINARY
-    typed path (`ctx.chatSend` and `ctx.chatAsk`, the same two calls the Send
-    button makes), which is Grant's "do not create a separate voice note
-    conversation" implemented rather than merely agreed with.
-
-    The panel holds three states and draws them here rather than in the shell,
-    because they change many times a second while recording and a shell redraw
-    would take the microphone with it.
-  */
-  const notePanel = () => root.querySelector('[data-bc-notepanel]')
-  const noteMic = () => root.querySelector('[data-bc-note]')
-  const clock = (n) =>
-    `${String(Math.floor(n / 60))}:${String(Math.floor(n % 60)).padStart(2, '0')}`
-  const meter = (lvl) => {
-    const bars = 14
-    /* A square root, so an ordinary speaking voice fills most of the meter -
-       a linear scale spends nine tenths of it on sounds nobody makes. */
-    const lit = Math.min(bars, Math.round(Math.sqrt(Math.min(1, lvl)) * bars))
-    let out = ''
-    for (let i = 0; i < bars; i += 1) out += `<i class="bcnotebar" data-lit="${i < lit ? 1 : 0}"></i>`
-    return `<div class="bcnotemeter" aria-hidden="true">${out}</div>`
-  }
-  const noteSay = (words, phase = '') => {
-    const panel = notePanel()
-    if (panel === null) return
-    panel.hidden = false
-    if (phase !== '') panel.dataset.bcNotephase = phase
-    const line = panel.querySelector('.bcnotesaid')
-    if (line !== null) line.textContent = words
-  }
-  const noteShut = () => {
-    const panel = notePanel()
-    if (panel !== null) {
-      panel.hidden = true
-      panel.innerHTML = ''
-      delete panel.dataset.bcNotephase
-    }
-    const mic = noteMic()
-    if (mic !== null) {
-      mic.dataset.bcNote = 'idle'
-      mic.querySelector('.bcnotemictxt').textContent = 'Voice note'
-    }
-  }
-
-  let held = null
-
-  const drawRecording = ({ seconds, level }) => {
-    const panel = notePanel()
-    if (panel === null) return
-    const shown = panel.querySelector('.bcnoteclock')
-    if (shown === null) {
-      panel.hidden = false
-      panel.dataset.bcNotephase = 'recording'
-      panel.innerHTML =
-        `<div class="bcnoterow">
-          <span class="bcnoteclock">${clock(seconds)}</span>
-          ${meter(level)}
-          <button type="button" class="bcbtn bcbtn--primary" data-bc-notestop>Stop</button>
-          <button type="button" class="bcbtn" data-bc-notecancel>Cancel</button>
-        </div>
-        <p class="bcnotesaid">Recording. Stop when you have finished and you can listen back before it goes.</p>`
-      return
-    }
-    shown.textContent = clock(seconds)
-    const bars = panel.querySelectorAll('.bcnotebar')
-    const lit = Math.min(bars.length, Math.round(Math.sqrt(Math.min(1, level)) * bars.length))
-    bars.forEach((b, i) => {
-      b.dataset.lit = i < lit ? '1' : '0'
-    })
-  }
-
-  const drawReview = async (kept) => {
-    const panel = notePanel()
-    if (panel === null) return
-    held = kept
-    const url = URL.createObjectURL(kept.blob)
-    panel.hidden = false
-    panel.dataset.bcNotephase = 'review'
-    panel.innerHTML =
-      `<div class="bcnoterow">
-        <span class="bcnoteclock">${clock(kept.seconds)}</span>
-        <audio class="bcnoteplayer" controls preload="metadata" src="${url}"
-          data-bc-noteplayback></audio>
-      </div>
-      <div class="bcnoterow">
-        <button type="button" class="bcbtn bcbtn--primary" data-bc-notesend>Send to the team</button>
-        <button type="button" class="bcbtn" data-bc-noteagain>Record again</button>
-        <button type="button" class="bcbtn" data-bc-notecancel>Delete</button>
-      </div>
-      <p class="bcnotesaid">The team is sent what you said, in words. The recording itself stays in this browser.</p>`
-  }
-
-  const startNote = async () => {
-    const mic = noteMic()
-    try {
-      await recorder.start(drawRecording)
-      if (mic !== null) {
-        mic.dataset.bcNote = 'recording'
-        mic.querySelector('.bcnotemictxt').textContent = 'Recording'
-      }
-      drawRecording({ seconds: 0, level: 0 })
-    } catch (e) {
-      noteShut()
-      noteSay('', 'failed')
-      const panel = notePanel()
-      if (panel !== null) {
-        panel.hidden = false
-        panel.dataset.bcNotephase = 'failed'
-        panel.innerHTML =
-          `<p class="bcnotesaid">${esc(e instanceof Error ? e.message : String(e))}</p>
-           <div class="bcnoterow">
-             <button type="button" class="bcbtn" data-bc-noteagain>Try again</button>
-             <button type="button" class="bcbtn" data-bc-notecancel>Close</button>
-           </div>`
-      }
-    }
-  }
-
-  const stopNote = async () => {
-    const mic = noteMic()
-    if (mic !== null) {
-      mic.dataset.bcNote = 'idle'
-      mic.querySelector('.bcnotemictxt').textContent = 'Voice note'
-    }
-    const kept = await recorder.stop().catch(() => null)
-    if (kept === null) {
-      noteShut()
-      return
-    }
-    /*
-      NOTHING WAS HEARD, and this is where that is settled rather than at the
-      speech service, which cannot tell: three seconds of digital silence comes
-      back from it as "Thank you.", with the same no-speech probability as real
-      speech. The browser measured the sound, so the browser is what knows.
-    */
-    if (!kept.heard) {
-      const panel = notePanel()
-      if (panel !== null) {
-        panel.hidden = false
-        panel.dataset.bcNotephase = 'failed'
-        panel.innerHTML =
-          `<p class="bcnotesaid">Nothing was picked up — the microphone stayed silent the whole
-             time. Nothing has been sent.</p>
-           <div class="bcnoterow">
-             <button type="button" class="bcbtn bcbtn--primary" data-bc-noteagain>Record again</button>
-             <button type="button" class="bcbtn" data-bc-notecancel>Close</button>
-           </div>`
-      }
-      return
-    }
-    await drawReview(kept)
-  }
-
-  const sendNote = async () => {
-    if (held === null) return
-    const panel = notePanel()
-    if (panel !== null) {
-      panel.dataset.bcNotephase = 'sending'
-      panel.innerHTML = '<p class="bcnotesaid">Working out what you said…</p>'
-    }
-    const project = ctx.state.project
-    let heard = ''
-    try {
-      heard = await recorder.words(held.blob, {
-        endpoint: ctx.voiceEndpoint?.() ?? '',
-        token: ctx.officeToken?.() ?? '',
-        /* A spelling hint only: the project's name and the team's. */
-        vocabulary: [
-          ctx.projectName?.(project) ?? '',
-          ...(ctx.crew ?? []).map((c) => c.name ?? ''),
-        ],
-      })
-    } catch (e) {
-      if (panel !== null) {
-        panel.dataset.bcNotephase = 'failed'
-        panel.innerHTML =
-          `<p class="bcnotesaid">${esc(e instanceof Error ? e.message : String(e))}
-             Your recording is still here.</p>
-           <div class="bcnoterow">
-             <button type="button" class="bcbtn bcbtn--primary" data-bc-notesend>Try sending again</button>
-             <button type="button" class="bcbtn" data-bc-notecancel>Delete it</button>
-           </div>`
-      }
-      return
-    }
-    /*
-      AND FROM HERE IT IS AN ORDINARY MESSAGE. Same two calls as the Send
-      button, same thread, same office - the only difference is where the words
-      came from.
-    */
-    const said = ctx.chatSend?.(project, heard) ?? []
-    const mine = [...said].reverse().find((m) => (m.who ?? m.from) === 'grant')
-    if (mine !== undefined) await notes.keep(mine.id, held.blob, { seconds: held.seconds })
-    held = null
-    noteShut()
-    await askTheTeam(project, heard, { alreadySaid: true })
-  }
-
-  /*
-    DELEGATED, on the form, because the panel replaces its own contents.
-
-    Stop, Cancel, Send and Record again are all drawn by `drawRecording` and
-    `drawReview` AFTER this runs, so a listener attached per button here would
-    be attached to nothing - which is exactly what the first run of
-    `verify:basecamp-voicenote` found: the meter moved, the clock ran, and
-    pressing Stop did nothing at all. CLAUDE.md records this trap three times
-    in one afternoon in one file; the cure is the same one: listen on the
-    element that does NOT get replaced.
-  */
   for (const form of root.querySelectorAll('[data-bc-sayform]')) {
-    form.addEventListener('click', async (e) => {
-      const pressed = e.target?.closest?.(
-        '[data-bc-note], [data-bc-notestop], [data-bc-noteagain], [data-bc-notecancel], [data-bc-notesend]',
-      )
-      if (pressed === null || pressed === undefined) return
-      e.preventDefault()
-      if (pressed.hasAttribute('data-bc-notestop')) {
-        await stopNote()
-        return
-      }
-      if (pressed.hasAttribute('data-bc-noteagain')) {
-        held = null
-        await startNote()
-        return
-      }
-      if (pressed.hasAttribute('data-bc-notecancel')) {
-        held = null
-        recorder.cancel()
-        noteShut()
-        return
-      }
-      if (pressed.hasAttribute('data-bc-notesend')) {
-        await sendNote()
-        return
-      }
-      /* The microphone itself: press to start, press again to stop. */
-      if (recorder.active()) await stopNote()
-      else await startNote()
+    form.addEventListener('click', (e) => {
+      void pageNote.press(e)
     })
   }
+  pageNote.resync()
 
   /*
     PLAYING ONE BACK. The control is only drawn for a message that HAS a
@@ -869,7 +1050,9 @@ const wireExpanded = (root) => {
         reference captured before the redraw - #197's lesson, which cost four
         attempts the first time.
       */
-      document.querySelector(`[data-bc-expand="${lastOpener}"]`)?.focus()
+      const back = document.querySelector(`[data-bc-expand="${lastOpener}"]`)
+      /* A module header is not focusable; its title button is. */
+      ;(back?.querySelector?.('.bcmodopen') ?? back)?.focus()
     })
   }
   const box = root.querySelector('.bcexpbox')
@@ -890,11 +1073,56 @@ let lastOpener = ''
   nothing of its own. Toggle rather than start, because a microphone that
   cannot stop the call it began is a control with no way out.
 */
+/*
+  THE CONNECTION, AS THE BROWSER REPORTS IT. Going offline redraws so the
+  strip says so at once; coming back asks the office again rather than
+  waiting for the next scheduled read, so the page stops saying "offline"
+  the moment it can prove otherwise.
+*/
+for (const [ev, then] of [
+  ['offline', () => ctx?.render?.()],
+  /* Only a signed-in page has an office to re-ask; a visitor's page is the
+     example projects, and asking with no credential would relabel it as an
+     outage. */
+  ['online', () => { ctx?.render?.(); if (canWrite()) void ctx?.refresh?.() }],
+]) {
+  globalThis.addEventListener?.(ev, () => {
+    if (document.documentElement.dataset.experience !== 'basecamp') return
+    then()
+  })
+}
+
+/*
+  A FACE THAT DOES NOT LOAD IS A PERSON, NOT A BROKEN IMAGE.
+
+  Every face in this experience draws the person's initial underneath the
+  photograph so that a missing photo still reads as somebody. But a failed
+  image still paints Chromium's broken-image glyph over the initial - alt=""
+  notwithstanding - which is what the settings roster, the dock and the chat
+  showed whenever a photo was deleted, the connection dropped or the storage
+  host was unreachable. `error` does not bubble, so this listens in the
+  capture phase, once, for the whole document; it hides the image rather than
+  removing it, so a redraw that brings a good photo back simply shows it.
+  Scoped to this experience: the default studio is not this branch's to change.
+*/
+document.addEventListener(
+  'error',
+  (e) => {
+    const img = e.target
+    if (!(img instanceof HTMLImageElement)) return
+    if (document.documentElement.dataset.experience !== 'basecamp') return
+    if (img.closest('.bcface, .setface, .face, .bcmateface, .dock') === null) return
+    img.hidden = true
+  },
+  true,
+)
+
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return
   if (document.querySelector('[data-bc-expanded]') === null) return
   ctx?.closeExpanded?.()
-  document.querySelector(`[data-bc-expand="${lastOpener}"]`)?.focus()
+  const back = document.querySelector(`[data-bc-expand="${lastOpener}"]`)
+  ;(back?.querySelector?.('.bcmodopen') ?? back)?.focus()
 })
 
 /*
@@ -945,9 +1173,10 @@ const paintMic = (b) => {
     when this shows them.
   */
   for (const el of document.querySelectorAll('[data-bc-callsay]')) {
-    const words = state === 'idle' ? callSays() : ''
-    el.textContent = words
-    el.hidden = words === ''
+    const said = state === 'idle' ? live.plainly(callSays()) : { words: '', tone: '' }
+    el.textContent = said.words
+    el.dataset.tone = said.tone
+    el.hidden = said.words === ''
   }
 }
 
@@ -1778,7 +2007,9 @@ const wireBoard = (root) => {
         this: "Do not allow interactive controls within the header, such as
         three-dot menus, to accidentally trigger expansion."
       */
-      if (e.target.closest('button, a, input, select, [data-bc-modoff]') !== null) return
+      /* The title's own button IS the header's target (its keyboard stop), so
+         a press on the title still drags; every other control does not. */
+      if (e.target.closest('button:not(.bcmodopen), a, input, select, [data-bc-modoff]') !== null) return
       begin('move', h, e)
     })
     h.addEventListener('pointermove', during)
@@ -1827,7 +2058,7 @@ const wireBoard = (root) => {
         : { x: now.x + step[0], y: Math.max(0, now.y + step[1]) }
       grid.place(slug, id, want)
       ctx.render()
-      document.querySelector(`[data-mod="${id}"] .bcmodhead`)?.focus()
+      document.querySelector(`[data-mod="${id}"] .bcmodopen`)?.focus()
     })
   }
 
@@ -2295,6 +2526,24 @@ const wireTasks = (root) => {
     The draft is cleared on send, which #197 established, and the answer
     arrives through the same repaint the default Team HQ uses.
   */
+  /*
+    THE FORM NEVER SUBMITS ITSELF. It had no submit listener, so Enter in the
+    field did a native form submission: the page reloaded and the message was
+    gone, with nothing on screen to say so. Enter now presses Send; Shift+Enter
+    is left to the textarea, which makes a new line.
+  */
+  for (const f of root.querySelectorAll('[data-bc-sayform]')) {
+    f.addEventListener('submit', (e) => {
+      e.preventDefault()
+      f.querySelector('[data-bc-say]')?.click()
+    })
+    const box = f.querySelector('#bc-say')
+    box?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return
+      e.preventDefault()
+      f.querySelector('[data-bc-say]')?.click()
+    })
+  }
   for (const b of root.querySelectorAll('[data-bc-say]')) {
     b.addEventListener('click', async () => {
       const f = root.querySelector('[data-bc-sayform]')
@@ -2645,6 +2894,17 @@ const wireTasks = (root) => {
           due: String(root.querySelector('#bc-edit-due')?.value ?? '').trim(),
         })
         ctx.render()
+        /*
+          The redraw replaced the button that was pressed, so the confirmation
+          goes on its successor, and focus with it: without this the save
+          looked like nothing had happened and the keyboard landed on Close.
+        */
+        const again = document.querySelector(`[data-bc-tasksave-edit="${CSS.escape(String(id))}"]`)
+        if (again instanceof HTMLElement) {
+          again.focus()
+          say(again, 'Saved in this browser.')
+          again.parentElement?.querySelector('[data-said]')?.setAttribute('role', 'status')
+        }
         return
       }
       const who = String(root.querySelector('#bc-edit-who')?.value ?? '').trim()

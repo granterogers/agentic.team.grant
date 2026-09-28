@@ -343,15 +343,28 @@ check(
   `${String(await page.locator('.bcmain [disabled]').count())} disabled control(s)`,
 )
 const recordTitle = (await page.locator('.bcrecordhead h1').innerText()).trim()
-await page.locator('#bc-edit-who').fill('Emma')
+/*
+  The assignee is a PICKER of the team now (it was a free-text box holding a
+  slug), so the suite chooses a person the way a person does and asserts the
+  person, by name, is who the saved record names. Chosen as somebody the task
+  is not already assigned to, so an edit that is ignored cannot pass.
+*/
+const whoBefore = await page.locator('#bc-edit-who').inputValue()
+const pick = whoBefore.includes('oliver') || whoBefore.includes('communications') ? 'Tom' : 'Oliver'
+const pickValue = await page
+  .locator('#bc-edit-who option')
+  .filter({ hasText: pick })
+  .first()
+  .getAttribute('value')
+await page.locator('#bc-edit-who').selectOption(pickValue ?? '')
 await page.locator('#bc-edit-due').fill('2026-10-15')
 await page.locator('[data-bc-tasksave-edit]').click()
 await page.waitForTimeout(700)
+const whoAfter = (await page.locator('#bc-edit-who option:checked').innerText()).trim()
 check(
   'editing who it is for and when it is due is kept',
-  (await page.locator('#bc-edit-who').inputValue()) === 'Emma' &&
-    (await page.locator('#bc-edit-due').inputValue()) === '2026-10-15',
-  `${await page.locator('#bc-edit-who').inputValue()} / ${await page.locator('#bc-edit-due').inputValue()}`,
+  whoAfter.startsWith(pick) && (await page.locator('#bc-edit-due').inputValue()) === '2026-10-15',
+  `${whoAfter} / ${await page.locator('#bc-edit-due').inputValue()}`,
 )
 await page.locator('[data-bc-taskdone]').click()
 await page.waitForTimeout(700)

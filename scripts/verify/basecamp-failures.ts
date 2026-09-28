@@ -654,6 +654,182 @@ for (const d of drives) {
   }
 }
 
+/*
+ * --- THE CONNECTION DROPS WHILE THE PAGE IS OPEN ---------------------------
+ *
+ * Nothing listened for it: a page open when the network went kept looking
+ * current until a later read failed, and a change made in between looked
+ * saved. The strip must say so at once, and coming back must not relabel a
+ * visitor's example page as an outage (the negative control: the fix first
+ * re-asked the office with no credential and did exactly that).
+ */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-GB' })
+  const page = await ctx.newPage()
+  await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcmain')
+  await page.waitForTimeout(600)
+  const before = (
+    await page
+      .locator('.bcnotlive')
+      .first()
+      .innerText()
+      .catch(() => '')
+  ).replace(/\s+/g, ' ')
+  await ctx.setOffline(true)
+  await page.waitForTimeout(500)
+  const off = (
+    await page
+      .locator('.bcnotlive')
+      .first()
+      .innerText()
+      .catch(() => '')
+  ).replace(/\s+/g, ' ')
+  check('losing the connection is said at once', /offline/i.test(off), off.slice(0, 80))
+  check(
+    'and it says changes cannot reach the office',
+    /can.?t reach the office/i.test(off),
+    off.slice(0, 120),
+  )
+  await ctx.setOffline(false)
+  await page.waitForTimeout(900)
+  const back = (
+    await page
+      .locator('.bcnotlive')
+      .first()
+      .innerText()
+      .catch(() => '')
+  ).replace(/\s+/g, ' ')
+  check('coming back clears it', !/offline/i.test(back), back.slice(0, 80))
+  check(
+    'and a signed-out page returns to what it said before, not to an outage',
+    back.slice(0, 40) === before.slice(0, 40),
+    `before: ${before.slice(0, 40)} / after: ${back.slice(0, 40)}`,
+  )
+  await ctx.close()
+}
+
+/*
+ * --- THE CHAT PAGE WHILE THE TEAM IS WORKING, AND WHEN IT FAILS -----------
+ *
+ * The page drew the in-flight row as a message - a name, a time and no
+ * words - drew a failure as the agent saying "I could not reach the office",
+ * offered no way to ask again, and did not follow a new answer, which landed
+ * under the sticky composer out of sight.
+ */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-GB' })
+  await ctx.addInitScript(
+    `try { localStorage.setItem('hq.token', 'not-a-credential-local-test-only') } catch {}`,
+  )
+  let answer: 'slow' | 'fail' = 'slow'
+  let asked = 0
+  await ctx.route('**/turn', async (r) => {
+    if (r.request().method() === 'OPTIONS') {
+      return r.fulfill({
+        status: 204,
+        headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' },
+      })
+    }
+    asked += 1
+    const cors = { 'access-control-allow-origin': '*', 'content-type': 'application/json' }
+    if (answer === 'slow') {
+      await new Promise((ok) => setTimeout(ok, 2500))
+      return r.fulfill({
+        status: 200,
+        headers: cors,
+        body: JSON.stringify({ speak: 'Booked for Tuesday.', did: 'answered' }),
+      })
+    }
+    return r.fulfill({
+      status: 500,
+      headers: cors,
+      body: JSON.stringify({ error: 'the office is having trouble' }),
+    })
+  })
+  const page = await ctx.newPage()
+  await page.goto(url(`${slug}/chat`), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-sayform]')
+  await page.waitForTimeout(900)
+  await page.fill('#bc-say', 'Can you book the next interview?')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(1200)
+  /*
+    Read at once, never waited for: innerText() on a locator that matches
+    nothing waits up to 30s, by which time the answer has arrived and the
+    state under test is gone - the blank check below was vacuous for exactly
+    that reason until a sabotage showed it.
+  */
+  const working = (
+    (await page.evaluate(
+      inPage(`return document.querySelector('.bcsaid--working')?.textContent ?? ''`),
+    )) as string
+  ).replace(/\s+/g, ' ')
+  check(
+    'while the team works, the page says so in words',
+    /working on it|sending/i.test(working),
+    working,
+  )
+  /* By the visible TEXT: an empty body still renders <p></p>, so :empty can never match. */
+  const blank = (await page.evaluate(
+    inPage(`return [...document.querySelectorAll('.bcsaid:not(.bcsaid--working) .bcsaidtext')]
+      .filter((e) => (e.textContent ?? '').trim() === '').length`),
+  )) as number
+  check(
+    'and no empty message stands in for the answer',
+    blank === 0,
+    `${String(blank)} blank message(s)`,
+  )
+  await page.waitForTimeout(2600)
+  check(
+    'the answer replaces the working row',
+    (await page.locator('.bcsaid--working').count()) === 0,
+  )
+  answer = 'fail'
+  await page.fill('#bc-say', 'And the one after?')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(1800)
+  const failed = (
+    await page
+      .locator('.bcsaid--failed')
+      .first()
+      .innerText()
+      .catch(() => '')
+  ).replace(/\s+/g, ' ')
+  check(
+    'a failed answer is a notice from the office, not an agent speaking',
+    /no answer came back/i.test(failed) && !/^\w+ [A-Z].*I could not/.test(failed),
+    failed,
+  )
+  const retry = page.locator('[data-bc-chatretry]').first()
+  check(
+    'and it is in view, not under the composer',
+    (await page
+      .evaluate(
+        inPage(`const el = document.querySelector('[data-bc-chatretry]')
+          if (el === null) return false
+          const r = el.getBoundingClientRect()
+          const c = document.querySelector('.bcsay')?.getBoundingClientRect()
+          return r.bottom <= innerHeight && (c === undefined || r.bottom <= c.top + 1)`),
+      )
+      .catch(() => false)) as boolean,
+  )
+  answer = 'slow'
+  const before = asked
+  await retry.click()
+  await page.waitForTimeout(3200)
+  check(
+    'Try again asks the office again',
+    asked === before + 1,
+    `${String(asked - before)} new request(s)`,
+  )
+  check(
+    'and the notice is replaced by the answer',
+    (await page.locator('.bcsaid--failed').count()) === 0,
+  )
+  await ctx.close()
+}
+
 await browser.close()
 server.close()
 console.log(`\n${String(pass)}/${String(pass + fail)} passed — subject: ${subject}`)

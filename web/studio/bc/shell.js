@@ -208,10 +208,26 @@ const toolPath = (slug, id) => {
  * Shell
  * ======================================================================== */
 
+/*
+  THE TRAY'S MARKS ARE ONE DRAWN SET, not four characters from four fonts.
+  They were the text glyphs for a pencil, a house, a tick and a triple bar:
+  each a different weight and optical size, 8px tall on a phone, and the
+  pencil stood for Chat. Same geometry as icons.js - 24 grid, stroked,
+  currentColor, round joins - so the tray reads as one object.
+*/
+const trayMark = (d) =>
+  `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`
+const TRAY_MARKS = {
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/>',
+  home: '<path d="M3.5 10.5 12 3.8l8.5 6.7"/><path d="M5.5 9.2V20h13V9.2"/><path d="M10 20v-5.5h4V20"/>',
+  tasks: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8.2 12.2 2.6 2.6 5-5.4"/>',
+  activity: '<path d="M3 12h4l2.5-6.5 5 13L17 12h4"/>',
+}
 const trayItems = () => [
-  { name: 'Home', to: at('/'), glyph: '⌂' },
-  { name: 'My Tasks', to: at('/tasks'), glyph: '✓' },
-  { name: 'Activity', to: at('/activity'), glyph: '≡' },
+  { name: 'Home', to: at('/'), glyph: trayMark(TRAY_MARKS.home) },
+  { name: 'My Tasks', to: at('/tasks'), glyph: trayMark(TRAY_MARKS.tasks) },
+  { name: 'Activity', to: at('/activity'), glyph: trayMark(TRAY_MARKS.activity) },
 ]
 
 /*
@@ -347,7 +363,15 @@ const topRow = () => {
               ? `Attention: ${waiting} waiting on you, and you are looking at it`
               : `Attention: ${waiting} waiting on you`,
         )}">
-        Attention${waiting === 0 ? '' : ` <span class="bcstatus bcstatus--waiting">${waiting}</span>`}
+        <!--
+          The word gives way to a bell on the narrowest phones, where it was
+          taking the room the project's own name needed (the name was cut to
+          one letter at 320 wide). The accessible name above is unchanged.
+        -->
+        <svg class="bcattbell" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+          stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>
+        </svg><span class="bcattword">Attention</span>${waiting === 0 ? '' : ` <span class="bcstatus bcstatus--waiting">${waiting}</span>`}
       </button>
       <!--
         THE OFFICE'S OWN SETTINGS, OUTSIDE ANY PROJECT.
@@ -395,7 +419,7 @@ const tray = () =>
       removing a duplicate.
     -->
     <button type="button" class="bcnarrow-only" data-bc-dock>
-      <span aria-hidden="true">✎</span><span>Chat</span>
+      <span aria-hidden="true">${trayMark(TRAY_MARKS.chat)}</span><span>Chat</span>
     </button>
     ${trayItems()
       .map(
@@ -440,7 +464,10 @@ const tasksPreview = (p) => {
       .map((t) =>
         row(
           t.title,
-          [t.who, t.due, t.note].filter((x) => x !== undefined && x !== null && x !== '').join(' · '),
+          /* A name and a date, not a database key and a stale sentence: this
+             printed the slug ("claire") and t.due, which disagreed with the
+             same task's date on the project home. */
+          [whoName(t.who), bcMini.dueWords(t), t.note].filter((x) => x !== undefined && x !== null && x !== '').join(' · '),
           t.blocked ? status('Blocked', 'blocked') : '',
         ),
       )
@@ -485,7 +512,7 @@ const teamPreview = (p) => {
     bits.push(
       waiting
         .slice(0, 2)
-        .map((w) => row(w.what, [w.who, w.when].filter(Boolean).join(' · '), status('Waiting for you', 'waiting')))
+        .map((w) => row(w.what, [whoName(w.who), w.when].filter(Boolean).join(' · '), status('Waiting for you', 'waiting')))
         .join(''),
     )
   }
@@ -500,7 +527,7 @@ const teamPreview = (p) => {
     bits.push(
       row(
         made.output.title,
-        [made.who, made.delivered].filter(Boolean).join(' · '),
+        [whoName(made.who), made.delivered].filter(Boolean).join(' · '),
         made.output.imported === true ? status('In the project', 'done') : status('Ready for you', 'waiting'),
       ),
     )
@@ -554,7 +581,7 @@ const activityPreview = (p) => {
   if (acts.length === 0) return nothing('Nothing has happened here yet.')
   return acts
     .slice(0, 6)
-    .map((a) => row(`${a.who ?? 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(), a.when ?? ''))
+    .map((a) => row(`${whoName(a.who) || 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(), a.when ?? ''))
     .join('')
 }
 
@@ -722,7 +749,7 @@ const projectHeader = (p, latest) => {
     ${
       latest
         ? `<p class="bcpmeta bclatest">Latest: ${esc(
-            `${latest.who ?? 'the team'} ${latest.verb ?? 'changed'} ${latest.what ?? ''}`.trim(),
+            `${whoName(latest.who) || 'the team'} ${latest.verb ?? 'changed'} ${latest.what ?? ''}`.trim(),
           )} · ${esc(latest.when ?? '')}</p>`
         : ''
     }
@@ -749,14 +776,25 @@ const portfolio = () => {
       ${PROJECTS.map((p) => {
         const open = (p.tasks ?? []).filter((t) => t.state !== 'done').length
         const waiting = (p.waiting ?? []).length
+        const late = bcMini.filtered(p, 'late').length
+        const stuck = bcMini.filtered(p, 'stuck').length
+        /*
+          THE SAME THREE SIGNALS AS THE PROJECT HOME, so a project reads the
+          same from across the portfolio as it does inside. Static figures,
+          not buttons: the whole preview is already the one control that
+          opens the project, and a control inside it would be nested.
+        */
+        const signal = (n, word, tone) =>
+          `<span class="bcpsig${n === 0 ? ' bcpsig--zero' : ` bcpsig--${tone}`}"><b>${esc(String(n > 99 ? '99+' : n))}</b> ${esc(word)}</span>`
         return tool({
           name: p.name,
           to: at(`/p/${p.slug}`),
-          summary: `${open === 1 ? '1 open task' : `${open} open tasks`}, ${
-            (p.documents ?? []).length
-          } documents. Opens the project.`,
+          mark: compose.projectMark(p, 22),
+          summary: `${waiting} waiting on you, ${late} late, ${stuck} stuck, ${
+            open === 1 ? '1 open task' : `${open} open tasks`
+          }. Opens the project.`,
           body: `${p.purpose ? `<div class="bcpexcerpt">${esc(p.purpose)}</div>` : ''}
-            ${waiting === 0 ? '' : `<div class="bcgap">${status(waiting === 1 ? '1 thing waiting on you' : `${waiting} things waiting on you`, 'waiting')}</div>`}
+            <div class="bcpsigs">${signal(waiting, waiting === 1 ? 'needs you' : 'need you', 'waiting')}${signal(late, 'late', 'late')}${signal(stuck, 'stuck', 'stuck')}</div>
             ${tasksPreview(p)}`,
         })
       }).join('')}
@@ -803,13 +841,43 @@ const crumbFor = (p, toolId) =>
   recoverable and honest, and better than not offering it at all.
 */
 
+/*
+  WHO A TASK IS FOR, as a choice of the team rather than a box to type in.
+  Shared by the record and the add form so the two cannot drift. The value
+  is the office's own name for the person (staffSlug), because hq_task_add
+  and hq_task_update resolve p_assignee against public.staff.slug and refuse
+  anything else - a free-text box only worked if somebody typed a role slug.
+  Anybody the row names who is not on the team stays selectable, so opening
+  a record can never silently reassign it.
+*/
+const assigneePicker = (id, current) => {
+  const crew = ctx?.crew ?? []
+  const now = String(current ?? '')
+  const known = crew.some((c) => c.slug === now || c.staffSlug === now)
+  const opts = crew
+    .map((c) => {
+      const v = c.staffSlug ?? c.slug
+      const on = now !== '' && (c.slug === now || c.staffSlug === now)
+      return `<option value="${esc(v)}"${on ? ' selected' : ''}>${esc(c.role ? `${c.name} · ${c.role}` : c.name)}</option>`
+    })
+    .join('')
+  return `<div class="bcfield">
+    <label class="bclabel" for="${esc(id)}">Assigned to</label>
+    <select class="bcinput bcselect" id="${esc(id)}" name="who">
+      <option value=""${now === '' ? ' selected' : ''}>Nobody yet</option>
+      ${opts}
+      ${known || now === '' ? '' : `<option value="${esc(now)}" selected>${esc(bcMini.pretty(now))}</option>`}
+    </select>
+  </div>`
+}
+
 /** One list's add-a-task form. Per list, because §10.2 expands IN PLACE. */
 const taskAddForm = (listId) => {
   const k = listId === '' ? 'loose' : listId
   return `<form class="bcaddform" data-bc-taskform="${esc(k)}" hidden>
     ${input({ id: `bc-task-title-${k}`, label: 'What needs doing', name: 'title', autocomplete: 'off' })}
     ${input({ id: `bc-task-due-${k}`, label: 'Due date', name: 'due', type: 'date' })}
-    ${input({ id: `bc-task-who-${k}`, label: 'Assigned to', name: 'who', autocomplete: 'off', hint: 'A team member’s name, or leave it unassigned.' })}
+    ${assigneePicker(`bc-task-who-${k}`, '')}
     <div class="bcrow">
       ${button('Add this task', { kind: 'primary', 'data-bc-tasksave': esc(k) })}
       ${button('Cancel', { 'data-bc-taskcancel': esc(k) })}
@@ -881,7 +949,7 @@ const taskList = (p, g, whole = false) => {
       ${
         done.length === 0
           ? ''
-          : `<h4 class="bcdonehead">${esc(
+          : `<h3 class="bcdonehead">${esc(
               /*
                 THE NOUN FIRST, AND A REAL HEADING.
 
@@ -893,7 +961,7 @@ const taskList = (p, g, whole = false) => {
                 navigate to rather than a paragraph in bold.
               */
               done.length === 1 ? 'Done (1)' : `Done (${String(done.length)})`,
-            )}</h4>
+            )}</h3>
             <div class="bcdonelist">
               ${done.map((t) => taskRow(t, all.indexOf(t), g.name)).join('')}
             </div>`
@@ -920,7 +988,8 @@ const filterBar = (p) => {
   if (f === undefined) return ''
   const n = bcMini.filtered(p, kind).length
   return `<div class="bcfilterbar" data-bc-filterbar="${esc(String(kind))}">
-    <span class="bcstatus bcstatus--waiting">${esc(`${f.name}: ${String(n)}`)}</span>
+    <!-- A sentence, not a key and a value: "Showing late · 1" reads; "Late:1" did not. -->
+    <span class="bcstatus bcstatus--waiting">${esc(`Showing ${f.name.charAt(0).toLowerCase()}${f.name.slice(1)} · ${String(n)}`)}</span>
     ${button('Show everything', { 'data-bc-filter-off': '1' })}
   </div>`
 }
@@ -973,9 +1042,7 @@ const tasksSurface = (whole) => {
     ${bcMini.taskCounts(whole)}
     ${filterBar(whole)}
     <p class="bcpmeta bcprose bcgap-l">
-      What this project has committed to, in its lists. Your own list is under
-      My Tasks, and what the team is running is under Agentic Team — three
-      different things.
+      Everything this project has committed to, by list. Your own tasks live in My Tasks.
     </p>
     <form class="bcaddform" data-bc-listform hidden>
       ${input({ id: 'bc-list-name', label: 'What is this list called', name: 'name', autocomplete: 'off', hint: 'A stage, a workstream, a module — whatever the work actually divides into.' })}
@@ -1049,7 +1116,8 @@ const taskKey = (t) => todos.keyOf(t)
 const whoName = (slug) =>
   slug === null || slug === undefined || slug === ''
     ? ''
-    : ((ctx?.crew ?? []).find((c) => c.slug === slug)?.name ?? slug)
+    : /* Either slug: the office names people by role slug, the design by short slug. */
+      ((ctx?.crew ?? []).find((c) => c.slug === slug || c.staffSlug === slug)?.name ?? bcMini.pretty(slug))
 
 const norm = (x) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 const repeatsList = (note, listName) => {
@@ -1118,13 +1186,24 @@ const taskRow = (t, i = 0, listName = '') => {
           "Client Vision & Journey") is the same repetition with four extra
           characters, and an exact comparison let all of those through.
         */
-        [whoName(t.who), t.due, repeatsList(t.note, listName) ? '' : t.note]
+        [whoName(t.who), repeatsList(t.note, listName) ? '' : t.note]
           .filter((x) => x !== undefined && x !== null && x !== '')
           .join(' · '),
       )}</span>
       ${t.blocked ? `<span class="bcitemmeta">${status('Blocked', 'blocked')} ${esc(t.blocked)}</span>` : ''}
     </div>
-    <span></span>
+    <!--
+      THE DATE, in the row's last column, which was an empty span. It read
+      t.due, which rows rarely carry, so no row on this page showed when
+      anything was due - the overdue one looked exactly like the undated
+      ones. The miniature's reader, so both say the same words.
+    -->
+    ${(() => {
+      const due = isDone ? '' : bcMini.dueWords(t)
+      return due === ''
+        ? '<span></span>'
+        : `<span class="bcitemdue${bcMini.isLate(t) ? ' bcitemdue--late' : ''}">${esc(due)}</span>`
+    })()}
   </div>`
 }
 
@@ -1170,23 +1249,23 @@ const taskRecord = (p) => {
         }
       </span>
     </div>
-    <p class="bcpmeta bcprose bcgap-l">
-      A commitment on ${esc(p.name)}. Not a job the team is running, and not
-      an item on your own list — those are different things with different
-      owners.
-    </p>
-
     <h2 class="bcsubhead">Details</h2>
     <form class="bcaddform bcgap-l" data-bc-taskedit="${esc(key)}">
-      ${input({
-        id: 'bc-edit-who',
-        label: 'Assigned to',
-        name: 'who',
-        value: t.who ?? '',
-        autocomplete: 'off',
-        hint: 'A team member’s name, or leave it unassigned.',
-      })}
-      ${input({ id: 'bc-edit-due', label: 'Due date', name: 'due', type: 'date', value: isoDay(t.due) })}
+      <!--
+        A PICKER, NOT A SLUG BOX. It was free text pre-filled with the
+        database key ("emma"), so the field showed a developer's word and
+        accepted any typo as an assignee. The options are the team; each
+        carries the office's own name for the person, which is what a write
+        has to address. Anybody the row names who is not on the team stays
+        selectable, so opening a record can never silently reassign it.
+      -->
+      ${assigneePicker('bc-edit-who', t.who)}
+      <!--
+        The date the row actually carries. This read t.due, which is prose
+        ("Due 16 September") or absent, so a task due today opened with an
+        empty date field - and Save would then have CLEARED the date.
+      -->
+      ${input({ id: 'bc-edit-due', label: 'Due date', name: 'due', type: 'date', value: isoDay(String(t.due_on ?? t.due ?? '').slice(0, 10)) })}
       <!--
         NOT DISABLED FOR A PROTOTYPE ROW - the third and last instance of the
         same defect, found by grepping for the shape rather than by waiting
@@ -1220,11 +1299,8 @@ const taskRecord = (p) => {
 
     <h2 class="bcsubhead">Discussion and history</h2>
     <p class="bcpmeta bcprose">
-      Comments on a task, and its relations to documents and jobs, are not
-      built here yet. They are the next thing this surface needs rather than
-      somewhere else to be sent: §20 asks that this experience never hand you
-      back to the old interface, so it says what is missing instead of
-      pretending a link is a feature.
+      Comments and linked documents for a task aren't available yet.
+      To talk it through, use Chat with Team.
     </p>`
 }
 
@@ -1407,8 +1483,29 @@ const teamSurface = (p) => {
     ${
       held === 'failed'
         ? errorState('The office could not say who is on this project.')
+        : !ready && (typeof p.id !== 'string' || p.id === '')
+          ? /*
+              AN EXAMPLE PROJECT HAS NOBODY TO ASK. The office is addressed by
+              the project's uuid and the studio's examples have none, so the
+              question was never sent and "Asking the office..." stayed on
+              screen for ever - a loading state that could not finish. The
+              example's own team is drawn instead, read-only, and says so.
+            */
+            `<div class="bclist">${(ctx?.crewFor?.(p.slug) ?? [])
+              .map(
+                (c) => `<div class="bcitem">
+                  ${bcMini.face(c, 'md')}
+                  <div class="bcitembody">
+                    <span class="bcitemtitle">${esc(c.name ?? c.slug)}</span>
+                    <span class="bcitemmeta">${esc(c.role ?? '')}</span>
+                  </div>
+                  <span></span>
+                </div>`,
+              )
+              .join('')}</div>
+             <p class="bcpmeta bcprose">This is the example project's team. Sign in to see and change who works on your projects.</p>`
         : !ready
-          ? `<p class="bcpmeta bcprose">Asking the office who is on this project…</p>`
+          ? `<p class="bcpmeta bcprose" role="status">Asking the office who is on this project…</p>`
           : onProject.length === 0
             ? empty({
                 title: 'Nobody is on this project yet',
@@ -1724,10 +1821,7 @@ const documentsSurface = (p) => {
       </span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      Everything filed on this project — what the team wrote, what you uploaded
-      and anything brought in from a connected source. A file opens in a new
-      tab, a recording plays here, and anything the office only has a record
-      of opens its details.
+      What the team wrote, what you uploaded, and what came in from connected sources.
     </p>
     <!--
       WHERE THE FILE IS COMING FROM.
@@ -1739,7 +1833,9 @@ const documentsSurface = (p) => {
       connector does.
     -->
     <form class="bcaddform" data-bc-uploadform hidden>
-      <div class="bcsources">
+      <!-- bcpickfrom, not bcsources: that name is the Sources list, and one
+           class for both made the list lay itself out as this picker grid. -->
+      <div class="bcpickfrom">
         <button type="button" class="bcsourcepick" data-bc-from="computer">
           <span class="bcsourcepickname">From this computer</span>
           <span class="bcsourcepickwhat">A file you have here</span>
@@ -1853,8 +1949,12 @@ const contactRecord = (p, c, i) => {
     </div>
 
     <form class="bcaddform bcgap-l" data-bc-contactedit="${esc(key)}">
+      <!--
+        ONE FACE. The header already shows the person's photograph or
+        monogram; a second, larger copy above the fields made the record open
+        on the same face twice. The row keeps only what changes it.
+      -->
       <div class="bcimagerow">
-        ${avatar(c, 72)}
         <span class="bcimageacts">
           <label class="bcbtn bcbtn--file">
             <span>${esc(faceOf(c) !== '' ? 'Replace the image' : 'Add an image')}</span>
@@ -1869,7 +1969,16 @@ const contactRecord = (p, c, i) => {
       </div>
       ${lines
         .map(
-          (l) => `<div class="${l.fields.length > 1 ? 'bcformrow' : ''}">
+          /*
+            GROUPED BY WHAT A PERSON ASKS: who is this, how do I reach them,
+            what happens next. Eleven boxes in a row read as a database form;
+            the same boxes under three plain headings read as a person.
+          */
+          (l) => `${
+            { 1: 'Who they are', 3: 'How to reach them', 5: 'Next step' }[l.n] === undefined
+              ? ''
+              : `<h2 class="bcctgroup">${esc({ 1: 'Who they are', 3: 'How to reach them', 5: 'Next step' }[l.n])}</h2>`
+          }<div class="${l.fields.length > 1 ? 'bcformrow' : ''}">
             ${l.fields
               .map((f) =>
                 f.kind === 'long'
@@ -2047,13 +2156,13 @@ const sourceRow = (s, i) => {
     ${bcMini.sourceMark(s)}
     <span class="bcsourcename">${esc(s.name ?? s.title ?? 'A source')}</span>
     <span class="bcsourcewhat">${esc(sourceSays(s))}</span>
-    <span class="bcsourcewhen">${
+    <span class="bcsourcewhen" data-tone="${trouble ? 'trouble' : connected ? 'on' : 'link'}">${
       trouble
         ? status(esc(s.problem ?? 'Needs attention'), 'blocked')
         : esc(
             connected
               ? ['Connected', s.last ? `last read ${s.last}` : 'not read yet'].join(' · ')
-              : 'Something to read',
+              : 'A link to read',
           )
     }</span>
   </button>`
@@ -2073,8 +2182,8 @@ const sourcesSurface = (p) => {
       <span class="bcactions">${button('Add Source', { kind: 'primary', 'data-bc-source-add': '1' })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      Where this project's material comes from. A connected service is one the
-      team can read; something to read is a link somebody left for it.
+      Where this project's material comes from: services the team can read,
+      and links left for it.
     </p>
     ${
       ss.length === 0
@@ -2269,7 +2378,7 @@ const card = (p, t, i) => {
     <button type="button" class="bcitemtitle bcitemlink" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
     <div class="bcbmeta">
       ${list === undefined ? '' : `<span class="bcbwhere">${esc(list.name)}</span>`}
-      ${t.due ? `<span class="bcbdue">${esc(t.due)}</span>` : ''}
+      ${bcMini.dueWords(t) ? `<span class="bcbdue${bcMini.isLate(t) ? ' bcbdue--late' : ''}">${esc(bcMini.dueWords(t))}</span>` : ''}
     </div>
     <label class="bcbmove">
       <span class="bcvh">Where this is</span>
@@ -2309,9 +2418,7 @@ const boardSurface = (p) => {
       <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      The same to-dos, by where the work has got to. Drag a card to another
-      column, or use the control on the card — either way the to-do itself
-      changes, because there is one set of records behind both views.
+      The same to-dos, by stage. Drag a card to another column, or choose its stage on the card.
     </p>
     ${
       all.length === 0
@@ -2413,10 +2520,7 @@ const scheduleSurface = (p) => {
       <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      When this project's work is due. The office keeps no separate diary, so
-      everything here is scheduled work rather than an appointment — and a
-      to-do with no date is at the foot of the page rather than invented onto
-      one.
+      When this project's to-dos are due. Anything without a date is listed at the foot.
     </p>
     ${
       dated.length === 0 && undated.length === 0
@@ -2433,6 +2537,7 @@ const scheduleSurface = (p) => {
               return `<section class="bcmonth">
                 ${monthGrid(ym, marks, today)}
                 <div class="bcagenda">
+                  <h2 class="bcagendamonth">${esc(`${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`)}</h2>
                   ${
                     items.length === 0
                       ? `<p class="bcpmeta">Nothing is due this month.</p>`
@@ -2555,23 +2660,48 @@ const chatSurface = (p) => {
           `<p class="bcpmeta bcgap">This is an example conversation. Sign in and the
             office's own record replaces it.</p>`
     }
-    <form class="bcaddform bcsay" data-bc-sayform>
-      ${input({ id: 'bc-say', label: `Ask the team about ${p.name}`, name: 'say', autocomplete: 'off' })}
-      <div class="bcrow">
-        <!--
-          THE VOICE NOTE, and it is deliberately HERE rather than at the top of
-          the project. Grant drew that line himself: the microphone inside the
-          chat sends a voice message, and the one on the project head opens a
-          live conversation. Its place is what says which it is, so this one
-          sits in the composer beside Send, where the thing you are composing
-          is a message.
-        -->
-        <button type="button" class="bcnotemic" data-bc-note="idle"
-          aria-label="Record a voice note">
-          <span class="bcnotemicdot" aria-hidden="true"></span>
-          <span class="bcnotemictxt">Voice note</span>
-        </button>
-        ${button('Send', { kind: 'primary', 'data-bc-say': '1' })}
+    <form class="bcsay" data-bc-sayform>
+      <label class="bcvh" for="bc-say">${esc(`Message the team about ${p.name}`)}</label>
+      <!--
+        ONE COMPOSER, SHAPED LIKE ONE. It was a labelled one-line field above
+        a row holding a 44px Voice note and a 32px Send, so the two actions
+        were different heights and neither sat with the text. Now a single
+        surface: the text grows with what is typed, and the actions sit on its
+        own bottom edge.
+
+        A TEXTAREA, because a message can be more than one line - and Enter
+        still sends, Shift+Enter makes the new line (Grant, 23 September, for
+        the dock; the same rule here so the two chats agree).
+      -->
+      <div class="bcsaybox">
+        <textarea class="bcsayinput" id="bc-say" name="say" rows="1" autocomplete="off"
+          placeholder="${esc(`Ask the team about ${p.name}…`)}"></textarea>
+        <div class="bcsaybar">
+          <!--
+            THE VOICE NOTE, and it is deliberately HERE rather than at the top
+            of the project. Grant drew that line himself: the microphone inside
+            the chat sends a voice message, and the one on the project head
+            opens a live conversation. Its place is what says which it is.
+
+            A MICROPHONE, NOT A RED DOT. The idle control carried a red dot,
+            which is the universal sign for already recording - so the
+            control said "on" before it had been pressed. The dot now appears
+            only while it actually records.
+          -->
+          <button type="button" class="bcnotemic" data-bc-note="idle"
+            aria-label="Record a voice note">
+            <svg class="bcnotemicicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+              stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+              <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"></path>
+              <path d="M12 18v3"></path>
+            </svg>
+            <span class="bcnotemicdot" aria-hidden="true"></span>
+            <span class="bcnotemictxt">Voice note</span>
+          </button>
+          <span class="bcsayhint" aria-hidden="true">Enter to send · Shift+Enter for a new line</span>
+          ${button('Send', { kind: 'primary', 'data-bc-say': '1' })}
+        </div>
       </div>
       <!--
         One panel, three states, because a recorder that appears in a different
@@ -2643,7 +2773,7 @@ const outputRecord = (p) => {
     </div>
     <p class="bcpmeta">${esc(
       [
-        got.who ? `Written by ${String(got.who)}` : '',
+        got.who ? `Written by ${whoName(String(got.who))}` : '',
         got.made ? when.words(String(got.made)) : '',
         got.evidence ? `Evidence: ${String(got.evidence)}` : '',
         typeof got.confidence === 'number' ? `Confidence ${String(got.confidence)}` : '',
@@ -2997,7 +3127,7 @@ const myTasks = () => {
       !signedIn
         ? empty({
             title: 'Sign in to see your list',
-            body: 'My Tasks is your own list, kept by the office. This browser has no token, so there is nothing to read — the projects above are the studio’s examples.',
+            body: 'My Tasks is your own list, kept by the office and separate from any project’s to-dos. Sign in above and it appears here.',
           })
         : trouble
           ? errorState('Your list could not be read just now.', button('Try again', { 'data-bc-go': at('/tasks') }))
@@ -3013,7 +3143,7 @@ const myTasks = () => {
                     aria-label="${esc(`${t.state === 'done' ? 'Completed' : 'Not completed'}: ${t.title}`)}">
                   <div class="bcitembody">
                     <span class="bcitemtitle">${esc(t.title)}</span>
-                    <span class="bcitemmeta">${esc([t.due, t.project].filter(Boolean).join(' · '))}</span>
+                    <span class="bcitemmeta">${esc([bcMini.dueWords(t), t.project].filter(Boolean).join(' · '))}</span>
                   </div>
                   <span></span>
                 </div>`,
@@ -3034,7 +3164,7 @@ const allActivity = () => {
                 <span></span>
                 <div class="bcitembody">
                   <span class="bcitemtitle">${esc(
-                    `${a.who ?? 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(),
+                    `${whoName(a.who) || 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(),
                   )}</span>
                   <span class="bcitemmeta">${esc([a.project, a.when].filter(Boolean).join(' · '))}</span>
                 </div>
@@ -3048,6 +3178,19 @@ const allActivity = () => {
 /* ======================================================================== *
  * Full search (§7.4)
  * ======================================================================== */
+
+/*
+  THE MATCH, MARKED. Escaped FIRST and the query matched against the escaped
+  text, so a query can only ever wrap text in <mark> - never add markup of
+  its own. Case-insensitive, every occurrence.
+*/
+const marked = (text, query) => {
+  const safe = esc(text)
+  const needle = esc(String(query ?? '').trim())
+  if (needle === '') return safe
+  const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+  return safe.replace(re, (m) => `<mark class="bcmark">${m}</mark>`)
+}
 
 /*
   WHY THIS EXISTS RATHER THAN A REDIRECT.
@@ -3087,7 +3230,7 @@ const searchHits = (q, kind, only) => {
     if (want('Tasks')) {
       for (const t of p.tasks ?? []) {
         if (!match(t.title, t.note, t.who)) continue
-        hits.push({ kind: 'Task', project: p.name, title: t.title, excerpt: t.note ?? '', who: t.who ?? '', when: t.due ?? '', to: at(`/p/${p.slug}/tasks`) })
+        hits.push({ kind: 'Task', project: p.name, title: t.title, excerpt: t.note ?? '', who: whoName(t.who), when: bcMini.dueWords(t), to: at(`/p/${p.slug}/tasks`) })
       }
     }
     if (want('Documents')) {
@@ -3112,7 +3255,7 @@ const searchHits = (q, kind, only) => {
     if (want('Outputs')) {
       for (const r of outputsOf(p)) {
         if (!match(r.output.title, r.ask, r.who)) continue
-        hits.push({ kind: 'Output', project: p.name, title: r.output.title, excerpt: r.ask ?? '', who: r.who ?? '', when: r.delivered ?? '', to: at(`/p/${p.slug}/team`) })
+        hits.push({ kind: 'Output', project: p.name, title: r.output.title, excerpt: r.ask ?? '', who: whoName(r.who), when: r.delivered ?? '', to: at(`/p/${p.slug}/team`) })
       }
     }
   }
@@ -3171,8 +3314,8 @@ const search = () => {
                 (h) => `<button type="button" class="bcitem bcresult" data-bc-go="${esc(h.to)}">
                   <span class="bcstatus">${esc(h.kind)}</span>
                   <span class="bcitembody">
-                    <span class="bcitemtitle">${esc(h.title)}</span>
-                    ${h.excerpt ? `<span class="bcitemmeta">${esc(h.excerpt)}</span>` : ''}
+                    <span class="bcitemtitle">${marked(h.title, q)}</span>
+                    ${h.excerpt ? `<span class="bcitemmeta">${marked(h.excerpt, q)}</span>` : ''}
                     <span class="bcitemmeta">${esc(
                       [h.kind === 'Project' ? '' : h.project, h.who, h.when].filter(Boolean).join(' · '),
                     )}</span>
@@ -3330,8 +3473,46 @@ const body = () => {
  * retrying can help - there is nothing to try with on the prototype state, and
  * a control that cannot do its job is a false affordance the gate would catch.
  */
+/*
+  SIGNED IN AND STILL CONNECTING IS NOT "PROTOTYPE DATA".
+
+  With a credential in the browser and the first answer not back yet,
+  `source.state` is still 'prototype' (nothing has been asked yet), so a
+  person on a slow connection was shown the invented projects under
+  "Prototype data - sign in to see your office", with a sign-in form - while
+  their own office was simply loading. This experience can tell the two
+  apart, because canWrite() knows a credential is present: it says it is
+  connecting and draws a neutral outline of the page until the answer lands.
+*/
+const connecting = () => source.live !== true && source.state === 'prototype' && canWrite() === true
+
+const connectingOutline = () => `<div class="bcconnecting" aria-busy="true" aria-live="polite">
+    <span class="bcvh">Loading your office</span>
+    <div class="bcskel bcskel--head"></div>
+    <div class="bcskelgrid">${'<div class="bcskel bcskel--pane"></div>'.repeat(6)}</div>
+  </div>`
+
 const notLive = () => {
+  /*
+    OFFLINE FIRST, whatever the office last said. Nothing listened for the
+    browser losing its connection, so a page open when the network dropped
+    kept looking current until some later read failed - and a change made in
+    that window looked saved. The browser knows at once; so does this strip.
+  */
+  if (globalThis.navigator?.onLine === false) {
+    return `<div class="bcnotlive bcnotlive--bad" role="status">
+      <b>You're offline</b>
+      <span>What you see was current when the connection dropped. Changes can't reach the office until it's back.</span>
+    </div>`
+  }
   if (source.live === true) return ''
+  if (connecting()) {
+    return `<div class="bcnotlive bcnotlive--wait" role="status">
+      <span class="bcspin" aria-hidden="true"></span>
+      <b>Connecting to your office</b>
+      <span>Your projects appear here the moment it answers.</span>
+    </div>`
+  }
   const s = SOURCE_STATE[source.state] ?? SOURCE_STATE.prototype
   const canRetry = source.state === 'unreachable' || source.state === 'stale'
   /*
@@ -3378,5 +3559,22 @@ export const html = () =>
   `<a class="bcskip" href="#bcmain">Skip to main content</a>
   ${topRow()}
   ${notLive()}
-  <main class="bcmain" id="bcmain" tabindex="-1">${body()}</main>
+  <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>
   ${tray()}`
+
+/*
+  The dock's voice-note control: the same button the Chat page's composer
+  draws (same attribute, same states), icon-only because the dock's row is
+  380px and already holds the text and Send.
+*/
+export const dockNoteButton = () => `<button type="button" class="bcnotemic bcnotemic--dock" data-bc-note="idle"
+    aria-label="Record a voice note" title="Record a voice note">
+    <svg class="bcnotemicicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+      stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"></path>
+      <path d="M12 18v3"></path>
+    </svg>
+    <span class="bcnotemicdot" aria-hidden="true"></span>
+    <span class="bcnotemictxt bcvh">Voice note</span>
+  </button>`

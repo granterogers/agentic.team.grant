@@ -96,6 +96,10 @@ const office = createServer((req, res) => {
               generated_at: new Date().toISOString(),
               crew: [
                 { slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' },
+                /* A second person, so the record's picker has somebody to
+                   change TO: with one, the persistence check below picked the
+                   current assignee and an ignored edit passed. */
+                { slug: 'research-director', name: 'Emma', role: 'Research', state: 'idle' },
               ],
               projects: [
                 {
@@ -321,7 +325,15 @@ await page
   .locator('[data-bc-taskform]:not([hidden]) input[name="title"]')
   .fill('Write the acceptance evidence')
 await page.locator('[data-bc-taskform]:not([hidden]) input[name="due"]').fill('2026-10-02')
-await page.locator('[data-bc-taskform]:not([hidden]) input[name="who"]').fill('claire')
+/*
+  Chosen from the team, not typed. It typed 'claire', which only this suite's
+  fake office accepted: hq_task_add resolves p_assignee against
+  public.staff.slug, and Claire's is chief-of-staff.
+*/
+const addWho = page.locator('[data-bc-taskform]:not([hidden]) select[name="who"]')
+const claireValue =
+  (await addWho.locator('option').filter({ hasText: 'Claire' }).first().getAttribute('value')) ?? ''
+await addWho.selectOption(claireValue)
 await page.locator('[data-bc-taskform]:not([hidden]) [data-bc-tasksave]').click()
 await page.waitForTimeout(900)
 
@@ -332,7 +344,8 @@ check(
   add?.args.p_project === 'journey-subject' &&
     add?.args.p_title === 'Write the acceptance evidence' &&
     add?.args.p_due_on === '2026-10-02' &&
-    add?.args.p_assignee === 'claire',
+    claireValue === 'chief-of-staff' &&
+    add?.args.p_assignee === claireValue,
   JSON.stringify(add?.args ?? {}),
 )
 check('the office now holds two tasks', tasks.length === 2)
@@ -498,7 +511,27 @@ check(
 )
 
 /* Assignment and the due date persist through a reload — §18. */
-await page.locator('#bc-edit-who').fill('emma')
+/*
+  The assignee is a PICKER now. hq_task_update resolves p_assignee against
+  public.staff.slug and refuses anything else, so the free-text box it
+  replaced only worked if somebody typed a role slug. The option's value is
+  what the office needs; the suite asserts that value reached it.
+*/
+/* Chosen as somebody the task is NOT already assigned to: the seeded task
+   is Claire's, and the first option is Claire, so picking the first one
+   was a no-op and an ignored edit would have passed. */
+const whoBefore = await page.locator('#bc-edit-who').inputValue()
+const person = page
+  .locator(`#bc-edit-who option:not([value=""]):not([value="${whoBefore}"])`)
+  .first()
+const emmaValue = (await person.getAttribute('value')) ?? ''
+const emmaName = ((await person.innerText()).split('·')[0] ?? '').trim()
+check(
+  'the edit picks a different person',
+  emmaValue !== '' && emmaValue !== whoBefore,
+  `${whoBefore} -> ${emmaValue}`,
+)
+await page.locator('#bc-edit-who').selectOption(emmaValue)
 await page.locator('#bc-edit-due').fill('2026-11-13')
 await page.locator('[data-bc-tasksave-edit]').click()
 await page.waitForTimeout(900)
@@ -510,13 +543,13 @@ check(
 )
 check(
   'the assignee and the due date persisted',
-  tasks[0]?.who === 'emma' && tasks[0]?.due === '2026-11-13',
+  emmaValue !== '' && tasks[0]?.who === emmaValue && tasks[0]?.due === '2026-11-13',
   JSON.stringify(tasks[0] ?? {}),
 )
 await open('/basecamp/p/journey-subject/tasks')
 check(
   'and they are there after a full reload',
-  (await page.locator('.bcitemmeta').first().innerText()).includes('emma'),
+  emmaName !== '' && (await page.locator('.bcitemmeta').first().innerText()).includes(emmaName),
   await page.locator('.bcitemmeta').first().innerText(),
 )
 
@@ -528,7 +561,7 @@ check(
 */
 await page.locator('[data-bc-task-open]').first().click()
 await page.waitForTimeout(500)
-await page.locator('#bc-edit-who').fill('')
+await page.locator('#bc-edit-who').selectOption('')
 await page.locator('[data-bc-tasksave-edit]').click()
 await page.waitForTimeout(900)
 const cleared = seen.filter((x) => x.action === 'task_update').at(-1)
@@ -675,7 +708,9 @@ const outText = await outRow.innerText()
   becomes unreconstructable — and the one that goes missing is always the
   instruction.
 */
-check('the output names who produced it', outText.includes('oliver'), outText.replace(/\n/g, ' / '))
+/* By NAME. This asserted the lowercase key 'oliver', which is the defect of
+   printing a database slug to the screen, locked in as a pass. */
+check('the output names who produced it', outText.includes('Oliver'), outText.replace(/\n/g, ' / '))
 check('the output names the instruction it came from', outText.includes('Turn the six modules'))
 check('the output names where the instruction came from', outText.includes('Grant · chat'))
 check('the output names what it was derived from', outText.includes('WS01'))

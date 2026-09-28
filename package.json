@@ -151,6 +151,7 @@
     "hq:token": "tsx scripts/deploy/hq-token.ts",
     "deploy:signin": "tsx scripts/deploy/signin.ts",
     "deploy:hq-basecamp": "tsx scripts/deploy/hq-basecamp.ts",
+    "deploy:ux-review": "tsx scripts/deploy/ux-review-preview.ts",
     "deploy:voice-basecamp": "tsx scripts/deploy/voice-basecamp.ts",
     "verify:signin": "tsx scripts/verify/signin.ts",
     "verify:hq": "tsx scripts/verify/hq.ts",
