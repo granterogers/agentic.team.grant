@@ -349,9 +349,77 @@ try {
             '[]'::jsonb, true)
   `)
 
-  const both = await history(String(agree.jp ?? mine), 100)
-  const answer = both.find((m) => String(m.body).includes('An answer'))
-  const question = both.find((m) => String(m.body).includes('Please look at this'))
+  /*
+    This pair is harness traffic -- the command did not come through a door, so
+    0576 marks it synthetic and app.harness_job says so -- and since 0602 the
+    reader Grant's Chat is drawn from hides it. That is the property now: before
+    0602 these rows were in his Chat, which is how eleven acceptance and probe
+    turns reached the Unnamed project on 29 September (#378).
+  */
+  const harnessSide = await history(String(agree.jp ?? mine), 100)
+  check(
+    '0602 — a harness question and its answer never appear in the chat',
+    `${String(harnessSide.filter((m) => String(m.body).includes(`Please look at this ${run}`) || String(m.body).includes(`An answer ${run}`)).length)} of the pair shown`,
+    !harnessSide.some(
+      (m) =>
+        String(m.body).includes(`Please look at this ${run}`) ||
+        String(m.body).includes(`An answer ${run}`),
+    ),
+  )
+
+  /*
+    The SHAPE of a real exchange, asked of a real one that never exists.
+
+    Everything happens inside one DO block that ends by raising: a turn through
+    a production door with an adapter-shaped key, its job, an answer, and the
+    reader -- whose result leaves in the exception text. The raise rolls every
+    write back, so no worker can ever see the job and nothing is left behind.
+    A real turn is the only kind the reader shows, and #45 says a check on a
+    reader that filters must look at something the filter lets through.
+  */
+  const realSide = async (): Promise<Msg[]> => {
+    const key = `teamhq:message:s${run}`
+    try {
+      await db.execute(`do $x$
+        declare c uuid; e jsonb; r jsonb; pr uuid;
+        begin
+          perform set_config('application_name', 'PostgREST 14.5', true);
+          -- A real project as well: the suite's own are fixtures, which is harness.
+          pr := (app.hq_create_project(${lit(`Conversation shape ${run}`)}, 'upload',
+                   ${lit(`shape-${run}`)}, ${lit(`Conversation shape ${run}`)}, true) ->> 'project_id')::uuid;
+          insert into public.inbound_commands
+            (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
+          values ('teamhq', ${lit(`s${run}`)}, 'grant', ${lit(`Please look at this, really ${run}`)},
+                  ${lit(key)}, pr)
+          returning command_id into c;
+          e := app.enqueue_inbound(c);
+          insert into public.outputs (job_id, body, confidence, evidence, sources, deterministic)
+          values ((e ->> 'job_id')::uuid, ${lit(`A real answer ${run}`)}, 'medium', 'inferred', '[]'::jsonb, true);
+          r := jsonb_build_object('harness', app.harness_job((e ->> 'job_id')::uuid),
+                                  'history', app.conversation_history(pr, 100));
+          raise exception 'ROLLED-BACK:%', r::text;
+        end $x$`)
+    } catch (error) {
+      const text = String((error as Error).message)
+      const at = text.indexOf('ROLLED-BACK:')
+      if (at < 0) throw error
+      const body = text.slice(at + 'ROLLED-BACK:'.length).replace(/\\"/g, '"')
+      const parsed = JSON.parse(body.slice(0, body.lastIndexOf('}') + 1)) as {
+        harness: boolean
+        history: Msg[]
+      }
+      check(
+        'the real subject is real to the canonical predicate',
+        String(parsed.harness),
+        parsed.harness === false,
+      )
+      return parsed.history
+    }
+    throw new Error('the rollback block did not raise, so its writes may have committed')
+  }
+  const both = await realSide()
+  const answer = both.find((m) => String(m.body).includes(`A real answer ${run}`))
+  const question = both.find((m) => String(m.body).includes(`Please look at this, really ${run}`))
   check(
     'the question and the answer are in the SAME conversation, not split across two',
     `${String(both.length)} message(s)`,
@@ -366,6 +434,15 @@ try {
     'an answer is marked as answered, not as something Grant said',
     String(answer?.kind),
     answer?.kind === 'answered',
+  )
+  const left = await one(
+    `select (select count(*) from public.inbound_commands where dedupe_key = ${lit(`teamhq:message:s${run}`)})
+       + (select count(*) from public.projects where name = ${lit(`Conversation shape ${run}`)}) as n`,
+  )
+  check(
+    'and the real subject left nothing behind',
+    `${String(left.n)} row(s)`,
+    Number(left.n) === 0,
   )
 
   // -----------------------------------------------------------------------

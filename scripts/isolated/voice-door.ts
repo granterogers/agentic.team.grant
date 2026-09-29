@@ -26,6 +26,15 @@ type Handler = (request: Request) => Promise<Response>
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/*
+  The session a real PostgREST request runs in says so, and 0576 reads it: a
+  command that did not arrive through a production door is synthetic. The
+  emulator stands in for that door, so it says the same -- without it every
+  turn through it was harness, and a proof of a reader that hides harness
+  traffic (0602) could only ever see nothing.
+*/
+const AS_POSTGREST = "set local application_name = 'PostgREST 14.5';"
+
 export async function startDoor(db: PgExecutor): Promise<Handler> {
   let handler: Handler | null = null
   const env: Record<string, string> = {
@@ -58,7 +67,9 @@ export async function startDoor(db: PgExecutor): Promise<Handler> {
         const args = Object.entries(body)
           .map(([k, v]) => `${k} => ${v === null ? 'null' : lit(String(v))}`)
           .join(', ')
-        const { rows } = await db.execute(`select to_jsonb(public.${fn}(${args})) as r`)
+        const { rows } = await db.execute(
+          `${AS_POSTGREST} select to_jsonb(public.${fn}(${args})) as r`,
+        )
         return reply(200, (rows[0] as { r: unknown }).r)
       }
       const table = path.slice('/rest/v1/'.length)
@@ -67,7 +78,7 @@ export async function startDoor(db: PgExecutor): Promise<Handler> {
       const cols = Object.keys(body)
         .filter((k) => /^[a-z_]+$/.test(k))
         .join(', ')
-      const { rows } = await db.execute(`
+      const { rows } = await db.execute(`${AS_POSTGREST}
         insert into public.${table} (${cols})
         select ${cols} from jsonb_populate_record(null::public.${table}, ${lit(JSON.stringify(body))}::jsonb)
         returning to_jsonb(${table}.*) as r`)

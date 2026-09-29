@@ -157,6 +157,7 @@ import { readTeaching, strongestTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import { oneReading, type ReadingKind, understand } from '../agents/understand.ts'
 import { asksWhatTheyFound, asksWhoIsOnIt } from '../agents/whoison.ts'
+import { DeliveryService } from '../channels/delivery.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
@@ -174,7 +175,10 @@ import {
 } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import type { ProviderRouter } from '../providers/router.ts'
+import { TelegramClient } from '../telegram/api.ts'
+import { escapeHtml } from '../telegram/message.ts'
 import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
+import { TelegramTransport } from '../telegram/transport.ts'
 import { scrub, scrubbedToNothing } from '../text/scrub.ts'
 import {
   fetchTelegramAudio,
@@ -1358,7 +1362,7 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
   if (already !== undefined && already !== null && already.trim() !== '') return already.trim()
 
   const { rows } = await db.execute(`
-    select app.resolve_secret(t.token_ref) as token
+    select app.resolve_secret(t.token_ref) as token, t.bot_id::text as bot_id
       from public.inbound_commands c
       -- The bot it arrived ON, not "a bot with this chat id" (0097). A
       -- Telegram file_id is scoped to the bot that received the file, so the
@@ -1368,7 +1372,8 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
        and t.enabled and t.token_ref is not null
      limit 1
   `)
-  const token = (rows[0] as { token?: string | null } | undefined)?.token
+  const bot = rows[0] as { token?: string | null; bot_id?: string | null } | undefined
+  const token = bot?.token
   if (token === undefined || token === null || token === '') {
     throw new Error('a voice note arrived on a bot whose token we cannot resolve')
   }
@@ -1450,7 +1455,14 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
   // "this job goes quiet and the request speaks for both".
   const sayBackFollows = readPlan(heard.text) !== null
   if (!sayBackFollows) {
-    await echoTranscript(token, String(payload.origin_ref ?? ''), heard)
+    await echoTranscript(
+      db,
+      job,
+      token,
+      String(bot?.bot_id ?? ''),
+      String(payload.origin_ref ?? ''),
+      heard,
+    )
   }
 
   await db.execute(`
@@ -1512,38 +1524,46 @@ async function spokenVocabulary(db: SqlExecutor): Promise<string[]> {
  * request.
  */
 async function echoTranscript(
+  db: SqlExecutor,
+  job: Job,
   token: string,
+  botId: string,
   originRef: string,
   heard: { text: string; seconds: number; hinted: boolean },
 ): Promise<void> {
   const [chatId, messageId] = originRef.split(':')
   if (chatId === undefined || chatId === '') return
+  /*
+    Through the delivery layer, like every other message (#378). This was a
+    bare sendMessage, so it was the one message a harness voice turn could put
+    in front of a real chat with nothing deciding whether it should, and
+    nothing recording that it had. Now app.claim_delivery decides, the row
+    names the job, and a second attempt of the same job does not echo twice.
+  */
   try {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        // Threaded under the voice note. `allow_sending_without_reply` so a
-        // deleted original degrades to a loose message rather than to nothing.
-        ...(messageId === undefined || messageId === '' || !/^\d+$/.test(messageId)
-          ? {}
-          : {
-              reply_to_message_id: Number(messageId),
-              allow_sending_without_reply: true,
-            }),
-        // Quoted, so it is unmistakably a repeat of his words rather than the
-        // bot saying something. The seconds are there because a transcript
-        // much shorter than the recording is its own kind of wrong.
+    await new DeliveryService(db, new TelegramTransport(new TelegramClient(token))).deliver({
+      dedupeKey: `heard:${job.jobId}`,
+      accountRef: botId,
+      targetRef: chatId,
+      // Threaded under the voice note; a message id that is not a number is not one.
+      threadRef: messageId !== undefined && /^\d+$/.test(messageId) ? messageId : null,
+      purpose: 'ack',
+      correlationId: job.correlationId,
+      jobId: job.jobId,
+      staffId: null,
+      // Quoted, so it is unmistakably a repeat of his words rather than the
+      // bot saying something. The seconds are there because a transcript much
+      // shorter than the recording is its own kind of wrong.
+      body: {
         text:
-          `🎧 Heard (${String(Math.round(heard.seconds))}s): “${heard.text}”\n\n` +
+          `🎧 Heard (${String(Math.round(heard.seconds))}s): “${escapeHtml(heard.text)}”\n\n` +
           'Working on it — if that is not what you said, send it again and ignore ' +
           'what comes back.',
-        disable_notification: true,
-      }),
+        silent: true,
+      },
     })
   } catch {
-    // Deliberately swallowed. See the note above.
+    // Never fatal: see the comment above. The delivery row says what happened.
   }
 }
 

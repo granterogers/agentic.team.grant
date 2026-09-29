@@ -30,6 +30,9 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { TelegramClient } from '../telegram/api.ts'
+import { TelegramTransport } from '../telegram/transport.ts'
+import { DeliveryService } from './delivery.ts'
 import { applyPreference } from './preference-store.ts'
 import { parseInstruction } from './preferences.ts'
 
@@ -173,30 +176,42 @@ const askForTheCorrection = async (db: SqlExecutor, row: PendingRow): Promise<vo
   if (chatId === undefined || chatId === '') return
 
   const { rows } = await db.execute(`
-    select app.callback_ack(b.bot_id, 'not_useful') as ack
+    select app.callback_ack(b.bot_id, 'not_useful') as ack, b.bot_id::text as bot_id
       from public.telegram_chats c
       join public.telegram_bots b on b.bot_id = c.bot_id and b.enabled
      where c.chat_id = ${lit(chatId)}
      limit 1
   `)
-  const token = (rows[0] as { ack?: { token?: string } } | undefined)?.ack?.token
+  const found = rows[0] as { ack?: { token?: string }; bot_id?: string } | undefined
+  const token = found?.ack?.token
   if (typeof token !== 'string' || token === '') return
 
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      // Threaded under the message he marked, so a correction typed twenty
-      // minutes later still says which answer it is about.
-      ...(messageId !== undefined && /^\d+$/.test(messageId)
-        ? { reply_to_message_id: Number(messageId), allow_sending_without_reply: true }
-        : {}),
+  /*
+    Through the delivery layer, carrying the job of the message he pressed
+    (#378). This was a bare sendMessage to whatever chat the press row named,
+    so anything that could write a press row could make the office speak there
+    with nothing deciding and nothing recorded. The job is the provenance: a
+    press on a harness job's message is contained like the message itself was,
+    and a press whose message we cannot trace has no job, which the guard
+    refuses rather than guesses about.
+  */
+  await new DeliveryService(db, new TelegramTransport(new TelegramClient(token))).deliver({
+    dedupeKey: `correction:${row.command_id}`,
+    accountRef: String(found?.bot_id ?? ''),
+    targetRef: chatId,
+    // Threaded under the message he marked, so a correction typed twenty
+    // minutes later still says which answer it is about.
+    threadRef: messageId !== undefined && /^\d+$/.test(messageId) ? messageId : null,
+    purpose: 'ack',
+    correlationId: row.correlation_id,
+    jobId: row.job_id,
+    staffId: null,
+    body: {
       text:
         'What should I have done instead? Tell me in a sentence and I will ' +
         'take it as an instruction, not just a note.',
-      disable_notification: true,
-    }),
+      silent: true,
+    },
   })
 }
 

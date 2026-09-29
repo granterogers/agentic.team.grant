@@ -146,3 +146,53 @@ describe('containment: the worker asks before the handler', () => {
     )
   })
 })
+
+describe('containment: nothing in the office sends around the delivery guard', () => {
+  /*
+    A message sent with a bare fetch is one app.claim_delivery never saw: no
+    decision about harness traffic, no row, nothing a witness can count. The
+    exceptions are named with the reason they are safe, so a new one has to
+    argue for itself.
+  */
+  const SENDS = /(api\.telegram\.org\/bot[^/`'"]*\/send|slack\.com\/api\/chat\.)/
+  const ALLOWED: Record<string, string> = {
+    // Its job kind is external in the registry, so the worker cancels harness work before it runs.
+    'src/backup/vault-export.ts': 'office.vault_export is contained at the job boundary',
+  }
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory()
+        ? walk(`${dir}/${e.name}`)
+        : e.name.endsWith('.ts')
+          ? [`${dir}/${e.name}`]
+          : [],
+    )
+  it('found the source (a scan that finds nothing proves nothing)', () => {
+    expect(walk('src').length).toBeGreaterThan(100)
+  })
+  it('no direct send outside the clients and the named exceptions', () => {
+    const offenders = walk('src')
+      .filter(
+        (f) => !['src/telegram/api.ts', 'src/slack/api.ts'].includes(f) && ALLOWED[f] === undefined,
+      )
+      .filter((f) => SENDS.test(readFileSync(f, 'utf8')))
+    expect(offenders).toEqual([])
+  })
+  it('the pattern catches the shape it exists for', () => {
+    expect(SENDS.test('await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {')).toBe(
+      true,
+    )
+    expect(SENDS.test("fetch('https://slack.com/api/chat.postMessage')")).toBe(true)
+    expect(SENDS.test('await fetch(`https://api.telegram.org/bot${token}/getFile`, {')).toBe(false)
+  })
+  it('the transcript echo and the correction question carry their job', () => {
+    const instruction = readFileSync('src/handlers/instruction.ts', 'utf8')
+    const echo = instruction.slice(instruction.indexOf('async function echoTranscript('))
+    expect(echo.slice(0, 2500)).toMatch(
+      /dedupeKey: `heard:\$\{job\.jobId\}`[\s\S]*jobId: job\.jobId,/,
+    )
+    const callbacks = readFileSync('src/channels/callbacks.ts', 'utf8')
+    const ask = callbacks.slice(callbacks.indexOf('const askForTheCorrection = async'))
+    expect(ask.slice(0, 2500)).toMatch(/\.deliver\(\{[\s\S]*jobId: row\.job_id,/)
+  })
+})
