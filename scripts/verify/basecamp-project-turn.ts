@@ -124,7 +124,7 @@ const browser = await chromium.launch({
 type Turn = { project: unknown; said: string; session: string; page: string }
 const newContext = async (
   turns: Turn[],
-  opts: { failFirst?: boolean } = {},
+  opts: { failFirst?: boolean; delayMs?: number } = {},
 ): Promise<BrowserContext> => {
   const ctx = await browser.newContext({
     viewport: { width: 1440, height: 900 },
@@ -156,10 +156,14 @@ const newContext = async (
       })
       return
     }
+    if (opts.delayMs !== undefined) await new Promise((r) => setTimeout(r, opts.delayMs))
     await route.fulfill({
       status: 200,
       headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
-      body: JSON.stringify({ speak: 'Noted.', did: 'answered' }),
+      body: JSON.stringify({
+        speak: opts.delayMs === undefined ? 'Noted.' : `Answer to: ${String(body.said ?? '')}`,
+        did: 'answered',
+      }),
     })
   })
   await ctx.route('**/voice*/note**', (r) =>
@@ -309,6 +313,45 @@ const dock = async (page: Page, text: string): Promise<void> => {
     'the retry of a failed turn on B is stated as B again',
     turns.length === 2 && turns.every((t) => who(t.project) === 'B'),
     turns.map((t) => who(t.project)).join(' '),
+  )
+  await ctx.close()
+}
+
+/* --- 6. sent on A, then straight to B while the answer is in flight ------- */
+{
+  const turns: Turn[] = []
+  const ctx = await newContext(turns, { delayMs: 1500 })
+  const page = await ctx.newPage()
+  await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-go^="/basecamp/p/provenance-a"]', { timeout: 20000 })
+  await go(page, '/basecamp/p/provenance-a/chat', '[data-bc-sayform]')
+  const words = 'Where is the venue contract? (switch test)'
+  await page.fill('#bc-say', words)
+  await page.keyboard.press('Enter')
+  await go(page, '/basecamp/p/provenance-b/chat', '[data-bc-sayform]')
+  await page.waitForTimeout(2600)
+  const onB = (await page.evaluate(
+    inPage("return document.querySelector('.bcmain')?.innerText ?? ''"),
+  )) as string
+  await go(page, '/basecamp/p/provenance-a/chat', '[data-bc-sayform]')
+  await page.waitForTimeout(600)
+  const onA = (await page.evaluate(
+    inPage("return document.querySelector('.bcmain')?.innerText ?? ''"),
+  )) as string
+  check(
+    'a turn sent on A and left mid-flight is stated as A',
+    who(turns[0]?.project) === 'A',
+    who(turns[0]?.project),
+  )
+  check(
+    "B's Chat never shows A's words or A's answer",
+    !onB.includes('switch test'),
+    onB.includes('switch test') ? 'B shows it' : 'clean',
+  )
+  check(
+    "and A's Chat has both when he goes back",
+    onA.includes(words) && onA.includes(`Answer to: ${words}`),
+    `words ${String(onA.includes(words))}, answer ${String(onA.includes(`Answer to: ${words}`))}`,
   )
   await ctx.close()
 }

@@ -67,6 +67,8 @@ exist.
 6. A malformed project is never sent. A well-formed id that names no project
    is dropped honestly (a retry without it, as the door already does for an
    unknown addressee): the message is kept, and the project is not guessed.
+   The turn keeps its thread's conversation key (`<session>/<id>`), so it can
+   never join the visit's no-project conversation and answer a question there.
 7. Provenance is in the row, not in process memory. A retry, a restart or a
    delayed worker reads the same command.
 8. Delegated work inherits the resolved project; this is unchanged.
@@ -170,3 +172,39 @@ from view. This is pre-existing and is filed separately.
 
 **Not yet validated in production.** That needs `deploy:voice` and
 `deploy:hq`. Both are for Grant to authorise.
+
+## Adversarial review (29 September 2026)
+
+**A cross-project authorization defect on `main`, closed by this branch.**
+With the session-wide conversation key, a "yes please" typed in project B's
+Chat answered a question raised in project A on the same page visit - the
+#374 spoken-answer lookup (`ours`) scopes by conversation, and the
+conversation spanned every project. Driven with the real door and the real
+`office.instruction` handler (invariant 10 in `project-provenance.ts`):
+with this branch B's reply leaves A's question open and A's reply resolves
+it; with the old key restored, B's reply RESOLVES A's question.
+
+**Found and fixed in this branch's own first version.** A stated id the
+foreign key refuses (a stale tab on a deleted project) fell back to the bare
+session key, which is the visit's no-project conversation. The conversation
+key now stays the thread the page showed and only the filing is dropped.
+The previous door fails the new check (18/19).
+
+**Checked and sound:**
+
+- every database reader of a voice `origin_ref` keys on the first segment
+  (`split_part(..., ':', 1)`); none parses the session's shape;
+- the live call fixes its project when it starts (`callAbout`, §8), so a call
+  is one conversation;
+- a turn sent on A and left mid-flight is stated as A, B's Chat never shows
+  it, and A's Chat has the words and the answer (browser case 6);
+- #376 is not a provenance flaw: the dock's header, its voice note and its
+  send handler all read the same `p` from one paint, so what is stated is
+  what was on screen by construction, and the browser check reads what the
+  dock showed before sending;
+- authority: the door requires the office's one bearer token, whose holder
+  can already do everything the office can, so stating a project grants
+  nothing new. A multi-user office would need the project validated against
+  the caller (see Multi-user).
+
+Backend proof 16/16 -> **19/19**; browser 10/10 -> **13/13**.

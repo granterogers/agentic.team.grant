@@ -9,6 +9,9 @@
  * from the rows, never from a reply's wording. Invariants are numbered as in
  * `docs/design/373-project-provenance.md`.
  */
+import { instructionHandler } from '../../src/handlers/instruction.ts'
+import { raiseBlocker } from '../../src/inference/record.ts'
+import type { Job } from '../../src/jobs/worker.ts'
 import { isolated } from './guard.ts'
 import { postTurn, startDoor } from './voice-door.ts'
 
@@ -176,6 +179,15 @@ const name = (id: unknown) =>
     session: s,
     project: '00000000-0000-4000-8000-000000000373',
   })
+  const loose = await sent({ said: `Please draft a loose note ${run}`, session: s })
+  const ghostTalk =
+    await one(`select split_part(origin_ref, ':', 1) as t from public.inbound_commands
+    where command_id = ${lit(String(ghost.command))}::uuid`)
+  check(
+    "6. and it stays in its own thread, never the visit's no-project conversation",
+    ghostTalk.t === `${s}/00000000-0000-4000-8000-000000000373` && loose.talk === s,
+    `${String(ghostTalk.t)} vs ${String(loose.talk)}`,
+  )
   check(
     '6. a project that does not exist costs the project, not the message',
     ghost.status === 200 && ghost.command !== undefined && ghost.project !== A,
@@ -237,6 +249,81 @@ const name = (id: unknown) =>
     `${inA.length} chars`,
   )
   check("9. and never in B's", !inB.includes(`The answer for A ${run}`), `${inB.length} chars`)
+}
+
+/* 10. #374 across projects: "yes please" in B's Chat never answers A's question. */
+{
+  const handler = instructionHandler({
+    db,
+    router: { complete: async () => ({ content: '{}', model: 'isolated/stand-in' }) } as never,
+  })
+  const jobOf = async (id: string): Promise<Job> => {
+    const j =
+      await one(`select job_id::text as id, kind, correlation_id::text as c, project_id::text as p,
+        idempotency_key as k from public.jobs where job_id = ${lit(id)}::uuid`)
+    return {
+      jobId: String(j.id),
+      kind: String(j.kind),
+      correlationId: String(j.c),
+      projectId: j.p === null ? null : String(j.p),
+      idempotencyKey: String(j.k),
+      attempt: 1,
+    } as Job
+  }
+  /* A question raised on A the way production raises one: by the pursuit its turn started. */
+  const askOn = async (s: string) => {
+    const t = await sent({
+      said: `Draft the renewal note and send it to the venue ${run}`,
+      session: s,
+      project: A,
+    })
+    const child = String(
+      (
+        await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id)
+          select 'office.pursue', requested_by, project_id, 'prov374-' || gen_random_uuid(), correlation_id, job_id
+            from public.jobs where job_id = ${lit(String(t.job))}::uuid returning job_id::text as id`)
+      ).id,
+    )
+    await raiseBlocker(db, {
+      jobId: child,
+      requestedAction: 'Send the renewal note to the venue',
+      whyNeeded: 'isolated proof #373 x #374',
+      consequencesOfDelay: 'none',
+      approvalOptions: ['Yes, do it', 'No, leave it'],
+      originatingAgent: 'chief-of-staff',
+      workCanContinue: false,
+    } as never)
+    return child
+  }
+  const reply = async (s: string, on: string) => {
+    const r = await sent({ said: 'yes please', session: s, project: on })
+    if (typeof r.job === 'string' && r.job !== '') await handler.handle(await jobOf(r.job), db)
+    return r
+  }
+  const state = async (child: string) =>
+    String(
+      (
+        await one(
+          `select state::text as s from public.blockers where job_id = ${lit(child)}::uuid order by created_at desc limit 1`,
+        )
+      ).s,
+    )
+  const s1 = session()
+  const onA = await askOn(s1)
+  const fromB = await reply(s1, B)
+  check(
+    '10. "yes please" typed in B, same visit, leaves A\'s question open',
+    typeof fromB.job === 'string' && (await state(onA)) === 'open',
+    `B turn job ${String(fromB.job)}, A question ${await state(onA)}`,
+  )
+  const s2 = session()
+  const onA2 = await askOn(s2)
+  await reply(s2, A)
+  check(
+    '10. (control) "yes please" typed in A answers it',
+    (await state(onA2)) === 'resolved',
+    `A question ${await state(onA2)}`,
+  )
 }
 
 const failed = results.filter((r) => !r.ok).length

@@ -402,9 +402,17 @@ Deno.serve(async (request: Request): Promise<Response> => {
   //    `chat:message` shape every other channel uses, so conversation memory
   //    and the pairing window work here with no special case.
   const turn = Date.now().toString(36)
+  /*
+    The CONVERSATION is the thread the page showed, and it stays that thread
+    even when the office cannot file the turn under its project. A stale tab
+    on a deleted project must not fall back to the visit's bare session: that
+    is the no-project conversation, and a "yes please" joined to it could
+    answer a question asked there.
+  */
+  const talk = project === null ? session : `${session}/${project}`
   const row = (stated: string | null, addressee: string | null): Record<string, unknown> => ({
     origin_channel: 'voice',
-    origin_ref: `${stated === null ? session : `${session}/${stated}`}:${turn}`,
+    origin_ref: `${talk}:${turn}`,
     actor: SUBJECT,
     // `subject` is NOT set here. 0056's trigger resolves it through
     // `app.subject_for`, the same way it does for Slack and Telegram — and a
@@ -452,7 +460,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     `project_id` has a foreign key to `projects`, so an id that names nothing
     fails the insert. One retry with no project: translation failing honestly.
     The message is then resolved as a message that named no project - never
-    guessed onto another one.
+    guessed onto another one - and stays in its own thread's conversation.
   */
   if (stated !== null && (await refusedReference(attempt))) {
     stated = null
