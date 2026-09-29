@@ -25,6 +25,11 @@ describe('a close that asks for nothing is answered as one (R43)', () => {
   })
   it('the handler never closes over a question it asked', () => {
     const src = readFileSync('src/handlers/instruction.ts', 'utf8')
-    expect(src).toMatch(/Number\(last\.waitingOnYou \?\? 0\) === 0 && !weAsked/)
+    // The precedence is stated once, in gates.ts, and the handler acts on the decision.
+    expect(src).toMatch(/early = decideEarlyGate\(\{/)
+    expect(src).toMatch(/if \(early === 'close'\)/)
+    expect(readFileSync('src/agents/gates.ts', 'utf8')).toMatch(
+      /f\.closes && !f\.questionWaiting && !f\.weAsked/,
+    )
   })
 })

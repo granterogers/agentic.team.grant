@@ -59,8 +59,8 @@ describe('and the office reads it from what he said', () => {
       controls that passed sabotage because an import still named the
       function — what discriminates is that the ARGUMENT is his words.
     */
-    expect(text).toMatch(/const hisWords = resolved\.from \?\? instruction/)
-    expect(text).toMatch(/const askedForAnother = wantsAnotherGo\(hisWords\)/)
+    // His words are `turn.kept` (run 1): what he said minus what he took back, never the rewrite.
+    expect(text).toMatch(/const askedForAnother = entitled\.anotherGo\(turn\.kept\)/)
   })
 
   it('passes that one decision down rather than re-deriving it from the plan text', async () => {

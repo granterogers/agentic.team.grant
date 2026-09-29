@@ -14,13 +14,15 @@ const source = readFileSync('src/handlers/instruction.ts', 'utf8')
 describe('a standing rule is read from his words (completion pass)', () => {
   it('the teaching union reads hisWords, through strongestTeaching, and never the rewrite', () => {
     expect(source).toMatch(
-      /strongestTeaching\(\[\s*\.\.\.asRules\.map\(\(text\) => readTeaching\(text, true\)\),\s*readTeaching\(hisWords\),\s*\]\)/,
+      /strongestTeaching\(\[\s*\.\.\.asRules\.map\(\(text\) => entitled\.teaching\(asHumanWords\(text\), true\)\),\s*entitled\.teaching\(turn\.kept\),\s*\]\)/,
     )
     expect(source).not.toMatch(/readTeaching\(instruction\)/)
+    expect(source).not.toMatch(/entitled\.teaching\(turn\.resolved\)/)
   })
 
-  it('hisWords is his pre-rewrite text', () => {
-    expect(source).toMatch(/const hisWords = resolved\.from \?\? instruction/)
+  it('turn.kept is his pre-rewrite text', () => {
+    // The resolver is handed `kept` and its output is `turn.resolved`, a Paraphrase.
+    expect(source).toMatch(/keptOf\(cleanedWords, retraction, heardAnswer\),/)
   })
 
   // Semantic neighbours of the sentence that failed: his words carry the rule.

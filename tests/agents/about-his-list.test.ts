@@ -57,7 +57,7 @@ describe('and the same questions reach his list (R38, one predicate)', () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync('src/handlers/instruction.ts', 'utf8')
     expect(src).toMatch(
-      /r\.kind === 'task_query'\) \|\|\s*\/\/[^\n]*\n\s*asksAboutHisOwnList\(asSaid\)/,
+      /r\.kind === 'task_query'\) \|\|\s*\/\/[^\n]*\n\s*asksAboutHisOwnList\(turn\.kept\)/,
     )
   })
 })

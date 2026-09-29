@@ -98,6 +98,7 @@ describe('what a real turn lets the planner start', () => {
       fakeRouter([step('look', 'db.read'), step('note', 'task.create', ['look'])]),
       job,
       SAID,
+      null,
     )
     const started = enqueues(said)
     expect(started).toHaveLength(1)
@@ -115,6 +116,7 @@ describe('what a real turn lets the planner start', () => {
       fakeRouter([step('look', 'db.read'), step('note', 'task.create', ['look'])]),
       job,
       SAID,
+      null,
     )
     /*
       #259: never claim a thing happened unless canonical state proves it, and
@@ -131,6 +133,7 @@ describe('what a real turn lets the planner start', () => {
       fakeRouter([step('look', 'db.read')]),
       job,
       SAID,
+      null,
     )
     expect(line).toBeNull()
     expect(enqueues(said)).toHaveLength(0)
@@ -147,6 +150,7 @@ describe('what a real turn lets the planner start', () => {
       fakeRouter([step('post', 'slack.post'), step('draft', 'gmail.draft', ['post'])]),
       job,
       SAID,
+      null,
     )
     expect(line).toBeNull()
     expect(enqueues(said)).toHaveLength(0)
@@ -159,6 +163,7 @@ describe('what a real turn lets the planner start', () => {
       { complete: async () => Promise.reject(new Error('no')) } as never,
       job,
       SAID,
+      null,
     )
     expect(line).toBeNull()
     expect(enqueues(said)).toHaveLength(0)
@@ -177,6 +182,7 @@ describe('what a real turn lets the planner start', () => {
       } as never,
       job,
       'What is open?',
+      null,
     )
     expect(asked).toBe(0)
     expect(line).toBeNull()

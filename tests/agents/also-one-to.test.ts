@@ -46,12 +46,12 @@ describe('"also one to…" is a task by the previous turn (R7)', () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync('src/handlers/instruction.ts', 'utf8')
     expect(src).toMatch(
-      /personalTaskRequest\(resolveElliptical\(text, `\$\{asSaid\} \$\{hisLastTurn\}`\)\)/,
+      /personalTaskRequest\(resolveElliptical\(text, `\$\{turn\.kept\} \$\{hisLastTurn\}`\)\)/,
     )
-    expect(src).toMatch(/const hisLastTurn = wantsAntecedent\(asSaid\)/)
+    expect(src).toMatch(/const hisLastTurn = wantsAntecedent\(turn\.kept\)/)
     // And his resolved sentence is a reading in its own right: the model's may drop it.
     expect(src).toMatch(
-      /const hisRequests = \[\s*\.\.\.\(hisElliptical !== asSaid \? \[hisElliptical\] : \[\]\)/,
+      /const hisRequests = \[\s*\.\.\.\(hisElliptical !== turn\.kept \? \[hisElliptical\] : \[\]\)/,
     )
   })
 })

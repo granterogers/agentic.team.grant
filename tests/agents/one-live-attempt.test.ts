@@ -228,7 +228,7 @@ describe('the duplicate decision is made once, above everything that starts work
       name was referenced — the same substring trap #268 records, and the
       second time in this file.
     */
-    expect(withoutComments).toMatch(/const askedForAnother = wantsAnotherGo\(hisWords\)/)
+    expect(withoutComments).toMatch(/const askedForAnother = entitled\.anotherGo\(turn\.kept\)/)
     /*
       And `hisWords` is his own sentence rather than the resolution of it.
       This assertion used to pin `wantsAnotherGo(instruction)` verbatim and
@@ -236,7 +236,9 @@ describe('the duplicate decision is made once, above everything that starts work
       CLAUDE.md records six times. What it means is that the authorisation is
       wired to a real reading; what it said was which variable held it.
     */
-    expect(withoutComments).toMatch(/const hisWords = resolved\.from \?\? instruction/)
+    // `turn.kept` is his own sentence (run 1): it is built from what he said, and the
+    // rewrite is a different type that does not compile where this is required.
+    expect(withoutComments).toMatch(/const turn = buildTurn\(\{/)
   })
 
   it('and a branch job never suppresses itself', () => {

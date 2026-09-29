@@ -33,7 +33,7 @@ const source = async (): Promise<string> =>
 */
 const STARTS_WORK: readonly (readonly [string, string])[] = [
   ['a PDF or a report', 'firstOf(artifactRequest)'],
-  ['a page to read', 'pageRequest(instruction)'],
+  ['a page to read', 'entitled.page(turn.kept)'],
   ['tasks pulled out of a document', 'firstOf(extractionRequest)'],
 ]
 

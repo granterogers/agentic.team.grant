@@ -84,7 +84,7 @@ describe('one clause is either a change or a new thing', () => {
       /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\((?:resolveElliptical\()?text\b[^\n]*\n/,
     )
     const asked =
-      /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)(?:, asSaid|, `\$\{asSaid\} \$\{hisLastTurn\}`)?\)/.exec(
+      /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)(?:, turn\.kept|, `\$\{turn\.kept\} \$\{hisLastTurn\}`)?\)/.exec(
         withoutComments,
       )?.[1]
     expect(asked).toContain('changesHis !== null')

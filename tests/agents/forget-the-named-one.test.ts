@@ -29,6 +29,6 @@ describe('"forget the printers one" cancels a named task (R42)', () => {
   })
   it('the settle reader falls back to his literal words, as the call-off does', () => {
     const src = readFileSync('src/handlers/instruction.ts', 'utf8')
-    expect(src).toMatch(/\(firstOfHis\(taskStateChange\) \?\? taskStateChange\(asSaid\)\)/)
+    expect(src).toMatch(/\(firstOfHis\(taskStateChange\) \?\? taskStateChange\(turn\.kept\)\)/)
   })
 })

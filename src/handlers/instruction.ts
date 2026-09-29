@@ -77,12 +77,10 @@ import {
   artifactRequest,
   KIND_LABEL,
   notebookRequest,
-  pageRequest,
   type RequestedKind,
 } from '../agents/actions.ts'
-import { type AnotherGo, wantsAnotherGo } from '../agents/again.ts'
+import type { AnotherGo } from '../agents/again.ts'
 import { alreadyPursuing } from '../agents/already.ts'
-import { callsItOff } from '../agents/calloff.ts'
 import {
   capabilityBrief,
   capabilityNow,
@@ -93,16 +91,17 @@ import {
 import { capabilityLies } from '../agents/capability-claims.ts'
 import { clauses, split } from '../agents/clauses.ts'
 import { heldToWhatIsQueued } from '../agents/commitment.ts'
-import { connectRequest, populateRequest } from '../agents/connect.ts'
-import { type Correction, readCorrection } from '../agents/correction.ts'
+import type { Correction } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
+import { entitled } from '../agents/entitled.ts'
 import { asksAboutHisOwnList, extractionRequest } from '../agents/extract.ts'
+import { answerOutranks, decideEarlyGate, type EarlyGate } from '../agents/gates.ts'
 import { type Capability, planFor, planningCatalogue } from '../agents/goal.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { type Handoff, handoffIn } from '../agents/handoff.ts'
 import { classifyIntent } from '../agents/intent.ts'
-import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
+import { type FoundLink, LINK_LABEL, type LinkRequest } from '../agents/links.ts'
 import {
   personalTaskChange,
   personalTaskRequest,
@@ -126,7 +125,6 @@ import {
   describePlan,
   needsGrantToChoose,
   type Plan,
-  readPlan,
   type Step,
 } from '../agents/plan.ts'
 import {
@@ -142,7 +140,7 @@ import { asksForWork } from '../agents/request.ts'
 import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
-import { optionFor, spokenAnswer } from '../agents/spoken-answer.ts'
+import { optionFor } from '../agents/spoken-answer.ts'
 import { nameSubjects } from '../agents/subject.ts'
 import {
   NEEDS_A_TITLE,
@@ -153,8 +151,16 @@ import {
   titleReply,
   wantsAntecedent,
 } from '../agents/tasks.ts'
-import { readTeaching, strongestTeaching } from '../agents/teaching.ts'
+import { strongestTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
+import {
+  type AnswerClause,
+  answerClause,
+  asHumanWords,
+  buildTurn,
+  keptOf,
+  retractionOf,
+} from '../agents/turn.ts'
 import { oneReading, type ReadingKind, understand } from '../agents/understand.ts'
 import { asksWhatTheyFound, asksWhoIsOnIt } from '../agents/whoison.ts'
 import { DeliveryService } from '../channels/delivery.ts'
@@ -254,7 +260,7 @@ export const planAndPursue = async (
     The default keeps the older behaviour for a caller that has no such
     reading of its own.
   */
-  deliberately: AnotherGo | null | undefined = undefined,
+  deliberately: AnotherGo | null,
 ): Promise<string | null> => {
   const canDo = new Set(performable())
   const [granted, roster] = await Promise.all([
@@ -318,7 +324,7 @@ export const planAndPursue = async (
     while the office stays honest about what is running; a false positive
     spends the model twice and produces two answers to one question.
   */
-  const deliberate = deliberately === undefined ? wantsAnotherGo(request) : deliberately
+  const deliberate = deliberately
 
   /*
     THE REPHRASED CASE IS DECIDED ABOVE, ONCE.
@@ -1453,7 +1459,7 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
   //
   // Same shape as the fix already in this file for the other duplicate pair:
   // "this job goes quiet and the request speaks for both".
-  const sayBackFollows = readPlan(heard.text) !== null
+  const sayBackFollows = entitled.plan(asHumanWords(heard.text)) !== null
   if (!sayBackFollows) {
     await echoTranscript(
       db,
@@ -2214,6 +2220,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         said twice, a date or time corrected in place. "Heard:" above still
         quotes the transcript exactly; this is what the readers are given.
       */
+      const saidWords = asHumanWords(instruction)
       instruction = cleanDictation(instruction)
 
       // Two messages that are one instruction. Grant shares a video and then
@@ -2221,6 +2228,57 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // and wrong apart. See `src/agents/pairing.ts`.
       const paired = await pairWithNearby(deps.db, job, payload, instruction)
       if (paired !== null) instruction = paired
+
+      /*
+        WHAT HE SAID, FIXED HERE AND NEVER REBOUND (run 1, `src/agents/turn.ts`).
+
+        Everything from this line to the resolver reads `cleanedWords`; the
+        resolver reads `keptOf(...)`; and after it `turn` says which text is
+        which for good. `instruction` used to be reassigned at each of these
+        steps - cleaned, then kept, then a model's rewrite - so what it held
+        depended on where in the file you were, and each reader chose by luck.
+
+        The retraction is READ here (a pure function) and its record written
+        where it always was, below. Reading it early is what lets the gates
+        below ask "was that a yes?" of the words he actually meant.
+      */
+      const isBranch = String(payload.handed_off_by ?? '') !== ''
+      const cleanedWords = asHumanWords(instruction)
+      const retractionRead = retractionOf(cleanedWords)
+      const keptBeforePeel = asHumanWords(retractionRead?.kept ?? cleanedWords)
+      let previous: Promise<
+        Awaited<ReturnType<typeof conversationBefore>>[number] | undefined
+      > | null = null
+      /** The turn before this one, read at most once and only when a gate needs it. */
+      const previousTurn = () =>
+        (previous ??= conversationBefore(deps.db, String(payload.command_id ?? ''))
+          .catch(() => [])
+          .then((turns) => turns.at(-1)))
+      const rejects = rejectsWithoutSaying(cleanedWords)
+      const closes = closesWithoutAsking(cleanedWords)
+      let heardAnswer: AnswerClause | null = null
+      let early: EarlyGate = null
+      /*
+        The database is asked only when a gate could speak. Reading the
+        previous turn in front of every message to serve the short ones would
+        put a query where there was none.
+      */
+      if (!isBranch && (rejects || closes || answerClause(keptBeforePeel) !== null)) {
+        const last = await previousTurn()
+        const questionWaiting = last !== undefined && Number(last.waitingOnYou ?? 0) > 0
+        heardAnswer = questionWaiting ? answerClause(keptBeforePeel) : null
+        early = decideEarlyGate({
+          answer: heardAnswer?.reading ?? null,
+          rejects,
+          closes,
+          questionWaiting,
+          // A question of ours in prose, with no blocker behind it, is answered by
+          // "yes, thanks" too; only a turn that asked him nothing may be closed.
+          weAsked: String(last?.answered ?? '')
+            .trim()
+            .endsWith('?'),
+        })
+      }
 
       /*
         What "it" refers to (#63).
@@ -2263,39 +2321,16 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         empty-history reply above it.
       */
       /*
-        AN OPEN QUESTION OUTRANKS GENERIC REJECTION (audit B3, 0608 era).
+        AN OPEN QUESTION OUTRANKS GENERIC REJECTION (audit B3).
 
-        "No." is two things at once: the shortest possible refusal of a
-        question the office asked, and the shortest possible rejection of its
-        last answer. `rejectsWithoutSaying` is right about the second and is
-        checked before the resolver precisely so a contentless message is not
-        rebuilt into the request it rejects - but it never asked whether a
-        question was WAITING on him, so a bare "No." to "Shall I send this?"
-        was answered "What did I get wrong?" and the question stayed open. Its
-        sibling `closesWithoutAsking` has always asked.
-
-        The precedence is by STATE, not by phrase: when a question is waiting
-        and what he said reads as a yes or a no to it, that is an answer, and
-        the spoken-answer path further down owns it. Anything else - a
-        rejection that names nothing but is not a yes or a no ("That is not
-        what I meant") - is still the generic rejection.
+        "No." is two things at once: the shortest refusal of a question the
+        office asked and the shortest rejection of its last answer. The
+        precedence is stated in `src/agents/gates.ts` and decided above, by
+        STATE and not by phrase: a question waiting and a yes or a no in his
+        words is an answer, and the spoken-answer path further down owns it.
       */
-      const answersAnOpenQuestion = async (said: string): Promise<boolean> => {
-        const reading = spokenAnswer(said)
-        if (reading !== 'yes' && reading !== 'no') return false
-        const last = (
-          await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => [])
-        ).at(-1)
-        return last !== undefined && Number(last.waitingOnYou ?? 0) > 0
-      }
-
-      if (rejectsWithoutSaying(instruction) && !(await answersAnOpenQuestion(instruction))) {
-        // The thread is read again here rather than hoisted: this path is
-        // rare, the read is one query, and moving the main one earlier would
-        // put a database call in front of every message to serve this one.
-        const last = (
-          await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => [])
-        ).at(-1)
+      if (early === 'reject') {
+        const last = await previousTurn()
         /*
           Attributed, because #65's whole finding was 499 jobs with a NULL
           `recipient_agent` and Grant reasonably concluding nothing was being
@@ -2331,16 +2366,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         resolver turns it back into the previous request — unless the last
         turn left a question of ours waiting on him, when it is an answer.
       */
-      if (closesWithoutAsking(instruction)) {
-        const last = (
-          await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => [])
-        ).at(-1)
-        // A question of ours in prose, with no blocker behind it, is answered by
-        // "yes, thanks" too; only a turn that asked him nothing may be closed.
-        const weAsked = String(last?.answered ?? '')
-          .trim()
-          .endsWith('?')
-        if (last === undefined || (Number(last.waitingOnYou ?? 0) === 0 && !weAsked)) {
+      if (closes) {
+        const last = await previousTurn()
+        if (early === 'close') {
           await deps.db
             .execute(`
               update public.jobs set recipient_agent = 'chief-of-staff'
@@ -2372,8 +2400,6 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         what he wanted changed. Same reason `rejectsWithoutSaying` is checked
         above the resolver and not below it.
       */
-      const asSaid = instruction
-
       /*
         A clause he took back in the same breath never reaches the planner.
 
@@ -2392,9 +2418,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         to SAY what it set aside - that clause is the whole reason erring
         towards withdrawal is defensible rather than merely convenient.
       */
-      const retraction = readRetraction(instruction)
+      const retraction = retractionRead
       if (retraction !== null) {
-        instruction = retraction.kept
         await deps.db
           .execute(`
             select app.understood(${lit(job.jobId)}::uuid,
@@ -2407,10 +2432,24 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         deps.db,
         deps.router,
         String(payload.command_id ?? ''),
-        instruction,
+        keptOf(cleanedWords, retraction, heardAnswer),
         { correlationId: job.correlationId, jobId: job.jobId },
       )
-      instruction = resolved.instruction
+      const turn = buildTurn({
+        said: saidWords,
+        cleaned: cleanedWords,
+        retraction,
+        answer: heardAnswer,
+        resolved,
+        addressedTo: payload.addressed_to ?? null,
+        isBranch,
+      })
+      /*
+        From here `instruction` is the ROUTING text: what the resolver made of
+        what he kept, good for choosing who answers and for what a model reads,
+        and never for deciding what he asked for. That is `turn.kept`.
+      */
+      instruction = turn.resolved
 
       const who = await speaker(
         deps.db,
@@ -2519,12 +2558,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         words, never the disjunction #327 could afford. A guard that PERMITS
         may not read a paraphrase.
       */
-      const hisWords = resolved.from ?? instruction
-      const askedForAnother = wantsAnotherGo(hisWords)
+      const askedForAnother = entitled.anotherGo(turn.kept)
       const alreadyRunning =
         String(payload.handed_off_by ?? '') !== '' ||
         askedForAnother !== null ||
-        asksWhoIsOnIt(hisWords) !== null
+        asksWhoIsOnIt(turn.kept) !== null
           ? null
           : await deps.db
               .execute(`
@@ -2983,7 +3021,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         `)
         .catch(() => undefined)
 
-      const unresolved = readPlan(instruction)
+      const unresolved = entitled.plan(turn.kept)
       const plan =
         unresolved === null ? null : await resolveProjects(deps.db, unresolved, job.jobId)
       if (plan !== null) {
@@ -3120,8 +3158,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         the precondition; the import follows a minute later so it finds the
         attachments waiting rather than racing them.
       */
-      const fill = populateRequest(instruction)
-      const wire = connectRequest(instruction)
+      const fill = entitled.populate(turn.kept)
+      const wire = entitled.connect(turn.kept)
       if ((wire !== null || fill) && job.projectId !== null && job.projectId !== undefined) {
         // A child of this job, so it inherits the correlation id, the priority
         // and — the part that matters — the project this instruction resolved
@@ -3198,7 +3236,6 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         branch performs nothing, so asking a model what the sentence means is
         several seconds spent to be told something this line already knows.
       */
-      const isBranch = String(payload.handed_off_by ?? '') !== ''
 
       /*
         WHAT HE MEANS, BEFORE ANYTHING DECIDES WHAT TO DO (#282).
@@ -3235,8 +3272,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         behaviour. The change cannot be worse than the status quo.
       */
       const understood = isBranch
-        ? oneReading(instruction)
-        : await understand(instruction, deps.router, {
+        ? oneReading(turn.kept)
+        : await understand(turn.kept, deps.router, {
             correlationId: job.correlationId,
             jobId: job.jobId,
           })
@@ -3330,7 +3367,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         main thread read is far below and hoisting it would put a query in
         front of every message to serve this one.
       */
-      const hisLastTurn = wantsAntecedent(asSaid)
+      const hisLastTurn = wantsAntecedent(turn.kept)
         ? // His last three turns, so "and another for the caterers" after "also one
           // to book the minibus" still reaches the turn that said "task".
           (await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => []))
@@ -3345,9 +3382,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         sentence with "one" replaced by the noun his last message used, so it
         is grounded in his words by construction and can only add a reading.
       */
-      const hisElliptical = resolveElliptical(asSaid, `${asSaid} ${hisLastTurn}`)
+      const hisElliptical = resolveElliptical(turn.kept, `${turn.kept} ${hisLastTurn}`)
       const hisRequests = [
-        ...(hisElliptical !== asSaid ? [hisElliptical] : []),
+        ...(hisElliptical !== turn.kept ? [hisElliptical] : []),
         ...(resolved.changed && resolved.from !== null ? [resolved.from] : []),
         ...understood.surviving.filter((r) => HIS_OWN.has(r.kind)).map((r) => r.text),
       ]
@@ -3595,7 +3632,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         exactly what it was written for.
       */
       const calledOff =
-        isBranch || changesHis !== null ? null : (firstOfHis(callsItOff) ?? callsItOff(asSaid))
+        isBranch || changesHis !== null || answerOutranks(turn, 'call_off')
+          ? null
+          : (firstOfHis((text) => entitled.callsItOff(asHumanWords(text))) ??
+            entitled.callsItOff(turn.kept))
       const stopped =
         calledOff === null
           ? null
@@ -3718,8 +3758,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           `verify:anchors` run and two of four in the next.
         */
         strongestTeaching([
-          ...asRules.map((text) => readTeaching(text, true)),
-          readTeaching(hisWords),
+          ...asRules.map((text) => entitled.teaching(asHumanWords(text), true)),
+          entitled.teaching(turn.kept),
         ])
 
       /*
@@ -3872,7 +3912,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           model: null,
         } satisfies HandlerOutput
       }
-      const sent = isBranch ? null : linkRequest(instruction)
+      const sent = isBranch ? null : entitled.link(turn.kept)
       const linked = sent === null ? null : await handleLinks(deps.db, job, sent)
 
       // Does this ask for something to be MADE? If so, make it, and let the
@@ -4024,8 +4064,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ? null
         : firstOfHis((text) => {
             // Grounded in his words, for the reason given at the project-task reader.
-            const got = personalTaskRequest(resolveElliptical(text, `${asSaid} ${hisLastTurn}`))
-            if (got === null || !groundedIn(got.title, asSaid)) return null
+            const got = personalTaskRequest(resolveElliptical(text, `${turn.kept} ${hisLastTurn}`))
+            if (got === null || !groundedIn(got.title, turn.kept)) return null
             /*
               And a change of mind inside the sentence names the task by what
               SURVIVED it (ledger R27): "add a task to chase kevin, no
@@ -4108,7 +4148,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const askedForPage =
         job.projectId === null || isBranch || wantsFile !== null || alreadyOn !== null
           ? null
-          : pageRequest(instruction)
+          : entitled.page(turn.kept)
       const wantsPage = askedForPage?.why === 'asked' ? askedForPage : null
       const reading =
         wantsPage === null
@@ -4249,7 +4289,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         flat-task readers - which otherwise filed his whole sentence as the
         title of a task with no parent.
       */
-      const subOf = isBranch ? null : (firstOfHis(subtaskRequest) ?? subtaskRequest(asSaid))
+      const subOf = isBranch ? null : (firstOfHis(subtaskRequest) ?? subtaskRequest(turn.kept))
       const forGrant =
         wantsFile !== null || isBranch || changesHis !== null || subOf !== null ? null : deferred
       const noted =
@@ -4403,8 +4443,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 */
                 // His whole message is the antecedent for an elliptical "add one to…",
                 // and his previous turn when this one does not name a task (R7).
-                const got = taskRequest(text, classifyIntent(text), `${asSaid} ${hisLastTurn}`)
-                return got === null || got.title === null || groundedIn(got.title, asSaid)
+                const got = taskRequest(text, classifyIntent(text), `${turn.kept} ${hisLastTurn}`)
+                return got === null || got.title === null || groundedIn(got.title, turn.kept)
                   ? got
                   : null
               })
@@ -4501,7 +4541,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         noted !== null || wantsFile !== null || isBranch
           ? null
           : // His literal words too: a withdrawal has no surviving intent (R26, R42).
-            (firstOfHis(taskStateChange) ?? taskStateChange(asSaid))
+            (firstOfHis(taskStateChange) ?? taskStateChange(turn.kept))
       const change =
         noted !== null || wantsFile !== null || namedLater !== null || isBranch || settles !== null
           ? null
@@ -4765,7 +4805,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         nothing. Answered through app.hq_answer_blocker, the same door the
         dashboard button uses, so what answering performs is identical.
       */
-      const spoken = isBranch ? null : spokenAnswer(asSaid)
+      const spoken = isBranch ? null : (turn.answer?.reading ?? entitled.answer(turn.kept))
       const answeredQuestion: { text: string; did: boolean } | null =
         spoken === null
           ? null
@@ -5330,7 +5370,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         the kind of thing that must not silently change how the office behaves
         for ever.
       */
-      const correction = readCorrection(asSaid, (turnsBefore.at(-1)?.answered ?? null) !== null)
+      const correction = entitled.correction(
+        turn.kept,
+        (turnsBefore.at(-1)?.answered ?? null) !== null,
+      )
 
       /*
         What this chat holds beyond the working window, and what of it matters
@@ -5662,7 +5705,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const asksAboutHisList =
         understood.surviving.some((r) => r.kind === 'task_query') ||
         // His words, whatever the model labelled them (ledger R38).
-        asksAboutHisOwnList(asSaid)
+        asksAboutHisOwnList(turn.kept)
       const hisList = !asksAboutHisList
         ? ''
         : await deps.db
