@@ -39,7 +39,7 @@ await db.execute(`insert into public.slack_channel_map (channel_id, team_id, cha
 
 /* Slack, as far as the wire is concerned. */
 const posted: { method: string; channel: string; text: string }[] = []
-const slack = new SlackClient('xoxb-isolated-not-a-token', {
+const slack = new SlackClient('isolated-fake-bot-token', {
   fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input)
     if (!url.startsWith('https://slack.com/api/')) throw new Error(`REFUSED: ${url}`)
