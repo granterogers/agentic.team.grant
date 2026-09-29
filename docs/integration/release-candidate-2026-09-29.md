@@ -44,7 +44,7 @@ invariants and the review.
 | Proof | Before | Candidate |
 |---|---|---|
 | `scripts/isolated/project-provenance.ts` (real door, real canonical layer, real handler) | 7/15 on `main` | **20/20** |
-| `npm run verify:basecamp-project-turn` (real page in Chromium, fake office) | 3/10 on `main` | **13/13** |
+| `npm run verify:basecamp-project-turn` (real page in Chromium, fake office, loop-back call) | 3/10 on `main` | **17/17** |
 
 Controls re-run on the merged candidate: removing the conversation key → 12/19;
 the `project_id` write → 12/19; the previous refused-id behaviour → 18/19; the
@@ -128,6 +128,46 @@ present (`hq_undo` knows `document_move`).
 - The Deno runtime itself was not run: no `deno` in the sandbox. The `voice`
   file was run end to end under Node with a Deno shim, and it uses only
   web-standard APIs.
+
+## Review: ways it could look right and be wrong
+
+Each of these is a way the candidate could pass every test and still fail in
+production. Each was checked against the real code or schema, not the tests.
+
+- **Does the page's `id` really hold a project UUID?** Every browser case
+  feeds a fake office. `app.hq_studio_core` emits `p.project_id as id`, and the
+  page already sends the same `id` to `conversation_history(p_project_id uuid)`
+  to read threads, which works in production. So `projectIdOf` fires. The
+  reserved Unnamed project is active and not a fixture in production (read
+  only), so it is in the payload and the portfolio dock states it.
+- **Does the sweep see every production channel's rows?** Production's
+  notifier is `reply`, `slack` and `pager` (`src/office/pass.ts`). All three
+  key through `deliveryKey`, and the unit test pins all three, so their rows
+  carry `blocker:<id>:<channel>`.
+- **Can the lapsed-claim re-drive send twice?** Only if a transport left an
+  ambiguous send `claimed`. Telegram classifies a network failure on a
+  non-idempotent write as `indeterminate`, which is recorded as `failed` and
+  never resent. Slack does the same through `toTransportError`. A plain throw
+  leaves `claimed`, which is the delivery layer's existing reclaim-after-crash
+  rule, and it only fires after the 2-minute claim lease.
+- **The live call.** `call.js` had no test at all. It now has one: a loop-back
+  realtime peer, and Claire's tool call arriving over the data channel. A
+  hand-off from a call opened on A states A, including after the page moves to
+  B. Removing the field turns it red.
+- **A composed question bypasses the creation gate.** The words come from the
+  blocker row (`requested_action` from the plan step, `why_needed` from the
+  policy), not from the refused sentence. The sending gate still runs on them
+  at delivery.
+
+Residuals, accepted and stated:
+
+- If the reserved Unnamed project were ever missing from the payload, the
+  portfolio dock would fall to `PROJECTS[0]`. That is the page's existing,
+  visible choice ("Filed under …"), and with this candidate it would also be
+  stated.
+- A tab left open on a project that is archived afterwards still states it,
+  and the answer is filed there. It is visible until the next reload.
+- The Deno runtime was not run.
 
 ## Production, read-only, 29 September
 
