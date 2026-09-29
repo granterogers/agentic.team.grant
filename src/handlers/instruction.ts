@@ -4820,8 +4820,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 const option =
                   q === undefined || spoken === 'unclear' ? null : optionFor(spoken, q.options)
                 if (q === undefined || option === null) return null
+                /*
+                  Answered AS whoever this turn came from (0608): the
+                  principal the door recorded on the command, never a name
+                  this handler supplies. A sender the office does not know
+                  gets a refusal back, which the line below reports.
+                */
                 const res = await deps.db.execute(
-                  `select app.hq_answer_blocker(${lit(q.id)}::uuid, ${lit(option)}) as r`,
+                  `select app.hq_answer_blocker(${lit(q.id)}::uuid, ${lit(option)},
+                     app.command_principal(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
                 )
                 const out = (res.rows[0] as { r?: unknown })?.r
                 const got = (typeof out === 'string' ? JSON.parse(out) : out) as {

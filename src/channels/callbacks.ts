@@ -298,7 +298,30 @@ const doUndo = async (db: SqlExecutor, row: PendingRow): Promise<ProcessedCallba
 
 export interface ProcessOptions {
   readonly limit?: number
+  /**
+   * @deprecated Ignored (0608). It used to be the identity every press was
+   * attributed to, whoever pressed, and defaulted to 'grant'. Who pressed is
+   * now read from the command the press was recorded as, resolved through the
+   * office's own list of people; a press from anybody else is refused.
+   */
   readonly subject?: string
+}
+
+/**
+ * Who pressed this button, according to the office: the person the door
+ * recorded on the command (`app.command_principal`), and only when the office
+ * knows them. Null is a refusal, never a default - an unresolved press is
+ * reported as such rather than attributed to whoever is usually pressing.
+ */
+const pressedBy = async (db: SqlExecutor, row: PendingRow): Promise<string | null> => {
+  const { rows } = await db.execute(`
+    select app.command_principal(${lit(row.command_id)}::uuid) as who,
+           app.principal_refusal(app.command_principal(${lit(row.command_id)}::uuid)) as refusal
+  `)
+  const r = rows[0] as { who?: string | null; refusal?: string | null } | undefined
+  if (r === undefined || r.refusal !== null || typeof r.who !== 'string' || r.who === '')
+    return null
+  return r.who
 }
 
 /**
@@ -379,8 +402,19 @@ export const processCallbacks = async (
         // contain — and the one Grant would find out about is the time it
         // silenced less than he expected. "Mute 24h" on a pager means the
         // pager. The project is still recorded on the audit row.
+        const who = await pressedBy(db, row)
+        if (who === null) {
+          await resolveNotification(db, row, 'dismissed')
+          done.push({
+            commandId: row.command_id,
+            action,
+            outcome: 'unresolvable',
+            note: 'I could not tell who pressed that, so nothing was changed',
+          })
+          break
+        }
         const applied = await applyPreference(db, parseInstruction('leave me alone today'), {
-          subject: options.subject ?? 'grant',
+          subject: who,
           originChannel: row.origin_channel as 'slack' | 'telegram' | 'voice' | 'teamhq',
           instruction: 'mute 24h (button)',
           commandId: row.command_id,
@@ -425,7 +459,9 @@ export const processCallbacks = async (
           select app.answer_generation_approval(
             app.open_approval_for_job(${lit(row.job_id)}::uuid),
             ${action === 'approve' ? 'true' : 'false'},
-            ${lit(options.subject ?? 'grant')}
+            -- Whoever pressed, as the office knows them; refused inside the
+            -- function when it does not (0608). Never a default.
+            app.command_principal(${lit(row.command_id)}::uuid)
           ) as r
         `)
         const r = (answered[0] as { r: Record<string, unknown> | null } | undefined)?.r ?? null

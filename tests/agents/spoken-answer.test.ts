@@ -104,7 +104,11 @@ describe("the handler answers only this conversation's ONE open question", () =>
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^[ \t]*\/\/.*$/gm, '')
   it('through the same door the dashboard uses', () => {
-    expect(src).toMatch(/app\.hq_answer_blocker\(\$\{lit\(q\.id\)\}::uuid, \$\{lit\(option\)\}\)/)
+    // And AS whoever the door recorded on this turn (0608): the principal is read
+    // from the command, never supplied by the handler.
+    expect(src).toMatch(
+      /app\.hq_answer_blocker\(\$\{lit\(q\.id\)\}::uuid, \$\{lit\(option\)\},\s*app\.command_principal\(/,
+    )
   })
   it('an unclear reading leaves the question open and asks, before any option is chosen', () => {
     const i = src.indexOf("if (q !== undefined && spoken === 'unclear') {")

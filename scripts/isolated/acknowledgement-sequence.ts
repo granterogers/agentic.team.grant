@@ -177,7 +177,7 @@ for (const channel of ['teamhq', 'telegram', 'slack', 'voice']) {
     const chat = `seqe-${run}-${channel}`
     const q = await ask(channel, chat, 'the florist')
     await reply(channel, chat, 'ok thanks')
-    await db.execute(`select app.hq_answer_blocker(${lit(q)}::uuid, 'No, leave it')`)
+    await db.execute(`select app.hq_answer_blocker(${lit(q)}::uuid, 'No, leave it', 'grant')`)
     const r = await reply(channel, chat, 'yes please')
     check(
       tag('CONTROL: a bound question answered elsewhere is not answered again'),

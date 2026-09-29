@@ -276,7 +276,7 @@ console.log('\nanswering a question and settling a proposal both write one down'
             'chief-of-staff', true);
     select app.hq_answer_blocker(
       (select blocker_id from public.blockers
-        where requested_action = ${lit(`Where do the ${run} pages live?`)}), 'Notion');
+        where requested_action = ${lit(`Where do the ${run} pages live?`)}), 'Notion', 'grant');
     select chose, array_to_string(ruled_out, ' | ') as ruled_out, decided_by
       from public.decisions where question = ${lit(`Where do the ${run} pages live?`)};
     rollback;

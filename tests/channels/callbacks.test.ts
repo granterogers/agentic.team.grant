@@ -26,6 +26,8 @@ interface Options {
   readonly outputId?: string | null
   readonly offers?: Record<string, unknown>[]
   readonly claimSucceeds?: boolean
+  /** Who the office says pressed it; null is somebody it does not know. */
+  readonly presser?: string | null
 }
 
 class Scripted implements SqlExecutor {
@@ -59,6 +61,17 @@ class Scripted implements SqlExecutor {
       return { rows: this.options.offers ?? [] }
     }
     if (sql.includes('app.request_undo')) return { rows: [{ status: 'undone' }] }
+    // 0608: who pressed is read from the command, through the office's own list.
+    if (sql.includes('app.command_principal') && sql.includes('principal_refusal')) {
+      return {
+        rows: [
+          {
+            who: this.options.presser ?? 'grant',
+            refusal: this.options.presser === null ? 'unknown' : null,
+          },
+        ],
+      }
+    }
     if (sql.includes('preference_instructions')) {
       return { rows: [{ instruction_id: 'eeeeeeee-0000-0000-0000-000000000005' }] }
     }
@@ -140,6 +153,13 @@ describe('the presses that are not requests', () => {
     await processCallbacks(db)
     // One implementation of what a mute means, one audit trail.
     expect(db.wrote('preference_instructions')).toBe(true)
+  })
+
+  it('a mute pressed by somebody the office does not know changes nothing (0608)', async () => {
+    const db = new Scripted({ action: 'mute_24h', presser: null })
+    const [done] = await processCallbacks(db)
+    expect(done?.outcome).toBe('unresolvable')
+    expect(db.wrote('preference_instructions')).toBe(false)
   })
 
   it('records `more_detail` and refuses to create work from it', async () => {

@@ -362,7 +362,7 @@ const granted = JSON.parse(
   String(
     (
       await one(
-        `select (public.hq_grant_standing(${lit(TOOL)}, 'Stop asking me about this.'))::text as d`,
+        `select (public.hq_grant_standing(${lit(TOOL)}, 'Stop asking me about this.', p_by => 'grant'))::text as d`,
       )
     ).d,
   ),
@@ -382,7 +382,13 @@ check(
 // A reason is required, the same rule declining a tool request obeys.
 {
   const said = JSON.parse(
-    String((await one(`select (public.hq_grant_standing(${lit(TOOL)}, '   '))::text as d`)).d),
+    String(
+      (
+        await one(
+          `select (public.hq_grant_standing(${lit(TOOL)}, '   ', p_by => 'grant'))::text as d`,
+        )
+      ).d,
+    ),
   ) as { ok?: boolean; error?: string }
   check(
     'a standing authorization with no reason is refused',
@@ -396,7 +402,7 @@ check(
     String(
       (
         await one(
-          `select (public.hq_revoke_standing(${lit(String(granted.authorization))}::uuid, 'done'))::text as d`,
+          `select (public.hq_revoke_standing(${lit(String(granted.authorization))}::uuid, 'done', p_by => 'grant'))::text as d`,
         )
       ).d,
     ),
@@ -416,7 +422,7 @@ check(
     String(
       (
         await one(
-          `select (public.hq_revoke_standing(${lit(String(granted.authorization))}::uuid, 'again'))::text as d`,
+          `select (public.hq_revoke_standing(${lit(String(granted.authorization))}::uuid, 'again', p_by => 'grant'))::text as d`,
         )
       ).d,
     ),
@@ -503,7 +509,7 @@ const answered = JSON.parse(
   String(
     (
       await one(
-        `select (public.hq_answer_blocker(${lit(blockerId)}::uuid, ${lit(OPTION)}))::text as d`,
+        `select (public.hq_answer_blocker(${lit(blockerId)}::uuid, ${lit(OPTION)}, 'grant'))::text as d`,
       )
     ).d,
   ),
@@ -570,7 +576,7 @@ console.log('\nanswering "add them" adds them')
     select app.hq_answer_blocker(
       (select blocker_id from public.blockers
         where requested_action = ${lit(`Two files have appeared (${run}). What would you like me to do?`)}),
-      ${lit(DO_IT)});
+      ${lit(DO_IT)}, 'grant');
     select
       (select count(*)::int from public.jobs
         where kind = 'drive.read_file'
@@ -614,7 +620,7 @@ console.log('\nanswering "add them" adds them')
               'payloads', jsonb_build_array(jsonb_build_object('file_id', 'fixture-one'))));
     select app.hq_answer_blocker(
       (select blocker_id from public.blockers
-        where requested_action = ${lit(`Ignore probe (${run})`)}), 'Ignore these');
+        where requested_action = ${lit(`Ignore probe (${run})`)}), 'Ignore these', 'grant');
     select (select count(*)::int from public.jobs
              where kind = 'drive.read_file'
                and requested_by = ${lit(`teamhq:verify-ignore-${run}`)}) as enqueued;

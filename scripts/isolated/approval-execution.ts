@@ -132,7 +132,9 @@ const blocker = async (jobId: string) =>
     ).id,
   )
 const answer = (jobId: string, a: string, fn = 'app') =>
-  blocker(jobId).then((b) => db.execute(`select ${fn}.hq_answer_blocker('${b}'::uuid, '${a}')`))
+  blocker(jobId).then((b) =>
+    db.execute(`select ${fn}.hq_answer_blocker('${b}'::uuid, '${a}', 'grant')`),
+  )
 const state = async (jobId: string) =>
   String((await one(`select state::text as s from public.jobs where job_id = '${jobId}'`)).s)
 
@@ -204,9 +206,9 @@ for (const [a, want] of [
   const j = await make([t])
   await step(j)
   const b = await blocker(j)
-  await db.execute(`select app.hq_answer_blocker('${b}'::uuid, '${a}')`)
+  await db.execute(`select app.hq_answer_blocker('${b}'::uuid, '${a}', 'grant')`)
   const second = await db
-    .execute(`select app.hq_answer_blocker('${b}'::uuid, '${a}')::text as r`)
+    .execute(`select app.hq_answer_blocker('${b}'::uuid, '${a}', 'grant')::text as r`)
     .then((r) => String((r.rows[0] as { r?: string }).r))
     .catch((e: unknown) => `refused: ${String((e as Error).message).slice(0, 60)}`)
   await step(j)

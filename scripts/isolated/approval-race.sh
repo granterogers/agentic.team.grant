@@ -19,11 +19,14 @@ race() {
            jsonb_build_object('option','Yes','kind','verify.approval_race_child','payloads', jsonb_build_array('{}'::jsonb))
       from j returning blocker_id || ' ' || job_id")
   local b=${ids% *} j=${ids#* }
+  # 0608: the candidate takes who is answering as a third argument; the control
+  # ("base") is the schema BEFORE that existed and takes two.
+  local who="'Yes'"; [ "$tpl" = base ] || who="'Yes','grant'"
   $P -d $db -c "update public.jobs set state='cancelled', state_reason='fixture' where job_id='$j'" >/dev/null
-  ( $P -d $db -c "begin" -c "select app.hq_answer_blocker('$b'::uuid,'Yes')" -c "select pg_sleep(4)" -c "commit" >/dev/null 2>&1 ) &
+  ( $P -d $db -c "begin" -c "select app.hq_answer_blocker('$b'::uuid,$who)" -c "select pg_sleep(4)" -c "commit" >/dev/null 2>&1 ) &
   sleep 1
   local second
-  second=$($P -d $db -c "select app.hq_answer_blocker('$b'::uuid,'Yes')::text" 2>&1 | cut -c1-120)
+  second=$($P -d $db -c "select app.hq_answer_blocker('$b'::uuid,$who)::text" 2>&1 | cut -c1-120)
   wait
   local n
   n=$($P -d $db -c "select count(*) from public.jobs where parent_job_id='$j' and kind='verify.approval_race_child'")

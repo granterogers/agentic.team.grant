@@ -808,7 +808,9 @@ const secondBlocker = await one(`
           ${lit(`Rotate the key ${run}`)}, 'The stored key expired.', 'Nothing runs.',
           array['Done', 'Not now']::text[], 'marcus', false)
   returning blocker_id::text as id`)
-await db.execute(`select app.hq_answer_blocker(${lit(String(secondBlocker.id))}::uuid, 'Done')`)
+await db.execute(
+  `select app.hq_answer_blocker(${lit(String(secondBlocker.id))}::uuid, 'Done', 'grant')`,
+)
 const cleared = await one(`
   select state from public.tasks where satisfies_blocker = ${lit(String(secondBlocker.id))}::uuid`)
 check(

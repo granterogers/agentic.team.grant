@@ -50,8 +50,10 @@ const bodyOf = (declaration: string): string => {
 describe('the gateway separates refused from could-not-check', () => {
   it('has three verdicts rather than a boolean', () => {
     expect(SOURCE).toMatch(/type Verdict = 'yes' \| 'no' \| 'unknown'/)
-    expect(SOURCE).toMatch(/const sessionAllowed = async \([^)]*\): Promise<Verdict>/)
-    expect(SOURCE).toMatch(/const allowed = async \([^)]*\): Promise<Verdict>/)
+    // 0608: the verdict now travels with who the credential is, in one value.
+    expect(SOURCE).toMatch(/interface Answer \{\s*readonly verdict: Verdict/)
+    expect(SOURCE).toMatch(/const sessionAllowed = async \([^)]*\): Promise<Answer>/)
+    expect(SOURCE).toMatch(/const allowed = async \([^)]*\): Promise<Answer>/)
   })
 
   it('calls a session invalid only when the identity service SAID so', () => {
@@ -72,7 +74,7 @@ describe('the gateway separates refused from could-not-check', () => {
   it('never reads a failure to reach the membership list as not being on it', () => {
     const body = bodyOf('const sessionAllowed = async')
     const membership = body.slice(body.indexOf('office_member'))
-    expect(membership).toMatch(/if \(!membership\.response\.ok\) return 'unknown'/)
+    expect(membership).toMatch(/if \(!membership\.response\.ok\) return \{ verdict: 'unknown'/)
   })
 
   it('retries a throttle rather than treating it as an answer', () => {

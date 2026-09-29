@@ -364,7 +364,7 @@ for (const how of ['terminal', 'indeterminate'] as const) {
   await runJob(db, j, [handler], review, notify)
   await age(j.jobId)
   const b = await blockerOf(j.jobId)
-  await db.execute(`select app.hq_answer_blocker('${b}'::uuid, 'No, leave it')`)
+  await db.execute(`select app.hq_answer_blocker('${b}'::uuid, 'No, leave it', 'grant')`)
   await lapse(b)
   await ticks(2, notify, j.jobId)
   check(
