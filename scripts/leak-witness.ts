@@ -55,11 +55,14 @@ export const harnessDocSql = `
     2. walks the whole parent chain and applies its OWN harness rules at every
        level - never app.harness_job, never app.deliverable_to, never the
        guard's operator_senders table;
-    3. names two breaches:
+    3. names three breaches:
          HARNESS_SENT  work whose lineage is harness by these rules was sent
                        to a destination not registered for tests;
          UNPROVENANCED a sent message traceable to no job, from a namespace
                        outside this witness's own list of operator senders.
+         UNKNOWN_SENT  (#379) not harness by these rules, but its ROOT is not
+                       something a production door or the office itself makes,
+                       by this witness's own grammar.
 
   It also reports where it and app.harness_job disagree, which is how the
   next blind spot of either one becomes visible.
@@ -73,6 +76,31 @@ export const WITNESS_OPERATOR_NAMESPACES = [
 ]
 const HARNESS_NAME = String.raw`(^|:)(verify|fixture|probe|gate|scenario-a|deploy[0-9]+)([-:_.]|$)`
 const JOB_IN_KEY = String.raw`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`
+/*
+  #379: what this witness accepts as a root Grant or the office could have
+  made. Written independently of app.adapter_key_ok and app.job_origin, on
+  purpose looser in digit counts and with a TIME rule for the retired
+  four-part Telegram key where the guard uses a snapshot, so a defect in one
+  formulation is not automatically a defect in the other.
+*/
+const WITNESS_DOOR_KEY = String.raw`^(telegram:(message:[0-9]+:-?[0-9]+:[0-9]+|callback:[0-9]+:[0-9]+)|slack:(message:[A-Z][A-Z0-9]+:[0-9]+\.[0-9]+|(reaction|action):[A-Z][A-Z0-9]+:[0-9]+\.[0-9]+:[A-Z][A-Z0-9]+:[a-z_]+)|voice:turn:s[a-z0-9]{1,10}\.[a-z0-9]+|teamhq:message:[0-9a-f]{32}|asset:[a-z_]+:[0-9a-f-]{36}:[a-z_]+:[0-9]+)$`
+const WITNESS_ROOT_TRUSTED = `(
+  case
+    when cmd.command_id is not null then
+      (cmd.dedupe_key ~ '${WITNESS_DOOR_KEY}'
+         and (split_part(cmd.dedupe_key, ':', 1) = cmd.origin_channel::text
+              or (split_part(cmd.dedupe_key, ':', 1) = 'asset' and cmd.origin_channel::text = 'teamhq')))
+      or (cmd.dedupe_key ~ '^telegram:message:-?[0-9]+:[0-9]+$' and cmd.received_at < '2026-09-08')
+    else
+      j.requested_by ~ '^(duty|trigger|mcp):'
+      or j.requested_by in ('hq', 'connector:register')
+      or (j.requested_by = 'grant' and j.kind = 'google.revoke')
+      or (j.kind = 'knowledge.read_source' and exists (
+            select 1 from public.documents dd
+             where dd.document_id::text = j.pinned_config ->> 'document_id'
+               and (dd.added_by is null or dd.added_by in ('grant', 'the office')
+                    or exists (select 1 from public.staff st where st.slug = dd.added_by))))
+  end)`
 
 /** One row per sent delivery at or after `since` (an SQL timestamptz expression). */
 export const provenanceSql = (since: string): string => `
@@ -106,7 +134,8 @@ export const provenanceSql = (since: string): string => `
              or (split_part(coalesce(cmd.dedupe_key, ''), ':', 1) in ('telegram', 'slack', 'voice')
                  and cmd.dedupe_key !~ '${ADAPTER_SHAPE}')
            ) as harness,
-           bool_or(c.depth = 0 and app.harness_job(c.job_id)) as guard_says_harness
+           bool_or(c.depth = 0 and app.harness_job(c.job_id)) as guard_says_harness,
+           bool_or(c.parent_job_id is null and ${WITNESS_ROOT_TRUSTED}) as root_trusted
       from chain c
       join public.jobs j on j.job_id = c.job_id
       left join public.projects pr on pr.project_id = j.project_id
@@ -121,6 +150,7 @@ export const provenanceSql = (since: string): string => `
            when s.job_id is null and split_part(s.dedupe_key, ':', 1) <> all (array[${WITNESS_OPERATOR_NAMESPACES.map((n) => `'${n}'`).join(', ')}])
              then 'UNPROVENANCED'
            when coalesce(g.harness, false) then 'HARNESS_SENT'
+           when s.job_id is not null and not coalesce(g.root_trusted, false) then 'UNKNOWN_SENT'
            else null
          end as breach
     from sent s left join judged g on g.delivery_id = s.delivery_id`

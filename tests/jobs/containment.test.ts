@@ -29,11 +29,25 @@ const handlerKinds = (): Set<string> => {
   return kinds
 }
 
-const fakeDb = (answer: { h?: unknown; known?: unknown } | Error): SqlExecutor =>
+/*
+  A database that answers the gate's question. `h` is the old harness_job
+  answer and is translated to the origin it implies (true -> harness,
+  false -> trusted, anything else -> not a word the gate knows); `o` is an
+  origin given directly.
+*/
+const fakeDb = (answer: { h?: unknown; o?: unknown; known?: unknown } | Error): SqlExecutor =>
   ({
     execute: async () => {
       if (answer instanceof Error) throw answer
-      return { rows: [answer] }
+      const o =
+        'o' in answer
+          ? answer.o
+          : answer.h === true
+            ? 'harness'
+            : answer.h === false
+              ? 'trusted'
+              : answer.h
+      return { rows: [{ o, known: answer.known }] }
     },
   }) as unknown as SqlExecutor
 
@@ -100,6 +114,55 @@ describe('containment: the refusal', () => {
     expect(await containmentRefusal(fakeDb({ h: null, known: true }), job('ci.dispatch'))).toMatch(
       /could not establish/,
     )
+  })
+})
+
+describe('containment: the origin question (#379)', () => {
+  const job = (kind: string) => ({ jobId: '00000000-0000-0000-0000-000000000001', kind })
+  it('refuses work of unknown origin', async () => {
+    expect(
+      await containmentRefusal(fakeDb({ o: 'unknown', known: true }), job('office.notion_import')),
+    ).toMatch(/no production door or office process made this work/)
+  })
+  it("lets the office's own work through", async () => {
+    expect(
+      await containmentRefusal(fakeDb({ o: 'internal', known: true }), job('office.notion_sync')),
+    ).toBeNull()
+  })
+  it('refuses an origin word it does not know', async () => {
+    expect(
+      await containmentRefusal(fakeDb({ o: 'probably-fine', known: true }), job('ci.dispatch')),
+    ).toMatch(/could not establish/)
+  })
+  const twoStep = (first: Error, second: { h: unknown; known: unknown }): SqlExecutor => {
+    let calls = 0
+    return {
+      execute: async () => {
+        calls += 1
+        if (calls === 1) throw first
+        return { rows: [second] }
+      },
+    } as unknown as SqlExecutor
+  }
+  it('before 0603 exists, asks app.harness_job instead (deploy order)', async () => {
+    const missing = new Error('42883: function app.job_origin(uuid) does not exist')
+    expect(
+      await containmentRefusal(twoStep(missing, { h: false, known: true }), job('ci.dispatch')),
+    ).toBeNull()
+    expect(
+      await containmentRefusal(twoStep(missing, { h: true, known: true }), job('ci.dispatch')),
+    ).toMatch(/harness work/)
+  })
+  it('any other error still refuses, and never falls back', async () => {
+    expect(
+      await containmentRefusal(
+        twoStep(new Error('57014: canceling statement due to statement timeout'), {
+          h: false,
+          known: true,
+        }),
+        job('ci.dispatch'),
+      ),
+    ).toMatch(/could not establish/)
   })
 })
 

@@ -1040,7 +1040,7 @@ const byClass = (c: string) => breaches.filter((r) => r.breach === c).length
 const disagreements = traced.filter((r) => r.harness !== r.guard_says_harness)
 console.log(
   `  every sent message traced to its cause ${fixedAt === undefined ? '(since the guard; 0601 not applied, so HISTORY — reported, not failed)' : `(since 0601, ${fixedAt})`}: ` +
-    `${String(traced.length)} examined · harness sent ${String(byClass('HARNESS_SENT'))} · unprovenanced ${String(byClass('UNPROVENANCED'))}` +
+    `${String(traced.length)} examined · harness sent ${String(byClass('HARNESS_SENT'))} · unprovenanced ${String(byClass('UNPROVENANCED'))} · unknown origin ${String(byClass('UNKNOWN_SENT'))}` +
     ` · witness and app.harness_job disagree on ${String(disagreements.length)}`,
 )
 if (fixedAt !== undefined && breaches.length > 0) {
@@ -1052,7 +1052,8 @@ if (fixedAt !== undefined && breaches.length > 0) {
         .slice(0, 8)
         .map((r) => `  ${r.breach}  ${r.key} -> ${r.channel} ${r.target_ref} at ${r.sent_at}`),
       ``,
-      "HARNESS_SENT: the lineage is harness by the witness's own rules. UNPROVENANCED: no job,",
+      "HARNESS_SENT: the lineage is harness by the witness's own rules. UNKNOWN_SENT: the root is",
+      'nothing a production door or the office itself makes (#379). UNPROVENANCED: no job,',
       'and not an operator notice. Either way app.claim_delivery allowed it (#378).',
     ].join('\n'),
   )

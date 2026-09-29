@@ -11,8 +11,10 @@
  */
 import { provenanceSql } from '../leak-witness.ts'
 import { isolated } from './guard.ts'
+import { realTelegramKey, registerBot } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'wit378')
+await registerBot(db)
 const run = Date.now().toString(36)
 const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<string, unknown>
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
@@ -41,20 +43,43 @@ const child =
     p_payload => '{}'::jsonb)::text as v`)
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] ?? ''
-const real = await turn(
+const real = await turn('telegram', realTelegramKey(), `1386648496:${String(Date.now() % 1000)}`)
+// #379's shapes: a production-door turn no adapter produces, and a root no creator makes.
+const forged = await turn(
   'telegram',
-  `telegram:message:1386648496:${String(Date.now() % 100000)}`,
-  `1386648496:${String(Date.now() % 1000)}`,
+  `telegram:artifact_demo:${run}`,
+  `1386648496:${String(Date.now() % 997)}`,
+)
+const orphan = String(
+  (
+    await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
+      values (gen_random_uuid(), ${lit(`orphan:${run}`)}, 'office.instruction', 'telegram:grant') returning job_id::text as v`)
+  ).v,
+)
+await db.execute(`insert into public.responsibilities (slug, staff_id, description, job_kind, period_minutes)
+  values (${lit(`wit-duty-${run}`)}, (select staff_id from public.staff where slug = 'chief-of-staff'),
+          'A scheduled duty made for the isolated witness proof of issue 379.', 'office.chores', 60)`)
+await db.execute('select * from app.dispatch_due_responsibilities()')
+const duty = String(
+  (
+    await one(
+      `select job_id::text as v from public.jobs where requested_by = ${lit(`duty:wit-duty-${run}`)} limit 1`,
+    )
+  ).v,
 )
 
 /* The guard's predicate, broken: everything is real. */
 await db.execute(`create or replace function app.harness_job(p_job_id uuid) returns boolean
   language sql stable as $f$ select false $f$`)
-const broken = await one(`select app.harness_job(${lit(harness)}::uuid) as h`)
+await db.execute(`create or replace function app.job_origin(p_job_id uuid) returns text
+  language sql stable as $f$ select 'trusted'::text $f$`)
+const broken = await one(
+  `select app.harness_job(${lit(harness)}::uuid) as h, app.job_origin(${lit(forged)}::uuid) as o`,
+)
 check(
-  'sabotage landed: the guard now calls the harness job real',
-  broken.h === false,
-  `harness_job ${String(broken.h)}`,
+  'sabotage landed: the guard calls the harness job real and the forged origin trusted',
+  broken.h === false && broken.o === 'trusted',
+  `harness_job ${String(broken.h)}, job_origin ${String(broken.o)}`,
 )
 
 const since = String((await one(`select app.now_utc()::text as t`)).t)
@@ -67,12 +92,17 @@ await sent(`outcome:${child}`, child) //               a child of harness work
 await sent(`mystery:${run}`, null) //                  traceable to nothing
 await sent(`narration:${real}`, real) //               control: Grant's own
 await sent(`build:${run}`, null, '1386648496', 'telegram') // control: an operator notice
+await sent(`result:${run}:${forged}`, forged) // #379: a turn no adapter produces
+await sent(`result:${run}:${orphan}`, orphan) // #379: a root no creator makes
+await sent(`result:${run}:${duty}`, duty) // control: a scheduled duty
 
 const rows = (await db.execute(provenanceSql(lit(since) + '::timestamptz'))).rows as {
   key: string
   breach: string | null
   guard_says_harness: boolean
 }[]
+const breachAt = (job: string) =>
+  rows.find((r) => r.key === `result:${run}:${job}`.slice(0, 80))?.breach
 const breachOf = (prefix: string) =>
   rows.find((r) => r.key.startsWith(prefix))?.breach ?? 'not seen'
 check(
@@ -82,14 +112,25 @@ check(
 )
 check(
   'a sent message naming a harness job is caught',
-  breachOf(`result:${run}`) === 'HARNESS_SENT',
-  breachOf(`result:${run}`),
+  breachAt(harness) === 'HARNESS_SENT',
+  String(breachAt(harness)),
 )
 check(
   "a harness job's child is caught (lineage)",
   breachOf(`outcome:${child.slice(0, 8)}`) === 'HARNESS_SENT',
   breachOf(`outcome:${child.slice(0, 8)}`),
 )
+check(
+  '#379: a turn whose key no adapter produces is caught',
+  (breachAt(forged) ?? null) !== null,
+  String(breachAt(forged)),
+)
+check(
+  '#379: a root job no creator makes is caught',
+  breachAt(orphan) === 'UNKNOWN_SENT',
+  String(breachAt(orphan)),
+)
+check('control: a scheduled duty is not a breach', breachAt(duty) === null, String(breachAt(duty)))
 check(
   'a message traceable to nothing is caught',
   breachOf(`mystery:${run}`) === 'UNPROVENANCED',

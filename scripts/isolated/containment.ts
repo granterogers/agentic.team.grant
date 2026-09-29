@@ -12,8 +12,10 @@
  */
 import { harnessDocSql, offShapeSql } from '../leak-witness.ts'
 import { isolated } from './guard.ts'
+import { registerBot } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'r37')
+await registerBot(db)
 const run = Date.now().toString(36)
 const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<string, unknown>
 const results: { what: string; ok: boolean }[] = []
@@ -138,7 +140,13 @@ const genuine: [string, () => Promise<string>, string, string][] = [
   ],
   [
     'a Slack message in his channel',
-    () => turn('slack', `slack:message:C0C2DAPDN02:${String(Date.now() / 1000)}`, 'U0REAL', true),
+    () =>
+      turn(
+        'slack',
+        `slack:message:C0C2DAPDN02:${String(Math.floor(Date.now() / 1000))}.${String(Date.now() % 1000000).padStart(6, '0')}`,
+        'U0REAL',
+        true,
+      ),
     'slack',
     'C0C2DAPDN02',
   ],
@@ -180,21 +188,33 @@ const doc = async (added: string, ref: string): Promise<string> => {
   )
 }
 
-// THE SABOTAGE: two shapes the guard is known to miss, sent, and the witness must see them.
+// #379: the two shapes the guard USED to miss are now refused by it.
 const missDoor = await turn('telegram', `telegram:message:escapes-${run}-real`, '1386648496', true)
-const missDoorOutcome = await claim(missDoor)
 const missDoc = await doc('verify:scenario-a', `src#scenario-a-${run}`)
+check(
+  'the guard refuses a production-door impersonation (#379, was a known miss)',
+  (await claim(missDoor)) === 'suppressed',
+  'suppressed',
+)
+check(
+  'the guard refuses work a harness-added document started (#379, was a known miss)',
+  (await claim(missDoc, 'slack', 'C0BV7ULTCJ1')) === 'suppressed',
+  'suppressed',
+)
+// THE SABOTAGE: break the guard's origin question, send both, and the witnesses must see them.
+await db.execute(`create or replace function app.job_origin(p_job_id uuid) returns text
+  language sql stable as $f$ select 'trusted'::text $f$`)
+await db.execute(
+  `delete from public.deliveries where dedupe_key in (${lit(`${run}:${missDoor}:telegram`)}, ${lit(`${run}:${missDoc}:slack`)})`,
+)
+const missDoorOutcome = await claim(missDoor)
 const missDocOutcome = await claim(missDoc, 'slack', 'C0BV7ULTCJ1')
 check(
-  'SABOTAGE the guard misses a production-door impersonation (known)',
+  'SABOTAGE with the origin question broken, the impersonation gets through',
   missDoorOutcome === 'claimed',
   missDoorOutcome,
 )
-check(
-  'SABOTAGE the guard misses the old document label (known)',
-  missDocOutcome === 'claimed',
-  missDocOutcome,
-)
+check('SABOTAGE and so does the harness document', missDocOutcome === 'claimed', missDocOutcome)
 await markSent(missDoor)
 await markSent(missDoc, 'slack')
 const shape = (await db.execute(offShapeSql)).rows as { key: string }[]

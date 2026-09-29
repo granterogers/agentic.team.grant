@@ -113,11 +113,19 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 /**
  * Why this job may not run here, or null when it may.
  *
- * Asks `app.harness_job`, the same canonical predicate the delivery guard
- * uses, so "harness" means one thing on both sides of the office. If the
- * question cannot be answered -- the database refused, the job row is gone --
- * an external kind is refused: an unanswerable question about whether work is
- * a test is not permission to write to Grant's Notion.
+ * Asks `app.job_origin` (0603), the same question the delivery guard asks
+ * through `app.delivery_refusal`, so "may touch the outside world" means one
+ * thing on both sides of the office. Only `trusted` (a turn a production
+ * adapter produced) and `internal` (a job the office itself creates) may run.
+ * `harness` and `unknown` are refused, and so is a question that cannot be
+ * answered -- the database refused, the job row is gone, the answer is not a
+ * word we know. An unanswerable question about where work came from is not
+ * permission to write to Grant's Notion.
+ *
+ * Deploy order: this worker ships before 0603. On a database that does not
+ * have `app.job_origin` yet (and only then -- recognised by Postgres's
+ * undefined-function error, 42883) it asks `app.harness_job` instead, which
+ * is exactly the gate the previous worker had. Any other error still refuses.
  */
 export const containmentRefusal = async (
   db: SqlExecutor,
@@ -127,20 +135,38 @@ export const containmentRefusal = async (
 ): Promise<string | null> => {
   const { reach, service } = reachOf(job.kind, declared)
   if (reach !== 'external') return null
-  let harness: boolean | null = null
+  const to = String(service)
+  const known = `exists (select 1 from public.jobs where job_id = ${lit(job.jobId)}::uuid) as known`
+  let origin: string | null = null
   try {
     const { rows } = await db.execute(
-      `select app.harness_job(${lit(job.jobId)}::uuid) as h,
-              exists (select 1 from public.jobs where job_id = ${lit(job.jobId)}::uuid) as known`,
+      `select app.job_origin(${lit(job.jobId)}::uuid) as o, ${known}`,
     )
-    const row = rows[0] as { h?: unknown; known?: unknown } | undefined
-    // Only a definite boolean is an answer; anything else is "could not tell".
-    harness = row?.known === true && typeof row.h === 'boolean' ? row.h : null
-  } catch {
-    harness = null
+    const row = rows[0] as { o?: unknown; known?: unknown } | undefined
+    origin = row?.known === true && typeof row.o === 'string' ? row.o : null
+  } catch (error) {
+    if (
+      !/42883|function app\.job_origin\(uuid\) does not exist/.test(
+        String((error as Error).message),
+      )
+    ) {
+      origin = null
+    } else {
+      try {
+        const { rows } = await db.execute(
+          `select app.harness_job(${lit(job.jobId)}::uuid) as h, ${known}`,
+        )
+        const row = rows[0] as { h?: unknown; known?: unknown } | undefined
+        origin =
+          row?.known === true && typeof row.h === 'boolean' ? (row.h ? 'harness' : 'trusted') : null
+      } catch {
+        origin = null
+      }
+    }
   }
-  if (harness === false) return null
-  return harness === true
-    ? `contained: harness work may not write to ${String(service)}`
-    : `contained: could not establish whether this job is harness work, so it may not write to ${String(service)}`
+  if (origin === 'trusted' || origin === 'internal') return null
+  if (origin === 'harness') return `contained: harness work may not write to ${to}`
+  if (origin === 'unknown')
+    return `contained: no production door or office process made this work, so it may not write to ${to}`
+  return `contained: could not establish where this job came from, so it may not write to ${to}`
 }
