@@ -610,5 +610,6 @@
   "0596_one_answer_per_question.sql": "9ffa0c3b49cbd5484b118e56af5f7bb1705b7a76fdd018b310f8f6433d68a475",
   "0597_a_harness_task_is_never_reminded.sql": "f0764d882f887400d3434fcd536ae65223742a58fb3ddecef07c31db909bb4ac",
   "0598_a_voice_session_the_page_did_not_mint_is_harness.sql": "6d92bd3460bb5eae6c30dcf77c900d6ff26df1c153e559b082aa7b01d3df34fe",
-  "0599_one_stalled_job_must_not_stop_the_office.sql": "6cf30a12d0d62f2d207722e88543fb4936cdf6e10d29670364c3023381ce52c1"
+  "0599_one_stalled_job_must_not_stop_the_office.sql": "6cf30a12d0d62f2d207722e88543fb4936cdf6e10d29670364c3023381ce52c1",
+  "0600_a_question_is_asked_once_whatever_became_of_it.sql": "fd4be594b791afcbe616ae4c86a377a3661d984f36d51d96258dfffeda2fc4e1"
 }
