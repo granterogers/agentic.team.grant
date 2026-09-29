@@ -179,10 +179,12 @@ describe('containment: nothing in the office sends around the delivery guard', (
     expect(offenders).toEqual([])
   })
   it('the pattern catches the shape it exists for', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the source text of the defect, quoted verbatim
     expect(SENDS.test('await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {')).toBe(
       true,
     )
     expect(SENDS.test("fetch('https://slack.com/api/chat.postMessage')")).toBe(true)
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the source text of the defect, quoted verbatim
     expect(SENDS.test('await fetch(`https://api.telegram.org/bot${token}/getFile`, {')).toBe(false)
   })
   it('the transcript echo and the correction question carry their job', () => {

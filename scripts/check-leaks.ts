@@ -49,7 +49,7 @@
  */
 
 import { ManagementApiExecutor } from '../src/db/executor.ts'
-import { ADAPTER_SHAPE, harnessDocSql, offShapeSql } from './leak-witness.ts'
+import { ADAPTER_SHAPE, harnessDocSql, offShapeSql, provenanceSql } from './leak-witness.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -983,6 +983,77 @@ if (offNew.length > 0) {
       'Whatever app.harness_job says, Grant did not send these. Find the script that',
       'posts to that door, name its identity verify-..., and teach app.harness_job',
       'the signal (0583, 0598).',
+    ].join('\n'),
+  )
+  process.exit(1)
+}
+
+/*
+  EVERY SENT MESSAGE, RECONCILED AGAINST WHAT CAUSED IT (#378).
+
+  Everything above either asks app.harness_job or starts from a delivery's
+  job_id, and #378 was a delivery with no job_id sent by a guard that allowed
+  a null job: 381 harness narrations reached Slack and every check here said
+  clean. provenanceSql attributes a row to a job from the row or from its key,
+  walks the lineage with rules of its own, and names two breaches. See
+  scripts/leak-witness.ts; scripts/isolated/witness-independence.ts proves it
+  catches every shape with app.harness_job deliberately broken.
+
+  It FAILS on breaches after 0601 (the fix) was applied, and until then reports
+  history, because history is evidence and is not deleted.
+*/
+const fixedAt = (
+  (
+    await db.execute(
+      `select applied_at::text as t from app.schema_migrations where name like '0601\\_%' limit 1`,
+    )
+  ).rows[0] as { t?: string } | undefined
+)?.t
+const since = fixedAt === undefined ? 'app.harness_guard_since()' : `'${fixedAt}'::timestamptz`
+const traced = (await db.execute(provenanceSql(since))).rows as {
+  key: string
+  channel: string
+  target_ref: string
+  sent_at: string
+  breach: string | null
+  harness: boolean
+  guard_says_harness: boolean
+}[]
+const population = Number(
+  (
+    (
+      await db.execute(`select count(*)::int as n from public.deliveries d
+         where d.state = 'sent' and d.sent_at >= ${since}
+           and not exists (select 1 from public.test_destinations t
+                            where t.channel::text = d.channel::text and t.target_ref = d.target_ref)`)
+    ).rows[0] as { n?: number } | undefined
+  )?.n ?? -1,
+)
+if (population !== traced.length) {
+  console.error(
+    `check:leaks CANNOT RUN — the provenance witness examined ${String(traced.length)} of ${String(population)} sent messages.`,
+  )
+  process.exit(2)
+}
+const breaches = traced.filter((r) => r.breach !== null)
+const byClass = (c: string) => breaches.filter((r) => r.breach === c).length
+const disagreements = traced.filter((r) => r.harness !== r.guard_says_harness)
+console.log(
+  `  every sent message traced to its cause ${fixedAt === undefined ? '(since the guard; 0601 not applied, so HISTORY — reported, not failed)' : `(since 0601, ${fixedAt})`}: ` +
+    `${String(traced.length)} examined · harness sent ${String(byClass('HARNESS_SENT'))} · unprovenanced ${String(byClass('UNPROVENANCED'))}` +
+    ` · witness and app.harness_job disagree on ${String(disagreements.length)}`,
+)
+if (fixedAt !== undefined && breaches.length > 0) {
+  console.error(
+    [
+      ``,
+      `check:leaks FAILED — ${String(breaches.length)} message(s) sent since 0601 that nothing should have let through.`,
+      ...breaches
+        .slice(0, 8)
+        .map((r) => `  ${r.breach}  ${r.key} -> ${r.channel} ${r.target_ref} at ${r.sent_at}`),
+      ``,
+      "HARNESS_SENT: the lineage is harness by the witness's own rules. UNPROVENANCED: no job,",
+      'and not an operator notice. Either way app.claim_delivery allowed it (#378).',
     ].join('\n'),
   )
   process.exit(1)
