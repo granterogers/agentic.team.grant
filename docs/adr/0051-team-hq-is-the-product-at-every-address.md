@@ -78,3 +78,10 @@ global destination is reachable from Team HQ: 26/26.
 - The dock took its text colour from the page. Inside Team HQ that is Team HQ's
   light text, which all but vanished on the dock's light surface under the
   light scheme (1.1:1). The dock now sets its own ink (`studio.css`).
+- A deep link to a real project resolves only once the office's projects have
+  arrived (`wantedPath`, #157), and until then the page shows the portfolio.
+  It used to write `/` into the address during that wait. Measured live, the
+  wait was up to five seconds, and a refresh inside it reloaded `/`, losing the
+  project for good. The arrival address is now kept until it has been tried
+  against the real list (`arrivalPending`). `verify:team-hq-journey` §6 drives
+  it against a slow office, and removing the guard turns 4 of its checks red.

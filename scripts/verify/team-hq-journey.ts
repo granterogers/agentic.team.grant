@@ -59,6 +59,20 @@ const projectRow = (id: string, slug: string, name: string) => ({
   connectors: [],
 })
 
+/* How long the office takes to answer with its projects; section 6 slows it down. */
+let studioDelay = 0
+const studioBody = (): string =>
+  JSON.stringify({
+    data: {
+      generated_at: new Date().toISOString(),
+      crew: [{ slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' }],
+      projects: [
+        projectRow(A, 'journey-a', 'Journey A'),
+        projectRow(B, 'journey-b', 'Journey B'),
+        projectRow(U, 'unnamed', 'Unnamed'),
+      ],
+    },
+  })
 const office = createServer((req, res) => {
   req.resume()
   req.on('end', () => {
@@ -74,22 +88,10 @@ const office = createServer((req, res) => {
     }
     const u = new URL(req.url ?? '/', 'http://x')
     if (req.method === 'GET' && u.searchParams.get('section') === 'studio') {
-      res.writeHead(200, cors)
-      res.end(
-        JSON.stringify({
-          data: {
-            generated_at: new Date().toISOString(),
-            crew: [
-              { slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' },
-            ],
-            projects: [
-              projectRow(A, 'journey-a', 'Journey A'),
-              projectRow(B, 'journey-b', 'Journey B'),
-              projectRow(U, 'unnamed', 'Unnamed'),
-            ],
-          },
-        }),
-      )
+      setTimeout(() => {
+        res.writeHead(200, cors)
+        res.end(studioBody())
+      }, studioDelay)
       return
     }
     res.writeHead(200, cors)
@@ -412,6 +414,50 @@ for (const phone of [false, true]) {
       classic.experience === 'none' && classic.rail > 0 && classic.path === '/classic',
       describe(classic),
     )
+    await ctx.close()
+  }
+
+  /* --- 6. a refresh before the office has answered keeps the project -- */
+  /*
+    Until the office's projects land, a link to a real project cannot
+    resolve, and the page shows the portfolio meanwhile. It used to write "/"
+    into the address while it did, so a refresh in that window - five seconds
+    on a slow answer, measured live - reloaded "/" and the project was lost.
+  */
+  {
+    studioDelay = 3000
+    const ctx = await newContext(seen, { signedIn: true, phone })
+    const page = await ctx.newPage()
+    page.on('pageerror', (e) => seen.errors.push(e.message))
+    await page.goto(url('/p/journey-b/tasks'), { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.bctop, .bcpanes, .bcmain', { timeout: 20000 })
+    await settle(page, 800)
+    const waiting = (await page.evaluate('location.pathname')) as string
+    check(
+      `${leg}: while the office has not answered, the address is still the project's`,
+      waiting === '/p/journey-b/tasks',
+      `address ${waiting} before the projects landed`,
+    )
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.bctop, .bcpanes, .bcmain', { timeout: 20000 })
+    await settle(page, 4200)
+    const after = await screen(page)
+    check(
+      `${leg}: a refresh before the office answered still lands on that project`,
+      isTeamHq(after) && after.path === '/p/journey-b/tasks',
+      describe(after),
+    )
+    // And a dead link still ends on the portfolio once it has been tried.
+    await page.goto(url('/p/a-project-that-is-gone/tasks'), { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.bctop, .bcpanes, .bcmain', { timeout: 20000 })
+    await settle(page, 4200)
+    const gone = await screen(page)
+    check(
+      `${leg}: a link to a gone project still ends on the portfolio`,
+      isTeamHq(gone) && gone.path === '/',
+      describe(gone),
+    )
+    studioDelay = 0
     await ctx.close()
   }
 

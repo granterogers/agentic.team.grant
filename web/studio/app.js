@@ -8878,9 +8878,24 @@ function goToPath(path) {
   through.
 */
 let shownPath = null
+/*
+  THE ADDRESS THE BROWSER ARRIVED WITH IS KEPT UNTIL IT HAS BEEN TRIED (#382).
+
+  A link to a real project cannot resolve until the office's projects land
+  (wantedPath, #157), so the first paint shows the portfolio - and used to
+  write "/" into the address bar while it did. A refresh in that window, which
+  on a slow answer was five seconds, reloaded "/" and the project was gone for
+  good. So the portfolio's "/" is not written until the second attempt has
+  been made; any other address means the person has moved on, and is written.
+*/
+let arrivalPending = false
 function keepUrl() {
   if (typeof history === 'undefined') return
   const path = pathNow()
+  if (arrivalPending) {
+    if (path === '/') return
+    arrivalPending = false
+  }
   if (path === shownPath) return
   const first = shownPath === null
   shownPath = path
@@ -13339,6 +13354,7 @@ const addressNow = () => {
 
 let wantedPath = addressNow()
 if (goToPath(wantedPath)) wantedPath = null
+arrivalPending = wantedPath !== null
 
 if (typeof window !== 'undefined') {
   window.addEventListener('popstate', (e) => {
@@ -15047,6 +15063,8 @@ async function live() {
     */
     source.state = 'prototype'
     source.why = 'no token — showing the prototype'
+    // No office will answer, so the arrival address has had its only attempt.
+    arrivalPending = false
     render()
     return
   }
@@ -15112,6 +15130,8 @@ async function live() {
     wantedPath = null
     shownPath = null
   }
+  // Tried against the real list: whatever it resolved to may be written now.
+  arrivalPending = false
   render()
   /*
     The home board reads what is open and what just happened (#219), and both
