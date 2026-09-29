@@ -25,6 +25,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { discoverTools } from '../../src/mcp/client.ts'
+import { testOrigins } from './lib/test-origin.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -465,6 +466,8 @@ try {
     insert into public.mcp_clients (client_id, display_name, token_sha256, scopes, enabled)
     values (${lit(`verify-connectors-${run}`)}, ${lit(CLIENT)}, ${lit(disposableHash)},
             array['read']::text[], true)`)
+  // Declared before it knocks (#381); read-only, so it can make no work, but the door is real.
+  await (await testOrigins(db, 'verify:connectors')).declare('mcp', `verify-connectors-${run}`)
   clientMade = true
 } catch (error) {
   ok('a disposable client could be minted', false, String((error as Error).message).slice(0, 120))

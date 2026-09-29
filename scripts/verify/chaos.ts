@@ -47,6 +47,17 @@ import { TelegramTransport } from '../../src/telegram/transport.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const run = Date.now().toString(36)
+/*
+  Sections 5 and 5b switch Grant's PRODUCTION Slack install and pager bot off
+  and back on. If a run dies between the two statements he is left without the
+  surface that exists to reach him (#381's acceptance review). So they run only
+  when asked, by name, and say NOT RUN otherwise.
+*/
+const FLIP = process.argv.includes('--flip-production-switches')
+const notRun = (what: string): void =>
+  console.log(
+    `   NOT RUN  ${what} — it switches a production surface off; pass --flip-production-switches to run it`,
+  )
 // Slack channel ids are shaped `^[CDG][A-Z0-9]{6,}$` (0014), so a fixture id
 // has to look like one. `C` plus the run stamp, uppercased and stripped.
 const CHAOS_CHANNEL = `C${run.toUpperCase().replace(/[^A-Z0-9]/g, '')}CHAOS`
@@ -393,7 +404,9 @@ const output = (): HandlerOutput =>
 // made. §17 requires the second to be possible without collateral damage, and
 // the two paths through the code are different — one throws at the transport,
 // the other never reaches it.
-{
+if (!FLIP) {
+  notRun('§18 Slack switched off (the pager untouched, the surface restored)')
+} else {
   await db.execute(`
     update public.slack_app_credentials
        set enabled = false, disabled_reason = 'verify:chaos — deliberately switched off'
@@ -448,7 +461,9 @@ const output = (): HandlerOutput =>
 // Telegram the interrupting surface and Slack the office, so "the pager is off"
 // and "the office is off" are different failures with different consequences,
 // and only one of them had ever been exercised.
-{
+if (!FLIP) {
+  notRun('§18 Telegram switched off (Slack untouched, the pager restored)')
+} else {
   await db.execute(`
     update public.telegram_bots
        set enabled = false, disabled_reason = 'verify:chaos — deliberately switched off'

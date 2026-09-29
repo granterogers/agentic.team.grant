@@ -39,6 +39,7 @@
  */
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { testOrigins } from './lib/test-origin.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -900,6 +901,8 @@ try {
       does not — `verify:search` found exactly that shape — so both legs are
       driven rather than one standing in for the other.
     */
+    // The project is declared before the gateway is asked to speak in it (#381).
+    await (await testOrigins(db, 'verify:history')).declare('teamhq', mine)
     const posted = await fetch(base, {
       method: 'POST',
       headers: { Authorization: `Bearer ${hqToken}`, 'Content-Type': 'application/json' },

@@ -28,6 +28,7 @@
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
+import { testOrigins } from './lib/test-origin.ts'
 
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const supabase = process.env.SUPABASE_ACCESS_TOKEN
@@ -37,6 +38,13 @@ if (supabase === undefined || supabase === '') {
 }
 const db = new ManagementApiExecutor(ref, supabase)
 const base = `https://${ref}.supabase.co/functions/v1`
+/*
+  Every probe below must be REFUSED at the door. The Telegram probes name chat
+  1, and that chat is declared first (#381), so a door that wrongly accepted
+  one would write it as a test rather than as Grant.
+*/
+const origins = await testOrigins(db, 'verify:security')
+await origins.declare('telegram', '1')
 
 const checks: { what: string; outcome: string; passed: boolean }[] = []
 const record = (what: string, outcome: string, passed: boolean): void => {
@@ -360,6 +368,7 @@ record(
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '✅' : '❌'} |`)
+await origins.release()
 const failed = checks.filter((c) => !c.passed)
 console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)
 if (failed.length > 0) process.exit(1)

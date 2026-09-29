@@ -19,6 +19,7 @@
 
 import { createHash, randomBytes } from 'node:crypto'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { testOrigins } from './lib/test-origin.ts'
 
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const supabase = process.env.SUPABASE_ACCESS_TOKEN
@@ -44,6 +45,14 @@ await db.execute(`
   values (${lit(CLIENT)}, 'Verification client',
           ${lit(createHash('sha256').update(token).digest('hex'))}, array['read'])
 `)
+/*
+  Declared before either client calls the office's MCP door (#381). A client
+  with the write scope makes work whose origin 0603 calls `internal` - the
+  office's own - so without this a verification writer's jobs could act
+  outside. With it, the door writes them synthetic.
+*/
+const origins = await testOrigins(db, 'verify:mcp')
+await origins.declare('mcp', CLIENT)
 
 const call = async (
   method: string,
@@ -206,6 +215,7 @@ await db.execute(`
   values (${lit(WRITER)}, 'Verification writer',
           ${lit(createHash('sha256').update(writeToken).digest('hex'))}, array['read','write'])
 `)
+await origins.declare('mcp', WRITER)
 const written = await call(
   'tools/call',
   {
@@ -328,6 +338,8 @@ await db.execute(`
   delete from public.mcp_calls where client_id in (${lit(CLIENT)}, ${lit(WRITER)});
   delete from public.mcp_clients where client_id in (${lit(CLIENT)}, ${lit(WRITER)});
 `)
-console.log('verification client removed.')
+console.log(
+  `verification client removed; test origins released: ${String(await origins.release())}.`,
+)
 
 if (failed.length > 0) process.exit(1)

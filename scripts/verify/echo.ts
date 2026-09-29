@@ -42,6 +42,7 @@
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
+import { testOrigins } from './lib/test-origin.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -65,7 +66,17 @@ const num = async (sql: string): Promise<number> => Number((await one(sql)).n ??
 
 const ENDPOINT = `https://${process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'}.supabase.co/functions/v1/slack-events`
 const run = Math.random().toString(36).slice(2, 10)
-const CHANNEL = 'C0ECHOVERIFY'
+/*
+  A channel of its own, declared before the first post (#381). The events are
+  correctly signed, so the adapter writes keys indistinguishable from Grant's;
+  the declaration is what makes the door write them synthetic. It was a fixed
+  C0ECHOVERIFY, relying on the subject mapping below to mark the jobs - and one
+  of its answers still reached Grant's Telegram. Per run, so two runs cannot
+  share one.
+*/
+const origins = await testOrigins(db, 'verify:echo')
+const CHANNEL = origins.slackChannel()
+await origins.declare('slack', CHANNEL)
 const TEAM = 'T0ECHOVERIFY'
 const HUMAN = 'U0ECHOVERIFY'
 
@@ -171,6 +182,22 @@ try {
      where c.dedupe_key = ${lit(`slack:message:${CHANNEL}:${first}`)}
        and j.is_fixture
   `)
+  const contained = await num(`
+    select count(*)::int as n from public.inbound_commands c
+     where c.dedupe_key = ${lit(`slack:message:${CHANNEL}:${first}`)}
+       and c.synthetic and not coalesce(app.may_act_outside(c.job_id), false)
+  `)
+  check(
+    'the declared channel is contained at the door: synthetic, and its work may not act outside',
+    `${String(contained)} of 1`,
+    contained === 1,
+  )
+  if (contained !== 1) {
+    console.error(
+      'STOP: the declared channel was not contained; nothing further is driven through the door.',
+    )
+    process.exit(1)
+  }
   check(
     'and that work is marked as harness traffic, not as Grant asking',
     `${String(asFixture)} of ${String(jobs)} is a fixture`,
@@ -307,6 +334,7 @@ try {
   )
 }
 
+console.log(`  test origins released: ${String(await origins.release())}`)
 const failed = checks.filter((c) => !c).length
 console.log(`\n${String(checks.length - failed)}/${String(checks.length)} checks passed`)
 process.exit(failed === 0 ? 0 : 1)

@@ -557,6 +557,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:voice-sessions',
     'no script reaches the live voice door under a name the guard reads as Grant',
   ],
+  [
+    'check:door-origins',
+    'no script drives a real Telegram, Slack, MCP or dashboard door without declaring its conversation first (#381)',
+  ],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 

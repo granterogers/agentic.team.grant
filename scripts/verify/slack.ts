@@ -42,6 +42,7 @@ import { computeSignature } from '../../src/slack/signature.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { CALLBACK_ACTIONS } from '../../src/telegram/message.ts'
 import { TelegramPager } from '../../src/telegram/pager.ts'
+import { testOrigins } from './lib/test-origin.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 const botToken = process.env.SLACK_BOT_TOKEN
@@ -211,6 +212,15 @@ record(
   created.outcome === 'created' && created.channelId !== null,
 )
 const CHANNEL = String(created.channelId)
+/*
+  And declared as a test ORIGIN before anything is posted to the deployed
+  events endpoint from it (#381): the signed button press below is
+  indistinguishable from Grant pressing one, and the declaration is what makes
+  the door write it synthetic. The channel is mapped to this suite's fixture
+  project, so the database accepts the declaration; it would refuse a real one.
+*/
+const origins = await testOrigins(db, 'verify:slack')
+await origins.declare('slack', CHANNEL)
 /*
   Registered as a contained test destination (#378). Every send below is
   job-less by design -- this suite tests the delivery layer, not a job -- and
@@ -1095,8 +1105,13 @@ const resultDelivery = await one<{ ts: string }>(`
 `)
 const PRESS_TS = String(resultDelivery?.ts)
 const pressed = await pressButton('feedback.useful', PRESS_TS)
-const pressedRow = await one<{ action: string; key: string; instruction: string }>(`
-  select callback_action as action, dedupe_key as key, instruction
+const pressedRow = await one<{
+  action: string
+  key: string
+  instruction: string
+  synthetic: boolean
+}>(`
+  select callback_action as action, dedupe_key as key, instruction, synthetic
   from public.inbound_commands
   where dedupe_key = ${lit(`slack:action:${CHANNEL}:${PRESS_TS}:U0GRANTVERIFY:useful`)}
 `)
@@ -1104,6 +1119,11 @@ record(
   'a signed button press reaches the deployed endpoint and is recorded as a signal',
   `http ${String(pressed.status)} action=${String(pressedRow?.action)}`,
   pressed.status === 200 && pressedRow?.action === 'useful',
+)
+record(
+  'the press, from a declared channel, is contained at the door (#381)',
+  `synthetic=${String(pressedRow?.synthetic)}`,
+  pressedRow?.synthetic === true,
 )
 record(
   'the press carries no instruction — it is a signal, not something Grant typed',
@@ -1830,7 +1850,9 @@ try {
     update public.projects set status = 'archived' where project_id = ${lit(PROJECT_ID)}::uuid;
   `)
 
-  console.log('fixtures retired; run `npm run purge:fixtures -- --go` for anything left.')
+  console.log(
+    `fixtures retired; test origins released: ${String(await origins.release())}; run \`npm run purge:fixtures -- --go\` for anything left.`,
+  )
 } catch (error) {
   console.log(`cleanup did not complete: ${(error as Error).message.slice(0, 160)}`)
 }

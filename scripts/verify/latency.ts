@@ -24,37 +24,29 @@
  * something that has to be thought about, which is the slow path and the one
  * worth holding to a minute.
  *
- * ## What it leaves behind
+ * ## Contained (#381)
  *
- * Two answered messages, and it says so. They are real: a latency check that
- * used a fixture would be measuring the fixture path, and the fixture path is
- * not the one Grant is on.
+ * It used to post AS Grant, from his real chat and into the ai-team-hq-test
+ * lobby, so its two probes were indistinguishable from his own turns and
+ * delivered ~30 messages to him and to Slack between 9 and 21 September.
+ *
+ * Now it declares a fixture Telegram chat and a fixture Slack channel with
+ * `app.register_test_origin` BEFORE posting, and posts from them. The door,
+ * the signature, the adapter, the queue, the kick and the worker are all the
+ * production path; the only thing that differs is that the turn is written
+ * `synthetic` at the door, so its answer is refused at the delivery guard
+ * instead of reaching anybody. That is the point of the change and it costs
+ * the measurement nothing it had: the last hop to Telegram or Slack was never
+ * measured (above). It asserts the containment BEFORE it waits, and stops if
+ * the declaration was not honoured.
  */
 
 import { createHmac } from 'node:crypto'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { testOrigins } from './lib/test-origin.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const run = Date.now().toString(36)
-
-/*
-  IT MESSAGES GRANT, SO IT ASKS FIRST (ledger R41, #354).
-
-  The two probes are posted AS him, from his real chat and to the real
-  webhooks, on purpose (above). They are therefore indistinguishable from his
-  own turns by every witness this office has: the adapter composes the dedupe
-  key and a Telegram id must be numeric, so nothing can mark them harness. Run
-  by a sweep of verify suites it delivered ~30 messages to his Telegram and
-  Slack between 9 and 21 September and none was ever counted as a leak. The
-  design is kept; running it is now a deliberate act.
-*/
-if (!process.argv.includes('--sends-to-grant')) {
-  console.error(
-    'verify:latency sends two real messages to Grant (Telegram and Slack) and they cannot be told\n' +
-      'apart from his own. Run it only when he has asked: npm run verify:latency -- --sends-to-grant',
-  )
-  process.exit(2)
-}
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN
 if (supabase === undefined || supabase === '') {
@@ -122,11 +114,53 @@ const chief = await one(`
 `)
 const botId = String(chief?.bot_id ?? '')
 
+// Declared before anything is posted (#381): the door writes both probes synthetic.
+const origins = await testOrigins(db, 'verify:latency')
+const TG_CHAT = origins.telegramChat()
+const SLACK_CHANNEL = origins.slackChannel()
+const SLACK_USER = `U0ZTLAT${run
+  .toUpperCase()
+  .replace(/[^A-Z0-9]/g, '')
+  .slice(-6)}`
+await origins.declare('telegram', TG_CHAT)
+await origins.declare('slack', SLACK_CHANNEL)
+
+/**
+ * Containment, asserted before the wait: the probe is synthetic and its work
+ * may not act outside. If the declaration was not honoured, stop here - the
+ * answer would otherwise be on its way to somebody.
+ */
+const contained = async (dedupeKey: string, surface: string): Promise<boolean> => {
+  for (let i = 0; i < 20; i += 1) {
+    const row = await one(`
+      select c.synthetic, j.job_id is not null as has_job,
+             coalesce(app.may_act_outside(j.job_id), false) as outside
+        from public.inbound_commands c left join public.jobs j on j.job_id = c.job_id
+       where c.dedupe_key = ${lit(dedupeKey)}`)
+    if (row?.has_job === true) {
+      const ok = row.synthetic === true && row.outside === false
+      record(
+        `the ${surface} probe is contained at the door (synthetic, may not act outside)`,
+        `synthetic=${String(row.synthetic)} outside=${String(row.outside)}`,
+        ok,
+      )
+      if (!ok) {
+        console.error(`STOP: the ${surface} probe was not contained. Nothing further is measured.`)
+        process.exit(1)
+      }
+      return ok
+    }
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  record(`the ${surface} probe is contained at the door`, 'no job appeared to check', false)
+  process.exit(1)
+}
+
 const telegramMessageId = 800_000 + (Date.now() % 90_000)
 // `telegram:message:<bot>:<chat>:<id>`. The first version of this guessed the
 // order and reported a working surface as broken for ninety seconds, which is
 // the harness lying rather than the product.
-const telegramKey = `telegram:message:${botId}:${String(1_386_648_496)}:${String(telegramMessageId)}`
+const telegramKey = `telegram:message:${botId}:${TG_CHAT}:${String(telegramMessageId)}`
 const telegramStart = Date.now()
 
 const telegramResponse = await fetch(
@@ -143,8 +177,8 @@ const telegramResponse = await fetch(
         message_id: telegramMessageId,
         date: Math.floor(Date.now() / 1000),
         text: `Give me one sentence on whether we should worry about anything today (${run})`,
-        chat: { id: 1_386_648_496, type: 'private' },
-        from: { id: 1_386_648_496, is_bot: false },
+        chat: { id: Number(TG_CHAT), type: 'private' },
+        from: { id: 4242, is_bot: false },
       },
     }),
   },
@@ -167,6 +201,7 @@ record(
 // contention rather than latency. Two people messaging at once is a real case
 // and worth its own check one day; it is not the case Grant described.
 
+await contained(telegramKey, 'Telegram')
 const telegramMs = await timeToAnswer(telegramKey, telegramStart)
 record(
   'a Telegram message is answered inside a minute',
@@ -191,8 +226,8 @@ const slackEnvelope = JSON.stringify({
   event_id: `Ev0LAT${run}`,
   event: {
     type: 'message',
-    user: 'U0BUNF6AALC',
-    channel: 'C0BVD21Q9S5',
+    user: SLACK_USER,
+    channel: SLACK_CHANNEL,
     text: `Give me one sentence on whether we should worry about anything today (${run})`,
     ts: slackTs,
   },
@@ -221,6 +256,7 @@ record(
 // And how long Slack took
 // ===========================================================================
 
+await contained(String(slackBody.dedupe_key ?? ''), 'Slack')
 const slackMs = await timeToAnswer(String(slackBody.dedupe_key ?? ''), slackStart)
 record(
   'a Slack message is answered inside a minute',
@@ -247,6 +283,9 @@ console.log(`\n| check | outcome | |`)
 console.log('|---|---|---|')
 for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '✅' : '❌'} |`)
 console.log(`\n${String(passed)}/${String(checks.length)} checks passed`)
-console.log('Two real messages were answered. They are in the chats, as they should be.')
+await db.execute(`delete from public.telegram_chats where chat_id = ${lit(TG_CHAT)}`)
+console.log(
+  `Two contained probes were answered; their answers were refused at the guard. Declarations released: ${String(await origins.release())}.`,
+)
 
 process.exit(passed === checks.length ? 0 : 1)

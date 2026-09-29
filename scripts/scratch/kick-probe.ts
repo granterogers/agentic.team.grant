@@ -9,6 +9,7 @@
  * project that has gathered a job can never be deleted.
  */
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { testOrigins } from '../verify/lib/test-origin.ts'
 
 const db = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
@@ -27,6 +28,9 @@ if (token === '') {
 }
 const project = process.argv[2] ?? ''
 const before = new Date().toISOString()
+// Declared first (#381): the database refuses a project that has real work, so
+// this cannot be pointed at one of Grant's.
+await (await testOrigins(db, 'scratch:kick-probe')).declare('teamhq', project)
 
 const res = await fetch('https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api', {
   method: 'POST',

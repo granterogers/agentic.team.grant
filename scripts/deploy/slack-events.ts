@@ -18,6 +18,7 @@
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
+import { testOrigins } from '../verify/lib/test-origin.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 const botToken = process.env.SLACK_BOT_TOKEN
@@ -187,6 +188,9 @@ if (unsigned.status !== 401) {
 // and a broken one is discovered by a button silently not working. A press of a
 // button we do not recognise must come back 200 — Slack shows the clicker an
 // error otherwise, for something they cannot fix.
+// The signed press below is indistinguishable from a real one once accepted, so
+// its channel is declared first (#381). CDEPLOYCHECK is nobody's channel.
+await (await testOrigins(db, 'deploy:slack')).declare('slack', 'CDEPLOYCHECK')
 const pressBody = `payload=${encodeURIComponent(
   JSON.stringify({
     type: 'block_actions',

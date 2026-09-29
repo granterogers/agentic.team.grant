@@ -35,6 +35,7 @@ import { callbackData, inlineKeyboard, pagerText } from '../../src/telegram/mess
 import { TelegramPager } from '../../src/telegram/pager.ts'
 import { botForStaff, pagerBot, roster } from '../../src/telegram/roster.ts'
 import { TelegramTransport } from '../../src/telegram/transport.ts'
+import { testOrigins } from './lib/test-origin.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 const botToken = process.env.TELEGRAM_CHIEF_BOT_TOKEN
@@ -191,7 +192,20 @@ const webhookSecret = String(
 )
 const WEBHOOK = `https://${process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'}.supabase.co/functions/v1/telegram-webhook`
 
-const WEBHOOK_CHAT = `-100${stamp}2`
+/*
+  The chats this suite posts FROM, through the deployed webhook, are declared
+  first (#381). The update is correctly signed, so the adapter writes a key
+  indistinguishable from Grant's; the declaration is what makes the door
+  write the turn synthetic, and every job under it harness. Teardown's
+  relabelling used to be the only thing marking these, and it ran after the
+  office had already answered: 21 messages reached his Telegram and the
+  ai-team-hq-test lobby from these "hello"s between 7 and 14 September.
+*/
+const origins = await testOrigins(db, 'verify:telegram')
+const WEBHOOK_CHAT = origins.telegramChat()
+const STICKER_CHAT = origins.telegramChat()
+await origins.declare('telegram', WEBHOOK_CHAT)
+await origins.declare('telegram', STICKER_CHAT)
 // Returns the body as well as the status, because the status is 200 whatever
 // happens — Telegram retries anything else — and the first version of this
 // check believed a 200 meant the chat had been registered. It had not.
@@ -233,6 +247,29 @@ record(
     registeredByWebhook !== undefined &&
     registeredByWebhook.bot_id === BOT_ID,
 )
+{
+  // Containment before anything else is asserted about the turn (#381).
+  const turn = await one<{ synthetic: boolean | null; outside: boolean | null }>(`
+    select c.synthetic, coalesce(app.may_act_outside(c.job_id), false) as outside
+      from public.inbound_commands c
+     where c.origin_channel = 'telegram' and c.origin_ref like ${lit(`${WEBHOOK_CHAT}:%`)}
+     order by c.received_at desc limit 1`)
+  const chat = await one<{ deliverable: boolean | null }>(
+    `select bool_or(deliverable) as deliverable from public.telegram_chats where chat_id = ${lit(WEBHOOK_CHAT)}`,
+  )
+  const ok = turn?.synthetic === true && turn.outside === false && chat?.deliverable === false
+  record(
+    'the declared webhook turn is contained at the door: synthetic, may not act outside, and its chat can never be paged',
+    `synthetic=${String(turn?.synthetic)} outside=${String(turn?.outside)} deliverable=${String(chat?.deliverable)}`,
+    ok,
+  )
+  if (!ok) {
+    console.error(
+      'STOP: the webhook turn was not contained; nothing further is driven through the door.',
+    )
+    process.exit(1)
+  }
+}
 record(
   'and it REPORTS whether registration worked, rather than 200-ing over a silent failure',
   `registration=${status.registration}`,
@@ -241,7 +278,6 @@ record(
 
 // An update the adapter cannot turn into an instruction still proves the chat
 // is reachable. Registering before normalizing is what keeps that.
-const STICKER_CHAT = `-100${stamp}3`
 const stickerStatus = await deliverUpdate({
   update_id: Number(stamp) + 1,
   message: {
@@ -841,7 +877,7 @@ try {
     update public.projects set status = 'archived'
      where project_id = ${lit(String(fixtureProject?.id))}::uuid;
   `)
-  console.log('fixtures retired.')
+  console.log(`fixtures retired; test origins released: ${String(await origins.release())}.`)
 } catch (error) {
   console.log(`cleanup did not complete: ${(error as Error).message.slice(0, 160)}`)
 }
