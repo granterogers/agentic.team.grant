@@ -91,10 +91,12 @@ export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promis
   // Same rule for the option that PERFORMS something, and for the same reason:
   // `hq_answer_blocker` refuses an answer outside the list, so an `onAnswer`
   // naming an option nobody offered is work nobody could ever trigger.
-  if (draft.onAnswer !== undefined && !draft.approvalOptions.includes(draft.onAnswer.option)) {
-    throw new Error(
-      `onAnswer option ${JSON.stringify(draft.onAnswer.option)} is not one of the approval options`,
-    )
+  for (const named of draft.onAnswer === undefined
+    ? []
+    : [draft.onAnswer.option, ...(draft.onAnswer.also ?? [])]) {
+    if (!draft.approvalOptions.includes(named)) {
+      throw new Error(`onAnswer option ${JSON.stringify(named)} is not one of the approval options`)
+    }
   }
   const { rows } = await db.execute(`
     insert into public.blockers

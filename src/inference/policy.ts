@@ -199,6 +199,11 @@ export interface BlockerDraft {
   readonly onAnswer?:
     | {
         readonly option: string
+        /**
+         * Further options that perform the SAME work (0610). Each must be one of
+         * the approval options, for the reason the primary one must.
+         */
+        readonly also?: readonly string[]
         readonly kind: string
         readonly payloads: readonly Record<string, unknown>[]
       }

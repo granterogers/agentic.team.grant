@@ -341,7 +341,14 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           // reason this is a question at all.
           approvalOptions: [
             'Add them to the project as source documents',
-            'Add them and summarise each one',
+            /*
+              No "Add them and summarise each one" (audit B6): it was offered,
+              answering it was accepted, and nothing summarised anything - no
+              job kind reads a file and writes a summary, and the blocker had
+              no way to name one. An option may only promise what answering
+              performs. Summaries are asked for in a message once the files
+              are in, which is the office's ordinary path for them.
+            */
             // Answering with this one writes a standing authorization for
             // `drive.ingest` in this project, which is what makes it true
             // rather than a sentence (#15, migration 0421).
@@ -365,6 +372,14 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           */
           onAnswer: {
             option: 'Add them to the project as source documents',
+            /*
+              And "from now on" is a yes to THESE files too (0610). It granted
+              the standing authorization for the next arrival and left the ones
+              he was being asked about unread, because only one option could
+              carry the work; a person who says "add them from now on" means
+              these as well.
+            */
+            also: ['Add them from now on without asking me'],
             kind: 'drive.read_file',
             payloads: arrived.map((file) => ({
               project_id: f.project_id,

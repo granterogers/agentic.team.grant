@@ -162,17 +162,28 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
               requestedAction:
                 `“${String(row.name)}” has no Slack channel of its own, because ` +
                 `#${String(result.channelName)} already exists and is not one of ours. ` +
-                'What would you like me to do?',
+                'I will not take over a channel somebody else made, and I cannot make one ' +
+                'under a different name on my own. If you free that name in Slack or rename ' +
+                'the project, I will make the channel the next time I look.',
               whyNeeded:
                 'I will not take over a channel somebody else made, and I cannot ' +
                 'guess a second name you would recognise.',
               consequencesOfDelay:
                 'Nothing breaks. The project works everywhere else; it just has no ' +
-                'room of its own, and I will not ask again until you answer.',
-              approvalOptions: [
-                `Use #${String(result.channelName)}_project instead`,
-                'Leave it without a channel',
-              ],
+                'room of its own. I look again about once a day and will ask again ' +
+                'if the name is still taken.',
+              /*
+                One answer, and it is a true one (audit B6).
+
+                "Use #<name>_project instead" was offered here, answering it was
+                accepted, and nothing created that channel: the provisioner
+                derives a channel's name from the project and there is no path
+                that takes a different one, so the option promised a room the
+                office had no way to make - and a channel is permanent in Slack,
+                so this is not a place to grow one on a guess. What answering
+                CAN do is settle this question.
+              */
+              approvalOptions: ['Leave it without a channel for now'],
               originatingAgent: 'operations-director',
               // The office is not stuck: everything else about the project
               // works, so the answer is wanted rather than waited on.

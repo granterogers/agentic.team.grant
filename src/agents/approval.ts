@@ -279,16 +279,31 @@ export const governOutward = async (
     return { go: false, decision, said: refusalSentence(decision), blocker: null }
   }
 
-  const option = what.standingOption ?? 'Do that from now on without asking me'
+  const option = what.standingOption ?? 'Yes, do that from now on without asking me'
   const blocker = await raise(db, {
     projectId: what.projectId ?? undefined,
     jobId: what.jobId,
-    requestedAction: `${what.summary}. Shall I?\n\n${what.detail}`,
+    requestedAction:
+      `${what.summary}. I will not do this on my own until you allow it - ` +
+      `shall I keep doing it without asking?\n\n${what.detail}`,
     whyNeeded: decision.because,
     consequencesOfDelay:
       'Nothing happens until you say. Our own records are already right; it is ' +
       'only the copy outside that waits.',
-    approvalOptions: ['Yes, do it', option, 'No, leave it'],
+    /*
+      NO ONE-OFF "Yes, do it" (audit B5).
+
+      It was offered, answering it was accepted ("Taken as a yes ... it is
+      going ahead now"), and nothing was performed: the blocker carries no
+      job to enqueue and the duty that asked has already finished, so the next
+      run found no permission, asked the same question again and wrote
+      nothing. An option may only promise what answering it performs. What
+      answering CAN perform here is the standing authorization - the row the
+      next run reads - so that is the yes this question offers, and the
+      question says so. A one-off yes needs the approval to bind the exact
+      action it approves, which is a different piece of work.
+    */
+    approvalOptions: [option, 'No, leave it'],
     originatingAgent: what.agent,
     // The rest of the office carries on. This is a question, not a halt.
     workCanContinue: true,

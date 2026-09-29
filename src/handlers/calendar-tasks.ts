@@ -61,7 +61,7 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
         detail: detail(planned),
         empty: planned.steps.length === 0,
         agent: 'operations-director',
-        standingOption: 'Keep the diary in step without asking me',
+        standingOption: 'Yes, keep the diary in step without asking me',
       })
       if (!gate.go) {
         return {
