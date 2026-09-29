@@ -4092,6 +4092,18 @@ Each of these cost real time. They are here so they cost it once.
   one SQL builder into another whose text contains regex `$` produced a syntax
   error at a quote forty lines away. Pass a function: `s.replace(x, () => y)`.
 
+- **A test destination is only non-human if nobody is IN it.** `verify:slack`
+  registered the channel it created as a test destination, and the
+  provisioner had invited Grant into it on creation, so about seven suite
+  messages landed in a room he was a member of. A `zz_` name is not what makes
+  a room safe; its membership is. A fixture project's channel now invites
+  nobody, and the suite asserts the membership Slack reports.
+- **Deleting a test-destination registration in teardown deletes the reason
+  the send was allowed.** The witness then correctly reported a legitimate
+  send as a breach, because it reads registrations as they stand now.
+  Registrations are retired, never deleted (0606), and "was it registered when
+  the guard decided" is `app.test_destination_at`.
+
 ---
 
 ## Visual standard

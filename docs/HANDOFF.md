@@ -30,7 +30,9 @@
 > `docs/testing/378-containment-audit-2026-09-29.md`. **Deploy the worker
 > before 0601.**
 >
-> **#381, RC2 on `claude/381-rc2` (NOT deployed).** A deployment of the above
+> **#381 containment: DEPLOYED and ACCEPTED 29 September; main is at the accepted implementation.** Worker v848, migrations to 0606. Fixture Slack channels invite nobody; test destinations are retired, never deleted (0606). Record: `docs/testing/381-production-acceptance-2026-09-29.md`.
+>
+> **(Earlier) #381, RC2 on `claude/381-rc2`.** A deployment of the above
 > stopped at pre-flight: suites posting correctly signed updates to the live
 > doors were `trusted` by 0603. `verify:latency` had posted as Grant from his
 > own chat. 0605 adds `public.test_origins`. A suite declares its fixture

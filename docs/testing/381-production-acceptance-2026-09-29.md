@@ -89,3 +89,34 @@ Nothing has been cleaned.
 2. Test-destination teardown: a deletion erases the only evidence the witness has. Retire registrations; don't delete them.
 3. `verify:history`: declare before creating any job, and move its conversation assertions to real-shaped turns inside a rollback (the pattern it already uses once).
 4. Gate order: `check:door-origins` and `check:voice-sessions` run after the live-door suites in `npm run gate`.
+
+---
+
+## Remediation and re-acceptance, 29 September: GREEN, promoted
+
+**Implementation commit `76f9c603`.** It contains the accepted RC2 (`52bb21aa`)
+plus the four fixes below. Records only: `37d5fbf3`, `1aa2e49d` and this entry.
+
+| Fix | Where |
+|---|---|
+| A fixture project's channel invites nobody, decided from `projects.is_fixture` for every caller; real projects unchanged | `src/slack/provision.ts`, `tests/slack/provision.test.ts` (red under sabotage) |
+| Test destinations go ACTIVE -> RETIRED and are never deleted; the guard honours active rows only; `app.test_destination_at` tells the witness what was registered when the guard decided; the 29 September send is acknowledged in `known_escapes` under #381 | `migrations/0606`, `scripts/leak-witness.ts`, `scripts/check-leaks.ts`, every suite teardown |
+| `verify:history` declares before any work, and its stale 0602 assertions now prove the harness turn is hidden, with the real property tested on rolled-back real-shaped turns | `scripts/verify/history.ts` |
+| `check:door-origins` and `check:voice-sessions` run first in the gate, and a failed preflight stops it | `scripts/e2e.ts`, `tests/scripts/gate-order.test.ts` |
+
+**Production.**
+- Migration 0606 applied on its own: 619 migrations, latest `0606`.
+- Worker v846 -> **v848**, built from `76f9c603`. `src/slack/provision.ts` is the only application-code change.
+
+**Targeted re-acceptance.**
+
+| Step | Result |
+|---|---|
+| Preflight, in the new order | `check:door-origins` 0 violations · `check:voice-sessions` clean · `check:leaks` 39 known, 0 new, and the historical breach listed as acknowledged |
+| `verify:slack` | **74/74, plus 3/3 retirement checks**. The fixture channel `C0C5D6D4WJG` had members=1 and humans=0, so Grant was not invited to it or to its research channel. Declared 12:12:53.8, registered 12:12:54.9, first send 12:13:10, retired 12:17:34. All 16 deliveries went to that channel, all authorised at send time (11 sent), and a retry after retirement was refused |
+| `verify:history` | **57/57**. Declared 12:18:09, before its first job at 12:18:22. Its own turns are hidden; the real-shaped turns (rolled back) are trusted and shown. All 5 delivery attempts were suppressed, including 2 aimed at 1386648496 |
+| `check:leaks` after | 0 new escapes and 0 of every breach class. The only acknowledged row is the 29 September send. 0 declarations ignored, 0 test destinations still active |
+
+**Human exposure.**
+- The 11 real Slack sends went only to `#zz_test_83965320_8kme`, whose only member is the app.
+- Nothing reached his Telegram chat, the office group, a project channel or his dashboard chat.
