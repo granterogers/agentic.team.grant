@@ -4982,6 +4982,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const goalAsHeSaidIt =
         understood.abandoned.length === 0 ? instruction.trim() : requests.join(' ')
 
+      const restOfAnswered =
+        answeredQuestion?.did === true && (turn.answer?.remainder.trim() ?? '') !== ''
       const actedAlready = [
         linked,
         made,
@@ -4990,7 +4992,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         changed,
         settledTask?.text ?? null,
         subbed?.text ?? null,
-        answeredQuestion?.text ?? null,
+        /*
+          An answer that also carried a request does not use up the turn: the
+          remainder still gets its chance to be planned (a mixed turn keeps
+          every clause).
+        */
+        restOfAnswered ? null : (answeredQuestion?.text ?? null),
         stopped,
         whoIsOn,
         alreadyOn,
@@ -5021,6 +5028,25 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         A). `taught` is non-null here only when something else survived the
         message as well — the rule-only case returned above.
       */
+      const restHandled = [
+        linked,
+        made,
+        filed,
+        noted,
+        changed,
+        settledTask?.text ?? null,
+        subbed?.text ?? null,
+        stopped,
+        whoIsOn,
+        alreadyOn,
+        secondOpinion,
+        extracting,
+        enumerating,
+        writingFile,
+        reading,
+        pursuing,
+        taught?.said ?? null,
+      ].some((x) => x !== null)
       const confirmation =
         [
           taught?.said ?? null,
@@ -5032,6 +5058,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           settledTask?.text ?? null,
           subbed?.text ?? null,
           answeredQuestion?.text ?? null,
+          restOfAnswered && !restHandled
+            ? `You also said "${(turn.answer?.remainder ?? '').trim().slice(0, 120)}" — I have not acted on that part; say it again with what it is for.`
+            : null,
           /*
             "Forget the printers one" is a task he has, not work in flight
             (ledger R42): when it settled a named task, the call-off that
