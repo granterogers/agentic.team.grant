@@ -310,6 +310,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     also?: unknown
     session?: unknown
     to?: unknown
+    project?: unknown
   }
   const said = typeof body.said === 'string' ? body.said.trim() : ''
   const session = typeof body.session === 'string' ? body.session : ''
@@ -371,36 +372,102 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json({ error: 'a session id is required' }, 400)
   }
 
+  /*
+    THE PROJECT THE PAGE IS WRITING INTO (#373).
+
+    The page names the thread's project by id, and this translates it into the
+    two places the office already reads. It decides nothing.
+
+    - `project_id` is 0337's column for "the project the caller named", which
+      outranks every guess `app.enqueue_inbound` could make.
+    - The conversation becomes that project's thread on this visit:
+      `<session>/<project>`, the first segment of `origin_ref`. A page visit
+      spans every project, so with the session alone a turn in one project
+      read another project's turn as the one before it - in the history the
+      office is shown, in the answer a "yes please" gives, and in the
+      project the conversation remembers.
+
+    Shaped, not trusted: anything that is not an id is not sent, and an id the
+    office does not know costs the project and never the message (below).
+    `dedupe_key` keeps the bare session, which is what containment (0598)
+    recognises as the page's own.
+  */
+  const project =
+    typeof body.project === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.project)
+      ? body.project.toLowerCase()
+      : null
+
   // 1. Canonicalise. `origin_ref` is `session:turn`, matching the
   //    `chat:message` shape every other channel uses, so conversation memory
   //    and the pairing window work here with no special case.
   const turn = Date.now().toString(36)
-  const stored = await fetch(`${DB_URL}/rest/v1/inbound_commands`, {
-    method: 'POST',
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=ignore-duplicates,return=representation',
-    },
-    body: JSON.stringify({
-      origin_channel: 'voice',
-      origin_ref: `${session}:${turn}`,
-      actor: SUBJECT,
-      // `subject` is NOT set here. 0056's trigger resolves it through
-      // `app.subject_for`, the same way it does for Slack and Telegram — and a
-      // channel that writes its own subject is a channel exempt from the
-      // identity map. The exemption was invisible until `verify:cross-interface`
-      // compared a voice row against a Slack one and found this the only column
-      // that differed (0104).
-      instruction: said,
-      addressed_to: addressedTo,
-      addressed_also: alsoAddressed,
-      dedupe_key: `voice:turn:${session}.${turn}`,
-    }),
-  })
   /*
-    An addressee that is not a person must not cost Grant his message.
+    The CONVERSATION is the thread the page showed, and it stays that thread
+    even when the office cannot file the turn under its project. A stale tab
+    on a deleted project must not fall back to the visit's bare session: that
+    is the no-project conversation, and a "yes please" joined to it could
+    answer a question asked there.
+  */
+  const talk = project === null ? session : `${session}/${project}`
+  const row = (stated: string | null, addressee: string | null): Record<string, unknown> => ({
+    origin_channel: 'voice',
+    origin_ref: `${talk}:${turn}`,
+    actor: SUBJECT,
+    // `subject` is NOT set here. 0056's trigger resolves it through
+    // `app.subject_for`, the same way it does for Slack and Telegram — and a
+    // channel that writes its own subject is a channel exempt from the
+    // identity map. The exemption was invisible until `verify:cross-interface`
+    // compared a voice row against a Slack one and found this the only column
+    // that differed (0104).
+    instruction: said,
+    addressed_to: addressee,
+    // The selection stays on every retry. The retry exists because a NAME
+    // could not be translated, and 0410's trigger already drops the ones that
+    // are not real.
+    addressed_also: alsoAddressed,
+    dedupe_key: `voice:turn:${session}.${turn}`,
+    ...(stated === null ? {} : { project_id: stated }),
+  })
+  const store = (r: Record<string, unknown>) =>
+    fetch(`${DB_URL}/rest/v1/inbound_commands`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=ignore-duplicates,return=representation',
+      },
+      body: JSON.stringify(r),
+    })
+  /*
+    A foreign key the office refuses is PostgREST's 409 with code 23503 - the
+    same status as a duplicate - so a refusal is told apart by its code, not
+    by its status.
+  */
+  const refusedReference = async (r: Response): Promise<boolean> =>
+    !r.ok &&
+    ((await r
+      .clone()
+      .json()
+      .then((b: { code?: unknown }) => b.code === '23503')
+      .catch(() => false)) ||
+      r.status !== 409)
+  let stated = project
+  let attempt = await store(row(stated, addressedTo))
+  /*
+    A project the office does not know must not cost Grant his message.
+    `project_id` has a foreign key to `projects`, so an id that names nothing
+    fails the insert. One retry with no project: translation failing honestly.
+    The message is then resolved as a message that named no project - never
+    guessed onto another one - and stays in its own thread's conversation.
+  */
+  if (stated !== null && (await refusedReference(attempt))) {
+    stated = null
+    attempt = await store(row(null, addressedTo))
+  }
+  /*
+    An addressee that is not a person must not cost Grant his message either.
 
     `inbound_commands.addressed_to` carries a FOREIGN KEY to `staff`, so a slug
     that names nobody does not route badly — it fails the INSERT, and the whole
@@ -413,34 +480,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
     person, so I recorded no addressee", which is exactly translation failing
     honestly, and the Chief of Staff then takes it as she does for every
     unaddressed message.
-
-    Only on 409-or-worse WITH an addressee set: an insert that failed for any
-    other reason must still fail, or this quietly swallows real breakage.
   */
-  let attempt = stored
-  if (!attempt.ok && attempt.status !== 409 && addressedTo !== null) {
-    attempt = await fetch(`${DB_URL}/rest/v1/inbound_commands`, {
-      method: 'POST',
-      headers: {
-        apikey: SERVICE_KEY,
-        Authorization: `Bearer ${SERVICE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=ignore-duplicates,return=representation',
-      },
-      body: JSON.stringify({
-        origin_channel: 'voice',
-        origin_ref: `${session}:${turn}`,
-        actor: SUBJECT,
-        instruction: said,
-        addressed_to: null,
-        // The selection goes too. The retry exists because a NAME could not be
-        // translated, and 0410's trigger already drops the ones that are not
-        // real — so keeping the rest is the difference between "I could not
-        // find one of them" and "I ignored everybody you picked".
-        addressed_also: alsoAddressed,
-        dedupe_key: `voice:turn:${session}.${turn}`,
-      }),
-    })
+  if (addressedTo !== null && (await refusedReference(attempt))) {
+    attempt = await store(row(stated, null))
   }
   if (!attempt.ok && attempt.status !== 409) {
     return json({ error: 'could not record what you said' }, 503)
