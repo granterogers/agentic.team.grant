@@ -1,3 +1,0 @@
-insert into _result select 'known=' || jsonb_array_length(app.harness_escapes()->'known') || ' new=' || jsonb_array_length(app.harness_escapes()->'new')
-  || ' page_real_jobs=' || (select count(*) from inbound_commands c join jobs j on (j.pinned_config->>'command_id')::uuid=c.command_id where c.dedupe_key ~ '^voice:turn:s[a-z0-9]{1,10}\.' and not app.harness_job(j.job_id))
-  || ' tonight_scenario_harness=' || (select count(*) from inbound_commands c join jobs j on (j.pinned_config->>'command_id')::uuid=c.command_id where c.dedupe_key like 'voice:turn:scenario-a-mug35frh%' and app.harness_job(j.job_id));

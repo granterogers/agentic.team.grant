@@ -4,8 +4,8 @@ The three-branch integration (Backend `claude/human-simulation-harness`,
 Production `claude/production-reliability` inherited through it, Frontend
 `claude/basecamp-team-hq`) is on `main` and deployed. The trial is recorded in
 `three-branch-trial-2026-09-24.md` and was planned in
-`three-branch-reconnaissance-2026-09-24.md`, which is on
-`claude/gracious-volta-48lh36`. Out-of-scope findings are in #370.
+`three-branch-reconnaissance-2026-09-24.md`, which was written on
+`claude/gracious-volta-48lh36` and has been on `main` since 29 September. Out-of-scope findings are in #370.
 
 ## Git
 

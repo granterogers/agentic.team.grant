@@ -1,8 +1,8 @@
 # Three-branch trial integration — 24 September 2026
 
 **Disposable candidate. Not merged into `main`, not deployed, not canonical.**
-Plan: `docs/integration/three-branch-reconnaissance-2026-09-24.md` (on
-`claude/gracious-volta-48lh36`).
+Plan: `docs/integration/three-branch-reconnaissance-2026-09-24.md` (written on
+`claude/gracious-volta-48lh36`, on `main` since 29 September).
 
 **Verdict: TRIAL INTEGRATION VERIFIED — READY FOR MAIN-MERGE AUTHORISATION.**
 
