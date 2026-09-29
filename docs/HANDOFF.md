@@ -29,6 +29,15 @@
 > Full matrix, proofs, history and deploy order:
 > `docs/testing/378-containment-audit-2026-09-29.md`. **Deploy the worker
 > before 0601.**
+>
+> **#381, RC2 on `claude/381-rc2` (NOT deployed).** A deployment of the above
+> stopped at pre-flight: suites posting correctly signed updates to the live
+> doors were `trusted` by 0603. `verify:latency` had posted as Grant from his
+> own chat. 0605 adds `public.test_origins`. A suite declares its fixture
+> conversation first (`testOrigins(db, …)`), the door writes it synthetic, and
+> the database refuses to declare anything real. `check:door-origins` guards
+> the repository side. Deploy order: worker, then 0601 → 0605. Everything is in
+> `docs/testing/381-live-door-containment-2026-09-29.md`.
 
 > ## State as of 2026-09-24 — MERGE-READINESS, and two defects it found
 >

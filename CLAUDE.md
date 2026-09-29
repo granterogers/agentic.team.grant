@@ -4069,6 +4069,29 @@ Each of these cost real time. They are here so they cost it once.
   vacuous — the guard simply could not tell. Build fixtures from the adapter
   functions (`scripts/isolated/real-telegram.ts`, `legit-origins.ts`).
 
+
+- **A valid signature proves the credential, not the person.** 0603 trusts a
+  turn whose key the production adapter wrote, and a suite posting a correctly
+  signed update to the deployed webhook gets exactly that key.
+  `verify:latency` posted AS Grant from his own chat and his own Slack user:
+  29 messages to him, the office group and the lobby, 9 to 21 September, still
+  read as his a week later, invisible to every witness. The gate-3 and
+  `verify:telegram` "hello"s were relabelled harness only after the office had
+  answered (21 more). Test intent inferred after acceptance is not
+  containment. **Declare the conversation BEFORE knocking**
+  (`testOrigins(db, …)`, 0605): the door writes it synthetic, and the database
+  refuses to declare anything real (#381).
+- **The Telegram webhook records every chat it hears from under Grant's
+  subject, before deciding anything,** and `telegram_chat_for` pages the
+  newest deliverable one. A fixture chat recorded that way is, until its row
+  is deleted, where his messages go. 0605 records a declared chat as not
+  deliverable. And a proof's "real" Telegram turn must be recorded there, with
+  `actor` set to the sender's numeric id as the adapter writes it, or it is
+  not modelling Grant.
+- **`String.replace` reads `$'` and `$&` in the REPLACEMENT string.** Splicing
+  one SQL builder into another whose text contains regex `$` produced a syntax
+  error at a quote forty lines away. Pass a function: `s.replace(x, () => y)`.
+
 ---
 
 ## Visual standard

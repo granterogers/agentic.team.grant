@@ -63,3 +63,19 @@ bound to its row), `harness`, `unknown`. Both chokepoints allow only
 it is harness, and do not grow a list of test names: extend the grammar in
 `app.adapter_key_ok` when an adapter changes its keys, and the legacy snapshot
 only with evidence of a retired adapter.
+
+## Amendment — #381, 29 September 2026
+
+A **correctly signed** request to a deployed door is `trusted` by 0603, and
+rightly: the adapter really wrote its key. A signature proves the caller holds
+the credential, not that it is Grant. So a suite that drives a real door
+**declares the conversation first** with `app.register_test_origin` (0605).
+The ingress stamp then writes the turn `synthetic` at the moment it arrives,
+and every child inherits that, permanently.
+
+- **Do not** mark test traffic after it has been accepted: teardown
+  relabelling and name conventions are what failed.
+- **Do not** widen a declaration to a real conversation. The database refuses
+  it, and that refusal is what keeps a declaration from ever swallowing Grant.
+- Every script that names a real door calls `testOrigins(db, …)`, and
+  `check:door-origins` fails before anything is sent if one does not.
