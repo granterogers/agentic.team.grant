@@ -330,6 +330,9 @@ export function send(slug, text, context, to, also = []) {
     at: now, pending: true, inflight: true,
     waiting: 'sending', since: startedAt(),
     said: text, to: to ?? null,
+    // And who else was asked, or a retry sends the request to fewer people
+    // than the first attempt did (#375).
+    also: Array.isArray(also) ? also : [],
     context: context ? { kind: context.kind, id: context.id, title: context.title } : null,
   }
   const next = [...thread(slug), mine, back]
@@ -535,5 +538,10 @@ export async function retry(slug, id, token, onState) {
   */
   const moved = [...thread(slug).filter((m) => m.id !== id), thread(slug).find((m) => m.id === id)]
   write(slug, moved.filter((m) => m !== undefined))
-  return ask(slug, row.said, row.context ?? null, token, row.to ?? undefined, onState)
+  /*
+    Every argument in its own slot (#375). This once passed `onState` where
+    `ask` takes `also`, so a retry asked fewer people than the first attempt
+    and never redrew while it waited.
+  */
+  return ask(slug, row.said, row.context ?? null, token, row.to ?? undefined, row.also ?? [], onState)
 }

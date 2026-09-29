@@ -57,6 +57,8 @@ const projectRow = (id: string, slug: string, name: string) => ({
   waiting: [],
   modules: [],
   requests: [],
+  // The default dashboard's project panel reads it; Basecamp never did.
+  connectors: [],
 })
 
 const office = createServer((req, res) => {
@@ -442,6 +444,250 @@ const LOOPBACK = `
     fromCall.map((t) => who(t.project)).join(' '),
   )
   check('nothing threw during the call', thrown.length === 0, thrown.slice(0, 2).join(' | '))
+  await ctx.close()
+}
+
+/* --- 8. an open dock keeps its thread through navigation and Send (#376) --- */
+/*
+  The failure: open the dock on B, go back to the portfolio with it still open,
+  send. The message was filed under B - correctly, it was B's thread on screen -
+  and then the repaint took the dock's project from the PAGE, so the dock
+  redrew onto Unnamed and the message just sent disappeared from view.
+
+  The model since #376: an open dock is pinned to the thread it was opened on
+  until it is closed. Navigating does not move it; closing and reopening on
+  another project does. Every property is read twice - what the dock SHOWS
+  immediately before Send and immediately after - and against what the page
+  POSTED.
+*/
+type DockView = { note: string; head: string; said: string[]; waiting: string }
+const view = async (page: Page): Promise<DockView> =>
+  JSON.parse(
+    (await page.evaluate(
+      inPage(`const d = document.querySelector('#dock')
+        return JSON.stringify({
+          note: d?.querySelector('[data-bc-noteproject]')?.getAttribute('data-bc-noteproject') ?? '',
+          head: (d?.querySelector('.dockhead')?.textContent ?? '').replace(/\\s+/g, ' ').trim(),
+          said: [...(d?.querySelectorAll('.msg') ?? [])].map((m) => (m.textContent ?? '').replace(/\\s+/g, ' ').trim()),
+          waiting: (d?.querySelector('.waitrow .waitsay')?.textContent ?? '').trim(),
+        })`),
+    )) as string,
+  ) as DockView
+const sendInDock = async (page: Page, text: string, settle = 900): Promise<void> => {
+  await page.locator('#dock [data-docksay]').fill(text)
+  await page.locator('#dock [data-dockform] button[type="submit"]').click()
+  await page.waitForTimeout(settle)
+}
+const has = (v: DockView, text: string): boolean => v.said.some((m) => m.includes(text))
+const mineCount = (v: DockView, text: string): number =>
+  v.said.filter((m) => m.startsWith('You') && m.includes(text)).length
+{
+  const turns: Turn[] = []
+  const ctx = await newContext(turns)
+  const page = await ctx.newPage()
+  const thrown: string[] = []
+  page.on('pageerror', (e) => thrown.push(e.message))
+  await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-go^="/basecamp/p/provenance-b"]', { timeout: 20000 })
+  await go(page, '/basecamp/p/provenance-b', '.bcmain')
+  await dock(page, 'Opened on B (dock-376)')
+
+  // The old failure, step for step: open on B, navigate, send.
+  await go(page, '/basecamp', '[data-bc-go^="/basecamp/p/"]')
+  const before = await view(page)
+  const text1 = 'Sent from the portfolio (dock-376)'
+  await sendInDock(page, text1)
+  const after = await view(page)
+  check(
+    'the thread visible before Send is the thread visible after it (#376)',
+    before.note === 'provenance-b' && after.note === before.note && after.head === before.head,
+    `before ${before.note} "${before.head}" -> after ${after.note} "${after.head}"`,
+  )
+  check(
+    'and the message just sent is still on screen, with the one before it',
+    has(after, text1) && has(after, 'Opened on B (dock-376)'),
+    after.said.join(' | ').slice(0, 300),
+  )
+  check(
+    'the page stated the project the dock shows',
+    who(turns.at(-1)?.project) === 'B' && turns.at(-1)?.said === text1,
+    `${who(turns.at(-1)?.project)}: ${String(turns.at(-1)?.said)}`,
+  )
+
+  // Onto ANOTHER project with the dock still open: it stays on B, and says so.
+  await go(page, '/basecamp/p/provenance-a', '.bcmain')
+  const onA = await view(page)
+  const text2 = 'Sent while looking at A (dock-376)'
+  await sendInDock(page, text2)
+  const onA2 = await view(page)
+  check(
+    'navigating to A with the dock open does not change where it files',
+    onA.note === 'provenance-b' &&
+      onA2.note === 'provenance-b' &&
+      who(turns.at(-1)?.project) === 'B',
+    `shows ${onA.note}, then ${onA2.note}, stated ${who(turns.at(-1)?.project)}`,
+  )
+  check(
+    'and its header says the thread is not the page behind it',
+    /Provenance B/.test(onA2.head) && /Filed under/.test(onA2.head),
+    onA2.head,
+  )
+  check(
+    'and the message is visible there too',
+    has(onA2, text2),
+    onA2.said.join(' | ').slice(0, 300),
+  )
+
+  // The voice note composer in the same dock files where the typed one does.
+  const beforeNote = turns.length
+  await page.locator('#dock [data-bc-note]').first().click()
+  await page.waitForTimeout(1600)
+  await page.locator('#dock [data-bc-notestop]').click()
+  await page.waitForTimeout(900)
+  await page.locator('#dock [data-bc-notesend]').click()
+  await page.waitForTimeout(2000)
+  const afterNote = await view(page)
+  const noteTurn = turns.slice(beforeNote)
+  check(
+    'a voice note from the same dock is stated as the same project',
+    noteTurn.length === 1 && who(noteTurn[0]?.project) === 'B',
+    noteTurn.map((t) => `${who(t.project)}: ${t.said}`).join(' | ') || 'no note reached the door',
+  )
+  check(
+    'and it lands in the thread on screen, which is still B',
+    afterNote.note === 'provenance-b' && has(afterNote, 'What still needs doing on this project?'),
+    `${afterNote.note}: ${afterNote.said.slice(-3).join(' | ')}`,
+  )
+
+  // Closing and reopening on A is the deliberate change of context.
+  await page.locator('#dock [data-dock-close]').click()
+  await page.waitForTimeout(500)
+  await page.locator('[data-bc-dock]:visible').first().click({ timeout: 8000 })
+  await page.waitForTimeout(600)
+  const reopened = await view(page)
+  const text3 = 'Sent after reopening on A (dock-376)'
+  await sendInDock(page, text3)
+  const reopened2 = await view(page)
+  check(
+    'closing the dock and opening it on A moves it to A, deliberately',
+    reopened.note === 'provenance-a' &&
+      reopened2.note === 'provenance-a' &&
+      who(turns.at(-1)?.project) === 'A' &&
+      has(reopened2, text3) &&
+      !has(reopened2, text1),
+    `${reopened.note} -> ${reopened2.note}, stated ${who(turns.at(-1)?.project)}`,
+  )
+  check(
+    'one turn per send: five sends (four typed, one voice), five turns, nothing twice',
+    turns.length === 5 && new Set(turns.map((t) => t.said)).size === 5,
+    turns.map((t) => `${who(t.project)}: ${t.said}`).join(' | '),
+  )
+  check('nothing threw', thrown.length === 0, thrown.join(' | '))
+  await ctx.close()
+}
+
+/* --- 9. the dock, pinned, while waiting and when asked again (#375, #376) -- */
+{
+  const turns: Turn[] = []
+  const ctx = await newContext(turns, { delayMs: 2500 })
+  const page = await ctx.newPage()
+  await page.goto(url('/basecamp/p/provenance-b'), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-dock]', { timeout: 20000 })
+  await page.waitForTimeout(600)
+  await page.locator('[data-bc-dock]:visible').first().click({ timeout: 8000 })
+  await page.waitForTimeout(600)
+  await go(page, '/basecamp', '[data-bc-go^="/basecamp/p/"]')
+  const text = 'A slow question from the portfolio (dock-376)'
+  await sendInDock(page, text, 1200)
+  const waiting = await view(page)
+  check(
+    'while the office thinks, the pinned dock says so on the same thread',
+    waiting.note === 'provenance-b' && has(waiting, text) && /working on it/.test(waiting.waiting),
+    `${waiting.note}: waiting "${waiting.waiting}"`,
+  )
+  await page.waitForTimeout(2500)
+  const answered = await view(page)
+  check(
+    'and the answer lands there, under the message, once',
+    answered.note === 'provenance-b' &&
+      has(answered, `Answer to: ${text}`) &&
+      mineCount(answered, text) === 1 &&
+      turns.length === 1,
+    `${answered.note}: ${answered.said.slice(-2).join(' | ')} · turns ${String(turns.length)}`,
+  )
+  await ctx.close()
+}
+{
+  const turns: Turn[] = []
+  const ctx = await newContext(turns, { failFirst: true })
+  const page = await ctx.newPage()
+  await page.goto(url('/basecamp/p/provenance-b'), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-dock]', { timeout: 20000 })
+  await page.waitForTimeout(600)
+  await page.locator('[data-bc-dock]:visible').first().click({ timeout: 8000 })
+  await page.waitForTimeout(600)
+  await go(page, '/basecamp', '[data-bc-go^="/basecamp/p/"]')
+  const text = 'This one fails first, from the dock (dock-376)'
+  await sendInDock(page, text, 1200)
+  await page.waitForSelector('#dock [data-chat-retry]', { timeout: 10000 })
+  await page.locator('#dock [data-chat-retry]').first().click()
+  await page.waitForTimeout(1500)
+  const after = await view(page)
+  check(
+    'Try again in a dock left open on the portfolio resends to B, once',
+    turns.length === 2 && turns.every((t) => who(t.project) === 'B' && t.said === text),
+    turns.map((t) => `${who(t.project)}: ${t.said}`).join(' | '),
+  )
+  check(
+    'and the dock stays on B with the message and its answer, and no second copy',
+    after.note === 'provenance-b' && mineCount(after, text) === 1 && has(after, 'Noted.'),
+    `${after.note}: ${after.said.slice(-2).join(' | ')}`,
+  )
+  await ctx.close()
+}
+
+/* --- 10. the portfolio's dock files under Unnamed, on purpose (#149, #376) -- */
+/*
+  The default dashboard draws a dock button on the portfolio, where there is no
+  project: #149 files that under the reserved Unnamed project, and the header
+  says so. Pinned, it stays Unnamed when he then opens a project - the choice
+  he made by opening it there - until he closes it. (The default dashboard
+  draws the dock button on the portfolio only; reopening on another project is
+  proved in section 8, in Basecamp.)
+*/
+{
+  const turns: Turn[] = []
+  const ctx = await newContext(turns)
+  const page = await ctx.newPage()
+  const thrown: string[] = []
+  page.on('pageerror', (e) => thrown.push(e.message))
+  await page.goto(url('/'), { waitUntil: 'domcontentloaded' })
+  // The office's projects have arrived (the first match is a hidden switcher option).
+  await page.waitForSelector('[data-open="provenance-a"]', { state: 'attached', timeout: 20000 })
+  await page.waitForSelector('[data-dock]', { timeout: 20000 })
+  await page.waitForTimeout(600)
+  await page.locator('[data-dock]:visible').first().click({ timeout: 8000 })
+  await page.waitForTimeout(500)
+  const head0 = (await view(page)).head
+  await sendInDock(page, 'Asked from the portfolio (dock-376)')
+  await go(page, '/p/provenance-a', '#dock [data-dockform]')
+  const onA = await view(page)
+  await sendInDock(page, 'Still the portfolio dock, on A (dock-376)')
+  const onA2 = await view(page)
+  check(
+    'a dock opened on the portfolio files under Unnamed and says so',
+    /Conversation/.test(head0) && who(turns[0]?.project) === 'Unnamed',
+    `"${head0}", stated ${who(turns[0]?.project)}`,
+  )
+  check(
+    'opening a project does not move it: still Unnamed, still visible',
+    /Conversation/.test(onA.head) &&
+      who(turns[1]?.project) === 'Unnamed' &&
+      has(onA2, 'Asked from the portfolio (dock-376)') &&
+      has(onA2, 'Still the portfolio dock, on A (dock-376)'),
+    `"${onA.head}", stated ${who(turns[1]?.project)}`,
+  )
+  check('nothing threw on the default dashboard', thrown.length === 0, thrown.join(' | '))
   await ctx.close()
 }
 

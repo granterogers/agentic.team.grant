@@ -1124,7 +1124,8 @@ function runCommand(row) {
       }
       chat.send(loose.slug, row.title, null)
       closeCmd()
-      rememberDock(true)
+      // Where the message went, on purpose, whatever the dock was showing.
+      rememberDock(true, loose.slug)
       render()
       paintDock()
       return
@@ -1551,8 +1552,43 @@ function markStalled(root) {
 const dockOpen = () => {
   try { return localStorage.getItem('studio.dock') === 'open' } catch { return false }
 }
-const rememberDock = (open) => {
+/*
+  AN OPEN DOCK IS PINNED TO THE THREAD IT WAS OPENED ON (#376).
+
+  It used to take its project from the page on every repaint. So a dock opened
+  on B and left open on the way to the portfolio went on SHOWING B - Basecamp
+  does not repaint it on navigation - until Send repainted it from the page:
+  the message was filed under B, correctly, and the dock redrew onto Unnamed,
+  and the message he had just sent vanished from view.
+
+  One model, stated once: the dock files where it was opened, and it stays
+  there until it is closed. Navigating does not move it (the header says
+  "Filed under" when the page behind it is somewhere else); closing it and
+  opening it again on another project is the deliberate change. The typed
+  composer and the voice note both read the project from the dock's own
+  markup, so they cannot disagree with what it shows.
+*/
+const DOCK_PIN = 'studio.dock.project'
+const dockPin = () => {
+  try { return localStorage.getItem(DOCK_PIN) } catch { return null }
+}
+const pinDock = (slug) => {
+  try {
+    if (slug === null) localStorage.removeItem(DOCK_PIN)
+    else localStorage.setItem(DOCK_PIN, slug)
+  } catch { /* not fatal */ }
+}
+/**
+ * Open or shut the dock. Opening a SHUT dock pins it to the page's project
+ * (or Unnamed from the portfolio); opening one already open keeps its pin;
+ * `slug` pins it somewhere on purpose. Shutting it forgets the pin.
+ */
+const rememberDock = (open, slug) => {
+  const was = dockOpen()
   try { localStorage.setItem('studio.dock', open ? 'open' : 'shut') } catch { /* not fatal */ }
+  if (!open) { pinDock(null); return }
+  if (slug !== undefined) pinDock(slug)
+  else if (!was || dockPin() === null) pinDock(state.project ?? 'unnamed')
 }
 
 function paintDock() {
@@ -1584,7 +1620,17 @@ function paintDock() {
     is not the one you are in, so the choice is visible rather than silent.
   */
   const loose = PROJECTS.find((x) => x.slug === 'unnamed')
-  const slug = state.project ?? loose?.slug ?? PROJECTS[0]?.slug
+  /*
+    The pin decides (#376). The page's project is only the fallback for a dock
+    that has no pin yet - one left open by an older build - and it is written
+    down the first time, so the next repaint cannot move it. A pin naming a
+    project this office does not list (yet: the prototype's projects are
+    replaced when the office answers) is neither used nor overwritten.
+  */
+  const pinned = dockPin()
+  const known = pinned !== null && PROJECTS.some((x) => x.slug === pinned)
+  const slug = known ? pinned : state.project ?? loose?.slug ?? PROJECTS[0]?.slug
+  if (pinned === null && slug) pinDock(slug)
   const p = slug ? byId(slug) : null
   const filed = p !== null && p.slug !== state.project
   const messages = p ? chat.thread(p.slug) : []
@@ -1707,7 +1753,8 @@ function paintDock() {
     if (box) box.value = ''
     chat.send(p.slug, text, null)
     paintDock()
-    void chat.ask(p.slug, text, null, presented(), undefined, () => { paintDock() })
+    // `also` is its own slot: the callback in it was the #375 defect, here too.
+    void chat.ask(p.slug, text, null, presented(), undefined, undefined, () => { paintDock() })
       .then(() => { paintDock() })
   })
 }
@@ -9302,6 +9349,11 @@ function drawShell() {
     root.classList.remove('shut')
     root.innerHTML = bc.html()
     bcWire.wire(root)
+    /*
+      Repaint the dock too, so its header says "Filed under" when the page
+      behind it has moved. It cannot move the thread: that is the pin (#376).
+    */
+    paintDock()
     /*
       Returns WITHOUT calling keepUrl or restoreFocus: render() does both after
       drawShell in every case, and a redraw that replaces every node takes the

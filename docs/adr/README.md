@@ -59,6 +59,7 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0045](0045-a-plan-is-a-proposal-and-permission-is-asked-twice.md) | A plan is a proposal, and permission is asked twice | Accepted |
 | [0046](0046-re-planning-never-expands-authorization.md) | Re-planning never expands authorization, and a finished plan is not a met goal | Accepted |
 | [0047](0047-the-to-do-interface-talks-to-a-port-not-to-a-provider.md) | The To-dos interface talks to a port, never to a provider | Accepted |
+| [0050](0050-an-open-dock-is-pinned-to-its-thread.md) | An open dock is pinned to the thread it was opened on | Accepted |
 
 **Note the collision:** two ADRs were written as 0012 on the same day, by two
 sessions that each read the highest number and then wrote. They are left as
