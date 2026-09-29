@@ -82,3 +82,43 @@ YES for the semantic boundary and B1–B7 (all proven by behavioural tests). Con
 
 ## 11. Recommended Run 2 start
 Unified `authorize_effect` over the entitled readers + `staff_may_use`, folding the task-tick approval door into `hq_answer_blocker`, then bringing the isolated suites into the gate.
+
+---
+
+# Production integration record (2026-09-29) — IN PROGRESS, blocked before migration
+
+## Correction to section 6
+The Run 1 handoff said only `telegram-webhook` and `hq-api` needed redeploying. **That was incomplete.**
+Walking each edge function's import graph against `git diff bbe9956c..HEAD` shows the **`worker`**
+also imports thirteen changed files (`src/handlers/instruction.ts`, `src/agents/{turn,entitled,gates,perform,approval}.ts`,
+`src/handlers/{drive,channels,calendar-tasks}.ts`, `src/inference/{policy,record}.ts`, `src/office/pass.ts`,
+`src/channels/callbacks.ts`). The worker MUST be redeployed. `slack-events`, `voice`, `voice-token`, `mcp`,
+`signin`, `google-oauth` import none. Also: `hq-api` and `telegram-webhook` both call functions whose
+signatures 0608 changes, so migration and all three deploys must be done back-to-back (no traffic: production
+had zero live jobs when checked).
+
+## Verified before touching production
+- main unmoved: `origin/main` = `bbe9956c`; Run 1 branch fast-forwards it (0 behind, 11 ahead).
+- Production migration position: 619 applied, head = 0606; `migrate --dry` would apply exactly 0607–0610.
+- Grant's identities exist in `subject_identities` (telegram 1386648496, slack U0BUNF6AALC, voice grant), so 0607 cannot lock him out.
+- Candidate gate: biome, tsc, vitest 234/3,671, check:migrations/secrets/templates clean; the isolated replica was
+  rebuilt from the repository and `run-all.sh` passes every suite (rc=0).
+- Barrier sabotage: importing `readPlan` directly into `instruction.ts` turns `gates.test.ts` red.
+- One integration finding, test-only: `correction-containment` failed 3/5 on the faithful replica because the chief
+  already owns the only bot row (fixture's `on conflict do nothing` did nothing). Fixture now uses the existing row.
+
+## Rollback point
+- Repository: `bbe9956c` (main); deploy scripts deploy the working tree, so rollback = check out `bbe9956c`, re-run deploy scripts.
+- Database: `docs/architecture-run-1/rollback-0606.sql` holds the production definition of every function 0607–0610
+  replace or drop (captured read-only at migration 0606).
+- Runtime before: worker v848, hq-api v781, telegram-webhook v601 (Supabase function versions).
+
+## Residuals confirmed read-only
+- R9: `telegram-webhook` still returns 200 `ignored` when `staff_for_bot` yields no row (including an error body).
+- R6: Slack actor is the Slack user id, resolved to a subject by `subject_for`; Grant's Slack id is mapped. A safe
+  allowlist = refuse non-synthetic production-door Slack commands whose subject is null, mirroring 0607, after
+  excluding bot/app messages; not enabled here.
+
+## STATUS: RUN 2 NOT READY
+Blocker: applying migrations 0607–0610 and deploying worker / hq-api / telegram-webhook to production was denied
+by the session's permission classifier. Nothing has been applied or deployed; production is unchanged.
