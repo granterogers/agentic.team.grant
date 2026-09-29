@@ -838,7 +838,35 @@ export const compile = (
             approvalOptions: [...STEP_OPTIONS],
             originatingAgent: 'chief-of-staff',
             workCanContinue: false,
-          }).catch(() => undefined)
+          }).catch(async (error: unknown) => {
+            /*
+              A QUESTION THAT COULD NOT BE WRITTEN IS NOT A QUESTION ASKED
+              (audit B7).
+
+              This used to be `.catch(() => undefined)`, and the pause below
+              was returned all the same: the job parked `awaiting_approval`,
+              non-resumable ("a clock cannot answer a question"), with nothing
+              behind it for anybody to answer - no dashboard card, no message,
+              no task - and no record that the write had failed. The plan
+              waited for ever on a question that did not exist.
+
+              Recorded where Governance reads it, then thrown, so the ordinary
+              retry path runs the step again: the question is raised on the
+              attempt where the write can succeed, and a job that runs out of
+              attempts owes Grant a sentence like any other (#231). Nothing is
+              performed in the meantime - the step stays unasked, not
+              approved.
+            */
+            const why = error instanceof Error ? error.message : String(error)
+            await db
+              .execute(
+                `select app.cannot(${lit(jobId)}::uuid, 'not_capable',
+                   'ask you to approve a step of the plan', 'the plan executor',
+                   ${lit(`the question could not be written: ${why.slice(0, 300)}`)}, null)`,
+              )
+              .catch(() => undefined)
+            throw new Error(`could not raise the approval question for a plan step: ${why}`)
+          })
           return { pause }
         }
         /*
