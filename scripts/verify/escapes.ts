@@ -282,10 +282,40 @@ if (realJob !== '') jobs.push(realJob)
   shape of a group chat and belongs to nobody. The transport is a counter, so
   nothing leaves this process whatever the number says.
 */
-const permitted = await attempt(realJob, 'telegram', '-9000000000001', 'control')
+/*
+  #379. This control's key is one no production adapter writes, so since 0603
+  its origin is UNKNOWN and the guard must refuse it even to Grant's real
+  chat -- the shape of telegram:artifact_demo, which reached him on 17
+  September. A refusal for the wrong reason looks exactly like the rule
+  working, so the reason is asserted too.
+*/
+const unknownToGrant = await attempt(realJob, 'telegram', GRANTS_TELEGRAM, 'unknown-origin')
+const unknownWhy = String(
+  (
+    await one(`select coalesce(suppressed_reason, '') as r from public.deliveries
+      where dedupe_key = ${lit(`escapes:${run}:unknown-origin:telegram`)}`)
+  ).r ?? '',
+)
+check(
+  unknownToGrant.outcome === 'suppressed' &&
+    unknownToGrant.sends === 0 &&
+    unknownWhy.includes('unknown origin'),
+  '#379: work of unknown origin never reaches his real chat, refused as unknown origin',
+  `outcome=${unknownToGrant.outcome}, sends=${String(unknownToGrant.sends)}, reason=${unknownWhy}`,
+)
+/*
+  The positive control, through a destination REGISTERED for this run (#378):
+  a registered test destination may receive anything, so a delivery there
+  must reach the transport. A fresh id each run, because the table refuses any
+  target that has ever had a real delivery, and removed in teardown.
+*/
+const TEST_CHAT = `-9${String(Date.now()).slice(-12)}`
+await db.execute(`insert into public.test_destinations (channel, target_ref, why)
+  values ('telegram', ${lit(TEST_CHAT)}, ${lit(`verify:escapes ${run} - a group id nobody holds, behind a counting transport`)})`)
+const permitted = await attempt(realJob, 'telegram', TEST_CHAT, 'control')
 check(
   permitted.outcome === 'sent' && permitted.sends === 1,
-  'CONTROL: a permitted delivery DOES reach the transport',
+  'CONTROL: a delivery to a registered test destination DOES reach the transport',
   `outcome=${permitted.outcome}, transport invoked ${String(permitted.sends)} time(s)`,
 )
 
@@ -305,7 +335,7 @@ const controlOut = await one(`
   select (select state::text from public.jobs where job_id = ${lit(realJob)}::uuid) as st,
          (select count(*)::int from public.deliveries
            where job_id = ${lit(realJob)}::uuid and sent_at is not null
-             and target_ref <> '-9000000000001') as real_sends`)
+             and target_ref <> ${lit(TEST_CHAT)}) as real_sends`)
 check(
   controlOut.st === 'queued' && Number(controlOut.real_sends ?? -1) === 0,
   'the real-looking control job was held: no worker ran it and it reached nobody',
@@ -314,6 +344,9 @@ check(
 
 // ── teardown, asserted ─────────────────────────────────────────────────────
 await db.execute(`delete from public.deliveries where dedupe_key like ${lit(`escapes:${run}:%`)}`)
+await db.execute(
+  `delete from public.test_destinations where channel = 'telegram' and target_ref = ${lit(TEST_CHAT)}`,
+)
 await db.execute(`
   delete from public.inbound_commands where dedupe_key like ${lit(`%escapes-${run}-%`)}`)
 if (jobs.length > 0) {
@@ -327,13 +360,14 @@ if (jobs.length > 0) {
 const left = await one(`
   select
     (select count(*) from public.deliveries where dedupe_key like ${lit(`escapes:${run}:%`)})::int as d,
+    (select count(*) from public.test_destinations where target_ref = ${lit(TEST_CHAT)})::int as t,
     (select count(*) from public.jobs
       where job_id in (${jobs.length === 0 ? 'null' : jobs.map((j) => `${lit(j)}::uuid`).join(', ')})
         and state not in ('complete', 'cancelled', 'failed'))::int as j`)
 check(
-  Number(left.d ?? -1) === 0 && Number(left.j ?? -1) === 0,
-  'teardown — no delivery row and no live job of this run',
-  `${String(left.d)} delivery row(s), ${String(left.j)} live job(s)`,
+  Number(left.d ?? -1) === 0 && Number(left.j ?? -1) === 0 && Number(left.t ?? -1) === 0,
+  'teardown — no delivery row, no live job and no test destination of this run',
+  `${String(left.d)} delivery row(s), ${String(left.j)} live job(s), ${String(left.t)} test destination(s)`,
 )
 
 if (failures > 0) {
