@@ -46,12 +46,21 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
 }) as typeof fetch
 
 const CHAT = '1386648496'
-const BOT = '9000000378'
+let BOT = '9000000378'
 const secret = await one(
   `insert into vault.secrets (name, secret) values ('isolated.telegram.${run}', 'isolated-fake-telegram-token') returning id::text as id`,
 )
 await db.execute(`insert into public.telegram_bots (bot_id, username, staff_slug, token_ref)
   values (${lit(BOT)}, 'isolated_bot', 'chief-of-staff', ${lit(String(secret.id))}) on conflict do nothing`)
+/*
+  The chief already owns a bot row on a faithful replica (one bot per person), so
+  the insert above does nothing there and the turn's key names a bot that does
+  not exist. Use the row that is really there.
+*/
+BOT = String(
+  (await one(`select bot_id from public.telegram_bots where staff_slug = 'chief-of-staff' limit 1`))
+    .bot_id,
+)
 await db.execute(`insert into public.telegram_chats (chat_id, chat_type, bot_id)
   values (${lit(CHAT)}, 'private', ${lit(BOT)}) on conflict do nothing`)
 
