@@ -401,7 +401,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // 1. Canonicalise. `origin_ref` is `session:turn`, matching the
   //    `chat:message` shape every other channel uses, so conversation memory
   //    and the pairing window work here with no special case.
-  const turn = Date.now().toString(36)
+  /*
+    A clock reading plus randomness. The clock alone gave two turns posted in
+    the same millisecond on one session the SAME dedupe key, so the second was
+    ignored as a duplicate and he was told "could not record what you said"
+    (found by a concurrency check on #373). Containment (0598) reads only the
+    session before the dot, so the turn's shape is free.
+  */
+  const turn = `${Date.now().toString(36)}${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
   /*
     The CONVERSATION is the thread the page showed, and it stays that thread
     even when the office cannot file the turn under its project. A stale tab

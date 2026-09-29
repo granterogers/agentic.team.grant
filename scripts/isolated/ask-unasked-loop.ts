@@ -445,6 +445,62 @@ for (const how of ['terminal', 'indeterminate'] as const) {
   }
 }
 
+// 13. Two workers sweep at once, each on its own connection: still sent once.
+{
+  const db2 = await isolated(process.argv[2] ?? 'aunq')
+  const service2 = new DeliveryService(db2, transport)
+  const witness2 = {
+    ...witness,
+    notify: async (job: Job, output: HandlerOutput) => {
+      const r = await service2.deliver({
+        dedupeKey: deliveryKey(job, output, 'reply'),
+        accountRef: '8967954396',
+        targetRef: '1386648496',
+        purpose: 'result',
+        correlationId: job.correlationId,
+        jobId: job.jobId,
+        body: { text: output.body },
+      })
+      return { delivered: r.outcome === 'sent', note: `witness2: ${r.outcome}` }
+    },
+  }
+  const notify2 = combinedNotifier([witness2], db2)
+  for (const shape of ['never tried', 'a lapsed claim'] as const) {
+    const j = await make('telegram:grant')
+    if (shape === 'a lapsed claim') failNext = 'retryable'
+    await runJob(db, j, [handler], review, shape === 'never tried' ? undefined : notify)
+    await age(j.jobId)
+    const b = await blockerOf(j.jobId)
+    if (shape === 'a lapsed claim') await lapse(b)
+    /* A barrier: each worker's notifier waits until BOTH sweeps have chosen
+       the question (or 2 s pass), so the two genuinely overlap between the
+       select and the claim - otherwise one sweep simply sees the other's row. */
+    let arrived = 0
+    let open: () => void = () => undefined
+    const gate = new Promise<void>((r) => {
+      open = r
+    })
+    const barrier =
+      (f: typeof notify) =>
+      async (...a: Parameters<typeof notify>) => {
+        arrived += 1
+        if (arrived >= 2) open()
+        await Promise.race([gate, new Promise((r) => setTimeout(r, 2000))])
+        return f(...a)
+      }
+    await Promise.all([askUnasked(db, barrier(notify)), askUnasked(db2, barrier(notify2))])
+    await Promise.all([askUnasked(db, notify), askUnasked(db2, notify2)])
+    check(
+      `(the two sweeps over ${shape} did overlap)`,
+      arrived === 2,
+      `${String(arrived)} arrived at the barrier`,
+    )
+    const n = sent.filter((x) => keyed(b)(x.key)).length
+    check(`two concurrent sweeps over ${shape} send it exactly once`, n === 1, `${String(n)} sent`)
+  }
+  await db2.end()
+}
+
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

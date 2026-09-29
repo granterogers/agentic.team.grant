@@ -251,6 +251,24 @@ const name = (id: unknown) =>
   check("9. and never in B's", !inB.includes(`The answer for A ${run}`), `${inB.length} chars`)
 }
 
+/* 3b. Concurrent turns on A and B in one visit: each lands where it was stated. */
+{
+  const s = session()
+  const burst = await Promise.all(
+    [A, B, A, B, A, B].map((p, i) =>
+      sent({ said: `Please draft concurrent note ${String(i)} ${run}`, session: s, project: p }),
+    ),
+  )
+  const wrong = burst.filter(
+    (r, i) => r.project !== (i % 2 === 0 ? A : B) || r.talk !== `${s}/${i % 2 === 0 ? A : B}`,
+  )
+  check(
+    '3b. six concurrent turns alternating A and B each resolve and converse where stated',
+    burst.length === 6 && wrong.length === 0,
+    burst.map((r) => name(r.project)).join(' '),
+  )
+}
+
 /* 10. #374 across projects: "yes please" in B's Chat never answers A's question. */
 {
   const handler = instructionHandler({
