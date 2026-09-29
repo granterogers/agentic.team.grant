@@ -28,7 +28,10 @@ const turn = async (channel: string, key: string, ref: string): Promise<string> 
   const cmd = await one(`
     set local application_name = 'PostgREST 14.5';
     insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(ref)}, 'grant', ${lit(`Witness proof ${run}`)}, ${lit(key)}, 'grant')
+    values (${lit(channel)}, ${lit(ref)},
+            -- The adapter writes the sender's own id; for a private Telegram chat that is the chat (#381).
+            ${lit(channel === 'telegram' ? (ref.split(':')[0] ?? '') : 'grant')},
+            ${lit(`Witness proof ${run}`)}, ${lit(key)}, 'grant')
     returning command_id::text as id`)
   const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
   return String(

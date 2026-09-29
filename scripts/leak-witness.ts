@@ -102,8 +102,80 @@ const WITNESS_ROOT_TRUSTED = `(
                     or exists (select 1 from public.staff st where st.slug = dd.added_by))))
   end)`
 
+/*
+  #381: a verification run that drives a REAL door declares the conversation
+  first, in public.test_origins. The ingress stamp honours that by writing
+  the turn `synthetic`. This witness does not read that stamp for the
+  purpose: it parses the conversation out of the job's own copy of the
+  origin (a suite may delete its inbound row; the job keeps origin_ref), and
+  looks the declaration up itself - a different expression from
+  app.origin_conversation, so a defect in one is not automatically in both.
+
+    TEST_ORIGIN_SENT          the root is in a declared conversation, and a
+                              message reached a destination not registered
+                              for tests;
+    UNREGISTERED_ORIGIN_SENT  the root has an adapter-exact key, so it passed
+                              every grammar, but its conversation is one no
+                              real person uses: a Telegram chat the adapter
+                              never recorded, or a Slack channel mapped to
+                              nothing, from somebody who is not the office's
+                              configured Slack user. That is the shape of a
+                              suite that forgot to declare.
+  And, with no send needed, `ignoredOriginSql`: a turn that arrived in a
+  declared conversation and was NOT written synthetic.
+*/
+export const WITNESS_CONVERSATION = String.raw`^(-?[A-Za-z0-9_-]+)[:/]`
+const ORIGIN_CH = `coalesce(cmd.origin_channel::text, j.pinned_config ->> 'origin_channel')`
+const ORIGIN_CONV = `substring(coalesce(cmd.origin_ref, j.pinned_config ->> 'origin_ref') from '${WITNESS_CONVERSATION}')`
+const WITNESS_DECLARED = `exists (
+    select 1 from public.test_origins t
+     where (t.channel = ${ORIGIN_CH} and t.channel in ('telegram', 'slack', 'voice')
+            and t.conversation = ${ORIGIN_CONV})
+        or (t.channel = 'teamhq' and ${ORIGIN_CH} = 'teamhq' and t.conversation = j.project_id::text)
+        or (t.channel = 'mcp' and j.requested_by = 'mcp:' || t.conversation))`
+/*
+  Known-real, by facts of the platforms rather than of this office's code:
+  a Telegram PRIVATE chat's id is positive and equals the id of the one user
+  in it (all 760 of Grant's private turns on 29 September satisfy this), and
+  a group's is negative; a Slack channel is real when it is mapped to no
+  project or to a project that is not a fixture, or the speaker is the
+  office's configured Slack user.
+*/
+const WITNESS_UNREGISTERED = `(
+    (${ORIGIN_CH} = 'telegram'
+       and not exists (
+         select 1 from public.telegram_chats tc
+          where tc.chat_id = ${ORIGIN_CONV}
+            and ((tc.chat_type = 'private' and tc.chat_id !~ '^-'
+                  and (cmd.actor is null or cmd.actor = tc.chat_id))
+                 or (tc.chat_type in ('group', 'supergroup') and tc.chat_id ~ '^-'))))
+    or (${ORIGIN_CH} = 'slack'
+       and not exists (
+         select 1 from public.slack_channel_map m
+           left join public.projects mp on mp.project_id = m.project_id
+          where m.channel_id = ${ORIGIN_CONV} and not coalesce(mp.is_fixture, false))
+       and coalesce(cmd.actor, '') is distinct from
+           (select sc.value #>> '{}' from public.system_config sc where sc.key = 'slack.subject_user_id')))`
+
+export const ignoredOriginSql = `
+  select c.dedupe_key as key, t.run_token, t.channel, t.conversation
+    from public.inbound_commands c
+    join public.test_origins t
+      on (t.channel = c.origin_channel::text and t.channel in ('telegram', 'slack', 'voice')
+          and t.conversation = substring(c.origin_ref from '${WITNESS_CONVERSATION}'))
+      or (t.channel = 'teamhq' and c.origin_channel::text = 'teamhq' and t.conversation = c.project_id::text)
+   where not c.synthetic and c.received_at >= t.registered_at
+  union all
+  select j.idempotency_key, t.run_token, t.channel, t.conversation
+    from public.jobs j
+    join public.test_origins t on t.channel = 'mcp' and j.requested_by = 'mcp:' || t.conversation
+   where j.parent_job_id is null and not j.synthetic and j.created_at >= t.registered_at`
+
 /** One row per sent delivery at or after `since` (an SQL timestamptz expression). */
-export const provenanceSql = (since: string): string => `
+export const provenanceSql = (
+  since: string,
+  opts: { declarations?: boolean } = { declarations: true },
+): string => `
   with recursive sent as (
     select d.delivery_id, d.channel::text as channel, d.target_ref, d.dedupe_key, d.sent_at,
            coalesce(d.job_id, (select j.job_id from public.jobs j
@@ -135,7 +207,9 @@ export const provenanceSql = (since: string): string => `
                  and cmd.dedupe_key !~ '${ADAPTER_SHAPE}')
            ) as harness,
            bool_or(c.depth = 0 and app.harness_job(c.job_id)) as guard_says_harness,
-           bool_or(c.parent_job_id is null and ${WITNESS_ROOT_TRUSTED}) as root_trusted
+           bool_or(c.parent_job_id is null and ${WITNESS_ROOT_TRUSTED}) as root_trusted,
+           bool_or(c.parent_job_id is null and ${opts.declarations === false ? 'false' : WITNESS_DECLARED}) as test_origin,
+           bool_or(c.parent_job_id is null and j.pinned_config ? 'command_id' and ${WITNESS_UNREGISTERED}) as unregistered
       from chain c
       join public.jobs j on j.job_id = c.job_id
       left join public.projects pr on pr.project_id = j.project_id
@@ -146,11 +220,14 @@ export const provenanceSql = (since: string): string => `
          s.sent_at::text as sent_at, s.job_id::text as job_id, s.named,
          coalesce(g.harness, false) as harness,
          coalesce(g.guard_says_harness, false) as guard_says_harness,
+         coalesce(g.test_origin, false) as test_origin,
          case
            when s.job_id is null and split_part(s.dedupe_key, ':', 1) <> all (array[${WITNESS_OPERATOR_NAMESPACES.map((n) => `'${n}'`).join(', ')}])
              then 'UNPROVENANCED'
+           when coalesce(g.test_origin, false) then 'TEST_ORIGIN_SENT'
            when coalesce(g.harness, false) then 'HARNESS_SENT'
            when s.job_id is not null and not coalesce(g.root_trusted, false) then 'UNKNOWN_SENT'
+           when coalesce(g.unregistered, false) then 'UNREGISTERED_ORIGIN_SENT'
            else null
          end as breach
     from sent s left join judged g on g.delivery_id = s.delivery_id`

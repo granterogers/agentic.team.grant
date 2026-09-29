@@ -49,7 +49,13 @@
  */
 
 import { ManagementApiExecutor } from '../src/db/executor.ts'
-import { ADAPTER_SHAPE, harnessDocSql, offShapeSql, provenanceSql } from './leak-witness.ts'
+import {
+  ADAPTER_SHAPE,
+  harnessDocSql,
+  ignoredOriginSql,
+  offShapeSql,
+  provenanceSql,
+} from './leak-witness.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -1010,7 +1016,14 @@ const fixedAt = (
   ).rows[0] as { t?: string } | undefined
 )?.t
 const since = fixedAt === undefined ? 'app.harness_guard_since()' : `'${fixedAt}'::timestamptz`
-const traced = (await db.execute(provenanceSql(since))).rows as {
+// #381's declarations exist only once 0605 is applied; before that there are none to honour.
+const declarations =
+  (
+    (await db.execute(`select to_regclass('public.test_origins') is not null as t`)).rows[0] as
+      | { t?: boolean }
+      | undefined
+  )?.t === true
+const traced = (await db.execute(provenanceSql(since, { declarations }))).rows as {
   key: string
   channel: string
   target_ref: string
@@ -1041,6 +1054,7 @@ const disagreements = traced.filter((r) => r.harness !== r.guard_says_harness)
 console.log(
   `  every sent message traced to its cause ${fixedAt === undefined ? '(since the guard; 0601 not applied, so HISTORY — reported, not failed)' : `(since 0601, ${fixedAt})`}: ` +
     `${String(traced.length)} examined · harness sent ${String(byClass('HARNESS_SENT'))} · unprovenanced ${String(byClass('UNPROVENANCED'))} · unknown origin ${String(byClass('UNKNOWN_SENT'))}` +
+    ` · declared test origin sent ${String(byClass('TEST_ORIGIN_SENT'))} · undeclared door origin sent ${String(byClass('UNREGISTERED_ORIGIN_SENT'))}` +
     ` · witness and app.harness_job disagree on ${String(disagreements.length)}`,
 )
 if (fixedAt !== undefined && breaches.length > 0) {
@@ -1054,10 +1068,41 @@ if (fixedAt !== undefined && breaches.length > 0) {
       ``,
       "HARNESS_SENT: the lineage is harness by the witness's own rules. UNKNOWN_SENT: the root is",
       'nothing a production door or the office itself makes (#379). UNPROVENANCED: no job,',
-      'and not an operator notice. Either way app.claim_delivery allowed it (#378).',
+      'and not an operator notice. TEST_ORIGIN_SENT: the root is in a conversation a run',
+      'declared as a test (#381). UNREGISTERED_ORIGIN_SENT: an adapter-exact turn from a',
+      'conversation no real person uses - a suite that drove a real door without declaring it.',
+      'Either way app.claim_delivery allowed it (#378).',
     ].join('\n'),
   )
   process.exit(1)
+}
+
+/*
+  #381: a declaration that was not honoured, whether or not anything was sent.
+  The door wrote a turn in a conversation a run declared, and the turn is not
+  synthetic: the stamp did not see the declaration, so everything downstream
+  would treat the test as Grant.
+*/
+if (declarations) {
+  const ignored = (await db.execute(ignoredOriginSql)).rows as {
+    key: string
+    run_token: string
+    channel: string
+    conversation: string
+  }[]
+  console.log(`  declared test origins that the door ignored: ${String(ignored.length)}`)
+  if (ignored.length > 0) {
+    console.error(
+      [
+        ``,
+        `check:leaks FAILED — ${String(ignored.length)} turn(s) arrived in a declared test conversation and were NOT marked synthetic.`,
+        ...ignored
+          .slice(0, 8)
+          .map((r) => `  ${r.channel} ${r.conversation} (run ${r.run_token}): ${r.key}`),
+      ].join('\n'),
+    )
+    process.exit(1)
+  }
 }
 
 if (fresh.length > 0) {

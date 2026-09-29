@@ -12,14 +12,28 @@ export const BOT = '8967954396'
 export const CHAT = '1386648496'
 
 export async function registerBot(db: PgExecutor): Promise<void> {
+  /*
+    And Grant's chat, as the webhook records it (#381): telegram-webhook calls
+    record_telegram_chat for every update BEFORE it normalises anything, so in
+    production his chat is always in telegram_chats (for all eight bots on 29
+    September). A "real" turn from a chat the office never recorded is the
+    shape of a suite that forgot to declare, and the witness says so.
+  */
+  const recordChat = () =>
+    db.execute(`insert into public.telegram_chats (chat_id, chat_type, bot_id, subject)
+      values ('${CHAT}', 'private', '${BOT}', 'grant') on conflict do nothing`)
   const exists = await db.execute(`select 1 from public.telegram_bots where bot_id = '${BOT}'`)
-  if (exists.rows.length > 0) return
+  if (exists.rows.length > 0) {
+    await recordChat()
+    return
+  }
   const secret = await db.execute(
     `insert into vault.secrets (name, secret) values ('isolated.chief.bot.${Date.now().toString(36)}', 'isolated-fake-telegram-token') returning id::text as id`,
   )
   const ref = String((secret.rows[0] as { id: string }).id)
   await db.execute(`insert into public.telegram_bots (bot_id, username, staff_slug, is_pager, token_ref)
     values ('${BOT}', 'isolated_chief_bot', 'chief-of-staff', true, '${ref}') on conflict do nothing`)
+  await recordChat()
 }
 
 /** A fresh message key from Grant's chat, in the adapter's shape. */
