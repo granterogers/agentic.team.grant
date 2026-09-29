@@ -299,3 +299,22 @@ export function toCanonicalCommand(
     compensates_event_id: null,
   }
 }
+
+/**
+ * Who sent this update, as Telegram states it, or null when it does not say
+ * (a channel post, an anonymous group admin) or says something that is not a
+ * user id.
+ *
+ * The door uses this and nothing else to ask "is this somebody the office
+ * answers". A private chat is NOT evidence of identity - the chat id of a
+ * private chat is merely the user's id, and anyone who finds the bot's
+ * username can open one (#B1, architecture audit).
+ */
+export function senderOf(update: TelegramUpdate): string | null {
+  const from =
+    update.message?.from ?? update.callback_query?.from ?? update.my_chat_member?.from ?? null
+  if (from === null || from === undefined) return null
+  const id = (from as { id?: unknown }).id
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) return null
+  return String(id)
+}

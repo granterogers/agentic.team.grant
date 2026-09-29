@@ -13,7 +13,7 @@ for m in $(ls migrations/*.sql | awk -F/ '{print $2}' | awk '$0 >= "0601"'); do
 done
 echo "== R48 recovery matrix"; bash scripts/isolated/recovery-matrix.sh > /tmp/iso-matrix.txt 2>&1 && echo PASS || { echo FAIL; status=1; }
 echo "== R48 drain survives a raising sweep (on pre)"; fresh drain_proof pre; npx tsx scripts/isolated/drain-survives-sweep.ts drain_proof 2>&1 | tail -1; [ ${PIPESTATUS[0]} -eq 0 ] || status=1
-for t in destination-retirement:ret381 history-shapes:hist381 test-origins:orig381 witness-test-origins:witorig381 legit-origins:legit379 synthetic-origins:syn379 task-content-containment:task379 narration-containment:narr378 external-containment:ext378 correction-containment:corr378 chat-containment:chat378 witness-independence:wit378 approval-execution:r45 approval-delivery:r46 containment:r37 acknowledgement:ack374 acknowledgement-sequence:seq374 project-provenance:prov373 paused-incoherent:pinc ask-unasked-loop:aunq; do
+for t in destination-retirement:ret381 history-shapes:hist381 test-origins:orig381 witness-test-origins:witorig381 legit-origins:legit379 synthetic-origins:syn379 task-content-containment:task379 narration-containment:narr378 external-containment:ext378 correction-containment:corr378 chat-containment:chat378 witness-independence:wit378 approval-execution:r45 approval-delivery:r46 containment:r37 acknowledgement:ack374 acknowledgement-sequence:seq374 project-provenance:prov373 paused-incoherent:pinc ask-unasked-loop:aunq sender-authorization:sa607; do
   f=${t%%:*}; db=${t##*:}; echo "== $f"; fresh $db cand
   npx tsx scripts/isolated/$f.ts $db > /tmp/iso-$f.txt 2>&1; rc=$?; grep -E "passed|^FAIL" /tmp/iso-$f.txt | tail -3; [ $rc -eq 0 ] || status=1
 done

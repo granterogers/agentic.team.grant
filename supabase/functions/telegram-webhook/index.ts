@@ -24,7 +24,7 @@
  */
 
 import type { TelegramUpdate } from './telegram.ts'
-import { secretMatches, toCanonicalCommand, UnsupportedUpdateError } from './telegram.ts'
+import { secretMatches, senderOf, toCanonicalCommand, UnsupportedUpdateError } from './telegram.ts'
 
 const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') ?? ''
 /**
@@ -37,8 +37,6 @@ const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') ?? ''
  * any staff member.
  */
 const DEFAULT_BOT_ID = Deno.env.get('TELEGRAM_BOT_ID') ?? ''
-/** Who the private chats reaching this bot belong to. One human, for V1. */
-const SUBJECT = Deno.env.get('TELEGRAM_SUBJECT') ?? 'grant'
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 /**
  * Where to kick the worker, and what to present when kicking it.
@@ -133,6 +131,66 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return new Response('bad request', { status: 400 })
   }
 
+  /*
+    WHO SENT THIS, according to the office and not according to Telegram.
+
+    The shared secret proves the request came from Telegram; it says nothing
+    about the person, and a bot's username is public. Until this check every
+    private chat that reached a bot was recorded as Grant's own (so the pager
+    could be pointed at a stranger, 0607) and everything it said became a job
+    from `telegram:<their id>`.
+
+    `public.sender_admitted` reads `subject_identities`, the list of which
+    Telegram user is which person (0056), and whether the conversation is a
+    declared test origin (0605). Anyone else is acknowledged with a 200 and
+    NOTHING is stored: no chat registered, no command, no job, no lesson. A
+    200 rather than a 4xx because Telegram retries a non-2xx forever, and a
+    stranger's message is one we will never accept however often it arrives.
+
+    Identity that cannot be established is a refusal: an update with no
+    `from`, or a `from.id` that is not a user id, never reaches storage.
+
+    But a LOOKUP that fails is not a stranger. If the office cannot be asked,
+    Grant's own message must not be dropped as though he were one, so that is
+    a 503 and Telegram retries it.
+  */
+  const sender = senderOf(update)
+  const claimedChat =
+    update.message?.chat ?? update.callback_query?.message?.chat ?? update.my_chat_member?.chat
+  let subject: string | null = null
+  let declaredTest = false
+  if (sender !== null) {
+    let admitted: Response
+    try {
+      admitted = await fetch(`${DB_URL}/rest/v1/rpc/sender_admitted`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_channel: 'telegram',
+          p_actor: sender,
+          p_conversation: claimedChat === undefined ? null : String(claimedChat.id),
+        }),
+      })
+    } catch {
+      return new Response('sender lookup failed', { status: 503 })
+    }
+    if (!admitted.ok) return new Response('sender lookup failed', { status: 503 })
+    const who = (await admitted.json().catch(() => null)) as {
+      subject?: string | null
+      declared_test?: boolean
+    } | null
+    if (who === null) return new Response('sender lookup failed', { status: 503 })
+    subject = typeof who.subject === 'string' && who.subject !== '' ? who.subject : null
+    declaredTest = who.declared_test === true
+  }
+  if (subject === null && !declaredTest) {
+    return Response.json({ ok: true, ignored: 'unrecognised sender' })
+  }
+
   // Register the chat BEFORE normalizing, and outside the try that drops
   // unsupported updates.
   //
@@ -171,9 +229,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
           p_chat_id: String(chat.id),
           p_chat_type: String(chat.type ?? 'private'),
           p_bot_id: BOT_ID,
-          // Attributed only for a private chat. A group is not one person, and
-          // saying it is would page a room.
-          p_subject: chat.type === 'private' ? SUBJECT : null,
+          // Attributed only for a private chat, and only to the person the
+          // office's own list says this Telegram user is (0607). A group is
+          // not one person, and saying it is would page a room.
+          p_subject: chat.type === 'private' ? subject : null,
           // A group has a name and Grant will recognise it by that, not by a
           // negative fourteen-digit id.
           p_title: chat.title ?? null,
