@@ -9,8 +9,10 @@
  * drawn from must show the second pair and not the first.
  */
 import { isolated } from './guard.ts'
+import { realTelegramKey, registerBot } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'chat378')
+await registerBot(db)
 const run = Date.now().toString(36)
 const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<string, unknown>
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
@@ -54,7 +56,7 @@ const h = await turn(
 )
 const r = await turn(
   'telegram',
-  `telegram:message:1386648496:${String(Date.now() % 100000)}`,
+  realTelegramKey(),
   `1386648496:${String(Date.now() % 100000)}`,
   `Grant asks ${run}`,
 )

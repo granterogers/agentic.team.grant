@@ -19,8 +19,10 @@ import { SlackClient } from '../../src/slack/api.ts'
 import { narrateHandoffs, narrateOutcomes } from '../../src/slack/narrate.ts'
 import { SlackOffice } from '../../src/slack/office.ts'
 import { isolated } from './guard.ts'
+import { realTelegramKey, registerBot } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'narr378')
+await registerBot(db)
 const run = Date.now().toString(36)
 const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<string, unknown>
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
@@ -73,11 +75,7 @@ const turn = async (channel: string, key: string, ref: string): Promise<string> 
   return v.job_id
 }
 const harness = await turn('voice', `voice:turn:verify-378-${run}.1`, `verify-378-${run}/x:1`)
-const real = await turn(
-  'telegram',
-  `telegram:message:1386648496:${String(Date.now() % 100000)}`,
-  `1386648496:${String(Date.now() % 100000)}`,
-)
+const real = await turn('telegram', realTelegramKey(), `1386648496:${String(Date.now() % 100000)}`)
 const cls =
   await one(`select app.harness_job(${lit(harness)}::uuid) as h, (select is_fixture from public.jobs where job_id = ${lit(harness)}::uuid) as f,
   app.harness_job(${lit(real)}::uuid) as rh`)

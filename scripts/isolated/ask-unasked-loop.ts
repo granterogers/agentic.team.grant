@@ -26,6 +26,7 @@ import {
   runJob,
 } from '../../src/jobs/worker.ts'
 import { isolated } from './guard.ts'
+import { realParent } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'aunq')
 const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<string, unknown>
@@ -117,7 +118,22 @@ const handler: Handler = {
 }
 
 const make = async (by: string): Promise<Job> => {
-  const r = await one(`
+  /*
+    Grant's own work is a child of a real adapter turn (#379): a root job with
+    no turn behind it is an origin no production component creates. Harness
+    work keeps its own name and needs no door.
+  */
+  const r =
+    by === 'telegram:grant'
+      ? {
+          id: String(
+            (
+              await one(`select app.enqueue_child(p_parent => '${await realParent(db)}'::uuid,
+                p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`)
+            ).v,
+          ).match(/[0-9a-f-]{36}/)?.[0],
+        }
+      : await one(`
     with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
                values ('verify.ask', '${by}', app.unnamed_project(), 'r46-' || gen_random_uuid(), gen_random_uuid())
                returning job_id)

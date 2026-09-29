@@ -17,8 +17,10 @@
 import type { Handler, HandlerOutput, Job } from '../../src/jobs/worker.ts'
 import { runJob } from '../../src/jobs/worker.ts'
 import { isolated } from './guard.ts'
+import { realTelegramKey, registerBot } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'ext378')
+await registerBot(db)
 const run = Date.now().toString(36)
 const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<string, unknown>
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
@@ -103,11 +105,7 @@ const runIt = async (jobId: string): Promise<{ state: string; ran: boolean; reas
 }
 
 const harness = await turn('voice', `voice:turn:verify-378x-${run}.1`, `verify-378x-${run}/x:1`)
-const real = await turn(
-  'telegram',
-  `telegram:message:1386648496:${String(Date.now() % 100000)}`,
-  `1386648496:${String(Date.now() % 100000)}`,
-)
+const real = await turn('telegram', realTelegramKey(), `1386648496:${String(Date.now() % 100000)}`)
 const cls =
   await one(`select app.harness_job(${lit(harness)}::uuid) as h, app.harness_job(${lit(real)}::uuid) as r,
   (select is_fixture from public.jobs where job_id = ${lit(harness)}::uuid) as f`)
