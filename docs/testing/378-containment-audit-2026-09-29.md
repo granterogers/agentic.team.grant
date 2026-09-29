@@ -240,3 +240,189 @@ because the old code sends it with no job.
 - **Channel audience is indeterminate** (§7).
 - **`verify:slack`, `verify:telegram` and `verify:history`** were adapted but
   can only be run against production, after the deploy.
+
+---
+
+# #379 — unknown origin is not real traffic (same branch, 29 September 2026)
+
+**Status.** With 0603 and 0604, the answer to "can unknown or harness-originated
+work produce an external side effect at a non-test destination" is **no, by any
+path known to this repository**. The limit is stated in §R.
+
+## R1. Root cause
+
+`app.harness_job` answers one question: *do we know this is test traffic?* Its
+last line is `coalesce(…, false)`, so anything it does not recognise comes back
+"real". Both 0601's guard and the worker gate asked it, so recognition was the
+only thing standing between harness work and Grant.
+
+A turn through a production door whose key no production adapter can produce
+was therefore treated as his. Examples: `telegram:artifact_demo:02jzde`,
+`telegram:message:escapes-…-real`, `telegram:ctx:…`, `teamhq:branch_turn:…` and
+`voice:message:…`. So was a root job that no office function creates, for
+example `requested_by = 'telegram:grant'` with no turn behind it.
+
+The same gap covered content: a trusted duty carried harness task content
+outward because its readers filtered on `tasks.is_fixture`.
+
+## R2. The trusted-origin model (0603)
+
+**Two questions, two functions.**
+
+`app.harness_job` is unchanged and still means *known harness*. The readers
+that hide test traffic from Grant keep using it.
+
+`app.job_origin` means *where this work came from*. It is decided at the root
+of the lineage, and harness anywhere in the lineage wins. It returns one of:
+
+| Value | Meaning |
+|---|---|
+| `harness` | exactly when `app.harness_job` is true |
+| `trusted` | the root turn's key is one its channel's production adapter produces |
+| `internal` | the root is a job an office function creates, bound to the row that made it |
+| `unknown` | everything else, including a missing job and a turn whose row was deleted |
+
+**What `trusted` accepts,** per adapter, read from the adapter code
+(`app.adapter_key_ok`):
+
+| Door | Source | Key shapes |
+|---|---|---|
+| Telegram | `src/channels/telegram.ts` | `telegram:message:<bot>:<chat>:<msg>` and `telegram:callback:<bot>:<id>`, with `<bot>` in `public.telegram_bots` |
+| Slack | `src/slack/events.ts`, `src/slack/interactions.ts`, `app.record_slack_history` | `slack:message:<C…>:<10.6 ts>` and `slack:reaction\|action:<C…>:<ts>:<U…>:<verb>` |
+| Voice | `supabase/functions/voice` | `voice:turn:s<≤10 base36>.<turn>`: the session `chat.js` and `call.js` mint, so Chat voice and the realtime call |
+| Dashboard | `app.say_in_project` | `teamhq:message:<32 hex>`, minted by the server |
+| Dashboard | `app.send_to_agent` | `asset:<kind>:<uuid>:<action>:<17-digit clock>` |
+
+Telegram voice notes and button presses use the same adapter keys. The origin
+channel must match the key's door.
+
+**What `internal` accepts** (`app.internal_root_ok`), per creator. These are
+all 13 SQL functions that insert into `public.jobs`, and no TypeScript inserts
+jobs.
+
+| Creator | Accepted when |
+|---|---|
+| a duty (`dispatch_due_responsibilities`) | `duty:<slug>` names a responsibility whose `job_kind` equals the job's kind |
+| an event trigger (`fire_triggers_for`) | `trigger:<name>` names a trigger row with that kind |
+| channel provisioning and renaming | `hq`, for those two kinds only |
+| Disconnect Google | `grant`, for `google.revoke` only |
+| MCP provider registration | `connector:register`, for `mcp.discover` |
+| an MCP client | `mcp:<client>`, for an enabled client with write scope |
+| a new document's read | `knowledge.read_source` for a document whose own origin is trusted (`app.document_origin`) |
+
+A document's origin is decided like this:
+- a document an office job made inherits that job's origin;
+- the writers that add documents record `added_by` as null, `grant`, `the office`, a staff slug or an MCP client with write scope;
+- anything else is unknown. That is how `verify:scenario-a`'s documents are caught.
+
+**Legacy.** The Telegram adapter wrote a four-part key before commit
+`72dd4040` (7 September). Those turns are trusted by id: 0603 snapshots them
+into `public.legacy_trusted_commands` when it runs. They are not trusted by
+shape or by time, because the caller supplies `received_at`.
+
+## R3. One definition at both boundaries
+
+`app.may_act_outside(job)` means `job_origin in ('trusted', 'internal')`. Both
+boundaries ask exactly this.
+
+- **Delivery.** `app.delivery_refusal` refuses `harness` and `unknown`, and so
+  does `app.deliverable_to`. The order before that is 0601's:
+  1. a registered test destination may receive anything;
+  2. with no job, only a registered operator sender may send;
+  3. a job that does not exist is refused.
+- **External writes.** `containmentRefusal` in `src/jobs/containment.ts` asks
+  `app.job_origin`. It refuses `harness` and `unknown`, and fails closed on any
+  error or any word it does not know.
+
+The worker is deployed before 0603, so the gate needs a fallback. Only when
+Postgres reports the function missing (42883) does it ask `app.harness_job` —
+which is exactly the gate the previous worker had. Unit tests prove the
+fallback and prove that no other error falls back.
+
+## R4. Proofs (isolated replica; all run by `run-all.sh`)
+
+Each command is made by the real adapter function, or the real SQL or voice
+door. Each proof asks both boundaries.
+
+| Proof | Before | After | Sabotage |
+|---|---|---|---|
+| `legit-origins.ts` (written first; controls) | **22/22** | **24/24** (plus both button presses `trusted`) | — |
+| `synthetic-origins.ts` (#379 reproduction) | **0/36** | **36/36** | `adapter_key_ok` returns true → 14/36; `internal_root_ok` returns true → 22/36 |
+| `task-content-containment.ts` (0604) | **3/5** | **5/5** | — |
+| `containment.ts` (R37) | recorded both shapes as known misses | the guard refuses both; with `job_origin` broken, both witnesses still catch them — **19/19** | — |
+| `witness-independence.ts` | — | **12/12**, with `harness_job` **and** `job_origin` both broken | witness made to trust every root → red |
+
+`legit-origins.ts` covers 11 origins:
+- Telegram text, a voice note and a button;
+- a Slack message and a Slack button;
+- Team HQ Chat typed, Chat voice and the realtime call;
+- a dashboard document action and the read a new document starts;
+- a scheduled duty;
+- plus an operator notice and a test destination.
+
+`synthetic-origins.ts` covers 11 synthetic door shapes, 6 root jobs no creator
+makes, and a grandchild of unknown work.
+
+**Deploy order, proved.** The new worker gate on production's schema today is
+19/19. On the schema with 0601 but without 0603 it is also 19/19.
+
+## R5. Production, read-only
+
+**False positives.** Over every send in the last 21 days, not one message that
+real work sent would have been refused. The refusals are all one of:
+- harness traffic;
+- suite roots (`progress-proof-*`, the `verify:escapes` positive control, a
+  deleted suite duty, a dashboard probe);
+- `verify:scenario-a` documents;
+- hand-run authoring-session jobs.
+
+No job is live today.
+
+**The witness (`check:leaks`)** now has a third breach, `UNKNOWN_SENT`, with its
+own grammar. Since the guard existed it finds **9 historical unknown-origin
+sends**:
+- 6 on 20 September from a `progress-proof` suite root: 3 to Grant's Telegram and 3 to Slack. These were not previously known.
+- 3 on 24 September from a `scenario-a` document.
+
+These are history, reported rather than failed until 0601 is applied.
+
+## R6. #380 blocking review
+
+| Item | Invalidates the claim? | Decision |
+|---|---|---|
+| Task content in `app.calendar_task_plan` / `app.notice` | **Yes.** `blocker_makes_a_task` files a harness job's task with `is_fixture = false`. Given a date, it was planned into his real calendar (dormant only because `calendar.sync_tasks` is false) and appeared in his briefing. | **Fixed: 0604**, proof above |
+| `telegram-webhook` voice refusal, GitHub `repository_dispatch` | Reachable only by a Telegram-signed voice update. Transcription is `api`, so the refusal never fires. The dispatch token is present. The dispatch starts a GitHub Actions run and messages nobody; its work is drained through the guard. No code in the repository posts voice updates. | Stays tracked in #380 |
+| Display readers that use `is_fixture` only | Display only | Stays tracked in #380 |
+| `blocker_makes_a_task` itself | Its tasks are now filtered wherever they reach outward | Stays tracked in #380 |
+| `provision_missing_channels` | Its jobs are `internal`; they create channels for real, 15-minute-old projects (0419) | Stays tracked in #380 |
+
+## R7. False greens found in this pass
+
+- Every "real Telegram" control in the #378 proofs used the retired four-part
+  key with no bot. They passed only because the guard could not tell. They now
+  use the adapter's key and a registered bot (`real-telegram.ts`).
+- Three approval proofs modelled Grant's job as a root inserted with
+  `telegram:grant` and no turn, which is exactly the unknown origin. It is now a
+  child of a real door turn.
+- The Slack fixture's timestamp was `Date.now() / 1000`, a 3-digit fraction;
+  Slack always writes six.
+- `containment.ts` asserted #379 as expected behaviour ("the guard misses …").
+- My first witness rule flagged the office's own operator notices as unknown.
+- A proof checked by key prefix and read another row's verdict.
+- `task-content-containment.ts` was vacuous twice:
+  - `app.task_add` already relabels harness tasks;
+  - blocker tasks are assigned to him, so the deadline line never showed
+    either task.
+
+## R. Residual risk (#379)
+
+- **Exact impersonation with production credentials.** A script holding the
+  service key can write a byte-perfect adapter key: a registered bot and a
+  numeric chat and message id, through PostgREST, with no harness label. That
+  is `trusted` by construction. No positive model can separate it from the
+  adapter without a secret only the adapter holds, and every such secret is in
+  the vault the harness can read. Nothing in the repository does this; the
+  harness conventions (`verify-…` labels, fixture destinations) are the control.
+  **This is not a known path.** It is the stated limit.
+- **Reads are ungated**, deliberately.
+- **Job-less deliveries rely on `operator_senders`** (0601).

@@ -4051,6 +4051,24 @@ Each of these cost real time. They are here so they cost it once.
   ARE the list a browser can reach — and it found the one bad entry among 147.
   Only a browser at the real deployed origin ever saw it (#340).
 
+- **"Not known to be harness" is not "real", and a guard that asks the first
+  question lets the unknown through.** 0601 made every message name its job and
+  asked `app.harness_job` of it — a predicate ending `coalesce(…, false)`. So a
+  turn through a production door whose key no adapter produces
+  (`telegram:artifact_demo:…`, which reached Grant on 17 September) read as
+  his, and so did a root job no office function creates. `app.job_origin`
+  (0603) is the other question, answered positively from what each adapter and
+  each job-creating function actually writes; both boundaries ask
+  `app.may_act_outside`. When an adapter changes its key, change
+  `app.adapter_key_ok` in the same commit, or its real traffic goes quiet.
+- **A fixture that models real traffic must be real by the product's own
+  definition, or the control passes for the wrong reason.** Every "real
+  Telegram" control in the #378 proofs used the four-part key the adapter
+  stopped writing on 7 September; three approval proofs modelled Grant's job as
+  a hand-inserted root; a Slack timestamp had three decimals. All green, all
+  vacuous — the guard simply could not tell. Build fixtures from the adapter
+  functions (`scripts/isolated/real-telegram.ts`, `legit-origins.ts`).
+
 ---
 
 ## Visual standard

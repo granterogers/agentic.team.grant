@@ -21,6 +21,11 @@
 > (`src/jobs/containment.ts`); see ADR-0049. `check:leaks` now reconciles
 > every sent message against provenance independently of `app.harness_job`.
 >
+> #379 (same branch): unknown origin is no longer real traffic. `app.job_origin`
+> (0603) decides both boundaries from a positive model of what each adapter and
+> office function creates; 0604 keeps harness task content out of his calendar
+> and briefing. Worker first, then 0601–0604.
+>
 > Full matrix, proofs, history and deploy order:
 > `docs/testing/378-containment-audit-2026-09-29.md`. **Deploy the worker
 > before 0601.**

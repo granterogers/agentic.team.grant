@@ -51,3 +51,15 @@ of this was counted.
 - **Reads are deliberately not gated.** A harness may read the web.
 - Deploy order: the worker before 0601. The old worker sends narration with no
   job, and 0601 refuses it.
+
+## Amendment — #379, 29 September 2026
+
+"Harness" and "trusted" are different questions, and 0601 answered both with
+`app.harness_job`, whose default is "real". `app.job_origin` (0603) is the
+boundary question: `trusted` (a turn a production adapter produces, by a
+positive per-adapter grammar), `internal` (a job an office function creates,
+bound to its row), `harness`, `unknown`. Both chokepoints allow only
+`app.may_act_outside(job)`. **Do not** answer "is this real?" by asking whether
+it is harness, and do not grow a list of test names: extend the grammar in
+`app.adapter_key_ok` when an adapter changes its keys, and the legacy snapshot
+only with evidence of a retired adapter.
