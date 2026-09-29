@@ -438,6 +438,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'every project-mark default names an icon the page can actually draw (#221 shipped twelve that did not)',
   ],
   [
+    'check:branding',
+    'no shipped page says "Basecamp": Team HQ is the product\'s name, and the check proves it can fail (#382)',
+  ],
+  [
     'check:callers',
     'no NEW capability ships with nothing that calls it — #72 had five in one session, each green in its own suite',
   ],

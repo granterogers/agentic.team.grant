@@ -58,7 +58,7 @@ await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.bcmain')
 await page.waitForTimeout(400)
 const slug = (await page.evaluate(
-  inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+  inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
      return el === null ? '' : (el.dataset.bcGo ?? '')`),
 )) as string
 await page.locator(`[data-bc-go="${slug}"]`).first().click()
@@ -203,11 +203,7 @@ await page.locator('[data-mod="schedule"] .bcmodhead').first().click()
 await page.waitForTimeout(500)
 await back()
 await back()
-check(
-  'from the bare project, Back finally goes to project selection',
-  here() === '/basecamp' || here() === '/basecamp/',
-  here(),
-)
+check('from the bare project, Back finally goes to project selection', here() === '/', here())
 
 /* --- 5. Forward reopens it, because it is a real history entry ---------- */
 await page.goForward()

@@ -89,6 +89,8 @@ subject.layout = [{ id: 'activity', x: 0, y: 0, w: 3, h: 320 }]
 const server = createServer(async (request, response) => {
   let file = join('web/studio', decodeURIComponent((request.url ?? '/').split('?')[0] ?? '/'))
   if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
+  // A dotless path is a route, as on the host (#382: the older studio is under /classic).
+  if (!existsSync(file) && extname(file) === '') file = join('web/studio', 'index.html')
   if (!existsSync(file)) {
     response.writeHead(404)
     response.end('not here')
@@ -145,7 +147,7 @@ await page.addInitScript(`
 
 console.log('\nverify:times\n')
 
-await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
+await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(2_000)
 await page.evaluate(`document.querySelector('[data-open]')?.click()`)
 await page.waitForTimeout(1_500)

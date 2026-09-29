@@ -153,7 +153,7 @@ const server = createServer(async (req, res) => {
     )
     return
   }
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   try {
     const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
@@ -396,7 +396,7 @@ for (const app of APPS) {
       };
     `)
 
-    await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(800)
 
     /*
@@ -432,7 +432,9 @@ for (const app of APPS) {
       // tab AFTER calling this, so clearing here covers every other route
       // without needing a second call site that somebody will forget.
       leaveSettings()
-      await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
+      await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, {
+        waitUntil: 'domcontentloaded',
+      })
       await page.waitForTimeout(600)
     }
     /*

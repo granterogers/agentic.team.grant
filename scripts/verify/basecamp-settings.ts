@@ -57,7 +57,7 @@ const slug = await (async (): Promise<string> => {
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(400)
   return (await page.evaluate(
-    inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+    inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
        return el === null ? '' : (el.dataset.bcGo ?? '')`),
   )) as string
 })()
@@ -123,8 +123,8 @@ check(
 await entry.first().click()
 await page.waitForTimeout(700)
 check(
-  'pressing it stays under the experiment',
-  new URL(page.url()).pathname.startsWith('/basecamp/'),
+  'pressing it stays in Team HQ',
+  !new URL(page.url()).pathname.startsWith('/classic'),
   page.url(),
 )
 check(
@@ -365,9 +365,10 @@ check('and pressing it opens the office settings', officeOpened)
 /*
   THE OTHER HALF OF EVERY SCOPED CHANGE, and the one that is easy to skip.
   Every rule added for this is scoped to the experiment; this is what proves
-  it, by measuring the same element on the default route.
+  it, by measuring the same element on the older studio, kept at /classic
+  since #382 (the root is Team HQ now).
 */
-await page.goto(url('/'), { waitUntil: 'domcontentloaded' })
+await page.goto(url('/classic'), { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(700)
 await page.evaluate(inPage(`window.location.hash = ''; return true`))
 const def = (await page.evaluate(
@@ -377,7 +378,7 @@ const def = (await page.evaluate(
    }`),
 )) as { experience: string; bc: number }
 check(
-  'the default experience carries no experimental attribute or shell',
+  'the older studio carries no Team HQ attribute or shell',
   def.experience === 'none' && def.bc === 0,
   `${def.experience}, ${String(def.bc)} experimental element(s)`,
 )

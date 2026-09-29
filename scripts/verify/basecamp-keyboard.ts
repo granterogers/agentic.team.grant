@@ -220,7 +220,7 @@ check(
 
 /* --- §7.1 and §7.3: the shortcut must not fire while composing ---------- */
 const slug = (await page.evaluate(
-  inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+  inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
      return el === null ? '' : (el.dataset.bcGo ?? '')`),
 )) as string
 await open(`${slug}/tasks`)
@@ -255,7 +255,7 @@ await page.keyboard.press('Enter')
 await page.waitForTimeout(600)
 check(
   'keyboard only: Jump, filter, Enter opened a project overview',
-  (await page.locator('.bchome').count()) > 0 && page.url().includes('/basecamp/p/'),
+  (await page.locator('.bchome').count()) > 0 && new URL(page.url()).pathname.startsWith('/p/'),
   page.url(),
 )
 
@@ -279,7 +279,7 @@ await page.locator('#bcjumpq').type('interview')
 await page.waitForTimeout(300)
 await page.keyboard.press('Shift+Enter')
 await page.waitForTimeout(700)
-check('Shift+Enter reaches the full search', page.url().endsWith('/basecamp/search'), page.url())
+check('Shift+Enter reaches the full search', new URL(page.url()).pathname === '/search', page.url())
 check(
   'and the query survived the promotion',
   (await page.locator('#bc-search-q').inputValue()) === 'interview',

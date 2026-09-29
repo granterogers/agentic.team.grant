@@ -39,7 +39,7 @@ const TYPES: Record<string, string> = {
 
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   try {
     const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
@@ -194,7 +194,7 @@ const page = await ctx.newPage()
 page.on('pageerror', (e) => {
   console.error(`THREW: ${e.message}`)
 })
-await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
+await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(700)
 
 /*
@@ -399,7 +399,7 @@ const phone = await browser.newContext({
   hasTouch: true,
 })
 const pp = await phone.newPage()
-await pp.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
+await pp.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'networkidle' })
 await pp.waitForTimeout(700)
 await pp.locator('.project[data-open="legacy-coaching-course"]').first().click()
 await pp.waitForTimeout(900)
@@ -457,7 +457,7 @@ if ((await chatTab.count()) > 0) {
   */
   {
     await pp.evaluate(`try { localStorage.setItem('hq.token', 'space-audit') } catch (e) {}`)
-    await pp.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
+    await pp.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'networkidle' })
     await pp.waitForTimeout(700)
     const toTasks = pp.locator('.navitem[data-go="tasks"], [data-go="tasks"]')
     if ((await toTasks.count()) > 0) {

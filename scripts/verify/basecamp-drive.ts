@@ -151,7 +151,7 @@ page.on('pageerror', (e) => {
 await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(500)
 const slug = (await page.evaluate(
-  inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+  inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
      return el === null ? '' : (el.dataset.bcGo ?? '')`),
 )) as string
 await page.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })

@@ -73,6 +73,8 @@ for (const [name, fn, args] of [
 const server = createServer(async (rq, rs) => {
   let f = join('web/studio', decodeURIComponent((rq.url ?? '/').split('?')[0] ?? '/'))
   if (existsSync(f) && statSync(f).isDirectory()) f = join(f, 'index.html')
+  // A dotless path is a route, as on the host (#382: the older studio is under /classic).
+  if (!existsSync(f) && extname(f) === '') f = join('web/studio', 'index.html')
   if (!existsSync(f)) {
     rs.writeHead(404)
     rs.end('not here')
@@ -167,7 +169,7 @@ const sweep = async (reduce: boolean): Promise<Moving> => {
       return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
     };
   `)
-  await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2_000)
 
   const all: Moving = { looping: [], finite: [] }
@@ -236,7 +238,7 @@ const context = await browser.newContext({
   reducedMotion: 'reduce',
 })
 const page = await context.newPage()
-await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
+await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(1_200)
 
 const js = (await page.evaluate(`(async () => {

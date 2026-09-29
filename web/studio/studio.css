@@ -3890,6 +3890,13 @@ kbd {
   gap: var(--s3); padding: var(--s4);
   background: var(--ground); border-left: 1px solid var(--edge);
   box-shadow: -18px 0 42px -30px rgb(0 0 0 / .5);
+  /*
+    The dock's own ink, with its own ground. Everything inside that sets no
+    colour inherited the PAGE's, and inside Team HQ that is Team HQ's light
+    text: under the light scheme the heading measured 1.1:1 on the dock's
+    light surface and the replies all but vanished on their white bubbles.
+  */
+  color: var(--ink);
 }
 body.docked { padding-right: min(380px, 100vw); }
 .dockhead {

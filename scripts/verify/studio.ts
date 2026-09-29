@@ -42,7 +42,7 @@ const TYPES: Record<string, string> = {
 
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   try {
     const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
@@ -133,7 +133,7 @@ for (const [size, opts] of SIZES) {
     const page = await ctx.newPage()
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
-    await page.goto(`http://127.0.0.1:${String(PORT)}/`, {
+    await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
     })
@@ -1169,7 +1169,7 @@ for (const [size, opts] of SIZES) {
       is missing and a capture taken before it drew.
     */
     await page.goto(
-      `http://127.0.0.1:${String(PORT)}/?google=connected&with=Gmail,Calendar,Drive`,
+      `http://127.0.0.1:${String(PORT)}/classic/?google=connected&with=Gmail,Calendar,Drive`,
       { waitUntil: 'networkidle', timeout: 30_000 },
     )
     await page.waitForTimeout(900)

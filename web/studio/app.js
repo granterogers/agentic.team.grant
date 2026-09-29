@@ -21,9 +21,11 @@ import {
 } from './data.js'
 import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, token, why, presented, presentedFresh} from './office.js'
 /*
-  The experimental Basecamp-inspired Team HQ (basecamp_clone.md).
+  Team HQ, the product at every address (ADR-0051; its design history is in
+  basecamp_clone.md). The older studio this file also renders is kept at
+  /classic.
 
-  Imported unconditionally and rendered only at the /basecamp prefix. Three
+  Imported unconditionally. Three
   small modules rather than another few thousand lines in this file: the spec
   warns by name against appending a second all-screen implementation to a file
   that is already 600 KB, and a separate module is also the only way the two
@@ -247,9 +249,10 @@ const state = {
   /*
     WHICH PRESENTATION OF THE OFFICE IS ON SCREEN.
 
-    'default' is everything this studio has always been. 'basecamp' is the
-    experimental Basecamp-inspired Team HQ described by the top-level
-    basecamp_clone.md, reached only at the /basecamp path prefix.
+    'basecamp' is TEAM HQ, the canonical experience, at the site's own
+    addresses (#382). The value is an internal name kept from development and
+    never shown. 'default' is the older studio, kept only at the unlinked
+    /classic prefix while anything still needs it.
 
     A FLAG ON THE STATE RATHER THAN A SECOND FRONTEND. Same state object, same
     data adapters, same mutations, same canonical records - only the renderer
@@ -8641,7 +8644,8 @@ function pathNow() {
     link into it stays in it across a reload, a Back and a bookmark - and the
     default addresses below are byte-for-byte what they have always been.
   */
-  const at = state.experience === 'basecamp' ? '/basecamp' : ''
+  // Team HQ owns the plain addresses (#382); the older studio keeps its own prefix.
+  const at = state.experience === 'basecamp' ? '' : '/classic'
   if (state.view === 'project' && state.project !== null) {
     /*
       AN EXPANDED VIEW IS A PLACE TOO.
@@ -8737,8 +8741,21 @@ function goToPath(path) {
     so a default URL always lands in the default experience even after the
     experiment has been open in the same tab.
   */
-  state.experience = bits[0] === 'basecamp' ? 'basecamp' : 'default'
-  if (state.experience === 'basecamp') bits.shift()
+  /*
+    TEAM HQ IS THE EXPERIENCE AT EVERY ADDRESS (#382).
+
+    The experience used to be chosen by a /basecamp prefix, so the root and
+    every plain link rendered the older studio, and the newer workspace was
+    reachable only by typing the prefix. Now the plain addresses are Team HQ.
+    The two retired prefixes, /basecamp and /studio, are read as the same
+    address without them, and the first paint writes the canonical form with
+    replaceState, so an old bookmark or a link in a message lands where it
+    always pointed. The older studio is kept at /classic, which nothing links
+    to, for as long as it is useful.
+  */
+  if (bits[0] === 'basecamp' || bits[0] === 'studio') bits.shift()
+  state.experience = bits[0] === 'classic' ? 'default' : 'basecamp'
+  if (state.experience === 'default') bits.shift()
   // Cleared here, once, rather than at each of the callers that navigate.
   state.bcTask = null
   // An expanded module does not survive a navigation: the page underneath it
@@ -8922,7 +8939,7 @@ function broke(e) {
   const lead = document.createElement('p')
   lead.className = 't-lead'
   lead.textContent =
-    'Something in the studio threw while building this view. Nothing you did is lost — '
+    'Something in Team HQ threw while building this view. Nothing you did is lost — '
     + 'the office and your projects are untouched, this is the page failing, not the work.'
   wrap.append(lead)
 
@@ -8952,7 +8969,7 @@ function broke(e) {
 
   const again = document.createElement('button')
   again.className = 'btn'
-  again.textContent = 'Reload the studio'
+  again.textContent = 'Reload Team HQ'
   again.addEventListener('click', () => { location.reload() })
   row.append(again)
 
@@ -13301,7 +13318,7 @@ const REVIEW = typeof window !== 'undefined' && window.STUDIO_REVIEW === true
 const START =
   typeof window !== 'undefined' && typeof window.STUDIO_START === 'string' && window.STUDIO_START !== ''
     ? window.STUDIO_START
-    : '/basecamp'
+    : '/'
 
 const addressNow = () => {
   if (typeof location === 'undefined') return '/'
@@ -13777,7 +13794,8 @@ const bcContext = {
     boot into its own shell.
   */
   goAnywhere: (path) => {
-    if (String(path).startsWith('/basecamp')) {
+    // Every address is Team HQ's except the older studio's (#382).
+    if (!String(path).startsWith('/classic')) {
       goToPath(path)
       if (state.view === 'tasks') void needMine(mine.bucket)
       render()

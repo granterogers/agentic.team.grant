@@ -74,9 +74,9 @@ const slug = await (async (): Promise<string> => {
     suite died waiting for a control that route does not have - which reads as
     a product defect and was a stopwatch.
   */
-  await page.waitForSelector('[data-bc-go^="/basecamp/p/"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/"]', { timeout: 20000 })
   return (await page.evaluate(
-    inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+    inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
        return el === null ? '' : (el.dataset.bcGo ?? '')`),
   )) as string
 })()

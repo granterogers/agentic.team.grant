@@ -115,7 +115,7 @@ for (const size of sizes) {
     await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(500)
     return (await page.evaluate(
-      `(() => { const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+      `(() => { const el = document.querySelector('[data-bc-go^="/p/"]')
          return el === null ? '' : (el.dataset.bcGo ?? '') })()`,
     )) as string
   })()

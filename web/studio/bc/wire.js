@@ -742,7 +742,7 @@ export const wire = (root) => {
         a panel that lists it a second time.
       */
       const p = ctx.projects().find((x) => (x.waiting ?? []).length > 0)
-      ctx.goAnywhere(p === undefined ? '/basecamp/' : `/basecamp/p/${p.slug}/team`)
+      ctx.goAnywhere(p === undefined ? '/' : `/p/${p.slug}/team`)
     })
   }
 

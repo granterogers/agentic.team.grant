@@ -59,7 +59,8 @@ const browser = await chromium.launch()
 const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage()
 const errors: string[] = []
 page.on('pageerror', (e) => errors.push(e.message))
-const base = `http://127.0.0.1:${String(PORT)}`
+// The older studio lives under /classic since #382; Team HQ owns the plain addresses.
+const base = `http://127.0.0.1:${String(PORT)}/classic`
 
 console.log('#157 — the studio can be linked to\n')
 
@@ -71,13 +72,17 @@ console.log('#157 — the studio can be linked to\n')
   check(
     'the portfolio is the root',
     new URL(page.url()).pathname,
-    new URL(page.url()).pathname === '/',
+    new URL(page.url()).pathname === '/classic',
   )
 
   await page.locator('.homego[data-open], .project[data-open]').first().click({ force: true })
   await page.waitForTimeout(1200)
   const onProject = new URL(page.url()).pathname
-  check('opening a project puts it in the address', onProject, /^\/p\/[a-z0-9-]+$/.test(onProject))
+  check(
+    'opening a project puts it in the address',
+    onProject,
+    /^\/classic\/p\/[a-z0-9-]+$/.test(onProject),
+  )
 
   await page.locator('[data-tab="tasks"]').first().click({ force: true })
   await page.waitForTimeout(1000)
@@ -88,7 +93,7 @@ console.log('#157 — the studio can be linked to\n')
 // --- and the screen follows the address -------------------------------------
 {
   const deep = new URL(page.url()).pathname
-  await page.goto(`${base}${deep}`)
+  await page.goto(`http://127.0.0.1:${String(PORT)}${deep}`)
   await page.waitForSelector('.rail', { timeout: 20_000 })
   await page.waitForTimeout(2400)
   const tab = await page.evaluate(

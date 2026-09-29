@@ -49,9 +49,9 @@ page.on('requestfailed', (r) => {
 })
 
 await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-await page.waitForSelector('[data-bc-go^="/basecamp/p/"]')
+await page.waitForSelector('[data-bc-go^="/p/"]')
 const slug = (await page.evaluate(
-  inPage(`return document.querySelector('[data-bc-go^="/basecamp/p/"]').dataset.bcGo`),
+  inPage(`return document.querySelector('[data-bc-go^="/p/"]').dataset.bcGo`),
 )) as string
 await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.bcpanes')

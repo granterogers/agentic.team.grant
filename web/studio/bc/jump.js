@@ -37,7 +37,8 @@ export const mount = (c) => {
 }
 export const isOpen = () => open
 
-const at = (p = '') => `/basecamp${p}`
+// Team HQ's addresses are the site's own (#382).
+const at = (p = '') => (p === '' ? '/' : p)
 
 /**
  * Everything Jump can reach, filtered by the query.
@@ -89,7 +90,7 @@ const candidates = () => {
   push('Go to', 'My Tasks', at('/tasks'), 'Place', 'my tasks personal')
   push('Go to', 'Activity', at('/activity'), 'Place', 'activity recent')
   push('Go to', 'Search everything', at('/search'), 'Place', 'search find everything')
-  push('Go to', 'Current Team HQ', '/', 'Leaves this experience', 'default studio current hq')
+  // No entry leaves Team HQ for the older studio any more (#382).
 
   /*
     A PERSON GOES WHERE THAT PERSON IS, and is not offered when that is

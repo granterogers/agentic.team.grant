@@ -42,6 +42,8 @@ const T: Record<string, string> = {
 const srv = createServer((q, r) => {
   let p = join('web/studio', decodeURIComponent((q.url ?? '/').split('?')[0] ?? '/'))
   if (existsSync(p) && statSync(p).isDirectory()) p = join(p, 'index.html')
+  // A dotless path is a route, as on the host (#382: the older studio is under /classic).
+  if (!existsSync(p) && extname(p) === '') p = join('web/studio', 'index.html')
   if (!existsSync(p)) {
     r.writeHead(404)
     r.end('no')
@@ -100,7 +102,7 @@ const ctx = await b.newContext({ viewport: { width: 1440, height: 1000 } })
 const pg = await ctx.newPage()
 pg.on('pageerror', (e) => console.log('PAGEERROR:', e.message))
 await pg.addInitScript(`try{localStorage.setItem('hq.token','audit')}catch(e){}`)
-await pg.goto('http://127.0.0.1:4418/', { waitUntil: 'domcontentloaded' })
+await pg.goto('http://127.0.0.1:4418/classic/', { waitUntil: 'domcontentloaded' })
 await pg.waitForTimeout(1000)
 
 const found = new Map<string, string>()

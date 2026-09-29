@@ -364,7 +364,7 @@ paid for repeatedly:
 | **No new auth system** | One bearer token (`hq.api_token`), constant-time compared. Reuse it. |
 | **Channel adapters may only translate** | §5 of the master spec. Every surface writes to `inbound_commands` and asks the canonical layer. An adapter that decides is a bug. |
 | **Frontend stack** | No React, no Next.js, no bundler, no build step. Hand-written HTML on Vercel. Deliberate — ADR 0002, ADR 0011. Changing this needs an ADR and evidence, not preference. |
-| **Which frontend** | **`web/studio` is the product**, served at the root. `web/hq/index.html` is deleted — every write action, section and the voice call moved across (**ADR-0019**, Issue #68). `verify:design` fails if a second frontend reappears. |
+| **Which frontend** | **`web/studio` is the product**, and **Team HQ is what it renders at every address**: `/`, `/p/<slug>/<tool>`, `/tasks`, `/activity`, `/search` (**ADR-0051**, #382). `/basecamp/…` and `/studio/…` redirect there. The older studio is kept, unlinked, at `/classic`. The word "Basecamp" must never reach a person: `npm run check:branding` is in the gate. Internal names (`bc/`, `verify:basecamp-*`, `experience === 'basecamp'`) stay. `web/hq/index.html` is deleted (ADR-0019, #68). |
 
 ---
 

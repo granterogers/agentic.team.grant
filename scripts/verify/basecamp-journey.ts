@@ -445,7 +445,7 @@ await rp.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
 await rp.waitForSelector('.bcmain')
 await rp.waitForTimeout(600)
 const roSlug = (await rp.evaluate(
-  inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+  inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
      return el === null ? '' : (el.dataset.bcGo ?? '')`),
 )) as string
 check('the read-only browser still renders a project to press', roSlug !== '')

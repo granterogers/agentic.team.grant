@@ -84,7 +84,7 @@ await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.bcmain')
 await page.waitForTimeout(500)
 const slug = (await page.evaluate(
-  inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+  inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
      return el === null ? '' : (el.dataset.bcGo ?? '')`),
 )) as string
 await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
@@ -258,9 +258,10 @@ for (const h of [...new Set(handoffs)]) {
 
 /* --- 2. every global rail destination is reachable ---------------------- */
 const GLOBAL: Record<string, string> = {
-  portfolio: '/basecamp/',
-  tasks: '/basecamp/tasks',
-  lately: '/basecamp/activity',
+  // Team HQ's own addresses since #382.
+  portfolio: '/',
+  tasks: '/tasks',
+  lately: '/activity',
 }
 for (const g of railGoes) {
   const want = GLOBAL[g]
@@ -324,8 +325,8 @@ check(
     true,
 )
 
-/* --- 4. the default experience is untouched ----------------------------- */
-await page.goto(url('/'), { waitUntil: 'domcontentloaded' })
+/* --- 4. the older studio, kept at /classic, is untouched (#382) --------- */
+await page.goto(url('/classic'), { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(600)
 check('the default experience still draws its rail', (await page.locator('.rail').count()) > 0)
 check(
@@ -337,7 +338,7 @@ check(
   (await page.evaluate(inPage('return document.documentElement.dataset.experience'))) === undefined,
 )
 for (const s of sections) {
-  await page.goto(url(`${bare}/${s.id}`), { waitUntil: 'domcontentloaded' })
+  await page.goto(url(`/classic${bare}/${s.id}`), { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(350)
   check(
     `the default ${s.name} route still renders`,

@@ -8,7 +8,7 @@
  * the harness's own fallback rather than of the product.
  *
  * This is one server that applies the REWRITE IN vercel.json rather than
- * paraphrasing it: any dotless path outside api/, studio/, samples/ and
+ * paraphrasing it: any dotless path outside api/, samples/ and
  * fonts/ serves index.html, and everything else is looked up on disk. A check
  * written against this is a check of the addresses Grant will actually open.
  */
@@ -35,14 +35,15 @@ const TYPES: Record<string, string> = {
 /**
  * The rewrite from vercel.json, transcribed once.
  *
- * `/:path((?!api/|studio/|samples/|fonts/)[^.]*)` -> `/index.html`. The
+ * `/:path((?!api/|samples/|fonts/)[^.]*)` -> `/index.html`. The
  * character class excluding a full stop is what lets a real asset through, and
  * it is also the reason `/basecamp` (no dot) reaches the app while
  * `/bc/bc.css` (a dot) reaches the file.
  */
 export const rewrites = (path: string): boolean => {
   const bare = path.replace(/^\//, '')
-  if (/^(api|studio|samples|fonts)\//.test(bare)) return false
+  // `studio/` was excluded until #382: a /studio/ address is a route to Team HQ now.
+  if (/^(api|samples|fonts)\//.test(bare)) return false
   return !bare.includes('.')
 }
 

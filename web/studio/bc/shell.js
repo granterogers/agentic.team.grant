@@ -66,7 +66,8 @@ const go = (path) => ctx.go(path)
 const repaint = () => ctx.render()
 
 /** Every address in this experience carries the prefix. One place to change. */
-const at = (p = '') => `/basecamp${p}`
+// Team HQ's addresses are the site's own (#382).
+const at = (p = '') => (p === '' ? '/' : p)
 
 /*
   ONE PLACE the project is read, and therefore one place the prototype's own
@@ -665,8 +666,7 @@ const overview = (p) => {
     <section class="bctool bcblock">
       <h2>Everything else on this project</h2>
       <p class="bcpmeta bcprose bcgap">
-        These open in the current Team HQ. Nothing has moved; this experience
-        has not built its own surface for them yet.
+        The rest of this project's tools.
       </p>
       <div class="bcinline-list">
         ${others
@@ -1282,7 +1282,7 @@ const taskRecord = (p) => {
       </div>
       ${
         t.local === true || t.id === undefined || t.id === null || t.id === ''
-          ? `<p class="bcpmeta bcprose">These are the studio's example projects, which have no
+          ? `<p class="bcpmeta bcprose">These are example projects, which have no
              records behind them, so changes here are kept in this browser. Sign
              in and the same controls write to the real project.</p>`
           : ''

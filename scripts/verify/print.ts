@@ -56,7 +56,7 @@ const check = (what: string, said: string, ok: boolean): void => {
 
 const browser = await chromium.launch()
 const page = await (await browser.newContext({ viewport: { width: 1200, height: 1600 } })).newPage()
-await page.goto(`http://127.0.0.1:${String(PORT)}/`)
+await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`)
 await page.waitForSelector('.rail', { timeout: 20_000 })
 await page.waitForTimeout(2200)
 await page.locator('.homego[data-open], .project[data-open]').first().click({ force: true })

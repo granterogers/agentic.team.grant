@@ -59,7 +59,7 @@ for (const size of SIZES) {
       await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
       await page.waitForTimeout(400)
       const slug = (await page.evaluate(
-        `(() => { const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+        `(() => { const el = document.querySelector('[data-bc-go^="/p/"]')
            return el === null ? '' : (el.dataset.bcGo ?? '') })()`,
       )) as string
       if (slug === '') throw new Error('no project link on the portfolio')

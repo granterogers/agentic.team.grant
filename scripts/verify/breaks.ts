@@ -41,7 +41,7 @@ const T: Record<string, string> = {
 }
 const server = createServer(async (req, res) => {
   const p = (req.url ?? '/').split('?')[0] ?? '/'
-  const f = join(ROOT, p === '/' ? 'index.html' : p.replace(/^\//, ''))
+  const f = join(ROOT, extname(p) === '' ? 'index.html' : p.replace(/^\//, ''))
   try {
     const b = await readFile(f)
     res.writeHead(200, { 'content-type': T[extname(f)] ?? 'application/octet-stream' })
@@ -62,7 +62,7 @@ const run = async (label: string) => {
   const page = await (
     await browser.newContext({ viewport: { width: 1440, height: 900 } })
   ).newPage()
-  await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(900)
   // The synthetic fault is on a project view, so open one.
   const card = page.locator('.project[data-open="legacy-coaching-course"]')

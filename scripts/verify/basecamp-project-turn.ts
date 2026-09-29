@@ -219,7 +219,7 @@ const dock = async (page: Page, text: string): Promise<void> => {
   const thrown: string[] = []
   page.on('pageerror', (e) => thrown.push(e.message))
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-bc-go^="/basecamp/p/provenance-a"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/provenance-a"]', { timeout: 20000 })
   for (const [slug, n] of [
     ['provenance-a', 1],
     ['provenance-b', 1],
@@ -251,7 +251,7 @@ const dock = async (page: Page, text: string): Promise<void> => {
   const before = turns.length
   await go(page, '/basecamp/p/provenance-b', '.bcmain')
   await dock(page, 'From the dock on B')
-  await go(page, '/basecamp', '[data-bc-go^="/basecamp/p/"]')
+  await go(page, '/basecamp', '[data-bc-go^="/p/"]')
   /* What the open dock SHOWS, read before sending: the header and the note's project. */
   const shows = (await page.evaluate(
     inPage(
@@ -325,7 +325,7 @@ const dock = async (page: Page, text: string): Promise<void> => {
   const ctx = await newContext(turns, { delayMs: 1500 })
   const page = await ctx.newPage()
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-bc-go^="/basecamp/p/provenance-a"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/provenance-a"]', { timeout: 20000 })
   await go(page, '/basecamp/p/provenance-a/chat', '[data-bc-sayform]')
   const words = 'Where is the venue contract? (switch test)'
   await page.fill('#bc-say', words)
@@ -407,7 +407,7 @@ const LOOPBACK = `
   const thrown: string[] = []
   page.on('pageerror', (e) => thrown.push(e.message))
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-bc-go^="/basecamp/p/provenance-a"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/provenance-a"]', { timeout: 20000 })
   await go(page, '/basecamp/p/provenance-a', '[data-bc-voice]')
   await page.locator('[data-bc-voice]').first().click()
   const live = await page
@@ -488,12 +488,12 @@ const mineCount = (v: DockView, text: string): number =>
   const thrown: string[] = []
   page.on('pageerror', (e) => thrown.push(e.message))
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-bc-go^="/basecamp/p/provenance-b"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/provenance-b"]', { timeout: 20000 })
   await go(page, '/basecamp/p/provenance-b', '.bcmain')
   await dock(page, 'Opened on B (dock-376)')
 
   // The old failure, step for step: open on B, navigate, send.
-  await go(page, '/basecamp', '[data-bc-go^="/basecamp/p/"]')
+  await go(page, '/basecamp', '[data-bc-go^="/p/"]')
   const before = await view(page)
   const text1 = 'Sent from the portfolio (dock-376)'
   await sendInDock(page, text1)
@@ -596,7 +596,7 @@ const mineCount = (v: DockView, text: string): number =>
   await page.waitForTimeout(600)
   await page.locator('[data-bc-dock]:visible').first().click({ timeout: 8000 })
   await page.waitForTimeout(600)
-  await go(page, '/basecamp', '[data-bc-go^="/basecamp/p/"]')
+  await go(page, '/basecamp', '[data-bc-go^="/p/"]')
   const text = 'A slow question from the portfolio (dock-376)'
   await sendInDock(page, text, 1200)
   const waiting = await view(page)
@@ -626,7 +626,7 @@ const mineCount = (v: DockView, text: string): number =>
   await page.waitForTimeout(600)
   await page.locator('[data-bc-dock]:visible').first().click({ timeout: 8000 })
   await page.waitForTimeout(600)
-  await go(page, '/basecamp', '[data-bc-go^="/basecamp/p/"]')
+  await go(page, '/basecamp', '[data-bc-go^="/p/"]')
   const text = 'This one fails first, from the dock (dock-376)'
   await sendInDock(page, text, 1200)
   await page.waitForSelector('#dock [data-chat-retry]', { timeout: 10000 })
@@ -661,7 +661,8 @@ const mineCount = (v: DockView, text: string): number =>
   const page = await ctx.newPage()
   const thrown: string[] = []
   page.on('pageerror', (e) => thrown.push(e.message))
-  await page.goto(url('/'), { waitUntil: 'domcontentloaded' })
+  // The older studio, kept at /classic since #382.
+  await page.goto(url('/classic/'), { waitUntil: 'domcontentloaded' })
   // The office's projects have arrived (the first match is a hidden switcher option).
   await page.waitForSelector('[data-open="provenance-a"]', { state: 'attached', timeout: 20000 })
   await page.waitForSelector('[data-dock]', { timeout: 20000 })
@@ -670,7 +671,7 @@ const mineCount = (v: DockView, text: string): number =>
   await page.waitForTimeout(500)
   const head0 = (await view(page)).head
   await sendInDock(page, 'Asked from the portfolio (dock-376)')
-  await go(page, '/p/provenance-a', '#dock [data-dockform]')
+  await go(page, '/classic/p/provenance-a', '#dock [data-dockform]')
   const onA = await view(page)
   await sendInDock(page, 'Still the portfolio dock, on A (dock-376)')
   const onA2 = await view(page)

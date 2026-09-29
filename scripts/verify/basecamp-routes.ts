@@ -49,21 +49,30 @@ const open = async (path: string): Promise<void> => {
   await page.waitForTimeout(700)
 }
 
-/* ---------------------------------------------------------- default first */
+/* ------------------------------------- the root is Team HQ since #382 */
 
 await open('/')
 check(
-  'the default Team HQ still opens at /',
+  'Team HQ opens at /',
+  (await page.locator('.bctop').count()) > 0 && (await page.locator('.rail').count()) === 0,
+  'the root is the product; a left rail here means the older studio has taken it back',
+)
+
+/* ----------------------- the older studio, kept apart at /classic */
+
+await open('/classic')
+check(
+  'the older studio still opens at /classic',
   (await page.locator('.rail').count()) > 0,
-  'the default studio draws a left rail; its absence means the experiment has taken the root',
+  'the older studio draws a left rail; kept, unlinked, while anything still needs it',
 )
 check(
-  'the default experience carries no experience attribute',
+  'the older studio carries no experience attribute',
   (await page.evaluate(inPage('return document.documentElement.dataset.experience'))) === undefined,
   'a stray attribute on the root is what would let the experimental stylesheet reach the product',
 )
 const defaultBc = await page.locator('.bctop').count()
-check('the default experience draws no experimental shell', defaultBc === 0)
+check('the older studio draws no Team HQ shell', defaultBc === 0)
 
 /* ------------------------------------------------------------ experiment */
 
@@ -101,7 +110,7 @@ check(
 /* ------------------------------------------- deep addresses under the prefix */
 
 const slug = (await page.evaluate(
-  inPage(`const first = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+  inPage(`const first = document.querySelector('[data-bc-go^="/p/"]')
      return first === null ? null : first.dataset.bcGo`),
 )) as string | null
 check('the home surface offers a project', slug !== null)
@@ -139,15 +148,15 @@ check(
   (await page.locator('.bcsectiontitle').count()) > 0,
 )
 
-/* ------------------------------------------------- the default is still fine */
+/* ------------------------------------- the older studio is still apart */
 
-await open('/')
+await open('/classic')
 check(
-  'the default Team HQ still opens after the experiment has been visited',
+  'the older studio still opens after Team HQ has been visited',
   (await page.locator('.rail').count()) > 0,
 )
 check(
-  'the scope attribute is removed again on the default route',
+  'the scope attribute is removed again on the older studio',
   (await page.evaluate(inPage('return document.documentElement.dataset.experience'))) === undefined,
   'it must be deleted rather than set to another value: an attribute-presence selector would still match',
 )
@@ -324,7 +333,7 @@ for (const l of landed) {
   if (l.group === 'Leaves this experience' || l.name === 'Current Team HQ') continue
   check(
     `Jump result "${l.name}" (${l.group}) goes somewhere of its own`,
-    l.url !== '/basecamp' && l.url !== '/basecamp/',
+    l.url !== '/' && l.url !== '',
     `landed on ${l.url} — the home page, which is where a result that has no real destination ends up`,
   )
 }
@@ -439,7 +448,8 @@ for (const where of surfaces) {
   await page.waitForTimeout(900)
   const out = (await page.evaluate(`(() => {
     const leaves = []
-    const inside = (u) => u === '' || u.indexOf('/basecamp') === 0 || u.indexOf('#/basecamp') >= 0
+    // Since #382 every plain address is Team HQ's; the older studio is the one at /classic.
+    const inside = (u) => u === '' || (u[0] === '/' && u.indexOf('/classic') !== 0) || (u.indexOf('#/') === 0 && u.indexOf('#/classic') !== 0)
     for (const a of document.querySelectorAll('a[href]')) {
       const raw = a.getAttribute('href') || ''
       if (raw.indexOf('http') === 0 || raw.indexOf('mailto:') === 0 || raw[0] === '#') continue

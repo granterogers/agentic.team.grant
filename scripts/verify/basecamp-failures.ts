@@ -177,7 +177,7 @@ const slug = await (async (): Promise<string> => {
   await p.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
   await p.waitForTimeout(400)
   const s = (await p.evaluate(
-    inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+    inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
        return el === null ? '' : (el.dataset.bcGo ?? '')`),
   )) as string
   await ctx.close()

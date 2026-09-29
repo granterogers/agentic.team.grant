@@ -142,8 +142,8 @@ check(
 /* --- the address is in the hash, and survives a reload --- */
 await page.goto(url('#/basecamp'), { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(900)
-await page.waitForSelector('[data-bc-go^="/basecamp/p/"]', { timeout: 8000 })
-await page.locator('[data-bc-go^="/basecamp/p/"]').first().click()
+await page.waitForSelector('[data-bc-go^="/p/"]', { timeout: 8000 })
+await page.locator('[data-bc-go^="/p/"]').first().click()
 await page.waitForTimeout(700)
 const hash = (await page.evaluate('location.hash')) as string
 const path = (await page.evaluate('location.pathname')) as string

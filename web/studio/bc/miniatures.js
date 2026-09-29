@@ -310,7 +310,7 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
         return `<p class="bcmpty">Nothing here under ${esc(f.name)}.
           <button type="button" class="bclinky" data-bc-filter-off="1">Show everything</button></p>`
       }
-      return emptyWith('No to-dos on this project yet.', 'Add a to-do', `/basecamp/p/${whole.slug}/tasks`)
+      return emptyWith('No to-dos on this project yet.', 'Add a to-do', `/p/${whole.slug}/tasks`)
     }
     return `<ul class="bctasks">${flat.slice(0, per * lists).map(taskLine).join('')}</ul>`
   }
@@ -412,7 +412,7 @@ export const cardsCount = (p) => {
 
 export const cardsMini = (p) => {
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
-  if (tasks.length === 0) return emptyWith('Nothing on the board yet.', 'Add a to-do', `/basecamp/p/${p.slug}/tasks`)
+  if (tasks.length === 0) return emptyWith('Nothing on the board yet.', 'Add a to-do', `/p/${p.slug}/tasks`)
   const at = (id) =>
     tasks.filter((t) => {
       const st = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
@@ -515,7 +515,7 @@ export const calendarMini = (p, { items = 4 } = {}) => {
     <div class="bcagenda">
       ${
         dated.length === 0
-          ? emptyWith('Nothing on this project has a date yet.', 'Give a to-do a date', `/basecamp/p/${p.slug}/schedule`)
+          ? emptyWith('Nothing on this project has a date yet.', 'Give a to-do a date', `/p/${p.slug}/schedule`)
           : dated
               .slice(0, items)
               .map(
@@ -1119,7 +1119,7 @@ export const docsMini = (p, { items = 6 } = {}) => {
     return emptyWith(
       'Nothing filed on this project yet. What you upload, or the team writes, appears here.',
       'Add a file',
-      `/basecamp/p/${p.slug}/documents`,
+      `/p/${p.slug}/documents`,
     )
   }
   /*
@@ -1135,7 +1135,7 @@ export const docsMini = (p, { items = 6 } = {}) => {
     caller guessing at a helper that is not on ctx would have produced a link
     to `undefined`.
   */
-  const to = `/basecamp/p/${p.slug}/documents`
+  const to = `/p/${p.slug}/documents`
   /*
     THE SAME ORDER THE EXPANDED VIEW USES (§§30, 33).
 
@@ -1453,7 +1453,7 @@ const face_ = (c) => {
 
 export const contactsMini = (p, { items = 4 } = {}) => {
   const cs = p.contacts ?? []
-  if (cs.length === 0) return emptyWith('Nobody is recorded against this project yet.', 'Add a contact', `/basecamp/p/${p.slug}/contacts`)
+  if (cs.length === 0) return emptyWith('Nobody is recorded against this project yet.', 'Add a contact', `/p/${p.slug}/contacts`)
   /*
     v2: *"Clicking a contact should show useful information/details... The user
     should be able to add a new contact directly from the miniature."* So each

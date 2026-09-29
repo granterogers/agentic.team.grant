@@ -217,6 +217,8 @@ const TYPES: Record<string, string> = {
 const server = createServer((request, response) => {
   let file = join('web/studio', decodeURIComponent((request.url ?? '/').split('?')[0] ?? '/'))
   if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
+  // A dotless path is a route, as on the host (#382: the older studio is under /classic).
+  if (!existsSync(file) && extname(file) === '') file = join('web/studio', 'index.html')
   if (!existsSync(file)) {
     response.writeHead(404)
     response.end('not here')
@@ -443,7 +445,7 @@ for (const [label, device, touch] of VIEWPORTS) {
   const crashes: string[] = []
   page.on('pageerror', (error) => crashes.push(error.message.slice(0, 120)))
 
-  await page.goto(`http://127.0.0.1:${String(PORT)}/`, {
+  await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, {
     waitUntil: 'domcontentloaded',
     timeout: 60_000,
   })

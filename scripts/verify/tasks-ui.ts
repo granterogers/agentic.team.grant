@@ -62,7 +62,7 @@ const TYPES: Record<string, string> = {
 }
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   /*
     READ FIRST, THEN WRITE.
 
@@ -87,7 +87,7 @@ await new Promise<void>((r) => {
     r()
   })
 })
-const PAGE = `http://127.0.0.1:${String(PORT)}/`
+const PAGE = `http://127.0.0.1:${String(PORT)}/classic/`
 
 const checks: boolean[] = []
 const check = (what: string, said: string, ok: boolean): void => {

@@ -49,7 +49,7 @@ const TYPES: Record<string, string> = {
 }
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   try {
     const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
@@ -119,7 +119,7 @@ window.__say = (words, final) => {
 const browser = await chromium.launch()
 
 const openChat = async (page: import('playwright').Page): Promise<void> => {
-  await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(700)
   await page.locator('.project[data-open="legacy-coaching-course"]').first().click()
   await page.waitForTimeout(500)

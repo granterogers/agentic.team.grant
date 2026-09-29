@@ -28,7 +28,7 @@ const TYPES: Record<string, string> = {
 
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   try {
     const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
@@ -78,7 +78,7 @@ const browser = await chromium.launch()
 for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'settings']) {
   const ctx = await browser.newContext({ ...devices['iPhone 14'] })
   const page = await ctx.newPage()
-  await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
+  await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(700)
   console.log(`\n--- portfolio`)
   if (tab === 'overview') console.log(await page.evaluate(FIND))

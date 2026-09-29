@@ -46,7 +46,7 @@ describe('alreadyAnswered', () => {
 })
 
 describe('both answer paths ask it', () => {
-  it('Basecamp words the reply with it and keeps the record open', () => {
+  it('Team HQ words the reply with it and keeps the record open', () => {
     const src = readFileSync('web/studio/bc/wire.js', 'utf8')
     expect(src).toContain("(r) => alreadyAnswered(r) ?? 'Answered. The team has it.'")
     expect(src).toContain('if (alreadyAnswered(done) !== null) return')

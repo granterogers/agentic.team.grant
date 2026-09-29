@@ -61,7 +61,8 @@ export const mount = (c) => {
   ctx = c
 }
 
-const at = (p = '') => `/basecamp${p}`
+// Team HQ's addresses are the site's own (#382).
+const at = (p = '') => (p === '' ? '/' : p)
 
 /*
   A module that IS a tool takes the TOOL's name, from the one list `shell.js`

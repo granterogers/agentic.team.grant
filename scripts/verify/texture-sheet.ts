@@ -32,7 +32,7 @@ const TYPES: Record<string, string> = {
 }
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   try {
     const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
@@ -71,7 +71,7 @@ for (const dark of [false, true]) {
   })
   await ctx.addInitScript(seedAppearance(dark ? 'dark' : 'light'))
   const page = await ctx.newPage()
-  await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
+  await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(800)
   await page.locator('.project[data-open="legacy-coaching-course"]').first().click()
   await page.waitForTimeout(700)

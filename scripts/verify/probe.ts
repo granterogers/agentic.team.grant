@@ -28,7 +28,7 @@ const TYPES: Record<string, string> = {
 
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   try {
     const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
@@ -76,7 +76,7 @@ const page = await ctx.newPage()
 page.on('pageerror', (e) => {
   console.error(`THREW: ${e.message}`)
 })
-await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
+await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(700)
 /*
   GO=lately measures a rail destination instead of a project tab.

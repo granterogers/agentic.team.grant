@@ -62,7 +62,7 @@ const FORBIDDEN = ['chat', 'sources']
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(400)
   const slug = (await page.evaluate(
-    inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+    inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
        return el === null ? '' : (el.dataset.bcGo ?? '')`),
   )) as string
   check('the portfolio offers a project to open', slug !== '')
@@ -374,9 +374,9 @@ for (const [name, vp, touch, budget] of [
   const hctx = await browser.newContext({ viewport: vp, hasTouch: touch, isMobile: touch })
   const hp = await hctx.newPage()
   await hp.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await hp.waitForSelector('[data-bc-go^="/basecamp/p/"]', { timeout: 20000 })
+  await hp.waitForSelector('[data-bc-go^="/p/"]', { timeout: 20000 })
   const hslug = (await hp.evaluate(
-    inPage(`const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+    inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
        return el === null ? '' : (el.dataset.bcGo ?? '')`),
   )) as string
   await hp.goto(url(hslug), { waitUntil: 'domcontentloaded' })

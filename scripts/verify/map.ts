@@ -42,7 +42,7 @@ const TYPES: Record<string, string> = {
 }
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   try {
     const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
@@ -74,7 +74,7 @@ const errors: string[] = []
 page.on('pageerror', (e) => errors.push(e.message))
 
 const openProject = async (): Promise<void> => {
-  await page.goto(`http://127.0.0.1:${String(PORT)}/`)
+  await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`)
   await page.waitForSelector('.rail', { timeout: 20_000 })
   await page.waitForTimeout(2200)
   const card = page.locator('.homego[data-open], .project[data-open]').first()
@@ -395,7 +395,7 @@ console.log('#25 — the project map, pressed rather than looked at\n')
   await phone.addInitScript(seedAppearance('dark'))
   const small = await phone.newPage()
   small.on('pageerror', (e) => errors.push(`phone: ${e.message}`))
-  await small.goto(`http://127.0.0.1:${String(PORT)}/`)
+  await small.goto(`http://127.0.0.1:${String(PORT)}/classic/`)
   await small.waitForSelector('.rail', { timeout: 20_000 })
   await small.waitForTimeout(2200)
   await small.locator('.homego[data-open], .project[data-open]').first().click({ force: true })

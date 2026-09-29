@@ -58,7 +58,7 @@ const TYPES: Record<string, string> = {
 }
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0] ?? '/'
-  const file = join(ROOT, path === '/' ? 'index.html' : path.replace(/^\//, ''))
+  const file = join(ROOT, extname(path) === '' ? 'index.html' : path.replace(/^\//, ''))
   try {
     const body = await readFile(file)
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
@@ -91,7 +91,7 @@ const page = await context.newPage()
 const errors: string[] = []
 page.on('pageerror', (e) => errors.push(e.message))
 
-await page.goto(`http://127.0.0.1:${String(PORT)}/`)
+await page.goto(`http://127.0.0.1:${String(PORT)}/classic/`)
 await page.waitForSelector('.rail', { timeout: 20_000 })
 // The studio paints twice — once from what is in hand, once hydrated — and a
 // journey begun between the two walks a DOM that is about to be replaced.
