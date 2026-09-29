@@ -9,6 +9,22 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
+> ## 2026-09-29 — #378 containment audit, on `claude/378-containment` (NOT deployed)
+>
+> Harness work reached people by paths that bypassed the guard. The first was
+> Slack narration with no job (381 of 523 narrations). Also: a bare-`fetch`
+> transcript echo and 👎 question, harness children writing to Notion and
+> NotebookLM, and harness turns in his Chat.
+>
+> Fixed at two chokepoints, both fail-closed: `app.delivery_refusal` inside
+> `claim_delivery` (0601), and a job-boundary gate in `runJob`
+> (`src/jobs/containment.ts`); see ADR-0049. `check:leaks` now reconciles
+> every sent message against provenance independently of `app.harness_job`.
+>
+> Full matrix, proofs, history and deploy order:
+> `docs/testing/378-containment-audit-2026-09-29.md`. **Deploy the worker
+> before 0601.**
+
 > ## State as of 2026-09-24 — MERGE-READINESS, and two defects it found
 >
 > **Nothing is merged.** `docs/integration/merge-plan-2026-09-24.md` is the
