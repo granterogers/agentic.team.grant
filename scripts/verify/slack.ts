@@ -603,6 +603,7 @@ await db.execute(`
 
 const e2eHandler: Handler = {
   kind: 'research.conclusion',
+  reach: 'internal',
   handle: (): Promise<HandlerOutput> =>
     Promise.resolve({
       body: 'All three suppliers quoted within 4% of each other, so price is not the deciding factor here.',

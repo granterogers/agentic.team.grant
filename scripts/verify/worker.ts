@@ -177,6 +177,7 @@ const stateOf = async (jobId: string): Promise<string> =>
 /** Deterministic: reads the database, calls no model. Exempt under §16. */
 const statusHandler: Handler = {
   kind: 'status.count_jobs',
+  reach: 'internal',
   handle: async (job, exec): Promise<HandlerOutput> => {
     const r = await exec.execute(
       `select count(*)::int as n from public.jobs where project_id = ${lit(String(job.projectId))}::uuid`,
@@ -208,6 +209,7 @@ const statusHandler: Handler = {
  */
 const liarHandler: Handler = {
   kind: 'research.liar',
+  reach: 'internal',
   handle: (): Promise<HandlerOutput> =>
     Promise.resolve({
       body: 'A conclusion a model wrote, claiming to be a database read.',
@@ -223,6 +225,7 @@ const liarHandler: Handler = {
 /** Produces metadata that no reviewer should ever get to see. */
 const incoherentHandler: Handler = {
   kind: 'research.incoherent',
+  reach: 'internal',
   handle: (): Promise<HandlerOutput> =>
     Promise.resolve({
       body: 'A speculative finding asserted with total confidence.',
@@ -237,6 +240,7 @@ const incoherentHandler: Handler = {
 
 const inferredHandler: Handler = {
   kind: 'research.conclusion',
+  reach: 'internal',
   handle: (): Promise<HandlerOutput> =>
     Promise.resolve({
       body: 'On the evidence available, the enterprise tier is under-priced relative to its support cost.',
@@ -251,6 +255,7 @@ const inferredHandler: Handler = {
 
 const throwingHandler: Handler = {
   kind: 'research.explodes',
+  reach: 'internal',
   handle: (): Promise<HandlerOutput> => Promise.reject(new Error('the provider went away')),
 }
 
@@ -633,6 +638,7 @@ if (apiKey === '') {
   const router = new ProviderRouter(db, apiKey)
   const liveHandler: Handler = {
     kind: 'research.live',
+    reach: 'internal',
     handle: async (job: Job): Promise<HandlerOutput> => {
       const completion = await router.complete({
         messages: [

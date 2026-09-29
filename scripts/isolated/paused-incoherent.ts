@@ -72,6 +72,7 @@ const review: Reviewer = async () => ({ status: 'approved', notes: 'isolated pro
 const asked = new Set<string>()
 const handler: Handler = {
   kind: 'verify.ask',
+  reach: 'internal',
   handle: async (job: Job) => {
     const base = {
       confidence: 'medium',
@@ -203,6 +204,7 @@ check('answered yes, the job resumes and completes', end.s === 'complete', Strin
 {
   const waiting: Handler = {
     kind: 'verify.ask',
+    reach: 'internal',
     handle: async (job: Job) => {
       await pauseJob(db, job.jobId, {
         reason: 'dependency_wait',

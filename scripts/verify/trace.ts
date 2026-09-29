@@ -126,6 +126,7 @@ const madeToFail = await one(`
 
 const explodes: Handler = {
   kind: 'research.explodes',
+  reach: 'internal',
   handle: (): Promise<HandlerOutput> =>
     // Carrying a credential shape on purpose: the message goes into the trace,
     // so this proves the redactor runs on the failure path too — which is the

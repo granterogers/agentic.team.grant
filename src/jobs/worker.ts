@@ -39,6 +39,7 @@ import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
 import type { Plan } from '../tools/plan.ts'
 import { plannedWrites, summarise } from '../tools/plan.ts'
+import { containmentRefusal, type Reach } from './containment.ts'
 import { lastWord } from './lastword.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -348,6 +349,15 @@ export interface HandlerOutput {
 
 export interface Handler {
   readonly kind: string
+  /**
+   * What this handler can do outside the office, for a kind the production
+   * registry in `src/jobs/containment.ts` does not list (#378).
+   *
+   * For handlers a suite builds for a kind of its own. The registry wins for
+   * every production kind, so this cannot relabel a writer; and a handler that
+   * says nothing about an unlisted kind is treated as one that writes out.
+   */
+  readonly reach?: Reach
   handle(job: Job, db: SqlExecutor): Promise<HandlerOutput>
   /**
    * What this job would change OUTSIDE the office, without changing it (#131).
@@ -921,6 +931,22 @@ export const runJob = async (
         'because a deploy that knows the kind can resume it',
     )
     throw new NoHandlerError(job.kind)
+  }
+
+  /*
+    Containment, before anything else the job does (#378).
+
+    A harness job of a kind that changes something outside the office stops
+    here, before the "on it" and before the handler, and is cancelled with the
+    reason in its own state history. See src/jobs/containment.ts for which
+    kinds, and why an unclassified kind or an unanswerable question counts as
+    a refusal. Cancelled rather than failed: nothing went wrong, and a failed
+    job is one the office would apologise to somebody for.
+  */
+  const contained = await containmentRefusal(db, job, handler.reach)
+  if (contained !== null) {
+    await moveTo(db, job.jobId, 'cancelled', contained)
+    return { jobId: job.jobId, finalState: 'cancelled', note: contained }
   }
 
   if (onStart !== undefined) {

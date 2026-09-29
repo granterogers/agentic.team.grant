@@ -41,6 +41,7 @@ const healthy = await one(`
 let ran = 0
 const handler: Handler = {
   kind: 'verify.drain',
+  reach: 'internal',
   handle: async (job: Job) => {
     ran += 1
     return {
