@@ -79,8 +79,8 @@ SAFE · PARTIAL (partially contained) · BYPASS (fixed on this branch) · DORMAN
 | Harness turns in the dashboard Chat (`conversation_history`) | page read | job | `is_fixture` → `+ harness_job` (0602) | n/a | n/a | yes: 11 rows visible to him in Unnamed | **BYPASS → fixed** |
 | Reads (`browser.gather`, `drive.*`, `google.read_*`, `mcp.discover`, `notebook.ask/collect*`, `office.sync`, `knowledge.read_source`) | any | job | not gated, by design | n/a | n/a | no, reads only | SAFE |
 | `telegram-webhook` voice refusal `sendMessage`; GitHub `repository_dispatch` | inbound webhook | the update itself | none | no | no | the chat the update came from | DORMANT: `voice.transcription = 'api'`, so it never fires; 0 harness voice commands and 0 from any other chat in production. #380 |
-| `app.notice` quiet/looming branches; `app.calendar_task_plan` | duty | task | `tasks.is_fixture` | yes (briefing) / n/a | partly | content in his briefing | PARTIAL: 0 harness tasks open on real projects today; calendar sync is off. Filed |
-| Other display readers (`hq_portfolio_tasks`, `hq_pulse`, `studio_modules`, `project_export`, …) | page read | row | `is_fixture` | n/a | n/a | display only | PARTIAL. Filed |
+| `app.notice` quiet/looming branches; `app.calendar_task_plan` | duty | task | `tasks.is_fixture` | yes (briefing) / n/a | partly | content in his briefing | PARTIAL: 0 harness tasks open on real projects today; calendar sync is off. #380 |
+| Other display readers (`hq_portfolio_tasks`, `hq_pulse`, `studio_modules`, `project_export`, …) | page read | row | `is_fixture` | n/a | n/a | display only | PARTIAL. #380 |
 | `blocker_makes_a_task` | trigger | job | none | n/a | `check:leaks` harness tasks | hidden by `harness_task` readers | PARTIAL (0597 readers hide it) |
 | `provision_missing_channels` | duty | project | slug + 15-minute age rule (0419) | n/a | n/a | creates Slack channels | PARTIAL, by time rather than lineage; an 0419 design decision |
 
@@ -165,7 +165,7 @@ escapes delivered.
 Teaching `harness_job` the rule would reclassify those 277 across about ten
 gate suites that cannot be run offline. The shape is also not validated for
 Slack `action`/`reaction` keys, so a blanket rule could suppress Grant's real
-presses. Filed rather than changed; the new witness fails loudly if the shape
+presses. Filed as #379 rather than changed; the new witness fails loudly if the shape
 ever sends again.
 
 **Dashboard Chat.** 11 harness rows are visible in Unnamed: 5 from the
@@ -231,11 +231,11 @@ because the old code sends it with no job.
 ## 10. Residual risk
 
 - **Off-adapter-shape `message` keys** are still real to `app.harness_job`.
-  They are witnessed, not prevented. Issue filed.
+  They are witnessed, not prevented. #379.
 - **Dormant direct sends** in `telegram-webhook` (voice refusal, GitHub
-  dispatch). Issue filed.
+  dispatch). #380.
 - **`is_fixture`-only display readers and briefing branches.** Currently 0
-  harness rows reach them. Issue filed.
+  harness rows reach them. #380.
 - **Reads are ungated**: a harness `browser.gather` fetches real pages.
 - **Channel audience is indeterminate** (§7).
 - **`verify:slack`, `verify:telegram` and `verify:history`** were adapted but
