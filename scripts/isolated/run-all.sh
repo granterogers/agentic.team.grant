@@ -7,7 +7,7 @@ fresh() { $P -c "drop database if exists $1" >/dev/null 2>&1; $P -c "create data
 status=0
 echo "== R48 recovery matrix"; bash scripts/isolated/recovery-matrix.sh > /tmp/iso-matrix.txt 2>&1 && echo PASS || { echo FAIL; status=1; }
 echo "== R48 drain survives a raising sweep (on pre)"; fresh drain_proof pre; npx tsx scripts/isolated/drain-survives-sweep.ts drain_proof 2>&1 | tail -1; [ ${PIPESTATUS[0]} -eq 0 ] || status=1
-for t in approval-execution:r45 approval-delivery:r46 containment:r37 acknowledgement:ack374 acknowledgement-sequence:seq374 project-provenance:prov373; do
+for t in approval-execution:r45 approval-delivery:r46 containment:r37 acknowledgement:ack374 acknowledgement-sequence:seq374 project-provenance:prov373 paused-incoherent:pinc ask-unasked-loop:aunq; do
   f=${t%%:*}; db=${t##*:}; echo "== $f"; fresh $db post
   npx tsx scripts/isolated/$f.ts $db > /tmp/iso-$f.txt 2>&1; rc=$?; grep -E "passed|^FAIL" /tmp/iso-$f.txt | tail -3; [ $rc -eq 0 ] || status=1
 done

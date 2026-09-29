@@ -1,8 +1,8 @@
 /**
- * Integration pass (finding 4): askUnasked re-asks, every tick, a question whose
- * notifier found nowhere to send it and so wrote no delivery row. Reproduction only.
+ * #371 residual 2: askUnasked re-asked, every tick, a question whose notifier
+ * found nowhere to send it and so wrote no delivery row.
  *
- *   npx tsx scripts/isolated/approval-delivery.ts <replica-db>
+ *   npx tsx scripts/isolated/ask-unasked-loop.ts <replica-db>
  *
  * Runs the REAL worker (`runJob`, `askUnasked`), the real `DeliveryService` and
  * the real `app.claim_delivery` containment guard against an isolated replica.
@@ -11,7 +11,7 @@
  * The channel uses the real `deliveryKey`, the expression every production
  * channel builds its dedupe key from.
  */
-import { DeliveryService, type Transport } from '../../src/channels/delivery.ts'
+import { DeliveryService, type Transport, TransportError } from '../../src/channels/delivery.ts'
 import { combinedNotifier } from '../../src/channels/notify.ts'
 import { raiseBlocker } from '../../src/inference/record.ts'
 import { pauseJob } from '../../src/jobs/checkpoint.ts'
@@ -36,13 +36,19 @@ const check = (what: string, ok: boolean, detail: string) => {
 }
 
 const sent: { key: string; target: string }[] = []
-let failNext = false
+/* Every call the transport received, sent or not, so a retry is countable. */
+const calls: string[] = []
+/* The next send fails once, in one of the ways a real transport can. */
+let failNext: null | 'retryable' | 'terminal' | 'indeterminate' | 'plain' = null
 const transport: Transport = {
   channel: 'telegram',
   send: async (r) => {
-    if (failNext) {
-      failNext = false
-      throw new Error('witness transport refused on purpose')
+    calls.push(r.dedupeKey)
+    if (failNext !== null) {
+      const how = failNext
+      failNext = null
+      if (how === 'plain') throw new Error('witness transport died on purpose')
+      throw new TransportError(`witness_${how}`, how)
     }
     sent.push({ key: r.dedupeKey, target: r.targetRef })
     return { messageRef: `witness-${String(sent.length)}` }
@@ -131,30 +137,315 @@ const age = (jobId: string) =>
   db.execute(
     `update public.blockers set created_at = created_at - interval '3 minutes' where job_id = '${jobId}'`,
   )
-const answer = (blocker: string, a: string) =>
-  db.execute(`select app.hq_answer_blocker('${blocker}'::uuid, '${a}')`)
 
-let calls = 0
-const nowhere = async () => {
-  calls += 1
+const tried: string[] = []
+const nowhere = async (job: Job) => {
+  tried.push(job.jobId)
   return { delivered: false, note: 'no slack destination for this job; nothing delivered' }
 }
-const j = await make('telegram:grant')
-await runJob(db, j, [handler], review, nowhere as never)
-await age(j.jobId)
-const perTick: number[] = []
-for (let t = 0; t < 3; t += 1) {
-  const before = calls
-  await askUnasked(db, nowhere as never)
-  perTick.push(calls - before)
+/* What combinedNotifier does when refuseToSend says no: an impediment, no row. */
+const refusing = async (job: Job) => {
+  tried.push(job.jobId)
+  await db.execute(
+    `select app.cannot('${job.jobId}'::uuid, 'missing_data', 'a sendable answer', 'the sending path', 'isolated refusal', 'not sent')`,
+  )
+  return { delivered: false, note: 'not sent: isolated refusal' }
 }
-const rows = await one(
-  `select count(*)::int as n from public.deliveries where dedupe_key like 'blocker:' || '${await blockerOf(j.jobId)}' || ':%'`,
-)
-console.log(JSON.stringify({ inlineCalls: 1, sweepCallsPerTick: perTick, deliveryRows: rows.n }))
-await db.end()
+const impediments = async (jobId: string) =>
+  Number(
+    (await one(`select count(*)::int as n from public.job_impediments where job_id = '${jobId}'`))
+      .n,
+  )
+/** Sweep n times; how many attempts each tick made at THIS job's question. */
+const ticks = async (n: number, via: unknown, jobId: string) => {
+  const per: number[] = []
+  const b = await blockerOf(jobId)
+  const mine = () =>
+    tried.filter((x) => x === jobId).length +
+    sent.filter((x) => x.key.startsWith(`blocker:${b}:`)).length
+  for (let t = 0; t < n; t += 1) {
+    const before = mine()
+    await askUnasked(db, via as never)
+    per.push(mine() - before)
+  }
+  return per
+}
 
-// Reproduction only: helpers shared with approval-delivery.ts that this file does not call.
-void check
-void notify
-void answer
+// 1. Asked inline, and there was nowhere to send it: tried, so never re-asked.
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, nowhere as never)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  const stamped = await one(
+    `select asked_at is not null as t from public.blockers where blocker_id = '${b}'`,
+  )
+  check(
+    'an attempt that found nowhere to send is recorded as tried',
+    stamped.t === true,
+    String(stamped.t),
+  )
+  const per = await ticks(3, nowhere, j.jobId)
+  check(
+    'so the sweep does not re-ask it every tick',
+    per.every((x) => x === 0),
+    JSON.stringify(per),
+  )
+}
+
+// 2. Refused by the sending gate: tried once, and the ledger grows once.
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, refusing as never)
+  await age(j.jobId)
+  const before = await impediments(j.jobId)
+  const per = await ticks(3, refusing, j.jobId)
+  const after = await impediments(j.jobId)
+  check(
+    'a question the sending gate refused is not re-asked, and the ledger does not grow per tick',
+    per.every((x) => x === 0) && after === before,
+    `sweep ${JSON.stringify(per)}, impediments ${String(before)} -> ${String(after)}`,
+  )
+}
+
+// 3. The recovery still works: a worker that died before asking.
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, undefined)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  const per = await ticks(3, notify, j.jobId)
+  const toHim = sent.filter((x) => x.key.startsWith(`blocker:${b}:`)).length
+  check(
+    'a question never tried is asked by the sweep, exactly once over three ticks',
+    toHim === 1 && JSON.stringify(per) === '[1,0,0]',
+    `sent ${String(toHim)}, sweep ${JSON.stringify(per)}`,
+  )
+}
+
+// 4. Stale: a question days old is not sprung on him by a deploy.
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, undefined)
+  await db.execute(
+    `update public.blockers set created_at = created_at - interval '3 days' where job_id = '${j.jobId}'`,
+  )
+  const per = await ticks(1, notify, j.jobId)
+  check('a question three days old is not swept', per[0] === 0, JSON.stringify(per))
+}
+
+/* --- attempted is not delivered: every way a send can end ----------------- */
+const keyed = (b: string) => (x: string) => x.startsWith(`blocker:${b}:`)
+const lapse = (b: string) =>
+  db.execute(`update public.deliveries set lease_expires_at = app.now_utc() - interval '1 second'
+               where dedupe_key like 'blocker:' || '${b}' || ':%' and state = 'claimed'`)
+const later = (b: string, by: string) =>
+  db.execute(
+    `update public.blockers set asked_at = asked_at - interval '${by}' where blocker_id = '${b}'`,
+  )
+
+// 5. A retryable transport failure is re-driven once its backoff lapses, under the same key.
+{
+  const j = await make('telegram:grant')
+  failNext = 'retryable'
+  await runJob(db, j, [handler], review, notify)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  const early = await ticks(1, notify, j.jobId)
+  await lapse(b)
+  await ticks(3, notify, j.jobId)
+  check(
+    'a retryable failure is sent once its backoff lapses, and only once',
+    early[0] === 0 &&
+      sent.filter((x) => keyed(b)(x.key)).length === 1 &&
+      calls.filter(keyed(b)).length === 2,
+    `before the lapse ${JSON.stringify(early)}; ${String(calls.filter(keyed(b)).length)} calls, ${String(sent.filter((x) => keyed(b)(x.key)).length)} sent`,
+  )
+}
+
+// 6. A worker that died mid-send leaves a claim; its lease lapses and the sweep finishes it.
+{
+  const j = await make('telegram:grant')
+  failNext = 'plain'
+  await runJob(db, j, [handler], review, notify)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  await lapse(b)
+  await ticks(2, notify, j.jobId)
+  check(
+    'a send that died after its claim is finished by the sweep, once',
+    sent.filter((x) => keyed(b)(x.key)).length === 1,
+    `${String(calls.filter(keyed(b)).length)} calls, ${String(sent.filter((x) => keyed(b)(x.key)).length)} sent`,
+  )
+}
+
+// 7. Terminal and indeterminate failures are never sent again: a second copy is the one harm.
+for (const how of ['terminal', 'indeterminate'] as const) {
+  const j = await make('telegram:grant')
+  failNext = how
+  await runJob(db, j, [handler], review, notify)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  await lapse(b)
+  await later(b, '1 day')
+  await ticks(3, notify, j.jobId)
+  check(
+    `an ${how} failure is never sent again`,
+    calls.filter(keyed(b)).length === 1 && sent.filter((x) => keyed(b)(x.key)).length === 0,
+    `${String(calls.filter(keyed(b)).length)} call(s)`,
+  )
+}
+
+// 8. Nowhere to send: retried with backoff, at most three tries in all, however long it waits.
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, nowhere as never)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  const per: number[] = []
+  for (let t = 0; t < 6; t += 1) {
+    await later(b, '1 day')
+    per.push(...(await ticks(1, nowhere, j.jobId)))
+  }
+  const n = await one(
+    `select coalesce(to_jsonb(b) ->> 'ask_attempts', 'no column') as n from public.blockers b where blocker_id = '${b}'`,
+  )
+  check(
+    'a try that left no delivery is retried, but three tries is the end',
+    tried.filter((x) => x === j.jobId).length === 3 && Number(n.n) === 3,
+    `tries ${String(tried.filter((x) => x === j.jobId).length)}, per tick ${JSON.stringify(per)}, attempts ${String(n.n)}`,
+  )
+}
+
+// 9. A notifier that threw before anything was recorded is retried, and gets through.
+{
+  const j = await make('telegram:grant')
+  let explode = true
+  const flaky = async (job: Job, output: HandlerOutput, outputId: string) => {
+    if (explode) {
+      explode = false
+      throw new Error('the database blinked')
+    }
+    return notify(job, output, outputId)
+  }
+  await runJob(db, j, [handler], review, flaky as never)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  await later(b, '1 day')
+  await ticks(2, flaky, j.jobId)
+  check(
+    'a notifier that failed before recording anything is retried and delivers',
+    sent.filter((x) => keyed(b)(x.key)).length === 1,
+    `${String(sent.filter((x) => keyed(b)(x.key)).length)} sent`,
+  )
+}
+
+// 10. Answered in the meantime: nothing more is sent, whatever its delivery says.
+{
+  const j = await make('telegram:grant')
+  failNext = 'retryable'
+  await runJob(db, j, [handler], review, notify)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  await db.execute(`select app.hq_answer_blocker('${b}'::uuid, 'No, leave it')`)
+  await lapse(b)
+  await ticks(2, notify, j.jobId)
+  check(
+    'a question answered elsewhere is not re-sent by its retry',
+    sent.filter((x) => keyed(b)(x.key)).length === 0,
+    `${String(sent.filter((x) => keyed(b)(x.key)).length)} sent`,
+  )
+  /* The answer resumed it to queued; settle it so the next case's dequeue takes its own job. */
+  await db.execute(
+    `update public.jobs set state = 'cancelled', finished_at = app.now_utc() where job_id = '${j.jobId}' and state = 'queued'`,
+  )
+}
+
+// 12. A question withdrawn while its job stays paused (it waits on another) is not re-sent.
+{
+  const j = await make('telegram:grant')
+  failNext = 'retryable'
+  await runJob(db, j, [handler], review, notify)
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  await db.execute(`update public.blockers set state = 'withdrawn', resolved_at = app.now_utc(),
+                      resolution = 'isolated: superseded' where blocker_id = '${b}'`)
+  await lapse(b)
+  await ticks(2, notify, j.jobId)
+  const st = await one(`select state::text as s from public.jobs where job_id = '${j.jobId}'`)
+  check(
+    'a question withdrawn on a job still paused is not re-sent by its retry',
+    st.s === 'paused' && sent.filter((x) => keyed(b)(x.key)).length === 0,
+    `job ${String(st.s)}, ${String(sent.filter((x) => keyed(b)(x.key)).length)} sent`,
+  )
+  await db.execute(
+    `update public.jobs set state = 'cancelled', finished_at = app.now_utc() where job_id = '${j.jobId}'`,
+  )
+}
+
+// 11. Two channels: he has had it on one, so a lapsed claim on the other is left;
+//     or the first failed for good, so the second is re-driven - and only it.
+{
+  const slackCalls: string[] = []
+  const slackSent: string[] = []
+  let slackFail: null | 'retryable' = null
+  const slackTransport: Transport = {
+    channel: 'slack',
+    send: async (r) => {
+      slackCalls.push(r.dedupeKey)
+      if (slackFail !== null) {
+        slackFail = null
+        throw new TransportError('witness_slack_retryable', 'retryable')
+      }
+      slackSent.push(r.dedupeKey)
+      return { messageRef: `slack-${String(slackSent.length)}` }
+    },
+  }
+  const slackService = new DeliveryService(db, slackTransport)
+  const channel = (name: 'telegram' | 'slack', svc: DeliveryService) => ({
+    name,
+    surface: name,
+    notify: async (job: Job, output: HandlerOutput) => {
+      const r = await svc.deliver({
+        dedupeKey: deliveryKey(job, output, name),
+        accountRef: '8967954396',
+        // Each channel's own target shape: deliveries_target_shaped refuses a chat id on Slack.
+        targetRef: name === 'slack' ? 'C0ISOLATED1' : '1386648496',
+        purpose: 'result',
+        correlationId: job.correlationId,
+        jobId: job.jobId,
+        body: { text: output.body },
+      })
+      return { delivered: r.outcome === 'sent', note: `${name}: ${r.outcome}` }
+    },
+  })
+  const both = combinedNotifier([channel('telegram', service), channel('slack', slackService)], db)
+  for (const [first, label] of [
+    [null, 'sent on Telegram, so the lapsed Slack claim is not re-driven'],
+    ['terminal', 'Telegram failed for good, so only the Slack claim is re-driven'],
+  ] as const) {
+    const j = await make('telegram:grant')
+    failNext = first
+    slackFail = 'retryable'
+    await runJob(db, j, [handler], review, both)
+    await age(j.jobId)
+    const b = await blockerOf(j.jobId)
+    await lapse(b)
+    await ticks(2, both, j.jobId)
+    const tg = calls.filter(keyed(b)).length
+    const sl = slackCalls.filter(keyed(b)).length
+    const slSent = slackSent.filter(keyed(b)).length
+    const ok =
+      first === null ? tg === 1 && sl === 1 && slSent === 0 : tg === 1 && sl === 2 && slSent === 1
+    check(
+      label,
+      ok,
+      `telegram calls ${String(tg)}, slack calls ${String(sl)}, slack sent ${String(slSent)}`,
+    )
+  }
+}
+
+const failed = results.filter((r) => !r.ok).length
+console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
+await db.end()
+process.exit(failed === 0 ? 0 : 1)

@@ -720,18 +720,88 @@ export const askedOnPause = async (
     return `asked: ${sent.note}`.slice(0, 160)
   } catch (error) {
     return `asking failed: ${String((error as Error).message).slice(0, 120)}`
+  } finally {
+    /*
+      ATTEMPTED, whatever came of it (#371, 0600). This is not evidence of
+      delivery - that is a sent row under the blocker's key - it is what lets
+      the sweep tell a question never tried from one tried with nothing to
+      show for it, which "does any delivery row exist" could not. Stamped
+      after the attempt, so a worker that dies before asking leaves it
+      untouched and the sweep still recovers it. Best-effort: a failed stamp
+      costs at most one extra try, never the question.
+    */
+    await db
+      .execute(
+        `update public.blockers set asked_at = app.now_utc(), ask_attempts = ask_attempts + 1
+          where blocker_id = ${lit(blocker)}::uuid`,
+      )
+      .catch(() => undefined)
   }
 }
 
 /**
- * The recovery half of R46: a question whose job paused but whose worker died
- * before asking. Only a question with NO delivery row at all under its scope -
- * a sent one is done and a failed one is not retried in a loop, because a
- * question re-sent every minute is the thing Grant must never receive. Older
- * than two minutes, so the inline path has had its turn.
+ * The question a paused job's open blocker asks, composed in code from the
+ * blocker the handler raised as DATA - never from the handler's prose.
+ *
+ * Used when the coherence gate refuses a paused job's own wording (#371). The
+ * pause and the blocker are durable facts the gate has no quarrel with; what it
+ * refused was a sentence about them. Retrying is not available (`paused` may
+ * not move to `retrying`, and a re-run would raise a second question), and
+ * failing would throw away a question he is owed. So the question goes out in
+ * words nobody invented: what is asked, why, and the options he can press.
+ * Null when the job is not paused on an open question.
+ */
+export const pausedQuestion = async (db: SqlExecutor, jobId: string): Promise<string | null> => {
+  const { rows } = await db
+    .execute(
+      `select b.requested_action as asked, b.why_needed as why, b.approval_options as options
+         from public.blockers b
+         join public.jobs j on j.job_id = b.job_id
+        where b.job_id = ${lit(jobId)}::uuid and b.state = 'open' and j.state = 'paused'
+        order by b.created_at desc limit 1`,
+    )
+    .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+  const b = rows[0] as { asked?: string; why?: string; options?: unknown } | undefined
+  if (b?.asked === undefined || b.asked.trim() === '') return null
+  const options = Array.isArray(b.options) ? b.options.map((o) => `"${String(o)}"`) : []
+  return [
+    `Before I go on, I need your answer: ${b.asked.trim()}`,
+    ...(b.why !== undefined && b.why.trim() !== '' ? [b.why.trim()] : []),
+    ...(options.length > 0 ? [`You can say ${options.join(' or ')}.`] : []),
+  ].join('\n\n')
+}
+
+/**
+ * The recovery half of R46: a paused job's question that has not been
+ * delivered and still can be. Older than two minutes, so the inline path has
+ * had its turn; younger than two days (#371). The rule is in the query.
  */
 export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): Promise<number> => {
   if (notify === undefined) return 0
+  /*
+    ATTEMPTED IS NOT DELIVERED (#371). Each question is decided by what its
+    delivery rows say, never by whether one exists:
+
+      a sent row                  delivered, never asked again
+      a failed row (terminal,     never on that channel again - a second copy
+        gave up, indeterminate)   is the one harm the delivery layer prevents
+      a suppressed row            the containment guard's decision
+      a claimed row whose lease   re-driven under the same key, unless it was
+        has lapsed                sent on another channel: claim_delivery
+                                  reclaims it, dedupes every other channel,
+                                  and the layer's own max_attempts and backoff
+                                  bound the retry
+      no row, never tried         asked (the worker died before asking)
+      no row, tried               tried again with backoff, three tries in all
+                                  (nowhere to send, a refusal, a notifier that
+                                  threw before recording anything)
+
+    Without 0600's columns this query fails and the sweep asks nothing, the
+    safe direction: an unsent question is still on the dashboard; one re-sent
+    every minute is the thing he must never receive. Only open questions of
+    paused jobs, so a question answered anywhere stops here. Younger than two
+    days, so a deploy does not spring an old question on him.
+  */
   const { rows } = await db.execute(`
     select j.job_id::text as job_id, j.kind, j.correlation_id::text as correlation_id,
            j.project_id::text as project_id,
@@ -739,10 +809,25 @@ export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): 
              order by o.created_at desc limit 1) as output_id
       from public.jobs j
       join public.blockers b on b.job_id = j.job_id and b.state = 'open'
+      left join lateral (
+        select count(*) as n,
+               count(*) filter (where d.state = 'sent') as sent,
+               count(*) filter (where d.state = 'claimed' and d.lease_expires_at < app.now_utc()) as lapsed
+          from public.deliveries d
+         where d.dedupe_key like 'blocker:' || b.blocker_id::text || ':%'
+      ) d on true
      where j.state = 'paused' and j.announce
        and b.created_at < app.now_utc() - interval '2 minutes'
-       and not exists (select 1 from public.deliveries d
-                        where d.dedupe_key like 'blocker:' || b.blocker_id::text || ':%')
+       and b.created_at > app.now_utc() - interval '2 days'
+       and (
+             -- a send the delivery layer can still make, and he has not had it anywhere
+             (d.lapsed > 0 and d.sent = 0)
+             -- or nothing was ever recorded, and a try is due
+          or (d.n = 0 and (b.asked_at is null
+                           or (b.ask_attempts < 3
+                               and b.asked_at < app.now_utc()
+                                     - interval '10 minutes' * power(6, greatest(b.ask_attempts, 1) - 1))))
+           )
      order by b.created_at
      limit ${String(max)}`)
   let asked = 0
@@ -1081,38 +1166,82 @@ export const runJob = async (
       and the impediment above is recorded on EVERY refusal including the last,
       so the fabrication stays countable however it ends (#211).
     */
-    const learnable = job.attempt < 4
-    if (learnable) {
-      try {
-        await db.execute(`
-          update public.jobs
-             set pinned_config = coalesce(pinned_config, '{}'::jsonb)
-                   || jsonb_build_object('coherence_note', ${lit(
-                     problems
-                       .map((p) => p.problem)
-                       .join(' | ')
-                       .slice(0, 600),
-                   )})
-           where job_id = ${lit(job.jobId)}::uuid`)
-      } catch {
-        /* A note that could not be written is a retry without the lesson,
-           which is still better than no retry. */
-      }
-    }
+    /*
+      A PAUSED JOB KEEPS ITS PAUSE (#371).
 
-    await moveTo(
-      db,
-      job.jobId,
-      learnable ? 'retrying' : 'failed',
-      `incoherent output metadata: ${problems.map((p) => p.field).join(', ')}`,
-    )
-    return {
-      jobId: job.jobId,
-      finalState: learnable ? 'retrying' : 'failed',
-      note: problems
-        .map((p) => p.problem)
-        .join(' | ')
-        .slice(0, 300),
+      A handler that paused to ask him something has already done the durable
+      part: the pause and the open blocker. The gate refused its WORDING, and
+      the retry below cannot apply - `paused -> retrying` is an illegal move,
+      so it threw, the job sat paused with no output, and the question never
+      reached him. So the model's sentence is replaced by the blocker's own
+      question, composed in code, and the job goes on through the paused path
+      below exactly as if the handler had written that.
+    */
+    const question = await pausedQuestion(db, job.jobId)
+    if (question !== null) {
+      output = {
+        body: question,
+        confidence: 'medium',
+        evidence: 'inferred',
+        sources: [],
+        contradictions: null,
+        path: 'inference',
+        model: output.model,
+        ...(output.announce === undefined ? {} : { announce: output.announce }),
+      }
+    } else if (
+      /*
+        Paused for something that is not a question (a wait on other work): the
+        pause stands, and a refused sentence with nobody to ask is simply not
+        kept. The refusal is already counted above.
+      */
+      (
+        (
+          await db.execute(
+            `select state::text as s from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
+          )
+        ).rows[0] as { s?: string } | undefined
+      )?.s === 'paused'
+    ) {
+      return {
+        jobId: job.jobId,
+        finalState: 'paused',
+        note: 'paused by its handler; its output was refused and not kept',
+      }
+    } else {
+      const learnable = job.attempt < 4
+      if (learnable) {
+        try {
+          await db.execute(`
+            update public.jobs
+               set pinned_config = coalesce(pinned_config, '{}'::jsonb)
+                     || jsonb_build_object('coherence_note', ${lit(
+                       problems
+                         .map((p) => p.problem)
+                         .join(' | ')
+                         .slice(0, 600),
+                     )})
+             where job_id = ${lit(job.jobId)}::uuid`)
+        } catch {
+          /* A note that could not be written is a retry without the lesson,
+             which is still better than no retry. */
+        }
+      }
+
+      await moveTo(
+        db,
+        job.jobId,
+        learnable ? 'retrying' : 'failed',
+        `incoherent output metadata: ${problems.map((p) => p.field).join(', ')}`,
+      )
+      return {
+        jobId: job.jobId,
+        finalState: learnable ? 'retrying' : 'failed',
+        note: problems
+          .map((p) => p.problem)
+          .join(' | ')
+          .slice(0, 300),
+      }
     }
   }
 

@@ -6,7 +6,7 @@
 #
 # base : every migration before 0592, replayed from 0001
 # pre  : base + 0592..0598   (0599 ABSENT - the recovery sweep still raises)
-# post : pre  + 0599
+# post : pre  + 0599 + every later migration (the candidate)
 #
 # Why a replica: the first remediation session proved failure paths against the
 # canonical database and stopped the production worker for 87 minutes. The
@@ -53,3 +53,10 @@ $P -c "drop database if exists pre"; $P -c "create database pre template base"
 for f in $(cd "$ROOT/migrations" && ls 059[2-8]_*.sql); do $P -d pre -v ON_ERROR_STOP=1 -1 -f "$ROOT/migrations/$f" >/dev/null; echo "pre: $f"; done
 $P -c "drop database if exists post"; $P -c "create database post template pre"
 $P -d post -v ON_ERROR_STOP=1 -1 -f "$ROOT/migrations/0599_one_stalled_job_must_not_stop_the_office.sql" >/dev/null && echo "post: 0599"
+# post is the candidate: every migration after 0599 too (0600 onwards), each
+# in its own transaction and stopping at the first error, as `npm run migrate`
+# would apply them.
+for f in $(cd "$ROOT/migrations" && ls [0-9][0-9][0-9][0-9]_*.sql | sort); do
+  n=${f%%_*}; [ "$n" \> "0599" ] || continue
+  $P -d post -v ON_ERROR_STOP=1 -1 -f "$ROOT/migrations/$f" >/dev/null; echo "post: $f"
+done

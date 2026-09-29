@@ -1,8 +1,8 @@
 /**
- * Integration pass (finding 3): a PAUSED job whose question output the coherence
- * gate refuses. Reproduction only; same stand-ins as approval-delivery.ts.
+ * #371 residual 1: a PAUSED job whose question output the coherence gate
+ * refuses. Same stand-ins as approval-delivery.ts.
  *
- *   npx tsx scripts/isolated/approval-delivery.ts <replica-db>
+ *   npx tsx scripts/isolated/paused-incoherent.ts <replica-db>
  *
  * Runs the REAL worker (`runJob`, `askUnasked`), the real `DeliveryService` and
  * the real `app.claim_delivery` containment guard against an isolated replica.
@@ -137,31 +137,109 @@ const answer = (blocker: string, a: string) =>
 const j = await make('telegram:grant')
 let thrown = ''
 try {
-  const r = await runJob(db, j, [handler], review, notify)
-  console.log('runJob returned', JSON.stringify(r).slice(0, 200))
+  await runJob(db, j, [handler], review, notify)
 } catch (e) {
   thrown = String((e as Error).message).slice(0, 200)
 }
-const st =
-  await one(`select state::text as s, (select count(*) from public.outputs o where o.job_id = '${j.jobId}')::int as outputs,
-  (select state::text from public.blockers b where b.job_id = '${j.jobId}' limit 1) as blocker from public.jobs where job_id = '${j.jobId}'`)
+const st = await one(`
+  select state::text as s,
+         (select count(*) from public.outputs o where o.job_id = '${j.jobId}')::int as outputs,
+         (select state::text from public.blockers b where b.job_id = '${j.jobId}' limit 1) as blocker,
+         (select count(*) from public.job_impediments i
+           where i.job_id = '${j.jobId}' and i.noticed_by = 'the quality gate')::int as refusals
+    from public.jobs where job_id = '${j.jobId}'`)
+const b = await blockerOf(j.jobId)
+check(
+  'the worker does not throw on a paused job the gate refuses',
+  thrown === '',
+  thrown || 'no throw',
+)
+check(
+  'the job keeps its pause and its question stays open',
+  st.s === 'paused' && st.blocker === 'open',
+  `${String(st.s)}, blocker ${String(st.blocker)}`,
+)
+check(
+  'the refusal is still countable',
+  Number(st.refusals) >= 1,
+  `${String(st.refusals)} refusal(s)`,
+)
+const toHim = sent.filter((x) => x.key.startsWith(`blocker:${b}:`))
+check(
+  'the question reaches him once, under the blocker',
+  toHim.length === 1,
+  `${String(toHim.length)} sent`,
+)
+const words = String(
+  (
+    await one(
+      `select string_agg(body, ' || ') as w from public.outputs where job_id = '${j.jobId}'`,
+    )
+  ).w ?? '',
+)
+check(
+  "in words the gate never refused: the blocker's own, not the claimed read",
+  !words.includes('I checked the database') &&
+    words.includes(`Approve step for ${j.jobId.slice(0, 8)}`),
+  words.slice(0, 160),
+)
 await age(j.jobId)
 const before = sent.length
-const swept = await askUnasked(db, notify)
-console.log(
-  JSON.stringify({
-    thrown,
-    state: st.s,
-    outputs: st.outputs,
-    blocker: st.blocker,
-    sweptAsked: swept,
-    sentBySweep: sent.length - before,
-    sentTotal: sent.length,
-  }),
+await askUnasked(db, notify)
+check(
+  'the sweep does not ask it again',
+  sent.length === before,
+  `${String(sent.length - before)} more`,
 )
-await db.end()
 
-// Reproduction only: helpers shared with approval-delivery.ts that this file does not call.
-void check
-void answer
-void blockerOf
+// And the answer still decides the step: yes resumes and finishes.
+await answer(b, 'Yes, do it')
+const resumed = await dequeue(db, 'r46', false, false, ['verify.ask'], 'telegram:grant')
+if (resumed !== null) await runJob(db, resumed, [handler], review, notify)
+const end = await one(`select state::text as s from public.jobs where job_id = '${j.jobId}'`)
+check('answered yes, the job resumes and completes', end.s === 'complete', String(end.s))
+
+// A pause that asks nothing (a wait on other work) whose wording is refused.
+{
+  const waiting: Handler = {
+    kind: 'verify.ask',
+    handle: async (job: Job) => {
+      await pauseJob(db, job.jobId, {
+        reason: 'dependency_wait',
+        detail: 'isolated proof',
+        resumeWhen: 'the branches finish',
+        resumable: true,
+      } as never)
+      return {
+        body: 'I checked the database and pulled the records.',
+        confidence: 'high',
+        evidence: 'verified',
+        sources: [],
+        contradictions: null,
+        path: 'deterministic_retrieval',
+        model: null,
+        announce: false,
+      } as never
+    },
+  }
+  const w = await make('telegram:grant')
+  let threw = ''
+  try {
+    await runJob(db, w, [waiting], review, notify)
+  } catch (e) {
+    threw = String((e as Error).message).slice(0, 160)
+  }
+  const ws = await one(`select state::text as s,
+    (select count(*) from public.outputs o where o.job_id = '${w.jobId}')::int as outputs
+    from public.jobs where job_id = '${w.jobId}'`)
+  check(
+    'a pause that asks nothing keeps its pause, and the refused sentence is not kept',
+    threw === '' && ws.s === 'paused' && ws.outputs === 0,
+    `${threw || 'no throw'}; ${String(ws.s)}, ${String(ws.outputs)} output(s)`,
+  )
+}
+
+const failed = results.filter((r) => !r.ok).length
+console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
+await db.end()
+process.exit(failed === 0 ? 0 : 1)

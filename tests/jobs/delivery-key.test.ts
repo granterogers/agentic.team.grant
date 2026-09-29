@@ -26,8 +26,16 @@ describe('a question and a result are different deliveries (R46)', () => {
     const src = readFileSync('src/jobs/worker.ts', 'utf8')
     expect(src).toMatch(/const asked = await askedOnPause\(db, job, output, outputId, notify\)/)
     expect(src).toMatch(/await askUnasked\(db, options\.notify\)\.catch\(/)
-    expect(src).toMatch(
-      /not exists \(select 1 from public\.deliveries d\s+where d\.dedupe_key like 'blocker:' \|\| b\.blocker_id::text \|\| ':%'\)/,
-    )
+    /*
+      The sweep reads the question's OWN delivery scope and decides by what
+      is recorded - delivery state, and the attempts 0600 counts - never by
+      whether a row exists (#371: attempted is not delivered). This pins the
+      inputs; the behaviour, every outcome, is proved against a replica in
+      scripts/isolated/ask-unasked-loop.ts.
+    */
+    const sweep = src.slice(src.indexOf('export const askUnasked'))
+    expect(sweep).toMatch(/d\.dedupe_key like 'blocker:' \|\| b\.blocker_id::text \|\| ':%'/)
+    expect(sweep).toMatch(/d\.state = 'claimed' and d\.lease_expires_at < app\.now_utc\(\)/)
+    expect(sweep).toMatch(/b\.ask_attempts < 3/)
   })
 })
