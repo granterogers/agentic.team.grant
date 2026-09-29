@@ -2262,7 +2262,34 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         answer and a model is not needed to find it — the same argument as the
         empty-history reply above it.
       */
-      if (rejectsWithoutSaying(instruction)) {
+      /*
+        AN OPEN QUESTION OUTRANKS GENERIC REJECTION (audit B3, 0608 era).
+
+        "No." is two things at once: the shortest possible refusal of a
+        question the office asked, and the shortest possible rejection of its
+        last answer. `rejectsWithoutSaying` is right about the second and is
+        checked before the resolver precisely so a contentless message is not
+        rebuilt into the request it rejects - but it never asked whether a
+        question was WAITING on him, so a bare "No." to "Shall I send this?"
+        was answered "What did I get wrong?" and the question stayed open. Its
+        sibling `closesWithoutAsking` has always asked.
+
+        The precedence is by STATE, not by phrase: when a question is waiting
+        and what he said reads as a yes or a no to it, that is an answer, and
+        the spoken-answer path further down owns it. Anything else - a
+        rejection that names nothing but is not a yes or a no ("That is not
+        what I meant") - is still the generic rejection.
+      */
+      const answersAnOpenQuestion = async (said: string): Promise<boolean> => {
+        const reading = spokenAnswer(said)
+        if (reading !== 'yes' && reading !== 'no') return false
+        const last = (
+          await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => [])
+        ).at(-1)
+        return last !== undefined && Number(last.waitingOnYou ?? 0) > 0
+      }
+
+      if (rejectsWithoutSaying(instruction) && !(await answersAnOpenQuestion(instruction))) {
         // The thread is read again here rather than hoisted: this path is
         // rare, the read is one query, and moving the main one earlier would
         // put a database call in front of every message to serve this one.
