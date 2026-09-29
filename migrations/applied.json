@@ -611,5 +611,10 @@
   "0597_a_harness_task_is_never_reminded.sql": "f0764d882f887400d3434fcd536ae65223742a58fb3ddecef07c31db909bb4ac",
   "0598_a_voice_session_the_page_did_not_mint_is_harness.sql": "6d92bd3460bb5eae6c30dcf77c900d6ff26df1c153e559b082aa7b01d3df34fe",
   "0599_one_stalled_job_must_not_stop_the_office.sql": "6cf30a12d0d62f2d207722e88543fb4936cdf6e10d29670364c3023381ce52c1",
-  "0600_a_question_is_asked_once_whatever_became_of_it.sql": "fd4be594b791afcbe616ae4c86a377a3661d984f36d51d96258dfffeda2fc4e1"
+  "0600_a_question_is_asked_once_whatever_became_of_it.sql": "fd4be594b791afcbe616ae4c86a377a3661d984f36d51d96258dfffeda2fc4e1",
+  "0601_an_outbound_message_must_name_what_caused_it.sql": "92adb375c537d88f719b3b958b206efd25f41e0f799192315f49ac5f6c9b2b25",
+  "0602_harness_turns_do_not_appear_in_his_chat.sql": "afd8fac44c640ca2654ad62ffa248ba47306b40439216be34b73e70355377874",
+  "0603_unknown_origin_is_not_real_traffic.sql": "3dce4c8f093415ae684a18aed13db6ad062e8d7bf0d53217aacab431cfb8f0a3",
+  "0604_harness_tasks_never_reach_his_calendar_or_briefing.sql": "017cb10ec7406c1eb3ab742abd3ce06a86631a664504005188735aacef6a04bc",
+  "0605_a_test_at_a_real_door_says_so_before_it_knocks.sql": "7cfa77dcdea05814a236eb446182be6941656ec66161d8fdfa6c59ceaa21df3a"
 }
