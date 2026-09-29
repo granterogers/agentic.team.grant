@@ -9,25 +9,47 @@ work.
 
 | Branch | Head | Commits not on main | Verdict |
 |---|---|---|---|
-| `claude/371-paused-edges` | `227c68f7` | 0 | merged: deleted |
-| `claude/373-project-provenance` | `69fc3e6c` | 0 | merged: deleted |
-| `claude/375-harness` | `ce12e710` | 0 | merged: deleted |
-| `claude/378-containment` | `939f32ce` | 0 | merged: deleted |
-| `claude/basecamp-team-hq` | `9c51e1e3` | 0 | merged: deleted |
-| `claude/dazzling-dirac-acjwqf` | `a8ed7e87` | 0 | merged: deleted |
-| `claude/human-simulation-harness` | `3bb5bb82` | 0 | merged: deleted |
-| `claude/jolly-darwin-8rwmp3` | `dcc03386` | 0 | merged: deleted |
-| `claude/phase-7-communications-kh8ow8` | `3c941508` | 0 | merged: deleted |
-| `claude/production-reliability` | `7be135f0` | 0 | merged: deleted |
-| `trial/three-branch-integration-2026-09-24` | `78ba12a1` | 0 | the promoted 24 September trial: deleted |
-| `claude/378-acceptance-prep` | `7c9c9638` | 1 | its patch is already on main (`git cherry` reports it as merged): tagged, deleted |
-| `claude/new-session-o2oklu` | `6f9bfe7d` | 2 merge commits | both trees equal the automatic merge of parents that are on main, so they add nothing: tagged, deleted |
-| `claude/gracious-volta-48lh36` | `85f0a544` | 1 | the three-branch reconnaissance plan. Two main docs cite it, and it was missing from main. **Copied to `docs/integration/three-branch-reconnaissance-2026-09-24.md`**, then tagged and deleted |
-| `claude/docs-onboarding-setup-5nxt5z` | `554ec4e1` | 1 | a 7 September draft of `docs/new-environment.md`. It was superseded by main's own version, which was maintained afterwards. Tagged, deleted |
+| `claude/371-paused-edges` | `227c68f7` | 0 | merged: delete |
+| `claude/373-project-provenance` | `69fc3e6c` | 0 | merged: delete |
+| `claude/375-harness` | `ce12e710` | 0 | merged: delete |
+| `claude/378-containment` | `939f32ce` | 0 | merged: delete |
+| `claude/basecamp-team-hq` | `9c51e1e3` | 0 | merged: delete |
+| `claude/dazzling-dirac-acjwqf` | `a8ed7e87` | 0 | merged: delete |
+| `claude/human-simulation-harness` | `3bb5bb82` | 0 | merged: delete |
+| `claude/jolly-darwin-8rwmp3` | `dcc03386` | 0 | merged: delete |
+| `claude/phase-7-communications-kh8ow8` | `3c941508` | 0 | merged: delete |
+| `claude/production-reliability` | `7be135f0` | 0 | merged: delete |
+| `trial/three-branch-integration-2026-09-24` | `78ba12a1` | 0 | the promoted 24 September trial: delete |
+| `claude/378-acceptance-prep` | `7c9c9638` | 1 | its patch is already on main (`git cherry` reports it as merged): tag, then delete |
+| `claude/new-session-o2oklu` | `6f9bfe7d` | 2 merge commits | both trees equal the automatic merge of parents that are on main, so they add nothing: tag, then delete |
+| `claude/gracious-volta-48lh36` | `85f0a544` | 1 | the three-branch reconnaissance plan. Two main docs cite it, and it was missing from main. **Copied to `docs/integration/three-branch-reconnaissance-2026-09-24.md`**, then tag and delete |
+| `claude/docs-onboarding-setup-5nxt5z` | `554ec4e1` | 1 | a 7 September draft of `docs/new-environment.md`. It was superseded by main's own version, which was maintained afterwards. Tag, then delete |
 | `claude/agentic-team-integration-rc-dx8x7e` | = main | 0 | working branch, kept |
 
-Branches with unique commits are kept as `archive/<branch>` tags, so deleting
-them loses nothing: `git checkout archive/claude/<name>`.
+**Not yet deleted.** The build session's git proxy refuses branch deletions
+and tag pushes (HTTP 403); only its working branch and `main` can be pushed.
+From any clone with push access, run these commands. They tag first, so a
+branch with unique commits stays recoverable as `archive/<branch>`:
+
+```bash
+git fetch origin --prune
+for b in 378-acceptance-prep docs-onboarding-setup-5nxt5z gracious-volta-48lh36 new-session-o2oklu; do
+  git tag "archive/claude/$b" "origin/claude/$b"
+done
+git push origin 'refs/tags/archive/*'
+git push origin --delete \
+  claude/371-paused-edges claude/373-project-provenance claude/375-harness \
+  claude/378-containment claude/basecamp-team-hq claude/dazzling-dirac-acjwqf \
+  claude/human-simulation-harness claude/jolly-darwin-8rwmp3 \
+  claude/phase-7-communications-kh8ow8 claude/production-reliability \
+  trial/three-branch-integration-2026-09-24 \
+  claude/378-acceptance-prep claude/docs-onboarding-setup-5nxt5z \
+  claude/gracious-volta-48lh36 claude/new-session-o2oklu
+```
+
+Nothing above changes a commit: the tags add refs, the deletes remove them, and
+the heads are listed in the table, so any branch can be recreated with
+`git push origin <head>:refs/heads/<name>`.
 
 ## Left alone: the fresh-install lineage
 

@@ -30,6 +30,13 @@
 > `docs/testing/378-containment-audit-2026-09-29.md`. **Deploy the worker
 > before 0601.**
 >
+> **Branch audit, 29 September: `main` is canonical.** Every non-fresh-install
+> branch is contained in `main`. The one missing document, the three-branch
+> reconnaissance plan, was copied in. The branches are listed for deletion in
+> `docs/integration/branch-audit-2026-09-29.md`; the session proxy refused the
+> deletions, so they are still there. The fresh-install lineage (four branches)
+> is untouched.
+>
 > **#381 containment: DEPLOYED and ACCEPTED 29 September; main is at the accepted implementation.** Worker v848, migrations to 0606. Fixture Slack channels invite nobody; test destinations are retired, never deleted (0606). Record: `docs/testing/381-production-acceptance-2026-09-29.md`.
 >
 > **(Earlier) #381, RC2 on `claude/381-rc2`.** A deployment of the above
