@@ -4104,6 +4104,16 @@ Each of these cost real time. They are here so they cost it once.
   Registrations are retired, never deleted (0606), and "was it registered when
   the guard decided" is `app.test_destination_at`.
 
+- **The build session's proxy can hand the browser a response Vercel never
+  sent.** During the #382 acceptance a stylesheet was refused as
+  `text/plain`, and scripts arrived as 502s so the page never started. The
+  failing responses had no `x-vercel-id` and no `server` header, and their
+  bodies were the real file contents: the outbound proxy had cut off a
+  parallel transfer and relabelled it. Vercel stamps `x-vercel-id` on every
+  response. So before reporting a live MIME or 5xx failure as a product
+  defect, read that header. With none present it is the sandbox, and one curl
+  or one reload that comes back clean confirms it.
+
 ---
 
 ## Visual standard

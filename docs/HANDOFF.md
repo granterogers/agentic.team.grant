@@ -30,7 +30,7 @@
 > `docs/testing/378-containment-audit-2026-09-29.md`. **Deploy the worker
 > before 0601.**
 >
-> **Team HQ is the product at every address (#382, ADR-0051), 29 September.** `/` is Team HQ's portfolio, and a project is `/p/<slug>`. Old `/basecamp/…` and `/studio/…` links redirect. The older studio is kept, unlinked, at `/classic`. No visible "Basecamp" anywhere (`check:branding`, in the gate). Journey proof: `verify:team-hq-journey`, desktop and phone.
+> **Team HQ is the product at every address (#382, ADR-0051), 29 September.** `/` is Team HQ's portfolio, and a project is `/p/<slug>`. Old `/basecamp/…` and `/studio/…` links redirect. The older studio is kept, unlinked, at `/classic`. No visible "Basecamp" anywhere (`check:branding`, in the gate). Journey proof: `verify:team-hq-journey`, desktop and phone. Live on `dpl_CojPMBWNXjWfQ3ogNAmXx6ZyAB9e` (main `77fc323c`); record `docs/integration/team-hq-cutover-2026-09-29.md`.
 >
 > **Branch audit, 29 September: `main` is canonical.** Every non-fresh-install
 > branch is contained in `main`. The one missing document, the three-branch
