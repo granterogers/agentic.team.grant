@@ -251,7 +251,14 @@ export async function narrateHandoffs(
          template literal, which is the trap CLAUDE.md lists first. It only
          checks the web folder.)
        */
-       and not j.is_fixture
+       /*
+         And the CANONICAL predicate (#378). is_fixture is generated from
+         requested_by, and a voice-door test turn is requested_by voice:grant,
+         so it read as real. app.harness_job reads the lineage and the
+         command. The delivery guard is still what decides; this only stops
+         asking it about work that was never going to be narrated.
+       */
+       and not app.harness_job(j.job_id)
        -- Old decisions are not news. A first run after a quiet fortnight should
        -- not post a fortnight of backlog into a channel nobody had yet.
        and r.decided_at > now() - interval '6 hours'
@@ -273,6 +280,14 @@ export async function narrateHandoffs(
     const h = raw as unknown as Handoff
     const result = await office.deliver({
       dedupeKey: `narration:${h.job_id}`,
+      /*
+        THE JOB, ON THE DELIVERY (#378). Without it app.claim_delivery could
+        not tell whose work this was and let it through, and the witness,
+        which joins deliveries to jobs, could not see it either: 381 of 523
+        narrations were of harness work.
+      */
+      jobId: h.job_id,
+      correlationId: h.job_id,
       teamId,
       channelId: channel.channelId,
       purpose: 'notice',
@@ -586,6 +601,9 @@ export async function narrateOutcomes(
     }
     const result = await office.deliver({
       dedupeKey: `outcome:${o.job_id}`,
+      // The job, on the delivery, for the same reason as the handoff (#378).
+      jobId: o.job_id,
+      correlationId: o.job_id,
       teamId,
       channelId: channel.channelId,
       ...(o.thread_ts === null ? {} : { threadTs: o.thread_ts }),
