@@ -71,6 +71,10 @@ as $f$
            then null
            else 'no provenance: a delivery must name its job or a registered operator sender'
       end
+    -- A job nobody can find is not provenance. app.harness_job answers "real"
+    -- for an id it cannot see, so this has to be asked first.
+    when not exists (select 1 from public.jobs j where j.job_id = p_job_id) then
+      'no provenance: the job this delivery names does not exist'
     -- A job: decided by its lineage.
     when app.harness_job(p_job_id) then
       'harness traffic may not reach a production destination'
@@ -97,6 +101,7 @@ as $f$
     when exists (select 1 from public.test_destinations t
                   where t.channel = p_channel and t.target_ref = p_target_ref) then true
     when p_job_id is null then false
+    when not exists (select 1 from public.jobs j where j.job_id = p_job_id) then false
     else not app.harness_job(p_job_id)
   end
 $f$;
@@ -148,8 +153,10 @@ begin
        correlation_id, job_id, purpose, state, suppressed_reason, lease_expires_at)
     values
       (p_channel, p_dedupe_key, p_account_ref, p_target_ref, p_thread_ref,
-       p_staff_id, p_correlation_id, p_job_id, p_purpose, 'suppressed',
-       v_refusal, app.now_utc())
+       p_staff_id, p_correlation_id,
+       -- The job only if it exists: a refusal of an unknown job must record, not raise.
+       (select j.job_id from public.jobs j where j.job_id = p_job_id),
+       p_purpose, 'suppressed', v_refusal, app.now_utc())
     on conflict (dedupe_key) do nothing
     returning * into v_row;
     if not found then

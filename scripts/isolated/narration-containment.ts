@@ -168,6 +168,21 @@ check(
   `outcome ${String(rOut.s ?? 'none')}, job_id ${String(rOut.j ?? 'null')}`,
 )
 
+/* --- a job id that names nothing ---------------------------------------- */
+{
+  const ghost =
+    await one(`select outcome from app.claim_delivery('slack', ${lit(`ghost:${run}`)}, ${lit(TEAM)},
+    ${lit(FLOOR)}, 'notice', null, null, null, '00000000-0000-4000-8000-000000000378'::uuid)`)
+  const row = await one(
+    `select coalesce(suppressed_reason, '') as r from public.deliveries where dedupe_key = ${lit(`ghost:${run}`)}`,
+  )
+  check(
+    'a delivery naming a job that does not exist is refused and recorded, not raised',
+    ghost.outcome === 'suppressed' && String(row.r).includes('does not exist'),
+    `${String(ghost.outcome)}: ${String(row.r)}`,
+  )
+}
+
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

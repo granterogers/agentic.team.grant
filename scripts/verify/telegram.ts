@@ -100,6 +100,18 @@ const HAS_REAL_CHAT = realChat?.chat_id !== null && realChat?.chat_id !== undefi
 // destination. Its id is in Telegram's supergroup range and does not exist —
 // which is exactly what makes it safe to send to.
 const FIXTURE_CHAT = `-100${stamp}0`
+/*
+  Registered as a contained test destination (#378). The sends below carry no
+  job, and 0601 refuses a job-less delivery anywhere else: a chat that does
+  not exist is exactly the destination that table is for. The trigger on it
+  refuses any chat that has ever had a real delivery, so this cannot register
+  one of Grant's by mistake. Removed in teardown.
+*/
+await db.execute(`
+  insert into public.test_destinations (channel, target_ref, why)
+  values ('telegram', ${lit(FIXTURE_CHAT)}, ${lit(`verify:telegram ${stamp} — a chat id in the supergroup range that does not exist`)})
+  on conflict (channel, target_ref) do nothing
+`)
 
 const first = await one<{ r: string }>(`
   select app.record_telegram_chat(${lit(FIXTURE_CHAT)}, 'private', ${lit(BOT_ID)},
@@ -814,6 +826,7 @@ if (!HAS_REAL_CHAT) {
 try {
   await db.execute(`
     delete from public.deliveries where dedupe_key like ${lit(`verify:tg:${stamp}:%`)};
+    delete from public.test_destinations where channel = 'telegram' and target_ref = ${lit(FIXTURE_CHAT)};
     delete from public.telegram_chats
      where chat_id in (${lit(FIXTURE_CHAT)}, ${lit(GROUP_CHAT)}, ${lit(WEBHOOK_CHAT)}, ${lit(STICKER_CHAT)});
     delete from public.feedback where given_by = '4242';

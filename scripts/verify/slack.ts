@@ -211,6 +211,18 @@ record(
   created.outcome === 'created' && created.channelId !== null,
 )
 const CHANNEL = String(created.channelId)
+/*
+  Registered as a contained test destination (#378). Every send below is
+  job-less by design -- this suite tests the delivery layer, not a job -- and
+  0601 refuses a job-less delivery anywhere else. The channel was created a
+  moment ago by this run, so it has never had a real delivery, which the
+  table's trigger insists on. Removed in teardown.
+*/
+await db.execute(`
+  insert into public.test_destinations (channel, target_ref, why)
+  values ('slack', ${lit(CHANNEL)}, ${lit(`verify:slack ${stamp} — the channel this run created for itself`)})
+  on conflict (channel, target_ref) do nothing
+`)
 
 const mapping = await one<{ created_by_app: boolean; project_id: string; name: string }>(`
   select created_by_app, project_id::text as project_id, channel_name as name
@@ -1793,6 +1805,7 @@ try {
        set active = false, archived_at = app.now_utc(), channel_name = ${lit(parkedLobby)}
      where channel_id = ${lit(CHANNEL)};
     delete from public.deliveries where dedupe_key like ${lit(`verify:${stamp}:%`)};
+    delete from public.test_destinations where channel = 'slack' and target_ref = ${lit(CHANNEL)};
     delete from public.preference_instructions where command_id in (
       select command_id from public.inbound_commands where actor = 'U0GRANTVERIFY');
     delete from public.inbound_commands where actor = 'U0GRANTVERIFY';
