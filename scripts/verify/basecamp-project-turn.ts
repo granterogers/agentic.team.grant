@@ -356,6 +356,95 @@ const dock = async (page: Page, text: string): Promise<void> => {
   await ctx.close()
 }
 
+/* --- 7. the live call: Claire's hand-off states the project the call is about */
+/*
+  The call's own loop-back, as `verify:basecamp-livevoice` builds it: the mint
+  and the SDP exchange are answered in the page, and a peer connection plays
+  the team. A hand-off is then Claire's tool call arriving over the data
+  channel, which `call.js` answers by posting `/voice/turn`. The call is about
+  the project it was opened on (section 8 of the brief), so a hand-off after
+  navigating away must still state that project, never the page now shown.
+*/
+const LOOPBACK = `
+(() => {
+  const real = window.fetch.bind(window)
+  window.__teamChannel = null
+  window.fetch = async (input, init) => {
+    const href = String(typeof input === 'string' ? input : input?.url ?? '')
+    if (href.includes('/voice-token')) {
+      return new Response(JSON.stringify({ client_secret: 'ephemeral-for-this-test', model: 'gpt-realtime-2.1-mini' }),
+        { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    if (href.includes('api.openai.com') && href.includes('/realtime/calls')) {
+      const team = new RTCPeerConnection()
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      const osc = ctx.createOscillator()
+      const dest = ctx.createMediaStreamDestination()
+      osc.connect(dest)
+      osc.start()
+      team.addTrack(dest.stream.getAudioTracks()[0], dest.stream)
+      team.ondatachannel = (e) => { window.__teamChannel = e.channel }
+      await team.setRemoteDescription({ type: 'offer', sdp: String(init?.body ?? '') })
+      await team.setLocalDescription(await team.createAnswer())
+      await new Promise((resolve) => {
+        if (team.iceGatheringState === 'complete') { resolve(true); return }
+        team.addEventListener('icegatheringstatechange', () => { if (team.iceGatheringState === 'complete') resolve(true) })
+        setTimeout(resolve, 2500)
+      })
+      return new Response(team.localDescription.sdp, { status: 200, headers: { 'content-type': 'application/sdp' } })
+    }
+    return real(input, init)
+  }
+})()
+`
+{
+  const turns: Turn[] = []
+  const ctx = await newContext(turns)
+  await ctx.addInitScript(LOOPBACK)
+  const page = await ctx.newPage()
+  const thrown: string[] = []
+  page.on('pageerror', (e) => thrown.push(e.message))
+  await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-go^="/basecamp/p/provenance-a"]', { timeout: 20000 })
+  await go(page, '/basecamp/p/provenance-a', '[data-bc-voice]')
+  await page.locator('[data-bc-voice]').first().click()
+  const live = await page
+    .waitForFunction(
+      'window.__teamChannel !== null && window.__teamChannel.readyState === "open"',
+      undefined,
+      {
+        timeout: 20000,
+      },
+    )
+    .then(() => true)
+    .catch(() => false)
+  check('the call opened on A reached the loop-back team', live)
+  const handOff = async (id: string, said: string) => {
+    await page.evaluate(
+      inPage(`window.__teamChannel.send(JSON.stringify({ type: 'response.function_call_arguments.done',
+        call_id: ${JSON.stringify(id)}, name: 'ask_the_team', arguments: JSON.stringify({ said: ${JSON.stringify(said)} }) }))`),
+    )
+    await page.waitForTimeout(1500)
+  }
+  await handOff('c1', 'What still needs doing on the venue?')
+  await go(page, '/basecamp/p/provenance-b', '.bcmain')
+  await handOff('c2', 'And who is on it?')
+  const fromCall = turns.filter((t) => t.said.includes('venue') || t.said.includes('who is on it'))
+  check(
+    "Claire's hand-off from a call opened on A states A",
+    who(fromCall[0]?.project) === 'A',
+    fromCall.map((t) => `${who(t.project)}: ${t.said}`).join(' | ') ||
+      'no hand-off reached the door',
+  )
+  check(
+    'and still states A after the page moved to B, because the call is about A',
+    fromCall.length === 2 && who(fromCall[1]?.project) === 'A',
+    fromCall.map((t) => who(t.project)).join(' '),
+  )
+  check('nothing threw during the call', thrown.length === 0, thrown.slice(0, 2).join(' | '))
+  await ctx.close()
+}
+
 /* --- 5. two tabs, two projects, sending at once --------------------------- */
 {
   const turns: Turn[] = []
