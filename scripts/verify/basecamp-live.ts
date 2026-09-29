@@ -77,8 +77,27 @@ const check = (what: string, ok: boolean, detail = ''): void => {
   }
 }
 
-const SITE =
-  process.env.BASECAMP_SITE ?? 'https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app'
+/*
+  HOST AND PATH, STATED (#375 item 12). BASECAMP_SITE is an ORIGIN - scheme
+  and host, nothing after it - and the suite always enters Basecamp at its
+  explicit route, /basecamp, because that is what selects the experience on
+  every host. The first version opened the site ROOT, which shows Basecamp
+  only on the experiment project; against ai-team-hq (the product, whose root
+  is the default experience) it timed out before any check. A value with a
+  path is refused rather than guessed at, since ".../basecamp" would otherwise
+  become ".../basecamp/basecamp".
+*/
+const SITE = (() => {
+  const raw =
+    process.env.BASECAMP_SITE ?? 'https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app'
+  const u = new URL(raw)
+  if (u.pathname !== '/' && u.pathname !== '') {
+    console.error(`BASECAMP_SITE must be an origin with no path; got ${raw}`)
+    process.exit(1)
+  }
+  return u.origin
+})()
+const ENTRY = `${SITE}/basecamp`
 
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
@@ -140,9 +159,9 @@ page.on('pageerror', (e) => {
 
 /* --- 1. the deployed page is reachable, over real TLS -------------------- */
 
-const landed = await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 40000 })
+const landed = await page.goto(ENTRY, { waitUntil: 'domcontentloaded', timeout: 40000 })
 check(
-  `the deployed page answers at ${SITE}`,
+  `the deployed page answers at ${ENTRY}`,
   landed !== null && landed.status() < 400,
   landed === null ? 'no response' : `http ${String(landed.status())}`,
 )

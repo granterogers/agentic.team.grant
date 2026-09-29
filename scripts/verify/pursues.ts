@@ -747,71 +747,74 @@ await settle(injectJobId)
   UNDER.
 
   `validate` asks the registry when the plan is composed. The job can then sit
-  in the queue, be retried, or resume after a restart — and in between Grant
+  in the queue, be retried, or resume after a restart - and in between Grant
   can revoke a capability on the Team page. Executing under a permission that
   no longer holds is the gap "the model may propose sequence, it never grants
-  authority" is about, so the executor asks again at the moment of doing.
+  authority" is about, so the executor asks `app.may_act` again at the moment
+  of doing.
 
-  Driven, not read. The revocation happens inside a transaction that is rolled
-  back, because `tool_permissions` is the office's real permission table and a
-  suite that leaves `task.create` disabled has broken the product to test it.
-  #210's rule: wrap the CALL, not the assertion.
+  Two halves, and neither touches the real registry (#375 item 9):
+
+  - THAT the executor asks the live policy at the moment of doing is the
+    OBSERVE control below: the plan is composed under act_with_review, the
+    suite's own project is then set to observe, and the write is refused.
+    Per project, so no real turn is affected.
+  - THAT the policy reads the live REGISTRY is driven here, in ONE statement
+    that raises: `task.create` is switched off, `app.may_act` is asked, and
+    the exception rolls the switch back with it. An earlier version committed
+    a global `enabled = false` and restored it in a finally, while its comment
+    said it was rolled back: for those seconds a real turn wanting a task was
+    refused, and a killed process would have left it off. MVCC means no other
+    session ever sees the uncommitted row. #210's rule: wrap the CALL.
 */
-const revokedJob = await one(`
-  insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
-     leased_by, leased_until)
-  values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-revoked-${run}`)}, gen_random_uuid(), '{}'::jsonb,
-          'verify:pursues', app.now_utc() + interval '30 minutes')
-  returning job_id::text as id`)
-const revokedJobId = String(revokedJob.id)
-await db.execute(`
-  update public.tool_permissions
-     set enabled = false,
-         disabled_reason = 'verify:pursues — restored in this run'
-   where tool = 'task.create'`)
-let refusal = ''
+const registryBefore = await one(
+  `select md5(row(t.*)::text) as digest from public.tool_permissions t where tool = 'task.create'`,
+)
+let registryProbe = ''
 try {
-  const underRevocation = await runSteps(
-    db,
-    revokedJobId,
-    'office.pursue@1',
-    compile(plan, db, revokedJobId, projectId, 'review it'),
-  )
-  const noted = (
-    underRevocation.kind === 'done' ? underRevocation.outcomes['note:task.create'] : {}
-  ) as Record<string, unknown>
-  refusal = noted.found === false ? String(noted.impediment ?? '') : 'IT WROTE A TASK ANYWAY'
-} finally {
-  /*
-    Always, even if the drive threw. A suite that leaves the office unable to
-    put anything on Grant's list would be a worse defect than the one it is
-    testing.
-  */
   await db.execute(`
-    update public.tool_permissions
-       set enabled = true, disabled_reason = null
-     where tool = 'task.create'`)
+    do $probe$
+    declare v jsonb;
+    begin
+      update public.tool_permissions
+         set enabled = false, disabled_reason = ${lit(`verify:pursues ${run}`)}
+       where tool = 'task.create';
+      v := app.may_act(${lit(projectId)}::uuid, 'task.create');
+      raise exception 'PURSUES_PROBE %', v::text;
+    end
+    $probe$`)
+  registryProbe = 'THE PROBE DID NOT RAISE, SO NOTHING WAS ROLLED BACK'
+} catch (error) {
+  registryProbe = String((error as Error).message)
 }
-const backOn = await one(`select enabled from public.tool_permissions where tool = 'task.create'`)
+const probed = (() => {
+  const at = registryProbe.indexOf('PURSUES_PROBE ')
+  if (at < 0) return {} as Record<string, unknown>
+  try {
+    const rest = registryProbe.slice(at + 'PURSUES_PROBE '.length)
+    return JSON.parse(rest.slice(0, rest.lastIndexOf('}') + 1)) as Record<string, unknown>
+  } catch {
+    return {} as Record<string, unknown>
+  }
+})()
 check(
-  'a capability withdrawn AFTER the plan was made is refused at the moment of doing',
-  refusal.slice(0, 100),
+  'a capability switched off in the registry is refused by the live policy',
+  String(probed.because ?? registryProbe).slice(0, 100),
   /*
-    The refusal must carry the reason THIS RUN just wrote into the registry,
-    which is what proves the policy read the live row rather than the plan.
-    A refusal for the wrong reason looks exactly like the rule working.
+    The refusal must carry the reason THIS RUN wrote, which is what proves the
+    policy read the live row. A refusal for the wrong reason looks exactly
+    like the rule working.
   */
-  refusal.includes('verify:pursues'),
+  probed.verdict === 'refuse' && String(probed.because ?? '').includes(run),
+)
+const registryAfter = await one(
+  `select md5(row(t.*)::text) as digest, enabled from public.tool_permissions t where tool = 'task.create'`,
 )
 check(
-  'and the suite put the permission back — the office can still write to his list',
-  `task.create enabled=${String(backOn.enabled)}`,
-  backOn.enabled === true,
+  'and the switch never committed: the registry row is byte-identical',
+  `task.create enabled=${String(registryAfter.enabled)}`,
+  registryAfter.enabled === true && registryAfter.digest === registryBefore.digest,
 )
-
-await settle(revokedJobId)
 
 // --- the project is gone by the time the plan runs ---------------------------
 /*
@@ -1696,7 +1699,7 @@ await db.execute(`
   update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
     state_reason = 'verify:pursues teardown'
    where job_id in (${lit(jobId)}::uuid, ${lit(emptyJobId)}::uuid, ${lit(gapJobId)}::uuid,
-                    ${lit(revokedJobId)}::uuid, ${lit(observeJobId)}::uuid,
+                    ${lit(observeJobId)}::uuid,
                     ${lit(injectJobId)}::uuid, ${lit(resumeJobId)}::uuid,
                     ${lit(askJobId)}::uuid, ${lit(outageJobId)}::uuid,
                     ${lit(replanJobId)}::uuid, ${lit(noRouteJobId)}::uuid,

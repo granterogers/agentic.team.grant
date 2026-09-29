@@ -178,20 +178,37 @@ try {
   check('and after a reload it is still on the Sources page', onScreen)
 
   /* --- 4. useful identity, which is §22's requirement applied to a new one */
-  const row = (await page.evaluate(
-    inPage(`
+  /*
+    WHAT IT IS, AS A PROPERTY, NOT A WORD LIST (#375 item 11). The first
+    version matched "something to read|a website|a page|a document" and went
+    red on "A link to read", which the UX branch introduced on purpose. What
+    the row must do is declare its KIND - the page marks a link with
+    data-tone="link", distinct from a connected service ("on") and one in
+    trouble - and say so in visible words beside its name.
+  */
+  const row = JSON.parse(
+    (await page.evaluate(
+      inPage(`
       for (const el of document.querySelectorAll('.bcsource')) {
         if (el.innerText.includes('verify-add-source-${RUN}')) {
-          return el.innerText.replace(/\\s+/g, ' ').trim()
+          const when = el.querySelector('.bcsourcewhen')
+          return JSON.stringify({
+            text: el.innerText.replace(/\\s+/g, ' ').trim(),
+            tone: when?.getAttribute('data-tone') ?? '',
+            kind: (when?.innerText ?? '').replace(/\\s+/g, ' ').trim(),
+          })
         }
       }
-      return ''
+      return '{}'
     `),
-  )) as string
+    )) as string,
+  ) as { text?: string; tone?: string; kind?: string }
   check(
     'the new source says what it is, not just that it exists',
-    row !== '' && /something to read|a website|a page|a document/i.test(row),
-    row,
+    row.tone === 'link' &&
+      (row.kind ?? '').length >= 3 &&
+      !(row.kind ?? '').includes('verify-add-source'),
+    `${String(row.tone)}: ${String(row.kind)} — ${String(row.text)}`,
   )
 
   check('nothing threw while all of that happened', errors.length === 0, errors.join(' | '))
