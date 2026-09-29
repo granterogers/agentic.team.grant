@@ -95,6 +95,53 @@ describe('provisioning', () => {
     expect(db.statements.some((s) => s.includes('created_by_app'))).toBe(true)
   })
 
+  /*
+    #381: a fixture project's channel is a test destination, and nobody is
+    invited into one. A real project's is unchanged: the subject is invited.
+    The Slack fake records every method called, so "not invited" means the
+    invite was never ASKED, not that it failed.
+  */
+  const recordingSlack = (): { slack: SlackClient; calls: string[] } => {
+    const calls: string[] = []
+    const fetchImpl = (async (url: string) => {
+      const method = String(url).split('/').pop() ?? ''
+      calls.push(method)
+      const body =
+        method === 'conversations.create'
+          ? { ok: true, channel: { id: 'C0BUNEW00002', name: 'proj-b' } }
+          : { ok: true }
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+    return { slack: new SlackClient('xoxb-test', { fetchImpl, sleep: async () => {} }), calls }
+  }
+  const projectRow = (isFixture: boolean) => ({
+    match: /select name, channel_prefix, is_fixture from public\.projects/,
+    rows: [{ name: 'Proj B', channel_prefix: null, is_fixture: isFixture }],
+  })
+  const subjectRow = {
+    match: /slack\.subject_user_id/,
+    rows: [{ user_id: 'U0HUMAN0001' }],
+  }
+  it("a fixture project's new channel invites nobody (#381)", async () => {
+    const { slack, calls } = recordingSlack()
+    const db = new FakeDb([projectRow(true), subjectRow])
+    const result = await new ChannelProvisioner(db, slack, 'T1').ensureChannel(PROJECT, 'b')
+    expect(result.outcome).toBe('created')
+    expect(result.invited).toBe('not_invited_test_channel')
+    expect(calls).toContain('conversations.create')
+    expect(calls).not.toContain('conversations.invite')
+  })
+  it("control: a real project's new channel still invites the subject", async () => {
+    const { slack, calls } = recordingSlack()
+    const db = new FakeDb([projectRow(false), subjectRow])
+    const result = await new ChannelProvisioner(db, slack, 'T1').ensureChannel(PROJECT, 'b')
+    expect(result.invited).toBe('invited')
+    expect(calls).toContain('conversations.invite')
+  })
+
   it('adopts a taken name ONLY when Postgres says that channel is already this project’s', async () => {
     const db = new FakeDb([
       {

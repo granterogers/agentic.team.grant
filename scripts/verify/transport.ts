@@ -615,8 +615,8 @@ try {
   if (jobId !== '') {
     await db.execute(`delete from public.deliveries where job_id = ${lit(jobId)}::uuid`)
     await db.execute(`
-      delete from public.test_destinations
-       where (channel, target_ref) in (('slack', 'CVERIFY001'), ('telegram', '12345'))`)
+      select app.retire_test_destination('slack', 'CVERIFY001');
+      select app.retire_test_destination('telegram', '12345')`)
     const left = await one(
       `select count(*) as n from public.deliveries where job_id = ${lit(jobId)}::uuid`,
     )

@@ -172,9 +172,24 @@ export const ignoredOriginSql = `
    where j.parent_job_id is null and not j.synthetic and j.created_at >= t.registered_at`
 
 /** One row per sent delivery at or after `since` (an SQL timestamptz expression). */
+/*
+  #381: a test destination is RETIRED, never deleted (0606), and a send was
+  legitimate only if the destination was registered WHEN THE GUARD DECIDED -
+  the delivery's creation. Before 0606 there is no retired_at and the
+  registration either exists or it does not.
+*/
+export const testDestinationAtSend = (d: string, retirement: boolean): string =>
+  retirement
+    ? `exists (select 1 from public.test_destinations t
+         where t.channel::text = ${d}.channel::text and t.target_ref = ${d}.target_ref
+           and t.created_at <= ${d}.created_at
+           and (t.retired_at is null or t.retired_at > ${d}.created_at))`
+    : `exists (select 1 from public.test_destinations t
+         where t.channel::text = ${d}.channel::text and t.target_ref = ${d}.target_ref)`
+
 export const provenanceSql = (
   since: string,
-  opts: { declarations?: boolean } = { declarations: true },
+  opts: { declarations?: boolean; retirement?: boolean } = { declarations: true, retirement: true },
 ): string => `
   with recursive sent as (
     select d.delivery_id, d.channel::text as channel, d.target_ref, d.dedupe_key, d.sent_at,
@@ -183,8 +198,7 @@ export const provenanceSql = (
            d.job_id is not null as named
       from public.deliveries d
      where d.state = 'sent' and d.sent_at >= ${since}
-       and not exists (select 1 from public.test_destinations t
-                        where t.channel::text = d.channel::text and t.target_ref = d.target_ref)
+       and not ${testDestinationAtSend('d', opts.retirement !== false)}
   ),
   chain as (
     select s.delivery_id, j.job_id, j.parent_job_id, 0 as depth
@@ -221,6 +235,8 @@ export const provenanceSql = (
          coalesce(g.harness, false) as harness,
          coalesce(g.guard_says_harness, false) as guard_says_harness,
          coalesce(g.test_origin, false) as test_origin,
+         -- Acknowledged in public.known_escapes (0583, 0606): known, never new.
+         exists (select 1 from public.known_escapes k where k.delivery_id = s.delivery_id) as known,
          case
            when s.job_id is null and split_part(s.dedupe_key, ':', 1) <> all (array[${WITNESS_OPERATOR_NAMESPACES.map((n) => `'${n}'`).join(', ')}])
              then 'UNPROVENANCED'

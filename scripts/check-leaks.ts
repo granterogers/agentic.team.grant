@@ -55,6 +55,7 @@ import {
   ignoredOriginSql,
   offShapeSql,
   provenanceSql,
+  testDestinationAtSend,
 } from './leak-witness.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -515,7 +516,8 @@ const piles = await db.execute(`
       receive harness traffic is a decision rather than a default — so this
       names it and stops, exactly as it does for a pinned project.
     */
-    (select count(*) from public.test_destinations) as registered_test_destinations,
+    (select count(*) from public.test_destinations t
+      where not (to_jsonb(t) ? 'retired_at') or (to_jsonb(t) ->> 'retired_at') is null) as registered_test_destinations,
     /*
       AND HIS ACTIVITY PANEL (#356).
 
@@ -1023,7 +1025,16 @@ const declarations =
       | { t?: boolean }
       | undefined
   )?.t === true
-const traced = (await db.execute(provenanceSql(since, { declarations }))).rows as {
+// 0606's retirement column exists only once 0606 is applied.
+const retirement =
+  (
+    (
+      await db.execute(`select exists (select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = 'test_destinations'
+           and column_name = 'retired_at') as t`)
+    ).rows[0] as { t?: boolean } | undefined
+  )?.t === true
+const traced = (await db.execute(provenanceSql(since, { declarations, retirement }))).rows as {
   key: string
   channel: string
   target_ref: string
@@ -1031,14 +1042,14 @@ const traced = (await db.execute(provenanceSql(since, { declarations }))).rows a
   breach: string | null
   harness: boolean
   guard_says_harness: boolean
+  known: boolean
 }[]
 const population = Number(
   (
     (
       await db.execute(`select count(*)::int as n from public.deliveries d
          where d.state = 'sent' and d.sent_at >= ${since}
-           and not exists (select 1 from public.test_destinations t
-                            where t.channel::text = d.channel::text and t.target_ref = d.target_ref)`)
+           and not ${testDestinationAtSend('d', retirement)}`)
     ).rows[0] as { n?: number } | undefined
   )?.n ?? -1,
 )
@@ -1048,14 +1059,17 @@ if (population !== traced.length) {
   )
   process.exit(2)
 }
-const breaches = traced.filter((r) => r.breach !== null)
+// Acknowledged sends (public.known_escapes) are reported, and never fail the run.
+const knownBreaches = traced.filter((r) => r.breach !== null && r.known)
+const breaches = traced.filter((r) => r.breach !== null && !r.known)
 const byClass = (c: string) => breaches.filter((r) => r.breach === c).length
 const disagreements = traced.filter((r) => r.harness !== r.guard_says_harness)
 console.log(
   `  every sent message traced to its cause ${fixedAt === undefined ? '(since the guard; 0601 not applied, so HISTORY — reported, not failed)' : `(since 0601, ${fixedAt})`}: ` +
     `${String(traced.length)} examined · harness sent ${String(byClass('HARNESS_SENT'))} · unprovenanced ${String(byClass('UNPROVENANCED'))} · unknown origin ${String(byClass('UNKNOWN_SENT'))}` +
     ` · declared test origin sent ${String(byClass('TEST_ORIGIN_SENT'))} · undeclared door origin sent ${String(byClass('UNREGISTERED_ORIGIN_SENT'))}` +
-    ` · witness and app.harness_job disagree on ${String(disagreements.length)}`,
+    ` · witness and app.harness_job disagree on ${String(disagreements.length)}` +
+    ` · acknowledged (known, not new): ${String(knownBreaches.length)}`,
 )
 if (fixedAt !== undefined && breaches.length > 0) {
   console.error(

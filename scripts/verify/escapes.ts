@@ -344,9 +344,7 @@ check(
 
 // ── teardown, asserted ─────────────────────────────────────────────────────
 await db.execute(`delete from public.deliveries where dedupe_key like ${lit(`escapes:${run}:%`)}`)
-await db.execute(
-  `delete from public.test_destinations where channel = 'telegram' and target_ref = ${lit(TEST_CHAT)}`,
-)
+await db.execute(`select app.retire_test_destination('telegram', ${lit(TEST_CHAT)})`)
 await db.execute(`
   delete from public.inbound_commands where dedupe_key like ${lit(`%escapes-${run}-%`)}`)
 if (jobs.length > 0) {
@@ -360,14 +358,19 @@ if (jobs.length > 0) {
 const left = await one(`
   select
     (select count(*) from public.deliveries where dedupe_key like ${lit(`escapes:${run}:%`)})::int as d,
-    (select count(*) from public.test_destinations where target_ref = ${lit(TEST_CHAT)})::int as t,
+    -- Retired, never deleted (0606): nothing ACTIVE left, and the evidence kept.
+    (select count(*) from public.test_destinations where target_ref = ${lit(TEST_CHAT)} and retired_at is null)::int as t,
+    (select count(*) from public.test_destinations where target_ref = ${lit(TEST_CHAT)} and retired_at is not null)::int as kept,
     (select count(*) from public.jobs
       where job_id in (${jobs.length === 0 ? 'null' : jobs.map((j) => `${lit(j)}::uuid`).join(', ')})
         and state not in ('complete', 'cancelled', 'failed'))::int as j`)
 check(
-  Number(left.d ?? -1) === 0 && Number(left.j ?? -1) === 0 && Number(left.t ?? -1) === 0,
+  Number(left.d ?? -1) === 0 &&
+    Number(left.j ?? -1) === 0 &&
+    Number(left.t ?? -1) === 0 &&
+    Number(left.kept ?? -1) === 1,
   'teardown — no delivery row, no live job and no test destination of this run',
-  `${String(left.d)} delivery row(s), ${String(left.j)} live job(s), ${String(left.t)} test destination(s)`,
+  `${String(left.d)} delivery row(s), ${String(left.j)} live job(s), ${String(left.t)} active test destination(s), ${String(left.kept)} retired and kept`,
 )
 
 if (failures > 0) {

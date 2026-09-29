@@ -121,6 +121,38 @@ const makeProject = async (name: string): Promise<string> => {
 }
 
 /**
+ * A real-shaped exchange, read back, and rolled back (#381).
+ *
+ * 0602 hides harness turns from the conversation Grant reads, by design, and
+ * every turn this suite makes through SQL is harness. So a property about what
+ * the conversation shows for a REAL turn is asked of a real one that never
+ * exists: inside one DO block, as the production ingress (application_name),
+ * on a real project made inside the same block, the body sets `r` (jsonb) and
+ * the block raises it. Nothing commits, so no worker sees the work and nothing
+ * can be delivered. `realSide` below was the first use of this shape.
+ */
+const inRollback = async (body: string): Promise<Record<string, unknown>> => {
+  try {
+    await db.execute(`do $x$
+      declare c uuid; e jsonb; r jsonb; pr uuid; v jsonb;
+      begin
+        perform set_config('application_name', 'PostgREST 14.5', true);
+        pr := (app.hq_create_project(${lit(`History real ${run}`)}, 'upload',
+                 ${lit(`hreal-${run}`)}, ${lit(`History real ${run}`)}, true) ->> 'project_id')::uuid;
+        ${body}
+        raise exception 'ROLLED-BACK:%', r::text;
+      end $x$`)
+  } catch (error) {
+    const text = String((error as Error).message)
+    const at = text.indexOf('ROLLED-BACK:')
+    if (at < 0) throw error
+    const raw = text.slice(at + 'ROLLED-BACK:'.length).replace(/\\"/g, '"')
+    return JSON.parse(raw.slice(0, raw.lastIndexOf('}') + 1)) as Record<string, unknown>
+  }
+  throw new Error('the rollback block did not raise, so its writes may have committed')
+}
+
+/**
  * Grant says something, on a named surface.
  *
  * `dedupe_key` is shaped by `inbound_dedupe_key_shaped`:
@@ -144,6 +176,13 @@ const said = async (project: string, body: string, surface = 'telegram'): Promis
 try {
   console.log('\nsetting up two real projects, each with a conversation')
   mine = await makeProject(MINE)
+  /*
+    Declared at once, before ANY work is made under it (#381). The first
+    production run declared it just before the HTTP say, after this suite had
+    already inserted a job under the project - and the database correctly
+    refused to call a project with non-synthetic work a test origin.
+  */
+  await (await testOrigins(db, 'verify:history')).declare('teamhq', mine)
   theirs = await makeProject(THEIRS)
   check(
     'two subjects exist',
@@ -514,10 +553,36 @@ try {
 
   const slackHistory = await history(mine, 100)
   check(
-    'and it reads back in that project’s conversation',
+    '0602 — this suite’s own channel turn is harness, so it is NOT in his conversation',
     `${String(slackHistory.length)} message(s)`,
-    slackHistory.map((m) => String(m.body)).some((b) => b.includes('Asked in the channel')),
+    !slackHistory.map((m) => String(m.body)).some((b) => b.includes('Asked in the channel')),
   )
+  {
+    // The property itself, asked of a real-shaped Slack turn that never exists.
+    const realChan = `C0RB${run
+      .slice(0, 6)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '0')}`
+    const r = await inRollback(`
+      insert into public.slack_channel_map (channel_id, team_id, project_id, channel_name, purpose, active)
+      values (${lit(realChan)}, ${lit(team)}, pr, ${lit(`zz rollback ${run}`)}, 'project', true);
+      insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key)
+      values ('slack', ${lit(`${realChan}:1790000000.000900`)}, 'U0RBACTOR01',
+              ${lit(`Asked in a real channel ${run}`)}, ${lit(`slack:message:${realChan}:1790000000.000900`)})
+      returning command_id into c;
+      e := app.enqueue_inbound(c);
+      r := jsonb_build_object('landed', (select project_id = pr from public.inbound_commands where command_id = c),
+                              'origin', app.job_origin((e ->> 'job_id')::uuid),
+                              'history', app.conversation_history(pr, 100));`)
+    const shown = ((r.history ?? []) as Msg[]).some((m) =>
+      String(m.body).includes(`Asked in a real channel ${run}`),
+    )
+    check(
+      'and a REAL turn from a project’s channel reads back in that project’s conversation (in a rollback)',
+      `landed=${String(r.landed)} origin=${String(r.origin)} shown=${String(shown)}`,
+      r.landed === true && r.origin === 'trusted' && shown,
+    )
+  }
   check(
     'and not in the rival’s, whose channel is mapped elsewhere',
     'checked',
@@ -643,17 +708,34 @@ try {
 
   const spokenHistory = await history(mine, 100)
   check(
-    'it appears in that project’s conversation, from Grant',
+    '0602 — this suite’s own studio turn is harness, so it is NOT in his conversation',
     `${String(spokenHistory.length)} message(s)`,
-    spokenHistory.some(
-      (m) => String(m.body).includes('Said from the studio') && m.from === 'grant',
-    ),
+    !spokenHistory.some((m) => String(m.body).includes('Said from the studio')),
+  )
+  /*
+    What the studio's composer shows for a REAL turn, asked of real ones in a
+    rollback: the words, from Grant, on the teamhq surface, not marked as
+    reconstructed - and the one addressed to nobody still arriving.
+  */
+  const studio = await inRollback(`
+    v := app.say_in_project(pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
+    e := app.say_in_project(pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
+    r := jsonb_build_object('origin', app.job_origin((v ->> 'job')::uuid),
+                            'nobody_ok', e ->> 'ok',
+                            'history', app.conversation_history(pr, 100));`)
+  const studioHistory = (studio.history ?? []) as (Msg & { backfilled?: boolean })[]
+  const realSaid = studioHistory.find((m) =>
+    String(m.body).includes(`Said for real from the studio ${run}`),
+  )
+  check(
+    'a REAL studio turn appears in that project’s conversation, from Grant (in a rollback)',
+    `origin=${String(studio.origin)} from=${String(realSaid?.from)}`,
+    studio.origin === 'trusted' && realSaid !== undefined && realSaid.from === 'grant',
   )
   check(
     'on the teamhq surface — not a new word for the web dashboard (0313)',
-    String(spokenHistory.find((m) => String(m.body).includes('Said from the studio'))?.surface),
-    spokenHistory.find((m) => String(m.body).includes('Said from the studio'))?.surface ===
-      'teamhq',
+    String(realSaid?.surface),
+    realSaid?.surface === 'teamhq',
   )
 
   /*
@@ -697,9 +779,10 @@ try {
     droppedHere.includes('nobody-at-all'),
   )
   check(
-    'the words still reach the conversation',
-    'checked',
-    (await history(mine, 100)).some((m) => String(m.body).includes('Addressed to nobody')),
+    'the words still reach the conversation — a REAL one addressed to nobody, in the rollback',
+    `ok=${String(studio.nobody_ok)}`,
+    studio.nobody_ok === 'true' &&
+      studioHistory.some((m) => String(m.body).includes(`Addressed for real to nobody ${run}`)),
   )
 
   const empty = (await one(`select app.say_in_project(${lit(mine)}::uuid, '   ') as v`)).v as {
@@ -769,13 +852,10 @@ try {
     `backfilled=${String((reconstructed as { backfilled?: boolean } | undefined)?.backfilled)}`,
     (reconstructed as { backfilled?: boolean } | undefined)?.backfilled === true,
   )
-  const live = (await history(mine, 100)).find((m) =>
-    String(m.body).includes('Said from the studio'),
-  )
   check(
-    'while a message the office DID witness is not',
-    `backfilled=${String((live as { backfilled?: boolean } | undefined)?.backfilled)}`,
-    (live as { backfilled?: boolean } | undefined)?.backfilled === false,
+    'while a message the office DID witness is not (the real studio turn, in the rollback)',
+    `backfilled=${String(realSaid?.backfilled)}`,
+    realSaid?.backfilled === false,
   )
 
   const unmapped = (
@@ -901,8 +981,6 @@ try {
       does not — `verify:search` found exactly that shape — so both legs are
       driven rather than one standing in for the other.
     */
-    // The project is declared before the gateway is asked to speak in it (#381).
-    await (await testOrigins(db, 'verify:history')).declare('teamhq', mine)
     const posted = await fetch(base, {
       method: 'POST',
       headers: { Authorization: `Bearer ${hqToken}`, 'Content-Type': 'application/json' },
@@ -922,11 +1000,24 @@ try {
       `http ${String(posted.status)}, ok=${String(postedBody.result?.ok)}`,
       posted.ok && postedBody.result?.ok === true,
     )
-    const saidOverHttp = await history(mine, 100)
+    /*
+      Through the whole chain, and contained (#381): the gateway wrote the
+      turn, in a project declared as a test origin, so the door wrote it
+      synthetic - and 0602 keeps it out of his conversation.
+    */
+    const overHttp = await one(`
+      select c.synthetic, coalesce(app.job_origin(c.job_id), 'none') as origin
+        from public.inbound_commands c
+       where c.project_id = ${lit(mine)}::uuid and c.instruction = ${lit(`Said over HTTP ${run}`)}`)
     check(
-      'and what it said is in the conversation, through the whole chain',
+      'and what it said reached the canonical layer — as a declared test turn, harness',
+      `synthetic=${String(overHttp.synthetic)} origin=${String(overHttp.origin)}`,
+      overHttp.synthetic === true && overHttp.origin === 'harness',
+    )
+    check(
+      'and 0602 keeps it out of his conversation',
       'checked',
-      saidOverHttp.some((m) => String(m.body).includes('Said over HTTP')),
+      !(await history(mine, 100)).some((m) => String(m.body).includes('Said over HTTP')),
     )
 
     const noAuth = await fetch(`${base}?section=conversation&id=${mine}`)

@@ -862,7 +862,7 @@ if (!HAS_REAL_CHAT) {
 try {
   await db.execute(`
     delete from public.deliveries where dedupe_key like ${lit(`verify:tg:${stamp}:%`)};
-    delete from public.test_destinations where channel = 'telegram' and target_ref = ${lit(FIXTURE_CHAT)};
+    select app.retire_test_destination('telegram', ${lit(FIXTURE_CHAT)});
     delete from public.telegram_chats
      where chat_id in (${lit(FIXTURE_CHAT)}, ${lit(GROUP_CHAT)}, ${lit(WEBHOOK_CHAT)}, ${lit(STICKER_CHAT)});
     delete from public.feedback where given_by = '4242';

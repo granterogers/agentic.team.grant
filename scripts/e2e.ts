@@ -194,7 +194,25 @@ const NEVER: Record<string, string> = {
  * gets skipped, and a skipped gate is worse than no gate because the
  * repository still believes it has one.
  */
+/** Must pass before anything after them runs (#381). */
+export const PREFLIGHT: readonly string[] = ['check:door-origins', 'check:voice-sessions']
+
 const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
+  /*
+    PREFLIGHT, FIRST (#381). Static checks that can recognise an unsafe test
+    origin run before ANY suite able to knock on a production door, and a
+    failure stops the gate: running the suites after them would be finding out
+    by sending. They were listed after the live-door suites until the 29
+    September acceptance noticed.
+  */
+  [
+    'check:door-origins',
+    'no script drives a real Telegram, Slack, MCP or dashboard door without declaring its conversation first (#381)',
+  ],
+  [
+    'check:voice-sessions',
+    'no script reaches the live voice door under a name the guard reads as Grant',
+  ],
   // Persistence and the shapes a client actually reaches.
   ['verify:schema', "the schema's own dangling references"],
   /*
@@ -553,14 +571,6 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'no service the office is delivering through is described to its agents as unreachable',
   ],
   ['check:answerable', 'every question open on his dashboard has somewhere for an answer to go'],
-  [
-    'check:voice-sessions',
-    'no script reaches the live voice door under a name the guard reads as Grant',
-  ],
-  [
-    'check:door-origins',
-    'no script drives a real Telegram, Slack, MCP or dashboard door without declaring its conversation first (#381)',
-  ],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 
@@ -815,6 +825,12 @@ if (argv.includes('--gate')) {
     console.log(
       `\n  -> ${r.status.toUpperCase()} in ${String(Math.round(r.ms / 1000))}s${r.tally === '' ? '' : ` — ${r.tally}`}`,
     )
+    if (PREFLIGHT.includes(script) && r.status !== 'pass') {
+      console.error(
+        `\nSTOP: preflight ${script} did not pass, so no suite that can reach a production door is run.`,
+      )
+      break
+    }
   }
 
   const bad = results.filter((r) => r.status !== 'pass')

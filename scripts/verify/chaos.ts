@@ -898,7 +898,7 @@ console.log(`provider breaker reset: available=${String(restored?.ok)}`)
 
 await db.execute(`
   delete from public.slack_channel_map where channel_id = ${lit(CHAOS_CHANNEL)};
-  delete from public.test_destinations where channel = 'slack' and target_ref = ${lit(CHAOS_CHANNEL)};
+  select app.retire_test_destination('slack', ${lit(CHAOS_CHANNEL)});
   delete from public.inbound_commands where dedupe_key like ${lit(`verify:chaos:%${run}`)};
   delete from public.deliveries where dedupe_key like ${lit(`chaos:${run}:%`)};
   delete from public.deliveries where job_id = ${lit(String(jobRow?.id))}::uuid;

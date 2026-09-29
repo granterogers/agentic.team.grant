@@ -119,7 +119,13 @@ export interface ProvisionResult {
   readonly invited?: InviteOutcome
 }
 
-export type InviteOutcome = 'invited' | 'already_in_channel' | 'no_subject_configured' | 'failed'
+export type InviteOutcome =
+  | 'invited'
+  | 'already_in_channel'
+  | 'no_subject_configured'
+  | 'failed'
+  /** The channel belongs to a fixture project, so nobody is invited (#381). */
+  | 'not_invited_test_channel'
 
 export class ChannelProvisioner {
   constructor(
@@ -153,8 +159,12 @@ export class ChannelProvisioner {
     // end, which is the point — then its name, then the caller's label. A slug
     // is a machine's name for a project; a person reading a sidebar wants the
     // name they gave it.
-    const named = await this.one<{ name: string | null; channel_prefix: string | null }>(
-      `select name, channel_prefix from public.projects
+    const named = await this.one<{
+      name: string | null
+      channel_prefix: string | null
+      is_fixture: boolean | null
+    }>(
+      `select name, channel_prefix, is_fixture from public.projects
         where project_id = ${lit(projectId)}::uuid`,
     )
     const stem =
@@ -188,7 +198,18 @@ export class ChannelProvisioner {
       const channel = body.channel as { id?: string; name?: string } | undefined
       const channelId = channel?.id ?? ''
       await this.map(channelId, channel?.name ?? name, projectId, true, staffSlug)
-      const invited = await this.inviteSubject(channelId)
+      /*
+        A fixture project's channel is a test destination, and a test
+        destination has no human in it (#381). The acceptance run of 29
+        September invited Grant into #zz_test_slack_81928391 and then posted a
+        suite's messages there; a zz_ name is not what makes a room safe, its
+        membership is. Decided from the project, not from who is asking, so
+        every caller that creates a fixture's channel gets it.
+      */
+      const invited: InviteOutcome =
+        named?.is_fixture === true
+          ? 'not_invited_test_channel'
+          : await this.inviteSubject(channelId)
       return {
         outcome: 'created',
         channelId,

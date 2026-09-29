@@ -251,21 +251,38 @@ record(
   again.outcome === 'existing' && again.channelId === CHANNEL,
 )
 
-// The check this suite did not have. Fifty-six of them established that a
-// message reaches the channel; none established that the channel reaches a
-// person, and the first real project channel was therefore created, posted
-// into, and read by nobody — the bot was its only member. "Delivered" and
-// "delivered to somebody" are different claims and only the second is §12's.
+/*
+  Nobody is in this room but the app (#381). It used to assert the opposite:
+  that the provisioner invites Grant, which is right for a REAL project's
+  channel and is proved there by tests/slack/provision.test.ts. For this
+  suite it meant every message below reached a channel he was a member of -
+  the acceptance run of 29 September posted about seven into
+  #zz_test_slack_81928391 with him in it. A fixture project's channel is a
+  test destination, so the provisioner invites nobody, and this checks the
+  MEMBERSHIP Slack reports rather than the name or the provisioner's word.
+  Checked before anything is posted, and the suite stops if it fails.
+*/
 const members = await slack.call('conversations.members', { channel: CHANNEL, limit: 200 })
 const memberIds = Array.isArray(members.body.members) ? (members.body.members as string[]) : []
 const subject = await one<{ user_id: string | null }>(
   `select value #>> '{}' as user_id from public.system_config where key = 'slack.subject_user_id'`,
 )
+const bot = await slack.call('auth.test', {})
+const humans = memberIds.filter((m) => m !== String(bot.body.user_id))
+const nobodyIn =
+  created.invited === 'not_invited_test_channel' &&
+  typeof subject?.user_id === 'string' &&
+  !memberIds.includes(subject.user_id) &&
+  humans.length === 0
 record(
-  'the human is IN the channel the app created — a room with only a bot in it is not delivery',
-  `invited=${String(created.invited)} members=${String(memberIds.length)} subject_present=${String(memberIds.includes(String(subject?.user_id)))}`,
-  created.invited === 'invited' && memberIds.includes(String(subject?.user_id)),
+  'the fixture channel has no human in it — Grant was not invited, and only the app is a member',
+  `invited=${String(created.invited)} members=${String(memberIds.length)} humans=${String(humans.length)} subject_present=${String(memberIds.includes(String(subject?.user_id)))}`,
+  nobodyIn,
 )
+if (!nobodyIn) {
+  console.error('STOP: the fixture channel has a person in it; nothing is posted to it.')
+  process.exit(1)
+}
 
 // --- per-project, per-discipline channels (0070) -----------------------------
 //
@@ -284,6 +301,12 @@ record(
   researchChannel.outcome === 'created' &&
     String(researchChannel.channelName).endsWith('_research') &&
     researchChannel.channelId !== CHANNEL,
+)
+
+record(
+  'and nobody was invited into that one either (#381)',
+  `invited=${String(researchChannel.invited)}`,
+  researchChannel.invited === 'not_invited_test_channel',
 )
 
 record(
@@ -1824,8 +1847,10 @@ try {
     update public.slack_channel_map
        set active = false, archived_at = app.now_utc(), channel_name = ${lit(parkedLobby)}
      where channel_id = ${lit(CHANNEL)};
-    delete from public.deliveries where dedupe_key like ${lit(`verify:${stamp}:%`)};
-    delete from public.test_destinations where channel = 'slack' and target_ref = ${lit(CHANNEL)};
+    -- Its delivery rows are KEPT (#381): with the destination retired rather
+    -- than deleted, the witness can reconcile every one as sent to a room that
+    -- was registered for tests at the time, which a deleted row never can be.
+    select app.retire_test_destination('slack', ${lit(CHANNEL)});
     delete from public.preference_instructions where command_id in (
       select command_id from public.inbound_commands where actor = 'U0GRANTVERIFY');
     delete from public.inbound_commands where actor = 'U0GRANTVERIFY';
@@ -1859,4 +1884,48 @@ try {
 
 await release(db)
 
-if (failed.length > 0) process.exit(1)
+/*
+  RETIRED, NOT DELETED - asserted after the teardown that retires it (#381).
+
+  On 29 September this suite deleted its registration, and the witness could
+  then no longer tell that the end-to-end result it had sent to this channel
+  was allowed. Now: the registration is still there and retired; every
+  delivery this run made to the channel was created while it was active, so
+  the witness reads each as authorised at the time; and a retry now, for the
+  end-to-end job or job-less, is refused.
+*/
+const afterwards: { what: string; ok: boolean; detail: string }[] = []
+{
+  const reg = await one<{ retired: boolean | null; n: number }>(`
+    select bool_and(retired_at is not null) as retired, count(*)::int as n
+      from public.test_destinations where channel = 'slack' and target_ref = ${lit(CHANNEL)}`)
+  afterwards.push({
+    what: 'the registration is retired, not deleted',
+    ok: Number(reg?.n) === 1 && reg?.retired === true,
+    detail: `rows=${String(reg?.n)} retired=${String(reg?.retired)}`,
+  })
+  const sends = await one<{ n: number; authorised: number; e2e: number }>(`
+    select count(*)::int as n,
+           count(*) filter (where app.test_destination_at('slack', d.target_ref, d.created_at))::int as authorised,
+           count(*) filter (where d.job_id = ${lit(E2E_JOB)}::uuid)::int as e2e
+      from public.deliveries d
+     where d.channel = 'slack' and d.target_ref = ${lit(CHANNEL)} and d.sent_at is not null`)
+  afterwards.push({
+    what: 'every message this run sent to the channel was sent while it was registered, and is kept as evidence',
+    ok: Number(sends?.n) > 0 && sends?.authorised === sends?.n && Number(sends?.e2e) >= 1,
+    detail: `${String(sends?.authorised)} of ${String(sends?.n)} authorised at send time; end-to-end result rows=${String(sends?.e2e)}`,
+  })
+  const retry = await one<{ job: string | null; jobless: string | null }>(`
+    select app.delivery_refusal(${lit(E2E_JOB)}::uuid, ${lit(`job:${E2E_JOB}:retry`)}, 'slack', ${lit(CHANNEL)}) as job,
+           app.delivery_refusal(null, ${lit(`verify:${stamp}:retry`)}, 'slack', ${lit(CHANNEL)}) as jobless`)
+  afterwards.push({
+    what: 'a retry after retirement is refused — for the end-to-end job and job-less alike',
+    ok: /harness traffic/.test(String(retry?.job)) && /no provenance/.test(String(retry?.jobless)),
+    detail: `job: ${String(retry?.job)} | job-less: ${String(retry?.jobless)}`,
+  })
+}
+for (const a of afterwards) console.log(`${a.ok ? '✅' : '❌'} ${a.what} — ${a.detail}`)
+console.log(
+  `${String(afterwards.filter((a) => a.ok).length)}/${String(afterwards.length)} retirement checks passed`,
+)
+if (failed.length > 0 || afterwards.some((a) => !a.ok)) process.exit(1)
