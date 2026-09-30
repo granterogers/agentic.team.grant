@@ -107,13 +107,21 @@ describe('the sealed vault', () => {
   })
 
   it.skipIf(!haveOpenssl)(
-    'refuses the wrong passphrase, rather than producing rubbish',
+    'the wrong passphrase never yields the plaintext (it may refuse, or it may produce rubbish - never the secret)',
     async () => {
-      const sealed = await buildVaultExport([{ name: 'x', value: 'y', description: '' }])
+      /*
+        The property is "no usable plaintext", not "openssl exits non-zero" (#338). AES-CBC has no authentication, so
+        roughly one wrong passphrase in 256 decrypts to bytes whose last block happens to be valid padding; openssl
+        then succeeds and writes rubbish. Asserting a rejection made this test fail about one run in 256 against a
+        correct implementation. What must hold is that whatever comes out is not the secret and is not the payload.
+      */
+      const sealed = await buildVaultExport([
+        { name: 'x', value: 'the-secret-value', description: '' },
+      ])
       const dir = await mkdtemp(join(tmpdir(), 'vault-test-'))
       const enc = join(dir, sealed.filename)
       await writeFile(enc, sealed.bytes)
-      await expect(
+      const decrypt = (pass: string, out: string) =>
         run('openssl', [
           'enc',
           '-d',
@@ -125,11 +133,25 @@ describe('the sealed vault', () => {
           '-in',
           enc,
           '-out',
-          join(dir, 'nope.json'),
+          out,
           '-pass',
-          'pass:definitely-not-it',
-        ]),
-      ).rejects.toThrow()
+          `pass:${pass}`,
+        ])
+      const wrong = join(dir, 'nope.json')
+      const outcome = await decrypt('definitely-not-it', wrong).then(
+        () => 'produced',
+        () => 'refused',
+      )
+      if (outcome === 'produced') {
+        const text = await readFile(wrong, 'utf8').catch(() => '')
+        expect(text).not.toContain('the-secret-value')
+        expect(() => JSON.parse(text)).toThrow()
+      }
+      // CONTROL: the same file, the right passphrase, DOES yield it - so "not the secret" is not vacuous.
+      expect(sealed.passphrase).toBeTruthy()
+      const right = join(dir, 'yes.json')
+      await decrypt(sealed.passphrase, right)
+      expect(await readFile(right, 'utf8')).toContain('the-secret-value')
     },
   )
 })

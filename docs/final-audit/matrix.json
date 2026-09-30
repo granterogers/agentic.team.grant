@@ -1,0 +1,1307 @@
+[
+ [
+  "B",
+  "B1",
+  "No sender authorization below the door; any Telegram private chat attributed to 'grant'",
+  "PRODUCTION-PROVEN FIXED",
+  "I ran `sender-authorization` 39/39 (recorded 8/31 red at baseline, 31/31 after) and `slack-sender` 17/17. Live: `scripts/verify/run1-live.ts` checks \"0607 a stranger in a private chat is ignored and changes nothing\", \"update with no sender ignored\" (14/14 recorded; run3-live 26/26)",
+  "Telegram bar is still shared webhook secret + public user id, no replay protection (#392.2 AD); Slack `team_id` unbound (#392.3 OPEN)",
+  ""
+ ],
+ [
+  "B",
+  "B2",
+  "Approver identity: `options.subject ?? 'grant'`; `hq_answer_blocker` takes no identity; `p_by='grant'`",
+  "PRODUCTION-PROVEN FIXED",
+  "I ran `approver-identity` 44/44 (3 sabotages recorded red). Live run1-live \"0608 unauthenticated answer refused\", \"office key cannot answer naming itself grant\", \"signed-in answer recorded as verified principal\"; run2-live 50/50, run3-live",
+  "bearer token is a service principal, gateway authority setters rely on gateway alone (#390 OPEN)",
+  ""
+ ],
+ [
+  "B",
+  "B3",
+  "bare \"No.\" claimed by `rejectsWithoutSaying`",
+  "PRODUCTION-PROVEN FIXED",
+  "I ran `open-question` 48/48 (6 red at baseline per Run 1 doc; the \"nah with NOTHING waiting\" negative control passes). Live run1-live: bare \"No.\" resolves blocker, reply \"Taken as a no\"",
+  "none found",
+  ""
+ ],
+ [
+  "B",
+  "B4",
+  "fan-in synthesis attempt starvation",
+  "ISOLATED-PROVEN FIXED",
+  "I ran `fan-in-waits` 6/6 (includes \"provider outage is not refunded\"). Not driven live (Run 1: function-body identity only)",
+  "`resume_job` still refunds for the two bounded waits, fence paused clause ambiguous there (#398.5)",
+  ""
+ ],
+ [
+  "B",
+  "B5",
+  "`governOutward` \"Yes, do it\" performs nothing (`approval.ts:291`)",
+  "ISOLATED-PROVEN FIXED",
+  "I ran `outward-options` 12/12 (decline -> next run does not go ahead). Not live",
+  "none known",
+  ""
+ ],
+ [
+  "B",
+  "B6",
+  "`channels.ts:159`/`drive.ts:346` options 2/3 promise things nothing performs",
+  "ISOLATED-PROVEN FIXED",
+  "I ran `drive-options` 4/4, `channel-options` 4/4; `check:answerable` exists as the structural guard (#366, per CLAUDE.md)",
+  "not driven live",
+  ""
+ ],
+ [
+  "B",
+  "B7",
+  "`perform.ts:841` swallowed `raiseBlocker` failure",
+  "ISOLATED-PROVEN FIXED",
+  "I ran `blocker-failure` 7/7. (The Run 5 reconciliation table says \"run1 live\" for this row; I found no matching check in run1-live.ts, so I do not credit it as PP)",
+  "none known",
+  ""
+ ],
+ [
+  "B",
+  "B8",
+  "`blocked_capability` unreachable (`instruction.ts:5244`)",
+  "ACCEPTED BOUNDED DEBT",
+  "blocked_capability has no producer (capabilityRefused is hard-coded false, instruction.ts). Failure mode: an impossible request is answered \"I understood what you want and could not carry it out\" instead of \"I cannot do that\" - imprecise, never false: outcome.ts refuses to assert an incapability nobody proved, and the narration contract forbids a completion claim (tests/agents/outcome-contract.test.ts). Mitigation: check:capabilities + verify:capability-claims hold the fabrication line.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "B",
+  "B9",
+  "skills stored without a press (`remember.ts:381`)",
+  "ACCEPTED BOUNDED DEBT",
+  "A skill is stored from Grant's own marked words with a say-back and no press. Bounded: only his entitled, non-forwarded words reach it (forwarded-writers, sender-authorization), a skill is prose that cannot grant authority (invariant 18), and it is retirable. Whether a press should come first is decision (a) - Grant's, not an engineering call.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "B",
+  "B10",
+  "`guidanceFor` `stated` = \"not a staff slug\"",
+  "ISOLATED-PROVEN FIXED",
+  "FIXED: guidanceFor labelled any non-staff author \"from Grant\". stated now means an admitted person subject (subject_identities kind person). scripts/isolated/guidance-stated.ts: a stranger, a duty, a service are beliefs; red before (3 FAIL), green after.",
+  "",
+  "A current architecture blocker"
+ ],
+ [
+  "B",
+  "B11",
+  "`may_act` \"a person asked\" true for `trigger:`/`mcp:`/`hq` requesters",
+  "PRODUCTION-PROVEN FIXED",
+  "0629: may_act asked-for requires origin trusted/harness. audit-closure (trigger:/mcp:/hq/duty: ask; own words and harness proceed), sabotage red; live: final-audit-live. Production: final-audit-live 35/35 (asked-for verdicts on deployed 0629).",
+  "",
+  ""
+ ],
+ [
+  "B",
+  "B12",
+  "TS `attempt < 4` vs SQL `max_attempts`",
+  "ACCEPTED BOUNDED DEBT",
+  "The retry cap of 4 for a model call is a recorded decision (ADR-0057); the job ceiling is max_attempts (0620 settle_exhausted_jobs).",
+  "constants remain: `instruction.ts:6393` `job.attempt < 4`, `outcome.ts maxAttempts: 4`, worker.ts:478 `>= 4` - a job with max_attempts > 4 is still capped at 4 by design",
+  ""
+ ],
+ [
+  "B",
+  "B13",
+  "Slack door calls `enqueue_inbound` before writing `inbound_commands_slack`",
+  "ISOLATED-PROVEN FIXED",
+  "slack-events writes the routing row before enqueue_inbound; vitest order test, sabotage (swap) red.",
+  "",
+  ""
+ ],
+ [
+  "B",
+  "B14",
+  "unbounded `harness_job` recursion (cycle), three unaligned depth limits",
+  "PRODUCTION-PROVEN FIXED",
+  "0629: a job's parent is written once; audit-closure, sabotage (trigger dropped) red; live: final-audit-live. Production: final-audit-live (re-parent refused on the live database).",
+  "",
+  ""
+ ],
+ [
+  "B",
+  "B15",
+  "task-tick door race/bypass",
+  "PRODUCTION-PROVEN FIXED",
+  "I ran `refusal-reversal` 41/41 (\"to-do tick does not call it - trigger body scanned\", \"ticking a to-do does not reopen a No\") and `approval-execution` 15/15; `authority.ts` section 6 (88/88 recorded) and `approval-race.sh` (two overlapping answers perform once). Live: run2-live \"tick from nobody does not answer; to-do reopens\", \"tick through the gateway answers as verified principal\"",
+  "none found",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#339",
+  "scan-and-create-tasks read as record-one-task",
+  "ISOLATED-PROVEN FIXED",
+  "`extractionRequest` (src/agents/extract.ts:153) returns the request for \"Scan the entirety of the Legacy Coaching Project and create appropriate tasks\", with and without the dictated false start; I probed: `personalTaskRequest` returns null for it so it is no longer filed as a task. Tests `understand.test.ts`, `dictation.test.ts`, `extract.test.ts`, `extract-read-then-make.test.ts`",
+  "I did not run `verify:extract` (live end-to-end that children actually start); issue left open in GitHub",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#340",
+  "hq-api pulse 502, no public wrapper",
+  "ISOLATED-PROVEN FIXED",
+  "check:gateway-wrappers is now in the gate.",
+  "",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#336",
+  "citation says \"null\"",
+  "ISOLATED-PROVEN FIXED",
+  "`citationRef` single formatter; `tests/knowledge/a-citation-names-where-it-came-from.test.ts` 8/8 passed (I ran it); three sabotages recorded in the issue; live drive recorded in issue (14 citations, 0 null)",
+  "live evidence is a recorded manual drive, not a verify suite",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#359",
+  "\"Read this for me\" filed not read",
+  "ISOLATED-PROVEN FIXED",
+  "`pageRequest` short branch checks `READ_IT` first; `page-request.test.ts` 24/24 passed (I ran it); revert sabotage recorded 3 red",
+  "pre-existing `<link> check this out later` -> asked, left alone on purpose",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#321",
+  "taskTitle uses requestBody (verb lost)",
+  "ACCEPTED BOUNDED DEBT",
+  "taskTitle loses the verb for unframed requests; the retraction case is fixed and the general fix was measured to break tuned neighbours (negative result recorded). Titles, not authority.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "ISSUE",
+  "#307",
+  "every real task title malformed",
+  "ACCEPTED BOUNDED DEBT",
+  "Reminder titles improved (only the request sentence is the title, connectors dropped); remaining shapes are cosmetic.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "ISSUE",
+  "#303",
+  "\"Jot down that get back to Priya\"",
+  "ISOLATED-PROVEN FIXED",
+  "`personalTaskRequest(\"jot down that I need to get back to Priya about the venue\")` -> \"Get back to Priya about the venue\" (probe)",
+  "I found no dedicated test named for the jot-down shape; the negative control (\"write down the numbers from the call\") not verified by me",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#305",
+  "withdrawal reads as work asked for",
+  "ACCEPTED BOUNDED DEBT",
+  "A withdrawal with a bare-stem verb can still read as a request (1 in 160 real turns). The work it would start is gated like any other; bounded by approvals.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "ISSUE",
+  "#306",
+  "\"told a task existed when none did\"",
+  "ISOLATED-PROVEN FIXED",
+  "`a-negation-stops-its-own-clause.test.ts` 26/26 passed (I ran it); `SAYS_I`, clause-scoped negation, `misrepresents` asks both readers; sabotages recorded",
+  "four ordinary completion phrasings caught by neither reader is asserted as a known gap",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#361",
+  "\"You have no open projects\" slipped gate",
+  "ISOLATED-PROVEN FIXED",
+  "`it-may-not-deny-what-it-holds.test.ts` 17/17 passed (I ran it), incl. controls; revert sabotage recorded 1 red",
+  "verb-based phrasings not covered",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#362",
+  "\"Your diary is empty\" slipped gate",
+  "ISOLATED-PROVEN FIXED",
+  "`provenance.test.ts` 71/71 passed (I ran it)",
+  "the issue itself records two still-missed phrasings (\"I see no emails from Sergio\", \"I found no meetings\") - not fixed, verb vocabulary",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#365",
+  "cancelled-without-his-asking owes a word",
+  "ACCEPTED BOUNDED DEBT",
+  "The 27 unexplained cancelled roots are all before 20 Sep, in clusters of four across voice/telegram/slack/teamhq in one minute (a suite), with no inbound command left. No recurrence in ten days.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "ISSUE",
+  "#358",
+  "`undoable_actions.job_id` never populated",
+  "ACCEPTED BOUNDED DEBT",
+  "undoable_actions.job_id unpopulated; no reader needs it.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "ISSUE",
+  "#343",
+  "verify:autonomy leaves `autonomy_settings` rows",
+  "ISOLATED-PROVEN FIXED",
+  "0629: project_delete clears autonomy_settings; audit-closure.",
+  "",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#338",
+  "vault-export wrong-passphrase flake",
+  "ISOLATED-PROVEN FIXED",
+  "FIXED: the test asserted a rejection; AES-CBC without authentication decrypts about one wrong passphrase in 256 to valid padding. It now asserts no plaintext and has a right-passphrase control.",
+  "",
+  "C proof gap"
+ ],
+ [
+  "ISSUE",
+  "#352",
+  "backup:rehearse never reaches restore",
+  "ACCEPTED BOUNDED DEBT",
+  "backup:rehearse never reaches restore: harness, not product.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "ISSUE",
+  "#383",
+  "check:tokens red on `--bcfade`",
+  "ISOLATED-PROVEN FIXED",
+  "check:tokens: --bcfade is a local scroll-fade variable, baselined with its reason; check exits 0.",
+  "",
+  ""
+ ],
+ [
+  "ISSUE",
+  "#369",
+  "pg_proc scan through a JOIN in 0573",
+  "ACCEPTED BOUNDED DEBT",
+  "check:migrations does not refuse a pg_proc scan through a join; the 0573 workaround stands. Tooling.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "ISSUE",
+  "#326",
+  "check:migrations passes on applied-but-missing",
+  "ACCEPTED BOUNDED DEBT",
+  "check:migrations reads files only; migrate enforces integrity at apply. Tooling.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D1",
+  "three \"his words\" variants, 74 raw reads",
+  "ACCEPTED BOUNDED DEBT",
+  "Branded HumanWords/Paraphrase and entitled cover the permitting readers; 127 raw reads of `instruction` remain, none of which can cause an effect (the task/file/extraction readers now go through firstOf/firstOfHis, silent for a forwarded turn). Scope: prose, titles.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D2",
+  "four clause segmenters",
+  "ACCEPTED BOUNDED DEBT",
+  "Four clause segmenters remain. Loss is mitigated by say-what-you-dropped and by the contested-reading cap; mixed-turns now covers rule+reminder+question both with and without a model.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D3",
+  "4,502-line single closure, ~16 writers, `isBranch` 21 sites",
+  "ACCEPTED BOUNDED DEBT",
+  "instruction.ts is large; ordering faults have been behavioural and each was caught by a driven check. No structural guarantee depends on writer order.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D4",
+  "`understand` fast path, `kind` mostly `other`",
+  "ACCEPTED BOUNDED DEBT",
+  "ADR-0052 \"Moving understand earlier was deliberately NOT done (model call on simple turns); recorded as engineering debt\"; Run 1 residual R1",
+  "`understand` still runs after the plan/populate/teach early returns",
+  ""
+ ],
+ [
+  "D",
+  "D5",
+  "permitting readers read the paraphrase (`linkRequest`, `pageRequest`, `readPlan`)",
+  "PRODUCTION-PROVEN FIXED",
+  "0630 + slack-events: events and presses from an unrecognised workspace are refused; live: final-audit-live (wrong workspace, no team, right workspace unknown user).",
+  "",
+  ""
+ ],
+ [
+  "D",
+  "D6",
+  "lifecycle copies (`states.ts`, ~18 SQL lists)",
+  "ACCEPTED BOUNDED DEBT",
+  "Lifecycle lists exist in six SQL functions and states.ts. Agreement is asserted (enumeration-agreement: enum order, 46 transitions) and every stallable state is driven (recovery-matrix). A new state missing from a list fails closed (job_held false).",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D7",
+  "`enqueue_child` non-idempotent on retry; `pinned_config` not inherited",
+  "PRODUCTION-PROVEN FIXED",
+  "Retry duplicates are prevented: children are keyed to the caller's claim (0625), enqueue_child_once returns the existing child, a stale caller is refused (40001). job-fence 23/23; final-audit-live \"a retry that defers again finds the deferral\" on production. The residual half (pinned_config is not inherited) is harmless: origin is derived by lineage (job_origin), not copied.",
+  "",
+  "D superseded / duplicate"
+ ],
+ [
+  "D",
+  "D8",
+  "\"who was asked\" in five places",
+  "ACCEPTED BOUNDED DEBT",
+  "Who-was-asked lives in five columns; the obligation view is derived, so no answer path treats one as truth.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D9",
+  "`waiting_user`/`waiting_external` dead states",
+  "ACCEPTED BOUNDED DEBT",
+  "waiting_user/waiting_external are legal and unreachable: enumeration-agreement asserts no function in app/public writes either, with a planted-writer control. Every reachable non-terminal state is driven by recovery-matrix; paused now has Stop (0635) and a word (0634).",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D10",
+  "`staff_prompts` decorative",
+  "ACCEPTED BOUNDED DEBT",
+  "staff_prompts is decorative (10 rows, no reader). Cosmetic; affects no answer.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D11",
+  "lessons/skills reach only the answering prompt",
+  "ACCEPTED BOUNDED DEBT",
+  "Standing rules reach the answering prompt, not the report or synthesis prompts. A preference gap, not an authority one; approval, autonomy and containment are enforced in SQL.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D12",
+  "only-chief-speaks at several seams",
+  "ACCEPTED BOUNDED DEBT",
+  "only-chief-speaks is enforced at the Telegram pager; copy now says so (0633). Containment does not depend on it.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D13",
+  "ADR-0023 default gives new specialists every project",
+  "ACCEPTED BOUNDED DEBT",
+  "ADR-0023 is the decision; tool authority is now runtime-checked (`authorize_effect` requires the named specialist to hold the tool: `authority` 88/88) so the default grants project reach, not tool authority",
+  "dynamic-specialist routing by project default untested (invariant 38 router half)",
+  ""
+ ],
+ [
+  "D",
+  "D14",
+  "`skill_effect` unread; perf per model only",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "skill_effect has no consumer; nothing claims it does. Product work.",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "D",
+  "D15",
+  "dead `src/projects/context.ts`",
+  "ACCEPTED BOUNDED DEBT",
+  "src/projects/context.ts is imported only by its test. Dead module, no runtime effect.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D16",
+  "duplicated enumerations (job state, channel/origin) no agreement check",
+  "ISOLATED-PROVEN FIXED",
+  "FIXED: no check compared the channel vocabulary in SQL and TypeScript. enumeration-agreement reads every CHECK that lists channels from the catalog (8) and compares to CHANNELS, with named exceptions and a planted-drift control; found and recorded the subject_identities web/teamhq naming difference.",
+  "",
+  "C proof gap"
+ ],
+ [
+  "D",
+  "D17",
+  "three harness predicates + 6 name signals",
+  "ACCEPTED BOUNDED DEBT",
+  "Three harness predicates remain, but authority is positive: job_origin returns harness, trusted, internal or unknown and only the first two-of-four that are not harness reach outside (may_act_outside). A missed harness signal cannot act outside unless it came through a production door. check:leaks 0 new; witness-independence 12/12.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D18",
+  "`verify:*` run on production and leave debris",
+  "ACCEPTED BOUNDED DEBT",
+  "verify:* suites run on production and leave fixtures for minutes (a fixture tool was visible in capabilityBrief during verify:approval). Bounded by teardown and check:leaks; declared test origins keep their traffic off real destinations.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D19",
+  "three \"plan\" vocabularies",
+  "ACCEPTED BOUNDED DEBT",
+  "Three plan vocabularies; approval binds to a sha256 of the exact steps, so drift does not loosen it.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D20",
+  "`step_begin` stale check compares only `schema_version`",
+  "ACCEPTED BOUNDED DEBT",
+  "step_begin compares schema_version and code_version (0527), not the step payload. Bounded: plan_steps are never rewritten for a job, approval is bound to the steps' hash, and an external step that started never re-runs (it parks).",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D21",
+  "`voice` vs `teamhq` channel word",
+  "ACCEPTED BOUNDED DEBT",
+  "voice vs teamhq vs dashboard vs web naming. enumeration-agreement pins where each appears. Cosmetic.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D22",
+  "`inference/policy.ts decide()` has no caller",
+  "ACCEPTED BOUNDED DEBT",
+  "inference/policy.ts decide() has no caller. Dead function; its test reads as proof of behaviour nobody runs.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "D",
+  "D23",
+  "`approve_tool/decline_tool` unlocked",
+  "ISOLATED-PROVEN FIXED",
+  "0631: approve_tool/decline_tool lock the request; audit-closure races two real connections with a widened window; sabotage red.",
+  "",
+  ""
+ ],
+ [
+  "D",
+  "D24",
+  "unledgered sends (vault export, webhook refusal)",
+  "ACCEPTED BOUNDED DEBT",
+  "The edge functions are now scanned (V8, containment.test); the single direct send is the dormant voice-refusal reply, named with its reason (ADR-0057).",
+  "both paths dormant (`voice.transcription='api'`, export disabled) per #378 audit; invariant 32/33 \"supabase/functions scan\" not done",
+  ""
+ ],
+ [
+  "AD",
+  "AD1",
+  "no entitlement-typed record of what Grant said; no precedence for turn gates",
+  "PRODUCTION-PROVEN FIXED",
+  "One semantic boundary with entitlement-typed words: HumanWords/entitled/noneEntitled, gate order table. turn-entitlement 12, mixed-turns 18, open-question 48, forwarded-writers 15; run1-live 15/15 and final-audit-live through the deployed doors. Residual mixed-intent cases are invariant 4.",
+  "",
+  "D superseded / duplicate"
+ ],
+ [
+  "AD",
+  "AD2",
+  "conversation identity = channel identity",
+  "ACCEPTED BOUNDED DEBT",
+  "`question-binding` 33/33 (cross-channel plain yes answers nothing; both shown -> once), run5-live 20/20 recorded",
+  "The phrase is narrowed, the architecture is not changed: the decision protects approvals, not context continuity. If Grant wants invariant 6 it is unbuilt [invariants: 6 (cross-interface continuation), 2 partly; invariant 6 is NOT met: a Telegram turn still sees none of the Team HQ turns]",
+  ""
+ ],
+ [
+  "AD",
+  "AD3",
+  "no single authority path for effects; dial and `staff_may_use` not enforced at execution",
+  "ACCEPTED BOUNDED DEBT",
+  "The authority path exists (may_act, authorize_effect, approvals) and is proven (authority 88/88, run2/3 live). Nine external kinds are not behind it - Slack channels and key, Notion import/adopt/sync, task board, Google revoke, CI dispatch, vault export - held by containment, named with reasons in tests/architecture/every-external-kind-is-gated-or-named.test.ts, which fails if a tenth joins or one is gated and left on the list. Which should ask is Grant's decision (#389/#390/#393); the dial's copy now says so (0633).",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "AD",
+  "AD4",
+  "approval has several lifecycles; binding exact action only in one",
+  "ACCEPTED BOUNDED DEBT",
+  "Exact binding holds for every agent-originated approval (fingerprint, delivery, question, principal). Bounded limits: no expiry (a yes is still the exact action he approved), dashboard/voice typed-yes binds by session and previous turn (#397), tool/standing/document approvals are a person's own press naming the thing. A step question inside an approved plan was misrouted as the plan's approval - fixed (0636, step-question).",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "AD",
+  "AD5",
+  "trust/origin of non-inbound roots from a mutable free-text grammar; harness by six name signals",
+  "PRODUCTION-PROVEN FIXED",
+  "Origin is positive and stored: job_origin, adapter_key_ok, may_act_outside, declared test origins. job-origin 22, synthetic-origins 36, witness-independence 12, run4-live 24/24, final-audit-live, check:leaks 0 new. Stated limit: exact impersonation with the service key (#379) is a provider/credential limit, not closable here.",
+  "",
+  "D superseded / duplicate"
+ ],
+ [
+  "INV",
+  "1",
+  "Every human turn enters one semantic boundary",
+  "ISOLATED-PROVEN FIXED",
+  "`turn-entitlement` 12/12 (a hostile resolver cannot start a plan, link, task, rule or call-off; baseline was 9/12), `mixed-turns` 12/12, vitest `turn`, `gates`. Import barrier in `gates.test.ts` is source text.",
+  "(Optional) a door-parity check: drive each door's enqueue and assert the same entry handler.",
+  ""
+ ],
+ [
+  "INV",
+  "2",
+  "Claire remains human-facing owner",
+  "ACCEPTED BOUNDED DEBT",
+  "Claire owns Telegram (enforced at the pager, 141/141 real sends from the chief); on Slack each colleague speaks under their own name by design. The Settings copy named no channel and now does (0633).",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "INV",
+  "3",
+  "Every obligation belongs to a project",
+  "ISOLATED-PROVEN FIXED",
+  "project-ownership: a turn naming no project gets the Unnamed project, a child and grandchild inherit, the command table refuses null, and no job a person started or any descendant has a null project. Duty roots are the one named global owner; legacy null rows are pre-0619 history.",
+  "",
+  "C proof gap"
+ ],
+ [
+  "INV",
+  "4",
+  "Mixed intents survive",
+  "ISOLATED-PROVEN FIXED",
+  "Found and fixed with the real handler: a rule's body was the FIRST sentence of the message (a reminder stored as a permanent standing rule) and a trailing question mark silenced a rule; a reminder's title swallowed the other clauses; a question the writers did not take vanished with the model down. mixed-turns 18/18 (rule+reminder+question, with controls), teaching unit tests; a real-model probe on production kept the preference, answered the question and handed the plan on.",
+  "",
+  "A current architecture blocker"
+ ],
+ [
+  "INV",
+  "5",
+  "Corrections/cancellations govern the right span",
+  "ISOLATED-PROVEN FIXED",
+  "Pure-function tables plus a hostile-resolver suite. The only integrated \"withdrawn work not performed\" run was a manual degraded-model pass (Run 1 phase 12).",
+  "Add one replica test that sends a withdrawal through the handler and asserts no task or plan was created.",
+  ""
+ ],
+ [
+  "INV",
+  "6",
+  "Cross-interface continuation locates the same context",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Cross-channel conversation identity is decided absent (docs/architecture-run-5/CROSS-CHANNEL.md); question-binding proves the safe direction (a bare yes binds to nothing it was not shown). Not a claim of the product.",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "INV",
+  "7",
+  "Every root objective has durable ownership",
+  "ISOLATED-PROVEN FIXED",
+  "0631 makes a parked obligation with no question read waiting_on_user; audit-closure V9. 0634 makes the person who asked hear about it.",
+  "",
+  "C proof gap"
+ ],
+ [
+  "INV",
+  "8",
+  "Human tasks and AI jobs distinct",
+  "PRODUCTION-PROVEN FIXED",
+  "`verify:tasks`, `verify:mytasks` (both in the gate); `authority` section 6 (tick).",
+  "none",
+  ""
+ ],
+ [
+  "INV",
+  "9",
+  "Child inherits project",
+  "ISOLATED-PROVEN FIXED",
+  "audit-closure: child inherits project; an explicit project is honoured; sabotage (coalesce removed) red.",
+  "",
+  ""
+ ],
+ [
+  "INV",
+  "10",
+  "Child inherits user/tenant",
+  "ISOLATED-PROVEN FIXED",
+  "audit-closure: a child inherits the user of its parent (the user half); the tenant half is invariant 40 and stays open under it.",
+  "",
+  ""
+ ],
+ [
+  "INV",
+  "11",
+  "Child inherits security/synthetic",
+  "PRODUCTION-PROVEN FIXED",
+  "`synthetic-origins` 36/36, `job-origin` 22/22, `containment` 19/19, `external-containment`, all sabotaged; `check:leaks` and `verify:escapes` are in the gate.",
+  "none",
+  ""
+ ],
+ [
+  "INV",
+  "12",
+  "Child inherits provenance",
+  "ISOLATED-PROVEN FIXED",
+  "`job-origin` 22/22, `forwarded-authority` 8/8.",
+  "List the `pinned_config` keys read in `src/` and assert each is either lineage-derived or explicitly not inherited.",
+  ""
+ ],
+ [
+  "INV",
+  "13",
+  "Specialist identity survives delegation",
+  "PRODUCTION-PROVEN FIXED",
+  "`verify:handoff`, `verify:delegation`, `verify:collaborates` are all in the gate.",
+  "none",
+  ""
+ ],
+ [
+  "INV",
+  "14",
+  "Specialists collaborate without losing root ownership",
+  "ISOLATED-PROVEN FIXED",
+  "Root-owned synthesis: obligation_state derives completion across the tree; fan-in-waits 6/6, acknowledgement-sequence 36/36. Specialist-initiated collaboration is MC5 (product).",
+  "",
+  "D superseded / duplicate"
+ ],
+ [
+  "INV",
+  "15",
+  "Fan-in produces one coherent result",
+  "ISOLATED-PROVEN FIXED",
+  "One coherent result: fan_in_over through a lone branch is relayed verbatim, waits past five wakes (fan-in-waits). An interim acknowledgement precedes the final answer by design (acknowledgement-sequence); deliveries.purpose does not yet distinguish them (cosmetic).",
+  "",
+  "D superseded / duplicate"
+ ],
+ [
+  "INV",
+  "16",
+  "Project retrieval preserves provenance",
+  "PRODUCTION-PROVEN FIXED",
+  "`verify:knowledge`, `verify:unified` in the gate.",
+  "none",
+  ""
+ ],
+ [
+  "INV",
+  "17",
+  "Cross-project retrieval preserves provenance and permissions",
+  "ISOLATED-PROVEN FIXED",
+  "FIXED: an agent's retrieve() with no project read as every project (search_documents treats null as all). retrieval-scope: null now means the Unnamed project; Grant's own search box is unchanged (control). Cross-project retrieval as a FEATURE is decision (b) and MC1.",
+  "",
+  "A current architecture blocker"
+ ],
+ [
+  "INV",
+  "18",
+  "Skills cannot grant authority",
+  "PRODUCTION-PROVEN FIXED",
+  "`verify:skills` (most-persuasive-skill), `boundary` are live, not in the gate. I confirmed the columns.",
+  "Move `verify:skills` into the gate.",
+  ""
+ ],
+ [
+  "INV",
+  "19",
+  "Learning cannot silently create durable preferences",
+  "ACCEPTED BOUNDED DEBT",
+  "Learning is never silent: every stored rule is said back and is retirable; a stranger, a forwarded turn and a duty cannot teach (sender-authorization 39, forwarded-writers, forwarded-authority). The rule body is now the sentence that carries the marker. Whether a press must come first is decision (a).",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "INV",
+  "20",
+  "One authoritative tool-permission path",
+  "ISOLATED-PROVEN FIXED",
+  "authorize_effect and staff_may_use are one path: authority 88/88 (a staff_tools change alters the outcome). What bypasses it is invariant 22.",
+  "",
+  "D superseded / duplicate"
+ ],
+ [
+  "INV",
+  "21",
+  "Unsupported capabilities produce truthful outcomes",
+  "ACCEPTED BOUNDED DEBT",
+  "Same as B8.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "INV",
+  "22",
+  "Consequential actions cross authorization",
+  "ACCEPTED BOUNDED DEBT",
+  "Same as AD3: nine named external kinds held by containment pending Grant's decision; a witness fails on a tenth.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "INV",
+  "23",
+  "Approval binds the exact action",
+  "ACCEPTED BOUNDED DEBT",
+  "Fingerprint-bound for every agent path; governOutward is consent to a category by design (its button says so); drive.ingest answers carry on_answer payloads naming the files.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "INV",
+  "24",
+  "Yes executes at most once",
+  "ISOLATED-PROVEN FIXED",
+  "`approval-race.sh` (base shows 2, post shows 1), `exactly-once` 6/6 (two racing workers, `local` control), `approval-execution` 15/15, `job-lifecycle` 27/27.",
+  "none beyond 22",
+  ""
+ ],
+ [
+  "INV",
+  "25",
+  "No executes zero times",
+  "ISOLATED-PROVEN FIXED",
+  "`refusal-reversal` 41/41, `approval-execution` (NO performs nothing), `open-question` 48/48, `mixed-turns`.",
+  "none beyond 22",
+  ""
+ ],
+ [
+  "INV",
+  "26",
+  "Refusal cannot be replanned around",
+  "ISOLATED-PROVEN FIXED",
+  "`refusal-reversal` 41/41, `approval-execution` (\"does not re-plan into asking again\"), `authority`. A different action asks afresh by design. I found no explicit \"refused + empty replan\" test (V6).",
+  "Add the refused-and-empty replan case.",
+  ""
+ ],
+ [
+  "INV",
+  "27",
+  "Completed checkpoint work not repeated",
+  "ACCEPTED BOUNDED DEBT",
+  "runSteps/claimExternal cover the handlers that use them (exactly-once 6/6). Per-kind: notebook.* claimExternal; execute_plan runSteps; vault export beginStep; Notion import createPageIfAbsent; calendar create now looks up its own tag before posting (review L1, calendar-write tests with sabotage); Slack rotation stores its pair atomically (review L2). Provider windows that cannot be closed from here are in the ADR: Slack accepts a single-use refresh token before the reply is stored; tasks.sync (dormant) has the pre-fix hazard.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "INV",
+  "28",
+  "Ambiguous external effects reconciled",
+  "ACCEPTED BOUNDED DEBT",
+  "Ambiguous effects never repeat (step_begin parks). 0634 tells the person who asked a turn is parked for good; 0635 makes Stop cancel it; the notice promises only that. There is no \"this happened / this did not\" action: bounded by no duplicate ever being made, zero real occurrences, and Stop + ask again.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "INV",
+  "29",
+  "Every legal nonterminal state has recovery",
+  "ISOLATED-PROVEN FIXED",
+  "recovery-matrix drives every stallable state; waiting_* are unwritable (enumeration-agreement); paused now exits by Stop (0635); a parked turn speaks (0634). Blocker expiry is MC7 (bounded).",
+  "",
+  "A current architecture blocker"
+ ],
+ [
+  "INV",
+  "30",
+  "One malformed job cannot stop unrelated work",
+  "ISOLATED-PROVEN FIXED",
+  "`recovery-matrix` (malformed row beside a healthy job), `drain-survives-sweep` (worker half), `verify:worker` (throwing handler goes to `retrying`; unknown kind pauses and leaves the queue). `verify:worker` is live and not in the gate.",
+  "One suite: a poison payload, a throwing handler and a healthy job together through `drain`.",
+  ""
+ ],
+ [
+  "INV",
+  "31",
+  "Synthetic descendants remain synthetic",
+  "PRODUCTION-PROVEN FIXED",
+  "`synthetic-origins` 36/36; `check:leaks`, `verify:escapes` in the gate.",
+  "none",
+  ""
+ ],
+ [
+  "INV",
+  "32",
+  "Synthetic cannot reach real destinations",
+  "PRODUCTION-PROVEN FIXED",
+  "`containment` 19/19, `external-containment`, `destination-retirement`; live `verify:escapes`, `check:leaks` (gate). The `supabase/functions` bare-send scan is missing (V8).",
+  "Close V8 (scan `supabase/functions`).",
+  ""
+ ],
+ [
+  "INV",
+  "33",
+  "Containment has an independent witness",
+  "ISOLATED-PROVEN FIXED",
+  "`witness-independence` 12/12 (isolated only, not in the gate).",
+  "Move `witness-independence` into the gate (V3).",
+  ""
+ ],
+ [
+  "INV",
+  "34",
+  "Completion claims require canonical evidence",
+  "ACCEPTED BOUNDED DEBT",
+  "Completion claims are gated on the outcome contract in the instruction path (outcome-contract tests, verify:attests). Other handlers compose their bodies in code from recorded state. Scope: a code-composed handler message that overclaims would be a handler bug, not a gate gap.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "INV",
+  "35",
+  "Partial completion reported as partial",
+  "PRODUCTION-PROVEN FIXED",
+  "`verify:obligation` (live; not in the gate).",
+  "Put `verify:obligation` in the gate.",
+  ""
+ ],
+ [
+  "INV",
+  "36",
+  "Claire can determine the state of an active obligation",
+  "ISOLATED-PROVEN FIXED",
+  "obligation_state/conversation_work answer \"what is happening\" from the tree (0631, audit-closure, an-obligation-is-not-a-job).",
+  "",
+  "C proof gap"
+ ],
+ [
+  "INV",
+  "37",
+  "Proactive work obeys authorization and notification",
+  "ACCEPTED BOUNDED DEBT",
+  "Proactive work is contained (runJob refuses harness/unknown origin), say-once deduped (0584/0585/0589), budgeted; authorization is the #389 decision. The dial copy no longer claims otherwise (0633).",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "INV",
+  "38",
+  "Dynamic specialists cannot self-grant authority",
+  "ISOLATED-PROVEN FIXED",
+  "`authority` (a specialist with no grant is refused; grant and revoke change the outcome), 88/88.",
+  "Re-test when MC5 is built.",
+  ""
+ ],
+ [
+  "INV",
+  "39",
+  "Skill improvement cannot self-grant authority",
+  "PRODUCTION-PROVEN FIXED",
+  "`verify:skills` (live, off-gate).",
+  "Test the proposal path when built.",
+  ""
+ ],
+ [
+  "INV",
+  "40",
+  "Credible tenant/user-isolation path",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Single-user product. A tenant/user seam is future architecture; do not relabel as a defect.",
+  "",
+  "F future architecture"
+ ],
+ [
+  "V",
+  "V1",
+  "Gate-order test",
+  "ISOLATED-PROVEN FIXED",
+  "`gates.test.ts` truth table (21), `mixed-turns` 12/12, `open-question` 48/48 (6 red on baseline).",
+  "none",
+  ""
+ ],
+ [
+  "V",
+  "V2",
+  "Poison-job queue suite",
+  "ISOLATED-PROVEN FIXED",
+  "`recovery-matrix`, `drain-survives-sweep`, `verify:worker` (live, off-gate). No single suite, not on the deployed worker.",
+  "One poison-job suite through `drain`.",
+  ""
+ ],
+ [
+  "V",
+  "V3",
+  "Isolated replicas not in the gate",
+  "ISOLATED-PROVEN FIXED",
+  "`npm run gate` now contains verify:isolated (scripts/isolated/run-all.sh) and the live acceptance suites; it fails loudly without the replica.",
+  "",
+  ""
+ ],
+ [
+  "V",
+  "V4",
+  "\"Permitting reader never sees the paraphrase\" seam tests",
+  "ISOLATED-PROVEN FIXED",
+  "`turn-entitlement` 12/12 (hostile resolver, baseline 9/12), `gates` import barrier, vitest `a-veto-reads-his-words`.",
+  "none",
+  ""
+ ],
+ [
+  "V",
+  "V5",
+  "Behavioural replacements for source-text invariants",
+  "ACCEPTED BOUNDED DEBT",
+  "Converted this run: dead-turn (behavioural twin in parked-turn-owes-a-word), forwarded wiring (forwarded-writers), voice dispatch (telegram-voice-test-origin), Slack routing (slack-sender). Remaining source-text checks are compile-time or registry barriers by nature (import barrier, provenance-order, quality-messages, gate-order) or have an isolated twin.",
+  "",
+  "C proof gap"
+ ],
+ [
+  "V",
+  "V6",
+  "Option answers undriven; refused+empty replan; tick vs dashboard race",
+  "ISOLATED-PROVEN FIXED",
+  "",
+  "The refused+empty case.",
+  ""
+ ],
+ [
+  "V",
+  "V7",
+  "SQL/TS enumeration agreement",
+  "ISOLATED-PROVEN FIXED",
+  "enumeration-agreement: job_state enum and transitions vs states.ts, every channel-listing CHECK vs CHANNELS; in the isolated gate.",
+  "",
+  "C proof gap"
+ ],
+ [
+  "V",
+  "V8",
+  "`supabase/functions/**` bare-send scan",
+  "ISOLATED-PROVEN FIXED",
+  "tests/jobs/containment.test.ts scans supabase/functions; a planted send and a removed exception both turn it red.",
+  "",
+  ""
+ ],
+ [
+  "V",
+  "V9",
+  "Non-resumable pause reads `working`",
+  "ISOLATED-PROVEN FIXED",
+  "0631: obligation_state reads waiting_on_user for a non-resumable pause with no question; audit-closure; sabotage red.",
+  "",
+  ""
+ ],
+ [
+  "V",
+  "V10",
+  "Stranger-sender refusal",
+  "PRODUCTION-PROVEN FIXED",
+  "`sender-authorization` 39/39, `slack-sender` 17/17, `principals` 70/70; recorded live in `run1-live` and Run 3.",
+  "The Slack `team_id` half (#392) is separate and open.",
+  ""
+ ],
+ [
+  "V",
+  "V11",
+  "`jobs.project_id` non-null for real work",
+  "ISOLATED-PROVEN FIXED",
+  "project-ownership drives the three writers and asserts the property over every job the run made.",
+  "",
+  "C proof gap"
+ ],
+ [
+  "V",
+  "V12",
+  "Synthesis wait over 5 wakes",
+  "ISOLATED-PROVEN FIXED",
+  "`fan-in-waits` 6/6 (on m626 + 0628); `job-fence` 23/23.",
+  "none",
+  ""
+ ],
+ [
+  "V",
+  "V13",
+  "Planner path through real Telegram/Slack",
+  "PRODUCTION-PROVEN FIXED",
+  "A planner turn through the deployed Telegram door with the real model (verify:final-audit-live): work is handed on to an office.pursue child, a preference is stored, nothing is sent outside. Slack shares the handler; its door is covered by slack-sender.",
+  "",
+  "C proof gap"
+ ],
+ [
+  "V",
+  "V14",
+  "Fresh-office migration build (#344)",
+  "ACCEPTED BOUNDED DEBT",
+  "A strict build from 0001 fails at 0054 (a vault secret); replica.sh tolerates 28 data assertions. Harness, not a product guarantee: production migrates forward and every migration here applies on the replica. Needed before multi-user, not before this closure.",
+  "",
+  "C proof gap"
+ ],
+ [
+  "MC",
+  "MC1",
+  "cross-project retrieval with provenance/permissions; derived ContextPack",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Not a claim of the current product: cross-project retrieval is decision (b); the agent boundary now refuses it (retrieval-scope).",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "MC",
+  "MC2",
+  "MCP `tools/call` executor",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Not a claim of the current product: no MCP tools/call executor; offered tools are disabled, so no claim without one.",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "MC",
+  "MC3",
+  "planner executors for external writes (#285 breadth)",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Not a claim of the current product: planner executors for external writes are none/local only by design.",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "MC",
+  "MC4",
+  "agent-initiated lesson/skill candidate flow; skill proposal; `skill_effect` consumer",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Not a claim of the current product: agent-initiated lesson/skill candidates; decision (a).",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "MC",
+  "MC5",
+  "specialist-initiated delegation; Claire-created specialists (proposal press)",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Not a claim of the current product: specialist-initiated delegation; hiring by proposal.",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "MC",
+  "MC6",
+  "cross-channel conversation/scope",
+  "ACCEPTED BOUNDED DEBT",
+  "`docs/architecture-run-5/CROSS-CHANNEL.md` (\"a decision, not an omission\"); ADR-0056 \u00a72; isolated `question-binding` 33/33, `run5-live` 20/20.",
+  "The decision is recorded, but its text covers what a reply may answer. It does not explicitly address cross-channel conversation history (`conversation_before`), which the audit's AD2 also named. The ADR says \"none is invented\", which arguably covers it. See slice 7.",
+  ""
+ ],
+ [
+  "MC",
+  "MC7",
+  "expiry/escalation/reconcile for non-resumable pauses and blockers",
+  "ACCEPTED BOUNDED DEBT",
+  "Blocker expiry/escalation is absent. A parked turn now speaks (0634) and can be stopped (0635); an approval is the exact action he approved, so a late yes performs that action, not another. Bounded; a duty that re-asks stale questions is product work.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "MC",
+  "MC8",
+  "editable autonomy matrix UI/action",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Not a claim of the current product: editable autonomy matrix UI; the dial is exposed, the matrix is not.",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "MC",
+  "MC9",
+  "spend reporting (#284); feedback consumption (#353)",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Not a claim of the current product: spend reporting and feedback consumption; the Settings cards no longer claim the press is read.",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "MC",
+  "MC10",
+  "general temporal slot in turns",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Not a claim of the current product: general temporal slot in turns; dates parsed for personal tasks only.",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "MC",
+  "MC11",
+  "per-agent-per-project experience record",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Not a claim of the current product: per-agent-per-project experience record.",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "FP",
+  "FP1",
+  "tenant/user seam; per-user lessons, vault, config, RLS",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Future requirement: tenant/user seam and per-user lessons, vault, config, RLS.",
+  "",
+  "F future architecture"
+ ],
+ [
+  "FP",
+  "FP2",
+  "per-user approval authority; sender allowlists per adapter",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Future requirement: per-user approval authority and per-adapter allowlists (single-user sender admission already holds).",
+  "",
+  "F future architecture"
+ ],
+ [
+  "FP",
+  "FP3",
+  "stored/derived obligation summary with owner and result-delivered",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Future requirement: stored obligation summary (obligation_state is derived today).",
+  "",
+  "F future architecture"
+ ],
+ [
+  "FP",
+  "FP4",
+  "per-person board arrangement (#341)",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Future requirement: per-person board arrangement #341.",
+  "",
+  "F future architecture"
+ ],
+ [
+  "FP",
+  "FP5",
+  "Gmail intelligence (#172)",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Future requirement: Gmail intelligence #172.",
+  "",
+  "F future architecture"
+ ],
+ [
+  "FP",
+  "FP6",
+  "shared-project membership/visibility",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Future requirement: shared-project membership/visibility.",
+  "",
+  "F future architecture"
+ ],
+ [
+  "FP",
+  "FP7",
+  "per-user Claire configuration",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Future requirement: per-user Claire configuration.",
+  "",
+  "F future architecture"
+ ],
+ [
+  "SLICE",
+  "0 Triage B1-B7",
+  "sender allowlist, approver identity, bare \"No.\", fan-in attempts, \"Yes, do it\", Drive/channel options, swallowed `raiseBlocker`",
+  "PRODUCTION-PROVEN FIXED",
+  "Run 1 table: sender-authorization 31, approver-identity 39, open-question 48, fan-in-waits 6, outward-options 12, drive-options 4, channel-options 4, blocker-failure 7; `verify:run1-live` 14/14 on production (ARCHITECTURE-RUN-1 \"Production verification\"); later re-run 15/15",
+  "done. Residuals R9 (`staff_for_bot` 200 \"ignored\") was later fixed to 503 in Run 3 (EFFECT-DOORS table).",
+  ""
+ ],
+ [
+  "SLICE",
+  "1 Turn value",
+  "`buildTurn`; `said`/`kept` the only permitting inputs; `resolved` routing-only",
+  "ISOLATED-PROVEN FIXED",
+  "`turn-entitlement` 12/12 (baseline 9/12), vitest `turn` 31, `gates` barrier test; hostile-resolver control not live-safe (ARCHITECTURE-RUN-1 section 11)",
+  "done. The audit's exit \"raw reads <= handful\" is not literally met; the barrier is the import block on `entitled`, which is what the audit asked for.",
+  ""
+ ],
+ [
+  "SLICE",
+  "2 Gate precedence + mixed turns",
+  "one ordered gate table; `readPlan` output one of the clauses; `understand` moved above early returns",
+  "ACCEPTED BOUNDED DEBT",
+  "Gate precedence and mixed turns: the defects found were fixed and proven (invariant 4); moving `understand` above the early returns is a refactor, not a guarantee.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "SLICE",
+  "3 Authority path",
+  "`app.authorize_effect`; `staff_may_use` at runtime; contacting a human = ask; `may_act` from job origin",
+  "ACCEPTED BOUNDED DEBT",
+  "Authority path: see AD3/INV22. The remaining kinds are Grant's decision.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "SLICE",
+  "4 One approval API",
+  "fingerprint-bound blocker for all mechanisms; `raise_approval`/`answer_approval`; task tick delegates; durable No",
+  "PRODUCTION-PROVEN FIXED",
+  "`approval-execution` 15, `approval-binding` 30/30, `approver-identity`, `refusal-reversal`, `question-binding` 33; `run2-live` 53/53 + `run3` + `run5-live` 20/20 on production",
+  "done for the blocker lifecycle; partly for all mechanisms. Residuals: \"Ignore these\" No on `drive.ingest` not durable (EFFECT-DOORS); dashboard/voice bind by session and previous turn only (#397); isolated approval suites still outside `npm run gate` (`scripts/e2e.ts` has no `isolated` reference; V3).",
+  ""
+ ],
+ [
+  "SLICE",
+  "5 Stored origin",
+  "`jobs.origin` once, inherited, immutable; `harness_job` a read of it, legacy signals retired after parity",
+  "PRODUCTION-PROVEN FIXED",
+  "`job-origin` 22/22 (**re-run by me on m626 = 22/22**), sabotages S3, S18, S19; `run4-live` 24/24 on production; witness-independence 12",
+  "partly. Trust/origin source = done (AD5's core: stored once, immutable, not from a free-text grammar). Harness classification is not converted to a read of the stored column, and the legacy name-based signals are not retired. Value set is `trusted/harness/unknown` (+ computed `internal`), not the audit's exact four.",
+  ""
+ ],
+ [
+  "SLICE",
+  "6 Lifecycle single source + recovery",
+  "SQL generates TS `states.ts`; `assertTransition` wired or deleted; no `attempt<4`; expiry/escalation for non-resumable pauses and blockers; `obligation_state` reads non-resumable pause; remove/use `waiting_*`",
+  "ACCEPTED BOUNDED DEBT",
+  "Lifecycle: agreement check and recovery matrix in the gate; SQL-generated states.ts and blocker expiry are refactors/product.",
+  "",
+  "B bounded hardening debt"
+ ],
+ [
+  "SLICE",
+  "7 Conversation across channels",
+  "`app.conversation_of` derived from person + recency + global scope; `voice_answer` through a job",
+  "ACCEPTED BOUNDED DEBT",
+  "ADR-0056; CROSS-CHANNEL.md; `question-binding` 33",
+  "not started, by recorded decision. The audit required \"ADR required\"; the ADR that exists rejects the derivation.",
+  ""
+ ],
+ [
+  "SLICE",
+  "8 Staff, skills, learning",
+  "roster ceilings as data; new-specialist project default off; hire proposal press; skill proposal + `skill_effect` consumer; one learning-confirmation policy; standing rules reach briefing/reports/synthesis",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Staff/skills/learning redesign: product, decision (a).",
+  "",
+  "E product capability not claimed"
+ ],
+ [
+  "SLICE",
+  "9 Cross-project reader + tenant seam ADR",
+  "derived cross-project reader; `outputs.sources` carry project; NOT NULL `project_id` on work tables; tenant-seam ADR; lint for new `'grant'` literals",
+  "PRODUCT / FUTURE REQUIREMENT",
+  "Cross-project reader and tenant seam ADR: future architecture.",
+  "",
+  "F future architecture"
+ ]
+]
