@@ -199,7 +199,18 @@ const srcElsewhere = (kind: string, reg: string | undefined): boolean => {
     .toString()
     .trim()
     .split('\n')
-  return files.some((f) => f !== reg && f !== '' && readFileSync(f, 'utf8').includes(`'${kind}'`))
+  /*
+    The containment registry NAMES every kind to say how far it reaches (src/jobs/containment.ts: `reach: 'external'`).
+    That is a description of the kind, not something that starts it, and counting it made every kind trivially
+    reachable - ci.dispatch was reported as started by "the office code" on the strength of its registry row (#395).
+  */
+  return files.some(
+    (f) =>
+      f !== reg &&
+      f !== '' &&
+      f !== 'src/jobs/containment.ts' &&
+      readFileSync(f, 'utf8').includes(`'${kind}'`),
+  )
 }
 
 const migrations = slurp("find migrations -name '*.sql'")
