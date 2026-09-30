@@ -1624,17 +1624,50 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({ error: 'unknown action', actions: Object.keys(ACTIONS) }, 400)
     }
     /*
-      The office key is a machine. It may do what SERVICE_MAY lists and nothing
-      that decides, speaks or reaches as a person (#385). 403, not 401: the
-      credential is genuine and this is what it may not do, and the page must
-      not sign anybody out over it.
+      WHO MAY DO WHAT (#385). Three kinds of credential, and only a person may do everything:
+
+        service (the office key)  - SERVICE_MAY, and nothing that decides, speaks or connects;
+        harness (a TEST member)   - SERVICE_MAY, plus the decisions whose database function itself
+                                    enforces "a test principal decides only test traffic"
+                                    (every action that carries the answering person, `by`);
+        person                    - everything.
+
+      A test member is a real signed-in session that the office key can ask `signin` to mint, so
+      treating it like a person for anything the database does not check would hand the key a way
+      round the gate (the review of the first cut found exactly that: credentials, connectors,
+      settings and hiring all ran with no `p_by` for a session the key could mint). What the database
+      does not check, a test member does not reach. 403, not 401: the credential is genuine.
     */
-    if (kind === 'service' && !SERVICE_MAY.has(actionName)) {
+    const mayDo =
+      kind === 'person' ||
+      SERVICE_MAY.has(actionName) ||
+      (kind === 'harness' && action.by !== undefined)
+    if (!mayDo) {
       return json(
         {
           error: 'person_required',
           message:
-            'This needs a signed-in person. The office key is a machine and cannot decide, approve, speak or connect as somebody.',
+            kind === 'harness'
+              ? 'This needs a signed-in person. A test member may only decide test traffic.'
+              : 'This needs a signed-in person. The office key is a machine and cannot decide, approve, speak or connect as somebody.',
+          action: actionName,
+        },
+        403,
+      )
+    }
+    /*
+      A session that names nobody is nobody to act as: every function that would have defaulted its
+      principal ('grant', in several) must not be reached by one (#385).
+    */
+    if (
+      kind !== 'service' &&
+      (principal === null || principal === '') &&
+      !SERVICE_MAY.has(actionName)
+    ) {
+      return json(
+        {
+          error: 'person_required',
+          message: 'I cannot tell who you are, so this was not done.',
           action: actionName,
         },
         403,

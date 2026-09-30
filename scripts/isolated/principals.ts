@@ -233,6 +233,57 @@ check(
     `http ${String(r.status)} ${await stateOf(q.id)}`,
   )
 }
+// 1a'. a TEST member is not a way round it: the key can ask for one, so it reaches only what the database
+// itself enforces (every action that carries the answering person) and what a machine may.
+{
+  // Actions that carry no `by`: the database never asks who is deciding, so a test member must not reach them.
+  const NO_BY: [string, Record<string, unknown>][] = [
+    ['set_google_secret', { p_secret: 'x' }],
+    ['set_google_credentials', { p_client_id: 'x', p_client_secret: 'y' }],
+    ['set_slack_credentials', { p_bot_token: 'x' }],
+    ['disconnect', { p_service: 'notion' }],
+    ['forget_google', {}],
+    ['register_connector', { p_name: 'x', p_endpoint: 'https://example.com' }],
+    ['revoke_connector', { p_provider: 'x' }],
+    ['offer_connector_tool', { p_provider: 'x', p_tool: 'y' }],
+    ['set_setting', { p_key: 'k', p_value: 'v' }],
+    [
+      'staff_hire',
+      { p_name: 'Nobody', p_title: 't', p_justification: 'j', p_expires_at: '2030-01-01' },
+    ],
+    ['staff_update', { p_slug: 'chief-of-staff' }],
+    ['staff_retire', { p_slug: 'nobody' }],
+    ['bot_assign', { p_username: 'x' }],
+    ['project_instruction', { p_slug: 'x', p_staff_slug: 'y' }],
+    ['project_staff', { p_slug: 'x' }],
+    ['automation_create', { p_project: realProject }],
+    ['undo', { p_action_id: ZERO }],
+    ['suggestion_decide', { p_suggestion: ZERO, p_decision: 'accept' }],
+    ['proposal_decide', { p_proposal: ZERO, p_decision: 'approve' }],
+    ['lesson_retract', { p_lesson: ZERO }],
+    ['routing_set', { p_phrase: 'x' }],
+    ['attach', { p_slug: 'x', p_connector: 'notion', p_ref: 'r' }],
+    ['document_upload', { p_project_id: realProject, p_name: 'x', p_base64: 'eA==' }],
+  ]
+  let refused = 0
+  for (const [action, args] of NO_BY) {
+    const r = await act(S_HARNESS, action, args)
+    if (r.status === 403 && r.body.error === 'person_required') refused += 1
+    else console.log(`  ${action}: http ${String(r.status)} ${JSON.stringify(r.body).slice(0, 80)}`)
+  }
+  check(
+    'a TEST member cannot reach any action whose function never asks who is deciding',
+    refused === NO_BY.length,
+    `${String(refused)} of ${String(NO_BY.length)} refused`,
+  )
+  const control = await act(S_GRANT, 'set_setting', {})
+  check(
+    'and the same call from a person passes the gate (400 missing arguments, not 403): the gate is not a wall',
+    control.status === 400,
+    `http ${String(control.status)}`,
+  )
+}
+
 // its positive control: the key still does what a machine may
 {
   const r = await act(TOKEN, 'project_seen', {})

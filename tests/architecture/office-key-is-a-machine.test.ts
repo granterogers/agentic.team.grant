@@ -64,7 +64,16 @@ describe('the office key is a machine (#385)', () => {
     expect(source).toMatch(
       /if \(await tokenMatches\(presented\)\) return \{ verdict: 'yes', principal: null, kind: 'service' \}/,
     )
-    expect(source).toMatch(/if \(kind === 'service' && !SERVICE_MAY\.has\(actionName\)\) \{/)
+    // The gate: a person may do everything; the key only SERVICE_MAY; a TEST member SERVICE_MAY plus
+    // the decisions whose database function enforces the test-principal rule (the ones that carry `by`).
+    expect(source).toMatch(
+      /const mayDo =\s*kind === 'person' \|\|\s*SERVICE_MAY\.has\(actionName\) \|\|\s*\(kind === 'harness' && action\.by !== undefined\)/,
+    )
+    expect(source).toMatch(/if \(!mayDo\) \{/)
+    // A session that names nobody cannot reach a function that would default its principal.
+    expect(source).toMatch(
+      /kind !== 'service' &&\s*\(principal === null \|\| principal === ''\) &&\s*!SERVICE_MAY\.has\(actionName\)/,
+    )
     expect(source).not.toMatch(/principal: 'grant'/)
     expect(source).not.toMatch(/TOKEN_PRINCIPAL/)
   })
