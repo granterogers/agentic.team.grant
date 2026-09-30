@@ -6,6 +6,7 @@
  * B11 (may_act: an office-made root is not a person asking), B14 (a job's parent is written once), #343 (a project
  * whose autonomy dial was set can be deleted). The real functions against the replica.
  */
+import { execFile } from 'node:child_process'
 import { isolated } from './guard.ts'
 import { realParent } from './real-telegram.ts'
 
@@ -221,6 +222,115 @@ const kid = String(
     JSON.stringify(anon),
   )
   await db.execute(`delete from public.slack_app_credentials where team_id = ${lit(team)}`)
+}
+
+// ---- V9: a job parked for a person, with no question open, is waiting on a person ----------------------------------------
+{
+  const root = await realParent(db)
+  const mk = async () => {
+    const id = String(
+      (
+        await one(
+          `select app.enqueue_child(${lit(root)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+        )
+      ).c,
+    ).match(/[0-9a-f-]{36}/)?.[0] as string
+    await db.execute(
+      `update public.jobs set state = 'running', leased_by = 'audit-w', leased_until = now() + interval '5 minutes', attempt = 1 where job_id = ${lit(id)}::uuid`,
+    )
+    return id
+  }
+  const state = async () =>
+    String((await one(`select app.obligation_state(${lit(root)}::uuid)::text as s`)).s)
+  const fp = 'e'.repeat(64)
+  const resumable = await mk()
+  await db.execute(
+    `select app.pause_job(${lit(resumable)}::uuid, 'dependency_wait', 'waiting for a sibling', 'the group', true, null, null, null)`,
+  )
+  check(
+    'a job parked on a clock or a sibling (resumable) is still WORKING',
+    (await state()) === 'working',
+    await state(),
+  )
+  const ambiguous = await mk()
+  await db.execute(
+    `select app.pause_job(${lit(ambiguous)}::uuid, 'needs_reconciliation', 'an interrupted external write', 'check whether it happened', false, null, null, null)`,
+  )
+  check(
+    'a job parked as not automatically resumable, with no question open, reads WAITING ON A PERSON (it read working for ever)',
+    (await state()) === 'waiting_on_user',
+    await state(),
+  )
+  void fp
+  const sit = await one(`select app.job_situation(${lit(ambiguous)}::uuid)->>'situation' as s`)
+  check(
+    'and agrees with what job_situation says of that job',
+    String(sit.s) === 'ambiguous_external',
+    String(sit.s),
+  )
+}
+
+// ---- D23: an approve and a decline racing take effect once -----------------------------------------------------------------
+{
+  await db.execute(
+    `create or replace function public.zz_slow_tool_request() returns trigger language plpgsql as $f$ begin perform pg_sleep(0.7); return new; end $f$`,
+  )
+  await db.execute(
+    `create trigger zz_slow_tool_request before update on public.tool_requests for each row execute function public.zz_slow_tool_request()`,
+  )
+  const req = String(
+    (
+      await one(`insert into public.tool_requests (tool, asked_by, what_for) values ('audit.proof.tool', 'chief-of-staff', 'the race proof for the final audit reconciliation, finding D23 of the original audit')
+        returning request_id::text as id`)
+    ).id,
+  )
+  // Two real connections: the executor is one client and would serialise the pair, which proves nothing.
+  const psql = (sql: string) =>
+    new Promise<string>((resolve, reject) => {
+      execFile(
+        'psql',
+        [
+          '-h',
+          process.env.ISOLATED_PG_SOCKET ?? '/tmp/pgs',
+          '-p',
+          process.env.ISOLATED_PG_PORT ?? '55432',
+          '-U',
+          'postgres',
+          '-d',
+          process.argv[2] ?? 'ac629',
+          '-At',
+          '-c',
+          sql,
+        ],
+        (err, out) => (err === null ? resolve(out.trim()) : reject(err)),
+      )
+    })
+  const [a = { r: '' }, b = { r: '' }] = (
+    await Promise.all([
+      psql(`select app.approve_tool(${lit(req)}::uuid, 'grant')::text`),
+      psql(
+        `select app.decline_tool(${lit(req)}::uuid, 'grant', 'declined for the race proof')::text`,
+      ),
+    ])
+  ).map((r) => ({ r }))
+  const ra = JSON.parse(String(a.r)) as Record<string, unknown>
+  const rb = JSON.parse(String(b.r)) as Record<string, unknown>
+  const won = [ra.approved === true || ra.granted === true, rb.declined === true].filter(
+    Boolean,
+  ).length
+  const final = String(
+    (await one(`select state from public.tool_requests where request_id = ${lit(req)}::uuid`))
+      .state,
+  )
+  check(
+    'an approve and a decline at the same moment: exactly one takes effect and the other is told the request was already answered',
+    won === 1 &&
+      (final === 'approved' || final === 'declined') &&
+      [ra, rb].some((r) => String(r.error ?? '').includes('already')),
+    `${String(won)} won, final ${final}`,
+  )
+  await db.execute(`drop trigger zz_slow_tool_request on public.tool_requests`)
+  await db.execute(`drop function public.zz_slow_tool_request()`)
 }
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
