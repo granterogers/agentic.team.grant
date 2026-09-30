@@ -187,3 +187,76 @@ describe('#237: a real teaching still lands', () => {
     expect(readTeaching(text)).not.toBeNull()
   })
 })
+
+describe('the rule is the sentence that carries the marker (final audit, invariant 4)', () => {
+  const lesson = (text: string) => {
+    const t = readTeaching(text)
+    return t?.kind === 'lesson' ? t.body : null
+  }
+
+  it('a reminder first and the rule second stores the RULE, never the reminder', () => {
+    expect(
+      lesson('Remind me tomorrow to call Kevin. From now on give me the conclusion first.'),
+    ).toBe('From now on give me the conclusion first.')
+  })
+
+  it('a rule followed by a question is stored; the question mark is not a question about the rule', () => {
+    expect(
+      lesson('From now on give me the conclusion first. And what is the status of the venue?'),
+    ).toBe('From now on give me the conclusion first.')
+  })
+
+  it('the rule sits between two other sentences', () => {
+    expect(
+      lesson(
+        'Please research sponsors then write the outreach note. Always keep it brief. What is on my plate today?',
+      ),
+    ).toBe('Always keep it brief.')
+  })
+
+  it('CONTROL: a question ABOUT a rule is still not stored as one', () => {
+    expect(
+      lesson('Should you always use bullet points? Also remind me tomorrow to call Kevin.'),
+    ).toBeNull()
+  })
+
+  it("CONTROL: a third party's habit in a later sentence is still not a rule for the office", () => {
+    expect(lesson('Thanks for that. My accountant always sends invoices late.')).toBeNull()
+    expect(lesson('Fine. Emma never replies before ten, by the way.')).toBeNull()
+  })
+
+  it('CONTROL: a single-sentence rule is unchanged', () => {
+    expect(lesson('From now on give me the conclusion first.')).toBe(
+      'From now on give me the conclusion first.',
+    )
+  })
+
+  it.each([
+    ['Do not use bullet points. I never read them.', 'Do not use bullet points.'],
+    ['Keep it short. I always read on my phone.', 'Keep it short.'],
+    ['Please use British spelling. I always forget to say.', 'Please use British spelling.'],
+    ['Keep replies short. From now on use bullet points.', 'Keep replies short.'],
+  ])(
+    'an incidental "never"/"always" later does not displace the rule before it (review R2-2): %s',
+    (said, rule) => {
+      expect(lesson(said)).toBe(rule)
+    },
+  )
+
+  it.each([
+    ['Write me a summary of the venue. Never mind, I will do it.'],
+    ['Remind me to call Kevin tomorrow. I never remember.'],
+    ['Thanks for that. My accountant always sends invoices late.'],
+  ])(
+    "a marker that is a retraction, a statement about himself or somebody else's habit stores NOTHING: %s",
+    (said) => {
+      expect(lesson(said)).toBeNull()
+    },
+  )
+
+  it('CONTROL: a first-person preference is still a rule', () => {
+    expect(lesson('I always want the conclusion first. Research the venue.')).toBe(
+      'I always want the conclusion first.',
+    )
+  })
+})

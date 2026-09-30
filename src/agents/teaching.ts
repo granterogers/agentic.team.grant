@@ -37,6 +37,7 @@
 
 import { opensByDroppingIt } from './clarify.ts'
 import { withdrawsARule } from './preference.ts'
+import { sentencesOf } from './sentences.ts'
 
 /** A standing preference. Short by construction — see ADR-0015. */
 export interface LessonTaught {
@@ -129,26 +130,48 @@ const ASKS_FOR_WORK =
 const ASKS_TO_STORE =
   /\b(?:learn this|remember this|write this down|note this down|save this|store this|add this to your|make this a (?:rule|skill|habit)|this is a (?:rule|skill))\b/i
 
-/** The sentences of a message, each with its own terminator. */
-const sentencesOf = (text: string): string[] =>
-  (text.trim().match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) ?? [text.trim()])
-    .map((s) => s.trim())
-    .filter((s) => s !== '')
-
 /**
- * THE SENTENCE THAT CARRIES THE MARKER, not the first sentence of the message.
+ * WHICH SENTENCE IS THE RULE, when a message has several (final audit, invariant 4; reviews R2-1, R2-2).
  *
- * "Remind me tomorrow to call Kevin. From now on give me the conclusion first." stored "Remind me tomorrow to call
- * Kevin." as a standing rule - permanent, append-only, in every prompt after - because the body was the first
- * sentence and the marker was in the second; and "From now on give me the conclusion first. And what is the status?"
- * stored nothing, because the question mark at the END of the message was read as a question ABOUT the rule. Both
- * are the same mistake: deciding about the rule from text that is not the rule. Null when no sentence carries a
- * marker (a preference a meaning-reader judged, which is a clause already).
+ * The body used to be the FIRST sentence whatever carried the marker, so "Remind me tomorrow to call Kevin. From now on
+ * give me the conclusion first." stored the reminder as a permanent standing rule; and a question mark at the END of a
+ * message was read as a question about a rule earlier in it. Both decided about the rule from text that was not the
+ * rule. But the obvious repair - "the sentence with the marker" - stores an incidental "never" ("I never read them.",
+ * "Never mind, I will do it.") over the rule it follows, so it is narrow on purpose:
+ *
+ *   - the message OPENS with the marker: that sentence is the rule, and only it is judged;
+ *   - the first sentence is plainly something ELSE (a reminder, a work request, a question): the rule is the first later
+ *     sentence that carries a marker, and it must itself be a rule - not a retraction, not a statement about himself;
+ *   - otherwise the first sentence is the rule, exactly as before.
+ *
+ * `reject` means a marker exists but only in a sentence that is not a rule: nothing is stored.
  */
-const carrierOf = (text: string): string | null => {
+const CLAIMED_BY_ANOTHER_READER =
+  /^\s*(?:please\s+)?(?:remind\s+me|add\s+(?:a\s+)?task|research|write|draft|find|look\s+(?:up|into)|send|book|call|email|check|summari[sz]e|prepare|create|make|schedule|review|update|tell|ask|arrange|organi[sz]e|plan|compare|build|fix|file|pull|scan|go\s+through|set\s+up|i\s+(?:must|need\s+to|have\s+to|should))\b/i
+const RULE_SHAPED =
+  /^\s*(?:please\s+)?(?:do\s+not|don'?t|never|always|stop|keep|use|avoid|make\s+sure|give|send|write|call\s+me|refer|address|sign|cc|copy|put|start|end|open|begin|lead|prefer|no\s+more|only|just|be\b|speak|reply|answer|respond|format|include|exclude|skip|drop)\b|\b(?:should|must|ought\s+to)\b/i
+const ABOUT_HIMSELF =
+  /^\s*(?:i|we)\s+(?:never|always|usually|often|sometimes)\b(?!\s+(?:want|need|prefer|like|expect|wish|ask|would))/i
+type Carrier =
+  | { readonly kind: 'rule'; readonly sentence: string }
+  | { readonly kind: 'reject' }
+  | null
+const carrierOf = (text: string): Carrier => {
   const sentences = sentencesOf(text)
   if (sentences.length < 2) return null
-  return sentences.find((s) => STANDING.test(s) || ASKS_TO_STORE.test(s)) ?? null
+  const first = sentences[0] ?? ''
+  const marked = (x: string) => STANDING.test(x) || ASKS_TO_STORE.test(x)
+  if (marked(first)) return { kind: 'rule', sentence: first }
+  const later = sentences.slice(1).find(marked)
+  if (later === undefined) return null
+  if (!CLAIMED_BY_ANOTHER_READER.test(first) && !first.trim().endsWith('?')) {
+    // The marker is in a later sentence and the first is nobody else's. It is the rule only if it reads as one: "Do not
+    // use bullet points. I never read them." stores the first; "Thanks for that. My accountant always sends invoices
+    // late." stores nothing (a pleasantry is not a standing rule, and the marker is about somebody else).
+    return RULE_SHAPED.test(first) ? null : { kind: 'reject' }
+  }
+  if (opensByDroppingIt(later) || ABOUT_HIMSELF.test(later)) return { kind: 'reject' }
+  return { kind: 'rule', sentence: later }
 }
 
 /** A single sentence, trimmed, or the whole thing if it has no full stop. */
@@ -414,18 +437,21 @@ export function readTeaching(instruction: string, alreadyAPreference = false): T
     the semantic reader already judged are untouched.
   */
   const carrier = carrierOf(text)
+  if (carrier?.kind === 'reject' && !takingItBack) return null
+  const ruleText = carrier?.kind === 'rule' ? carrier.sentence : text
   if (
     standing &&
     !asked &&
     !takingItBack &&
     !alreadyAPreference &&
-    notARuleForTheOffice(carrier ?? text)
+    notARuleForTheOffice(ruleText)
   ) {
     return null
   }
 
   if (standing || asked || takingItBack || (alreadyAPreference && !JUST_THIS_ONCE.test(text))) {
-    const body = carrier !== null && !takingItBack ? firstSentence(carrier) : firstSentence(text)
+    const body =
+      carrier?.kind === 'rule' && !takingItBack ? firstSentence(ruleText) : firstSentence(text)
     if (body.length < 8 || body.length > 280) return null
     return { kind: 'lesson', body, marked: standing || asked || takingItBack }
   }

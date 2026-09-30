@@ -665,6 +665,111 @@ const rowFor = async (said: string) =>
   )
 }
 
+// ---- 6. a machine changes only test projects, and does not stop jobs as him (reviews R2-2, R2-3, R2-4; 0635, 0638) ---
+{
+  const realSlug = `principals-real-${run}`
+  const fxSlug = `fixture-principals-fixture-${run}`
+  const statusOf = async (slug: string) =>
+    String((await one(`select status::text as s from public.projects where slug = ${lit(slug)}`)).s)
+  for (const [who, bearer] of [
+    ['the office key', TOKEN],
+    ['a test member', S_HARNESS],
+  ] as const) {
+    const made = await act(bearer, 'create_project', {
+      p_name: `Real Machine ${who.replace(/ /g, '')} ${run}`,
+      p_connector: 'upload',
+      p_ref: `machine-${run}`,
+      p_force: true,
+    })
+    const exists = await one(
+      `select count(*)::int as n from public.projects where name = ${lit(`Real Machine ${who.replace(/ /g, '')} ${run}`)}`,
+    )
+    check(
+      `${who} cannot create a REAL project (it would provision a Slack channel that cannot be deleted)`,
+      made.status === 403 && made.body.error === 'person_required' && Number(exists.n) === 0,
+      `http ${String(made.status)}; ${String(exists.n)} created`,
+    )
+    const arch = await act(bearer, 'project_archive', { p_slug: realSlug })
+    check(
+      `${who} cannot archive a REAL project (it would switch its duties off)`,
+      arch.status === 403 && (await statusOf(realSlug)) === 'active',
+      `http ${String(arch.status)}; status ${await statusOf(realSlug)}`,
+    )
+    const ren = await act(bearer, 'rename_project', {
+      p_slug: realSlug,
+      p_name: `Renamed by machine ${run}`,
+    })
+    check(`${who} cannot rename a REAL project`, ren.status === 403, `http ${String(ren.status)}`)
+  }
+  const fxMade = await act(TOKEN, 'create_project', {
+    p_name: `fixture machine ok ${run}`,
+    p_connector: 'upload',
+    p_ref: `machine-ok-${run}`,
+    p_force: true,
+  })
+  check(
+    'control: the office key still creates a FIXTURE project',
+    fxMade.status === 200,
+    `http ${String(fxMade.status)}`,
+  )
+  const fxArch = await act(TOKEN, 'project_archive', { p_slug: fxSlug })
+  check(
+    'control: and archives one',
+    fxArch.status === 200 && (await statusOf(fxSlug)) === 'archived',
+    `http ${String(fxArch.status)}`,
+  )
+  const personArch = await act(S_GRANT, 'project_archive', { p_slug: realSlug })
+  check(
+    'control: a person archives a real project',
+    personArch.status === 200 && (await statusOf(realSlug)) === 'archived',
+    `http ${String(personArch.status)}`,
+  )
+  const personBack = await act(S_GRANT, 'project_unarchive', { p_slug: realSlug })
+  check(
+    'control: and brings it back',
+    personBack.status === 200 && (await statusOf(realSlug)) === 'active',
+    `http ${String(personBack.status)}`,
+  )
+
+  // Who stopped it.
+  const stopJob = async () => {
+    const id = await realParent(db)
+    return id
+  }
+  const a = await stopJob()
+  const viaKey = await act(TOKEN, 'stop_job', { p_job: a })
+  const rowA = await one(
+    `select state::text as s, state_reason as r, stop_requested_by as by from public.jobs where job_id = ${lit(a)}::uuid`,
+  )
+  check(
+    'the office key stops a job as THE OFFICE, never as him',
+    viaKey.status === 200 &&
+      rowA.s === 'cancelled' &&
+      rowA.by === 'the office' &&
+      !/grant/i.test(String(rowA.r)),
+    `${String(rowA.s)} / ${String(rowA.by)} / ${String(rowA.r)}`,
+  )
+  const b = await stopJob()
+  const viaTest = await act(S_HARNESS, 'stop_job', { p_job: b })
+  const rowB = await one(`select state::text as s from public.jobs where job_id = ${lit(b)}::uuid`)
+  check(
+    'a test member cannot stop a REAL job',
+    rowB.s !== 'cancelled' &&
+      (viaTest.status !== 200 || JSON.stringify(viaTest.body).includes('test principal')),
+    `http ${String(viaTest.status)}; job ${String(rowB.s)}; ${JSON.stringify(viaTest.body).slice(0, 100)}`,
+  )
+  const c = await stopJob()
+  const viaPerson = await act(S_GRANT, 'stop_job', { p_job: c })
+  const rowC = await one(
+    `select state::text as s, stop_requested_by as by from public.jobs where job_id = ${lit(c)}::uuid`,
+  )
+  check(
+    'control: a person stops it as himself',
+    viaPerson.status === 200 && rowC.s === 'cancelled' && rowC.by === 'grant',
+    `${String(rowC.s)} / ${String(rowC.by)}`,
+  )
+}
+
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

@@ -145,25 +145,20 @@ export const REACTION_ACTIONS: Readonly<Record<string, string>> = {
 }
 
 /**
- * Message subtypes that are not a person saying something.
+ * The message subtypes that are a person saying something - an ALLOW-list (final audit, review R2-5).
  *
- * `message_changed` and `message_deleted` are excluded on purpose: acting on an
- * edit would mean re-running an instruction whose text has changed underneath a
- * job, and there is no defined semantics for that. §6's canonical record is the
+ * It was a block-list of the subtypes somebody thought of, so every other one the platform invents - `huddle_thread`,
+ * `reminder_add`, `pinned_item`, `channel_archive`, `file_comment`, `slackbot_response` - reached the office as a typed
+ * instruction under an admitted user's id. A subtype nobody listed is the platform speaking, not him.
+ *
+ * `message_changed` and `message_deleted` stay out on purpose: acting on an edit would mean re-running an instruction
+ * whose text has changed underneath a job, and there is no defined semantics for that. §6's canonical record is the
  * instruction as first received.
  */
-const IGNORED_SUBTYPES = new Set([
-  'bot_message',
-  'message_changed',
-  'message_deleted',
-  'channel_join',
-  'channel_leave',
-  'channel_topic',
-  'channel_purpose',
-  'channel_name',
-  'thread_broadcast_ignore',
-  'message_replied',
-  'tombstone',
+const ACCEPTED_SUBTYPES: ReadonlySet<string> = new Set([
+  // A person posting: nothing (no subtype), a reply broadcast to the channel, and a message that carries a file.
+  'thread_broadcast',
+  'file_share',
 ])
 
 /** Strip the leading `<@Uxxxx>` mention, keeping everything else verbatim. */
@@ -261,7 +256,7 @@ export const toCanonicalCommand = (
   }
 
   if (event.type === 'message' || event.type === 'app_mention') {
-    if (event.subtype !== undefined && IGNORED_SUBTYPES.has(event.subtype)) {
+    if (event.subtype !== undefined && !ACCEPTED_SUBTYPES.has(event.subtype)) {
       throw new UnsupportedSlackEventError(
         event.type,
         `subtype ${event.subtype} is not an instruction`,

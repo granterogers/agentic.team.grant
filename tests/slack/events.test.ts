@@ -146,15 +146,45 @@ describe('messages', () => {
     ).toThrow(/originated from this app/)
   })
 
-  it.each(['message_changed', 'message_deleted', 'channel_join', 'channel_leave', 'bot_message'])(
-    'refuses the subtype %s',
+  it.each([
+    'message_changed',
+    'message_deleted',
+    'channel_join',
+    'channel_leave',
+    'bot_message',
+    // The platform speaking under an admitted user's id (review R2-5): never a typed instruction.
+    'huddle_thread',
+    'reminder_add',
+    'pinned_item',
+    'group_join',
+    'channel_archive',
+    'file_comment',
+    'slackbot_response',
+    'some_subtype_slack_invents_next_year',
+  ])('refuses the subtype %s', (subtype) => {
+    expect(() =>
+      toCanonicalCommand(
+        envelope({ type: 'message', user: 'U1', channel: 'C1', ts: '1.1', text: 'x', subtype }),
+        BOT,
+      ),
+    ).toThrow(UnsupportedSlackEventError)
+  })
+
+  it.each([undefined, 'thread_broadcast', 'file_share'])(
+    'CONTROL: a person posting (subtype %s) is still an instruction',
     (subtype) => {
-      expect(() =>
-        toCanonicalCommand(
-          envelope({ type: 'message', user: 'U1', channel: 'C1', ts: '1.1', text: 'x', subtype }),
-          BOT,
-        ),
-      ).toThrow(UnsupportedSlackEventError)
+      const c = toCanonicalCommand(
+        envelope({
+          type: 'message',
+          user: 'U1',
+          channel: 'C1',
+          ts: '1.1',
+          text: 'do the thing',
+          subtype,
+        }),
+        BOT,
+      )
+      expect(c.instruction).toBe('do the thing')
     },
   )
 

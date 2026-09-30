@@ -81,9 +81,10 @@ export function apology(spoken: boolean): string {
  */
 export function parkedNotice(): string {
   return (
-    'I stopped part-way through what you asked. One step changes something outside our own records ' +
-    'and I cannot tell whether it went through, so I have not repeated it. It is parked on the ' +
-    'dashboard: stop it there, and if the step did not happen, ask me again and I will start it fresh.'
+    'I stopped part-way through what you asked and I will not carry on by myself: a step outside our own ' +
+    'records may or may not have gone through, or kept being refused, and repeating it could do it twice. ' +
+    'It is parked on the dashboard - stop it there, and if you still want it, ask me again and I will start ' +
+    'it fresh.'
   )
 }
 

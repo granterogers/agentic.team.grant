@@ -46,6 +46,10 @@
  * purpose and every widening below is argued for.
  */
 
+import { withoutOpeningAffirmation } from './intent.ts'
+import { mentionsWithoutAsking } from './not-a-request.ts'
+import { REMIND_TIME_WORDS, remindAtFor, spokenToDigits } from './remind-at.ts'
+import { DANGLING_AFTER_A_DATE, PROJECT_ADJUNCT } from './request.ts'
 /*
   The office reminding him. The verb is "remind" and the object is HIM, which
   is what separates it from "remind the team" — a different request that this
@@ -57,10 +61,7 @@
   is a rule that does not fire on anything Grant dictates, which is most of
   what he sends. The corpus caught it on its first run.
 */
-import { withoutOpeningAffirmation } from './intent.ts'
-import { mentionsWithoutAsking } from './not-a-request.ts'
-import { REMIND_TIME_WORDS, remindAtFor, spokenToDigits } from './remind-at.ts'
-import { DANGLING_AFTER_A_DATE, PROJECT_ADJUNCT } from './request.ts'
+import { sentencesOf } from './sentences.ts'
 
 const APOS = "['\u2019\u02bc]?"
 const REMIND_ME = new RegExp(
@@ -574,9 +575,7 @@ const REMIND_ME_A_QUESTION = /\bremind\s+me\s+(?:again\s+)?(?:why|what|who|wheth
 
 /** The sentences that carry a personal-task request frame, when the message has other sentences too; else null. */
 const requestSentences = (said: string): string | null => {
-  const sentences = (said.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) ?? [said])
-    .map((x) => x.trim())
-    .filter((x) => x !== '')
+  const sentences = sentencesOf(said)
   if (sentences.length < 2) return null
   const carriers = sentences.filter(
     (x) =>

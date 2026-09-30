@@ -84,3 +84,55 @@ describe('a to-do asked for by a word that also means something else', () => {
     )
   })
 })
+
+import { personalTaskRequest as personalTask } from '../../src/agents/mine.ts'
+
+describe('the task is the sentence that asked for it (final audit, invariant 4)', () => {
+  const now = new Date('2026-09-30T10:00:00Z')
+  it('a rule and a question around a reminder do not end up in its title', () => {
+    const t = personalTask(
+      'From now on give me the conclusion first. Also remind me tomorrow to call Kevin. And what is the status of the venue?',
+      now,
+    )
+    expect(t?.title).toBe('Call Kevin')
+  })
+  it('a reminder followed by a rule is titled by the reminder alone', () => {
+    expect(
+      personalTask(
+        'Remind me tomorrow to call Kevin. From now on give me the conclusion first.',
+        now,
+      )?.title,
+    ).toBe('Call Kevin')
+  })
+  it('CONTROL: a one-sentence reminder reads exactly as before', () => {
+    expect(personalTask('Remind me tomorrow to call Kevin about the roof.', now)?.title).toBe(
+      'Call Kevin about the roof',
+    )
+  })
+  it('CONTROL: a message with no request sentence files nothing', () => {
+    expect(
+      personalTask(
+        'From now on give me the conclusion first. And what is the status of the venue?',
+        now,
+      ),
+    ).toBeNull()
+  })
+})
+
+describe('an abbreviation or a list number does not end the request sentence (review R2-1)', () => {
+  const now = new Date('2026-09-30T10:00:00Z')
+  it.each([
+    ['Remind me to call Dr. Smith tomorrow.', 'Call Dr. Smith'],
+    [
+      'Remind me to email Acme Inc. about the contract on Friday.',
+      'Email Acme Inc. about the contract',
+    ],
+    ['Remind me to call Mr. Jones at 3.30pm.', 'Call Mr. Jones'],
+    ["Remind me to call St. Mary's school on Monday.", "Call St. Mary's school"],
+  ])('%s', (said, title) => {
+    expect(personalTask(said, now)?.title).toBe(title)
+  })
+  it('a numbered list is one request, as it was', () => {
+    expect(personalTask('Remind me to: 1. call Kevin. 2. book flights.', now)).not.toBeNull()
+  })
+})

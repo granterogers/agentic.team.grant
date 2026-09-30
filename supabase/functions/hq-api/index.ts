@@ -802,7 +802,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   /*
     Stop. A column the runner reads between steps, not a socket.
   */
-  stop_job: { fn: 'request_stop', required: ['p_job'] },
+  stop_job: { fn: 'request_stop', required: ['p_job'], by: 'p_who' },
   revoke_connector: { fn: 'revoke_mcp_provider', required: ['p_provider'] },
   offer_connector_tool: { fn: 'offer_mcp_tool', required: ['p_discovered'] },
   approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'], by: 'p_by' },
@@ -1514,6 +1514,13 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
   the person, hiring, connecting, credentials, uploading material as theirs -
   needs a session.
 */
+const MACHINE_FIXTURE_ONLY: ReadonlySet<string> = new Set([
+  'create_project',
+  'rename_project',
+  'project_archive',
+  'project_unarchive',
+])
+
 const SERVICE_MAY: ReadonlySet<string> = new Set([
   'create_project',
   'rename_project',
@@ -1691,6 +1698,41 @@ Deno.serve(async (request: Request): Promise<Response> => {
     )
     if (missing.length > 0) {
       return json({ error: `missing: ${missing.join(', ')}` }, 400)
+    }
+
+    /*
+      A MACHINE CHANGES ONLY TEST PROJECTS (review R2-2, R2-3, 0638).
+
+      These four are on SERVICE_MAY because suites and tooling need them, but none of them asks whose project it is:
+      a machine created a real project (which provisions a Slack channel that cannot be deleted) and archived a real
+      one (which switched its duties off). For a credential that is not a person the project must be a fixture's -
+      `app.machine_project_ok` says so from the database, never from this file's idea of a name. Fails closed: a
+      lookup that does not answer is a refusal.
+    */
+    if (kind !== 'person' && MACHINE_FIXTURE_ONLY.has(actionName)) {
+      const ref = String((actionName === 'create_project' ? args.p_name : args.p_slug) ?? '')
+      const ok = await fetch(`${DB_URL}/rest/v1/rpc/machine_project_ok`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_ref: ref }),
+      })
+        .then((r) => (r.ok ? r.json() : false))
+        .catch(() => false)
+      if (ok !== true) {
+        return json(
+          {
+            error: 'person_required',
+            message:
+              'This changes a real project, so it needs a signed-in person. The office key and a test member change only test projects.',
+            action: actionName,
+          },
+          403,
+        )
+      }
     }
 
     /*

@@ -4114,6 +4114,40 @@ Each of these cost real time. They are here so they cost it once.
   defect, read that header. With none present it is the sandbox, and one curl
   or one reload that comes back clean confirms it.
 
+- **A guard placed at each writer is a guard for the writers somebody remembered.** The forwarded-content fix closed
+  links, rules and personal tasks one by one, then `entitled` for ten more readers - and an independent review drove
+  the real handler and found a forwarded "mark the call Kevin one done" ticking a task, "cancel it" cancelling one and
+  "add a task to wire the deposit" creating one, because those writers read through `firstOf`/`firstOfHis`, a door the
+  fix never named. The repair is at the DOOR the writers share (both closures are silent for a forwarded turn), proven by
+  `scripts/isolated/forwarded-writers.ts` driving every writer with a typed control. Ask what every reader has in
+  common before guarding any one of them.
+- **A rule's body was the first sentence of the message, whatever sentence carried the marker.** "Remind me tomorrow to
+  call Kevin. From now on give me the conclusion first." stored "Remind me tomorrow to call Kevin." as a permanent
+  standing rule - append-only, in every prompt - and a question mark at the END of a message silenced a rule earlier in
+  it. Both decided about the rule from text that was not the rule. Found by sending a three-clause message through the
+  real handler, which is the only way mixed intents can be found.
+- **A test that names the gate is satisfied by the import line.** `every-external-kind-is-gated-or-named` first decided
+  "gated" by a regex for `approval-gate`, which `plan.ts` matches on its import alone; replacing every call with
+  `{ ok: true }` stayed green. A gate is a call whose answer is consumed (`const x = await mayStart(...)` then
+  `if (!x.ok)`), so that is what it asserts. #268's superstring, in its commonest form.
+- **An allow-list that forbids names passes the function that does the forbidden thing under a friendlier name.**
+  `output_import` was in the office key's allow-list while `import_output` approves a document inline - the act
+  `document_approve` refuses the key for. The architecture test matched `approve|decline|...` in the ACTION name.
+  `service-decides-nothing` follows the calls in the catalog instead and found it in one run and nothing else.
+- **A child that inherits its asker's marker is asked about as the asker.** An approval creates the job it approves with a
+  copy of the asking job's config, including `approval_next`; a later STEP question on that job was then answered as the
+  plan's own approval and a yes was recorded as a decline. Every proof built its step questions on empty-config fixtures.
+  Build the fixture from the function that creates the real thing.
+- **A control the notice tells him to press has to work on the state the notice describes.** The parked-turn notice said
+  "stop this job"; `request_stop` only stamped a flag that a running handler reads, so on a paused job it did nothing.
+- **A declared test origin is not exempt from the webhook's own side effects.** A declared voice note spent a runner
+  dispatch (Actions minutes) and could send a refusal through a real bot; the containment proofs all looked at
+  DELIVERIES. The edge emulator refuses and records every URL that is not the replica, which is how this was made an
+  observation (`telegram-voice-test-origin`).
+- **A suite that is not in the gate went red and nobody knew.** `verify:approval` failed 6 of 30 against the current
+  matrix for two independent reasons (a hand-built "Grant" job whose origin is unknown since 0603, and a level-1 fixture
+  the matrix now lets through unasked). Nothing ran it. A hand-built fixture asserts the rule it was written under.
+
 ---
 
 ## Visual standard

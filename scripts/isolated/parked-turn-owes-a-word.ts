@@ -203,6 +203,45 @@ const park = (id: string, reason: string, resumable: boolean) =>
   )
 }
 
+// ---- the office can SAY it when asked, and a parked CHILD is owed a word too (review F3, R2-4) -------------------------
+{
+  const j = await claimReal()
+  await park(j.jobId, 'needs_reconciliation', false)
+  const cmd = String(
+    (
+      await one(
+        `select (pinned_config ->> 'command_id') as c from public.jobs where job_id = ${lit(j.jobId)}::uuid`,
+      )
+    ).c,
+  )
+  const work = JSON.parse(
+    String((await one(`select app.conversation_work(${lit(cmd)}::uuid)::text as w`)).w),
+  ) as { obligation: string | null; waiting_on_you: number }
+  check(
+    'a turn parked with no child of its own is what "what is happening with that?" reports: waiting on a person',
+    work.obligation === 'waiting_on_user' && Number(work.waiting_on_you) >= 1,
+    JSON.stringify(work),
+  )
+  // The approved generation and every claimExternal caller is a CHILD of the turn.
+  const root = await claimReal()
+  const kid = String(
+    (
+      await one(
+        `select app.enqueue_child(${lit(root.jobId)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
+      )
+    ).c,
+  ).match(/[0-9a-f-]{36}/)?.[0] as string
+  await db.execute(
+    `update public.jobs set state = 'running', leased_by = 'kid-proof', leased_until = now() + interval '1 hour', attempt = 1 where job_id = ${lit(kid)}::uuid`,
+  )
+  await park(kid, 'needs_reconciliation', false)
+  check(
+    'a parked CHILD of a real turn owes the person who asked a word (the notebook generation is always a child)',
+    (await owed(kid)) === 1,
+    `${await owed(kid)} row(s)`,
+  )
+}
+
 // ---- and the control he is told to press works on it (0635) ---------------------------------------------------------
 {
   const stop = async (id: string) =>

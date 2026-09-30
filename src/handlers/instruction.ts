@@ -95,6 +95,7 @@ import type { Correction } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
 import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
+import { sentencesOf } from '../agents/sentences.ts'
 
 const entitled = allEntitled
 
@@ -1729,9 +1730,12 @@ async function enqueueSource(
   `)
 }
 
-/** The sentences of his own words that end in a question mark. */
+/**
+ * The sentences of his own words that end in a question mark - as sentences, not as fragments (review R2-6): a URL's
+ * "?id=5" and an abbreviation end nothing, so a link in a reminder is never "a question you also asked".
+ */
 const unansweredQuestions = (said: string): string[] =>
-  (said.match(/[^.!?]+\?/g) ?? []).map((q) => q.trim()).filter((q) => q.length >= 8)
+  sentencesOf(said.replace(/https?:\/\/\S+/gi, ' ')).filter((q) => q.endsWith('?') && q.length >= 8)
 
 /**
  * Complete a half-instruction from its neighbour, or leave it alone.
@@ -3715,8 +3719,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 if (finished > 0) {
                   parts.push(
                     n === 0
-                      ? `Nothing was still running — ${String(finished)} had already finished. Say the word if you want what ${finished === 1 ? 'it' : 'they'} produced taken back.`
-                      : `${String(finished)} had already finished, so that part stands. Say the word if you want it taken back.`,
+                      ? `Nothing was still running — ${String(finished)} had already finished. Recent activity on the dashboard has an Undo for what ${finished === 1 ? 'it' : 'they'} produced, if you want that taken back.`
+                      : `${String(finished)} had already finished, so that part stands. Recent activity on the dashboard has an Undo for it, if you want that taken back.`,
                   )
                 }
                 return parts.join(' ')
@@ -4503,7 +4507,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         a conversation behind it. An explicit "call it X" needs no lookup at all.
       */
       const namedLater =
-        asked !== null || isBranch || instruction.trim().length > 90
+        asked !== null || isBranch || forwarded || instruction.trim().length > 90
           ? null
           : await deps.db
               .execute(`
@@ -5085,7 +5089,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const modelOwnsTheQuestion = understood.surviving.some(
         (r) => r.kind === 'question' || r.kind === 'task_query',
       )
-      const leftUnasked = modelOwnsTheQuestion || isBranch ? [] : unansweredQuestions(turn.kept)
+      const leftUnasked = (
+        modelOwnsTheQuestion || isBranch ? [] : unansweredQuestions(turn.kept)
+      ).filter(
+        (q) =>
+          ![taught?.said, noted, changed, made, filed].some(
+            (x) => typeof x === 'string' && x.toLowerCase().includes(q.toLowerCase().slice(0, 30)),
+          ),
+      )
       const confirmation =
         [
           taught?.said ?? null,

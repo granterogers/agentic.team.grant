@@ -127,8 +127,8 @@ const FALLBACK_BEHAVIOURS = [
       different vocabularies and only the prototype is what a capture sees.
     */
     options: [
-      { id: 'observe', name: 'Watch only', note: 'The team reads and reports and starts nothing for you. Its housekeeping (Slack channels and key, Notion sync, task board) is not governed by this dial yet.' },
-      { id: 'suggest', name: 'Ask me first', note: 'Every action you ask for outside our own records waits for you. Housekeeping (Slack channels and key, Notion sync, task board) is not governed by this dial yet.' },
+      { id: 'observe', name: 'Watch only', note: 'The team reads and reports and starts nothing for you. Slack channels and key, Notion and the task board are not governed by this dial yet.' },
+      { id: 'suggest', name: 'Ask me first', note: 'Every action you ask for outside our own records waits for you - except Slack channels and key, Notion and the task board, which this dial does not govern yet.' },
       { id: 'act_with_review', name: 'Act, then show me', note: 'Routine work proceeds and lands in front of you afterwards.' },
       { id: 'act', name: 'Act', note: 'Only purchases and destructive changes stop and ask.' },
     ],
