@@ -188,8 +188,13 @@ const withQuestion = async (chat: string) => {
     returning blocker_id::text as id`)
   // As in production, the question REACHED him (0622, #394): a typed yes answers a question he was shown. A row
   // only - nothing is sent, and the target is a declared test chat.
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
-    values ('telegram', ${lit(`run1-live-${crypto.randomUUID()}`)}, 'run1-live', ${lit(chat)}, 'blocker', ${lit(child)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
+  // 0623: the message names the question it asked, and is per bot (the bot the turn came through).
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
+    values ('telegram', ${lit(`run1-live-${crypto.randomUUID()}`)},
+      coalesce((select app.command_account(c.command_id) from public.inbound_commands c
+                 where c.origin_channel = 'telegram' and c.origin_ref like ${lit(`${chat}:%`)}
+                 order by c.received_at desc limit 1), 'run1-live'),
+      ${lit(chat)}, 'blocker', ${lit(child)}::uuid, ${lit(String(b.id))}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
   return { blocker: String(b.id), first }
 }
 const blockerRow = async (id: string) =>
@@ -338,7 +343,7 @@ try {
 } finally {
   const released = // Rows written to model 'the question reached him' were never sent to anybody: removed, so the leak witness cannot
     // read a fabricated row as harness traffic reaching a destination.
-    await db.execute(`delete from public.deliveries where account_ref = 'run1-live'`)
+    await db.execute(`delete from public.deliveries where dedupe_key like 'run1-live-%'`)
   await origins.release()
   console.log(`released ${String(released)} declaration(s)`)
 }

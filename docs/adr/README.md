@@ -61,6 +61,7 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0047](0047-the-to-do-interface-talks-to-a-port-not-to-a-provider.md) | The To-dos interface talks to a port, never to a provider | Accepted |
 | [0050](0050-an-open-dock-is-pinned-to-its-thread.md) | An open dock is pinned to the thread it was opened on | Accepted |
 | [0051](0051-team-hq-is-the-product-at-every-address.md) | Team HQ is the product at every address | Accepted |
+| [0056](0056-a-message-names-the-question-it-asked-and-a-child-has-an-author.md) | A message names the question it asked; a claim has a number and a child has an author | Accepted |
 
 **Note the collision:** two ADRs were written as 0012 on the same day, by two
 sessions that each read the highest number and then wrote. They are left as

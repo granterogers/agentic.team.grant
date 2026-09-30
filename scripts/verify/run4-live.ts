@@ -132,9 +132,10 @@ try {
     )
     if (typeof row.job === 'string') {
       made.push(row.job)
-      // The turn's own job is cancelled at once: the proof is about its provenance, not its answer.
+      // The turn's own job is held a day out: the proof is about its provenance, not its answer. Held rather than
+      // cancelled since 0625, because a job that is called off is given no children and the proof hangs fixtures on it.
       await db.execute(
-        `update public.jobs set state = 'cancelled', state_reason = 'run4-live fixture' where job_id = ${lit(row.job)}::uuid and state = 'queued'`,
+        `update public.jobs set not_before = now() + interval '1 day' where job_id = ${lit(row.job)}::uuid and state = 'queued'`,
       )
     }
     return row
@@ -413,8 +414,9 @@ try {
       )
       if (shown) {
         // A row only: nothing is sent, and the target is a declared test chat.
-        await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
-          values ('telegram', ${lit(`run4-live-${crypto.randomUUID()}`)}, 'run4-live', ${lit(chat)}, 'blocker', ${lit(c)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
+        // The bot the turn came through (0623: what he was shown is per bot) and the question the message named.
+        await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
+          values ('telegram', ${lit(`run4-live-${crypto.randomUUID()}`)}, coalesce(app.command_account(${lit(String(turnJob.command))}::uuid), 'run4-live'), ${lit(chat)}, 'blocker', ${lit(c)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
       }
       return b
     }
@@ -502,7 +504,7 @@ try {
   )
   // The delivery rows this run wrote to model 'a question that reached him' were never sent to anybody; they are
   // removed so the leak witness cannot read a fabricated row as harness traffic reaching a destination.
-  await db.execute(`delete from public.deliveries where account_ref = 'run4-live'`)
+  await db.execute(`delete from public.deliveries where dedupe_key like 'run4-live-%'`)
   await origins.release()
 }
 
