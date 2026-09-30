@@ -124,6 +124,34 @@ const forNext = async (command: string) =>
     `${String(got.length)} question(s)`,
   )
 }
+// ---- review B, F1: what he was shown is the office's LAST word, and a result or blocker message -------------------------------
+{
+  const prev = await turn('an eighth thing that needs a go-ahead')
+  const q = await ask(prev.job, null)
+  // the question's own message failed; a later PROGRESS note of the same job was sent
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
+    values ('telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'progress', ${lit(prev.job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4243')`)
+  const next = await turn('yes')
+  const got = await forNext(next.command)
+  check(
+    'a later PROGRESS note of the job is not the question: a typed yes answers nothing',
+    got.length === 0 && q.length > 0,
+    `${String(got.length)} question(s)`,
+  )
+  // a question that WAS shown, then the office said something else to the chat: the yes no longer answers it
+  const prev2 = await turn('a ninth thing that needs a go-ahead')
+  await ask(prev2.job, CHAT)
+  const other = await turn('an unrelated question from him')
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
+    values ('telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'result', ${lit(other.job)}::uuid, 'sent', app.now_utc() + interval '1 hour', clock_timestamp(), '4244')`)
+  const next2 = await turn('yes')
+  const got2 = await forNext(next2.command)
+  check(
+    'once the office has said something else to the chat, an older question is not what "yes" answers',
+    got2.length === 0,
+    `${String(got2.length)} question(s)`,
+  )
+}
 // ---- #392: a FORWARDED yes is somebody else's words ------------------------------------------------------------------------------
 {
   const prev = await turn('a sixth thing that needs a go-ahead')

@@ -306,6 +306,71 @@ const grandkid = await child(kid)
   )
 }
 
+// ---- review B, F2 and F3: a real command's key does not lend trust to a different principal, and the root is not the caller's ----
+{
+  const live = await realParent(db)
+  const cmd = String(
+    (
+      await one(
+        `select origin_command_id::text as c from public.jobs where job_id = ${lit(live)}::uuid`,
+      )
+    ).c,
+  )
+  // a command with no job yet: another real turn whose enqueue we do not run
+  const key = `telegram:message:8967954396:1386648496:${String(Math.floor(Math.random() * 9_000_000) + 1_000_000)}`
+  const fresh = String(
+    (
+      await one(`set local application_name = 'PostgREST 14.5';
+        insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+        values ('telegram', ${lit(`1386648496:${key.split(':').pop()}`)}, '1386648496', 'a command nobody enqueued yet', ${lit(key)}, 'grant')
+        returning command_id::text as id`)
+    ).id,
+  )
+  const wrongWho = String(
+    (
+      await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
+        values (gen_random_uuid(), ${lit(`inbound-${fresh}`)}, 'office.instruction', 'telegram:attacker-999') returning job_id::text as j`)
+    ).j,
+  )
+  const w = await one(
+    `select origin_kind, origin_class, origin_command_id from public.jobs where job_id = ${lit(wrongWho)}::uuid`,
+  )
+  check(
+    "B2: a job with a real command's key but a DIFFERENT principal is not trusted (recorded inbound, unknown, no command)",
+    w.origin_class === 'unknown' &&
+      w.origin_command_id === null &&
+      (await origin(wrongWho)) === 'unknown',
+    JSON.stringify(w),
+  )
+  const claimed = String(
+    (
+      await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
+        values (gen_random_uuid(), ${lit(`inbound-${cmd}`)}, 'office.instruction', 'telegram:grant') returning job_id::text as j`).catch(
+        () => ({ j: '' }),
+      )
+    ).j,
+  )
+  void claimed
+  const dup = await one(
+    `select count(*)::int as n from public.jobs where origin_command_id = ${lit(cmd)}::uuid and parent_job_id is null`,
+  )
+  check(
+    "B2: a second root claiming a command that already has a job is not stamped as that command's (one job per command)",
+    Number(dup.n) === 1,
+    `${String(dup.n)} root(s) recorded for the command`,
+  )
+  const lie = String(
+    (
+      await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, root_job_id)
+        values (gen_random_uuid(), ${lit(`root-lie-${run}`)}, 'office.instruction', 'system:x', ${lit(live)}::uuid) returning job_id::text as j`)
+    ).j,
+  )
+  const rr = await one(
+    `select root_job_id::text as r from public.jobs where job_id = ${lit(lie)}::uuid`,
+  )
+  check('B3: a caller cannot name its own root: it is itself', rr.r === lie, String(rr.r === lie))
+}
+
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

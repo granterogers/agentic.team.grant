@@ -220,10 +220,11 @@ const fp = 'a'.repeat(64)
   )
   const claimed = await dequeue(db, `ans-${run}`, true, true, [KIND], scope)
   check(
-    'D2: a job that had spent its last attempt asking a question can still be claimed once it is answered, and its pause is closed',
+    'D2: a job that had spent its last attempt asking a question is granted a FURTHER attempt when answered (its attempt number is never reused), can be claimed, and its pause is closed',
     waiting === 'waiting_for_grant' &&
       j.s === 'queued' &&
-      Number(j.attempt) === 4 &&
+      Number(j.attempt) === 5 &&
+      Number(j.max_attempts) === 6 &&
       pauseOpen === 0 &&
       claimed?.jobId === id,
     `${waiting} / ${JSON.stringify(j)} / open pauses ${String(pauseOpen)} / claimed ${String(claimed?.jobId === id)}`,
@@ -586,6 +587,158 @@ const fp = 'a'.repeat(64)
       (await outputs(id)) === 0 &&
       String((await job(id)).s) === 'cancelled',
     `${outcome} / outputs ${String(await outputs(id))}`,
+  )
+}
+
+// ---- review A, F1: a healthy worker whose handler parked the job is not marked lost by its own heartbeat -------------------
+{
+  const id = await newJob()
+  const w = await dequeue(db, `pk-${run}`, true, true, [KIND], scope)
+  const realSet = globalThis.setInterval
+  // The heartbeat is once a minute; run it every 80ms so the real timer in runJob fires during the handler.
+  ;(globalThis as { setInterval: unknown }).setInterval = ((fn: () => void, _ms: number) =>
+    realSet(fn, 80)) as never
+  const parker: Handler = {
+    reach: 'internal',
+    kind: KIND,
+    handle: async () => {
+      await blockerFor(id)
+      await db.execute(
+        `select app.pause_job(${lit(id)}::uuid, 'awaiting_approval', 'asks a question', 'when he answers', false, null, null, ${lit(fp)})`,
+      )
+      await new Promise((r) => setTimeout(r, 600)) // still composing the question long after it parked
+      return out('the question, after parking')
+    },
+  }
+  let r: { finalState: string } | null = null
+  try {
+    r = await runJob(db, w as never, [parker], review)
+  } finally {
+    ;(globalThis as { setInterval: unknown }).setInterval = realSet
+  }
+  check(
+    'a handler that parks its own job and keeps working: the heartbeat does not mark the worker lost, and its output is written',
+    r?.finalState === 'paused' && (await outputs(id)) === 1,
+    `${String(r?.finalState)} / outputs ${String(await outputs(id))}`,
+  )
+  await db.execute(
+    `update public.jobs set state = 'cancelled', state_reason = 'proof done' where job_id = ${lit(id)}::uuid`,
+  )
+}
+
+// ---- review A, F3: an answer does not let a zombie of the SAME attempt number pass ------------------------------------------
+{
+  const id = await newJob()
+  await db.execute(
+    `update public.jobs set state = 'running', leased_by = 'z1', leased_until = now() + interval '5 minutes', attempt = 1 where job_id = ${lit(id)}::uuid`,
+  )
+  await blockerFor(id)
+  await db.execute(
+    `select app.pause_job(${lit(id)}::uuid, 'awaiting_approval', 'asks', 'when answered', false, null, null, ${lit(fp)})`,
+  )
+  await db.execute(`select app.let_job_go(${lit(id)}::uuid, 'answered')`)
+  const w2 = await dequeue(db, `z2-${run}`, true, true, [KIND], scope)
+  await blockerFor(id)
+  await db.execute(
+    `select app.pause_job(${lit(id)}::uuid, 'awaiting_approval', 'asks again', 'when answered', false, null, null, ${lit(fp)})`,
+  )
+  const zombie = await one(
+    `select app.job_held(${lit(id)}::uuid, 'z1', 1) as z, app.job_held(${lit(id)}::uuid, ${lit(`z2-${run}`)}, ${String(w2?.attempt)}) as live`,
+  )
+  check(
+    'after an approval wake and a second park, the first worker (attempt 1) does not hold the job and the second (attempt 2) does',
+    zombie.z === false && zombie.live === true && Number(w2?.attempt) === 2,
+    `${String(zombie.z)}/${String(zombie.live)} attempt ${String(w2?.attempt)}`,
+  )
+  await db.execute(
+    `update public.jobs set state = 'cancelled', state_reason = 'proof done' where job_id = ${lit(id)}::uuid`,
+  )
+}
+
+// ---- review A, F2: the retried parent finds its child in the cases that used to duplicate ------------------------------------
+{
+  const parent = await newJob()
+  await dequeue(db, `cc-${run}`, true, true, [KIND], scope)
+  const mk = async (payload: string, project: string | null = null) =>
+    String(
+      (
+        await one(
+          `select app.enqueue_child(${lit(parent)}::uuid, 'office.instruction', ${lit(payload)}::jsonb, '0 seconds'::interval, true, ${project === null ? 'null' : lit(project)}::uuid)::text as c`,
+        )
+      ).c,
+    )
+  const retry = async (n: number) => {
+    await db.execute(
+      `update public.jobs set leased_until = now() - interval '1 minute' where job_id = ${lit(parent)}::uuid`,
+    )
+    await db.execute(`select * from app.recover_stalled_jobs()`)
+    await db.execute(`select app.requeue_retrying()`)
+    await dequeue(db, `cc${String(n)}-${run}`, true, true, [KIND], scope)
+  }
+  // 2a: a handoff carries the uuid of the output it hands on, which a retry writes afresh
+  const h1 = await mk(JSON.stringify({ instruction: 'handoff', from_output: crypto.randomUUID() }))
+  // 2c: a deferral that COMPLETED having only scheduled the work, whose later sibling failed
+  const g0 = await mk('{"kind":"deck"}')
+  const g1 = await mk('{"kind":"deck"}')
+  await db.execute(
+    `update public.jobs set state = 'running', leased_by = 'x', leased_until = now() + interval '5 minutes' where job_id = ${lit(g0)}::uuid`,
+  )
+  await db.execute(
+    `update public.jobs set state = 'cancelled', state_reason = 'proof' where job_id = ${lit(g1)}::uuid`,
+  )
+  await retry(2)
+  const h2 = await mk(JSON.stringify({ instruction: 'handoff', from_output: crypto.randomUUID() }))
+  check(
+    '2a: a handoff retried with a NEW output id still finds the child it already made',
+    h2 === h1,
+    h2 === h1 ? 'same child' : 'a duplicate',
+  )
+  const g2 = await mk('{"kind":"deck"}')
+  check(
+    '2c: a slot whose later sibling failed is not returned as done - the retry makes the work again',
+    g2 !== g0 && g2 !== g1,
+    g2 === g0 ? 'returned the deferral that only scheduled it' : 'a fresh child',
+  )
+  // 2b: an approval wake grants a further attempt, so the re-run is a NEW attempt number and finds slot 0 of it
+  const a1 = await mk('{"proof":"2b"}')
+  await db
+    .execute(
+      `update public.jobs set state = 'running', leased_by = 'y', leased_until = now() + interval '5 minutes' where job_id = ${lit(parent)}::uuid and state <> 'running'`,
+    )
+    .catch(() => undefined)
+  await blockerFor(parent)
+  await db.execute(
+    `select app.pause_job(${lit(parent)}::uuid, 'awaiting_approval', 'asks', 'when answered', false, null, null, ${lit(fp)})`,
+  )
+  await db.execute(`select app.let_job_go(${lit(parent)}::uuid, 'answered')`)
+  await dequeue(db, `cc3-${run}`, true, true, [KIND], scope)
+  const a2 = await mk('{"proof":"2b"}')
+  check(
+    '2b: after an approval wake and re-run, the same request finds the child it made before the question',
+    a2 === a1,
+    a2 === a1 ? 'same child' : 'a duplicate',
+  )
+  // 2d: the project is part of the request's identity
+  const mkProject = async (n: string) =>
+    String(
+      (
+        (
+          await one(
+            `select app.hq_create_project(${lit(`fixture childslots ${n} ${run}`)}, 'upload', ${lit(`cs-${n}-${run}`)}, ${lit(`Fixture childslots ${n}`)}, true)::text as v`,
+          )
+        ).v as string
+      ).match(/"project_id": ?"([0-9a-f-]{36})"/)?.[1] ?? '',
+    )
+  const projA = await mkProject('a')
+  const projB = await mkProject('b')
+  const pA = await mk('{"proof":"2d"}', projA)
+  await retry(4)
+  // the retry asks for the same payload but for ANOTHER project: slot 0 of the new attempt must not find A's child
+  const pB = await mk('{"proof":"2d"}', projB)
+  check(
+    '2d: on a retry, the same payload for a different project is a different child',
+    projA !== '' && projB !== '' && pA !== pB,
+    pA === pB ? 'swallowed' : 'distinct',
   )
 }
 

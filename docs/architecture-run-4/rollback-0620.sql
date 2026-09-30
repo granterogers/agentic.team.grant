@@ -131,3 +131,4 @@ AS $function$
        from public.jobs j where j.job_id = p_job_id),
     jsonb_build_object('error', 'no such job'))
 $function$;
+drop table if exists public.job_child_slots;

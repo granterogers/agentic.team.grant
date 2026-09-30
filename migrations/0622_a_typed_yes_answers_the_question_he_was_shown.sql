@@ -15,6 +15,12 @@
   old query - the question the office's previous reply said it was still waiting on (`awaiting_answer`, #374) -
   is unchanged: that pointer is written only by a turn that already bound to a question.
 
+  Residual, recorded on #394: the binding is to the office's last message that came from the job that raised the
+  question, not to the message's CONTENT - a delivery carries no blocker id (a question reaches him as a result
+  under `job:<id>`, never yet under `blocker:<id>` in production), so an exact binding needs the blocker id written
+  on the delivery where the question is composed. Voice and the dashboard have no delivery record and keep the
+  old tree binding.
+
   Everything else is the old query verbatim: the turn IMMEDIATELY before only, twelve hours, several open
   questions are named and asked about, none does nothing.
 
@@ -69,9 +75,20 @@ as $fn$
                      select 1 from public.deliveries d, me
                       where d.job_id = b.job_id
                         and d.state = 'sent'
+                        -- What the office SAYS to him, not a progress note or an acknowledgement: a question
+                        -- reaches him as a result or a blocker message (production: only 'result' has ever
+                        -- shared a job with a blocker).
+                        and d.purpose in ('result', 'blocker')
                         and d.channel = me.origin_channel::text
                         and d.target_ref = me.chat
-                        and app.approval_for_delivery(d.delivery_id) = b.blocker_id)))
+                        and app.approval_for_delivery(d.delivery_id) = b.blocker_id
+                        -- and it is the LAST thing the office sent to this chat: a typed yes answers what he
+                        -- has just read, not something further up the conversation.
+                        and not exists (
+                              select 1 from public.deliveries d2
+                               where d2.channel = d.channel and d2.target_ref = d.target_ref
+                                 and d2.state = 'sent' and d2.delivery_id <> d.delivery_id
+                                 and (d2.sent_at, d2.delivery_id) > (d.sent_at, d.delivery_id)))))
           -- Or the ONE question the office's previous reply said it was still waiting on (#374).
           or b.blocker_id = (select nullif(j.pinned_config ->> 'awaiting_answer', '')::uuid
                                from public.jobs j

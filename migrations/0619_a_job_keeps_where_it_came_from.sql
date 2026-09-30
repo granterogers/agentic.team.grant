@@ -31,7 +31,7 @@
                         `app.internal_root_ok`, which reads what the office is configured to do.
     origin_command_id   the inbound command that began the tree - recorded ONLY when the job is exactly what
                         `app.enqueue_inbound` makes: idempotency key `inbound-<command>` and a `requested_by`
-                        that begins with that command's channel. A `command_id` merely present in a config is
+                        that is exactly that command's channel and subject. A `command_id` merely present in a config is
                         not evidence of anything.
     origin_channel      the command's channel, taken at the same moment.
 
@@ -91,11 +91,10 @@ declare
   v_cmd uuid;
   v_class text;
 begin
-  if new.root_job_id is null then
-    new.root_job_id := coalesce(
-      (select j.root_job_id from public.jobs j where j.job_id = new.parent_job_id),
-      new.parent_job_id, new.job_id);
-  end if;
+  -- Always the trigger's to write: a structural fact a caller could set would not be one (review of Run 4, B3).
+  new.root_job_id := coalesce(
+    (select j.root_job_id from public.jobs j where j.job_id = new.parent_job_id),
+    new.parent_job_id, new.job_id);
   -- A caller cannot name its own origin: the columns are the trigger's to write.
   new.origin_kind := null; new.origin_class := null;
   new.origin_command_id := null; new.origin_channel := null;
@@ -130,7 +129,12 @@ begin
     end;
     if v_cmd is not null then
       select * into c from public.inbound_commands where command_id = v_cmd;
-      if found and new.requested_by like c.origin_channel::text || ':%' then
+      -- Exactly what enqueue_inbound composes: the channel AND the subject it recorded, for a command no job has
+      -- claimed yet. A prefix alone let a job name a different principal under a real command's key (review of
+      -- Run 4, B2).
+      if found
+         and new.requested_by = c.origin_channel::text || ':' || coalesce(c.subject, c.actor)
+         and (c.job_id is null or c.job_id = new.job_id) then
         new.origin_kind := 'inbound';
         new.origin_command_id := c.command_id;
         new.origin_channel := c.origin_channel::text;
@@ -194,7 +198,7 @@ update public.jobs j
  where j.parent_job_id is null
    and j.origin_kind is null
    and j.idempotency_key = 'inbound-' || c.command_id::text
-   and j.requested_by like c.origin_channel::text || ':%';
+   and j.requested_by = c.origin_channel::text || ':' || coalesce(c.subject, c.actor);
 
 alter table public.jobs enable trigger jobs_touch_updated_at;
 

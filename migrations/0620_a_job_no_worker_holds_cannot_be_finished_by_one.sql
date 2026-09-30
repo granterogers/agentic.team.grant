@@ -16,7 +16,8 @@
   D2  AN ANSWERED QUESTION COULD BE A DEAD LETTER. `dequeue_job` claims only `attempt < max_attempts`, and answering
       an approval put the job back in the queue having spent an attempt on the wait - so a job that had asked its
       fifth question was `queued` for ever. A wait is not an attempt (0609 already says so for two pause reasons);
-      an approval is a third. `let_job_go` gives the attempt back and closes the pause row it was answering.
+      an approval is a third. `let_job_go` grants a FURTHER attempt (never a refund: an attempt number is not handed
+      out twice, because the fence and the child slots are keyed on it) and closes the pause row it was answering.
   D3  `retrying` OR `queued` WITH NO ATTEMPTS LEFT WAS STUCK FOR EVER. The worker decides "retryable" from a literal 4,
       not from the job's own `max_attempts`, so a job with a ceiling of 1 or 3 could be left `retrying` at its
       ceiling, which `requeue_retrying` and `dequeue_job` both refuse and no sweep fails. `app.settle_exhausted_jobs`
@@ -79,7 +80,6 @@ set search_path = ''
 as $fn$
 declare
   v_seconds integer;
-  v_rows integer;
 begin
   v_seconds := coalesce((select (value #>> '{}')::integer from public.system_config where key = 'jobs.lease_seconds'), 300);
   update public.jobs
@@ -88,8 +88,13 @@ begin
      and leased_by = p_worker
      and attempt = p_attempt
      and state in ('running', 'output_created', 'quality_review', 'committing', 'committed', 'notifying');
-  get diagnostics v_rows = row_count;
-  return v_rows = 1;
+  /*
+    The answer is "do I still hold it", which is job_held's question, not "was a lease row renewed": a job parked by
+    its OWN handler has no lease to renew and is still this attempt's (the handler is composing its question, the
+    worker has an output to write). Answering false for it made the heartbeat mark a healthy worker lost and drop
+    its output (found by the second independent review of Run 4, F1).
+  */
+  return app.job_held(p_job, p_worker, p_attempt);
 end;
 $fn$;
 
@@ -167,12 +172,17 @@ begin
        set resumed_at = app.now_utc(), resumed_why = left(coalesce(p_why, ''), 400)
      where job_id = p_job and resumed_at is null;
     -- A question is not an attempt (0609's rule, for the third bounded wait): without this a job that had asked
-    -- its last question was queued and could never be claimed.
+    -- its last question was queued and could never be claimed. Granted as a further attempt, never as a refund.
     update public.jobs
        set state = 'queued', state_reason = p_why, updated_at = app.now_utc(),
            waiting_on = null,
-           attempt = case when v_reason in ('awaiting_approval', 'awaiting_human_action')
-                          then greatest(attempt - 1, 0) else attempt end
+           -- A question is not an attempt, but an attempt NUMBER is never handed out twice: the fence and the child
+           -- slots are keyed on it, so refunding it would let a zombie of attempt N pass for the next attempt N.
+           -- The answer grants a FURTHER attempt instead (capped, so an approval loop is bounded by more than the
+           -- person answering: past the cap the job fails with a sentence, as any exhausted job does).
+           max_attempts = case when v_reason in ('awaiting_approval', 'awaiting_human_action')
+                                and attempt >= max_attempts and max_attempts < 25
+                               then max_attempts + 1 else max_attempts end
      where job_id = p_job;
   end if;
 end;
@@ -290,7 +300,9 @@ begin
   end if;
 
   perform pg_advisory_xact_lock(hashtext('enqueue_child:' || p_parent::text));
-  v_hash := md5(coalesce(p_payload, '{}'::jsonb)::text);
+  -- Identity of the request: kind, payload MINUS ids that are minted afresh by every attempt (a handoff carries the
+  -- uuid of the output it hands on, and a retry writes a new output), and the project it is for.
+  v_hash := md5((coalesce(p_payload, '{}'::jsonb) - 'from_output')::text || '|' || coalesce(coalesce(p_project, v_parent.project_id)::text, ''));
   v_slot := left(p_kind, 40) || ':' || v_hash;
   insert into public.job_child_slots as s (job_id, attempt, slot_key, used)
   values (p_parent, v_parent.attempt, v_slot, 1)
@@ -298,11 +310,18 @@ begin
   returning s.used - 1 into v_n;
   v_key := format('child-%s-%s-%s', left(p_kind, 40), left(v_hash, 16), v_n);
 
-  -- One parent, one kind, one payload, one slot: this is the child the parent already made, if it did and it
-  -- did not fail. A failed or cancelled child is not reused - the retry is entitled to try again.
+  -- One parent, one kind, one request, one slot: this is the child the parent already made, if it did and it did
+  -- not fail. A failed or cancelled child is not reused - the retry is entitled to try again - and neither is a
+  -- child whose LATER sibling of the same request failed: a deferral that completed having only scheduled the work
+  -- has not done it (notebook.generate defers itself as a sibling).
   select c.job_id into v_id from public.jobs c
    where c.parent_job_id = p_parent and c.kind = p_kind
      and c.idempotency_key like v_key || '-%' and c.state not in ('failed', 'cancelled')
+     and not exists (
+       select 1 from public.jobs s2
+        where s2.parent_job_id = p_parent and s2.kind = p_kind
+          and s2.idempotency_key like 'child-' || left(p_kind, 40) || '-' || left(v_hash, 16) || '-%'
+          and s2.state in ('failed', 'cancelled') and s2.created_at > c.created_at)
    order by c.created_at limit 1;
   if v_id is not null then
     return v_id;
