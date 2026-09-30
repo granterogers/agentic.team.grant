@@ -408,6 +408,113 @@ const root = await realParent(db)
     String(await forDelivery(after.id)),
   )
 }
+
+// ---- one conversation, several channels ------------------------------------------------------------------------------
+{
+  // (a) the SAME question shown on Telegram and on Slack, answered from both: performed once
+  const j = await child(root)
+  const q = await ask(j, 'shown twice')
+  const tg = await deliver(j, { blocker: q, chat: '4110001', ago: 2 })
+  const sl = await deliver(j, {
+    blocker: q,
+    channel: 'slack',
+    account: 'T0TEAM',
+    chat: 'C0BOTH01',
+    ago: 1,
+  })
+  const first = await answer((await forDelivery(sl.id)) as string)
+  const second = await answer((await forDelivery(tg.id)) as string)
+  check(
+    'a question shown on two channels and answered from both is performed once: the second press finds it already answered',
+    first.ok !== false && second.already === true && (await stateOf(q)) === 'resolved',
+    `${JSON.stringify(first).slice(0, 40)} then ${JSON.stringify(second).slice(0, 50)}`,
+  )
+}
+{
+  // (b) dashboard -> Telegram and Telegram -> dashboard: a channel answers only what IT showed
+  const dash = async (channel: 'teamhq' | 'voice', session: string, text: string) => {
+    const key =
+      channel === 'voice'
+        ? `voice:turn:s${session}.${String(Math.floor(Math.random() * 9000) + 1000)}`
+        : `teamhq:message:${crypto.randomUUID().replace(/-/g, '')}`
+    const cmd = await one(`${DOOR}
+      insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+      values (${lit(channel)}, ${lit(`${session}:${crypto.randomUUID().slice(0, 8)}`)}, 'grant', ${lit(text)}, ${lit(key)}, 'grant')
+      returning command_id::text as id`)
+    const enq = await one(
+      `${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`,
+    )
+    const v = typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v
+    return { command: String(cmd.id), job: String((v as { job_id?: string }).job_id ?? '') }
+  }
+  const s1 = run.slice(0, 6)
+  const first = await dash('teamhq', s1, 'a dashboard question needs a go-ahead')
+  const qd = await ask(first.job, 'raised in the dashboard')
+  chatNow = String(3300000 + Math.floor(Math.random() * 90000))
+  const tgYes = await turn('yes')
+  const got = await forNext(tgYes.command)
+  check(
+    'HQ -> Telegram: a Telegram yes does not answer a question only the dashboard raised',
+    !got.some((g) => g.id === qd),
+    `${String(got.length)} rows`,
+  )
+  const dashYes = await dash('teamhq', s1, 'yes')
+  const dgot = await forNext(dashYes.command)
+  check(
+    'the dashboard yes, in the conversation that raised it, binds (exactly one open in the turn before)',
+    dgot.length === 1 && dgot[0]?.id === qd && dgot[0]?.bindable === true,
+    JSON.stringify(dgot).slice(0, 80),
+  )
+  // two open in the same dashboard turn: named, never guessed
+  const s2 = `${run.slice(0, 5)}b`
+  const m = await dash('teamhq', s2, 'two dashboard questions')
+  const mj1 = await child(m.job)
+  const mj2 = await child(m.job)
+  await ask(mj1, 'dash A')
+  await ask(mj2, 'dash B')
+  const dyes = await dash('teamhq', s2, 'yes')
+  const two = await forNext(dyes.command)
+  check(
+    'two open in the dashboard turn: a bare yes binds to neither',
+    two.filter((g) => g.bindable).length === 0,
+    String(two.length),
+  )
+  const rows2 = (
+    await db.execute(
+      `select bindable from app.open_questions_for_reply(${lit(dyes.command)}::uuid)`,
+    )
+  ).rows as { bindable: boolean }[]
+  check(
+    'but both are named, so the office can ask which',
+    rows2.length >= 2 && rows2.every((r) => r.bindable === false),
+    String(rows2.length),
+  )
+  // voice: the same rule under a voice session
+  const vs = `${run.slice(0, 4)}v`
+  const v1 = await dash('voice', vs, 'a spoken request that needs a go-ahead')
+  const vq = await ask(v1.job, 'raised by voice')
+  const vyes = await dash('voice', vs, 'yes')
+  const vgot = await forNext(vyes.command)
+  check(
+    'voice is no weaker than text: a spoken yes binds to the ONE question the spoken turn raised',
+    vgot.length === 1 && vgot[0]?.id === vq,
+    JSON.stringify(vgot).slice(0, 70),
+  )
+}
+{
+  // (c) stale channel: shown more than twelve hours ago is not "what he was shown"
+  const t = await turn('a stale channel proof')
+  const j = await child(t.job)
+  const q = await ask(j, 'stale channel')
+  await deliver(j, { blocker: q, ago: 13 * 60 })
+  const yes = await turn('yes')
+  const got = await forNext(yes.command)
+  check(
+    'a question shown thirteen hours ago binds to nothing',
+    !got.some((g) => g.bindable),
+    String(got.length),
+  )
+}
 void realTelegramKey
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
