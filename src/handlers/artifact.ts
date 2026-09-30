@@ -278,59 +278,63 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         milliseconds, so checkpointing it would store a megabyte to save
         nothing.
       */
-      const run = await runSteps(db, job.jobId, 'artifact.report@1', [
-        {
-          name: 'gather',
-          run: async () => {
-            const found = await retrieve(db, brief, projectId, 8)
-            const post = await correspondence(db, projectId, brief, 4)
-            return {
-              outcome: {
-                /*
+      const run = await runSteps(
+        db,
+        job.jobId,
+        'artifact.report@1',
+        [
+          {
+            name: 'gather',
+            run: async () => {
+              const found = await retrieve(db, brief, projectId, 8)
+              const post = await correspondence(db, projectId, brief, 4)
+              return {
+                outcome: {
+                  /*
                   References, not contents. The Issue asks for "safe tool
                   inputs/outputs or references to them" and a document's text
                   is the one thing here that is already stored elsewhere under
                   its own id — copying it into a checkpoint would put the same
                   bytes in two places and make the row enormous.
                 */
-                documents: found.map((h) => ({
-                  connector: h.connector,
-                  id: h.documentId,
-                  // Carried so the citation can say `made` where the office
-                  // made it, rather than printing the word null on the
-                  // sources page of a PDF Grant reads.
-                  origin: h.origin,
-                  title: h.title,
-                })),
-                mail: post.map((m) => ({ id: m.messageId, subject: m.subject })),
-              },
-            }
-          },
-        },
-        {
-          name: 'draft',
-          run: async (done) => {
-            const documents = (done.gather?.documents ?? []) as {
-              connector: string
-              id: string
-              title: string
-            }[]
-            const mail = (done.gather?.mail ?? []) as { id: string; subject: string }[]
-            if (documents.length === 0 && mail.length === 0) {
-              return {
-                outcome: { nothing: true },
+                  documents: found.map((h) => ({
+                    connector: h.connector,
+                    id: h.documentId,
+                    // Carried so the citation can say `made` where the office
+                    // made it, rather than printing the word null on the
+                    // sources page of a PDF Grant reads.
+                    origin: h.origin,
+                    title: h.title,
+                  })),
+                  mail: post.map((m) => ({ id: m.messageId, subject: m.subject })),
+                },
               }
-            }
-            /*
+            },
+          },
+          {
+            name: 'draft',
+            run: async (done) => {
+              const documents = (done.gather?.documents ?? []) as {
+                connector: string
+                id: string
+                title: string
+              }[]
+              const mail = (done.gather?.mail ?? []) as { id: string; subject: string }[]
+              if (documents.length === 0 && mail.length === 0) {
+                return {
+                  outcome: { nothing: true },
+                }
+              }
+              /*
               Re-read by id rather than carrying the text through the
               checkpoint. On a first run this is a second read of documents
               `gather` just had, which is a few milliseconds against a model
               call — and on a resume it is the only way the text is available
               at all.
             */
-            const hits = await retrieve(db, brief, projectId, 8)
-            const post = await correspondence(db, projectId, brief, 4)
-            /*
+              const hits = await retrieve(db, brief, projectId, 8)
+              const post = await correspondence(db, projectId, brief, 4)
+              /*
               WHAT THE OFFICE COULD NOT LOOK AT, not merely what it found.
 
               This call passed `post` alone for the life of the feature, so the
@@ -343,100 +347,100 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               the strong one, so the no-hits branch is the only branch this
               path takes.
             */
-            const cover =
-              ((
-                await db
-                  .execute(`select app.mail_coverage(${lit(projectId)}::uuid) as c`)
-                  .catch(() => ({ rows: [] as Record<string, unknown>[] }))
-              ).rows[0]?.c as MailCoverage | undefined) ?? null
-            const completion = await router.complete({
-              correlationId: job.correlationId,
-              jobId: job.jobId,
-              maxTokens: 6_000,
-              messages: [
-                { content: BRIEF, role: 'system' },
-                {
-                  content:
-                    `What was asked for: ${brief}\n\n` +
-                    `${contextBlock(hits, 40_000)}\n\n${mailBlock(post, cover)}`,
-                  role: 'user',
-                },
-              ],
-            })
-            const read = readReport(completion.content)
-            return {
-              outcome: {
-                blocks: read?.blocks ?? [],
-                model: completion.model,
-                title: read?.title ?? '',
-                unreadable: read === null,
-              },
-            }
-          },
-        },
-        {
-          name: 'store',
-          effect: 'local',
-          run: async (done) => {
-            const draft = done.draft ?? {}
-            if (draft.nothing === true || draft.unreadable === true) {
-              return { outcome: { skipped: true } }
-            }
-            const sources = [
-              ...(
-                (done.gather?.documents ?? []) as {
-                  connector: string | null
-                  id: string
-                  origin?: string
-                  title: string
-                }[]
-              ).map((d) => ({
-                label: d.title,
-                ref: citationRef({ connector: d.connector, documentId: d.id, origin: d.origin }),
-              })),
-              ...((done.gather?.mail ?? []) as { id: string; subject: string }[]).map((m) => ({
-                label: m.subject,
-                ref: `mail:${m.id}`,
-              })),
-            ]
-            const report: Report = {
-              author: 'Agentic Team',
-              blocks: draft.blocks as Block[],
-              created: new Date(),
-              sources,
-              // The document's own opening, not the request that asked for it.
-              // See `coverLine`: every report so far printed Grant's
-              // instruction on its cover above two thirds of an empty page.
-              subtitle: coverTakes(draft.blocks as Block[]).line,
-              title: String(draft.title ?? 'Report'),
-            }
-            const { bytes, problems } = renderReport(report)
-            const verdict = validatePdf(bytes, { layoutProblems: problems })
-            if (!verdict.ok) {
-              return { outcome: { failed: verdict.problems.slice(0, 2) } }
-            }
-            const kept = await storeArtifact(
-              db,
-              { projectRef: deps.projectRef, serviceKey: deps.serviceKey },
-              {
-                bytes,
-                extension: 'pdf',
+              const cover =
+                ((
+                  await db
+                    .execute(`select app.mail_coverage(${lit(projectId)}::uuid) as c`)
+                    .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+                ).rows[0]?.c as MailCoverage | undefined) ?? null
+              const completion = await router.complete({
+                correlationId: job.correlationId,
                 jobId: job.jobId,
-                mime: 'application/pdf',
-                producedBy: String(payload?.by ?? 'chief-of-staff'),
-                projectId,
-                title: report.title,
-              },
-            )
-            if (!kept.ok) {
-              return { outcome: { pages: verdict.pages, stored: false, why: kept.error } }
-            }
-            return {
-              effectRef: `document:${kept.documentId ?? ''}`,
-              outcome: {
-                documentId: kept.documentId,
-                pages: verdict.pages,
-                /*
+                maxTokens: 6_000,
+                messages: [
+                  { content: BRIEF, role: 'system' },
+                  {
+                    content:
+                      `What was asked for: ${brief}\n\n` +
+                      `${contextBlock(hits, 40_000)}\n\n${mailBlock(post, cover)}`,
+                    role: 'user',
+                  },
+                ],
+              })
+              const read = readReport(completion.content)
+              return {
+                outcome: {
+                  blocks: read?.blocks ?? [],
+                  model: completion.model,
+                  title: read?.title ?? '',
+                  unreadable: read === null,
+                },
+              }
+            },
+          },
+          {
+            name: 'store',
+            effect: 'local',
+            run: async (done) => {
+              const draft = done.draft ?? {}
+              if (draft.nothing === true || draft.unreadable === true) {
+                return { outcome: { skipped: true } }
+              }
+              const sources = [
+                ...(
+                  (done.gather?.documents ?? []) as {
+                    connector: string | null
+                    id: string
+                    origin?: string
+                    title: string
+                  }[]
+                ).map((d) => ({
+                  label: d.title,
+                  ref: citationRef({ connector: d.connector, documentId: d.id, origin: d.origin }),
+                })),
+                ...((done.gather?.mail ?? []) as { id: string; subject: string }[]).map((m) => ({
+                  label: m.subject,
+                  ref: `mail:${m.id}`,
+                })),
+              ]
+              const report: Report = {
+                author: 'Agentic Team',
+                blocks: draft.blocks as Block[],
+                created: new Date(),
+                sources,
+                // The document's own opening, not the request that asked for it.
+                // See `coverLine`: every report so far printed Grant's
+                // instruction on its cover above two thirds of an empty page.
+                subtitle: coverTakes(draft.blocks as Block[]).line,
+                title: String(draft.title ?? 'Report'),
+              }
+              const { bytes, problems } = renderReport(report)
+              const verdict = validatePdf(bytes, { layoutProblems: problems })
+              if (!verdict.ok) {
+                return { outcome: { failed: verdict.problems.slice(0, 2) } }
+              }
+              const kept = await storeArtifact(
+                db,
+                { projectRef: deps.projectRef, serviceKey: deps.serviceKey },
+                {
+                  bytes,
+                  extension: 'pdf',
+                  jobId: job.jobId,
+                  mime: 'application/pdf',
+                  producedBy: String(payload?.by ?? 'chief-of-staff'),
+                  projectId,
+                  title: report.title,
+                },
+              )
+              if (!kept.ok) {
+                return { outcome: { pages: verdict.pages, stored: false, why: kept.error } }
+              }
+              return {
+                effectRef: `document:${kept.documentId ?? ''}`,
+                outcome: {
+                  documentId: kept.documentId,
+                  pages: verdict.pages,
+                  /*
                   AND WHERE THE BYTES ARE (#258).
 
                   The step's outcome is the only thing the composing code below
@@ -457,15 +461,17 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                   Found by asking for a report in a real Slack channel and
                   reading what landed in the room.
                 */
-                path: kept.path,
-                sources: sources.length,
-                stored: true,
-                title: report.title,
-              },
-            }
+                  path: kept.path,
+                  sources: sources.length,
+                  stored: true,
+                  title: report.title,
+                },
+              }
+            },
           },
-        },
-      ])
+        ],
+        job,
+      )
 
       if (run.kind === 'paused') {
         /*

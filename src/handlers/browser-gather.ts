@@ -180,89 +180,101 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
                                   ${String(Math.max(0, Math.round(ms)))})`)
       }
 
-      const run = await runSteps(db, job.jobId, 'browser.gather@1', [
-        {
-          /*
+      const run = await runSteps(
+        db,
+        job.jobId,
+        'browser.gather@1',
+        [
+          {
+            /*
             External, because opening a page is a request somebody else's
             server saw. A resume must not silently repeat it: a page read is
             usually harmless and "usually" is not a property the effect
             declaration is allowed to assume.
           */
-          effect: 'external',
-          name: 'read',
-          run: async () => {
-            const got = await adapter.gather({
-              cookies: jar.cookies as never,
-              timeoutMs: STEP_MS,
-              url,
-              verbs: ['read'],
-            })
-            await note('read', got.ok, got.detail, null, got.ms)
-            if (got.signedOut && session !== undefined) {
-              await db.execute(
-                `select app.browser_session_expired(${lit(session.session_id)}::uuid,
+            effect: 'external',
+            name: 'read',
+            run: async () => {
+              const got = await adapter.gather({
+                cookies: jar.cookies as never,
+                timeoutMs: STEP_MS,
+                url,
+                verbs: ['read'],
+              })
+              await note('read', got.ok, got.detail, null, got.ms)
+              if (got.signedOut && session !== undefined) {
+                await db.execute(
+                  `select app.browser_session_expired(${lit(session.session_id)}::uuid,
                                                     ${lit(got.detail.slice(0, 200))})`,
+                )
+              }
+              return {
+                effectRef: `${adapter.name}:${url}`,
+                outcome: {
+                  detail: got.detail,
+                  ms: got.ms,
+                  ok: got.ok,
+                  signedOut: got.signedOut,
+                  text: (got.text ?? '').slice(0, 200_000),
+                  title: got.title,
+                },
+              }
+            },
+          },
+          {
+            effect: 'external',
+            name: 'shot',
+            run: async (done) => {
+              if (done.read?.ok !== true) return { outcome: { skipped: 'the read failed' } }
+              const got = await adapter.gather({
+                cookies: jar.cookies as never,
+                timeoutMs: STEP_MS,
+                url,
+                verbs: ['shot'],
+              })
+              if (got.shot === null) {
+                await note('shot', false, got.detail, null, got.ms)
+                return { outcome: { ok: false } }
+              }
+              const path = filePath(projectId, 'browser', `${job.jobId}-page`, 'png')
+              const kept = await putFile(projectRef, serviceKey, path, got.shot, 'image/png')
+              await note(
+                'shot',
+                kept.ok,
+                kept.error ?? 'photographed',
+                kept.ok ? path : null,
+                got.ms,
               )
-            }
-            return {
-              effectRef: `${adapter.name}:${url}`,
-              outcome: {
-                detail: got.detail,
-                ms: got.ms,
-                ok: got.ok,
-                signedOut: got.signedOut,
-                text: (got.text ?? '').slice(0, 200_000),
-                title: got.title,
-              },
-            }
+              return kept.ok
+                ? { effectRef: path, outcome: { ok: true, path } }
+                : { outcome: { ok: false, path: null } }
+            },
           },
-        },
-        {
-          effect: 'external',
-          name: 'shot',
-          run: async (done) => {
-            if (done.read?.ok !== true) return { outcome: { skipped: 'the read failed' } }
-            const got = await adapter.gather({
-              cookies: jar.cookies as never,
-              timeoutMs: STEP_MS,
-              url,
-              verbs: ['shot'],
-            })
-            if (got.shot === null) {
-              await note('shot', false, got.detail, null, got.ms)
-              return { outcome: { ok: false } }
-            }
-            const path = filePath(projectId, 'browser', `${job.jobId}-page`, 'png')
-            const kept = await putFile(projectRef, serviceKey, path, got.shot, 'image/png')
-            await note('shot', kept.ok, kept.error ?? 'photographed', kept.ok ? path : null, got.ms)
-            return kept.ok
-              ? { effectRef: path, outcome: { ok: true, path } }
-              : { outcome: { ok: false, path: null } }
-          },
-        },
-        {
-          effect: 'local',
-          name: 'keep',
-          run: async (done) => {
-            const text = String(done.read?.text ?? '')
-            if (done.read?.ok !== true || text.trim() === '') {
-              return { outcome: { kept: false } }
-            }
-            const title = String(done.read?.title ?? '') || host
-            const kept = jsonOf(
-              (
-                await db.execute(`
+          {
+            effect: 'local',
+            name: 'keep',
+            run: async (done) => {
+              const text = String(done.read?.text ?? '')
+              if (done.read?.ok !== true || text.trim() === '') {
+                return { outcome: { kept: false } }
+              }
+              const title = String(done.read?.title ?? '') || host
+              const kept = jsonOf(
+                (
+                  await db.execute(`
                   select app.record_browser_page(${lit(projectId)}::uuid, ${lit(url)},
                                                  ${lit(title.slice(0, 300))}, ${lit(text)},
                                                  ${lit(job.jobId)}::uuid) as r`)
-              ).rows[0]?.r,
-            ) as { document_id?: string; error?: string }
-            return {
-              outcome: { document: kept.document_id ?? null, kept: kept.error === undefined },
-            }
+                ).rows[0]?.r,
+              ) as { document_id?: string; error?: string }
+              return {
+                outcome: { document: kept.document_id ?? null, kept: kept.error === undefined },
+              }
+            },
           },
-        },
-      ])
+        ],
+        job,
+      )
 
       if (run.kind === 'paused') {
         return {

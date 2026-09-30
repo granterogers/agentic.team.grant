@@ -101,7 +101,16 @@ export function vaultExportHandler(db: SqlExecutor): Handler {
         DIFFERENT file. So the claim is made before anything is decrypted, and an attempt that started
         and did not finish is reconciled by a person rather than repeated.
       */
-      const claim = await beginStep(db, job.jobId, 'send', 0, 'external', 'office.vault_export@1')
+      const claim = await beginStep(
+        db,
+        job.jobId,
+        'send',
+        0,
+        'external',
+        'office.vault_export@1',
+        job.jobId,
+        job,
+      )
       if (claim.kind === 'skip') {
         return {
           ...base,

@@ -39,6 +39,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { assertHeld, type Claimed } from './fence.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const json = (v: unknown): string => lit(JSON.stringify(v ?? {}))
@@ -146,6 +147,7 @@ export async function beginStep(
    * there is one, still applies to `jobId`: it is the running job that must wait.
    */
   claimOn: string = jobId,
+  held?: Claimed,
 ): Promise<StepGate> {
   const { rows } = await db.execute(
     `select app.step_begin(${lit(claimOn)}::uuid, ${lit(name)}, ${String(index)},
@@ -169,7 +171,7 @@ export async function beginStep(
         `Check whether "${name}" actually happened outside the office. ` +
         'If it did, mark the step finished; if it did not, clear it and I will run it again.',
     }
-    await pauseJob(db, jobId, pause)
+    await pauseJob(db, jobId, pause, held)
     return { kind: 'paused', pause }
   }
   if (verdict.stale === true) {
@@ -179,7 +181,7 @@ export async function beginStep(
       resumable: false,
       resumeWhen: 'A person decides whether the earlier steps still hold under the current code.',
     }
-    await pauseJob(db, jobId, pause)
+    await pauseJob(db, jobId, pause, held)
     return { kind: 'paused', pause }
   }
   return { kind: 'do' }
@@ -201,10 +203,11 @@ export async function claimExternal(
   codeVersion: string,
   /** The job the claim is recorded against (see `beginStep`): the asking job, for an approved effect. */
   claimOn: string = jobId,
+  held?: Claimed,
 ): Promise<{ readonly name: string; readonly gate: StepGate; readonly claimedOn: string }> {
   for (let n = 0; n < 6; n += 1) {
     const name = n === 0 ? base : `${base}.retry${String(n)}`
-    const gate = await beginStep(db, jobId, name, n, 'external', codeVersion, claimOn)
+    const gate = await beginStep(db, jobId, name, n, 'external', codeVersion, claimOn, held)
     if (gate.kind === 'skip' && gate.outcome.failed === true) continue
     return { name, gate, claimedOn: claimOn }
   }
@@ -214,7 +217,7 @@ export async function claimExternal(
     resumable: false,
     resumeWhen: 'A person looks at why the other side keeps refusing, and asks again.',
   }
-  await pauseJob(db, jobId, pause)
+  await pauseJob(db, jobId, pause, held)
   return { name: base, gate: { kind: 'paused', pause }, claimedOn: claimOn }
 }
 
@@ -254,6 +257,8 @@ export async function runSteps(
   jobId: string,
   codeVersion: string,
   steps: readonly Step[],
+  /** The claim this run holds. Asked before every step, and the pause is made under it (0628). */
+  held?: Claimed,
 ): Promise<RunEnd> {
   const outcomes: Record<string, Outcome> = {}
 
@@ -269,7 +274,17 @@ export async function runSteps(
     if (await stopRequested(db, jobId)) {
       return { at: step.name, kind: 'stopped', outcomes }
     }
-    const gate = await beginStep(db, jobId, step.name, index, step.effect ?? 'none', codeVersion)
+    if (held !== undefined) await assertHeld(db, held)
+    const gate = await beginStep(
+      db,
+      jobId,
+      step.name,
+      index,
+      step.effect ?? 'none',
+      codeVersion,
+      jobId,
+      held,
+    )
     if (gate.kind === 'skip') {
       outcomes[step.name] = gate.outcome
       continue
@@ -284,7 +299,7 @@ export async function runSteps(
         A step that decided to wait has not done its work, and recording it as
         done would make the resume skip the very thing it is waiting for.
       */
-      await pauseJob(db, jobId, result.pause)
+      await pauseJob(db, jobId, result.pause, held)
       return { at: step.name, kind: 'paused', pause: result.pause }
     }
     await finishStep(db, jobId, step.name, result.outcome ?? {}, result.effectRef)
@@ -401,7 +416,13 @@ export async function requestStop(db: SqlExecutor, jobId: string, who: string): 
 }
 
 /** Stop the job where it is, with a reason a person can act on. */
-export async function pauseJob(db: SqlExecutor, jobId: string, pause: Paused): Promise<void> {
+export async function pauseJob(
+  db: SqlExecutor,
+  jobId: string,
+  pause: Paused,
+  /** The claim the pause is made under (0628): a worker that no longer holds the job cannot park it. */
+  held?: Claimed,
+): Promise<void> {
   const when = (d: Date | undefined): string =>
     d === undefined ? 'null' : `${lit(d.toISOString())}::timestamptz`
   const binds = pause.binds === undefined ? null : await fingerprint(pause.binds)
@@ -409,6 +430,10 @@ export async function pauseJob(db: SqlExecutor, jobId: string, pause: Paused): P
     `select app.pause_job(${lit(jobId)}::uuid, ${lit(pause.reason)}, ${lit(pause.detail)},
                           ${lit(pause.resumeWhen)}, ${String(pause.resumable ?? true)},
                           ${when(pause.until)}, ${when(pause.expiresAt)},
-                          ${binds === null ? 'null' : lit(binds)})`,
+                          ${binds === null ? 'null' : lit(binds)}${
+                            held?.leasedBy === undefined || held.claimGen === undefined
+                              ? ''
+                              : `, p_worker => ${lit(held.leasedBy)}, p_gen => ${String(held.claimGen)}`
+                          })`,
   )
 }

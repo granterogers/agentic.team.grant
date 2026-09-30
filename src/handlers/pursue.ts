@@ -214,7 +214,8 @@ export function pursueHandler(deps: PursueDeps): Handler {
         db,
         job.jobId,
         VERSION,
-        compile(working, db, job.jobId, job.projectId, request, deps.router, round),
+        compile(working, db, job.jobId, job.projectId, request, deps.router, round, job),
+        job,
       )
       let outcome = assess(
         working,
@@ -256,7 +257,8 @@ export function pursueHandler(deps: PursueDeps): Handler {
           db,
           job.jobId,
           VERSION,
-          compile(next, db, job.jobId, job.projectId, request, deps.router, round),
+          compile(next, db, job.jobId, job.projectId, request, deps.router, round, job),
+          job,
         )
         if (run.kind === 'done') Object.assign(everySeen, run.outcomes)
         outcome = assess(

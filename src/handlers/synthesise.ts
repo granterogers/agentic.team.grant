@@ -182,13 +182,18 @@ export function synthesiseHandler(deps: SynthesiseDeps): Handler {
         const who = ready.waiting_for
           .map((w) => `${w.agent}${w.required ? ' (needed)' : ''}`)
           .join(', ')
-        await pauseJob(db, job.jobId, {
-          detail: `${String(ready.done)} of ${String(ready.total)} branches are in.`,
-          reason: 'dependency_wait',
-          resumable: true,
-          resumeWhen: `Waiting for ${who === '' ? 'the remaining branches' : who}.`,
-          until: new Date(Date.now() + 60_000),
-        })
+        await pauseJob(
+          db,
+          job.jobId,
+          {
+            detail: `${String(ready.done)} of ${String(ready.total)} branches are in.`,
+            reason: 'dependency_wait',
+            resumable: true,
+            resumeWhen: `Waiting for ${who === '' ? 'the remaining branches' : who}.`,
+            until: new Date(Date.now() + 60_000),
+          },
+          job,
+        )
         return {
           ...base,
           announce: false,

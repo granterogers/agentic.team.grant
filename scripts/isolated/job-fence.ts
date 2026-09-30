@@ -314,6 +314,69 @@ const refused = async (fn: () => Promise<unknown>) => {
     `${staleFan.slice(0, 50)} / ${String(groups)} groups`,
   )
 }
+
+// ---- final audit: a worker that lost its claim cannot park the job (0628) ----------------------------------------------------
+{
+  const id = await newJob()
+  const a = await claim(id, 'pa')
+  await waitAndWake(a)
+  const b = await claim(id, 'pb')
+  const pause = (j: Job | null) =>
+    one(
+      `select app.pause_job(${lit(id)}::uuid, 'awaiting_human_action', 'proof', 'a person'${'' /* resumable default */}, true, null, null, null${j === null ? '' : `, ${lit(j.leasedBy ?? '')}, ${String(j.claimGen)}`})::text as r`,
+    )
+  const said = await refused(() => pause({ ...a, leasedBy: b.leasedBy ?? '' } as Job))
+  const held = await row(id)
+  check(
+    'a superseded worker (same attempt number, earlier claim) cannot park the job its replacement is running',
+    /stale caller/.test(said) && held.s === 'running' && held.leased_by === b.leasedBy,
+    `${said.slice(0, 50)} / ${String(held.s)}`,
+  )
+  const pauses = Number(
+    (
+      await one(
+        `select count(*)::int as n from public.job_pauses where job_id = ${lit(id)}::uuid and resumed_at is null`,
+      )
+    ).n,
+  )
+  check('and leaves no pause row behind', pauses === 0, String(pauses))
+  const half = await refused(() =>
+    one(
+      `select app.pause_job(${lit(id)}::uuid, 'awaiting_human_action', 'proof', 'a person', true, null, null, null, ${lit(b.leasedBy ?? '')}, null)::text`,
+    ),
+  )
+  check(
+    'a worker without its claim is refused, not silently unfenced',
+    /incomplete caller/.test(half),
+    half.slice(0, 60),
+  )
+  const old = await one(
+    `select app.pause_job(${lit(id)}::uuid, 'awaiting_human_action', 'proof', 'a person')::text as r`,
+  )
+  check(
+    'an old worker (no claim given) is unchanged: it parks the job as it always did',
+    String(old.r).includes('"ok": true') || String(old.r).includes('"ok":true'),
+    String(old.r).slice(0, 60),
+  )
+  await db
+    .execute(`update public.jobs set state = 'cancelled' where job_id = ${lit(id)}::uuid`)
+    .catch(() => undefined)
+}
+{
+  const id = await newJob()
+  const j = await claim(id, 'pl')
+  const r = await one(
+    `select app.pause_job(${lit(id)}::uuid, 'awaiting_human_action', 'proof', 'a person', true, null, null, null, ${lit(j.leasedBy ?? '')}, ${String(j.claimGen)})::text as r`,
+  )
+  check(
+    'the live worker parks its own job under its claim',
+    String(r.r).includes('ok') && (await row(id)).s === 'paused',
+    String(r.r).slice(0, 60),
+  )
+  await db
+    .execute(`update public.jobs set state = 'cancelled' where job_id = ${lit(id)}::uuid`)
+    .catch(() => undefined)
+}
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

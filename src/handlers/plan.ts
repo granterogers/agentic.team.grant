@@ -265,6 +265,7 @@ export function planHandler(db: SqlExecutor): Handler {
             return { outcome: acc as unknown as Outcome }
           },
         })),
+        job,
       )
 
       if (run.kind === 'paused') {

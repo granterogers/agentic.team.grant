@@ -461,6 +461,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           `generate:${approval.blocker ?? 'unasked'}`,
           'notebook.generate@1',
           approval.askingJob ?? job.jobId,
+          job,
         )
         if (claim.kind === 'skip') {
           return deterministic(
@@ -665,6 +666,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           `add_source:${(await fingerprint({ notebook: notebook.id, url })).slice(0, 16)}`,
           'notebook.add_source@1',
           await claimJobFor(db, job),
+          job,
         )
         if (addGate.kind === 'skip') {
           return deterministic(
@@ -777,6 +779,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           `push_document:${(await fingerprint({ notebook: notebook.id, document: documentId })).slice(0, 16)}`,
           'notebook.push_document@1',
           await claimJobFor(db, job),
+          job,
         )
         if (pushGate.kind === 'skip') {
           return deterministic(

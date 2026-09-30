@@ -43,6 +43,7 @@
 import type { SqlExecutor } from '../db/executor.ts'
 import { raiseBlocker } from '../inference/record.ts'
 import { fingerprint, type Outcome, type Paused, type Step } from '../jobs/checkpoint.ts'
+import { type Claimed, callerArgs } from '../jobs/fence.ts'
 import { isUntrusted, retrieve } from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { mayAct, refusalSentence } from './approval.ts'
@@ -70,6 +71,11 @@ export interface Doing {
    * registry and the validator rule, and those are different questions.
    */
   readonly router?: ProviderRouter
+  /**
+   * The claim the step runs under (Run 5 / final audit): the job that holds it, the worker and its claim number, so a
+   * child the step starts is made under its author's claim and a worker that lost the job makes none.
+   */
+  readonly held?: Claimed
 }
 
 /**
@@ -485,7 +491,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
    */
   'task.extract': {
     effect: 'local',
-    run: async ({ db, jobId, step, from }): Promise<Observation> => {
+    run: async ({ db, jobId, step, from, held }): Promise<Observation> => {
       /*
         THIS EXECUTOR IGNORED ITS DEPENDENCY, AND THE CHAIN CLAIM WAS FALSE
         FOR IT.
@@ -536,7 +542,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
       const { rows } = await db
         .execute(`
           select app.enqueue_child(${lit(jobId)}::uuid, 'office.extract_tasks',
-            jsonb_build_object('from', ${lit(only)}), interval '0', false)::text as id`)
+            jsonb_build_object('from', ${lit(only)}), interval '0', false${callerArgs(held)})::text as id`)
         .catch(() => ({ rows: [] as Record<string, unknown>[] }))
       const id = String((rows[0] as { id?: string } | undefined)?.id ?? '')
       if (id === '') return nothing('task.extract', 'the extraction job could not be started')
@@ -625,6 +631,7 @@ export const compile = (
    * resume of the SAME round still skips what it finished.
    */
   round = 1,
+  held?: Claimed,
 ): readonly Step[] =>
   plan.steps.map((step) => {
     const executor = EXECUTORS[step.capability]
@@ -881,6 +888,7 @@ export const compile = (
           step,
           from,
           ...(router === undefined ? {} : { router }),
+          ...(held === undefined ? {} : { held }),
         })
         // A step that says "not yet" stops the plan; one that says "no" is an
         // outcome the steps after it can read.

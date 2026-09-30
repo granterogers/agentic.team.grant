@@ -125,37 +125,43 @@ export function backupHandler(deps: BackupDeps): Handler {
       const prefix = backupPrefix(job.jobId)
       const tables = await tablesToBackUp(db)
 
-      const end = await runSteps(db, job.jobId, 'office.backup@1', [
-        ...tables.map((t) => ({
-          name: `table:${t.table_schema}.${t.table_name}`,
-          effect: 'local' as const,
-          run: async () => {
-            const dump = await dumpTable(db, prefix, t.table_schema, t.table_name)
-            await putObject(projectRef, serviceKey, dump)
-            return { outcome: { rows: dump.rows, bytes: dump.bytes.length }, effectRef: dump.key }
-          },
-        })),
-        {
-          /*
+      const end = await runSteps(
+        db,
+        job.jobId,
+        'office.backup@1',
+        [
+          ...tables.map((t) => ({
+            name: `table:${t.table_schema}.${t.table_name}`,
+            effect: 'local' as const,
+            run: async () => {
+              const dump = await dumpTable(db, prefix, t.table_schema, t.table_name)
+              await putObject(projectRef, serviceKey, dump)
+              return { outcome: { rows: dump.rows, bytes: dump.bytes.length }, effectRef: dump.key }
+            },
+          })),
+          {
+            /*
             The manifest LAST, because its presence is what makes the folder a
             complete backup rather than an interrupted one. A restore that
             finds tables and no manifest should say so, not load three
             quarters of an office.
           */
-          name: 'manifest',
-          effect: 'local' as const,
-          run: async (done) => {
-            const counts: Record<string, number> = {}
-            for (const t of tables) {
-              const o = done[`table:${t.table_schema}.${t.table_name}`]
-              counts[`${t.table_schema}.${t.table_name}`] = Number(o?.rows ?? 0)
-            }
-            const m = await buildManifest(db, projectRef, prefix, counts)
-            await putObject(projectRef, serviceKey, m)
-            return { outcome: { rows: m.rows, tables: Object.keys(counts).length } }
+            name: 'manifest',
+            effect: 'local' as const,
+            run: async (done) => {
+              const counts: Record<string, number> = {}
+              for (const t of tables) {
+                const o = done[`table:${t.table_schema}.${t.table_name}`]
+                counts[`${t.table_schema}.${t.table_name}`] = Number(o?.rows ?? 0)
+              }
+              const m = await buildManifest(db, projectRef, prefix, counts)
+              await putObject(projectRef, serviceKey, m)
+              return { outcome: { rows: m.rows, tables: Object.keys(counts).length } }
+            },
           },
-        },
-      ])
+        ],
+        job,
+      )
 
       if (end.kind !== 'done') {
         /*
