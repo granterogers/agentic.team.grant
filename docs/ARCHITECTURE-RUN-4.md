@@ -132,13 +132,13 @@ the previous worker (v865), hq-api (v798 source = commit 6a579291) and telegram-
 `superseded` stays (an enum value cannot be removed; nothing reads it once the worker is rolled back).
 
 ## Remaining debt (concrete)
-1. A delivery carries no blocker id, so a typed yes binds to "the office's last message from the job that raised
+1. (#396) A delivery carries no blocker id, so a typed yes binds to "the office's last message from the job that raised
    the question", not to the message's content.
-2. Voice and the dashboard chat have no delivery record and keep the old tree binding; Slack has no
+2. (#397) Voice and the dashboard chat have no delivery record and keep the old tree binding; Slack has no
    forward/shared-message detection; Telegram `external_reply` and `quote` are not treated as forwards.
 3. A forwarded turn is still `trusted` and spawns trusted children; only the typed yes reads `forwarded` (#392).
-4. `enqueue_child` cannot tell who is asking, so a CHILD that retries and defers again takes a new slot (those
+4. (#398) `enqueue_child` cannot tell who is asking, so a CHILD that retries and defers again takes a new slot (those
    deferrals carry their own claims); it is not fenced against a stale caller.
-5. `resume_job` still refunds an attempt number for `dependency_wait` and `scheduled_wait` (0609), so the fence's
+5. (#398) `resume_job` still refunds an attempt number for `dependency_wait` and `scheduled_wait` (0609), so the fence's
    paused clause is ambiguous across those two wakes.
 6. #389 (a decision), #391 (a budget-integrity gap), #393 (write-capable attach gate) untouched by design.
