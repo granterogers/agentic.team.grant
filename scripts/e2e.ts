@@ -190,7 +190,8 @@ const NEVER: Record<string, string> = {
  * anything spending a real external budget, and anything whose failure would
  * be a known-open Issue rather than a new regression.
  *
- * Keep it under about six minutes. A gate that takes fifteen is a gate that
+ * Keep the FAST part under about six minutes. The last entries (the isolated replica and the live acceptance suites) are
+ * the audit's own evidence and take about an hour; `--only` runs any of them alone. A gate that takes fifteen minutes is a gate that
  * gets skipped, and a skipped gate is worse than no gate because the
  * repository still believes it has one.
  */
@@ -651,6 +652,34 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   */
   ['verify:tasks-ui', 'My Tasks pressed in a real browser, on desktop and phone (#259)'],
   ['verify:upload', 'a dropped file, through the deployed gateway, with its provenance intact'],
+  /*
+    THE ARCHITECTURE AUDIT'S OWN EVIDENCE (final audit reconciliation). The original audit's definition of done (its
+    section 46) asks for behavioural proof on the integrated system, in a gate that includes the isolated-replica
+    suites. These were outside it: the isolated suites were a manual script, the Run 1-5 live suites were run by hand.
+    `verify:isolated` needs the local replica (`sudo scripts/isolated/replica.sh`) and FAILS LOUDLY without one rather
+    than being skipped: a gate that quietly drops its strongest suites is the defect it exists to prevent.
+  */
+  [
+    'check:gateway-wrappers',
+    'every gateway section and action names a public function a browser can actually reach (#340)',
+  ],
+  [
+    'verify:isolated',
+    'every isolated-replica proof, each on a fresh copy of production plus the candidate migrations',
+  ],
+  ['verify:run1-live', 'Run 1 acceptance through the deployed doors'],
+  ['verify:run2-live', 'Run 2 acceptance: authority and approval'],
+  ['verify:run3-live', 'Run 3 acceptance: identity and sender authorization'],
+  ['verify:run3-effects-live', 'Run 3 acceptance: the effect boundary'],
+  ['verify:run4-live', 'Run 4 acceptance: durable origin and lifecycle'],
+  [
+    'verify:run5-live',
+    'Run 5 acceptance: exact question binding, forwarded content, fenced children',
+  ],
+  [
+    'verify:final-audit-live',
+    'the original architecture audit, representative guarantees across every category',
+  ],
 ]
 
 type Result = {

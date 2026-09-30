@@ -15,6 +15,7 @@ import { notebookHandlers } from '../../src/handlers/notebook.ts'
 import { planHandler } from '../../src/handlers/plan.ts'
 import type { Job } from '../../src/jobs/worker.ts'
 import { isolated } from './guard.ts'
+import { realParent } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'approvalbinding')
 const run = Date.now().toString(36)
@@ -102,6 +103,26 @@ const jobRow = async (
   by = 'telegram:grant',
   parent: string | null = null,
 ): Promise<Job> => {
+  // Grant's own work is a child of a real adapter turn (#379, and B11 of the original audit): a hand-inserted root
+  // that merely NAMES telegram:grant is an origin no production component creates, and "a person asked" is no longer
+  // read off the name.
+  if (by === 'telegram:grant') {
+    const hung = await one(
+      `select app.enqueue_child(${lit(parent ?? (await realParent(db)))}::uuid, ${lit(kind)}, ${lit(JSON.stringify(config))}::jsonb, interval '0', true, ${lit(p)}::uuid)::text as id`,
+    )
+    const id = String(hung.id).match(/[0-9a-f-]{36}/)?.[0] as string
+    const row = await one(
+      `select correlation_id::text as cid, idempotency_key as k from public.jobs where job_id = ${lit(id)}::uuid`,
+    )
+    return {
+      jobId: id,
+      kind,
+      correlationId: String(row.cid),
+      projectId: p,
+      idempotencyKey: String(row.k),
+      attempt: 1,
+    }
+  }
   const r =
     await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, pinned_config, parent_job_id)
       values (${lit(kind)}, ${lit(by)}, ${lit(p)}::uuid, 'ab-' || gen_random_uuid(), gen_random_uuid(),

@@ -38,6 +38,10 @@ await db.execute(
   `insert into public.subject_identities (subject, origin_channel, actor, note)
    values ('grant', 'slack', ${lit(GRANT)}, 'isolated proof') on conflict do nothing`,
 )
+// The installed workspace (0630): the app is installed in TEAM, and an event from anywhere else is not this office's.
+await db.execute(
+  `insert into public.slack_app_credentials (slack_app_id, team_id, app_name) values ('A0ISOLATED1', ${lit(TEAM)}, 'isolated proof') on conflict do nothing`,
+)
 const resolves = await one(`select app.subject_for('slack', ${lit(GRANT)}) as s`)
 check(
   "the fixture resolves Grant's Slack user to grant",
@@ -298,6 +302,71 @@ const press = async (user: string, action: string) => {
   )
 }
 
+// ---- the workspace (#392.3, 0630) ---------------------------------------------------------------------
+{
+  const before = await cmds()
+  const text = `grant in the wrong workspace ${run}`
+  const wrong = JSON.parse(message({ user: GRANT }, text))
+  wrong.team_id = 'T0SOMEWHERE'
+  const r = await post(JSON.stringify(wrong))
+  const stored = await count(
+    `select count(*)::int as c from public.inbound_commands where instruction = ${lit(text)}`,
+  )
+  check(
+    'a correctly signed event from Grant in ANOTHER workspace is acknowledged and stored nowhere',
+    r.status === 200 &&
+      r.body.ignored === 'unrecognised workspace' &&
+      stored === 0 &&
+      (await cmds()) === before,
+    `http ${String(r.status)} ${JSON.stringify(r.body)}`,
+  )
+  const noTeam = JSON.parse(message({ user: GRANT }, `no team ${run}`))
+  noTeam.team_id = undefined
+  const r2 = await post(JSON.stringify(noTeam))
+  check(
+    'an event with no team identity is refused the same way',
+    r2.status === 200 && r2.body.ignored === 'unrecognised workspace',
+    JSON.stringify(r2.body),
+  )
+  const lower = JSON.parse(message({ user: GRANT }, `lower ${run}`))
+  lower.team_id = 't0isolated'
+  const r3 = await post(JSON.stringify(lower))
+  check(
+    'a differently-cased team id is not the installed workspace',
+    r3.body.ignored === 'unrecognised workspace',
+    JSON.stringify(r3.body),
+  )
+  const okText = `grant in the right workspace ${run}`
+  const ok = await post(message({ user: GRANT }, okText))
+  const row = await commandFor(okText)
+  check(
+    'the control: the installed workspace and the same user still becomes a job',
+    ok.status === 200 && typeof row?.job === 'string',
+    `http ${String(ok.status)}`,
+  )
+  // replay: the same signed body twice is one command
+  const replay = message({ user: GRANT }, `replay ${run}`)
+  await post(replay)
+  await post(replay)
+  const replayed = await count(
+    `select count(*)::int as c from public.inbound_commands where instruction = ${lit(`replay ${run}`)}`,
+  )
+  check('replaying a delivered event makes no second command', replayed === 1, String(replayed))
+  // an installation that is disabled serves nothing
+  await db.execute(
+    `update public.slack_app_credentials set enabled = false, disabled_reason = 'proof' where team_id = ${lit(TEAM)}`,
+  )
+  const offText = `grant while disabled ${run}`
+  const off = await post(message({ user: GRANT }, offText))
+  check(
+    'a disabled installation serves no workspace',
+    off.body.ignored === 'unrecognised workspace',
+    JSON.stringify(off.body),
+  )
+  await db.execute(
+    `update public.slack_app_credentials set enabled = true, disabled_reason = null where team_id = ${lit(TEAM)}`,
+  )
+}
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

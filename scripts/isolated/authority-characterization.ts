@@ -12,6 +12,7 @@
  */
 import { mayAct } from '../../src/agents/approval.ts'
 import { isolated } from './guard.ts'
+import { realParent } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'authchar')
 const run = Date.now().toString(36)
@@ -37,13 +38,22 @@ const setDial = (p: string, level: string) =>
     `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(p)}::uuid, ${lit(level)}, 'grant', 'characterisation')`,
   )
 const job = async (p: string, by: string, kind = 'office.instruction'): Promise<string> =>
-  String(
-    (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
+  by.startsWith('telegram:')
+    ? // a person's work is a child of a real adapter turn: a root that only NAMES him is unknown provenance
+      (String(
+        (
+          await one(
+            `select app.enqueue_child(${lit(await realParent(db))}::uuid, ${lit(kind)}, '{}'::jsonb, interval '0', true, ${lit(p)}::uuid)::text as id`,
+          )
+        ).id,
+      ).match(/[0-9a-f-]{36}/)?.[0] ?? '')
+    : String(
+        (
+          await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
         values (${lit(kind)}, ${lit(by)}, ${lit(p)}::uuid, 'ac-' || gen_random_uuid(), gen_random_uuid())
         returning job_id::text as id`)
-    ).id,
-  )
+        ).id,
+      )
 
 // ---- the matrix, through the real caller ---------------------------------
 const TOOLS = { read: 'db.read', write: 'task.create', outward: 'notion.write' } as const
