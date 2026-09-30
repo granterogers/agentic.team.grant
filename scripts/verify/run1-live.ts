@@ -186,6 +186,10 @@ const withQuestion = async (chat: string) => {
     insert into public.blockers (job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
     select job_id, 'Send the renewal note to the venue', 'run1-live fixture', 'nothing', array['Yes, do it','No, leave it'], 'chief-of-staff', false from k
     returning blocker_id::text as id`)
+  // As in production, the question REACHED him (0622, #394): a typed yes answers a question he was shown. A row
+  // only - nothing is sent, and the target is a declared test chat.
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
+    values ('telegram', ${lit(`run1-live-${crypto.randomUUID()}`)}, 'run1-live', ${lit(chat)}, 'blocker', ${lit(child)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
   return { blocker: String(b.id), first }
 }
 const blockerRow = async (id: string) =>
@@ -332,7 +336,10 @@ try {
     )
   }
 } finally {
-  const released = await origins.release()
+  const released = // Rows written to model 'the question reached him' were never sent to anybody: removed, so the leak witness cannot
+    // read a fabricated row as harness traffic reaching a destination.
+    await db.execute(`delete from public.deliveries where account_ref = 'run1-live'`)
+  await origins.release()
   console.log(`released ${String(released)} declaration(s)`)
 }
 

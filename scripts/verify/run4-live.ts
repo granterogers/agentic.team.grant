@@ -201,12 +201,12 @@ try {
       .execute(`update public.jobs set origin_class = 'trusted' where job_id = ${lit(kid)}::uuid`)
       .then(
         () => 'accepted',
-        (e: unknown) => String((e as Error).message).slice(0, 90),
+        (e: unknown) => String((e as Error).message),
       )
     check(
       'and the origin cannot be rewritten afterwards (refused, for that reason)',
       /written once/.test(said) && lie.origin_class === 'harness',
-      said,
+      said.slice(0, 110),
     )
   }
 
@@ -235,13 +235,13 @@ try {
     )
     const now =
       await one(`select app.job_held(${lit(P)}::uuid, 'run4-w1', 1) as stale, app.job_held(${lit(P)}::uuid, 'run4-w2', 2) as holder,
-        app.renew_lease(${lit(P)}::uuid, 'run4-w1', 1) as staleRenews, app.renew_lease(${lit(P)}::uuid, 'run4-w2', 2) as holderRenews`)
+        app.renew_lease(${lit(P)}::uuid, 'run4-w1', 1) as stale_renews, app.renew_lease(${lit(P)}::uuid, 'run4-w2', 2) as holder_renews`)
     check(
       'after a takeover the stale worker no longer holds the job and cannot renew it; the new holder does and can',
       now.stale === false &&
         now.holder === true &&
-        now.staleRenews === false &&
-        now.holderRenews === true,
+        now.stale_renews === false &&
+        now.holder_renews === true,
       JSON.stringify(now),
     )
     const sit = await one(`select app.job_situation(${lit(P)}::uuid)->>'situation' as s`)
@@ -327,13 +327,14 @@ try {
     )
     const ans = await gateway('answer_blocker', { p_blocker_id: b1, p_answer: 'Yes, do it' })
     const after = await one(
-      `select state::text as s, attempt, origin_kind, origin_class, root_job_id::text as r from public.jobs where job_id = ${lit(A)}::uuid`,
+      `select state::text as s, attempt, max_attempts, origin_kind, origin_class, root_job_id::text as r from public.jobs where job_id = ${lit(A)}::uuid`,
     )
     check(
-      'answered later, as the verified principal: the SAME job is queued again with the same origin, and the wait did not cost an attempt',
+      'answered later, as the verified principal: the SAME job is queued again with the same origin, and the question did not spend its attempt (its number is kept, a further one is granted)',
       ans.status === 200 &&
         after.s === 'queued' &&
-        Number(after.attempt) === 0 &&
+        Number(after.attempt) === 1 &&
+        Number(after.max_attempts) >= 5 &&
         after.origin_kind === before.origin_kind &&
         after.origin_class === before.origin_class &&
         after.r === before.r,
@@ -499,6 +500,9 @@ try {
   await db.execute(
     `update public.blockers set state = 'resolved', answered_by = 'verify-operator', answered_option = decline_option, resolved_at = app.now_utc() where state = 'open' and why_needed = 'run4-live fixture'`,
   )
+  // The delivery rows this run wrote to model 'a question that reached him' were never sent to anybody; they are
+  // removed so the leak witness cannot read a fabricated row as harness traffic reaching a destination.
+  await db.execute(`delete from public.deliveries where account_ref = 'run4-live'`)
   await origins.release()
 }
 
