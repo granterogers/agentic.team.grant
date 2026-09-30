@@ -95,8 +95,8 @@ export async function guidanceFor(
       select
         (select coalesce(jsonb_agg(jsonb_build_object(
                   'body', l.body, 'scope', l.scope::text, 'observations', l.observations,
-                  'stated', not exists (select 1 from public.staff st
-                                         where st.slug = l.learned_by))),
+                  'stated', exists (select 1 from public.subject_identities si
+                                     where si.kind = 'person' and si.subject = l.learned_by))),
                 '[]'::jsonb)
            from app.lessons_for(${uuid(projectId)}, ${lit(staffSlug)},
                                 ${jobKind === null ? 'null' : lit(jobKind)},
@@ -124,8 +124,9 @@ export async function guidanceFor(
         body: l.body,
         scope: l.scope,
         observations: l.observations,
-        // Defaulting to false is the safe direction: an unknown author is
-        // treated as a belief to weigh rather than as an order from Grant.
+        // An order is one an admitted PERSON gave (subject_identities, kind person). Everything else - a
+        // specialist's inference, a duty, a service, a stranger, a harness - is a belief to weigh. The earlier
+        // test was "not a staff slug", which labelled every non-staff author as Grant.
         stated: l.stated === true,
       })),
       skills: (row.skills ?? []).map((s) => ({

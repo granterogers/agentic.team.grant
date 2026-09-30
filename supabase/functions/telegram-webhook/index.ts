@@ -448,7 +448,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // means carry on and let the runner path below handle it.
   // Only the delivery that STORED (or finished) the command says so: Telegram redelivers an update it
   // was not answered promptly, and a refusal sent on every redelivery is the same message N times.
-  if (command.voice_file_id !== null && queued !== null) {
+  // A declared test origin reaches no provider from here: the note is stored like any turn and nothing is sent or
+  // dispatched on its account (a dispatch spends Actions minutes and a reply goes out through a real bot).
+  if (command.voice_file_id !== null && queued !== null && !declaredTest) {
     const refusal = (await rpcOne('voice_refusal', { p_bot_id: claimed })) as {
       refuse?: boolean
       token?: string
@@ -486,7 +488,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // hours. Skipped silently when no token is configured — the note is then
   // picked up on the next cron, which is late but never lost (§18).
   let woke = false
-  if (queued !== null && command.voice_file_id !== null) {
+  if (queued !== null && command.voice_file_id !== null && !declaredTest) {
     const gh = (await rpcOne('github_dispatch')) as { repository?: string; token?: string }
     if (typeof gh?.token === 'string' && gh.token !== '' && typeof gh.repository === 'string') {
       // The Actions-minutes ceiling is asked BEFORE anything is dispatched (#391, 0626): a dispatch the ledger

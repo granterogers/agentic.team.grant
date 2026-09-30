@@ -67,6 +67,25 @@ const run = Date.now().toString(36)
 const TOOL = `verification.standing.${run}`
 const WHO = 'growth-director'
 
+/**
+ * SQL that makes a turn the way the Telegram door does, inside the caller's transaction: a command through a
+ * production door, enqueued by the real `enqueue_inbound`. A job hand-inserted as `requested_by = 'telegram:grant'`
+ * is not Grant's (its origin is unknown since 0603), so a fixture built that way asserted the old rule; this is the
+ * real shape. Refer to the job afterwards by the tag.
+ */
+const realTurnSql = (tag: string): string => `
+    set local application_name = 'PostgREST 14.5';
+    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values ('telegram', ${lit(`1386648496:${String(Math.floor(Math.random() * 9e6) + 1e6)}`)}, '1386648496', 'fixture turn',
+            ${lit(`telegram:message:8967954396:1386648496:${tag}`)}, 'grant');
+    select public.enqueue_inbound((select command_id from public.inbound_commands
+                                    where dedupe_key = ${lit(`telegram:message:8967954396:1386648496:${tag}`)}));`
+const realTurnJob = (tag: string): string =>
+  `(select j.job_id from public.jobs j join public.inbound_commands c on c.command_id = j.origin_command_id
+     where c.dedupe_key = ${lit(`telegram:message:8967954396:1386648496:${tag}`)})`
+
+const TAG_PERSON = String(Date.now() * 10 + 1)
+const TAG_OBSERVE = String(Date.now() * 10 + 2)
 const one = async (sql: string): Promise<Record<string, unknown>> =>
   ((await db.execute(sql)).rows[0] ?? {}) as Record<string, unknown>
 
@@ -218,18 +237,16 @@ console.log('\nwho asked: a person, or a schedule')
     insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
     values (extensions.gen_random_uuid(), null, ${lit(`verify-approval-duty-${run}`)},
             'research', 'duty:fixture-schedule');
-    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
-    values (extensions.gen_random_uuid(), null, ${lit(`verify-approval-person-${run}`)},
-            'research', 'telegram:grant');
+    ${realTurnSql(TAG_PERSON)}
     select
       (app.may_act(null, 'notion.write',
         (select job_id from public.jobs where idempotency_key = ${lit(`verify-approval-duty-${run}`)}))
         ->> 'verdict') as by_duty,
       (app.may_act(null, 'notion.write',
-        (select job_id from public.jobs where idempotency_key = ${lit(`verify-approval-person-${run}`)}))
+        ${realTurnJob(TAG_PERSON)})
         ->> 'verdict') as by_person,
       (app.may_act(null, ${lit(LIVE_THREE)},
-        (select job_id from public.jobs where idempotency_key = ${lit(`verify-approval-person-${run}`)}))
+        ${realTurnJob(TAG_PERSON)})
         ->> 'verdict') as person_level_three,
       (app.may_act(null, 'notion.write', null) ->> 'verdict') as no_job;
     rollback;
@@ -264,11 +281,9 @@ console.log('\nwho asked: a person, or a schedule')
     begin;
     insert into public.autonomy_settings (project_id, level, set_by, reason)
     values (null, 'observe', 'verify:approval', 'driving the asked-for rule');
-    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
-    values (extensions.gen_random_uuid(), null, ${lit(`verify-approval-observe-${run}`)},
-            'research', 'telegram:grant');
+    ${realTurnSql(TAG_OBSERVE)}
     select (app.may_act(null, 'notion.write',
-      (select job_id from public.jobs where idempotency_key = ${lit(`verify-approval-observe-${run}`)}))
+      ${realTurnJob(TAG_OBSERVE)})
       ->> 'verdict') as v;
     rollback;
   `)
@@ -355,7 +370,7 @@ const clean = async (): Promise<void> => {
 await clean()
 await db.execute(`
   insert into public.tool_permissions (tool, level, description, enabled, verbs, delivered_by)
-  values (${lit(TOOL)}, 1,
+  values (${lit(TOOL)}, 2,
           'A fixture capability created by verify:approval, and removed by it.',
           true, array['stand in for a real capability'], 'scripts/verify/approval.ts')
 `)
