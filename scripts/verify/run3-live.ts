@@ -301,6 +301,7 @@ try {
     check('and no autonomy row was written', Number(rows.n) === 0, String(rows.n))
   }
 
+  // check:voice-sessions-exempt: office-key refusal probe (the refusal is the subject; the 403 is asserted below)
   // ---- 385: the voice door: the key is not a voice ---------------------------------------------------
   {
     const said = `run3 live: this must not be heard ${run}`

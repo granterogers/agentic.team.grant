@@ -48,9 +48,20 @@ export const sessionsIn = (src: string): { literal: string; ok: boolean }[] => {
   return found.map((literal) => ({ literal, ok: /^[`'"]verify-/.test(literal) }))
 }
 
+/**
+ * The ONE intentional exception (#395's rule: an exception is encoded explicitly and narrowly, never by suppressing the
+ * check). The voice door refuses the office key for any session that is not a declared test session (403), and the
+ * only way to prove that refusal is to post a REAL-LOOKING session with the key. A script may do so when it says
+ * so in a marker comment AND asserts the 403 in the same file: then a turn that got through is a failed check in that
+ * suite, and the marker without the assertion is no exemption.
+ */
+const REFUSAL_PROBE_MARKER = /check:voice-sessions-exempt: office-key refusal probe/
+const ASSERTS_403 = /\.status\s*===\s*403/
+
 /** A script's verdict: null when it is fine, else the reason. */
 export const verdict = (src: string): string | null => {
   if (!POSTS_TO_TURN.test(src) || INTERCEPTS.test(src)) return null
+  if (REFUSAL_PROBE_MARKER.test(src) && ASSERTS_403.test(src)) return null
   const sessions = sessionsIn(src)
   // Posts to the door with no session literal: the door refuses a missing
   // session (400), so a script like that is a refusal probe, not a turn.
@@ -64,6 +75,12 @@ const control = [
   'const session = `scenario-a-${run}`\nfetch(`https://x/functions/v1/voice/turn`)',
 ]
 const passes = ["fetch(`${b}/voice/turn`, { body: JSON.stringify({ said, session: 'verify-x' }) })"]
+// the exemption needs BOTH halves: the marker alone, or the assertion alone, is still an escape
+const probe =
+  '// check:voice-sessions-exempt: office-key refusal probe\nconst r = await fetch(`${b}/voice/turn`, { body: JSON.stringify({ session: `page${run}xyz` }) })\ncheck(r.status === 403)'
+control.push(probe.replace('// check:voice-sessions-exempt: office-key refusal probe\n', ''))
+control.push(probe.replace('check(r.status === 403)', 'check(r.ok)'))
+passes.push(probe)
 if (control.some((c) => verdict(c) === null) || passes.some((p) => verdict(p) !== null)) {
   console.error(
     'check:voice-sessions CANNOT RUN — its detector does not tell an escape from a name.',
