@@ -109,7 +109,7 @@ const rest = async (
   retries a non-2xx, and there is no reason to tell a stranger anything). A
   failure to ASK is not a refusal, and answers 503 so Slack tries again.
 */
-type Admission = 'admitted' | 'stranger' | 'unknown'
+type Admission = 'admitted' | 'test' | 'stranger' | 'unknown'
 const admission = async (actor: string, conversation: string): Promise<Admission> => {
   const asked = await fetch(`${DB_URL}/rest/v1/rpc/sender_admitted`, {
     method: 'POST',
@@ -126,9 +126,28 @@ const admission = async (actor: string, conversation: string): Promise<Admission
     declared_test?: boolean
   } | null
   if (said === null) return 'unknown'
-  return (typeof said.subject === 'string' && said.subject !== '') || said.declared_test === true
-    ? 'admitted'
-    : 'stranger'
+  if (said.declared_test === true) return 'test'
+  return typeof said.subject === 'string' && said.subject !== '' ? 'admitted' : 'stranger'
+}
+
+/*
+  The workspace (#392.3, 0630). A valid signature proves Slack sent it, not WHICH workspace; a Slack user id is unique
+  only inside one. Asked for everything that is not a declared test conversation (a harness keeps its fixture team ids).
+  'unknown' means we could not ask, and is never a yes.
+*/
+const workspaceOk = async (team: unknown): Promise<'ok' | 'wrong' | 'unknown'> => {
+  if (typeof team !== 'string' || team === '') return 'wrong'
+  const asked = await fetch(`${DB_URL}/rest/v1/rpc/slack_team_ok`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_team: team }),
+  }).catch(() => null)
+  if (asked === null || !asked.ok) return 'unknown'
+  return (await asked.json().catch(() => null)) === true ? 'ok' : 'wrong'
 }
 
 /**
@@ -191,10 +210,10 @@ const storeCommand = async (
     // Only for something that IS an instruction: a reaction, a join notice and
     // a button press are canonical commands too, and none of them is work.
     // Button presses go through `processCallbacks` at the top of every pass.
-    if (command.instruction !== null && command.instruction.trim() !== '') {
-      await rest('rpc/enqueue_inbound', { p_command_id: commandId })
-    }
-
+    //
+    // The routing row is written BEFORE the turn is enqueued (B13 of the original audit): a reader that joins it the
+    // moment the job exists (the notifier joins it to find the thread) must never see a turn without its routing. A
+    // failure to write it is not a reason to lose the turn, so the enqueue follows either way.
     await rest('inbound_commands_slack', {
       command_id: commandId,
       team_id: command.slack.team_id,
@@ -203,6 +222,9 @@ const storeCommand = async (
       is_dm: command.slack.is_dm,
       reaction: command.slack.reaction,
     })
+    if (command.instruction !== null && command.instruction.trim() !== '') {
+      await rest('rpc/enqueue_inbound', { p_command_id: commandId })
+    }
   }
   return 'stored'
 }
@@ -261,6 +283,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const presser = await admission(pressed.actor, pressed.slack.channel_id ?? '')
     if (presser === 'unknown') return new Response('could not check the sender', { status: 503 })
     if (presser === 'stranger') return new Response('', { status: 200 })
+    if (presser !== 'test') {
+      const w = await workspaceOk(pressed.slack.team_id)
+      if (w === 'unknown') return new Response('could not check the workspace', { status: 503 })
+      if (w === 'wrong') return new Response('', { status: 200 })
+    }
     await storeCommand(pressed)
     // An empty 200 leaves the message exactly as it is. Slack treats a body
     // here as a REPLACEMENT for the message, so returning anything chatty would
@@ -320,6 +347,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const sender = await admission(command.actor, command.slack.channel_id ?? '')
   if (sender === 'unknown') return new Response('could not check the sender', { status: 503 })
   if (sender === 'stranger') return Response.json({ ok: true, ignored: 'unrecognised sender' })
+  if (sender !== 'test') {
+    const w = await workspaceOk(command.slack.team_id)
+    if (w === 'unknown') return new Response('could not check the workspace', { status: 503 })
+    if (w === 'wrong') return Response.json({ ok: true, ignored: 'unrecognised workspace' })
+  }
 
   const outcome = await storeCommand(command)
   if (outcome === 'failed') return new Response('storage failed', { status: 503 })
