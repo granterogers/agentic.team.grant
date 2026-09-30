@@ -426,14 +426,20 @@ export async function pauseJob(
   const when = (d: Date | undefined): string =>
     d === undefined ? 'null' : `${lit(d.toISOString())}::timestamptz`
   const binds = pause.binds === undefined ? null : await fingerprint(pause.binds)
-  await db.execute(
+  const call = (fenced: boolean): string =>
     `select app.pause_job(${lit(jobId)}::uuid, ${lit(pause.reason)}, ${lit(pause.detail)},
                           ${lit(pause.resumeWhen)}, ${String(pause.resumable ?? true)},
                           ${when(pause.until)}, ${when(pause.expiresAt)},
                           ${binds === null ? 'null' : lit(binds)}${
-                            held?.leasedBy === undefined || held.claimGen === undefined
-                              ? ''
-                              : `, p_worker => ${lit(held.leasedBy)}, p_gen => ${String(held.claimGen)}`
-                          })`,
-  )
+                            fenced && held?.leasedBy !== undefined && held.claimGen !== undefined
+                              ? `, p_worker => ${lit(held.leasedBy)}, p_gen => ${String(held.claimGen)}`
+                              : ''
+                          })`
+  try {
+    await db.execute(call(true))
+  } catch (error) {
+    // Only a database that predates 0628 has no fenced arity; a stale-claim refusal is a different error and must propagate.
+    if (!/42883|does not exist/i.test(String((error as Error).message))) throw error
+    await db.execute(call(false))
+  }
 }
