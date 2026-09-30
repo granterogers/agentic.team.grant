@@ -2134,9 +2134,11 @@ export const drain = async (
       Grant sent a 17-second voice note on 8 September, the transcription path
       threw, and he was told nothing at all. That is what this is for.
     */
-    if (result.finalState === 'failed') {
+    if (result.finalState === 'failed' || result.finalState === 'paused') {
       try {
-        await lastWord(db, job, options.notify)
+        // A parked turn is owed a word only when `app.owed_a_word` says so (0634: a non-resumable pause and no
+        // open question); an approval pause, a resumable wait and a duty all come back empty.
+        await lastWord(db, job, options.notify, result.finalState === 'paused')
       } catch {
         /* An apology that fails must not become a second failure. */
       }

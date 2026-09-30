@@ -168,8 +168,8 @@ export async function beginStep(
       reason: 'needs_reconciliation',
       resumable: false,
       resumeWhen:
-        `Check whether "${name}" actually happened outside the office. ` +
-        'If it did, mark the step finished; if it did not, clear it and I will run it again.',
+        `Check whether "${name}" actually happened outside the office. The office will not repeat it by itself: ` +
+        'stop this job, and if the step did not happen, ask again and it starts fresh.',
     }
     await pauseJob(db, jobId, pause, held)
     return { kind: 'paused', pause }

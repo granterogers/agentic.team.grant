@@ -74,6 +74,19 @@ export function apology(spoken: boolean): string {
   )
 }
 
+/**
+ * What he reads when the turn did not die but PARKED for good (0634): a step that changes something outside the
+ * office was interrupted, or was written by other code, so nothing will resume it. It says what is true and what
+ * he can actually do - stop it on the dashboard and ask again - and promises nothing the office cannot perform.
+ */
+export function parkedNotice(): string {
+  return (
+    'I stopped part-way through what you asked. One step changes something outside our own records ' +
+    'and I cannot tell whether it went through, so I have not repeated it. It is parked on the ' +
+    'dashboard: stop it there, and if the step did not happen, ask me again and I will start it fresh.'
+  )
+}
+
 export type LastWordOutcome = 'told' | 'nobody owed' | 'could not'
 
 /**
@@ -86,6 +99,8 @@ export async function lastWord(
   db: SqlExecutor,
   job: Job,
   notify: Notifier | undefined,
+  /** The turn parked rather than died: the sentence says so (0634). */
+  parked = false,
 ): Promise<LastWordOutcome> {
   if (notify === undefined) return 'nobody owed'
 
@@ -136,7 +151,7 @@ export async function lastWord(
     /* The plainer wording is correct for both, so this is not worth failing. */
   }
 
-  const body = apology(spoken)
+  const body = parked ? parkedNotice() : apology(spoken)
 
   /*
     Stored as an output before it is sent, for the same reason every other

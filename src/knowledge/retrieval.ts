@@ -87,6 +87,12 @@ export function citationRef(source: {
 /**
  * The documents most relevant to a question.
  *
+ * SCOPED TO A PROJECT, ALWAYS (invariant 17). `app.search_documents` reads a null project as "every project", which
+ * is right for Grant's own search box and wrong for an agent: a job with no project of its own (a legacy row) would
+ * have searched everything with no permission question asked. A null here means the Unnamed project - the catch-all
+ * every unscoped turn is given - never all of them. Searching across projects is a decision (b) that has not been
+ * made, and when it is, it will be a different function that says so.
+ *
  * Returns `[]` rather than throwing when nothing matches, because an empty
  * corpus and an unmatched query are both normal and neither is an error. The
  * caller's job is to say so in the answer rather than to pretend it searched.
@@ -106,7 +112,7 @@ export async function retrieve(
       -- coaching and mentoring" requires "material" and "say" to appear, and it
       -- matched nothing against a corpus whose one document is about exactly
       -- that. 0060 has the measurement.
-      from app.search_documents(${lit(query)}, ${projectId === null ? 'null' : `${lit(projectId)}::uuid`}, ${String(limit)}, 'any') s
+      from app.search_documents(${lit(query)}, ${projectId === null ? 'app.unnamed_project()' : `${lit(projectId)}::uuid`}, ${String(limit)}, 'any') s
       join public.documents d on d.document_id = s.document_id
   `)
   return (

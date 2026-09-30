@@ -123,26 +123,32 @@ describe('what the office says when a turn of his died', () => {
  */
 describe('the seam', () => {
   const worker = readFileSync('src/jobs/worker.ts', 'utf8')
+  const from = worker.indexOf(
+    "if (result.finalState === 'failed' || result.finalState === 'paused')",
+  )
+  const to = worker.indexOf('done.push(result)', from)
+  const window = worker.slice(from, to)
 
+  /*
+    Source-text, and said so: the BEHAVIOURAL proof is scripts/isolated/parked-turn-owes-a-word.ts, which drives the
+    real tick and asserts what is sent for a death, for a retry, and for a notifier that throws. This pins only the
+    wiring's shape so a refactor cannot quietly drop the seam.
+  */
   it('speaks from the one place every terminal failure arrives', () => {
-    expect(worker).toMatch(/await lastWord\(db, job, options\.notify\)/)
+    expect(from).toBeGreaterThan(-1)
+    expect(window).toMatch(
+      /await lastWord\(\s*db,\s*job,\s*options\.notify,\s*result\.finalState === 'paused'/,
+    )
   })
 
-  it('speaks only for a death, never for a retry', () => {
-    /*
-      Bounded at BOTH ends. CLAUDE.md's slice trap: a window opened at one
-      anchor and left to run on was satisfied by a neighbouring function that
-      happened to contain the words, so a gutted branch stayed green.
-    */
-    const from = worker.indexOf("if (result.finalState === 'failed')")
-    expect(from).toBeGreaterThan(-1)
-    const window = worker.slice(from, worker.indexOf('done.push(result)', from))
-    expect(window).toMatch(/await lastWord\(db, job, options\.notify\)/)
+  it('speaks for a death or a turn parked for good, never for a retry', () => {
+    // Bounded at BOTH ends (the slice trap): from the branch to the push that follows it.
+    expect(to).toBeGreaterThan(from)
+    expect(window).not.toMatch(/retrying/)
   })
 
   it('cannot turn an apology into a second failure', () => {
-    const from = worker.indexOf('await lastWord(db, job, options.notify)')
-    expect(worker.slice(from, from + 220)).toMatch(/catch/)
+    expect(window).toMatch(/catch/)
   })
 })
 

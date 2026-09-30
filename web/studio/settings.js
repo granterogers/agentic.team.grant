@@ -127,8 +127,8 @@ const FALLBACK_BEHAVIOURS = [
       different vocabularies and only the prototype is what a capture sees.
     */
     options: [
-      { id: 'observe', name: 'Watch only', note: 'The team reads and reports. It changes nothing anywhere.' },
-      { id: 'suggest', name: 'Ask me first', note: 'Every action outside our own records waits for you.' },
+      { id: 'observe', name: 'Watch only', note: 'The team reads and reports and starts nothing for you. Its housekeeping (Slack channels and key, Notion sync, task board) is not governed by this dial yet.' },
+      { id: 'suggest', name: 'Ask me first', note: 'Every action you ask for outside our own records waits for you. Housekeeping (Slack channels and key, Notion sync, task board) is not governed by this dial yet.' },
       { id: 'act_with_review', name: 'Act, then show me', note: 'Routine work proceeds and lands in front of you afterwards.' },
       { id: 'act', name: 'Act', note: 'Only purchases and destructive changes stop and ask.' },
     ],
@@ -136,7 +136,7 @@ const FALLBACK_BEHAVIOURS = [
   {
     id: 'chief', name: 'Only the Chief of Staff messages me',
     kind: 'switch', value: true,
-    note: 'Everyone else still works and still writes output. They just do not send.',
+    note: 'On Telegram, everyone else still works and still writes output; they just do not send. Slack shows each colleague under their own name.',
   },
   {
     id: 'quiet', name: 'Quiet hours', kind: 'range', value: '22:00 – 07:00',
