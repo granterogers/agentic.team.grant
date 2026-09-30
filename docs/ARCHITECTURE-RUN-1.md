@@ -145,6 +145,11 @@ LIVE VERIFIED, through the deployed doors:
 PRODUCTION-EQUIVALENT VERIFIED (not run live): 0609 (a wait is not an attempt; provider outage still counts) and 0610 (an answer performs what the question promised; unsupported options not offered) - by function-body identity with the candidate database plus the isolated suites `fan-in-waits`, `drive-options`, `channel-options`, `outward-options`. Hostile-resolver entitlement (`turn-entitlement` 12/12): NOT SAFE TO VERIFY LIVE (it needs a sabotaged shared resolver); the deployed code is the tested code.
 Not exercised live: a competent model on the standing-preference remainder case ("Yes, do it. Also from now on ...") because it would store a real standing rule attributed to Grant; covered by `mixed-turns`.
 
+## Two regressions Run 1 introduced in the repository's own checks, found and fixed during integration
+- `check:pressable` read 0 gateway actions: the format pass re-indented the `ACTIONS` table. A named `ActionSpec` type keeps the declaration on one line (hq-api redeployed for it, formatting-only: now v787).
+- `check:door-origins` refused the live suite for naming Grant's chat id; the suite now reads it from `subject_identities`.
+Other `check:*` reds (`callers`, `reachable`, `tokens`) fail identically on `bbe9956c` and are pre-existing, not Run 1: `callers` names `app.deliverable_to` and `app.release_test_origins`.
+
 ## Run 1 still-open residuals (carried unchanged)
 R1 understand() placement (ENGINEERING DEBT); R2 degraded-model multi-clause task title, seen again live ("do it. Create the task to book the hall") (BUG); R3 "Save this link..." stored as a standing preference (BUG, semantic classification); R4 task-tick approval door (ARCHITECTURAL, Run 2); R5 a declined action is re-asked (ARCHITECTURAL, Run 2); R6 Slack sender allowlist (MISSING CAPABILITY, do not enable blindly); R7 isolated suites outside `npm run gate` (VERIFICATION GAP); R8 competent-model mixed-turn evidence (VERIFICATION GAP); R9 telegram-webhook returns 200 "ignored" when `staff_for_bot` returns no row (BUG, confirmed still true).
 The `correction-containment` change is a FIXTURE-ONLY integration correction (test file); no production behaviour changed for it.
