@@ -626,5 +626,8 @@
   "0612_internal_office_work_proceeds_and_a_no_can_be_taken_back.sql": "8884c84e4bb580f637368e4be56e0483b63e7575a264c3d574e8918273daa9b4",
   "0613_the_public_key_reaches_no_function.sql": "c012fcecdc535782819212ecd59315093617d2ed8344656ecd5d91ed34f62809",
   "0614_a_credential_is_not_a_person.sql": "0cda3dcf59861460555782e3751ed651f107a042c36aeebfcabfd30c7f4efeed",
-  "0615_a_stranger_on_slack_is_not_a_conversation.sql": "e377e6c97a4fbee3958137655e29b616895dd732b3edf99cc6961c1208589ec2"
+  "0615_a_stranger_on_slack_is_not_a_conversation.sql": "e377e6c97a4fbee3958137655e29b616895dd732b3edf99cc6961c1208589ec2",
+  "0616_an_approval_applies_to_exactly_what_it_approved.sql": "ac21179af7f7728b403ac51b34ed7fdfdf8ea0eaecee641a40d3f853bcb3135b",
+  "0617_a_button_answers_the_question_its_message_showed.sql": "5d1a3f82e74204902f86b1ad5e15ce3cc3280c6fbaa552189a60f82a5e94e2e7",
+  "0618_a_test_principal_cannot_speak_or_grant_in_a_real_project.sql": "a61eef564a7f4c07de2716b977154422d8f222b489f6244bff607d816c100ac5"
 }
