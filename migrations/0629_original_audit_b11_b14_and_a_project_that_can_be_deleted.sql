@@ -4,7 +4,8 @@
   B11. `app.may_act` called a job "asked for" whenever its requester was not `duty:%`, so a `trigger:` or `mcp:` job
   (or any office-made root) was treated as a person asking and a level 0-2 action proceeded without a question. "Asked
   for" now requires the job's ORIGIN to be a person's: trusted (his words through a production door), or a harness
-  standing in for him. Internal and unknown origins ask, exactly as a duty already did. Level 3, the outside-audience
+  standing in for him. Internal and unknown origins ask, exactly as a duty already did - except a registered, write-scoped MCP client, whose
+  tool call is a person's (review of the candidate: MCP push_document would otherwise have become a dead end). Level 3, the outside-audience
   floor, a recorded No and a standing authorization are untouched.
 
   B14. `app.harness_job` and `app.job_origin` recurse through `parent_job_id`, and nothing stopped a row being
@@ -71,7 +72,12 @@ begin
     -- `trigger:`, `mcp:`, `hq` and every other office-made root is 'internal' and is not somebody asking (B11 of the
     -- original audit); an unknown origin gains no authority; forwarded text is somebody else's words (0624).
     v_asked_for := v_by is not null and v_by not like 'duty:%' and not app.job_forwarded(p_job)
-                   and app.job_origin(p_job) in ('trusted', 'harness');
+                   and (app.job_origin(p_job) in ('trusted', 'harness')
+                        -- A write-scoped MCP client the office issued a credential to IS a person's tool asking (it
+                        -- pushes a document because somebody told it to): app.internal_root_ok has already checked the
+                        -- client is enabled and holds write, which is what makes this root 'internal'. The other
+                        -- internal roots (trigger:, hq, duty:, system) are the office deciding and still ask.
+                        or (v_by like 'mcp:%' and app.job_origin(p_job) = 'internal'));
   end if;
 
   v_autonomy := app.autonomy_for(p_project);

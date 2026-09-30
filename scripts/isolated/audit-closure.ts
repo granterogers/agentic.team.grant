@@ -381,6 +381,141 @@ const kid = String(
     JSON.stringify(o).slice(0, 90),
   )
 }
+
+// ---- a registered write-scoped MCP client is a person's tool asking; nothing else office-made is (0629) ------------------
+{
+  const client = `audit-${run}`
+  await db.execute(
+    `insert into public.mcp_clients (client_id, display_name, token_sha256, scopes) values (${lit(client)}, 'audit proof', ${lit('a'.repeat(64))}, array['read','write'])`,
+  )
+  const viaMcp = await rootJob(`mcp:${client}`)
+  const readOnly = `audit-ro-${run}`
+  await db.execute(
+    `insert into public.mcp_clients (client_id, display_name, token_sha256, scopes) values (${lit(readOnly)}, 'audit read-only', ${lit('b'.repeat(64))}, array['read'])`,
+  )
+  const viaRo = await rootJob(`mcp:${readOnly}`)
+  const a = await may(viaMcp, 'notebook.write')
+  const b = await may(viaRo, 'notebook.write')
+  check(
+    'a registered, write-scoped MCP client is asking (its push_document proceeds)',
+    a.verdict === 'proceed' && a.asked_for === true,
+    `${a.verdict}/${String(a.asked_for)}`,
+  )
+  check(
+    'a read-only MCP client is not, and an unregistered one is not (control)',
+    b.verdict === 'ask',
+    b.verdict,
+  )
+  await db.execute(
+    `update public.mcp_clients set enabled = false, disabled_reason = 'proof' where client_id = ${lit(client)}`,
+  )
+  const off = await may(viaMcp, 'notebook.write')
+  check('a disabled client is not', off.verdict === 'ask', off.verdict)
+}
+
+// ---- work called off cannot be started by a later yes (0632) ---------------------------------------------------------------
+{
+  const mk = async () => {
+    const root = await realParent(db)
+    return String(
+      (
+        await one(
+          `select app.enqueue_child(${lit(root)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
+        )
+      ).c,
+    ).match(/[0-9a-f-]{36}/)?.[0] as string
+  }
+  const ask = async (job: string) => {
+    const r = await one(
+      `select app.request_generation_approval(${lit(job)}::uuid, 'notebook.generate', 'a deck for the audit proof', 'free')::text as r`,
+    )
+    return { blocker: String(r.r).match(/[0-9a-f-]{36}/)?.[0] ?? '' } as {
+      blocker?: string
+      blocker_id?: string
+    }
+  }
+  const kids = async (job: string) =>
+    Number(
+      (
+        await one(
+          `select count(*)::int as n from public.jobs where parent_job_id = ${lit(job)}::uuid`,
+        )
+      ).n,
+    )
+  // a live job: yes starts the generation (control - the guard must not buy precision with recall)
+  const live = await mk()
+  const lr = await ask(live)
+  const lb = String(lr.blocker ?? lr.blocker_id ?? '')
+  const liveAns = JSON.parse(
+    String(
+      (
+        await one(
+          `select app.hq_answer_blocker(${lit(lb)}::uuid, 'Go ahead', 'grant')::text as r`,
+        )
+      ).r,
+    ),
+  ) as Record<string, unknown>
+  check(
+    'a live job: a yes starts the generation (control)',
+    liveAns.ok === true && liveAns.called_off !== true && (await kids(live)) >= 1,
+    `${JSON.stringify(liveAns).slice(0, 60)} / ${String(await kids(live))} child`,
+  )
+  // the same job called off first
+  const dead = await mk()
+  const dr = await ask(dead)
+  const db2 = String(dr.blocker ?? dr.blocker_id ?? '')
+  await db
+    .execute(
+      `update public.jobs set state = 'paused', state_reason = 'waiting' where job_id = ${lit(dead)}::uuid`,
+    )
+    .catch(() => undefined)
+  await db.execute(
+    `update public.jobs set state = 'cancelled', state_reason = 'you asked me to stop' where job_id = ${lit(dead)}::uuid`,
+  )
+  const ans = JSON.parse(
+    String(
+      (
+        await one(
+          `select app.hq_answer_blocker(${lit(db2)}::uuid, 'Go ahead', 'grant')::text as r`,
+        )
+      ).r,
+    ),
+  ) as Record<string, unknown>
+  const st = await one(
+    `select state::text as s, resolution from public.blockers where blocker_id = ${lit(db2)}::uuid`,
+  )
+  check(
+    'a job called off: a later yes is recorded, says the work was called off, and starts NOTHING',
+    ans.ok === true && ans.called_off === true && (await kids(dead)) === 0 && st.s === 'resolved',
+    `${JSON.stringify(ans).slice(0, 70)} / ${String(await kids(dead))} child`,
+  )
+  // the button path calls answer_generation_approval directly
+  const dead2 = await mk()
+  const d2 = await ask(dead2)
+  const db3 = String(d2.blocker ?? d2.blocker_id ?? '')
+  await db
+    .execute(
+      `update public.jobs set state = 'paused', state_reason = 'waiting' where job_id = ${lit(dead2)}::uuid`,
+    )
+    .catch(() => undefined)
+  await db.execute(
+    `update public.jobs set state = 'cancelled', state_reason = 'you asked me to stop' where job_id = ${lit(dead2)}::uuid`,
+  )
+  const btn = JSON.parse(
+    String(
+      (
+        await one(
+          `select app.answer_generation_approval(${lit(db3)}::uuid, true, 'grant')::text as r`,
+        )
+      ).r,
+    ),
+  ) as Record<string, unknown>
+  check(
+    'and so is a button press on it (the direct door)',
+    btn.called_off === true && (await kids(dead2)) === 0,
+    `${JSON.stringify(btn).slice(0, 70)} / ${String(await kids(dead2))} child`,
+  )
+}
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

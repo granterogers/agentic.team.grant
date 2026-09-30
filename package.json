@@ -399,7 +399,8 @@
     "verify:basecamp-team": "tsx scripts/verify/basecamp-team.ts",
     "verify:basecamp-addsource": "tsx scripts/verify/basecamp-addsource.ts",
     "verify:final-audit-live": "tsx scripts/verify/final-audit-live.ts",
-    "verify:isolated": "bash scripts/isolated/run-all.sh"
+    "verify:isolated": "bash scripts/isolated/run-all.sh",
+    "verify:run5-live": "tsx scripts/verify/run5-live.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
