@@ -31,7 +31,7 @@ const check = (what: string, ok: boolean, detail: string) => {
 // ---- the notebook service, as a counter ----------------------------------------------------
 const WRITER = 'http://notebook.invalid/act'
 const calls: { action: string; args: Record<string, unknown> }[] = []
-let mode: 'ok' | 'refuse' | 'drop' = 'ok'
+let mode: 'ok' | 'refuse' | 'quota' | 'drop' = 'ok'
 let created = 0
 const realFetch = globalThis.fetch
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -52,6 +52,7 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
   if (body.action === 'generate') {
     if (mode === 'drop') throw new Error('connection dropped')
     if (mode === 'refuse') return reply({ ok: false, error: 'the service said no' })
+    if (mode === 'quota') return reply({ ok: false, error: 'usage limit reached', quota: true })
     return reply({ ok: true, task_id: `task-${String(calls.length)}`, state: 'started' })
   }
   if (body.action === 'add_url') {
@@ -203,6 +204,22 @@ const verdict = async (job: string) =>
     did('generate') === before + 1 && /already under way/.test(again.body),
     `${String(did('generate') - before)} generation(s): ${again.body.slice(0, 60)}`,
   )
+  // A deferred SIBLING: a re-enqueued child copies the config and hangs off the same parent, so it is a
+  // different job carrying the same approval. One yes is one generation, whichever job carries it.
+  const sib = await one(`
+    select app.enqueue_child(
+      (select parent_job_id from public.jobs where job_id = ${lit(child.jobId)}::uuid),
+      'notebook.generate',
+      (select pinned_config from public.jobs where job_id = ${lit(child.jobId)}::uuid),
+      '0 seconds'::interval, true) as id`)
+  const sibId = String(sib.id)
+  const sibling = await asJob(sibId.replace(/[^0-9a-f-]/g, ''))
+  const viaSibling = await generate.handle(sibling, db)
+  check(
+    'a deferred SIBLING carrying the same approval generates nothing more: one yes is one generation',
+    did('generate') === before + 1 && !/is away/.test(viaSibling.body),
+    `${String(did('generate') - before)} generation(s): ${viaSibling.body.slice(0, 60)}`,
+  )
 }
 
 // ---- 2. generation: what is not an approval is not accepted ---------------------------------------------------
@@ -310,7 +327,16 @@ const verdict = async (job: string) =>
   await answer(String(q.id), 'Go ahead')
   const child = await asJob(String(await childOf(j0.jobId)))
   const before = did('generate')
+  // The cutoff is when approvals began carrying fingerprints; a question older than it is legacy. This
+  // one was raised seconds ago, so the cutoff is moved past it, as it was for a question already open
+  // when the migration applied, and put back afterwards.
+  await db.execute(
+    `update public.system_config set value = to_jsonb((app.now_utc() + interval '1 minute')::text) where key = 'approval.fingerprints_from'`,
+  )
   await generate.handle(child, db)
+  await db.execute(
+    `update public.system_config set value = to_jsonb(app.now_utc()::text) where key = 'approval.fingerprints_from'`,
+  )
   check(
     'an in-flight approval raised BEFORE this migration still works (approved_legacy), once',
     (await verdict(child.jobId)).state === 'approved_legacy' && did('generate') === before + 1,
@@ -344,7 +370,33 @@ const verdict = async (job: string) =>
   )
 }
 {
-  const a = await approvedGeneration({ kind: 'slides', instructions: `refused ${run}` })
+  // A refusal that says QUOTA is Google stating nothing started: the claim is spent and a retry may go.
+  const a = await approvedGeneration({ kind: 'slides', instructions: `quota ${run}` })
+  const before = did('generate')
+  mode = 'quota'
+  await generate.handle(a.child, db).catch(() => undefined)
+  mode = 'ok'
+  const spentClean = await count(
+    `select count(*)::int as c from public.job_steps where job_id = ${lit(a.j0.jobId)}::uuid and outcome->>'failed' = 'true'`,
+  )
+  // The handler measured the ceiling and deferred; the deferral is what a real retry is. Clear the
+  // stand-in meter so the retry is allowed to go, as it would be once the window reopened.
+  await db.execute('delete from public.notebook_refusals')
+  await db.execute('delete from public.notebook_spend')
+  const retry = await generate.handle(a.child, db)
+  check(
+    'a write the service REFUSED FOR QUOTA is a clean failure: the claim is spent and the retry generates once',
+    spentClean === 1 && did('generate') === before + 2 && /away/.test(retry.body),
+    `${String(did('generate') - before)} call(s), ${String(spentClean)} clean failure(s)`,
+  )
+  const artifacts = await count(
+    `select count(*)::int as c from public.artifacts where requested_by_job = ${lit(a.child.jobId)}::uuid`,
+  )
+  check('and exactly one artifact was recorded', artifacts === 1, String(artifacts))
+}
+{
+  // Anything else that says ok:false is NOT proof nothing started: it parks, as a dropped line does.
+  const a = await approvedGeneration({ kind: 'slides', instructions: `generic ${run}` })
   const before = did('generate')
   mode = 'refuse'
   let threw = false
@@ -356,14 +408,10 @@ const verdict = async (job: string) =>
   mode = 'ok'
   const retry = await generate.handle(a.child, db)
   check(
-    'a write the service REFUSED is safe to try again: the retry generates, and it is one success',
-    threw && did('generate') === before + 2 && /away/.test(retry.body),
+    'a generic refusal is not proof nothing started: the retry parks instead of generating again',
+    threw && did('generate') === before + 1 && /I stopped/.test(retry.body),
     `${String(did('generate') - before)} call(s)`,
   )
-  const artifacts = await count(
-    `select count(*)::int as c from public.artifacts where requested_by_job = ${lit(a.child.jobId)}::uuid`,
-  )
-  check('and exactly one artifact was recorded', artifacts === 1, String(artifacts))
 }
 
 // ---- 3b. a link he pasted: the boundary and exactly once --------------------------------------------------

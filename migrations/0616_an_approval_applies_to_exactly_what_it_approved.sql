@@ -22,7 +22,7 @@
     1. The question carries the fingerprint of what it asks about
        (`blockers.action_fingerprint`, from `app.approval_fingerprint`): the
        tool the yes will start, the project, and the MATERIAL of the request -
-       kind and instructions for a generation, the steps for a plan. Deliberately
+       kind, instructions and the notebook it lands in for a generation, the steps for a plan. Deliberately
        a whitelist: a job's config also collects retry notes and gate refusals,
        and hashing all of it would fail every retry.
     2. The child job carries the question's id (`approval`) as it always did,
@@ -33,7 +33,8 @@
        `forged` (something claims an approval that does not exist), `mismatch`
        (the action changed), `approved`, or `approved_legacy` (a question raised
        before this migration, which has no fingerprint: verified as far as it can
-       be, and accepted for in-flight work only).
+       be, and accepted for in-flight work only - a question with none raised AFTER
+       `approval.fingerprints_from` is `forged`, not legacy).
     3. A client cannot bring an approval with it: `app.mcp_enqueue` strips the
        keys that say a job was approved or where it came from.
 
@@ -41,6 +42,13 @@
   functions, so a question raised by the OLD ones has none and is `approved_legacy`.
   A worker that predates this asks nothing and behaves as before.
 */
+
+-- The instant fingerprints began. A question raised BEFORE it has none and is accepted (once, bounded by
+-- this instant); one raised AFTER it with none is not an approval of anything (review of Run 3, F3).
+insert into public.system_config (key, value, description)
+values ('approval.fingerprints_from', to_jsonb(app.now_utc()::text),
+        'When approvals began carrying a fingerprint (0616). A yes on a question raised before this is honoured without one, so work in flight survives the migration; nothing raised after it is.')
+on conflict (key) do nothing;
 
 create or replace function app.approval_material(p_next text, p_config jsonb)
 returns jsonb
@@ -50,7 +58,8 @@ set search_path = ''
 as $$
   select case p_next
     when 'notebook.generate' then
-      jsonb_build_object('kind', p_config -> 'kind', 'instructions', p_config -> 'instructions')
+      jsonb_build_object('kind', p_config -> 'kind', 'instructions', p_config -> 'instructions',
+                         'notebook', p_config -> 'notebook')
     when 'office.execute_plan' then
       jsonb_build_object('plan_steps', p_config -> 'plan_steps')
     else '{}'::jsonb
@@ -243,6 +252,7 @@ declare
   b public.blockers;
   v_id uuid;
   v_fp text;
+  v_from timestamptz;
 begin
   select job_id, kind, project_id, parent_job_id, pinned_config into j
     from public.jobs where job_id = p_job;
@@ -286,6 +296,14 @@ begin
 
   v_fp := app.approval_fingerprint(j.project_id, j.kind, j.pinned_config);
   if b.action_fingerprint is null then
+    select (value #>> '{}')::timestamptz into v_from
+      from public.system_config where key = 'approval.fingerprints_from';
+    -- Accepted only for a question raised before approvals carried a fingerprint: a finite set that
+    -- only shrinks. Any other question with none (a Drive question, a pause) is not this job's approval.
+    if v_from is null or b.created_at >= v_from then
+      return jsonb_build_object('state', 'forged', 'blocker', b.blocker_id,
+        'why', 'that question carries no fingerprint, so nothing ties it to what this job is about to do');
+    end if;
     return jsonb_build_object('state', 'approved_legacy', 'fingerprint', v_fp,
       'blocker', b.blocker_id, 'by', b.answered_by, 'asking_job', b.job_id,
       'why', 'raised before approvals carried a fingerprint: the question is real and was answered yes, and that is as far as it can be checked');

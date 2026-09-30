@@ -30,6 +30,8 @@ export interface ApprovalCheck {
   readonly fingerprint: string | null
   /** The job whose question it was. */
   readonly askingJob: string | null
+  /** The question itself: an approval is used once, and the claim on its effect is made against it. */
+  readonly blocker: string | null
 }
 
 const STATES: ReadonlySet<string> = new Set([
@@ -52,6 +54,7 @@ export const checkApproval = async (db: SqlExecutor, jobId: string): Promise<App
     why: typeof v.why === 'string' ? v.why : 'the approval could not be read',
     fingerprint: typeof v.fingerprint === 'string' ? v.fingerprint : null,
     askingJob: typeof v.asking_job === 'string' ? v.asking_job : null,
+    blocker: typeof v.blocker === 'string' ? v.blocker : null,
   }
 }
 

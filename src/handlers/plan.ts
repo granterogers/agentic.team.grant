@@ -36,6 +36,14 @@
 import type { Step } from '../agents/plan.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { type Outcome, runSteps } from '../jobs/checkpoint.ts'
+
+const EXTERNAL_STEPS: ReadonlySet<string> = new Set([
+  'create_project',
+  'add_source',
+  'generate',
+  'ask',
+])
+
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import { checkApproval, mayStart, refusedApproval } from './approval-gate.ts'
@@ -108,13 +116,25 @@ export function planHandler(db: SqlExecutor): Handler {
       }
       const stepName = (i: number): string => `${String(i)}:${String(steps[i]?.kind)}`
 
+      // The credential is checked BEFORE any step is claimed: a plan that cannot make its notebook
+      // must fail cleanly at the start, not after an external claim has been opened for nothing.
+      if (
+        steps.some((x) => x.kind === 'create_project') &&
+        (await NotebookActions.fromVault(db)) === null
+      ) {
+        throw new Error('no NotebookLM credential in the vault; cannot make a notebook')
+      }
+
       const run = await runSteps(
         db,
         job.jobId,
         'office.execute_plan@1',
         steps.map((step, index) => ({
           name: stepName(index),
-          effect: step.kind === 'create_project' ? ('external' as const) : ('local' as const),
+          // A step that makes something the office cannot take back - a notebook at Google, or a job
+          // that will go and act - is EXTERNAL: a crash between the effect and its record parks the
+          // plan for a person instead of doing it a second time (review of Run 3, F5).
+          effect: EXTERNAL_STEPS.has(step.kind) ? ('external' as const) : ('local' as const),
           run: async (done: Readonly<Record<string, Outcome>>) => {
             const acc = stateBefore(done, index)
             let effectRef: string | undefined

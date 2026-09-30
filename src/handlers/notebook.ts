@@ -39,7 +39,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
-import { claimExternal, failedCleanly, finishStep } from '../jobs/checkpoint.ts'
+import { claimExternal, failedCleanly, fingerprint, finishStep } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
   ARTIFACT_KINDS,
@@ -126,6 +126,20 @@ const MAX_TICKS = 10
 const TICK_GAP = '2 minutes'
 
 /** Capitalised for the start of a sentence: "mind map is away" reads as a typo. */
+/**
+ * The job an effect's claim is recorded against, so that a retry AND a deferred sibling share it.
+ *
+ * A deferral re-enqueues a child that copies the config and hangs off the same parent, so a claim on the
+ * running job alone stops a retry and lets its sibling through (review of Run 3, F2). The parent is what
+ * they have in common; a job with no parent is its own.
+ */
+const claimJobFor = async (db: SqlExecutor, job: Job): Promise<string> => {
+  const { rows } = await db.execute(
+    `select coalesce(parent_job_id, job_id)::text as j from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
+  )
+  return String((rows[0] as { j?: string } | undefined)?.j ?? job.jobId)
+}
+
 const sentence = (v: string): string => `${v.charAt(0).toUpperCase()}${v.slice(1)}`
 
 const LABEL: Record<string, string> = {
@@ -331,6 +345,14 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         const approval = await checkApproval(db, job.jobId)
         if (approval.state === 'none') {
           const forecast = await allowance(db, kind)
+          // The notebook the generation would land in is part of what he is approving: recorded on the
+          // request before the question, so it is in the fingerprint and a later change is a mismatch.
+          await db.execute(`
+            update public.jobs
+               set pinned_config = coalesce(pinned_config, '{}'::jsonb)
+                     || jsonb_build_object('notebook', ${lit(notebook.id)}::text)
+             where job_id = ${lit(job.jobId)}::uuid
+          `)
           const { rows: asked } = await db.execute(`
             select app.request_generation_approval(
               ${lit(job.jobId)}::uuid, ${lit(kind)},
@@ -372,6 +394,14 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           } satisfies HandlerOutput
         }
 
+        if (approval.state === 'approved' && String(payload.notebook ?? '') !== notebook.id) {
+          return await refusedApproval(
+            db,
+            job,
+            `make the ${LABEL[kind] ?? kind}`,
+            `It was approved for a different notebook than the one this project has now (“${notebook.name}”).`,
+          )
+        }
         const start = await mayStart(db, job, approval, 'notebook.write')
         if (!start.ok) {
           return await refusedApproval(db, job, `make the ${LABEL[kind] ?? kind}`, start.why)
@@ -416,11 +446,20 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           person to look in the notebook rather than start a second one. Ambiguous notebook writes are
           reconciled, never guessed (the same rule `artifact.report` follows).
         */
-        const { name: claimName, gate: claim } = await claimExternal(
+        // Read before the claim: a listing that fails here must not leave a claim open for nothing.
+        const before = await actions.artifacts(notebook.id)
+        // Recorded against the job that ASKED, under the question's own id: one yes is one generation,
+        // however many times the work is deferred, retried or re-enqueued (review of Run 3, F2).
+        const {
+          name: claimName,
+          gate: claim,
+          claimedOn,
+        } = await claimExternal(
           db,
           job.jobId,
-          'generate',
+          `generate:${approval.blocker ?? 'unasked'}`,
           'notebook.generate@1',
+          approval.askingJob ?? job.jobId,
         )
         if (claim.kind === 'skip') {
           return deterministic(
@@ -434,16 +473,17 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             notebook,
           )
         }
-        const before = await actions.artifacts(notebook.id)
         let started: Awaited<ReturnType<typeof actions.generate>>
         try {
           started = await actions.generate(notebook.id, kind as ArtifactKind, instructions)
         } catch (error) {
-          // Google REFUSED this (it says so): nothing was started, so the claim is spent and the
-          // next attempt may go ahead. Anything else - a timeout, a dropped connection - may have
-          // reached Google, and leaves the claim open for a person to reconcile.
-          if (error instanceof NotebookActionError) {
-            await failedCleanly(db, job.jobId, claimName, error.detail)
+          // A clean failure is a POSITIVE statement from the other side that nothing started - here,
+          // that the notebook's usage limit is spent. Everything else, including a NotebookActionError
+          // that only says the runner produced nothing readable, may have reached Google (a lost
+          // response, a killed runner) and leaves the claim open for a person to reconcile (review of
+          // Run 3, F1: treating every error as a refusal is how one generation becomes two).
+          if (error instanceof NotebookActionError && error.quota) {
+            await failedCleanly(db, claimedOn, claimName, error.detail)
           }
           if (error instanceof NotebookActionError && error.quota) {
             // The measurement. Refused having spent what we spent, so the real
@@ -500,7 +540,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         const artifactId = String((made[0] as { artifact_id: string }).artifact_id)
         await finishStep(
           db,
-          job.jobId,
+          claimedOn,
           claimName,
           { artifact: artifactId },
           started.taskId === null ? undefined : String(started.taskId),
@@ -614,11 +654,16 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
 
         // ONCE (0616): "asking again is how one source becomes three". The claim is made before the
         // call, an interrupted attempt parks for a person, and one Google REFUSED may be tried again.
-        const { name: addName, gate: addGate } = await claimExternal(
+        const {
+          name: addName,
+          gate: addGate,
+          claimedOn: addOn,
+        } = await claimExternal(
           db,
           job.jobId,
-          'add_source',
+          `add_source:${(await fingerprint({ notebook: notebook.id, url })).slice(0, 16)}`,
           'notebook.add_source@1',
+          await claimJobFor(db, job),
         )
         if (addGate.kind === 'skip') {
           return deterministic(
@@ -634,10 +679,10 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         }
         try {
           await actions.addUrl(notebook.id, url)
-          await finishStep(db, job.jobId, addName, { url })
+          await finishStep(db, addOn, addName, { url })
         } catch (error) {
-          if (error instanceof NotebookActionError) {
-            await failedCleanly(db, job.jobId, addName, error.detail)
+          if (error instanceof NotebookActionError && error.quota) {
+            await failedCleanly(db, addOn, addName, error.detail)
           }
           if (error instanceof NotebookActionError && error.quota) {
             await refused(db, 'add_url', error.detail)
@@ -721,11 +766,16 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         if (!mayPush.ok) {
           return await refusedApproval(db, job, 'push that document into the notebook', mayPush.why)
         }
-        const { name: pushName, gate: pushGate } = await claimExternal(
+        const {
+          name: pushName,
+          gate: pushGate,
+          claimedOn: pushOn,
+        } = await claimExternal(
           db,
           job.jobId,
-          'push_document',
+          `push_document:${(await fingerprint({ notebook: notebook.id, document: documentId })).slice(0, 16)}`,
           'notebook.push_document@1',
+          await claimJobFor(db, job),
         )
         if (pushGate.kind === 'skip') {
           return deterministic(
@@ -747,12 +797,12 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             String(doc.title ?? 'From AI Team HQ'),
           )
         } catch (error) {
-          if (error instanceof NotebookActionError) {
-            await failedCleanly(db, job.jobId, pushName, error.detail)
+          if (error instanceof NotebookActionError && error.quota) {
+            await failedCleanly(db, pushOn, pushName, error.detail)
           }
           throw error
         }
-        await finishStep(db, job.jobId, pushName, { source: sourceId ?? '' })
+        await finishStep(db, pushOn, pushName, { source: sourceId ?? '' })
         // Cheap, but not free: Google processes a source on the way in, and a
         // meter that counts only the expensive things drifts (0078).
         await record(db, 'add_text', {

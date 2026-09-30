@@ -422,34 +422,135 @@ check(
   )
 }
 
-// 1c. saying something
+// 1c. saying something: a test member speaks only in a FIXTURE project (0618)
 {
-  const say = async (bearer: string, by?: string) => {
-    const r = await act(bearer, 'say', {
-      p_project_id: realProject,
-      p_text: `hello ${run} ${bearer.slice(4, 6)}`,
+  const say = async (bearer: string, project: string, tag: string, by?: string) =>
+    await act(bearer, 'say', {
+      p_project_id: project,
+      p_text: `hello ${run} ${tag}`,
       ...(by ? { p_by: by } : {}),
     })
-    return r
-  }
-  const g = await say(S_GRANT, 'mallory')
+  const g = await say(S_GRANT, realProject, 'grant', 'mallory')
   const gRow = await one(
-    `select actor, origin_channel from public.inbound_commands where instruction = ${lit(`hello ${run} ${S_GRANT.slice(4, 6)}`)} order by received_at desc limit 1`,
+    `select actor, origin_channel from public.inbound_commands where instruction = ${lit(`hello ${run} grant`)} order by received_at desc limit 1`,
   )
   check(
     "Grant's session says something as grant",
     g.status === 200 && gRow?.actor === 'grant',
     JSON.stringify(gRow),
   )
-  const h = await say(S_HARNESS)
+  const h = await say(S_HARNESS, fixtureProject, 'harness-fixture')
   const hRow = await one(
     `select c.actor, j.requested_by, j.is_fixture from public.inbound_commands c left join public.jobs j on j.job_id = c.job_id
-      where c.instruction = ${lit(`hello ${run} ${S_HARNESS.slice(4, 6)}`)} order by c.received_at desc limit 1`,
+      where c.instruction = ${lit(`hello ${run} harness-fixture`)} order by c.received_at desc limit 1`,
   )
   check(
-    'a test member says something as ITSELF, so the job is harness traffic by its own name',
+    'a test member says something in a FIXTURE project as ITSELF, so the job is harness traffic by its own name',
     h.status === 200 && hRow?.actor === 'verify-operator' && hRow?.is_fixture === true,
     JSON.stringify(hRow),
+  )
+  const r = await say(S_HARNESS, realProject, 'harness-real')
+  const stored = Number(
+    (
+      await one(
+        `select count(*)::int as c from public.inbound_commands where instruction = ${lit(`hello ${run} harness-real`)}`,
+      )
+    ).c,
+  )
+  check(
+    'a test member cannot say anything in a REAL project, and nothing is stored',
+    stored === 0 && /test principal/i.test(JSON.stringify(r.body)),
+    JSON.stringify(r.body).slice(0, 110),
+  )
+  const sent = json(
+    (
+      await one(
+        `select public.send_to_agent('document', ${lit(ZERO)}::uuid, 'summarise', null, null, null, 'verify-operator') as r`,
+      )
+    ).r,
+  )
+  check(
+    'send_to_agent asks who too: an asset that does not exist is still refused as itself, not as a test principal saying something real',
+    typeof sent.error === 'string',
+    String(sent.error),
+  )
+}
+
+// 1d. a test principal cannot mint a standing authorization in a REAL project (0618, review finding F2)
+{
+  const standingQuestion = async (project: string) => {
+    const job = await harnessJob(project)
+    const b =
+      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+        approval_options, originating_agent, work_can_continue, decline_option, standing_tool, standing_option)
+      values (${lit(project)}::uuid, ${lit(job)}::uuid, ${lit(`Do it from now on ${run}`)}, 'proof', 'Nothing happens until somebody answers this.',
+        array['Yes, do that from now on without asking me', 'No, leave it'], 'chief-of-staff', false, 'No, leave it',
+        'notion.write', 'Yes, do that from now on without asking me') returning blocker_id::text as id`)
+    return String(b.id)
+  }
+  const count = async (project: string) =>
+    Number(
+      (
+        await one(
+          `select count(*)::int as c from public.standing_authorizations where project_id = ${lit(project)}::uuid and revoked_at is null`,
+        )
+      ).c,
+    )
+  const real = await standingQuestion(realProject)
+  const before = await count(realProject)
+  const refused = json(
+    (
+      await one(
+        `select app.hq_answer_blocker(${lit(real)}::uuid, 'Yes, do that from now on without asking me', 'verify-operator') as r`,
+      )
+    ).r,
+  )
+  check(
+    'a test principal answering "do that from now on" on a REAL project is refused, the question stays open, and no standing row exists',
+    /test principal/i.test(String(refused.error)) &&
+      (await stateOf(real)) === 'open' &&
+      (await count(realProject)) === before,
+    JSON.stringify(refused).slice(0, 120),
+  )
+  const direct = json(
+    (
+      await one(
+        `select app.grant_standing('notion.write', ${lit(realProject)}::uuid, 'proof', 'verify-operator', null) as r`,
+      )
+    ).r,
+  )
+  check(
+    'and app.grant_standing itself refuses it, whichever door calls',
+    direct.ok === false &&
+      /test principal/i.test(String(direct.error)) &&
+      (await count(realProject)) === before,
+    JSON.stringify(direct).slice(0, 110),
+  )
+  const fixtureQ = await standingQuestion(fixtureProject)
+  const okFixture = json(
+    (
+      await one(
+        `select app.hq_answer_blocker(${lit(fixtureQ)}::uuid, 'Yes, do that from now on without asking me', 'verify-operator') as r`,
+      )
+    ).r,
+  )
+  check(
+    'the control: the same answer on a FIXTURE project is accepted and grants the standing row',
+    okFixture.ok === true && (await count(fixtureProject)) === 1,
+    JSON.stringify(okFixture).slice(0, 100),
+  )
+  const personQ = await standingQuestion(realProject)
+  const okPerson = json(
+    (
+      await one(
+        `select app.hq_answer_blocker(${lit(personQ)}::uuid, 'Yes, do that from now on without asking me', 'grant') as r`,
+      )
+    ).r,
+  )
+  check(
+    'and a person may grant it on the real project',
+    okPerson.ok === true && (await count(realProject)) === before + 1,
+    JSON.stringify(okPerson).slice(0, 100),
   )
 }
 

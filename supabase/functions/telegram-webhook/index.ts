@@ -402,9 +402,21 @@ Deno.serve(async (request: Request): Promise<Response> => {
         body: JSON.stringify({ p_command_id: commandId }),
       }).catch(() => null)
       // The instruction is stored; if it could not be turned into work, say so, so Telegram tries again.
-      if (call === null || !call.ok) return new Response('could not queue it', { status: 503 })
-      const enqueued = (await call.json().catch(() => ({}))) as { job_id?: string; error?: string }
-      queued = enqueued.job_id ?? enqueued.error ?? null
+      // Only a failure on OUR side is worth Telegram's retry. A 4xx is the database refusing this
+      // message for good (a sender it does not admit, a malformed row); retrying it is a storm, so it
+      // is answered 200 and recorded as refused (review of Run 3, F8).
+      if (call === null || call.status >= 500) {
+        return new Response('could not queue it', { status: 503 })
+      }
+      if (!call.ok) return Response.json({ ok: true, refused: 'not accepted', queued: null })
+      const enqueued = (await call.json().catch(() => ({}))) as {
+        job_id?: string
+        error?: string
+        already?: boolean
+      }
+      // A redelivery that finds its job already made must not say anything a second time (the voice
+      // refusal, the kick): only the delivery that made the job speaks for it.
+      queued = enqueued.already === true ? null : (enqueued.job_id ?? enqueued.error ?? null)
     }
   }
 

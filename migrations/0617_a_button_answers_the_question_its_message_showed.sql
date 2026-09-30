@@ -32,7 +32,7 @@ as $$
     from public.deliveries d
     join public.blockers b on b.job_id = d.job_id
    where d.delivery_id = p_delivery
-     and b.created_at <= coalesce(d.sent_at, d.created_at)
+     and b.created_at <= d.created_at
    order by b.created_at desc, b.blocker_id
    limit 1
 $$;

@@ -405,7 +405,7 @@ const apiToken = String(
   ).rows[0]?.v ?? '',
 )
 
-const post = async (
+const viaKey = async (
   action: string,
   args: Record<string, unknown>,
 ): Promise<{ status: number; body: string }> => {
@@ -415,6 +415,36 @@ const post = async (
     body: JSON.stringify({ action, args }),
   })
   return { status: response.status, body: await response.text() }
+}
+
+/*
+  What the gateway does for a signed-in PERSON: the same wrapper it calls, with the principal it verified.
+
+  These four actions decide - who may reach what - so the office key cannot press them (#385: it is a
+  machine and the gateway answers it 403), and this suite has no person's session to borrow: production
+  has one person and a suite must not become him. What it can prove live is the function the page's
+  press lands on, called as that person, and that the key is refused over HTTP (checked below). The
+  person's own session through the real handler is proved in scripts/isolated/principals.ts.
+*/
+const post = async (
+  action: string,
+  args: Record<string, unknown>,
+): Promise<{ status: number; body: string }> => {
+  const q = (v: unknown): string => (v === undefined || v === null ? 'null' : lit(String(v)))
+  const call =
+    action === 'decline_tool'
+      ? `public.hq_decline_tool(${q(args.p_request_id)}::uuid, ${q(args.p_reason)}, 'grant')`
+      : action === 'approve_tool'
+        ? `public.hq_approve_tool(${q(args.p_request_id)}::uuid, null, 'grant')`
+        : action === 'revoke_tool'
+          ? `public.hq_revoke_tool(${q(args.p_slug)}, ${q(args.p_tool)}, 'grant')`
+          : action === 'staff_tool_set'
+            ? `public.hq_staff_tool_set(${q(args.p_slug)}, ${q(args.p_tool)}, ${args.p_granted === true ? 'true' : 'false'}, 'grant')`
+            : null
+  if (call === null) return viaKey(action, args)
+  const out = (await db.execute(`select ${call}::text as r`)).rows[0] as { r: string }
+  const parsed = JSON.parse(out.r) as Record<string, unknown>
+  return { status: parsed.error === undefined ? 200 : 400, body: out.r }
 }
 
 /*
@@ -656,6 +686,12 @@ if (apiToken === '') {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ action: 'approve_tool', args: { p_request_id: open2 } }),
   })
+  const keyed = await viaKey('approve_tool', { p_request_id: open2 })
+  check(
+    'CONTROL: the office KEY cannot Approve over HTTP - it is a machine (#385)',
+    `http ${String(keyed.status)} — ${keyed.body.slice(0, 80)}`,
+    keyed.status === 403,
+  )
   check(
     'CONTROL: and an unauthenticated Approve is refused',
     `http ${String(naked.status)}`,

@@ -139,9 +139,16 @@ export async function beginStep(
   index: number,
   effect: Effect,
   codeVersion: string,
+  /**
+   * The job the CLAIM is recorded against, when that is not the running one. A claim on one job stops a
+   * retry of that job; an effect started by an approval must stop every job that carries the same approval
+   * (a deferred sibling copies its config), so it is recorded against the job that ASKED. The pause, when
+   * there is one, still applies to `jobId`: it is the running job that must wait.
+   */
+  claimOn: string = jobId,
 ): Promise<StepGate> {
   const { rows } = await db.execute(
-    `select app.step_begin(${lit(jobId)}::uuid, ${lit(name)}, ${String(index)},
+    `select app.step_begin(${lit(claimOn)}::uuid, ${lit(name)}, ${String(index)},
                            ${lit(effect)}, ${String(CHECKPOINT_SCHEMA)},
                            ${lit(codeVersion)}) as r`,
   )
@@ -192,12 +199,14 @@ export async function claimExternal(
   jobId: string,
   base: string,
   codeVersion: string,
-): Promise<{ readonly name: string; readonly gate: StepGate }> {
+  /** The job the claim is recorded against (see `beginStep`): the asking job, for an approved effect. */
+  claimOn: string = jobId,
+): Promise<{ readonly name: string; readonly gate: StepGate; readonly claimedOn: string }> {
   for (let n = 0; n < 6; n += 1) {
     const name = n === 0 ? base : `${base}.retry${String(n)}`
-    const gate = await beginStep(db, jobId, name, n, 'external', codeVersion)
+    const gate = await beginStep(db, jobId, name, n, 'external', codeVersion, claimOn)
     if (gate.kind === 'skip' && gate.outcome.failed === true) continue
-    return { name, gate }
+    return { name, gate, claimedOn: claimOn }
   }
   const pause: Paused = {
     detail: `${base} was refused six times in a row`,
@@ -206,7 +215,7 @@ export async function claimExternal(
     resumeWhen: 'A person looks at why the other side keeps refusing, and asks again.',
   }
   await pauseJob(db, jobId, pause)
-  return { name: base, gate: { kind: 'paused', pause } }
+  return { name: base, gate: { kind: 'paused', pause }, claimedOn: claimOn }
 }
 
 /** The remote system refused this attempt, so nothing happened and the next attempt may go ahead. */

@@ -89,6 +89,39 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     public: true,
     service: true,
   })
+  /*
+    The defence in depth the sweep leans on: PostgREST exposes `public` and nothing else, and a public key has no
+    USAGE on `app` or `cron`, so the ~500 `app` functions that carry the built-in PUBLIC default are unreachable.
+    That is true today and breaks the day either schema is exposed, so it is asserted, not assumed.
+  */
+  const usage = (
+    await db.execute(
+      `select n.nspname as schema,
+              has_schema_privilege('anon', n.oid, 'usage') as anon,
+              has_schema_privilege('authenticated', n.oid, 'usage') as authenticated
+         from pg_namespace n where n.nspname in ('app', 'cron', 'vault', 'auth', 'storage')
+        order by 1`,
+    )
+  ).rows as { schema: string; anon: boolean; authenticated: boolean }[]
+  const reachable = usage.filter(
+    (u) => ['app', 'cron', 'vault'].includes(u.schema) && (u.anon || u.authenticated),
+  )
+  console.log(
+    `schemas a public key must not use: ${usage
+      .filter((u) => ['app', 'cron', 'vault'].includes(u.schema))
+      .map((u) => u.schema)
+      .join(', ')}`,
+  )
+  if (usage.filter((u) => ['app', 'cron', 'vault'].includes(u.schema)).length < 3) {
+    console.log(
+      'FAIL the schema-usage check found fewer schemas than it asked about, so its silence means nothing',
+    )
+    process.exit(1)
+  }
+  if (reachable.length > 0) {
+    console.log(`FAIL a public key has USAGE on: ${reachable.map((u) => u.schema).join(', ')}`)
+    process.exit(1)
+  }
   console.log(`inspected ${String(fns.length)} public function(s)`)
   console.log(
     `control: an anon grant is caught ${String(control)}; a PUBLIC grant is caught ${String(controlPublic)}`,

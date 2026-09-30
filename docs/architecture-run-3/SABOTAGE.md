@@ -29,3 +29,12 @@ A first draft of one control was itself wrong and is worth recording: `principal
 refusals with `status === 403`, and the **origin allow-list** produced that 403, not the kind check. It went green for
 the wrong reason. It now sends a real `Origin` and asserts the refusal *message* (`test member`, `not somebody the office
 works for`). A refusal for the wrong reason looks exactly like the rule working.
+
+## Second-review fixes (F1, F2)
+
+| Sabotage | Landed | Result |
+|---|---|---|
+| `failedCleanly` on ANY `NotebookActionError` (not only quota) in `notebook.generate` | printed `changed F1` | approval-binding 26/30: generic refusal retried and generated twice |
+| claim recorded on the running job instead of the asking job | printed `changed F2` | approval-binding 28/30: deferred sibling generated a second time; quota clean-failure not found on the asking job |
+
+Both restored (`cmp` identical), suite 30/30.

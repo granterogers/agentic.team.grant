@@ -344,32 +344,32 @@ export const processCallbacks = async (
   for (const raw of rows) {
     const row = raw as unknown as PendingRow
     if (!(await claim(db, row.command_id))) continue // someone else has it
-
-    const action = row.callback_action as CallbackAction
-    switch (action) {
-      case 'useful':
-      case 'not_useful': {
-        /*
+    try {
+      const action = row.callback_action as CallbackAction
+      switch (action) {
+        case 'useful':
+        case 'not_useful': {
+          /*
           Only a person the office knows can give feedback or take something back
           (#388). This used to record `feedback.given_by = row.actor` for anybody the
           Slack door let through, and a stranger's press could claim Grant's undo
           offer and leave him without it. The door refuses strangers now, so this is
           the second lock, for an edge function that has not been redeployed.
         */
-        if ((await pressedBy(db, row)) === null) {
-          await resolveNotification(db, row, 'dismissed')
-          done.push({
-            commandId: row.command_id,
-            action,
-            outcome: 'unresolvable',
-            note: 'I could not tell who pressed that, so nothing was recorded',
-          })
-          break
-        }
-        await recordFeedback(db, row, action)
-        await resolveNotification(db, row, 'acted')
+          if ((await pressedBy(db, row)) === null) {
+            await resolveNotification(db, row, 'dismissed')
+            done.push({
+              commandId: row.command_id,
+              action,
+              outcome: 'unresolvable',
+              note: 'I could not tell who pressed that, so nothing was recorded',
+            })
+            break
+          }
+          await recordFeedback(db, row, action)
+          await resolveNotification(db, row, 'acted')
 
-        /*
+          /*
           A thumbs-down that only records displeasure is half a feature.
 
           Grant asked for the buttons as *"a means to confirm or to quickly
@@ -388,104 +388,104 @@ export const processCallbacks = async (
           stray emoji becomes a policy."* The reaction opens the door; the
           sentence is the thing worth keeping.
         */
-        if (action === 'not_useful') {
-          await askForTheCorrection(db, row).catch(() => undefined)
+          if (action === 'not_useful') {
+            await askForTheCorrection(db, row).catch(() => undefined)
+          }
+
+          done.push({
+            commandId: row.command_id,
+            action,
+            outcome: 'acted',
+            note:
+              row.output_id === null
+                ? 'recorded against no output — the delivery record is gone'
+                : `recorded against output ${row.output_id}`,
+          })
+          break
         }
 
-        done.push({
-          commandId: row.command_id,
-          action,
-          outcome: 'acted',
-          note:
-            row.output_id === null
-              ? 'recorded against no output — the delivery record is gone'
-              : `recorded against output ${row.output_id}`,
-        })
-        break
-      }
+        case 'undo': {
+          if ((await pressedBy(db, row)) === null) {
+            await resolveNotification(db, row, 'dismissed')
+            done.push({
+              commandId: row.command_id,
+              action,
+              outcome: 'unresolvable',
+              note: 'I could not tell who pressed that, so nothing was undone',
+            })
+            break
+          }
+          const outcome = await doUndo(db, row)
+          if (outcome.outcome === 'acted') await resolveNotification(db, row, 'acted')
+          done.push(outcome)
+          break
+        }
 
-      case 'undo': {
-        if ((await pressedBy(db, row)) === null) {
+        case 'mute_24h': {
+          // Through the same parse and the same store as a typed instruction, so
+          // there is one implementation of what a mute means and one audit trail.
+          // A button that wrote `quiet_until` directly would be a second one.
+          //
+          // **Deliberately global, not scoped to the project.** Scoping it when
+          // we happen to know the project and not when we do not would make one
+          // button mean two different things depending on what our own records
+          // contain — and the one Grant would find out about is the time it
+          // silenced less than he expected. "Mute 24h" on a pager means the
+          // pager. The project is still recorded on the audit row.
+          const who = await pressedBy(db, row)
+          if (who === null) {
+            await resolveNotification(db, row, 'dismissed')
+            done.push({
+              commandId: row.command_id,
+              action,
+              outcome: 'unresolvable',
+              note: 'I could not tell who pressed that, so nothing was changed',
+            })
+            break
+          }
+          const applied = await applyPreference(db, parseInstruction('leave me alone today'), {
+            subject: who,
+            originChannel: row.origin_channel as 'slack' | 'telegram' | 'voice' | 'teamhq',
+            instruction: 'mute 24h (button)',
+            commandId: row.command_id,
+          })
           await resolveNotification(db, row, 'dismissed')
           done.push({
             commandId: row.command_id,
             action,
-            outcome: 'unresolvable',
-            note: 'I could not tell who pressed that, so nothing was undone',
+            outcome: applied.applied ? 'acted' : 'noted',
+            note: applied.applied ? 'quiet for 24 hours' : String(applied.notUnderstood),
           })
           break
         }
-        const outcome = await doUndo(db, row)
-        if (outcome.outcome === 'acted') await resolveNotification(db, row, 'acted')
-        done.push(outcome)
-        break
-      }
 
-      case 'mute_24h': {
-        // Through the same parse and the same store as a typed instruction, so
-        // there is one implementation of what a mute means and one audit trail.
-        // A button that wrote `quiet_until` directly would be a second one.
-        //
-        // **Deliberately global, not scoped to the project.** Scoping it when
-        // we happen to know the project and not when we do not would make one
-        // button mean two different things depending on what our own records
-        // contain — and the one Grant would find out about is the time it
-        // silenced less than he expected. "Mute 24h" on a pager means the
-        // pager. The project is still recorded on the audit row.
-        const who = await pressedBy(db, row)
-        if (who === null) {
-          await resolveNotification(db, row, 'dismissed')
+        case 'open_project': {
+          await resolveNotification(db, row, 'acted')
           done.push({
             commandId: row.command_id,
             action,
-            outcome: 'unresolvable',
-            note: 'I could not tell who pressed that, so nothing was changed',
+            outcome: 'noted',
+            note: 'opening a project is a signal, not a request',
           })
           break
         }
-        const applied = await applyPreference(db, parseInstruction('leave me alone today'), {
-          subject: who,
-          originChannel: row.origin_channel as 'slack' | 'telegram' | 'voice' | 'teamhq',
-          instruction: 'mute 24h (button)',
-          commandId: row.command_id,
-        })
-        await resolveNotification(db, row, 'dismissed')
-        done.push({
-          commandId: row.command_id,
-          action,
-          outcome: applied.applied ? 'acted' : 'noted',
-          note: applied.applied ? 'quiet for 24 hours' : String(applied.notUnderstood),
-        })
-        break
-      }
 
-      case 'open_project': {
-        await resolveNotification(db, row, 'acted')
-        done.push({
-          commandId: row.command_id,
-          action,
-          outcome: 'noted',
-          note: 'opening a project is a signal, not a request',
-        })
-        break
-      }
-
-      case 'approve':
-      case 'decline': {
-        // Resolved from the JOB the message came from, never from the button's
-        // payload. The payload round-trips through a client and §10 forbids
-        // free-form input reaching a lookup; the delivery row is ours, and 0037
-        // already established it as the trustworthy end of a button press.
-        if (row.job_id === null || row.delivery_id === null) {
-          done.push({
-            commandId: row.command_id,
-            action,
-            outcome: 'unresolvable',
-            note: 'the delivery record for that message is gone, so I cannot tell what it was asking about',
-          })
-          break
-        }
-        /*
+        case 'approve':
+        case 'decline': {
+          // Resolved from the JOB the message came from, never from the button's
+          // payload. The payload round-trips through a client and §10 forbids
+          // free-form input reaching a lookup; the delivery row is ours, and 0037
+          // already established it as the trustworthy end of a button press.
+          if (row.job_id === null || row.delivery_id === null) {
+            done.push({
+              commandId: row.command_id,
+              action,
+              outcome: 'unresolvable',
+              note: 'the delivery record for that message is gone, so I cannot tell what it was asking about',
+            })
+            break
+          }
+          /*
           Through app.hq_answer_blocker, the one door that knows what answering
           MEANS: it queues the follow-on for a generation approval, releases the
           parked job, performs what the question promised (a standing grant, the
@@ -498,7 +498,7 @@ export const processCallbacks = async (
           writer named as the No (decline_option), else the last one - the same
           convention the Drive question already follows ("Ignore these").
         */
-        const { rows: answered } = await db.execute(`
+          const { rows: answered } = await db.execute(`
           select app.hq_answer_blocker(
             q.blocker_id,
             case when ${action === 'approve' ? 'true' : 'false'} then q.approval_options[1]
@@ -511,50 +511,63 @@ export const processCallbacks = async (
                   from public.blockers b
                  where b.blocker_id = app.approval_for_delivery(${lit(row.delivery_id)}::uuid)) q
         `)
-        const r = (answered[0] as { r: Record<string, unknown> | null } | undefined)?.r ?? null
-        await resolveNotification(db, row, action === 'approve' ? 'acted' : 'dismissed')
-        done.push({
-          commandId: row.command_id,
-          action,
-          outcome: r === null || r.error !== undefined ? 'unresolvable' : 'acted',
-          note:
-            r === null || r.error !== undefined
-              ? // The same message can be answered on Slack and on Telegram.
-                // Answering twice is normal, not a fault, and saying "already
-                // answered" is the honest note for the second press.
-                String(r?.error ?? 'nothing was waiting on that message')
-              : r.already === true
-                ? `already ${String(r.state)}`
-                : action === 'approve'
-                  ? r.job_id === undefined
-                    ? 'approved'
-                    : `approved — queued as ${String(r.job_id).slice(0, 8)}`
-                  : r.kind === undefined && r.approved === undefined
-                    ? 'declined'
-                    : 'declined; nothing was generated',
-        })
-        break
-      }
+          const r = (answered[0] as { r: Record<string, unknown> | null } | undefined)?.r ?? null
+          await resolveNotification(db, row, action === 'approve' ? 'acted' : 'dismissed')
+          done.push({
+            commandId: row.command_id,
+            action,
+            outcome: r === null || r.error !== undefined ? 'unresolvable' : 'acted',
+            note:
+              r === null || r.error !== undefined
+                ? // The same message can be answered on Slack and on Telegram.
+                  // Answering twice is normal, not a fault, and saying "already
+                  // answered" is the honest note for the second press.
+                  String(r?.error ?? 'nothing was waiting on that message')
+                : r.already === true
+                  ? `already ${String(r.state)}`
+                  : action === 'approve'
+                    ? r.job_id === undefined
+                      ? 'approved'
+                      : `approved — queued as ${String(r.job_id).slice(0, 8)}`
+                    : r.kind === undefined && r.approved === undefined
+                      ? 'declined'
+                      : 'declined; nothing was generated',
+          })
+          break
+        }
 
-      case 'more_detail': {
-        await resolveNotification(db, row, 'acted')
-        done.push({
-          commandId: row.command_id,
-          action,
-          outcome: 'not_routed',
-          note: "more_detail creates work, which is the router's decision, not this processor's",
-        })
-        break
-      }
+        case 'more_detail': {
+          await resolveNotification(db, row, 'acted')
+          done.push({
+            commandId: row.command_id,
+            action,
+            outcome: 'not_routed',
+            note: "more_detail creates work, which is the router's decision, not this processor's",
+          })
+          break
+        }
 
-      default: {
-        done.push({
-          commandId: row.command_id,
-          action: String(row.callback_action),
-          outcome: 'noted',
-          note: 'no handler for this action',
-        })
+        default: {
+          done.push({
+            commandId: row.command_id,
+            action: String(row.callback_action),
+            outcome: 'noted',
+            note: 'no handler for this action',
+          })
+        }
       }
+    } catch (error) {
+      // A press that threw before it was answered is released, so the next tick tries it again: a
+      // claimed-and-lost approval is a question that looks answered and never was (review of Run 3, F4).
+      // Answering is idempotent (hq_answer_blocker reports already), so a retry cannot double it.
+      if (row.callback_action === 'approve' || row.callback_action === 'decline') {
+        await db
+          .execute(
+            `update public.inbound_commands set processed_at = null where command_id = ${lit(row.command_id)}::uuid`,
+          )
+          .catch(() => undefined)
+      }
+      throw error
     }
   }
 
