@@ -34,6 +34,7 @@ import { mayAct, recordRefusal } from '../agents/approval.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { changesIn, describeKind, driveAccess, listFolder, startToken } from '../google/drive.ts'
 import { raiseBlocker } from '../inference/record.ts'
+import { callerArgs } from '../jobs/fence.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { count } from '../text/plain.ts'
 
@@ -186,7 +187,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
                 'title', ${lit(file.name)},
                 'mime_type', ${lit(String(file.mimeType ?? 'application/octet-stream'))}
               ),
-              interval '0', false)
+              interval '0', false${callerArgs(job)})
           `)
         }
         refreshedFiles += changed.length
@@ -295,7 +296,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
                   'title', ${lit(file.name)},
                   'mime_type', ${lit(String(file.mimeType ?? 'application/octet-stream'))}
                 ),
-                interval '0', false)
+                interval '0', false${callerArgs(job)})
             `)
           }
           took += arrived.length

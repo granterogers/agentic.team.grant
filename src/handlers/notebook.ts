@@ -40,6 +40,7 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import { claimExternal, failedCleanly, fingerprint, finishStep } from '../jobs/checkpoint.ts'
+import { callerArgs } from '../jobs/fence.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
   ARTIFACT_KINDS,
@@ -286,7 +287,7 @@ async function again(
       ),
       'notebook.collect',
       jsonb_build_object('artifact', ${lit(rowId)}, 'tick', ${String(tick + 1)}),
-      interval '${TICK_GAP}', true
+      interval '${TICK_GAP}', true${callerArgs(job)}
     )
   `)
   await quiet(db, job)
@@ -423,7 +424,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
               'notebook.generate',
               (select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid),
               ${lit(`${String(Math.max(60, Math.round((when.getTime() - Date.now()) / 1000)))} seconds`)}::interval,
-              true
+              true${callerArgs(job)}
             )
           `)
           return deterministic(
@@ -499,7 +500,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
                 'notebook.generate',
                 (select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid),
                 ${lit(`${String(Math.max(60, Math.round((when.getTime() - Date.now()) / 1000)))} seconds`)}::interval,
-                true
+                true${callerArgs(job)}
               )
             `)
             return deterministic(
@@ -552,7 +553,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           select app.enqueue_child(
             ${lit(job.jobId)}::uuid, 'notebook.collect',
             jsonb_build_object('artifact', ${lit(artifactId)}, 'tick', 1),
-            interval '90 seconds', true
+            interval '90 seconds', true${callerArgs(job)}
           )
         `)
 
@@ -642,7 +643,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
               'notebook.add_source',
               (select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid),
               ${lit(`${String(Math.max(60, Math.round((when.getTime() - Date.now()) / 1000)))} seconds`)}::interval,
-              true
+              true${callerArgs(job)}
             )
           `)
           return deterministic(
@@ -968,7 +969,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
                   'project_id', ${lit(String(job.projectId))},
                   'title', ${lit(title)}
                 ),
-                interval '0 seconds', true, ${lit(String(job.projectId))}::uuid
+                interval '0 seconds', true, ${lit(String(job.projectId))}::uuid${callerArgs(job)}
               )
             `)
           }
@@ -1029,7 +1030,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
                 'notebook.ask',
                 (select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid)
                   || jsonb_build_object('tick', ${String(tick + 1)}),
-                interval '90 seconds', true
+                interval '90 seconds', true${callerArgs(job)}
               )
             `)
             await db.execute(

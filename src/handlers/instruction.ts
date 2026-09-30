@@ -165,6 +165,7 @@ import { oneReading, type ReadingKind, understand } from '../agents/understand.t
 import { asksWhatTheyFound, asksWhoIsOnIt } from '../agents/whoison.ts'
 import { DeliveryService } from '../channels/delivery.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { callerArgs } from '../jobs/fence.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
   awaiting,
@@ -347,7 +348,7 @@ export const planAndPursue = async (
           'plan', ${lit(JSON.stringify(plan))}::jsonb,
           'request', ${lit(request.slice(0, 2000))}
         ), interval '0', true`
-        }
+        }${callerArgs(job)}
       ) as r`)
     .then((r) => {
       const raw = (r.rows[0] as { r?: unknown })?.r
@@ -1299,7 +1300,7 @@ async function act(
       select app.enqueue_child(
         ${lit(job.jobId)}::uuid, 'notebook.generate',
         jsonb_build_object('kind', ${lit(kind)}, 'instructions', ${lit(instructions)}),
-        interval '0', true
+        interval '0', true${callerArgs(job)}
       )
     `)
     started.push(KIND_LABEL[kind])
@@ -1720,7 +1721,7 @@ async function enqueueSource(
     select app.enqueue_child(
       ${lit(job.jobId)}::uuid, 'notebook.add_source',
       jsonb_build_object('url', ${lit(link.url)}, 'kind', ${lit(link.kind)}),
-      interval '0', false, ${lit(projectId)}::uuid
+      interval '0', false, ${lit(projectId)}::uuid${callerArgs(job)}
     )
   `)
 }
@@ -2709,7 +2710,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                         'command_id', ${lit(String(payload.command_id ?? ''))},
                         'handed_off_by', ${lit(who.slug)}
                       ),
-                      false
+                      false${callerArgs(job)}
                     ) ->> 'created' as made`)
                   .then((x) => String((x.rows[0] as { made?: string })?.made ?? 'false'))
                 return started === 'true'
@@ -2804,7 +2805,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 'command_id', ${lit(String(payload.command_id ?? ''))},
                 'handed_off_by', ${lit(who.slug)}
               ),
-              false
+              false${callerArgs(job)}
             ) ->> 'job_id' as id
           `)
           .catch((error: unknown) => ({ rows: [{ id: null, e: (error as Error).message }] }))
@@ -3173,7 +3174,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               '{}'::jsonb,
               interval '0',
               true,
-              ${lit(job.projectId)}::uuid
+              ${lit(job.projectId)}::uuid${callerArgs(job)}
             )
           `)
         }
@@ -3185,7 +3186,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               '{}'::jsonb,
               interval ${wire === null ? "'0'" : "'1 minute'"},
               true,
-              ${lit(job.projectId)}::uuid
+              ${lit(job.projectId)}::uuid${callerArgs(job)}
             )
           `)
         }
@@ -3982,7 +3983,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
                     'command_id', ${lit(String(payload.command_id ?? ''))}
                   ),
-                  interval '0', true
+                  interval '0', true${callerArgs(job)}
                 )::text as id`)
               .then(() =>
                 listing.kinds.length === 0
@@ -4164,7 +4165,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
                     'command_id', ${lit(String(payload.command_id ?? ''))}
                   ),
-                  interval '0', true
+                  interval '0', true${callerArgs(job)}
                 )::text as id`)
               .then(
                 () =>
@@ -4199,7 +4200,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
                     'command_id', ${lit(String(payload.command_id ?? ''))}
                   ),
-                  interval '0', true
+                  interval '0', true${callerArgs(job)}
                 )::text as id`)
               .then(
                 () =>
@@ -4233,7 +4234,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
                     'command_id', ${lit(String(payload.command_id ?? ''))}
                   ),
-                  interval '0', true
+                  interval '0', true${callerArgs(job)}
                 )::text as id`)
               .then(() =>
                 pullOut.from === null

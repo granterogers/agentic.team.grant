@@ -44,6 +44,7 @@ const EXTERNAL_STEPS: ReadonlySet<string> = new Set([
   'ask',
 ])
 
+import { callerArgs } from '../jobs/fence.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import { checkApproval, mayStart, refusedApproval } from './approval-gate.ts'
@@ -324,7 +325,7 @@ async function child(
     select app.enqueue_child(
       ${lit(job.jobId)}::uuid, ${lit(kind)},
       ${lit(JSON.stringify(payload))}::jsonb,
-      ${lit(delay)}::interval, true, ${lit(projectId)}::uuid
+      ${lit(delay)}::interval, true, ${lit(projectId)}::uuid${callerArgs(job)}
     )
   `)
 }

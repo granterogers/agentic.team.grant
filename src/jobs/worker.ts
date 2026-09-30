@@ -40,7 +40,7 @@ import { redactDeep } from '../text/secrets.ts'
 import type { Plan } from '../tools/plan.ts'
 import { plannedWrites, summarise } from '../tools/plan.ts'
 import { containmentRefusal, type Reach } from './containment.ts'
-import { assertHeld, fenceClause, StaleWorkerError, startHeartbeat } from './fence.ts'
+import { assertHeld, callerArgs, fenceClause, StaleWorkerError, startHeartbeat } from './fence.ts'
 import { lastWord } from './lastword.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -123,6 +123,8 @@ export interface Job {
   readonly attempt: number
   /** The worker `dequeue` leased this to; with `attempt`, the claim every write asks about (see fence.ts). */
   readonly leasedBy?: string
+  /** The claim's number (0625, see fence.ts); absent on a schema from before it. */
+  readonly claimGen?: number
   /** Set when a renewal finds the claim gone. */
   lost?: boolean
 }
@@ -725,6 +727,16 @@ export const dequeue = async (
   )
   const r = rows[0]
   if (r === undefined) return null
+  // The number of the claim just made (0625). Read back by the claim itself - this worker, this attempt - because
+  // changing what dequeue_job RETURNS would break a worker running the old shape. A schema without the column
+  // answers an error, and the fence then asks the attempt as it always did.
+  const gen = await db
+    .execute(
+      `select claim_gen from public.jobs
+        where job_id = ${lit(String(r.job_id))}::uuid and leased_by = ${lit(workerId)} and attempt = ${String(Number(r.attempt))}`,
+    )
+    .then((g) => (g.rows[0] as { claim_gen?: unknown } | undefined)?.claim_gen)
+    .catch(() => undefined)
   return {
     jobId: String(r.job_id),
     kind: String(r.kind),
@@ -734,6 +746,7 @@ export const dequeue = async (
     attempt: Number(r.attempt),
     // The claim this worker now holds, so every later write can ask whether it still does (Run 4, D1).
     leasedBy: workerId,
+    ...(gen === undefined || gen === null ? {} : { claimGen: Number(gen) }),
   }
 }
 
@@ -1419,8 +1432,8 @@ const runJobHeld = async (
     insert into public.outputs
       (job_id, staff_id, body, confidence, evidence, sources, contradictions,
        deterministic, model, shape, facts)
-    values
-      (${lit(job.jobId)}::uuid,
+    select
+      ${lit(job.jobId)}::uuid,
        -- WHO did this. 736 outputs were written before this line existed, every
        -- one of them attributed to nobody, while §9 makes staff identities and
        -- §22 A requires "correct staff identity". The notifier had always
@@ -1444,7 +1457,14 @@ const runJobHeld = async (
        -- The column constraint says the same thing, so a caller that sends one
        -- is refused rather than half-recorded.
        ${output.shape === undefined || output.facts === undefined ? 'null' : lit(output.shape)},
-       ${output.shape === undefined || output.facts === undefined ? 'null' : `${lit(JSON.stringify(output.facts))}::jsonb`})
+       ${output.shape === undefined || output.facts === undefined ? 'null' : `${lit(JSON.stringify(output.facts))}::jsonb`}
+    -- The check and the write are ONE statement (0625): a worker that lost the claim between the question above and
+    -- this insert writes nothing. Only asked where the claim has a number, which is where the function exists.
+    where ${
+      job.leasedBy === undefined || job.claimGen === undefined
+        ? 'true'
+        : `app.job_held(${lit(job.jobId)}::uuid, ${lit(job.leasedBy)}, ${String(job.attempt)}, ${String(job.claimGen)})`
+    }
     returning output_id::text as id
   `)
   } catch (error) {
@@ -1479,6 +1499,11 @@ const runJobHeld = async (
       said: said.slice(0, 300),
     })
     return { jobId: job.jobId, finalState: 'failed', note: said.slice(0, 200) }
+  }
+  if (inserted.rows[0] === undefined) {
+    // the insert's own held-check refused: this worker no longer holds the job
+    job.lost = true
+    throw new StaleWorkerError(job.jobId, job.leasedBy ?? '', job.attempt)
   }
   const outputId = String((inserted.rows[0] as { id?: string } | undefined)?.id)
 
@@ -1687,7 +1712,7 @@ const runJobHeld = async (
             'handed_off_because', ${lit(output.handoff.because.slice(0, 500))},
             'from_output', ${lit(outputId)}
           ),
-          interval '0', false
+          interval '0', false${callerArgs(job)}
         )
       `)
     } catch (error) {
