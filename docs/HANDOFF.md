@@ -9,6 +9,23 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
+> ## 2026-09-30 — Architecture Run 1 is deployed and verified on `main`
+>
+> Migrations 0607–0610 are applied; `worker`, `hq-api` and `telegram-webhook`
+> are redeployed (worker v852, hq-api v787, telegram-webhook v605). The
+> semantic boundary (one immutable `Turn`, `HumanWords` vs `Paraphrase`,
+> `entitled.*`, explicit early-gate precedence) is ADR-0052; B1–B7 are fixed and
+> were re-proved live through the deployed doors (`npm run verify:run1-live`,
+> 14/14, all traffic declared test traffic). Record, rollback point and the
+> residual register: `docs/ARCHITECTURE-RUN-1.md`. **The worker also needed the
+> redeploy** (it imports the changed handlers); the first handoff omitted it.
+> The Vercel page step of `deploy:hq` fails on a 10 MB request-size limit; the
+> page live is unchanged from `bbe9956c`.
+>
+> **Run 2 (authority) is a CANDIDATE on `claude/architecture-run-2-authority`,
+> not merged and not deployed.** Migration 0611 is not applied. See
+> `docs/ARCHITECTURE-RUN-2.md` and ADR-0053.
+>
 > ## 2026-09-29 — #378 containment audit, on `claude/378-containment` (NOT deployed)
 >
 > Harness work reached people by paths that bypassed the guard. The first was
