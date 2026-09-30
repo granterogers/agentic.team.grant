@@ -168,9 +168,19 @@ export async function retrieve(
  * records about coverage notes.
  *
  * What is fenced is material written by SOMEBODY ELSE and pulled in
- * automatically: the open internet, and inbound correspondence.
+ * automatically: the open internet, and inbound correspondence - and what an
+ * external MCP client wrote into the office (final audit, review F6), which is
+ * authored outside it whoever the client's person is. Not fenced, on purpose:
+ * the material Grant attached himself (Drive, Notion, NotebookLM, an upload);
+ * nothing in a prompt can make a reader act on it, since every consequence-
+ * bearing reader takes only his own words.
  */
-export const UNTRUSTED_CONNECTORS: ReadonlySet<string> = new Set(['browser', 'gmail', 'mail'])
+export const UNTRUSTED_CONNECTORS: ReadonlySet<string> = new Set([
+  'browser',
+  'gmail',
+  'mail',
+  'mcp',
+])
 
 /*
   NULL is not untrusted. A document with no connector is one the OFFICE made,

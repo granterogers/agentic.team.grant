@@ -1534,7 +1534,6 @@ const SERVICE_MAY: ReadonlySet<string> = new Set([
   'contact_label_remove',
   'contact_labels_set',
   'contact_fields_set',
-  'output_import',
   'document_tag',
   'document_rename',
   'document_move',

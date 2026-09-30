@@ -242,6 +242,32 @@ export async function syncTasksToCalendar(
   const trouble: string[] = []
 
   for (const row of create) {
+    /*
+      ASK THE DIARY BEFORE CREATING (final audit, invariant 27).
+
+      A crash between Google accepting the event and the link being written leaves an event nothing points at, and the
+      next pass - seeing no link - POSTed a second one for the same task. Every event carries the task's own tag, so
+      the diary itself says whether this task already has one: if it does, adopt it (and let the next pass update it)
+      instead of making another. A failed lookup is not evidence of absence, so it falls through to the old behaviour
+      only when Google answered that there is none; any other answer skips this task until the next pass.
+    */
+    const existing = await fetchImpl(
+      `${API}/calendars/${cal}/events?privateExtendedProperty=${encodeURIComponent(`${TAG}=${row.task_id}`)}&maxResults=1&showDeleted=false`,
+      { method: 'GET', headers },
+    )
+    if (!existing.ok) {
+      trouble.push(`could not check the diary for ${row.title} (${String(existing.status)})`)
+      continue
+    }
+    const listed = (await existing.json().catch(() => ({}))) as { items?: { id?: string }[] }
+    const already = listed.items?.find((e) => typeof e.id === 'string' && e.id !== '')?.id
+    if (already !== undefined) {
+      await db.execute(
+        `select app.calendar_link_set(${lit(row.task_id)}::uuid, ${lit(target)}, ${lit(already)}, ${lit(row.hash)})`,
+      )
+      created += 1
+      continue
+    }
     const r = await fetchImpl(`${API}/calendars/${cal}/events`, {
       method: 'POST',
       headers,

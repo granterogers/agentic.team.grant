@@ -242,9 +242,20 @@ describe('rotateAndPersist — §18: an invalid refresh token must not lock us o
     )
     expect(outcome).toEqual({ kind: 'rotated', expiresAt: 1_800_000_000 })
     const stored = db.statements.filter((s) => s.includes('store_secret'))
-    expect(stored).toHaveLength(3) // pre-rotation copy, new access, new refresh
+    expect(stored).toHaveLength(2) // the pre-rotation copy, then the new pair TOGETHER
     expect(stored[1]).toContain('xoxe-new')
-    expect(stored[2]).toContain('xoxe-1-new')
+    expect(stored[1]).toContain('xoxe-1-new')
+  })
+
+  it('never stores half of the new pair: the two tokens are one statement (review L2)', async () => {
+    // The access token alone would leave the consumed refresh token in the vault: the next rotation fails and only a
+    // person can repair it. So no statement may name one of the new tokens without the other.
+    const db = recordingDb()
+    await rotateAndPersist({ execute: db.execute, fetchImpl: issues() }, 'A0APP', 'xoxe-1-current')
+    const withAccess = db.statements.filter((s) => s.includes('xoxe-new'))
+    const withRefresh = db.statements.filter((s) => s.includes('xoxe-1-new'))
+    expect(withAccess).toHaveLength(1)
+    expect(withRefresh).toEqual(withAccess)
   })
 
   it('CONTROL: a successful rotation DOES write the access token', async () => {

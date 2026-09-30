@@ -203,6 +203,42 @@ const park = (id: string, reason: string, resumable: boolean) =>
   )
 }
 
+// ---- and the control he is told to press works on it (0635) ---------------------------------------------------------
+{
+  const stop = async (id: string) =>
+    (await one(`select app.request_stop(${lit(id)}::uuid, 'grant')::text as r`)).r as string
+  const stateOf = async (id: string) =>
+    String(
+      (await one(`select state::text as s from public.jobs where job_id = ${lit(id)}::uuid`)).s,
+    )
+  const j = await claimReal()
+  await park(j.jobId, 'needs_reconciliation', false)
+  const said = await stop(j.jobId)
+  check(
+    'Stop cancels a job parked on an unsure effect (the parked notice tells him to press it)',
+    (await stateOf(j.jobId)) === 'cancelled' && /cancelled/.test(said),
+    `${await stateOf(j.jobId)}; ${said.slice(0, 60)}`,
+  )
+  check(
+    'and it no longer owes a word once cancelled',
+    (await owed(j.jobId)) === 0,
+    `${await owed(j.jobId)}`,
+  )
+  const running = await claimReal()
+  await stop(running.jobId)
+  check(
+    'control: Stop on a RUNNING job only asks - the flag is read between steps, where it can be honoured',
+    (await stateOf(running.jobId)) === 'running',
+    await stateOf(running.jobId),
+  )
+  const again = await stop(j.jobId)
+  check(
+    'control: Stop on a finished job says so and changes nothing',
+    /already finished/.test(again) && (await stateOf(j.jobId)) === 'cancelled',
+    again.slice(0, 70),
+  )
+}
+
 // ---- through the real tick: the worker speaks, once, and only for the turn that is owed -------------------------------
 {
   const driveOnce = async (resumable: boolean, reason: string) => {

@@ -220,9 +220,20 @@ export async function rotateAndPersist(
     return { kind: 'failed', error: rotation.message, needsHuman: rotation.needsHuman === true }
   }
 
-  // 4. The new pair, immediately.
-  await store('slack.config_token', pair.accessToken, 'Slack config access token (rotates ~12h)')
-  await store('slack.config_refresh_token', pair.refreshToken, 'Slack config refresh token')
+  /*
+    4. The new pair, immediately, AS ONE STATEMENT.
+
+    Two statements left a window in which the new ACCESS token was stored and the new REFRESH token was not: the
+    refresh token still in the vault was the one Slack had just consumed, so the next rotation failed with
+    invalid_refresh_token and only a person at api.slack.com could repair it (final audit, review L2). One statement
+    is one transaction: both are written or neither is. What remains is the window between Slack accepting the
+    rotation and this statement landing - Slack has consumed the old token and the reply exists only in memory. That
+    is the provider's single-use design and is not closable from here; `needsHuman` says so when it happens.
+  */
+  await deps.execute(
+    `select app.store_secret(${sqlLit('slack.config_token')}, ${sqlLit(pair.accessToken)}, ${sqlLit('Slack config access token (rotates ~12h)')}),
+            app.store_secret(${sqlLit('slack.config_refresh_token')}, ${sqlLit(pair.refreshToken)}, ${sqlLit('Slack config refresh token')})`,
+  )
 
   return { kind: 'rotated', expiresAt: pair.expiresAt }
 }

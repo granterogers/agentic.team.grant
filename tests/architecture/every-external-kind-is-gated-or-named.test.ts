@@ -34,8 +34,18 @@ const UNGATED: Record<string, string> = {
   'tasks.sync': "#389: the task board is dormant; create/update/delete from the office's own tasks",
 }
 
-const DOOR =
-  /\b(?:mayWrite|governOutward|authorizeEffect|mayAct)\b|authorize_effect|app\.may_act\(|approval-gate/
+/*
+  A gate is a CALL WHOSE ANSWER IS CONSUMED, not a name that appears in the file (review V1: replacing every
+  `mayStart(...)` with `{ ok: true }` left the earlier name-matching version green because the import line still
+  named the module). So a handler is gated when it assigns the result of an awaited authorization call and then
+  branches on it: `const start = await mayStart(...)` ... `if (!start.ok)`.
+*/
+const CALL =
+  /\bconst\s+(\w+)\s*=\s*await\s+(?:mayWrite|mayStart|governOutward|authorizeEffect|mayAct)\s*\(/g
+const isGated = (text: string): boolean =>
+  [...text.matchAll(CALL)].some((m) =>
+    new RegExp(`if\\s*\\(\\s*!?\\s*${m[1]}\\.(?:ok|go|verdict)\\b`).test(text),
+  )
 
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap((f) => {
@@ -60,7 +70,7 @@ const ungatedExternalKinds = (reach: Record<string, { reach: string }>): string[
     .filter((k) => reach[k]?.reach === 'external')
     .filter((k) => {
       const f = handlerFile(k)
-      return f === undefined || !DOOR.test(f.text)
+      return f === undefined || !isGated(f.text)
     })
     .sort()
 
@@ -80,6 +90,23 @@ describe('every external kind is gated or named', () => {
   it('the ungated kinds are exactly the named ones, with a reason each', () => {
     expect(ungatedExternalKinds(REACH)).toEqual(Object.keys(UNGATED).sort())
     for (const [kind, why] of Object.entries(UNGATED)) expect(why.length, kind).toBeGreaterThan(20)
+  })
+
+  it('a gate whose answer is never consumed is not a gate (the review V1 sabotage)', () => {
+    expect(isGated('const start = await mayStart(db, job, approval, "x")\nreturn run()')).toBe(
+      false,
+    )
+    expect(
+      isGated(
+        'import { mayStart } from "./approval-gate.ts"\nconst start = { ok: true }\nif (!start.ok) return',
+      ),
+    ).toBe(false)
+    expect(
+      isGated(
+        'const start = await mayStart(db, job, approval, "x")\nif (!start.ok) return refused()',
+      ),
+    ).toBe(true)
+    expect(isGated('const gate = await governOutward(db, {})\nif (!gate.go) { return }')).toBe(true)
   })
 
   it('a new external kind with no gate and no entry is caught (the detector can fail)', () => {

@@ -382,7 +382,7 @@ const kid = String(
   )
 }
 
-// ---- a registered write-scoped MCP client is a person's tool asking; nothing else office-made is (0629) ------------------
+// ---- a write-scoped MCP client is NOT a person asking: its consent was given with the office key (0637) ---------------------
 {
   const client = `audit-${run}`
   await db.execute(
@@ -397,20 +397,85 @@ const kid = String(
   const a = await may(viaMcp, 'notebook.write')
   const b = await may(viaRo, 'notebook.write')
   check(
-    'a registered, write-scoped MCP client is asking (its push_document proceeds)',
-    a.verdict === 'proceed' && a.asked_for === true,
+    'a registered, write-scoped MCP client is NOT asking: its consent was given with the office key, a machine, so the same level-2 action asks',
+    a.verdict === 'ask' && a.asked_for !== true,
     `${a.verdict}/${String(a.asked_for)}`,
   )
-  check(
-    'a read-only MCP client is not, and an unregistered one is not (control)',
-    b.verdict === 'ask',
-    b.verdict,
-  )
+  check('a read-only MCP client is not either (control)', b.verdict === 'ask', b.verdict)
   await db.execute(
     `update public.mcp_clients set enabled = false, disabled_reason = 'proof' where client_id = ${lit(client)}`,
   )
   const off = await may(viaMcp, 'notebook.write')
   check('a disabled client is not', off.verdict === 'ask', off.verdict)
+}
+
+// ---- a test member does not change a real task (review F5, 0637) ------------------------------------------------------
+{
+  const name = `Audit real ${run}`
+  await one(
+    `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`real-${run}`)}, ${lit(name)}, true)::text as r`,
+  )
+  const real = String(
+    (
+      await one(
+        `select project_id::text as id from public.projects where slug = ${lit(`audit-real-${run}`)}`,
+      )
+    ).id,
+  )
+  const fxName = `fixture task ${run}`
+  await one(
+    `select app.hq_create_project(${lit(fxName)}, 'upload', ${lit(`fxt-${run}`)}, ${lit(fxName)}, true)::text as r`,
+  )
+  const fx = String(
+    (
+      await one(
+        `select project_id::text as id from public.projects where slug = ${lit(`fixture-task-${run}`)}`,
+      )
+    )?.id ?? real,
+  )
+  const mkTask = async (project: string, title: string) =>
+    String(
+      (
+        await one(
+          `select (app.task_add(p_project => ${lit(project)}::uuid, p_title => ${lit(title)}, p_added_by => 'grant')) ->> 'id' as id`,
+        )
+      ).id,
+    )
+  const t1 = await mkTask(real, `Real task ${run}`)
+  const refusal = String(
+    (await one(`select app.hq_task_state(${lit(t1)}, 'done', null, 'verify-operator')::text as r`))
+      .r,
+  )
+  const still = await one(
+    `select state::text as s from public.tasks where task_id = ${lit(t1)}::uuid`,
+  )
+  check(
+    'a test member cannot complete a task in a REAL project (and says why)',
+    still.s === 'todo' && /test|real|decid/i.test(refusal),
+    `${String(still.s)}; ${refusal.slice(0, 100)}`,
+  )
+  const t2 = await mkTask(real, `Real task two ${run}`)
+  await one(`select app.hq_task_state(${lit(t2)}, 'done', null, 'grant')::text as r`)
+  const did = await one(
+    `select state::text as s, completed_by from public.tasks where task_id = ${lit(t2)}::uuid`,
+  )
+  check(
+    'control: a person still completes it',
+    did.s === 'done' && did.completed_by === 'grant',
+    `${String(did.s)} by ${String(did.completed_by)}`,
+  )
+  if (fx !== real) {
+    const t3 = await mkTask(fx, `Fixture task ${run}`)
+    await one(`select app.hq_task_state(${lit(t3)}, 'done', null, 'verify-operator')::text as r`)
+    const f3 = await one(
+      `select state::text as s from public.tasks where task_id = ${lit(t3)}::uuid`,
+    )
+    check(
+      'control: a test member still completes a task in a FIXTURE project',
+      f3.s === 'done',
+      String(f3.s),
+    )
+  }
 }
 
 // ---- work called off cannot be started by a later yes (0632) ---------------------------------------------------------------

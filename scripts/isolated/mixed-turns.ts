@@ -97,6 +97,63 @@ const attempt = async (said: string, waiting: boolean) => {
   return { body, state, tasks, lessons }
 }
 
+/*
+  A preference, a reminder and a question in ONE message (invariant 4, final audit). Two defects lived here with the
+  model degraded: the rule's body was the FIRST sentence of the message, so "Remind me tomorrow to call Kevin. From now
+  on give me the conclusion first." stored the reminder as a permanent standing rule; and a question mark at the END of
+  the message was read as a question about the rule, so "From now on give me the conclusion first. And what is the
+  status of the venue?" stored nothing and said nothing. The controls are the same words with no rule in them.
+*/
+{
+  const r = await attempt(
+    'Remind me tomorrow to call Kevin. From now on give me the conclusion first.',
+    false,
+  )
+  check(
+    'a reminder then a rule: the RULE is the sentence that carries the marker, the reminder is a task',
+    r.lessons.length === 1 &&
+      /conclusion first/i.test(r.lessons[0] ?? '') &&
+      !/kevin/i.test(r.lessons[0] ?? '') &&
+      r.tasks.some((t) => /call kevin/i.test(t)),
+    `lessons ${JSON.stringify(r.lessons)}; tasks ${JSON.stringify(r.tasks)}`,
+  )
+}
+{
+  const r = await attempt(
+    'From now on give me the conclusion first. Also remind me tomorrow to call Kevin. And what is the status of the venue?',
+    false,
+  )
+  check(
+    'a rule, a reminder and a question: the rule is stored as itself and the reminder is a task without the rule in its title',
+    r.lessons.length === 1 &&
+      /conclusion first/i.test(r.lessons[0] ?? '') &&
+      r.tasks.some((t) => /call kevin/i.test(t) && !/from now on/i.test(t)),
+    `lessons ${JSON.stringify(r.lessons)}; tasks ${JSON.stringify(r.tasks)}`,
+  )
+}
+{
+  const r = await attempt(
+    'From now on give me the conclusion first. And what is the status of the venue?',
+    false,
+  )
+  check(
+    'a rule then a question: the question mark at the end of the message is not a question about the rule',
+    r.lessons.length === 1 && /conclusion first/i.test(r.lessons[0] ?? ''),
+    `lessons ${JSON.stringify(r.lessons)}`,
+  )
+}
+{
+  const r = await attempt(
+    'Should you always use bullet points? Also remind me tomorrow to call Kevin.',
+    false,
+  )
+  check(
+    'CONTROL: a question ABOUT a rule is not stored as one, and the reminder still is a task',
+    r.lessons.length === 0 && r.tasks.some((t) => /call kevin/i.test(t)),
+    `lessons ${JSON.stringify(r.lessons)}; tasks ${JSON.stringify(r.tasks)}`,
+  )
+}
+
 {
   const r = await attempt('Yes, and remind me tomorrow to call Kevin.', true)
   check(

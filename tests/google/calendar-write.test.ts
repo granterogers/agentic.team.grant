@@ -116,6 +116,10 @@ describe('syncTasksToCalendar', () => {
           { status: 200 },
         )
       }
+      // The lookup by tag before a create (an empty diary), then the create itself.
+      if ((init?.method ?? 'GET') === 'GET') {
+        return new Response(JSON.stringify({ items: [] }), { status: 200 })
+      }
       bodies.push(String(init?.body ?? ''))
       return new Response(JSON.stringify({ id: 'ev-new' }), { status: 200 })
     }) as unknown as typeof fetch
@@ -246,5 +250,50 @@ describe('syncTasksToCalendar', () => {
     expect(out.note).toContain('dry run')
     expect(out.created).toBe(1)
     expect(seen).toHaveLength(0)
+  })
+})
+
+describe('a create after a crash between Google and the link (invariant 27)', () => {
+  it('adopts the event the diary already holds for the task, and posts nothing', async () => {
+    const seen: { url: string; method: string }[] = []
+    const db = fakeDb({ plan: { create: [ROW], update: [], remove: [] } })
+    const out = await syncTasksToCalendar(db, {
+      fetchImpl: fakeGoogle({
+        seen,
+        onGet: () => new Response(JSON.stringify({ items: [{ id: 'orphan-1' }] }), { status: 200 }),
+      }),
+    })
+    expect(seen.filter((c) => c.method === 'POST')).toHaveLength(0)
+    expect(seen[0]?.url).toContain(`privateExtendedProperty=hqTaskId%3D${TASK}`)
+    expect(db.calls.some((c) => c.includes('calendar_link_set'))).toBe(true)
+    expect(out.created).toBe(1)
+  })
+
+  it('CONTROL: an empty diary still gets exactly one create', async () => {
+    const seen: { url: string; method: string }[] = []
+    const out = await syncTasksToCalendar(
+      fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
+      {
+        fetchImpl: fakeGoogle({
+          seen,
+          onGet: () => new Response(JSON.stringify({ items: [] }), { status: 200 }),
+        }),
+      },
+    )
+    expect(seen.filter((c) => c.method === 'POST')).toHaveLength(1)
+    expect(out.created).toBe(1)
+  })
+
+  it('a lookup that fails is not proof of an empty diary: nothing is posted, and the pass says so', async () => {
+    const seen: { url: string; method: string }[] = []
+    const out = await syncTasksToCalendar(
+      fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
+      {
+        fetchImpl: fakeGoogle({ seen, onGet: () => new Response('', { status: 503 }) }),
+      },
+    )
+    expect(seen.filter((c) => c.method === 'POST')).toHaveLength(0)
+    expect(out.created).toBe(0)
+    expect(out.note).toMatch(/could not check the diary/)
   })
 })

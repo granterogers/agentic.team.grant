@@ -572,6 +572,26 @@ const stripFraming = (said: string): string =>
  */
 const REMIND_ME_A_QUESTION = /\bremind\s+me\s+(?:again\s+)?(?:why|what|who|whether|how)\b/i
 
+/** The sentences that carry a personal-task request frame, when the message has other sentences too; else null. */
+const requestSentences = (said: string): string | null => {
+  const sentences = (said.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) ?? [said])
+    .map((x) => x.trim())
+    .filter((x) => x !== '')
+  if (sentences.length < 2) return null
+  const carriers = sentences.filter(
+    (x) =>
+      (REMIND_ME.test(x) && !REMIND_SOMEBODY_ELSE.test(x)) ||
+      I_MUST.test(x) ||
+      ADD_COLON.test(x) ||
+      ((MAKE_A_TASK.test(x) ||
+        MAKE_AN_ITEM_TO.test(x) ||
+        MAKE_SURE_I.test(x) ||
+        ON_MY_LIST.test(x)) &&
+        !A_TASK_FOR_SOMEBODY_ELSE.test(x)),
+  )
+  return carriers.length === 0 || carriers.length === sentences.length ? null : carriers.join(' ')
+}
+
 export function personalTaskRequest(text: string, now: Date = new Date()): PersonalTask | null {
   const said = text.trim()
   if (said === '') return null
@@ -590,7 +610,18 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
       !A_TASK_FOR_SOMEBODY_ELSE.test(said))
   if (!remind && !commit) return null
 
-  const title = stripFraming(said)
+  /*
+    THE TASK IS THE SENTENCE THAT ASKED FOR IT (final audit, invariant 4).
+
+    A message with a rule and a question around a reminder filed the WHOLE message as the title:
+    "From now on give me the conclusion first. Also to call Kevin. And what is the status of the venue?". The other
+    clauses have their own readers (the rule is stored, the question is answered), so a title that swallows them is
+    one clause performed twice and the task unreadable. Only when a sentence of its own carries the request frame;
+    a one-sentence message, and one whose frame straddles sentences, read exactly as before.
+  */
+  const carried = requestSentences(said)
+  const asked = carried === null ? said : carried
+  const title = stripFraming(asked.replace(/^(?:also|and|then|plus)[,\s]+/i, ''))
   /*
     A title of nothing is not a task. "Remind me" on its own is a sentence with
     no work in it, and filing an empty row would be the placeholder this

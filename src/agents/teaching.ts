@@ -129,6 +129,28 @@ const ASKS_FOR_WORK =
 const ASKS_TO_STORE =
   /\b(?:learn this|remember this|write this down|note this down|save this|store this|add this to your|make this a (?:rule|skill|habit)|this is a (?:rule|skill))\b/i
 
+/** The sentences of a message, each with its own terminator. */
+const sentencesOf = (text: string): string[] =>
+  (text.trim().match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) ?? [text.trim()])
+    .map((s) => s.trim())
+    .filter((s) => s !== '')
+
+/**
+ * THE SENTENCE THAT CARRIES THE MARKER, not the first sentence of the message.
+ *
+ * "Remind me tomorrow to call Kevin. From now on give me the conclusion first." stored "Remind me tomorrow to call
+ * Kevin." as a standing rule - permanent, append-only, in every prompt after - because the body was the first
+ * sentence and the marker was in the second; and "From now on give me the conclusion first. And what is the status?"
+ * stored nothing, because the question mark at the END of the message was read as a question ABOUT the rule. Both
+ * are the same mistake: deciding about the rule from text that is not the rule. Null when no sentence carries a
+ * marker (a preference a meaning-reader judged, which is a clause already).
+ */
+const carrierOf = (text: string): string | null => {
+  const sentences = sentencesOf(text)
+  if (sentences.length < 2) return null
+  return sentences.find((s) => STANDING.test(s) || ASKS_TO_STORE.test(s)) ?? null
+}
+
 /** A single sentence, trimmed, or the whole thing if it has no full stop. */
 const firstSentence = (text: string): string => {
   const cut = /^[\s\S]{10,278}?[.!?](?=\s|$)/.exec(text.trim())
@@ -391,12 +413,19 @@ export function readTeaching(instruction: string, alreadyAPreference = false): T
     ONLY evidence: an explicit "remember that...", a withdrawal and a meaning
     the semantic reader already judged are untouched.
   */
-  if (standing && !asked && !takingItBack && !alreadyAPreference && notARuleForTheOffice(text)) {
+  const carrier = carrierOf(text)
+  if (
+    standing &&
+    !asked &&
+    !takingItBack &&
+    !alreadyAPreference &&
+    notARuleForTheOffice(carrier ?? text)
+  ) {
     return null
   }
 
   if (standing || asked || takingItBack || (alreadyAPreference && !JUST_THIS_ONCE.test(text))) {
-    const body = firstSentence(text)
+    const body = carrier !== null && !takingItBack ? firstSentence(carrier) : firstSentence(text)
     if (body.length < 8 || body.length > 280) return null
     return { kind: 'lesson', body, marked: standing || asked || takingItBack }
   }
