@@ -617,5 +617,9 @@
   "0603_unknown_origin_is_not_real_traffic.sql": "3dce4c8f093415ae684a18aed13db6ad062e8d7bf0d53217aacab431cfb8f0a3",
   "0604_harness_tasks_never_reach_his_calendar_or_briefing.sql": "017cb10ec7406c1eb3ab742abd3ce06a86631a664504005188735aacef6a04bc",
   "0605_a_test_at_a_real_door_says_so_before_it_knocks.sql": "7cfa77dcdea05814a236eb446182be6941656ec66161d8fdfa6c59ceaa21df3a",
-  "0606_a_test_destination_is_retired_never_forgotten.sql": "e6495a73febf7fef473a7f7a51c6075db57e2db2f290e91a8229c402016af0db"
+  "0606_a_test_destination_is_retired_never_forgotten.sql": "e6495a73febf7fef473a7f7a51c6075db57e2db2f290e91a8229c402016af0db",
+  "0607_a_sender_the_office_does_not_know_is_refused_at_the_door.sql": "6339233051a5c55160465d1cc8076e5143d4e52f549d5c77ed956673aa1643c9",
+  "0608_an_approval_is_answered_by_somebody_the_office_can_name.sql": "4d9576078e83d88ce4f662424baa1649f1119391edec4ac1650f0651a9e7a41d",
+  "0609_a_wait_is_not_an_attempt.sql": "91cdd8c1f43c5a9f7efe6414ec3549fdbc4c26a1bbf89fc155aa4e669a34713a",
+  "0610_an_answer_may_perform_what_the_question_promised.sql": "065906933c557b1707761c8b01e33513d6b9caf6572c37ed8d9132978ed7f88d"
 }
