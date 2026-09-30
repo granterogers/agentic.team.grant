@@ -53,6 +53,29 @@ values ('approval.refusal_days', '30'::jsonb,
         false, 'migration 0611')
 on conflict (key) do nothing;
 
+-- BACKFILL-BEGIN
+/*
+  Questions already open when this lands. A plan step's question was found by a
+  +-10 second window around its pause; from now on it is found by the fingerprint
+  on the question. So an OPEN question that has one pause bound to it gets that
+  fingerprint and its No, once, here - otherwise a step resumed after the deploy
+  would not find the answer it was waiting for and would ask again. Resolved
+  questions are left as they are: their answer lives in the resolution sentence
+  and nothing is going to resume on them.
+*/
+update public.blockers b
+   set action_fingerprint = p.binds_to,
+       decline_option = coalesce(b.decline_option, b.approval_options[2])
+  from (select distinct on (job_id, binds_to) job_id, binds_to, at
+          from public.job_pauses
+         where reason = 'awaiting_approval' and binds_to is not null
+         order by job_id, binds_to, at desc) p
+ where b.state = 'open'
+   and b.action_fingerprint is null
+   and b.job_id = p.job_id
+   and b.created_at between p.at - interval '10 seconds' and p.at + interval '10 seconds';
+-- BACKFILL-END
+
 -- What answered this exact action, for this job.
 create or replace function app.action_answer(p_job uuid, p_fingerprint text)
 returns text

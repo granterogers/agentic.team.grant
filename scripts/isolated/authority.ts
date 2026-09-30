@@ -8,9 +8,11 @@
  * control (a grant that exists, an action that differs, a window that has passed, a principal that is known)
  * so a boundary that refuses everything cannot pass. Effects are read from canonical state.
  */
+
+import { readFileSync } from 'node:fs'
 import { governOutward, mayAct } from '../../src/agents/approval.ts'
 import { compile } from '../../src/agents/perform.ts'
-import { fingerprint } from '../../src/jobs/checkpoint.ts'
+import { fingerprint, pauseJob } from '../../src/jobs/checkpoint.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'authority')
@@ -477,6 +479,63 @@ const answer = async (b: string, a: string, by = 'grant') =>
     (again.done?.outcome as { declined?: boolean } | undefined)?.declined === true &&
       (await tasks('outside')) === 0,
     JSON.stringify(again.done?.outcome ?? {}).slice(0, 80),
+  )
+}
+
+// ---- 9. a question already open when 0611 lands still finds its answer -------
+{
+  const p = await project('backfill')
+  const j = await job(p, 'telegram:grant-backfill', 'office.pursue')
+  await db
+    .execute(
+      `update public.jobs set state = 'running', started_at = now(), leased_until = now() + interval '5 minutes', lease_owner = 'authority' where job_id = ${lit(j)}::uuid`,
+    )
+    .catch(() => undefined)
+  const binds = { step: 's1:task.create', why: `backfill ${run}` }
+  await pauseJob(db as never, j, {
+    reason: 'awaiting_approval',
+    detail: 'authority proof',
+    resumeWhen: 'an answer',
+    resumable: false,
+    binds,
+  })
+  const b = String(
+    (
+      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (${lit(p)}::uuid, ${lit(j)}::uuid, 'Backfill proof', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+    ).id,
+  )
+  const sql = readFileSync(
+    'migrations/0611_authorization_is_asked_once_and_a_no_is_remembered.sql',
+    'utf8',
+  )
+  const block = /-- BACKFILL-BEGIN([\s\S]*?)-- BACKFILL-END/.exec(sql)?.[1] ?? ''
+  check(
+    'the backfill statement was found in the migration',
+    block.includes('update public.blockers'),
+    `${String(block.length)} chars`,
+  )
+  await db.execute(block)
+  const fp = await fingerprint(binds)
+  const row = await one(
+    `select action_fingerprint as fp, decline_option as d from public.blockers where blocker_id = ${lit(b)}::uuid`,
+  )
+  check(
+    'an open question gets the fingerprint of the pause it waits on, and its No',
+    row.fp === fp && row.d === 'No, leave it',
+    `${String(row.fp).slice(0, 10)}... / ${String(row.d)}`,
+  )
+  await answer(b, 'Yes, do it')
+  const seen = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp,
+    job: j,
+  })
+  check(
+    'so his answer after the deploy is found by the resumed step',
+    seen.verdict === 'proceed' && seen.approved,
+    seen.verdict,
   )
 }
 
