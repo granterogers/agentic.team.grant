@@ -448,11 +448,8 @@ const kid = String(
   const lb = String(lr.blocker ?? lr.blocker_id ?? '')
   const liveAns = JSON.parse(
     String(
-      (
-        await one(
-          `select app.hq_answer_blocker(${lit(lb)}::uuid, 'Go ahead', 'grant')::text as r`,
-        )
-      ).r,
+      (await one(`select app.hq_answer_blocker(${lit(lb)}::uuid, 'Go ahead', 'grant')::text as r`))
+        .r,
     ),
   ) as Record<string, unknown>
   check(
@@ -474,11 +471,8 @@ const kid = String(
   )
   const ans = JSON.parse(
     String(
-      (
-        await one(
-          `select app.hq_answer_blocker(${lit(db2)}::uuid, 'Go ahead', 'grant')::text as r`,
-        )
-      ).r,
+      (await one(`select app.hq_answer_blocker(${lit(db2)}::uuid, 'Go ahead', 'grant')::text as r`))
+        .r,
     ),
   ) as Record<string, unknown>
   const st = await one(
