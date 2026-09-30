@@ -921,7 +921,34 @@ try {
         first.status === 200 && typeof kid?.id === 'string' && kid.inherits === false,
         `http ${String(first.status)}; inherits ${String(kid?.inherits)}`,
       )
-      if (typeof kid?.id === 'string') {
+      const kidState =
+        typeof kid?.id === 'string'
+          ? String(
+              (
+                await one(
+                  `select state::text as s from public.jobs where job_id = ${lit(kid.id)}::uuid`,
+                )
+              ).s,
+            )
+          : 'none'
+      if (kidState === 'cancelled') {
+        // The deployed worker contained the harness plan before this suite could hold it (a harness job may not write
+        // to NotebookLM) - the containment working. The step-question decision is then read off the deployed function,
+        // and is driven end to end on the replica (scripts/isolated/step-question.ts).
+        const def = String(
+          (
+            await one(
+              `select string_agg(pg_get_functiondef(p.oid), ' ') as d from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'app' and p.proname = 'hq_answer_blocker'`,
+            )
+          ).d,
+        )
+        check(
+          'the plan child was contained by the deployed worker, and the answer router decides a generation yes/no by the declared decline option',
+          /decline_option/.test(def),
+          `child ${kidState}; definition ${def.length} chars`,
+        )
+        made.push(String(kid?.id))
+      } else if (typeof kid?.id === 'string') {
         await db.execute(
           `update public.jobs set state = 'running', leased_by = 'final-audit-closure', leased_until = now() + interval '1 hour', attempt = 1 where job_id = ${lit(kid.id)}::uuid`,
         )

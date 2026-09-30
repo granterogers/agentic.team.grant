@@ -464,6 +464,43 @@ const kid = String(
     did.s === 'done' && did.completed_by === 'grant',
     `${String(did.s)} by ${String(did.completed_by)}`,
   )
+  // 0639: a to-do that stands for a HARNESS job's question, on a real project, is answered by a test member; a
+  // to-do for a REAL job's question on the same project is not.
+  const answerThrough = async (by: string, asker: string) => {
+    const j = await rootJob(asker)
+    const b = String(
+      (
+        await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+          values (${lit(real)}::uuid, ${lit(j)}::uuid, ${lit(`q ${run} ${asker}`)}, 'closure fixture', 'nothing', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+      ).id,
+    )
+    const t = String(
+      (
+        await one(
+          `select task_id::text as id from public.tasks where satisfies_blocker = ${lit(b)}::uuid`,
+        )
+      ).id,
+    )
+    const r = String(
+      (await one(`select app.hq_task_state(${lit(t)}, 'done', null, ${lit(by)})::text as r`)).r,
+    )
+    const st = await one(
+      `select state::text as s from public.tasks where task_id = ${lit(t)}::uuid`,
+    )
+    return { r, s: String(st.s) }
+  }
+  const harnessQ = await answerThrough('verify-operator', 'teamhq:verify-audit')
+  check(
+    "a test member answers a TEST's own question on a real project (0639)",
+    harnessQ.s === 'done' && !/cannot decide something real/i.test(harnessQ.r),
+    `${harnessQ.s}; ${harnessQ.r.slice(0, 80)}`,
+  )
+  const realQ = await answerThrough('verify-operator', 'telegram:grant')
+  check(
+    "control: the same test member does not answer a REAL job's question",
+    realQ.s !== 'done' && /test principal|cannot decide/i.test(realQ.r),
+    `${realQ.s}; ${realQ.r.slice(0, 80)}`,
+  )
   if (fx !== real) {
     const t3 = await mkTask(fx, `Fixture task ${run}`)
     await one(`select app.hq_task_state(${lit(t3)}, 'done', null, 'verify-operator')::text as r`)
