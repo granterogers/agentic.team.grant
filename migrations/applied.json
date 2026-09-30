@@ -629,5 +629,9 @@
   "0615_a_stranger_on_slack_is_not_a_conversation.sql": "e377e6c97a4fbee3958137655e29b616895dd732b3edf99cc6961c1208589ec2",
   "0616_an_approval_applies_to_exactly_what_it_approved.sql": "ac21179af7f7728b403ac51b34ed7fdfdf8ea0eaecee641a40d3f853bcb3135b",
   "0617_a_button_answers_the_question_its_message_showed.sql": "5d1a3f82e74204902f86b1ad5e15ce3cc3280c6fbaa552189a60f82a5e94e2e7",
-  "0618_a_test_principal_cannot_speak_or_grant_in_a_real_project.sql": "a61eef564a7f4c07de2716b977154422d8f222b489f6244bff607d816c100ac5"
+  "0618_a_test_principal_cannot_speak_or_grant_in_a_real_project.sql": "a61eef564a7f4c07de2716b977154422d8f222b489f6244bff607d816c100ac5",
+  "0619_a_job_keeps_where_it_came_from.sql": "9f1f0dff57552f910bcc73f9cbc8c6c64658bfaf15e3ee79a6d42de86221f3d7",
+  "0620_a_job_no_worker_holds_cannot_be_finished_by_one.sql": "edd1d268269cf12a74ea95c70ac1e65f7d7c1d3dbfdbc9a117ba780886be6701",
+  "0621_a_retry_can_commit_what_its_predecessor_left.sql": "3a0cc74a9bcb521b981e9bbfc580c68969d843a3238f20b4a7e0dd2026c9caf4",
+  "0622_a_typed_yes_answers_the_question_he_was_shown.sql": "f410ba351c046753d1e2d0ee4cd9ac108630dabc6e24f5351d45680ffdbd7557"
 }
