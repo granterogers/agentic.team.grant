@@ -94,7 +94,10 @@ import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import type { Correction } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
-import { entitled } from '../agents/entitled.ts'
+import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
+
+const entitled = allEntitled
+
 import { asksAboutHisOwnList, extractionRequest } from '../agents/extract.ts'
 import { answerOutranks, decideEarlyGate, type EarlyGate } from '../agents/gates.ts'
 import { type Capability, planFor, planningCatalogue } from '../agents/goal.ts'
@@ -2452,6 +2455,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       instruction = turn.resolved
 
+      /*
+        FORWARDED WORDS ARE CONTENT, NOT INTENT - the class, not three writers (0624, final audit review). Asked once,
+        here, from the durable record of how the turn arrived, before any reader runs; every consequence-bearing reader
+        below is reached through `entitled`, which for a forwarded turn is the one in which nobody asked for anything.
+        A failed ask reads as forwarded (a permitting guard must fail closed); only a schema without the function
+        (an older database) reads as not.
+      */
+      const forwarded = await deps.db
+        .execute(`select app.job_forwarded(${lit(job.jobId)}::uuid) as f`)
+        .then((r) => (r.rows[0] as { f?: unknown } | undefined)?.f === true)
+        .catch((error: unknown) => !/42883|does not exist/i.test(String((error as Error).message)))
+      const entitled = forwarded ? noneEntitled : allEntitled
+
       const who = await speaker(
         deps.db,
         payload.addressed_to ?? null,
@@ -3833,12 +3849,6 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         Nothing about the marked path changes, so this is backward
         compatible by construction.
       */
-      // Forwarded words are content, not intent (0624, #397): a rule found in a forwarded message is OFFERED to him,
-      // never stored as his, and a personal task found in one is not filed. A schema without the function reads false.
-      const forwarded = await deps.db
-        .execute(`select app.job_forwarded(${lit(job.jobId)}::uuid) as f`)
-        .then((r) => (r.rows[0] as { f?: unknown } | undefined)?.f === true)
-        .catch(() => false)
       const ruleOffered =
         teaching !== null && teaching.kind === 'lesson' && (!teaching.marked || forwarded)
           ? await offerRule(

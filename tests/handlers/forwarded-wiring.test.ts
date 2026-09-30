@@ -9,18 +9,24 @@ import { describe, expect, it } from 'vitest'
 const src = readFileSync(new URL('../../src/handlers/instruction.ts', import.meta.url), 'utf8')
 const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
 
-describe('a forwarded turn does not write as if he had said it', () => {
-  it('asks whether the turn was forwarded from the durable record, and a failed ask reads false', () => {
-    expect(code).toMatch(/select app\.job_forwarded\(\$\{lit\(job\.jobId\)\}::uuid\) as f/)
-    expect(code).toMatch(/\.catch\(\(\) => false\)/)
+describe('a forwarded turn does not read as his instruction (the class, not three writers)', () => {
+  it('asks once, from the durable record, before any reader runs', () => {
+    const ask = code.indexOf('select app.job_forwarded(')
+    const firstReader = code.indexOf('entitled.anotherGo(turn.kept)')
+    expect(ask).toBeGreaterThan(0)
+    expect(ask).toBeLessThan(firstReader)
   })
-  it('a marked standing rule found in it is OFFERED, never stored', () => {
-    expect(code).toMatch(/teaching\.kind === 'lesson' && \(!teaching\.marked \|\| forwarded\)/)
+  it('a failed ask reads as forwarded (a permitting guard fails closed); only a missing function reads as not', () => {
+    expect(code).toMatch(
+      /\.catch\(\(error: unknown\) => !\/42883\|does not exist\/i\.test\(String\(\(error as Error\)\.message\)\)\)/,
+    )
   })
-  it('a personal task found in it is not filed', () => {
-    expect(code).toMatch(/subOf !== null \|\| forwarded/)
+  it('every consequence-bearing reader is reached through an `entitled` that is the silent one for a forwarded turn', () => {
+    expect(code).toMatch(/const entitled = forwarded \? noneEntitled : allEntitled/)
   })
-  it('a link in it is not attached or filed', () => {
-    expect(code).toMatch(/isBranch \|\| forwarded \? null : entitled\.link\(turn\.kept\)/)
+  it('and the handler still reaches no reader any other way', () => {
+    expect(code).not.toMatch(
+      /(?<![.\w])(readPlan|populateRequest|connectRequest|linkRequest|pageRequest|callsItOff|readTeaching|readCorrection|wantsAnotherGo|spokenAnswer)\(/,
+    )
   })
 })

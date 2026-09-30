@@ -58,6 +58,28 @@ export const entitled = {
 } as const
 
 /**
+ * FORWARDED WORDS ARE CONTENT, NOT INTENT (0624, and the class behind #392/#397).
+ *
+ * A message he forwards carries somebody else's words under his name. The first fix guarded three writers one by one
+ * (links, rules, tasks) and left every other reader reading it as an instruction - the instance-versus-class mistake
+ * #249/#254 record. The handler reaches every consequence-bearing reader through `entitled`, so the class is closed
+ * here: for a forwarded turn it is handed THIS object, in which nobody asked for anything. The turn is still
+ * answered (prose, from the model); only the deterministic readers that cause, permit or cancel something are silent.
+ */
+export const noneEntitled: typeof entitled = {
+  plan: () => null,
+  populate: () => false,
+  connect: () => null,
+  link: () => null,
+  page: () => null,
+  callsItOff: () => null,
+  teaching: () => null,
+  correction: () => null,
+  anotherGo: () => null,
+  answer: () => null,
+}
+
+/**
  * What a rewrite would have made of it, when his own words made nothing.
  *
  * Non-null means: the resolver's paraphrase reads as this act and Grant's words
