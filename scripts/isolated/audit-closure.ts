@@ -332,6 +332,55 @@ const kid = String(
   await db.execute(`drop trigger zz_slow_tool_request on public.tool_requests`)
   await db.execute(`drop function public.zz_slow_tool_request()`)
 }
+
+// ---- invariants 9 and 10: a child inherits its project and the person who asked --------------------------------------------
+{
+  const parent = await realParent(db)
+  const pp = await one(
+    `select project_id::text as p, requested_by as r, correlation_id::text as c from public.jobs where job_id = ${lit(parent)}::uuid`,
+  )
+  const kid = String(
+    (
+      await one(
+        `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+      )
+    ).c,
+  ).match(/[0-9a-f-]{36}/)?.[0] as string
+  const k = await one(
+    `select project_id::text as p, requested_by as r, correlation_id::text as c from public.jobs where job_id = ${lit(kid)}::uuid`,
+  )
+  check(
+    'a child inherits the project, the person who asked and the correlation (invariants 9, 10)',
+    k.p === pp.p && k.r === pp.r && k.c === pp.c,
+    JSON.stringify(k).slice(0, 90),
+  )
+  const nm = `fixture audit inherit ${run}`
+  await one(
+    `select app.hq_create_project(${lit(nm)}, 'upload', ${lit(`inh-${run}`)}, ${lit(nm)}, true)::text as r`,
+  )
+  const other = String(
+    (
+      await one(
+        `select project_id::text as p from public.projects where slug = ${lit(`fixture-audit-inherit-${run}`)}`,
+      )
+    ).p,
+  )
+  const over = String(
+    (
+      await one(
+        `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', '{"x":1}'::jsonb, interval '0', true, ${lit(other)}::uuid)::text as c`,
+      )
+    ).c,
+  ).match(/[0-9a-f-]{36}/)?.[0] as string
+  const o = await one(
+    `select project_id::text as p, requested_by as r from public.jobs where job_id = ${lit(over)}::uuid`,
+  )
+  check(
+    'an explicit project is honoured and the requester is still inherited',
+    o.p === other && o.r === pp.r,
+    JSON.stringify(o).slice(0, 90),
+  )
+}
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()
