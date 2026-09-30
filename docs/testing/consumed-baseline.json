@@ -1,9 +1,14 @@
 {
   "note": "Tables the product WRITES and nothing READS. See scripts/check-consumed.ts. An entry with no reason is an admission, not a decision. Validated through five corrections before it was believed: VIEW definitions are readers; OPERATOR COMMANDS are readers (#272), which is what cleared preference_instructions; a table nothing writes is not this check's business; comments are not calls (#351); and a table read over PostgREST (/rest/v1/<table>) is still read, which is what cleared slack_workspaces -- 55 rows and an edge function reading it on every Slack event, reported by the first version as never read.",
   "recorded": "2026-09-23",
-  "unconsumed": ["feedback", "undo_requests"],
+  "unconsumed": [
+    "feedback",
+    "public.job_child_slots",
+    "undo_requests"
+  ],
   "why": {
     "feedback": "THE FEEDBACK LOOP'S LAST LINK, and the finding this check was written for. Every Telegram message carries a thumbs up and down by default (src/telegram/transport.ts) and Slack maps the same two reactions (src/slack/events.ts). A press writes this table and moves notification_events past delivered. Nothing reads this table at all; notification_events has exactly one reader, app.notification_patterns, which has no caller. One half does work: a thumbs DOWN on TELEGRAM replies asking what he would have preferred and takes the answer as an instruction, because askForTheCorrection returns early unless origin_channel is telegram -- so on Slack both signals do nothing. 0580 and 0581 removed both Settings cards' claims that a press is read. NOT WIRED ON PURPOSE: seven rows, every one positive, none since 6 September, and building learning over a table with no signal in it is the public.contacts trap. What a reaction should DO is a product decision and is filed as #353 rather than guessed at here.",
-    "undo_requests": "WRITTEN BY A LIVE PATH THAT HAS NEVER FIRED. app.claim_undo is the only writer and it is itself reached, so this is not a forgotten mouth in the usual sense -- the table holds ZERO rows. Recorded rather than resolved because what should read it is not established: whether the request record is meant to be a ledger beside app.hq_undo, which performs the reversal, or whether a reader was forgotten, is an open question and saying otherwise here would be the false baselined reason this programme has now found three times."
+    "undo_requests": "WRITTEN BY A LIVE PATH THAT HAS NEVER FIRED. app.claim_undo is the only writer and it is itself reached, so this is not a forgotten mouth in the usual sense -- the table holds ZERO rows. Recorded rather than resolved because what should read it is not established: whether the request record is meant to be a ledger beside app.hq_undo, which performs the reversal, or whether a reader was forgotten, is an open question and saying otherwise here would be the false baselined reason this programme has now found three times.",
+    "public.job_child_slots": "Read by app.enqueue_child through INSERT ... ON CONFLICT DO UPDATE ... RETURNING (the counter's value comes back from the upsert), which this check's FROM/JOIN reader cannot see. Checked, not assumed: scripts/isolated/job-lifecycle.ts (D4, review A 2a-2d) fails when the counter is removed or the request identity changes (sabotages S4, S14-S17)."
   }
 }
