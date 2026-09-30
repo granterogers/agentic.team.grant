@@ -125,7 +125,6 @@ const deterministic = (body: string, notebook: { id: string; name: string }): Ha
 const MAX_TICKS = 10
 const TICK_GAP = '2 minutes'
 
-/** Capitalised for the start of a sentence: "mind map is away" reads as a typo. */
 /**
  * The job an effect's claim is recorded against, so that a retry AND a deferred sibling share it.
  *
@@ -140,6 +139,7 @@ const claimJobFor = async (db: SqlExecutor, job: Job): Promise<string> => {
   return String((rows[0] as { j?: string } | undefined)?.j ?? job.jobId)
 }
 
+/** Capitalised for the start of a sentence: "mind map is away" reads as a typo. */
 const sentence = (v: string): string => `${v.charAt(0).toUpperCase()}${v.slice(1)}`
 
 const LABEL: Record<string, string> = {

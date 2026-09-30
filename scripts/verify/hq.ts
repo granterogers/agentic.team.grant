@@ -77,6 +77,26 @@ const post = async (
   return { status: response.status, body: await response.text() }
 }
 
+/*
+  A signed-in PERSON's press on the permission screen, as the database sees it: the same function the
+  gateway calls for a person (#385). The office key is a machine and the gateway refuses it here by name
+  (person_required, proved by verify:run3-live), and the test member may not touch a REAL specialist's
+  grants (0618) - so this suite, which restores what it changes, calls the function directly, as the
+  operator, naming the person. It tests the POLICY (a per-staff grant is not a second place that can say
+  yes), which is what these checks are about; the door in front of it is tested elsewhere.
+*/
+const asPerson = async (
+  action: 'staff_tool_set',
+  args: { p_slug: string; p_tool: string; p_granted: boolean },
+): Promise<{ status: number; body: string }> => {
+  void action
+  const q = (v: string) => `'${v.replace(/'/g, "''")}'`
+  const { rows } = await db.execute(
+    `select app.hq_staff_tool_set(${q(args.p_slug)}, ${q(args.p_tool)}, ${String(args.p_granted)}, 'grant')::text as r`,
+  )
+  return { status: 200, body: String((rows[0] as { r: unknown }).r) }
+}
+
 // ===========================================================================
 // Who can read it
 // ===========================================================================
@@ -498,7 +518,7 @@ record(
 // The check that matters. A per-staff grant must not be a second place that
 // can say yes: `gmail.send` is disabled by policy and granting it here has to
 // be REFUSED, not accepted and quietly ignored.
-const widen = await post('staff_tool_set', {
+const widen = await asPerson('staff_tool_set', {
   p_slug: 'growth-director',
   p_tool: 'gmail.send',
   p_granted: true,
@@ -510,6 +530,16 @@ record(
     ? 'refused, with the reason'
     : widenSaid.slice(0, 60),
   widenSaid.includes('switched off for everyone'),
+)
+const viaKey = await post('staff_tool_set', {
+  p_slug: 'growth-director',
+  p_tool: 'notebook.read',
+  p_granted: false,
+})
+record(
+  'the office key cannot press the same control through the gateway (a credential is not a person)',
+  `http ${String(viaKey.status)} ${viaKey.body.slice(0, 40)}`,
+  viaKey.status === 403 && viaKey.body.includes('person_required'),
 )
 const stillBlocked = String(
   (await db.execute(`select app.staff_may_use('growth-director', 'gmail.send')::text as v`)).rows[0]
@@ -534,7 +564,7 @@ record(
   enabled, delivered, and one growth-director already holds — so the revoke and
   the restore both put the roster back exactly where they found it.
 */
-await post('staff_tool_set', {
+await asPerson('staff_tool_set', {
   p_slug: 'growth-director',
   p_tool: 'notebook.read',
   p_granted: false,
@@ -543,7 +573,7 @@ const revoked = String(
   (await db.execute(`select app.staff_may_use('growth-director', 'notebook.read')::text as v`))
     .rows[0]?.v ?? 'x',
 )
-await post('staff_tool_set', {
+await asPerson('staff_tool_set', {
   p_slug: 'growth-director',
   p_tool: 'notebook.read',
   p_granted: true,

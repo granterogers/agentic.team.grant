@@ -40,6 +40,7 @@ import { redactDeep } from '../text/secrets.ts'
 import type { Plan } from '../tools/plan.ts'
 import { plannedWrites, summarise } from '../tools/plan.ts'
 import { containmentRefusal, type Reach } from './containment.ts'
+import { assertHeld, fenceClause, StaleWorkerError, startHeartbeat } from './fence.ts'
 import { lastWord } from './lastword.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -120,6 +121,10 @@ export interface Job {
   readonly projectId: string | null
   readonly idempotencyKey: string
   readonly attempt: number
+  /** The worker `dequeue` leased this to; with `attempt`, the claim every write asks about (see fence.ts). */
+  readonly leasedBy?: string
+  /** Set when a renewal finds the claim gone. */
+  lost?: boolean
 }
 
 /** What a handler produces. Deliberately the same shape §16 requires. */
@@ -433,15 +438,45 @@ const moveTo = async (
   jobId: string,
   state: string,
   reason?: string,
+  /** The claim this write is made under, when it is a running worker's. Absent: as it always was. */
+  claim?: Job,
 ): Promise<void> => {
   const finished = ['complete', 'cancelled', 'failed'].includes(state)
-  await db.execute(`
+  const fence = fenceClause(claim)
+  const { rows } = await db.execute(`
     update public.jobs
     set state = ${lit(state)}::public.job_state
       ${reason === undefined ? '' : `, state_reason = ${lit(reason)}`}
       ${finished ? ', finished_at = app.now_utc()' : ''}
-    where job_id = ${lit(jobId)}::uuid
+    where job_id = ${lit(jobId)}::uuid${fence}
+    returning job_id
   `)
+  // A fenced write that changed nothing means this worker no longer holds the job (Run 4, D1): whoever does
+  // now owns what happens to it, and this process must write nothing more.
+  if (fence !== '' && rows.length === 0 && claim !== undefined) {
+    claim.lost = true
+    throw new StaleWorkerError(jobId, claim.leasedBy ?? '', claim.attempt)
+  }
+}
+
+/** `moveTo` under the claim this worker holds on `job`. */
+const moveJob = (db: SqlExecutor, job: Job, state: string, reason?: string): Promise<void> =>
+  moveTo(db, job.jobId, state, reason, job)
+
+/**
+ * May this job be tried again? Bounded by the job's OWN ceiling as well as the office's four: a job created with
+ * one or three attempts was being left `retrying` at its ceiling, which nothing can claim and no sweep failed (D3).
+ */
+const mayRetry = async (db: SqlExecutor, job: Job): Promise<boolean> => {
+  if (job.attempt >= 4) return false
+  try {
+    const { rows } = await db.execute(
+      `select attempt < max_attempts as room from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
+    )
+    return (rows[0] as { room?: boolean } | undefined)?.room !== false
+  } catch {
+    return true
+  }
 }
 
 export interface Recovered {
@@ -692,6 +727,41 @@ export const dequeue = async (
     projectId: r.project_id === null ? null : String(r.project_id),
     idempotencyKey: String(r.idempotency_key),
     attempt: Number(r.attempt),
+    // The claim this worker now holds, so every later write can ask whether it still does (Run 4, D1).
+    leasedBy: workerId,
+  }
+}
+
+/**
+ * Run one job to a terminal state - holding it, or not at all (Run 4, D1).
+ *
+ * The lease is renewed while the handler works, so a healthy slow job never looks abandoned; and every state
+ * write and the output insert ask whether this worker still holds the attempt. One that does not throws
+ * StaleWorkerError, and the job is left to whoever holds it: an abandoned result, no further writes, and no
+ * attempt to move a job that is no longer this worker's.
+ */
+export const runJob = async (
+  db: SqlExecutor,
+  job: Job,
+  handlers: readonly Handler[],
+  review: Reviewer,
+  notify?: Notifier,
+  onStart?: (job: Job) => Promise<unknown>,
+): Promise<WorkerResult> => {
+  const stopBeating = startHeartbeat(db, job)
+  try {
+    return await runJobHeld(db, job, handlers, review, notify, onStart)
+  } catch (error) {
+    if (error instanceof StaleWorkerError) {
+      return {
+        jobId: job.jobId,
+        finalState: 'abandoned',
+        note: `no longer held by this worker (attempt ${String(error.attempt)}); left to its current holder`,
+      }
+    }
+    throw error
+  } finally {
+    stopBeating()
   }
 }
 
@@ -886,7 +956,7 @@ export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): 
   return asked
 }
 
-export const runJob = async (
+const runJobHeld = async (
   db: SqlExecutor,
   job: Job,
   handlers: readonly Handler[],
@@ -923,9 +993,9 @@ export const runJob = async (
     // proceed here — it leaves the queue, so it cannot spin, and a later
     // worker or a human can resume it. `attempt` is untouched, so the count
     // still means what it says.
-    await moveTo(
+    await moveJob(
       db,
-      job.jobId,
+      job,
       'paused',
       `no handler for kind ${job.kind} in this worker — paused rather than failed, ` +
         'because a deploy that knows the kind can resume it',
@@ -945,7 +1015,7 @@ export const runJob = async (
   */
   const contained = await containmentRefusal(db, job, handler.reach)
   if (contained !== null) {
-    await moveTo(db, job.jobId, 'cancelled', contained)
+    await moveJob(db, job, 'cancelled', contained)
     return { jobId: job.jobId, finalState: 'cancelled', note: contained }
   }
 
@@ -984,7 +1054,7 @@ export const runJob = async (
     output = await handler.handle(job, db)
     output = { ...output, body: withoutStrayQuotes(output.body) }
   } catch (error) {
-    const retryable = job.attempt < 4
+    const retryable = await mayRetry(db, job)
     /*
       Recognise it (#132).
 
@@ -1061,9 +1131,9 @@ export const runJob = async (
         /* Recording a failure must never be a second failure. */
       }
     }
-    await moveTo(
+    await moveJob(
       db,
-      job.jobId,
+      job,
       retryable ? 'retrying' : 'failed',
       `handler threw: ${(error as Error).message.slice(0, 180)}`,
     )
@@ -1235,7 +1305,7 @@ export const runJob = async (
         note: 'paused by its handler; its output was refused and not kept',
       }
     } else {
-      const learnable = job.attempt < 4
+      const learnable = await mayRetry(db, job)
       if (learnable) {
         try {
           await db.execute(`
@@ -1254,9 +1324,9 @@ export const runJob = async (
         }
       }
 
-      await moveTo(
+      await moveJob(
         db,
-        job.jobId,
+        job,
         learnable ? 'retrying' : 'failed',
         `incoherent output metadata: ${problems.map((p) => p.field).join(', ')}`,
       )
@@ -1333,6 +1403,8 @@ export const runJob = async (
     the same answer.
   */
   let inserted: { rows: readonly Record<string, unknown>[] }
+  // An output from a worker that no longer holds the job must not become the newest one a delivery reads (D6).
+  await assertHeld(db, job)
   try {
     inserted = await db.execute(`
     insert into public.outputs
@@ -1392,7 +1464,7 @@ export const runJob = async (
     } catch {
       /* Recording a refusal must not become a second failure. */
     }
-    await moveTo(db, job.jobId, 'failed', `output refused: ${said.slice(0, 180)}`)
+    await moveJob(db, job, 'failed', `output refused: ${said.slice(0, 180)}`)
     await trace(db, job.jobId, 'degradation', {
       shape: output.shape ?? null,
       said: said.slice(0, 300),
@@ -1517,8 +1589,8 @@ export const runJob = async (
     }
   }
 
-  await moveTo(db, job.jobId, 'output_created')
-  await moveTo(db, job.jobId, 'quality_review')
+  await moveJob(db, job, 'output_created')
+  await moveJob(db, job, 'quality_review')
 
   if (!gate.exempt) {
     const verdict = await review(output, job)
@@ -1533,10 +1605,10 @@ export const runJob = async (
     if (verdict.status === 'rejected' || verdict.status === 'needs_revision') {
       // Back to the queue, not onward. §10's reviewer exists to be able to say
       // no, and a worker that committed anyway would make that a formality.
-      const retryable = job.attempt < 4
-      await moveTo(
+      const retryable = await mayRetry(db, job)
+      await moveJob(
         db,
-        job.jobId,
+        job,
         retryable ? 'retrying' : 'failed',
         `review ${verdict.status}: ${verdict.notes.slice(0, 150)}`,
       )
@@ -1606,9 +1678,9 @@ export const runJob = async (
   // The commit trigger reads `reviewer_status` here. If anything above skipped
   // review, this is where it is refused — which is the point of not checking
   // ourselves first.
-  await moveTo(db, job.jobId, 'committing')
-  await moveTo(db, job.jobId, 'committed')
-  await moveTo(db, job.jobId, 'notifying')
+  await moveJob(db, job, 'committing')
+  await moveJob(db, job, 'committed')
+  await moveJob(db, job, 'notifying')
 
   // Delivery failing does NOT fail the job. The work is done and committed —
   // that is what `committed` means, and it is already true. A failed delivery
@@ -1631,7 +1703,7 @@ export const runJob = async (
     }
   }
 
-  await moveTo(db, job.jobId, 'complete', notified.note.slice(0, 200))
+  await moveJob(db, job, 'complete', notified.note.slice(0, 200))
 
   const ledgerNote = await recordOnLedger(
     db,
@@ -1827,6 +1899,12 @@ export const drain = async (
         `recovery sweep failed, draining anyway: ${String((error as Error).message).slice(0, 300)}`,
       )
     })
+  }
+
+  // A job with no attempts left, queued or retrying, can never be claimed: fail it, in words, so whoever asked is
+  // told (Run 4, D3). Never fatal.
+  if (options.recover !== false) {
+    await db.execute('select * from app.settle_exhausted_jobs()').catch(() => undefined)
   }
 
   // And put back anything a previous worker parked for want of a handler THIS
