@@ -19,12 +19,26 @@
 > 14/14, all traffic declared test traffic). Record, rollback point and the
 > residual register: `docs/ARCHITECTURE-RUN-1.md`. **The worker also needed the
 > redeploy** (it imports the changed handlers); the first handoff omitted it.
-> The Vercel page step of `deploy:hq` fails on a 10 MB request-size limit; the
-> page live is unchanged from `bbe9956c`.
+> The Vercel page step of `deploy:hq` fails on a 10 MB request-size limit; Run 2
+> shipped the page with `deploy:hq-page` instead.
 >
-> **Run 2 (authority) is a CANDIDATE on `claude/architecture-run-2-authority`,
-> not merged and not deployed.** Migration 0611 is not applied. See
-> `docs/ARCHITECTURE-RUN-2.md` and ADR-0053.
+> ## 2026-09-30 — Architecture Run 2 (authority) is deployed and verified on `main`
+>
+> Migrations 0611 and 0612 are applied; `worker` v855 and `hq-api` v790 are
+> deployed (`telegram-webhook` untouched). **What it completes:** the canonical
+> authorization and exact-approval architecture (`app.authorize_effect`,
+> exact-action fingerprints, a durable and reversible No, the to-do tick through
+> the one door) is established and production-proven for the MIGRATED paths
+> (plan steps, the calendar duty, `drive.ingest`). Migration of the remaining
+> effect doors to that boundary is explicit follow-up work (#386); it is NOT
+> true that every effect is behind `authorize_effect`. Grant's decision: at
+> `suggest`, internal level-1 writes proceed (0612, data). Refusals can be taken
+> back from Governance (*Let it ask again*). Debt, each an Issue: #384 anon
+> sweep, **#385 the bearer token is attributed as `grant`, so possession can
+> confer Grant's approval identity**, #386, #387, #388. Page deployed with
+> `npm run deploy:hq-page` (digest delta; `deploy:hq`'s page step still exceeds
+> 10 MB); rollback point `dpl_CojPMBWNXjWfQ3ogNAmXx6ZyAB9e`. Live proof:
+> `npm run verify:run2-live` 50/50. Record: `docs/ARCHITECTURE-RUN-2.md`, ADR-0053.
 >
 > ## 2026-09-29 — #378 containment audit, on `claude/378-containment` (NOT deployed)
 >

@@ -34,3 +34,6 @@ The Run 2 map (`docs/architecture-run-2/AUTHORITY-MAP.md`) found six independent
 
 ## What would reverse this
 A second `may_act` caller in the handlers that bypasses `mayAct`; a parse of `resolution` to learn an answer; the tick resolving a blocker without `hq_answer_blocker`; `authorize_effect` gaining a path to `proceed` for an outside audience without an approval on file; a caller of `withdraw_refusal` other than the gateway; a fallback from `authorize_effect` to `may_act`; a special case for a tool or a dial setting inside the boundary.
+
+## Integration note (30 September 2026)
+Applied to production in the strict order 0611, then `worker` and `hq-api`, then 0612, and verified live (`verify:run2-live`, 50/50). This ADR's claim is bounded: authorization and exact approval are proven for the migrated paths only; the unmigrated effect doors (#386) and the identity debt (#385, the bearer token is attributed as `grant`) are unchanged by it.

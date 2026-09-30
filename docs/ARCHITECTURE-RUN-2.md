@@ -11,7 +11,7 @@ The canonical authorization and exact-approval architecture (`app.authorize_effe
 |---|---|---|
 | Reconnaissance | RECONNAISSANCE COMPLETE | `docs/architecture-run-2/AUTHORITY-MAP.md` (deciders, effects and their gates, traced cases) |
 | Characterization | CHARACTERIZATION COMPLETE | `authority-characterization.ts` 18/18: matrix (12 cells), disabled and unknown tools, asked-for, standing; it first pinned the three gaps at commit `2a8447de` (22/22, three KNOWN GAP checks), which 0611 then flipped |
-| Authorization boundary | AUTHORIZATION COMPLETE **for the paths that already asked the policy** (plan steps, calendar duty via `governOutward`; `drive.ingest` reaches it through `mayAct`) — PARTIAL overall | `app.authorize_effect`; `authority.ts` 36/36, five sabotages each turn it red |
+| Authorization boundary | AUTHORIZATION COMPLETE **for the paths that already asked the policy** (plan steps, calendar duty via `governOutward`; `drive.ingest` reaches it through `mayAct`) — PARTIAL overall | `app.authorize_effect`; `authority.ts` 88/88, five sabotages each turn it red |
 | Specialist / tool authority | COMPLETE for a step that names a specialist; the office acting as itself is unchanged by design | `staff_may_use` is now a runtime input; the grant cannot lift a switched-off tool |
 | Autonomy / standing as inputs | COMPLETE (unchanged inputs inside `may_act`); an OPEN DECISION for Grant is recorded below | matrix, standing, outside-audience floor |
 | Approval | APPROVAL COMPLETE for the blocker lifecycle; PARTIAL overall | `action_fingerprint` on the question replaces the ±10 s window and the resolution-sentence parse; the answer is a column; the button path writes it too |
@@ -37,4 +37,15 @@ A named specialist may only do what its grant allows (plan steps and the duty) �
 Migration **0611** → deploy `worker` and `hq-api` → migration **0612**. The new code has no fallback to the old policy (it would re-ask forever and a loose catch also swallows failures inside the boundary): a worker ahead of 0611 fails loudly and retries; the old worker keeps working after 0611. 0612 comes last so the old worker never sees a level-1 step proceed after a No it cannot read. Both migrations are safe on an idle office; production had no live jobs when applied.
 
 ## Production state — code committed / merged / deployed / migrations applied / verified live
-Run 1: committed, merged, deployed, applied, verified live. Run 2: committed and pushed on its branch; NOT merged; NOT deployed; 0611 NOT applied; NOT verified live.
+Run 1: committed, merged, deployed, applied, verified live (`verify:run1-live` 14/14 against production, re-run after Run 2).
+
+Run 2 (integrated 30 September 2026, in the strict order):
+- **Migrations applied to production:** 0611, then 0612 (625 recorded). Nothing else.
+- **Runtime deployed:** `worker` v855 and `hq-api` v790. `telegram-webhook` (v606) and every other function were NOT touched.
+- **Page:** Vercel deployment `dpl_B4dsLwpGdCHqqXA1ehxombNj7NxW`, made with `npm run deploy:hq-page` (`scripts/deploy/hq-page-delta.ts`): the same file set as `deploy:hq`, sent as digests with only missing files uploaded, because `deploy:hq`'s inline body exceeds Vercel's 10 MB limit. It refuses unless the file NAMES equal the live deployment's; they did (the only extras live were Vercel's own `out/` build outputs). Served `app.js`, `settings.js`, `studio.css` and `index.html` are byte-identical (sha1) to the repository; the page loads with no page errors. **Rollback point:** `dpl_CojPMBWNXjWfQ3ogNAmXx6ZyAB9e`.
+- **Verified live:** `verify:run2-live` 50/50 (authorization, exact approval, durable No, reversal, task tick, exactly-once from production-safe evidence, containment), all fixtures declared before the door was knocked on, all torn down; `check:leaks` exit 0; ordinary use of Claire (the four real projects listed) unaffected.
+- **Compatibility window:** between 0611 and the worker deploy, the OLD worker keeps working (it never calls the new function); a worker ahead of 0611 would fail loudly and retry. 0612 was applied only after both deploys, so no old worker ever saw a level-1 step proceed after a No it could not read.
+- **Merged:** `main` fast-forwarded from `f8ab9c5a` to the tip of this branch after production verification passed.
+
+## Not established (carried forward, each an Issue)
+#384 the other ~250 anon-executable functions · #385 the bearer token is attributed as `grant`, so possession can confer Grant's approval identity · #386 the unmigrated effect doors · #387 `suggest` equals `act_with_review`; capabilities no specialist holds · #388 Slack sender allowlist and `staff_for_bot` answering 200 "ignored".
