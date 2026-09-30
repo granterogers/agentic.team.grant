@@ -867,6 +867,17 @@ const FALLBACK_GOVERNANCE = {
     `because` is JSONB holding counts, not prose -- the card renders it as
     chips through the same evidence() the noticing pass uses.
   */
+  /*
+    One No still being remembered (ADR-0053). The prototype needs one or the
+    card and its press cannot be judged, and verify:wired cannot see a control
+    that is only drawn when a row exists.
+  */
+  refusals: [
+    {
+      id: 'f-n1', what: 'Put the module outline in Notion', project: 'Legacy Coaching Course',
+      declined_at: '2026-09-28T09:00:00Z', until: '2026-10-28T09:00:00Z', by: 'grant',
+    },
+  ],
   requests: [
     {
       id: 'f-r1', tool: 'calendar.write', who: 'growth-director', who_name: 'Ruby',
@@ -986,6 +997,7 @@ export const GOVERNANCE = {
   noticed: [...FALLBACK_GOVERNANCE.noticed],
   agents: [...FALLBACK_GOVERNANCE.agents],
   requests: [...FALLBACK_GOVERNANCE.requests],
+  refusals: [...FALLBACK_GOVERNANCE.refusals],
   stranded: { ...FALLBACK_GOVERNANCE.stranded },
   scoring: [...FALLBACK_GOVERNANCE.scoring],
   triggers: [...FALLBACK_GOVERNANCE.triggers],
@@ -1024,6 +1036,11 @@ export async function hydrateGovernance(read) {
         place that knows the shape.
       */
       requests: d.requests ?? [],
+      /*
+        `refusals` arrives from migration 0612 (ADR-0053); a gateway deployed
+        before it returns none, which is an empty list here and nowhere else.
+      */
+      refusals: Array.isArray(d.refusals) ? d.refusals : [],
       /*
         Same rule, two keys later (#272). `stranded` and `scoring` arrive from
         migration 0451, so an hq-api deployed before it returns neither — and

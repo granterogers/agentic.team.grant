@@ -115,7 +115,8 @@ const LIVE_THREE = `verification.consequential.${run}`
 
 const expected: Record<string, Record<number, string>> = {
   observe: { 0: 'proceed', 1: 'refuse', 2: 'refuse', 3: 'refuse' },
-  suggest: { 0: 'proceed', 1: 'ask', 2: 'ask', 3: 'ask' },
+  // 0612, Grant's decision: internal office work proceeds at suggest. Level 2 and 3 still ask.
+  suggest: { 0: 'proceed', 1: 'proceed', 2: 'ask', 3: 'ask' },
   act_with_review: { 0: 'proceed', 1: 'proceed', 2: 'ask', 3: 'ask' },
   act: { 0: 'proceed', 1: 'proceed', 2: 'proceed', 3: 'ask' },
 }
@@ -150,10 +151,16 @@ for (const [autonomy, wants] of Object.entries(expected)) {
 */
 {
   const rows = new Set(Object.values(expected).map((w) => [0, 1, 2, 3].map((n) => w[n]).join('/')))
+  /*
+    THREE, not four, since 0612: with internal writes proceeding at suggest, suggest and
+    act_with_review resolve identically. That is a recorded consequence of Grant's decision,
+    and this control still does its job - a resolver that ignored the dial would return one
+    row, and one that ignored everything but level would not produce observe's refusals.
+  */
   check(
-    'CONTROL: the four autonomy levels are four different answers',
+    'CONTROL: the autonomy levels are not all one answer (three distinct rows since 0612)',
     `${String(rows.size)} distinct rows`,
-    rows.size === 4,
+    rows.size === 3,
   )
 }
 

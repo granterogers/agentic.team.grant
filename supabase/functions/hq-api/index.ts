@@ -905,6 +905,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     available: the interface would report success.
   */
   answer_blocker: { fn: 'hq_answer_blocker', required: ['p_blocker_id', 'p_answer'], by: 'p_by' },
+  withdraw_refusal: { fn: 'hq_withdraw_refusal', required: ['p_blocker_id'], by: 'p_by' },
   // `p_reason` is optional here and required by the RPC when the state is
   // `blocked` — the schema's own check constraint, said in a sentence.
   task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'], by: 'p_by' },

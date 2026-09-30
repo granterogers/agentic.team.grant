@@ -25,7 +25,9 @@ alter table public.blockers
   add column if not exists action_fingerprint text,
   add column if not exists decline_option     text,
   add column if not exists answered_option    text,
-  add column if not exists answered_by        text;
+  add column if not exists answered_by        text,
+  add column if not exists refusal_withdrawn_at timestamptz,
+  add column if not exists refusal_withdrawn_by text;
 
 comment on column public.blockers.action_fingerprint is
   'sha256 of the exact action this question asks about (the same fingerprint job_pauses.binds_to stores). '
@@ -37,6 +39,11 @@ comment on column public.blockers.answered_option is
   'The option that answered it, written by app.hq_answer_blocker. resolution stays for people; nothing parses it.';
 comment on column public.blockers.answered_by is
   'The verified principal that answered (0608), written by app.hq_answer_blocker.';
+
+comment on column public.blockers.refusal_withdrawn_at is
+  'When a person took this No back (app.withdraw_refusal). It does not approve anything: the action simply stops being remembered as refused, so the next attempt may ask again.';
+comment on column public.blockers.refusal_withdrawn_by is
+  'The verified principal that took the No back. Never an agent, a specialist, a harness name or a task tick.';
 
 create index if not exists blockers_by_action on public.blockers (action_fingerprint)
   where action_fingerprint is not null;
@@ -100,6 +107,9 @@ set search_path = public, pg_catalog
 as $$
   select case
            when b.answered_option is null then null
+           -- A No that was taken back decides nothing, and must not let an OLDER
+           -- yes on the same action speak: taking a No back never approves.
+           when b.refusal_withdrawn_at is not null then null
            when b.answered_option = coalesce(b.decline_option, b.approval_options[2]) then 'no'
            when b.answered_option = b.approval_options[1] then 'yes'
            else 'unclear'
@@ -194,7 +204,7 @@ begin
   v_days := coalesce((select (value #>> '{}')::integer from public.system_config
                        where key = 'approval.refusal_days'), 30);
   select b.resolved_at,
-         (b.answered_option = b.decline_option) as declined
+         (b.answered_option = b.decline_option and b.refusal_withdrawn_at is null) as declined
     into v_last
     from public.blockers b
    where b.state = 'resolved'
@@ -220,6 +230,95 @@ $$;
 
 revoke all on function app.authorize_effect(uuid, text, uuid, text, text, text, uuid) from public;
 grant execute on function app.authorize_effect(uuid, text, uuid, text, text, text, uuid) to ai_team_app, service_role;
+
+/*
+  TAKING A NO BACK, explicitly.
+
+  A No is remembered for approval.refusal_days, and Grant must be able to say he
+  has changed his mind without waiting it out. This is the one door, and it is a
+  state transition on the question that recorded the No - not a parse of
+  anything he typed and not a second refusal mechanism.
+
+    * It never approves. It clears the memory; the next attempt asks again
+      (authorize_effect) and the action is only ever approved by an answer.
+    * It is attributed: the caller must be a principal the office knows (0608),
+      and never a specialist or a harness name.
+    * It is for a PERSON's door. Execute is granted to service_role only, the
+      role the gateway uses - not to ai_team_app, which is what the worker and
+      every handler run as - so no job, specialist, synthetic or not, can call
+      it; a task tick never does; and src/ contains no call (a test reads it).
+    * Only a No, only a resolved question, only inside its window. Taking back a
+      Yes, or something already expired, is refused with a reason.
+    * It does not touch a standing authorization: that is a different row and a
+      different decision (app.revoke_standing / app.grant_standing).
+*/
+create or replace function app.withdraw_refusal(p_blocker uuid, p_by text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_catalog
+as $$
+declare
+  b         public.blockers;
+  v_by      text := btrim(coalesce(p_by, ''));
+  v_refusal text;
+  v_days    integer;
+begin
+  v_refusal := app.principal_refusal(v_by);
+  if v_refusal is not null then
+    return jsonb_build_object('error', v_refusal);
+  end if;
+  if app.harness_label(v_by) or exists (select 1 from public.staff s where s.slug = v_by) then
+    return jsonb_build_object('error',
+      'Only a person can take a No back, and that name is not a person the office answers to.');
+  end if;
+
+  select * into b from public.blockers where blocker_id = p_blocker for update;
+  if not found then
+    return jsonb_build_object('error', 'there is no such question');
+  end if;
+  if b.state <> 'resolved' or b.answered_option is null
+     or b.answered_option is distinct from b.decline_option then
+    return jsonb_build_object('error', 'That question was not answered No, so there is nothing to take back.');
+  end if;
+  if b.refusal_withdrawn_at is not null then
+    return jsonb_build_object('ok', true, 'already', true, 'withdrawn_at', b.refusal_withdrawn_at);
+  end if;
+  v_days := coalesce((select (value #>> '{}')::integer from public.system_config
+                       where key = 'approval.refusal_days'), 30);
+  if b.resolved_at <= app.now_utc() - make_interval(days => v_days) then
+    return jsonb_build_object('error', 'That No has already run out, so the office may ask again without this.');
+  end if;
+
+  update public.blockers
+     set refusal_withdrawn_at = app.now_utc(), refusal_withdrawn_by = v_by
+   where blocker_id = p_blocker;
+
+  perform public.append_event(
+    extensions.gen_random_uuid(), 'user', v_by, 'approval', 'refusal.withdrawn',
+    false, b.project_id,
+    jsonb_build_object('remembered_no', true),
+    jsonb_build_object('remembered_no', false),
+    format('%s took back the No to: %s', v_by, left(b.requested_action, 120)),
+    '[]'::jsonb, null, b.standing_tool, null, b.job_id);
+
+  return jsonb_build_object('ok', true, 'withdrawn', p_blocker, 'by', v_by,
+    'note', 'Nothing was approved. The next attempt may ask again.');
+end;
+$$;
+
+revoke all on function app.withdraw_refusal(uuid, text) from public;
+grant execute on function app.withdraw_refusal(uuid, text) to service_role;
+
+create or replace function public.hq_withdraw_refusal(p_blocker_id uuid, p_by text default null)
+returns jsonb
+language sql
+security definer
+set search_path to 'public', 'pg_catalog'
+as $$ select app.withdraw_refusal(p_blocker_id, p_by) $$;
+
+revoke all on function public.hq_withdraw_refusal(uuid, text) from public;
+grant execute on function public.hq_withdraw_refusal(uuid, text) to service_role;
 
 -- The old shapes of hq_task_state, by exact signature (the new one carries p_by).
 drop function if exists public.hq_task_state(text, text, text);

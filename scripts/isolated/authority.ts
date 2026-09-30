@@ -50,7 +50,7 @@ const job = async (p: string, by: string, kind = 'office.instruction'): Promise<
   )
 const OPTS = ['Yes, do it', 'No, leave it']
 /** A question about one exact action, as a plan step raises it. */
-const ask = async (p: string, j: string, fp: string, tool = 'task.create') =>
+const ask = async (p: string, j: string, fp: string, tool = 'notion.write') =>
   String(
     (
       await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
@@ -153,7 +153,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const b = await ask(p, j, fp1)
   const before = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp1,
     job: j,
   })
@@ -161,19 +161,19 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await answer(b, 'Yes, do it')
   const same = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp1,
     job: j,
   })
   const changed = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp2,
     job: j,
   })
   const other = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp1,
     job: await job(p, 'telegram:grant-exact2'),
   })
@@ -192,7 +192,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const r = await answer(b, 'No, leave it')
   const same = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp,
     job: j,
   })
@@ -214,7 +214,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const later = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp,
     job: await job(p, 'telegram:grant-no2'),
   })
@@ -225,7 +225,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const diff = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fpOther,
     job: await job(p, 'telegram:grant-no3'),
   })
@@ -239,7 +239,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const expired = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp,
     job: await job(p, 'telegram:grant-no4'),
   })
@@ -251,7 +251,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await db.execute(`update public.jobs set state = 'cancelled' where job_id = ${lit(j2)}::uuid`)
   const cancelled = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp3,
     job: await job(p, 'telegram:grant-cancel2'),
   })
@@ -530,7 +530,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await answer(b, 'Yes, do it')
   const seen = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp,
     job: j,
   })
@@ -538,6 +538,86 @@ const answer = async (b: string, a: string, by = 'grant') =>
     'so his answer after the deploy is found by the resumed step',
     seen.verdict === 'proceed' && seen.approved,
     seen.verdict,
+  )
+}
+
+// ---- 11. internal office work proceeds at suggest; outward effects still ask (0612) --------
+{
+  const p = await project('internal', 'suggest')
+  const INTERNAL = ['task.create', 'task.extract', 'draft.create', 'document.create']
+  for (const tool of INTERNAL) {
+    const d = await mayAct(db as never, { projectId: p, tool })
+    check(`internal ${tool} proceeds at suggest, unasked`, d.verdict === 'proceed', d.verdict)
+  }
+  for (const tool of INTERNAL) {
+    const d = await mayAct(db as never, { projectId: p, tool, audience: 'outside' })
+    check(
+      `the SAME ${tool} asks when its audience is outside (the floor holds at level 1)`,
+      d.verdict === 'ask' && d.reason === 'outside_audience',
+      `${d.verdict}/${String(d.reason)}`,
+    )
+  }
+  // calendar.write is not listed: migration 0424 seeds a standing authorization for the diary duty, so it proceeds by that row.
+  for (const tool of ['notion.write', 'slack.post', 'notebook.write']) {
+    const d = await mayAct(db as never, { projectId: p, tool })
+    check(`outward ${tool} (level 2) still asks at suggest`, d.verdict === 'ask', d.verdict)
+  }
+  const ingest = await mayAct(db as never, { projectId: p, tool: 'drive.ingest' })
+  check(
+    "drive.ingest (material from somebody else's system) still asks at suggest: it is not internal work",
+    ingest.verdict === 'ask' && ingest.actionLevel === 2,
+    `${ingest.verdict} level ${String(ingest.actionLevel)}`,
+  )
+  for (const tool of ['note.create', 'gmail.draft', 'gmail.send']) {
+    const d = await mayAct(db as never, { projectId: p, tool })
+    check(
+      `${tool} stays refused (switched off), whatever the dial says`,
+      d.verdict === 'refuse',
+      d.verdict,
+    )
+  }
+  const watch = await project('observe', 'observe')
+  const obs = await mayAct(db as never, { projectId: watch, tool: 'task.create' })
+  check('observe still refuses even an internal write', obs.verdict === 'refuse', obs.verdict)
+  // a specialist without the grant is still refused an internal write
+  const bare = String((await one(`select slug from public.staff order by slug limit 1`)).slug)
+  await db.execute(
+    `delete from public.staff_tools where staff_slug = ${lit(bare)} and tool = 'task.create'`,
+  )
+  const refused = await mayAct(db as never, { projectId: p, tool: 'task.create', staff: bare })
+  check(
+    'an internal write by a specialist who lacks the grant is still refused',
+    refused.verdict === 'refuse' && refused.reason === 'specialist_not_granted',
+    refused.verdict,
+  )
+  // the change is DATA: the boundary carries no special case for a tool or a dial setting
+  const body = String(
+    (
+      await one(
+        `select pg_get_functiondef('app.authorize_effect(uuid, text, uuid, text, text, text, uuid)'::regprocedure) as d`,
+      )
+    ).d,
+  )
+  check(
+    'the boundary names no tool and no dial setting (the rule is a row, not a branch)',
+    !/task\.create|draft\.create|suggest|observe/.test(body),
+    'authorize_effect body scanned',
+  )
+  const may = String(
+    (await one(`select pg_get_functiondef('app.may_act(uuid, text, uuid)'::regprocedure) as d`)).d,
+  )
+  check(
+    'and neither does may_act',
+    !/task\.create|draft\.create|'suggest'/.test(may),
+    'may_act body scanned',
+  )
+  const cell = await one(
+    `select verdict::text as v, (select level from public.tool_permissions where tool = 'drive.ingest') as di from public.autonomy_policy where autonomy = 'suggest' and action_level = 1`,
+  )
+  check(
+    'what changed is exactly one matrix cell and one tool level',
+    cell.v === 'proceed' && Number(cell.di) === 2,
+    JSON.stringify(cell),
   )
 }
 
@@ -580,7 +660,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await db.execute(`select app.answer_generation_approval(${lit(b2)}::uuid, false, 'grant')`)
   const viaButton = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp,
     job: j2,
   })
@@ -628,7 +708,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await db.execute(`drop function app.authorize_effect(uuid, text, uuid, text, text, text, uuid)`)
   const old = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     fingerprint: fp,
     job: j2,
   })

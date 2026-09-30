@@ -6011,6 +6011,29 @@ function governanceTab() {
   </article>`
 
   /*
+    A No the office is still remembering (ADR-0053).
+
+    The button takes the No back. It does NOT approve anything: the next time
+    the office wants to do this it asks again, and only an answer approves. The
+    wording says so, because Reopen sounds like Allow and it is not.
+
+    No backticks in this comment: template literal.
+  */
+  const refusal = (r) => `<article class="govcase g-declined" data-lift data-tilt="1.4" data-saidwrap>
+    <div class="govhead">
+      <b>${esc(r.what)}</b>
+      <span class="govstate">Said no</span>
+    </div>
+    <p class="govnote">You said no${r.project ? ` in ${esc(r.project)}` : ''} on ${when.stamp(r.declined_at)}.
+      It will not ask again until ${when.stamp(r.until)}.</p>
+    <div class="govfoot">
+      <div class="govfrom"><span class="t-meta">Reopening does not approve it. It lets the team ask again.</span></div>
+      <span class="t-meta" data-said></span>
+      <button class="gobtn" data-reopen="${esc(r.id)}" ${canWrite() ? '' : 'disabled'}>Let it ask again</button>
+    </div>
+  </article>`
+
+  /*
     A decision, and what it ruled out (#129).
 
     The ruled-out list is given its own line rather than folded into the
@@ -6060,6 +6083,13 @@ function governanceTab() {
       ${g.proposals.length === 0
         ? empty('Nothing outstanding. A proposal appears when an agent hits the same wall three times.')
         : `<div class="govcases">${g.proposals.map(proposal).join('')}</div>`}
+    </section>
+
+    <section class="govsec">
+      <h3 class="govtitle">What you said no to<span class="t-meta">${esc(String((g.refusals ?? []).length))}</span></h3>
+      ${(g.refusals ?? []).length === 0
+        ? empty('Nothing. When you say no to a question about an action, it stays no for a while and appears here.')
+        : `<div class="govcases">${g.refusals.map(refusal).join('')}</div>`}
     </section>
 
     <section class="govsec">
@@ -7654,6 +7684,23 @@ function settingsSheet() {
           yes ? { p_request_id: id } : { p_request_id: id, p_reason: reason },
         ),
         yes ? 'Granted.' : 'Declined.')
+      if (done) await afterGovernance()
+    })
+  }
+
+  /*
+    Taking a No back (ADR-0053). Not an approval: the question will be asked
+    again the next time, and answering it is what approves. No confirmation is
+    asked, because nothing is granted and nothing happens now.
+  */
+  for (const b of v.querySelectorAll('[data-reopen]')) {
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Saving…',
+        () => act('withdraw_refusal', { p_blocker_id: String(b.dataset.reopen) }),
+        'Reopened.',
+      )
       if (done) await afterGovernance()
     })
   }

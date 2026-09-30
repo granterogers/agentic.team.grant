@@ -49,7 +49,7 @@ const job = async (p: string, by: string, kind = 'office.instruction'): Promise<
 const TOOLS = { read: 'db.read', write: 'task.create', outward: 'notion.write' } as const
 const EXPECT: Record<string, Record<keyof typeof TOOLS, string>> = {
   observe: { read: 'proceed', write: 'refuse', outward: 'refuse' },
-  suggest: { read: 'proceed', write: 'ask', outward: 'ask' },
+  suggest: { read: 'proceed', write: 'proceed', outward: 'ask' }, // 0612
   act_with_review: { read: 'proceed', write: 'proceed', outward: 'ask' },
   act: { read: 'proceed', write: 'proceed', outward: 'proceed' },
 }
@@ -90,28 +90,28 @@ for (const [level, want] of Object.entries(EXPECT)) {
   const duty = await job(p, 'duty:isolated-ac')
   const asked = await mayAct(db as never, {
     projectId: p,
-    tool: 'task.create',
+    tool: 'notion.write',
     jobAskedFor: person,
   })
   const unprompted = await mayAct(db as never, {
+    projectId: p,
+    tool: 'notion.write',
+    jobAskedFor: duty,
+  })
+  check(
+    'outward work a person asked for proceeds below level 3; a duty of the same kind still asks',
+    asked.verdict === 'proceed' && asked.askedFor && unprompted.verdict === 'ask',
+    `${asked.verdict}/${unprompted.verdict}`,
+  )
+  const internal = await mayAct(db as never, {
     projectId: p,
     tool: 'task.create',
     jobAskedFor: duty,
   })
   check(
-    'work a person asked for proceeds below level 3; a duty of the same kind still asks',
-    asked.verdict === 'proceed' && asked.askedFor && unprompted.verdict === 'ask',
-    `${asked.verdict}/${unprompted.verdict}`,
-  )
-  const outward = await mayAct(db as never, {
-    projectId: p,
-    tool: 'notion.write',
-    jobAskedFor: person,
-  })
-  check(
-    'and a person asking is consent for an outward (level 2) write too - the plan step deliberately withholds it',
-    outward.verdict === 'proceed',
-    outward.verdict,
+    'internal office work proceeds at suggest even for a duty (0612)',
+    internal.verdict === 'proceed',
+    internal.verdict,
   )
 }
 {
