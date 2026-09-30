@@ -637,5 +637,11 @@
   "0623_a_message_names_the_question_it_asked.sql": "3d2999ffcb1cc0fcf364310254389b439f93d7cc243a8c9f5f1ffbd64469ea10",
   "0624_forwarded_content_is_not_intent.sql": "1b0a33b566b9d7c85e0065a59895eab322ff5c84b78cfb1c78e676a95dcbe6fd",
   "0625_a_child_has_an_author_and_an_attempt_a_name.sql": "fae407ba076742998536c029aa3f5ffd1a942d96ab53acf8e94b53a011f5b418",
-  "0626_a_voice_note_dispatch_asks_the_ci_ledger.sql": "bc9ab1ff66b44cc74acf4397bc61025a4924724e9a77dc2a8d1cee7e395fc336"
+  "0626_a_voice_note_dispatch_asks_the_ci_ledger.sql": "bc9ab1ff66b44cc74acf4397bc61025a4924724e9a77dc2a8d1cee7e395fc336",
+  "0627_one_definition_of_may_this_reach_a_destination.sql": "5ef14e6e4ba573119fcf17073b13ba349e6cba2dd07863d292bc447ae2defef0",
+  "0628_a_worker_that_lost_its_claim_cannot_park_the_job.sql": "446dcf8b94d52541c390f402ba965257017a9b4ce1c934239c459369c2f3c8c3",
+  "0629_original_audit_b11_b14_and_a_project_that_can_be_deleted.sql": "6b39724cd6b5c007d01fba053264a4a02a3ff8278d634bc1ae16561078c61eda",
+  "0630_a_slack_event_must_come_from_the_installed_workspace.sql": "8a1348db530edda7a5d56deefa9fb98fbba8a616d5415222bc0f415bdb220a09",
+  "0631_a_parked_obligation_waits_on_a_person_and_a_tool_answer_locks.sql": "fb02c0a64691c3afb156d46d2890a48ecf66ef4c5f9f229e997e0e67a2ed3a6b",
+  "0632_a_called_off_question_cannot_start_the_work.sql": "595ef48c1c2902ca9f9461bbd9ad817cb158be5604de1ffa455fffbc667ce74e"
 }

@@ -18,6 +18,7 @@ import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { fingerprint } from '../../src/jobs/checkpoint.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
 import { harnessSession } from './lib/harness-session.ts'
+import { officeKey } from './lib/sign-in.ts'
 import { testOrigins } from './lib/test-origin.ts'
 
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
@@ -449,8 +450,8 @@ try {
         none.verdict === 'ask',
       `${a.verdict}/${f.verdict}/${t.verdict}/${none.verdict}`,
     )
-    const svc = keys.find((k) => k.name === 'service_role')?.api_key ?? ''
-    const office = await gateway(svc, 'answer_blocker', {
+    // check:voice-sessions-exempt: office-key refusal probe (the refusal is the subject; the 403 is asserted below)
+    const office = await gateway(await officeKey(db), 'answer_blocker', {
       p_blocker_id: '00000000-0000-0000-0000-000000000000',
       p_answer: 'Yes',
       p_by: 'grant',
