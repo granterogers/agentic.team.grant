@@ -152,14 +152,38 @@ export const mayAct = async (
     readonly job?: string | null | undefined
   },
 ): Promise<Decision> => {
-  const { rows } = await db.execute(
-    `select app.authorize_effect(${uuidOrNull(where.projectId)}, ${lit(where.tool)},
+  /*
+    Deploy order (0611): a worker may ship before the migration. On a database
+    that does not have `app.authorize_effect` yet - recognised by Postgres's
+    undefined-function error and by nothing else - ask the policy it wraps, which
+    is exactly what the previous worker asked. Any other error still propagates,
+    and an unreadable answer is still `ask`.
+  */
+  let rows: Record<string, unknown>[]
+  try {
+    rows = (
+      await db.execute(
+        `select app.authorize_effect(${uuidOrNull(where.projectId)}, ${lit(where.tool)},
        ${uuidOrNull(where.jobAskedFor)},
        ${where.staff === null || where.staff === undefined ? 'null' : lit(where.staff)},
        ${where.audience === null || where.audience === undefined ? 'null' : lit(where.audience)},
        ${where.fingerprint === null || where.fingerprint === undefined ? 'null' : lit(where.fingerprint)},
        ${uuidOrNull(where.job)}) as d`,
-  )
+      )
+    ).rows as Record<string, unknown>[]
+  } catch (error) {
+    if (
+      !/42883|function app\.authorize_effect\(.*does not exist/.test(
+        String((error as Error).message),
+      )
+    )
+      throw error
+    rows = (
+      await db.execute(
+        `select app.may_act(${uuidOrNull(where.projectId)}, ${lit(where.tool)}, ${uuidOrNull(where.jobAskedFor)}) as d`,
+      )
+    ).rows as Record<string, unknown>[]
+  }
   const raw = rows[0]?.d as RawDecision | string | undefined
   const parsed: RawDecision =
     typeof raw === 'string' ? (JSON.parse(raw) as RawDecision) : (raw ?? {})
@@ -266,6 +290,12 @@ export interface Governed {
   readonly said: string
   /** The blocker raised, when one was. */
   readonly blocker: string | null
+  /**
+   * The office was already told no (0611): keep the job's own record, do not
+   * announce it. A duty that repeated a refusal every hour would teach him to
+   * stop reading them, and an output body may not be empty.
+   */
+  readonly quiet: boolean
 }
 
 export const governOutward = async (
@@ -301,19 +331,19 @@ export const governOutward = async (
   })
 
   if (what.empty || decision.verdict === 'proceed') {
-    return { go: true, decision, said: '', blocker: null }
+    return { go: true, decision, said: '', blocker: null, quiet: false }
   }
 
   /*
     A NO ALREADY GIVEN IS NOT ASKED AGAIN (0611). He said no to this, inside
     the refusal window, and a duty that asks every hour would teach him to
-    stop reading the questions. Nothing is raised, nothing is recorded as an
-    impediment (it is not a fault) and nothing is said: silence is the
-    answer, and the standing question is his to reopen by changing the dial or
-    granting the tool.
+    stop reading the questions. Nothing is raised and nothing is recorded as
+    an impediment (it is not a fault). The job still records why it did not
+    act, but `quiet` tells the caller not to announce it: the standing
+    question is his to reopen by changing the dial or granting the tool.
   */
   if (decision.remembered) {
-    return { go: false, decision, said: '', blocker: null }
+    return { go: false, decision, said: refusalSentence(decision), blocker: null, quiet: true }
   }
 
   if (decision.verdict === 'refuse') {
@@ -323,7 +353,7 @@ export const governOutward = async (
       because: decision.because,
       noticedBy: what.agent,
     })
-    return { go: false, decision, said: refusalSentence(decision), blocker: null }
+    return { go: false, decision, said: refusalSentence(decision), blocker: null, quiet: false }
   }
 
   const option = what.standingOption ?? 'Yes, do that from now on without asking me'
@@ -358,5 +388,5 @@ export const governOutward = async (
     standingTool: what.tool,
     standingOption: option,
   })
-  return { go: false, decision, said: refusalSentence(decision), blocker }
+  return { go: false, decision, said: refusalSentence(decision), blocker, quiet: false }
 }

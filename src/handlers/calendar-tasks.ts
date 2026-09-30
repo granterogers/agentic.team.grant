@@ -69,7 +69,7 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
           shape: 'nothing_happened',
           facts: { changed: false, looked_at: planned.steps.length },
           // A blocker speaks for itself; a refusal has nothing else to say it.
-          announce: gate.blocker === null,
+          announce: gate.blocker === null && !gate.quiet,
           confidence: 'high',
           evidence: 'verified',
           sources: [`job:${job.jobId}`],

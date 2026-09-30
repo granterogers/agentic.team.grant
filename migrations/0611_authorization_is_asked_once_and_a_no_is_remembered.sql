@@ -55,25 +55,39 @@ on conflict (key) do nothing;
 
 -- BACKFILL-BEGIN
 /*
-  Questions already open when this lands. A plan step's question was found by a
-  +-10 second window around its pause; from now on it is found by the fingerprint
-  on the question. So an OPEN question that has one pause bound to it gets that
-  fingerprint and its No, once, here - otherwise a step resumed after the deploy
-  would not find the answer it was waiting for and would ask again. Resolved
-  questions are left as they are: their answer lives in the resolution sentence
-  and nothing is going to resume on them.
+  Questions in flight when this lands. A plan step's question used to be found by
+  a +-10 second window around its pause and its answer read from the resolution
+  sentence; from now on both are columns. So a question whose job has NOT
+  finished (open, or answered and about to be resumed) gets, once, here:
+    - the fingerprint of the NEAREST pause it was raised for, and its No, and
+    - if it was answered, the option its resolution sentence begins with.
+  This is the one place the sentence is read, for history only, and only where a
+  live job is about to look. Questions on finished jobs are left alone.
 */
 update public.blockers b
-   set action_fingerprint = p.binds_to,
+   set action_fingerprint = (
+         select jp.binds_to from public.job_pauses jp
+          where jp.job_id = b.job_id and jp.reason = 'awaiting_approval' and jp.binds_to is not null
+            and b.created_at between jp.at - interval '10 seconds' and jp.at + interval '10 seconds'
+          order by abs(extract(epoch from (b.created_at - jp.at))) limit 1),
        decline_option = coalesce(b.decline_option, b.approval_options[2])
-  from (select distinct on (job_id, binds_to) job_id, binds_to, at
-          from public.job_pauses
-         where reason = 'awaiting_approval' and binds_to is not null
-         order by job_id, binds_to, at desc) p
- where b.state = 'open'
-   and b.action_fingerprint is null
-   and b.job_id = p.job_id
-   and b.created_at between p.at - interval '10 seconds' and p.at + interval '10 seconds';
+ where b.action_fingerprint is null
+   and exists (select 1 from public.jobs j where j.job_id = b.job_id
+                and j.state not in ('complete', 'failed', 'cancelled'))
+   and exists (select 1 from public.job_pauses jp
+                where jp.job_id = b.job_id and jp.reason = 'awaiting_approval' and jp.binds_to is not null
+                  and b.created_at between jp.at - interval '10 seconds' and jp.at + interval '10 seconds');
+
+update public.blockers b
+   set answered_option = o.opt
+  from (select bb.blocker_id,
+               (select x from unnest(bb.approval_options) x
+                 where bb.resolution = x or bb.resolution like x || ' — %' limit 1) as opt
+          from public.blockers bb
+         where bb.state = 'resolved' and bb.answered_option is null
+           and exists (select 1 from public.jobs j where j.job_id = bb.job_id
+                        and j.state not in ('complete', 'failed', 'cancelled'))) o
+ where b.blocker_id = o.blocker_id and o.opt is not null;
 -- BACKFILL-END
 
 -- What answered this exact action, for this job.
@@ -210,6 +224,76 @@ grant execute on function app.authorize_effect(uuid, text, uuid, text, text, tex
 -- The old shapes of hq_task_state, by exact signature (the new one carries p_by).
 drop function if exists public.hq_task_state(text, text, text);
 drop function if exists app.hq_task_state(text, text, text);
+
+-- ---- app.answer_generation_approval, spliced from the live definition ----
+CREATE OR REPLACE FUNCTION app.answer_generation_approval(p_blocker uuid, p_approved boolean, p_by text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_catalog'
+AS $function$
+declare
+  b public.blockers;
+  v_config jsonb;
+  v_next text;
+  v_new uuid;
+  v_refusal text;
+begin
+  -- 0608: called directly by the button path as well as by hq_answer_blocker,
+  -- so it refuses an unidentified approver for itself.
+  v_refusal := app.principal_refusal(p_by);
+  if v_refusal is not null then
+    return jsonb_build_object('error', v_refusal);
+  end if;
+
+  select * into b from public.blockers where blocker_id = p_blocker;
+  if not found then
+    return jsonb_build_object('error', 'no such request');
+  end if;
+  if b.state <> 'open' then
+    return jsonb_build_object('already', true, 'state', b.state, 'resolution', b.resolution);
+  end if;
+
+  update public.blockers
+     set state = 'resolved',
+         resolved_at = app.now_utc(),
+         resolution = case when p_approved
+                        then format('approved by %s', p_by)
+                        else format('declined by %s', p_by) end,
+         -- 0611: the option chosen is a column whichever door answered, so an
+         -- answer from a button is as visible to the boundary as one typed.
+         answered_option = case when p_approved then b.approval_options[1]
+                                else coalesce(b.decline_option, b.approval_options[2]) end,
+         answered_by = p_by
+   where blocker_id = p_blocker;
+
+  if not p_approved then
+    return jsonb_build_object('approved', false);
+  end if;
+
+  select pinned_config into v_config from public.jobs where job_id = b.job_id;
+  -- `notebook.generate` when the job did not say, which is every approval
+  -- created before this migration. An in-flight request must not become
+  -- unanswerable because the schema moved under it.
+  v_next := coalesce(v_config ->> 'approval_next', 'notebook.generate');
+
+  insert into public.jobs
+    (parent_job_id, correlation_id, project_id, idempotency_key, kind,
+     requested_by, priority, pinned_config)
+  select b.job_id, j.correlation_id, j.project_id,
+         format('approved-%s', p_blocker),
+         v_next,
+         j.requested_by,
+         -- Ahead of the queue: he has just pressed a button and is watching.
+         50,
+         coalesce(v_config, '{}'::jsonb)
+           || jsonb_build_object('approved_by', p_by, 'approval', p_blocker)
+    from public.jobs j where j.job_id = b.job_id
+  returning job_id into v_new;
+
+  return jsonb_build_object('approved', true, 'job_id', v_new, 'kind', v_next);
+end;
+$function$;
 
 -- ---- app.hq_answer_blocker, spliced from the live definition ----
 CREATE OR REPLACE FUNCTION app.hq_answer_blocker(p_blocker_id uuid, p_answer text, p_by text DEFAULT NULL::text)
@@ -453,6 +537,7 @@ declare
   v_was_why  text;
   v_title    text;
   v_undo     uuid;
+  v_now      text;
 begin
   begin
     v_id := p_task_id::uuid;
@@ -494,6 +579,16 @@ begin
          completed_by = case when p_state = 'done' then nullif(btrim(coalesce(p_by, '')), '') else null end
    where task_id = v_id
   returning jsonb_build_object('id', task_id, 'title', title, 'state', state) into v;
+
+  -- 0611: the tick may have been refused by the trigger (a to-do that stands for a
+  -- question, ticked by somebody the office cannot name, is put back). The reply
+  -- and the stored task must agree, and no undo is offered for a change that
+  -- did not stick.
+  select state into v_now from public.tasks where task_id = v_id;
+  if v_now is distinct from p_state then
+    return jsonb_build_object('error',
+      'that was not taken: the question this to-do stands for was not answered by somebody the office can name, so it is still open');
+  end if;
 
   if p_state is distinct from v_was then
     v_undo := app.undo_offer(

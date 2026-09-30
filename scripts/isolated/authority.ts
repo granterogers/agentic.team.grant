@@ -12,6 +12,7 @@
 import { readFileSync } from 'node:fs'
 import { governOutward, mayAct } from '../../src/agents/approval.ts'
 import { compile } from '../../src/agents/perform.ts'
+import { raiseBlocker } from '../../src/inference/record.ts'
 import { fingerprint, pauseJob } from '../../src/jobs/checkpoint.ts'
 import { isolated } from './guard.ts'
 
@@ -298,10 +299,11 @@ const answer = async (b: string, a: string, by = 'grant') =>
     ).n,
   )
   check(
-    'after "No, leave it" the next run raises nothing, says nothing and records no fault',
+    'after "No, leave it" the next run raises nothing, announces nothing and records no fault, with a body the outputs table accepts',
     !second.g.go &&
       second.g.blocker === null &&
-      second.g.said === '' &&
+      second.g.said !== '' &&
+      second.g.quiet &&
       blockersAfter === blockersBefore &&
       impediments === 0,
     `blockers ${String(blockersBefore)}->${String(blockersAfter)}, impediments ${String(impediments)}`,
@@ -536,6 +538,124 @@ const answer = async (b: string, a: string, by = 'grant') =>
     'so his answer after the deploy is found by the resumed step',
     seen.verdict === 'proceed' && seen.approved,
     seen.verdict,
+  )
+}
+
+// ---- 10. review findings, each with the state it would have corrupted --------
+{
+  const p = await project('review')
+  // (a) a refused tick must not report success or offer an undo for it
+  const j = await job(p, 'telegram:grant-review')
+  const b = String(
+    (
+      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (${lit(p)}::uuid, ${lit(j)}::uuid, 'Review tick', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+    ).id,
+  )
+  const t = String(
+    (
+      await one(
+        `select task_id::text as id from public.tasks where satisfies_blocker = ${lit(b)}::uuid`,
+      )
+    ).id,
+  )
+  const undosBefore = Number((await one(`select count(*)::int as n from public.undo_offers`)).n)
+  const reply = json(
+    (await one(`select app.hq_task_state(${lit(t)}, 'done', null, null)::text as r`)).r,
+  )
+  const undosAfter = Number((await one(`select count(*)::int as n from public.undo_offers`)).n)
+  const stored = String(
+    (await one(`select state::text as s from public.tasks where task_id = ${lit(t)}::uuid`)).s,
+  )
+  check(
+    'a refused tick is reported as not taken, matches the stored task, and offers no undo',
+    typeof reply.error === 'string' && stored === 'todo' && undosAfter === undosBefore,
+    `${String(reply.error).slice(0, 50)} / ${stored} / undo ${String(undosBefore)}->${String(undosAfter)}`,
+  )
+
+  // (b) an answer by the button path is a column too
+  const j2 = await job(p, 'telegram:grant-button')
+  const fp = await fingerprint({ button: run })
+  const b2 = await ask(p, j2, fp)
+  await db.execute(`select app.answer_generation_approval(${lit(b2)}::uuid, false, 'grant')`)
+  const viaButton = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp,
+    job: j2,
+  })
+  check(
+    'a No given by the approve/decline button is seen by the boundary',
+    viaButton.verdict === 'refuse' && viaButton.declined,
+    viaButton.verdict,
+  )
+
+  // (c) an answered question whose job has not finished is backfilled from its sentence, once
+  const j3 = await job(p, 'telegram:grant-live', 'office.pursue')
+  await db
+    .execute(
+      `update public.jobs set state = 'running', started_at = now(), leased_until = now() + interval '5 minutes', lease_owner = 'authority' where job_id = ${lit(j3)}::uuid`,
+    )
+    .catch(() => undefined)
+  const b3 = String(
+    (
+      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, state, resolved_at, resolution)
+      values (${lit(p)}::uuid, ${lit(j3)}::uuid, 'Live proof', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', true, 'resolved', now(), 'Yes, do it — answered by grant') returning blocker_id::text as id`)
+    ).id,
+  )
+  const sql = readFileSync(
+    'migrations/0611_authorization_is_asked_once_and_a_no_is_remembered.sql',
+    'utf8',
+  )
+  await db.execute(/-- BACKFILL-BEGIN([\s\S]*?)-- BACKFILL-END/.exec(sql)?.[1] ?? 'select 1')
+  const filled = String(
+    (
+      await one(
+        `select answered_option as o from public.blockers where blocker_id = ${lit(b3)}::uuid`,
+      )
+    ).o,
+  )
+  check(
+    'a question answered before the deploy, on a job still live, gets its answer as a column',
+    filled === 'Yes, do it',
+    filled,
+  )
+
+  // (d) the boundary and the question writer still work on a database without 0611 (a worker that ships first)
+  await db.execute(
+    `alter table public.blockers drop column action_fingerprint, drop column decline_option`,
+  )
+  await db.execute(`drop function app.authorize_effect(uuid, text, uuid, text, text, text, uuid)`)
+  const old = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp,
+    job: j2,
+  })
+  check(
+    'without app.authorize_effect the policy it wraps still answers (a worker that ships before the migration)',
+    old.verdict === 'ask' || old.verdict === 'proceed' || old.verdict === 'refuse',
+    old.verdict,
+  )
+  const raised = await raiseBlocker(
+    db as never,
+    {
+      jobId: j2,
+      projectId: p,
+      requestedAction: 'Fallback proof',
+      whyNeeded: 'authority proof',
+      consequencesOfDelay: 'Nothing happens until somebody answers this question.',
+      approvalOptions: OPTS,
+      originatingAgent: 'chief-of-staff',
+      workCanContinue: true,
+      actionFingerprint: fp,
+      declineOption: 'No, leave it',
+    } as never,
+  )
+  check(
+    'and a question is still written without the new columns',
+    typeof raised === 'string' && raised.length > 10,
+    String(raised).slice(0, 8),
   )
 }
 

@@ -1392,7 +1392,7 @@ interface Answer {
 const sessionAllowed = async (presented: string): Promise<Answer> => {
   const cached = seen.get(presented)
   if (cached !== undefined && cached.until > Date.now()) {
-    return { verdict: 'yes', principal: cached.owner }
+    return { verdict: 'yes', principal: cached.owner === '' ? null : cached.owner }
   }
 
   const asking = await askUpstream(`${DB_URL}/auth/v1/user`, {
