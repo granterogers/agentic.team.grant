@@ -155,6 +155,26 @@ const attempt = async (said: string, waiting: boolean) => {
 }
 
 {
+  const r = await attempt(
+    'From now on give me the conclusion first. Also remind me tomorrow to call Kevin. And what is the status of the venue?',
+    false,
+  )
+  check(
+    'a rule, a reminder and a question with no model: the question is NAMED as not answered, not lost',
+    /what is the status of the venue/i.test(r.body) && /have not answered that part/i.test(r.body),
+    r.body.slice(0, 220),
+  )
+}
+{
+  const r = await attempt('What is the status of the venue?', false)
+  check(
+    'CONTROL: a question on its own is not told it was dropped (the answering path owns it)',
+    !/have not answered that part/i.test(r.body),
+    r.body.slice(0, 160),
+  )
+}
+
+{
   const r = await attempt('Yes, and remind me tomorrow to call Kevin.', true)
   check(
     'yes + a reminder: the question is answered AND the reminder is kept',

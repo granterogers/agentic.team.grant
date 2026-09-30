@@ -1729,6 +1729,10 @@ async function enqueueSource(
   `)
 }
 
+/** The sentences of his own words that end in a question mark. */
+const unansweredQuestions = (said: string): string[] =>
+  (said.match(/[^.!?]+\?/g) ?? []).map((q) => q.trim()).filter((q) => q.length >= 8)
+
 /**
  * Complete a half-instruction from its neighbour, or leave it alone.
  *
@@ -5068,6 +5072,20 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         pursuing,
         taught?.said ?? null,
       ].some((x) => x !== null)
+      /*
+        A QUESTION THE WRITERS DID NOT TAKE IS NOT A QUESTION ANSWERED (final audit, invariant 4).
+
+        With the model unavailable `understood.surviving` is empty, so nothing marks "what is the status of the venue?"
+        as a question, the confirmation of the rule or the reminder short-circuits the answering path, and the question
+        simply vanished - neither answered nor said to be dropped. When a model reading did mark a question the
+        answering path owns it; when none did and a writer acted, any sentence of his own that ends in a question mark
+        is named back, so nothing he asked is lost in silence. Model-free on purpose: this is the turn on which the
+        model was not there to do it.
+      */
+      const modelOwnsTheQuestion = understood.surviving.some(
+        (r) => r.kind === 'question' || r.kind === 'task_query',
+      )
+      const leftUnasked = modelOwnsTheQuestion || isBranch ? [] : unansweredQuestions(turn.kept)
       const confirmation =
         [
           taught?.said ?? null,
@@ -5079,6 +5097,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           settledTask?.text ?? null,
           subbed?.text ?? null,
           answeredQuestion?.text ?? null,
+          leftUnasked.length > 0 && restHandled
+            ? `You also asked "${leftUnasked[0]?.slice(0, 120) ?? ''}" — I have not answered that part; ask it again on its own.`
+            : null,
           restOfAnswered && !restHandled
             ? `You also said "${(turn.answer?.remainder ?? '').trim().slice(0, 120)}" — I have not acted on that part; say it again with what it is for.`
             : null,
