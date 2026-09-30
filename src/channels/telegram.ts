@@ -76,6 +76,16 @@ export interface TelegramUpdate {
     audio?: { file_id: string; duration?: number; mime_type?: string }
     /** A round video message. Its audio track is the instruction. */
     video_note?: { file_id: string; duration?: number }
+    /**
+     * Present when the message was FORWARDED from somewhere else (#392). The sender is still the person who
+     * forwarded it, so without this a forwarded email arrives as his own words, under his authority.
+     * `forward_origin` is the current field; the older four are what a client on an older API still sends.
+     */
+    forward_origin?: unknown
+    forward_date?: number
+    forward_from?: unknown
+    forward_from_chat?: unknown
+    forward_sender_name?: string
   }
   readonly callback_query?: {
     id: string
@@ -130,6 +140,11 @@ export interface CanonicalCommand {
   readonly callback_action: string | null
   /** The event id a callback compensates, if any — §6 keys Undo on this. */
   readonly compensates_event_id: string | null
+  /**
+   * Facts about how the message arrived that are not his words (#392). Present only when there is something to
+   * say; today: `forwarded`, which says the text is somebody else's, carried by him.
+   */
+  readonly context?: { readonly forwarded: true }
 }
 
 export class UnsupportedUpdateError extends Error {
@@ -297,6 +312,15 @@ export function toCanonicalCommand(
     received_at,
     callback_action: null,
     compensates_event_id: null,
+    // Forwarded text is somebody else's words carried by him. It is recorded here, at the door, because nothing
+    // later can tell (#392); what reads it is app.open_questions_for_reply (a forwarded "yes" answers nothing).
+    ...(message.forward_origin !== undefined ||
+    message.forward_date !== undefined ||
+    message.forward_from !== undefined ||
+    message.forward_from_chat !== undefined ||
+    message.forward_sender_name !== undefined
+      ? { context: { forwarded: true as const } }
+      : {}),
   }
 }
 

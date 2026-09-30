@@ -4811,50 +4811,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         spoken === null
           ? null
           : await deps.db
-              .execute(`
-                with recursive me as (
-                  select origin_channel, split_part(origin_ref, ':', 1) as chat,
-                         coalesce(subject, actor) as who, command_id
-                    from public.inbound_commands
-                   where command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid
-                ), ours as (
-                  select c.job_id from public.inbound_commands c, me
-                   where c.origin_channel = me.origin_channel
-                     and split_part(c.origin_ref, ':', 1) = me.chat
-                     and coalesce(c.subject, c.actor) = me.who
-                     and c.command_id <> me.command_id
-                     and c.job_id is not null
-                     and c.received_at >= app.now_utc() - interval '12 hours'
-                   /*
-                     The turn IMMEDIATELY before only. "ok" is also how people
-                     acknowledge, so a question raised three turns back, with
-                     other answers since, must not be approved by an "ok,
-                     thanks" meant for the latest reply.
-                   */
-                   order by c.received_at desc
-                   limit 1
-                ), tree as (
-                  select job_id from ours
-                  union
-                  select j.job_id from public.jobs j join tree t on j.parent_job_id = t.job_id
-                )
-                select b.blocker_id::text as id, b.requested_action as what,
-                       coalesce(b.approval_options, array[]::text[]) as options
-                  from public.blockers b
-                 where b.state = 'open'
-                   and (b.job_id in (select job_id from tree)
-                        /*
-                          Or the ONE question the office's previous reply said
-                          it was still waiting on (#374): an acknowledgement
-                          answers nothing, and its turn records which blocker
-                          it asked about, so "yes please" after it binds to
-                          that question and no other - only while it is open,
-                          only from the turn immediately before, in this chat.
-                        */
-                        or b.blocker_id = (select nullif(j.pinned_config ->> 'awaiting_answer', '')::uuid
-                                             from public.jobs j
-                                            where j.job_id = (select job_id from ours)))
-                 order by b.created_at desc limit 5`)
+              .execute(
+                // One assembly, asked here and by the test: the previous turn's tree, only a question he was
+                // SHOWN on a channel that delivers (0622, #394), or the one it said it was still waiting on.
+                `select id, what, options from app.open_questions_for_reply(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)`,
+              )
               .then(async (r) => {
                 const open = r.rows as { id: string; what: string; options: string[] }[]
                 if (open.length === 0) return null

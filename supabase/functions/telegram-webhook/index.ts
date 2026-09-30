@@ -296,6 +296,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       voice_file_id: command.voice_file_id,
       voice_seconds: command.voice_seconds,
       compensates_event_id: command.compensates_event_id,
+      // How it arrived, when that is not his own words (#392): forwarded.
+      ...(command.context === undefined ? {} : { context: command.context }),
       received_at: command.received_at,
       // Who it was sent TO. Opening @atg_research_bot addresses Ines, and that
       // is a clearer signal than any classifier could produce from the text.
