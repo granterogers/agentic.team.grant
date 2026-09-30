@@ -219,6 +219,8 @@ const BASELINE: Record<string, string> = {
   '--bc-mod':
     "declared on [data-experience='basecamp'] .bcmod in compose.css, per module kind, and read by that element and its own descendants",
   '--bc-mod-ink': 'declared beside --bc-mod on the same element, and re-declared on hover',
+  '--bcfade':
+    'declared in the SAME rule that reads it (compose.css, the scroll-fade pane) and registered with @property; it is the target of a scroll-driven animation, so it is a local variable and not a design token (#383)',
 }
 
 const inReach = (u: { token: string; within: Set<string>; file: string }): boolean => {
