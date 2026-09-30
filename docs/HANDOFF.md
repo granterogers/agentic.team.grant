@@ -1040,6 +1040,12 @@ rather than rediscovery.
 
 ---
 
+## 30 September 2026 - final audit reconciliation
+
+Verdict **AUDIT PARTIAL - 82 findings remain** (`docs/final-audit/FINAL-RECONCILIATION.md`, ADR-0057). Migrations 0627-0632
+applied; worker, slack-events deployed; final-audit-live 35/35 and every historical live suite green; `check:leaks` and
+`check:callers` exit 0. Open: the listed rows, residual review items A4/A5/A7/B2, and Grant's decisions (a)(b)(c) and #389.
+
 ## Read these four, in this order
 
 1. **[`known-problems.md`](known-problems.md)** — everything currently wrong.
