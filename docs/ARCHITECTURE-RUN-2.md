@@ -1,11 +1,10 @@
-# Architecture Run 2 — authority and approval (CANDIDATE, not merged, not deployed)
+# Architecture Run 2 — authority and approval
 
-Branch `claude/architecture-run-2-authority`, from `main` @ `08f0aa12` (Run 1, deployed and verified). Migration **0611** is written and proven in
-isolation; **it is not applied to production and the branch is not merged**, because `main` is what production runs and this code needs 0611.
+Branch `claude/architecture-run-2-authority`, from `main` @ `08f0aa12` (Run 1, deployed and verified). Migrations **0611** and **0612**.
+Production state is recorded at the END of this document (it changes as the run is deployed); read that section before trusting any other line.
 
-## Run 1 production status: PASS
-main `f8ab9c5a` (docs on top of `08f0aa12`); migrations 0607–0610 applied; worker v852, hq-api v787, telegram-webhook v605; `verify:run1-live` 14/14
-through the deployed doors; `check:leaks` exit 0. Full record: `docs/ARCHITECTURE-RUN-1.md`.
+## What Run 2 establishes, and what it does not
+The canonical authorization and exact-approval architecture (`app.authorize_effect`, exact-action fingerprints, a durable and reversible No, the to-do tick through the one door) is established and proven for the **migrated paths**: plan steps, the calendar duty (`governOutward`) and `drive.ingest`. **It is not true that every consequential effect is behind `authorize_effect`.** The unmigrated doors are listed below and in issue #386 and stay explicit follow-up work.
 
 ## Run 2 status
 | Area | Status | Evidence |
@@ -21,39 +20,21 @@ through the deployed doors; `check:leaks` exit 0. Full record: `docs/ARCHITECTUR
 | Exactly-once | EXACTLY-ONCE COMPLETE for the approval lifecycle and for the checkpoint engine; PARTIAL for effects outside the boundary | `exactly-once.ts` 6/6 (parked external step, reconcile, local control, repeat resumes, two racing workers, changed code), `approval-execution` 15/15, `approval-race`; sabotage red |
 | Effects not yet behind the boundary | NOT STARTED (deliberately) | `notebook.generate`, `office.execute_plan` (blocker-only); `notebook.add_source`, `notebook.push_document`, `office.notion_import`, `tasks.sync`, `office.provision_channels`, `google.revoke` (containment-only); the raw sends in `telegram-webhook` and `vault-export` |
 
-## Commits (Run 2)
-`2a8447de` map + design + characterization · `c073cea4` the boundary, fingerprints, durable No, tick (0611) · `a03519da` backfill + ADR-0053 ·
-`e06f8788` fixes for an independent code review's findings · `7348eb7a` exactly-once suite · `acd7342c` merge of main's HANDOFF.
+## Decisions made by Grant during this run
+- **Internal office work proceeds at the default dial (0612).** `autonomy_policy` `suggest × level 1` `ask → proceed`, and `drive.ingest` `level 1 → 2` (it brings in material from somebody else's system; its question is deliberate). Data, not a branch. Every level-2/3 cell, the outside-audience floor and the switched-off level-1 tools are unchanged. Consequence: `suggest` and `act_with_review` now resolve identically (issue #387).
+- **A remembered No can be taken back, explicitly (0611).** `app.withdraw_refusal`, the Governance card *Let it ask again* and the gateway action `withdraw_refusal`. Never approves; attributed; gateway-only (the function refuses any call that did not arrive through PostgREST with the service key). See ADR-0053.
 
-## Migrations
-Applied to production: 0607–0610 (Run 1). Written this run, candidate-only: **0611** (columns `blockers.action_fingerprint/decline_option/answered_option/answered_by`,
-`tasks.completed_by`, config `approval.refusal_days`, `app.action_answer`, `app.authorize_effect`, spliced `hq_answer_blocker`, `answer_generation_approval`, `hq_task_state`, `task_answers_blocker`, a backfill of questions in flight).
+## Independent reviews (three passes, `/code-review`)
+1. First draft: 8 findings, 6 fixed (the worst: a remembered No would have failed the calendar duty on an empty body).
+2. Candidate with both decisions: 15 findings. Fixed: the identity-bearing wrappers were executable by `anon` (Supabase's default ACL; 0607/0608 had revoked only from PUBLIC); a No recorded for this step was overridden by 0612's proceed; the button door could overwrite a racing answer; the specialist's grant was skipped for the duty; the pre-existing suites that relied on a level-1 step asking were red (approval-execution, blocker-failure, verify:pursues); harness Nos could bind real duties; refused ticks of blocked to-dos; the fallbacks that made the deploy order look forgiving; honest dates; named arguments.
+3. After those fixes: 14 findings. Fixed: the in-flight fingerprint no longer matched the new shape (legacy fingerprint accepted); the four authority setters (`hq_autonomy_set`, `hq_staff_tool_set`, `approve_document`, `discard_document`) and every `p_by` function closed to `anon`; the Approve/Decline buttons now answer through `hq_answer_blocker` (they used to queue a `notebook.generate` for any question and stored the wrong option); reversal is gateway-only by a claims check (the earlier "ai_team_app cannot execute it" claim was false — the worker connects as a database owner); a to-do pulled done from an external board is reconciled without a permanent impediment per sync; no undo is offered for a tick that answered a question; the floor starts at level 1 and an unrecognised audience word means outside; one `app.refusal_days()`; the pause text no longer tells Grant to raise a dial that cannot lift the floor.
+Recorded, deliberately not fixed here: `suggest ≡ act_with_review` (#387), capabilities no specialist holds (#387), the other ~250 anon-executable functions (#384), the bearer token attributed as `grant` (#385), the unmigrated effect doors (#386), Slack allowlist / `staff_for_bot` (#388).
 
-## Tests
-vitest 235 files / 3,668; biome, tsc, `check:migrations/secrets/templates/consumed/pressable/gateway-wrappers/answerable/door-origins/undo/capabilities` clean (`check:callers` fails identically on `main`: `app.deliverable_to`, `app.release_test_origins`).
-Isolated `run-all.sh`: every earlier suite plus `authority-characterization` 18, `authority` 36, `exactly-once` 6 — all green with 0611 applied (rc=0). Not run: any live suite (0611 is not in production).
+## Invariants now enforced (each has a test that goes red when the mechanism is removed)
+A named specialist may only do what its grant allows (plan steps and the duty) · an outside audience never proceeds without an approval on file · an answer approves exactly the step, what it is for, what it depends on, who acts and who it reaches · a No recorded for a step beats the dial, a standing row and any matrix cell · a No is remembered for a window, does not spread to a different action, and is heard only by the same kind of traffic (harness or real) · taking a No back never approves, is attributed, and is reachable only through the gateway · a to-do tick answers as a named principal or not at all and its reply matches the stored task · the buttons answer through the one door · the identity-bearing wrappers and authority setters are not executable by `anon` · an external step interrupted mid-write is parked, not repeated · a finished step is never re-run.
 
-## Independent review
-`/code-review high` found eight defects in the first draft; six were fixed and pinned (quiet remembered No — it would have failed the calendar duty on an empty body;
-honest reply for a refused tick; button-path answers; backfill of live questions; forgiving deploy order in both directions; cached empty principal). Two are recorded, not fixed:
-the bearer token is attributed as `grant` (0608's model: an agent holding it answers as Grant — ARCHITECTURAL, security follow-up) and a No is sticky across jobs while a Yes is per-job
-(deliberate, fails toward doing less; there is no explicit "unsay" — ENGINEERING DEBT).
-
-## Invariants now genuinely enforced (each has a red-on-sabotage test)
-A named specialist may only do what its grant allows · an outside audience never proceeds without an approval on file · an answer approves exactly the action it was asked about ·
-a No is remembered for a window and does not spread to a different action · a to-do tick answers as a named principal or not at all · the reply of a task change matches the stored task ·
-an external step interrupted mid-write is parked, not repeated · a finished step is never re-run.
-
-## Remaining work (the next boundary)
-1. Bring the containment-only and blocker-only effects behind `authorize_effect`, one handler at a time, each needing its own plan or dry run (see map). Start with `notebook.generate` (a third "approved?" test lives in `notebook.ts:325`).
-2. An explicit `unsay`/reopen path for a durable No.
-3. **OPEN DECISION FOR GRANT (not made here):** at the default `suggest` dial a level-1 internal write (a task, a draft) still asks, because that cell of `autonomy_policy` says so ("even for a draft"). The product rule says internal work proceeds; the matrix is his data. Recommended: set `suggest × 1` to `proceed` for internally-delivered tools, or leave it; either is a data edit, not code.
-4. Person-bound credentials so the machine token cannot answer as Grant.
-5. Slack sender allowlist (R6) and `staff_for_bot` 200-ignored (R9), unchanged from Run 1.
-6. Bring the critical isolated suites into the canonical gate (R7).
-
-## Production deployment of Run 2 (when Grant decides)
-Apply 0611, then deploy `worker` and `hq-api` together (both orders are safe: fallbacks for a missing function/column and a backfill for questions in flight), then re-run `verify:run1-live` plus a new live check of a remembered No and a to-do tick through the deployed gateway. **None of that has been done.**
+## Deploy order (strict, one direction)
+Migration **0611** → deploy `worker` and `hq-api` → migration **0612**. The new code has no fallback to the old policy (it would re-ask forever and a loose catch also swallows failures inside the boundary): a worker ahead of 0611 fails loudly and retries; the old worker keeps working after 0611. 0612 comes last so the old worker never sees a level-1 step proceed after a No it cannot read. Both migrations are safe on an idle office; production had no live jobs when applied.
 
 ## Production state — code committed / merged / deployed / migrations applied / verified live
 Run 1: committed, merged, deployed, applied, verified live. Run 2: committed and pushed on its branch; NOT merged; NOT deployed; 0611 NOT applied; NOT verified live.
