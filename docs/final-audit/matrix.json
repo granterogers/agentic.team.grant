@@ -553,7 +553,7 @@
     "AD4",
     "approval has several lifecycles; binding exact action only in one",
     "ACCEPTED BOUNDED DEBT",
-    "Exact binding holds for every agent-originated approval (fingerprint, delivery, question, principal). Bounded limits: no expiry (a yes is still the exact action he approved), dashboard/voice typed-yes binds by session and previous turn (#397), tool/standing/document approvals are a person's own press naming the thing. A step question inside an approved plan was misrouted as the plan's approval - fixed (0636, step-question).",
+    "Exact binding holds, since 0611, for every agent-originated approval (fingerprint, delivery, question, principal). Bounded limits: no expiry (a yes is still the exact action he approved), dashboard/voice typed-yes binds by session and previous turn (#397), tool/standing/document approvals are a person's own press naming the thing. A step question inside an approved plan was misrouted as the plan's approval - fixed (0636, step-question). Four legacy open blockers predating 0611 carry null fingerprints (an instance of MC7, blocker expiry; each is still a person's own answer to a named question).",
     "",
     "B bounded hardening debt"
   ],
@@ -562,7 +562,7 @@
     "AD5",
     "trust/origin of non-inbound roots from a mutable free-text grammar; harness by six name signals",
     "PRODUCTION-PROVEN FIXED",
-    "Origin is positive and stored: job_origin, adapter_key_ok, may_act_outside, declared test origins. job-origin 22, synthetic-origins 36, witness-independence 12, run4-live 24/24, final-audit-live, check:leaks 0 new. Stated limit: exact impersonation with the service key (#379) is a provider/credential limit, not closable here.",
+    "Origin is positive and stored: job_origin, adapter_key_ok, may_act_outside, declared test origins. job-origin 22, synthetic-origins 36 (the carrier for origin classes), witness-independence 12, run4-live 24/24, final-audit-live, check:leaks 0 new. Stated limit: exact impersonation with the service key (#379) is a provider/credential limit, not closable here.",
     "",
     "D superseded / duplicate"
   ],
@@ -589,7 +589,7 @@
     "3",
     "Every obligation belongs to a project",
     "ISOLATED-PROVEN FIXED",
-    "project-ownership: a turn naming no project gets the Unnamed project, a child and grandchild inherit, the command table refuses null, and no job a person started or any descendant has a null project. Duty roots are the one named global owner; legacy null rows are pre-0619 history.",
+    "project-ownership: a turn naming no project gets the Unnamed project, a child and grandchild inherit, the command table refuses null, and no job started by a person's turn or any descendant has a null project. Stated limit: `google_revoke_begin` and `register_mcp_provider` are gateway actions that write a job with no project (machine/operator work, not a person's turn) and duty roots are the named global owner; legacy null rows are pre-0619 history. Bounded: a null project on such a job reads as the Unnamed project everywhere an agent retrieves (0634, retrieval-scope).",
     "",
     "C proof gap"
   ],
@@ -697,7 +697,7 @@
     "15",
     "Fan-in produces one coherent result",
     "ISOLATED-PROVEN FIXED",
-    "One coherent result: fan_in_over through a lone branch is relayed verbatim, waits past five wakes (fan-in-waits). An interim acknowledgement precedes the final answer by design (acknowledgement-sequence); deliveries.purpose does not yet distinguish them (cosmetic).",
+    "One coherent result: fan_in_over through a lone branch is relayed verbatim, waits past five wakes (fan-in-waits). An interim acknowledgement precedes the final answer by design (acknowledgement-sequence); the two are distinguished by the job that sent them, not by a purpose column on deliveries (there is none; no reader needs one).",
     "",
     "D superseded / duplicate"
   ],
@@ -715,7 +715,7 @@
     "17",
     "Cross-project retrieval preserves provenance and permissions",
     "ISOLATED-PROVEN FIXED",
-    "FIXED: an agent's retrieve() with no project read as every project (search_documents treats null as all). retrieval-scope: null now means the Unnamed project; Grant's own search box is unchanged (control). Cross-project retrieval as a FEATURE is decision (b) and MC1.",
+    "FIXED: an agent's retrieve() with no project read as every project (search_documents treats null as all). retrieval-scope: null now means the Unnamed project; Grant's own search box is unchanged (control). Cross-project retrieval as a FEATURE is decision (b) and MC1. The sibling reader app.mcp_search had the same shape for an unresolved slug and is fixed in 0638 (returns nothing).",
     "",
     "A current architecture blocker"
   ],
@@ -823,7 +823,7 @@
     "29",
     "Every legal nonterminal state has recovery",
     "ISOLATED-PROVEN FIXED",
-    "recovery-matrix drives every stallable state; waiting_* are unwritable (enumeration-agreement); paused now exits by Stop (0635); a parked turn speaks (0634). Blocker expiry is MC7 (bounded).",
+    "recovery-matrix drives every stallable state; waiting_* are unwritable (enumeration-agreement); paused now exits by Stop (0635); a parked turn speaks (0634). Blocker expiry is MC7 (bounded). conversation_work counts a parked turn (0634).",
     "",
     "A current architecture blocker"
   ],
@@ -886,7 +886,7 @@
     "36",
     "Claire can determine the state of an active obligation",
     "ISOLATED-PROVEN FIXED",
-    "obligation_state/conversation_work answer \"what is happening\" from the tree (0631, audit-closure, an-obligation-is-not-a-job).",
+    "obligation_state/conversation_work answer \"what is happening\" from the tree (0631, audit-closure, an-obligation-is-not-a-job). 0634 extends conversation_work so a turn's own non-resumable paused job counts as waiting_on_you (parked-turn-owes-a-word, 23 checks incl. the conversation view).",
     "",
     "C proof gap"
   ],
@@ -1039,7 +1039,7 @@
     "V13",
     "Planner path through real Telegram/Slack",
     "PRODUCTION-PROVEN FIXED",
-    "A planner turn through the deployed Telegram door with the real model (verify:final-audit-live): work is handed on to an office.pursue child, a preference is stored, nothing is sent outside. Slack shares the handler; its door is covered by slack-sender.",
+    "A planner-shaped mixed turn through the deployed Telegram door with the real model: verify:final-audit-live 48/48 at the final candidate (work handed to an office.pursue child, a preference stored, nothing sent outside), and the same turn shape on the real handler in mixed-turns 18/18. Slack shares the handler; its door is covered by slack-sender.",
     "",
     "C proof gap"
   ],

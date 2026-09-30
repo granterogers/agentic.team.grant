@@ -1734,7 +1734,7 @@ async function enqueueSource(
  * The sentences of his own words that end in a question mark - as sentences, not as fragments (review R2-6): a URL's
  * "?id=5" and an abbreviation end nothing, so a link in a reminder is never "a question you also asked".
  */
-const unansweredQuestions = (said: string): string[] =>
+export const unansweredQuestions = (said: string): string[] =>
   sentencesOf(said.replace(/https?:\/\/\S+/gi, ' ')).filter((q) => q.endsWith('?') && q.length >= 8)
 
 /**
