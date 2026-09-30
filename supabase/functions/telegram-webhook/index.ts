@@ -513,7 +513,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
             },
             // No payload beyond the type. The job is already in the queue; the
             // runner's job is to drain it, not to be told what is in it.
-            body: JSON.stringify({ event_type: 'voice-note', client_payload: { ci_run_id: ciRun } }),
+            body: JSON.stringify({
+              event_type: 'voice-note',
+              client_payload: { ci_run_id: ciRun },
+            }),
           }).catch(() => null)
           // GitHub refusing (or not answering) means no run exists: release the reservation rather than
           // leave it counted against the month.

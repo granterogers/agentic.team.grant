@@ -54,7 +54,9 @@ const again = parse(
 )
 check('releasing twice is harmless and changes nothing', again.ok === false, JSON.stringify(again))
 // the ceiling refuses when the month is spent
-await db.execute(`update public.system_config set value = '1'::jsonb where key = 'ci.monthly_minutes'`)
+await db.execute(
+  `update public.system_config set value = '1'::jsonb where key = 'ci.monthly_minutes'`,
+)
 const refused = parse(
   (await one(`select public.ci_reserve('voice-note', 'voice-note', 'over', 'grant', null) as v`)).v,
 )
