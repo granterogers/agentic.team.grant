@@ -77,6 +77,12 @@ const plan = (titles: string[]) => ({
     why,
     needs: [],
     specialist: null,
+    /*
+      Outside on purpose (0612). Internal level-1 writes proceed at suggest now, so a task
+      step would not ask; these suites are about what happens AROUND a question, so the step
+      is one the floor still stops: its audience is somebody outside the office.
+    */
+    audience: 'outside',
   })),
   unreachable: [],
   refused: [],

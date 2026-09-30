@@ -201,7 +201,7 @@ const FALLBACK_DECISIONS = [
 
 const FALLBACK_STANDING = [
   {
-    id: 'f-sa1', tool: 'drive.ingest', level: 1, live: true,
+    id: 'f-sa1', tool: 'drive.ingest', level: 2, live: true,
     what: 'Add a file that has appeared in a watched Drive folder to the project as a source document.',
     scope: 'Legacy Coaching Course', reason: 'You answered "Add them from now on without asking me" on 15 Sep.',
     by: 'grant', since: '2026-09-15T09:12:00Z', until: null, revoked: null, revoked_reason: null,

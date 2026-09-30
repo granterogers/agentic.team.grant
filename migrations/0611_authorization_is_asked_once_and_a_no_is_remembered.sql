@@ -164,6 +164,7 @@ declare
   v_days    integer;
   v_answer  text;
   v_last    record;
+  v_real    boolean;
 begin
   v := app.may_act(p_project, p_tool, p_asked_job);
   v_verdict := v ->> 'verdict';
@@ -177,30 +178,54 @@ begin
       'because', format('%s has not been given %s, so this is not theirs to do.', p_staff, p_tool));
   end if;
 
-  if p_audience = 'outside' and v_verdict = 'proceed' then
-    v_verdict := 'ask';
-    v := v || jsonb_build_object(
-      'verdict', 'ask', 'standing', null, 'reason', 'outside_audience',
-      'because', 'This reaches somebody outside the office, so it always waits for your say-so.');
-  end if;
-
-  if v_verdict <> 'ask' then
-    return v;
-  end if;
-
+  /*
+    WHAT HE ALREADY SAID ABOUT EXACTLY THIS ACTION, in this job, comes before
+    the dial. A No recorded for this very step is not undone by a later change
+    of dial, a standing row, or a matrix cell that now says proceed (0612 made
+    internal writes do exactly that): executing it would contradict an answer
+    he gave. A standing row "upgrades ask" and "can never turn refuse into
+    anything" (0421); a recorded refusal is a refusal.
+  */
   if p_job is not null and p_fingerprint is not null then
     v_answer := app.action_answer(p_job, p_fingerprint);
-    if v_answer = 'yes' then
-      return v || jsonb_build_object(
-        'verdict', 'proceed', 'approved', true, 'reason', 'approved',
-        'because', 'You said yes to exactly this.');
-    elsif v_answer in ('no', 'unclear') then
+    if v_answer in ('no', 'unclear') then
       return v || jsonb_build_object(
         'verdict', 'refuse', 'declined', true, 'reason', 'declined',
         'because', 'You said no to this.');
     end if;
   end if;
 
+  if p_audience = 'outside' and v_verdict = 'proceed' then
+    v_verdict := 'ask';
+    v := v || jsonb_build_object(
+      'verdict', 'ask', 'standing', null, 'reason', 'outside_audience',
+      'because', 'This is meant for somebody outside the office, so it waits for your say-so.');
+  end if;
+
+  if v_verdict = 'ask' and v_answer = 'yes' then
+    return v || jsonb_build_object(
+      'verdict', 'proceed', 'approved', true, 'reason', 'approved',
+      'because', 'You said yes to exactly this.');
+  end if;
+
+  /*
+    A No he gave BEFORE, to this action or its standing offer, inside the window.
+
+    Applies to what the matrix would let through or ask about - but not to a
+    standing authorization (an explicit, later, broader yes: that is how a No is
+    reversed by granting the tool) and not to "you asked for this" (he is asking
+    again himself). And it only hears Nos from the same kind of traffic: a
+    harness job's No must not silence a real duty, and a real No must not bind
+    a harness run (the same two-sided rule every reader in this office follows).
+  */
+  if (v -> 'standing') is not null and v -> 'standing' <> 'null'::jsonb then
+    return v;
+  end if;
+  if coalesce((v ->> 'asked_for')::boolean, false) then
+    return v;
+  end if;
+
+  v_real := not coalesce(app.harness_job(p_job), false);
   v_days := coalesce((select (value #>> '{}')::integer from public.system_config
                        where key = 'approval.refusal_days'), 30);
   select b.resolved_at,
@@ -209,6 +234,7 @@ begin
     from public.blockers b
    where b.state = 'resolved'
      and b.answered_option is not null
+     and (b.job_id is null or (not coalesce(app.harness_job(b.job_id), false)) = v_real)
      and (   (p_fingerprint is not null and b.action_fingerprint = p_fingerprint)
           or (p_fingerprint is null and b.action_fingerprint is null
               and b.standing_tool = p_tool and b.project_id is not distinct from p_project))
@@ -317,7 +343,7 @@ security definer
 set search_path to 'public', 'pg_catalog'
 as $$ select app.withdraw_refusal(p_blocker_id, p_by) $$;
 
-revoke all on function public.hq_withdraw_refusal(uuid, text) from public;
+revoke all on function public.hq_withdraw_refusal(uuid, text) from public, anon, authenticated;
 grant execute on function public.hq_withdraw_refusal(uuid, text) to service_role;
 
 -- The old shapes of hq_task_state, by exact signature (the new one carries p_by).
@@ -345,7 +371,11 @@ begin
     return jsonb_build_object('error', v_refusal);
   end if;
 
-  select * into b from public.blockers where blocker_id = p_blocker;
+  -- 0611: locked, like hq_answer_blocker (0596). This is the door the button path
+  -- calls directly, and it now writes the durable answer, so two presses at the
+  -- same moment must not both read 'open' and leave an answer that contradicts
+  -- the job that ran.
+  select * into b from public.blockers where blocker_id = p_blocker for update;
   if not found then
     return jsonb_build_object('error', 'no such request');
   end if;
@@ -711,7 +741,7 @@ security definer
 set search_path to 'public', 'pg_catalog'
 as $$ select app.hq_task_state(p_task_id, p_state, p_reason, p_by) $$;
 
-revoke all on function public.hq_task_state(text, text, text, text) from public;
+revoke all on function public.hq_task_state(text, text, text, text) from public, anon, authenticated;
 grant execute on function public.hq_task_state(text, text, text, text) to service_role;
 
 /*
@@ -746,7 +776,8 @@ begin
 
   if r ? 'error' then
     update public.tasks
-       set state = coalesce(nullif(old.state, ''), 'todo'), done_at = null, completed_by = null
+       set state = coalesce(nullif(old.state, ''), 'todo'), done_at = null, completed_by = null,
+           blocked_on = coalesce(old.blocked_on, '')
      where task_id = new.task_id;
     if b.job_id is not null then
       perform app.cannot(b.job_id, 'not_capable', 'answer a question from a completed to-do',
@@ -756,3 +787,32 @@ begin
   return new;
 end;
 $$;
+
+/*
+  THE IDENTITY-BEARING WRAPPERS ARE THE GATEWAY'S ALONE.
+
+  Each of these takes the answering principal as an argument and trusts it,
+  because the gateway (hq-api, running as service_role) supplies it from the
+  credential it verified. Supabase grants EXECUTE on every new public function to
+  anon and authenticated by default, and 0607/0608 revoked only from PUBLIC, so
+  anybody holding the project's anon key could call them directly and NAME
+  themselves: p_by => 'grant'. Found by reading the live ACLs during the Run 2
+  review; 272 of 275 security-definer functions in public are open the same
+  way, which is recorded as its own follow-up rather than swept here.
+
+  This closes the ones that decide who approved something. The gateway, the
+  telegram webhook and the worker all use service_role, and nothing in the
+  product calls these as anon or authenticated.
+*/
+revoke all on function public.hq_answer_blocker(uuid, text, text) from public, anon, authenticated;
+revoke all on function public.hq_approve_tool(uuid, jsonb, text) from public, anon, authenticated;
+revoke all on function public.hq_decline_tool(uuid, text, text) from public, anon, authenticated;
+revoke all on function public.hq_grant_standing(text, text, uuid, timestamptz, text) from public, anon, authenticated;
+revoke all on function public.hq_revoke_standing(uuid, text, text) from public, anon, authenticated;
+revoke all on function public.sender_admitted(text, text, text) from public, anon, authenticated;
+grant execute on function public.hq_answer_blocker(uuid, text, text) to service_role;
+grant execute on function public.hq_approve_tool(uuid, jsonb, text) to service_role;
+grant execute on function public.hq_decline_tool(uuid, text, text) to service_role;
+grant execute on function public.hq_grant_standing(text, text, uuid, timestamptz, text) to service_role;
+grant execute on function public.hq_revoke_standing(uuid, text, text) to service_role;
+grant execute on function public.sender_admitted(text, text, text) to service_role;

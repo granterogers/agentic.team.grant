@@ -103,11 +103,11 @@ export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promis
       throw new Error(`onAnswer option ${JSON.stringify(named)} is not one of the approval options`)
     }
   }
-  const insert = (withAction: boolean): string => `
+  const { rows } = await db.execute(`
     insert into public.blockers
       (project_id, job_id, requested_action, why_needed, consequences_of_delay,
        approval_options, originating_agent, work_can_continue,
-       standing_tool, standing_option, on_answer${withAction ? ', action_fingerprint, decline_option' : ''})
+       standing_tool, standing_option, on_answer, action_fingerprint, decline_option)
     values
       (${nullableLit(draft.projectId)}::uuid, ${lit(draft.jobId)}::uuid,
        ${lit(draft.requestedAction)}, ${lit(draft.whyNeeded)},
@@ -115,32 +115,10 @@ export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promis
        array[${options}]::text[], ${lit(draft.originatingAgent)},
        ${draft.workCanContinue ? 'true' : 'false'},
        ${nullableLit(draft.standingTool)}, ${nullableLit(draft.standingOption)},
-       ${draft.onAnswer === undefined ? 'null' : `${lit(JSON.stringify(draft.onAnswer))}::jsonb`}${
-         withAction
-           ? `,\n       ${nullableLit(draft.actionFingerprint)}, ${nullableLit(draft.declineOption)}`
-           : ''
-})
+       ${draft.onAnswer === undefined ? 'null' : `${lit(JSON.stringify(draft.onAnswer))}::jsonb`},
+       ${nullableLit(draft.actionFingerprint)}, ${nullableLit(draft.declineOption)})
     returning blocker_id::text as blocker_id
-  `
-  /*
-    Deploy order (0611): the columns arrive with the migration. A worker that
-    ships first writes the question without them (recognised by the undefined
-    column error and by nothing else) - the previous behaviour, so nothing
-    stops; the answer is then found by the old pause window, which is why the
-    migration backfills questions in flight.
-  */
-  let rows: Record<string, unknown>[]
-  try {
-    rows = (await db.execute(insert(true))).rows as Record<string, unknown>[]
-  } catch (error) {
-    if (
-      !/42703|column "(action_fingerprint|decline_option)" of relation "blockers" does not exist/.test(
-        String((error as Error).message),
-      )
-    )
-      throw error
-    rows = (await db.execute(insert(false))).rows as Record<string, unknown>[]
-  }
+  `)
   const id = rows[0]?.blocker_id
   if (typeof id !== 'string') throw new Error('blocker insert returned no id')
   return id

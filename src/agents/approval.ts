@@ -153,37 +153,28 @@ export const mayAct = async (
   },
 ): Promise<Decision> => {
   /*
-    Deploy order (0611): a worker may ship before the migration. On a database
-    that does not have `app.authorize_effect` yet - recognised by Postgres's
-    undefined-function error and by nothing else - ask the policy it wraps, which
-    is exactly what the previous worker asked. Any other error still propagates,
-    and an unreadable answer is still `ask`.
+    Migration 0611 first, worker second. There is deliberately NO fallback to
+    `app.may_act` when `app.authorize_effect` is missing: the old policy cannot
+    read an answer, so a plan step would re-ask its question every round, and a
+    catch loose enough to recognise "the function is missing" also recognises any
+    undefined function INSIDE the boundary and would quietly drop its specialist
+    and outside-audience checks. A worker ahead of its migration fails loudly and
+    retries; the old worker keeps working after the migration, which is why that
+    is the order.
+
+    Named arguments: seven of them, two of which are both jobs with different
+    meanings (the one whose PURPOSE the tool is, and the one running).
   */
-  let rows: Record<string, unknown>[]
-  try {
-    rows = (
-      await db.execute(
-        `select app.authorize_effect(${uuidOrNull(where.projectId)}, ${lit(where.tool)},
-       ${uuidOrNull(where.jobAskedFor)},
-       ${where.staff === null || where.staff === undefined ? 'null' : lit(where.staff)},
-       ${where.audience === null || where.audience === undefined ? 'null' : lit(where.audience)},
-       ${where.fingerprint === null || where.fingerprint === undefined ? 'null' : lit(where.fingerprint)},
-       ${uuidOrNull(where.job)}) as d`,
-      )
-    ).rows as Record<string, unknown>[]
-  } catch (error) {
-    if (
-      !/42883|function app\.authorize_effect\(.*does not exist/.test(
-        String((error as Error).message),
-      )
-    )
-      throw error
-    rows = (
-      await db.execute(
-        `select app.may_act(${uuidOrNull(where.projectId)}, ${lit(where.tool)}, ${uuidOrNull(where.jobAskedFor)}) as d`,
-      )
-    ).rows as Record<string, unknown>[]
-  }
+  const { rows } = await db.execute(
+    `select app.authorize_effect(
+       p_project => ${uuidOrNull(where.projectId)},
+       p_tool => ${lit(where.tool)},
+       p_asked_job => ${uuidOrNull(where.jobAskedFor)},
+       p_staff => ${where.staff === null || where.staff === undefined ? 'null' : lit(where.staff)},
+       p_audience => ${where.audience === null || where.audience === undefined ? 'null' : lit(where.audience)},
+       p_fingerprint => ${where.fingerprint === null || where.fingerprint === undefined ? 'null' : lit(where.fingerprint)},
+       p_job => ${uuidOrNull(where.job)}) as d`,
+  )
   const raw = rows[0]?.d as RawDecision | string | undefined
   const parsed: RawDecision =
     typeof raw === 'string' ? (JSON.parse(raw) as RawDecision) : (raw ?? {})
@@ -328,6 +319,7 @@ export const governOutward = async (
     projectId: what.projectId,
     tool: what.tool,
     jobAskedFor: what.jobId,
+    job: what.jobId,
   })
 
   if (what.empty || decision.verdict === 'proceed') {

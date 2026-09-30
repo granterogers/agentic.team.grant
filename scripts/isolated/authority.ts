@@ -484,6 +484,55 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
 }
 
+// ---- 8b. what is approved includes who acts and who it reaches --------------------------------
+{
+  const p = await project('binds', 'act')
+  const [a, b] = (await db.execute(`select slug from public.staff order by slug limit 2`)).rows.map(
+    (r) => String((r as { slug: string }).slug),
+  )
+  for (const who of [a, b]) {
+    await db.execute(
+      `insert into public.staff_tools (staff_slug, tool) values (${lit(String(who))}, 'task.create') on conflict do nothing`,
+    )
+  }
+  const j = await job(p, 'telegram:grant-binds', 'office.pursue')
+  const plan = (specialist: string | null, audience: 'office' | 'outside') => ({
+    goal: 'binds proof',
+    steps: [
+      { id: 'k1', capability: 'task.create', why: `BINDS ${run}`, needs: [], specialist, audience },
+    ],
+    unreachable: [],
+    refused: [],
+    how: 'fallback',
+  })
+  const runStep = async (specialist: string | null, audience: 'office' | 'outside') => {
+    const [st] = compile(plan(specialist, audience) as never, db as never, j, p, 'binds proof')
+    return st?.run({})
+  }
+  const first = await runStep(a ?? null, 'outside')
+  check(
+    'an outside step asks (control)',
+    first?.pause?.reason === 'awaiting_approval',
+    String(first?.pause?.reason),
+  )
+  const qs = await one(
+    `select blocker_id::text as id from public.blockers where job_id = ${lit(j)}::uuid order by created_at desc limit 1`,
+  )
+  await answer(String(qs.id), 'Yes, do it')
+  const same = await runStep(a ?? null, 'outside')
+  check(
+    'the same step after his yes performs (control)',
+    same?.outcome !== undefined && same.pause === undefined,
+    JSON.stringify(same?.pause ?? same?.outcome).slice(0, 60),
+  )
+  const otherWho = await runStep(b ?? null, 'outside')
+  check(
+    'the same step by a DIFFERENT specialist is a different action: it asks again, it does not borrow the yes',
+    otherWho?.pause?.reason === 'awaiting_approval',
+    JSON.stringify(otherWho?.pause ?? otherWho?.outcome).slice(0, 60),
+  )
+}
+
 // ---- 9. a question already open when 0611 lands still finds its answer -------
 {
   const p = await project('backfill')
@@ -621,6 +670,180 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
 }
 
+// ---- 12. what the second review found, each with the state it would have corrupted ---------
+{
+  const p = await project('second-review', 'suggest')
+  // (a) a recorded No on THIS step beats a later change of dial, a matrix cell, or a standing row
+  const j = await job(p, 'telegram:grant-rv2')
+  const fp = await fingerprint({ rv2: 'internal no', run })
+  const b = await ask(p, j, fp)
+  await answer(b, 'No, leave it')
+  const internal = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp,
+    job: j,
+  })
+  check(
+    'a No recorded for this step beats 0612: an internal write that now proceeds is still refused',
+    internal.verdict === 'refuse' && internal.declined === true,
+    internal.verdict,
+  )
+  await db.execute(
+    `select app.grant_standing('notion.write', ${lit(p)}::uuid, 'review proof', 'grant', null)`,
+  )
+  const withStanding = await mayAct(db as never, {
+    projectId: p,
+    tool: 'notion.write',
+    fingerprint: fp,
+    job: j,
+  })
+  check(
+    "and a standing row granted later does not turn this job's recorded No into a proceed",
+    withStanding.verdict === 'refuse',
+    withStanding.verdict,
+  )
+  const elsewhere = await mayAct(db as never, {
+    projectId: p,
+    tool: 'notion.write',
+    fingerprint: fp,
+    job: await job(p, 'telegram:grant-rv2b'),
+  })
+  check(
+    'control: another job, same action, under the standing row, proceeds (an explicit later yes is how a No is reversed)',
+    elsewhere.verdict === 'proceed',
+    elsewhere.verdict,
+  )
+
+  // (b) a real No and a harness No do not bind each other
+  const pH = await project('two-sided', 'suggest')
+  const fpH = await fingerprint({ rv2: 'two-sided', run })
+  const hj = await job(pH, 'teamhq:verify-two-sided')
+  const hb = await ask(pH, hj, fpH)
+  await answer(hb, 'No, leave it')
+  const realAsks = await mayAct(db as never, {
+    projectId: pH,
+    tool: 'notion.write',
+    fingerprint: fpH,
+    job: await job(pH, 'telegram:grant-real'),
+  })
+  check(
+    "a harness job's No does not silence a real run of the same action",
+    realAsks.verdict === 'ask',
+    realAsks.verdict,
+  )
+  const harnessAsks = await mayAct(db as never, {
+    projectId: pH,
+    tool: 'notion.write',
+    fingerprint: fpH,
+    job: await job(pH, 'teamhq:verify-two-sided-b'),
+  })
+  check(
+    'control: another harness run hears it',
+    harnessAsks.verdict === 'refuse' && harnessAsks.remembered === true,
+    harnessAsks.verdict,
+  )
+  const pR = await project('two-sided-real', 'suggest')
+  const rj = await job(pR, 'telegram:grant-real-no')
+  const rb = await ask(pR, rj, await fingerprint({ rv2: 'real no', run }))
+  await answer(rb, 'No, leave it')
+  const harnessUnbound = await mayAct(db as never, {
+    projectId: pR,
+    tool: 'notion.write',
+    fingerprint: await fingerprint({ rv2: 'real no', run }),
+    job: await job(pR, 'teamhq:verify-unbound'),
+  })
+  check(
+    'and a real No does not bind a harness run',
+    harnessUnbound.verdict === 'ask',
+    harnessUnbound.verdict,
+  )
+
+  // (c) two doors answer one question: the second is told it was already answered, and cannot overwrite
+  const j3 = await job(p, 'telegram:grant-rv2c')
+  const b3 = await ask(p, j3, await fingerprint({ rv2: 'race', run }))
+  await answer(b3, 'Yes, do it')
+  const late = json(
+    (
+      await one(
+        `select app.answer_generation_approval(${lit(b3)}::uuid, false, 'grant')::text as r`,
+      )
+    ).r,
+  )
+  const kept = await one(
+    `select answered_option as o from public.blockers where blocker_id = ${lit(b3)}::uuid`,
+  )
+  check(
+    'the button door cannot overwrite an answer already given',
+    late.already === true && kept.o === 'Yes, do it',
+    JSON.stringify(late).slice(0, 70),
+  )
+  const lockSrc = String(
+    (
+      await one(
+        `select pg_get_functiondef('app.answer_generation_approval(uuid, boolean, text)'::regprocedure) as d`,
+      )
+    ).d,
+  )
+  check(
+    'and it reads the question under a lock (the race is closed, not just the sequence)',
+    /for update/i.test(lockSrc),
+    'FOR UPDATE present',
+  )
+
+  // (d) a to-do that was blocked keeps its reason when a refused tick puts it back
+  const j4 = await job(p, 'telegram:grant-rv2d')
+  const b4 = String(
+    (
+      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (${lit(p)}::uuid, ${lit(j4)}::uuid, 'Blocked tick proof', 'review proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+    ).id,
+  )
+  const t4 = String(
+    (
+      await one(
+        `select task_id::text as id from public.tasks where satisfies_blocker = ${lit(b4)}::uuid`,
+      )
+    ).id,
+  )
+  await db.execute(`select app.hq_task_state(${lit(t4)}, 'blocked', 'waiting on the venue')`)
+  const refused = json(
+    (await one(`select app.hq_task_state(${lit(t4)}, 'done', null, null)::text as r`)).r,
+  )
+  const back = await one(
+    `select state::text as s, blocked_on as w from public.tasks where task_id = ${lit(t4)}::uuid`,
+  )
+  check(
+    'a refused tick of a BLOCKED to-do returns the clean refusal and keeps its reason',
+    typeof refused.error === 'string' &&
+      /not taken/.test(String(refused.error)) &&
+      back.s === 'blocked' &&
+      back.w === 'waiting on the venue',
+    `${String(refused.error).slice(0, 40)} / ${String(back.s)} / ${String(back.w)}`,
+  )
+
+  // (e) the identity-bearing wrappers are not open to the anonymous and authenticated roles
+  for (const fn of [
+    'public.hq_answer_blocker(uuid, text, text)',
+    'public.hq_approve_tool(uuid, jsonb, text)',
+    'public.hq_decline_tool(uuid, text, text)',
+    'public.hq_grant_standing(text, text, uuid, timestamptz, text)',
+    'public.hq_revoke_standing(uuid, text, text)',
+    'public.hq_withdraw_refusal(uuid, text)',
+    'public.hq_task_state(text, text, text, text)',
+    'public.sender_admitted(text, text, text)',
+  ]) {
+    const r = await one(
+      `select has_function_privilege('anon', '${fn}', 'execute') as a, has_function_privilege('authenticated', '${fn}', 'execute') as u, has_function_privilege('service_role', '${fn}', 'execute') as s`,
+    )
+    check(
+      `${fn}: only the gateway role may execute it`,
+      r.a === false && r.u === false && r.s === true,
+      JSON.stringify(r),
+    )
+  }
+}
+
 // ---- 10. review findings, each with the state it would have corrupted --------
 {
   const p = await project('review')
@@ -701,28 +924,31 @@ const answer = async (b: string, a: string, by = 'grant') =>
     filled,
   )
 
-  // (d) the boundary and the question writer still work on a database without 0611 (a worker that ships first)
+  // (d) a worker that ships BEFORE the migration fails loudly; it does not silently fall back
   await db.execute(
     `alter table public.blockers drop column action_fingerprint, drop column decline_option`,
   )
   await db.execute(`drop function app.authorize_effect(uuid, text, uuid, text, text, text, uuid)`)
-  const old = await mayAct(db as never, {
+  const boundary = await mayAct(db as never, {
     projectId: p,
     tool: 'notion.write',
     fingerprint: fp,
     job: j2,
-  })
-  check(
-    'without app.authorize_effect the policy it wraps still answers (a worker that ships before the migration)',
-    old.verdict === 'ask' || old.verdict === 'proceed' || old.verdict === 'refuse',
-    old.verdict,
+  }).then(
+    (d) => `answered ${d.verdict}`,
+    (e: Error) => `threw: ${e.message.slice(0, 40)}`,
   )
-  const raised = await raiseBlocker(
+  check(
+    'without app.authorize_effect the boundary throws (no quiet fall back to a policy that cannot read an answer)',
+    boundary.startsWith('threw'),
+    boundary,
+  )
+  const writer = await raiseBlocker(
     db as never,
     {
       jobId: j2,
       projectId: p,
-      requestedAction: 'Fallback proof',
+      requestedAction: 'Loud proof',
       whyNeeded: 'authority proof',
       consequencesOfDelay: 'Nothing happens until somebody answers this question.',
       approvalOptions: OPTS,
@@ -731,11 +957,14 @@ const answer = async (b: string, a: string, by = 'grant') =>
       actionFingerprint: fp,
       declineOption: 'No, leave it',
     } as never,
+  ).then(
+    () => 'wrote it',
+    (e: Error) => `threw: ${e.message.slice(0, 40)}`,
   )
   check(
-    'and a question is still written without the new columns',
-    typeof raised === 'string' && raised.length > 10,
-    String(raised).slice(0, 8),
+    'and the question writer throws rather than writing a question nothing can read',
+    writer.startsWith('threw'),
+    writer,
   )
 }
 

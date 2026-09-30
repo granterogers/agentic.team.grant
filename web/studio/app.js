@@ -6019,13 +6019,19 @@ function governanceTab() {
 
     No backticks in this comment: template literal.
   */
+  const shortDay = (iso) => {
+    const at = Date.parse(iso)
+    return Number.isNaN(at)
+      ? ''
+      : new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  }
   const refusal = (r) => `<article class="govcase g-declined" data-lift data-tilt="1.4" data-saidwrap>
     <div class="govhead">
       <b>${esc(r.what)}</b>
       <span class="govstate">Said no</span>
     </div>
-    <p class="govnote">You said no${r.project ? ` in ${esc(r.project)}` : ''} on ${when.stamp(r.declined_at)}.
-      It will not ask again until ${when.stamp(r.until)}.</p>
+    <p class="govnote">You said no${r.project ? ` in ${esc(r.project)}` : ''} on ${esc(shortDay(r.declined_at))}.
+      It will not ask again until ${esc(shortDay(r.until))}.</p>
     <div class="govfoot">
       <div class="govfrom"><span class="t-meta">Reopening does not approve it. It lets the team ask again.</span></div>
       <span class="t-meta" data-said></span>

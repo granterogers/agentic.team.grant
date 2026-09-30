@@ -686,6 +686,17 @@ export const compile = (
           project: projectId,
           why: step.why,
           needs: [...step.needs],
+          /*
+            Who acts and who it reaches are inputs to the decision, so they are
+            part of WHAT is approved: a yes given to a step for the office must
+            not carry to the same step relabelled for somebody outside. And a
+            step with no reason (validate allows one) would otherwise have the
+            same fingerprint in every request, so its No would follow it into
+            unrelated work; the request then says which work this is.
+          */
+          audience: step.audience,
+          specialist: step.specialist,
+          ...(step.why.trim() === '' ? { request: request.slice(0, 400) } : {}),
         }
         const decision = await mayAct(db, {
           projectId,

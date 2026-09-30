@@ -248,10 +248,11 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           tell me when things land here, do not ask again", which nothing could
           honour because there was nowhere to write the answer.
 
-          `drive.ingest` is a level-1 tool: the document lands as a project
-          source with no text read yet, nothing is opened, nothing is sent. So
-          `act_with_review` and `act` take it in and say so; `suggest` asks, as
-          today; `observe` refuses and records why.
+          `drive.ingest` is a level-2 tool since 0612: it brings material in from
+          somebody else's system, which is not internal office work merely
+          because it lands in our tables. Only `act` takes it in unasked;
+          `act_with_review` and `suggest` ask; `observe` refuses and records
+          why.
         */
         /*
           No `jobAskedFor`, deliberately.

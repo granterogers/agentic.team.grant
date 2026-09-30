@@ -33,9 +33,20 @@ describe('an answer already given decides the step (R45)', () => {
     )
   })
   it('the approval binds what the step will DO, so a changed step is asked afresh', () => {
-    expect(perform).toMatch(
-      /project: projectId,\s*why: step\.why,\s*needs: \[\.\.\.step\.needs\],\s*\}\s*const decision = await mayAct/,
-    )
+    // The property, not the expression: what is approved names the step, what it is for, what
+    // it depends on, who acts and who it reaches - and the decision is asked of exactly that.
+    const binds =
+      /const binds = \{([\s\S]*?)\n\s*\}\s*const decision = await mayAct/.exec(perform)?.[1] ?? ''
+    for (const part of [
+      'capability: step.capability',
+      'project: projectId',
+      'why: step.why',
+      'needs: [...step.needs]',
+      'audience: step.audience',
+      'specialist: step.specialist',
+    ]) {
+      expect(binds).toContain(part)
+    }
   })
   it("0592's idempotency never returns a question's own to-do as the step's work", () => {
     const sql = readFileSync('migrations/0592_a_retry_does_not_write_the_task_again.sql', 'utf8')

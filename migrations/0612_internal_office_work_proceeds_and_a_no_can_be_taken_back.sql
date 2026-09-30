@@ -48,7 +48,7 @@ update public.tool_permissions
    set level = 2
  where tool = 'drive.ingest' and level = 1;
 
-create or replace function app.active_refusals(p_limit integer default 20)
+create or replace function app.active_refusals(p_limit integer default 50)
 returns jsonb
 language sql
 stable

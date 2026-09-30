@@ -147,7 +147,8 @@ const projectId = String(project.id)
   THE DIAL IS PART OF THE PRODUCT NOW, SO THE SUITE HAS TO SET IT.
 
   `app.may_act` is consulted at every step, and the GLOBAL default is
-  `suggest`, under which a level-1 write asks rather than proceeds. That is
+  `suggest`. Since 0612 an internal level-1 write PROCEEDS there, so the asking
+  path below uses a step whose audience is outside the office, which still asks. That is
   Grant's setting doing exactly what #15 built it for — so a suite proving what
   a plan DOES has to put its own project on a level where doing is permitted,
   and a separate control below proves `observe` refuses.
@@ -1028,7 +1029,9 @@ let asked: Awaited<ReturnType<typeof runSteps>> | null = null
 const ASKED = `pemberquil${run}`
 const askPlan: GoalPlan = {
   ...plan,
-  steps: plan.steps.map((st, i) => (i === 1 ? { ...st, why: `Review the ${ASKED} clause` } : st)),
+  steps: plan.steps.map((st, i) =>
+    i === 1 ? { ...st, why: `Review the ${ASKED} clause`, audience: 'outside' } : st,
+  ),
 }
 try {
   await db.execute(`
@@ -1102,7 +1105,9 @@ check(
 const SPOKEN = `haldrevin${run}`
 const spokenPlan: GoalPlan = {
   ...plan,
-  steps: plan.steps.map((st, i) => (i === 1 ? { ...st, why: `Review the ${SPOKEN} clause` } : st)),
+  steps: plan.steps.map((st, i) =>
+    i === 1 ? { ...st, why: `Review the ${SPOKEN} clause`, audience: 'outside' } : st,
+  ),
 }
 const spokenJob = await one(`
   insert into public.jobs
