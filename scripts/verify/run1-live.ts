@@ -17,6 +17,7 @@
  * words with nothing waiting stay a command.
  */
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { harnessSession } from './lib/harness-session.ts'
 import { officeKey } from './lib/sign-in.ts'
 import { testOrigins } from './lib/test-origin.ts'
 
@@ -290,15 +291,28 @@ try {
       `http ${String(anon.status)}`,
     )
     check('and the question stays open', (await blockerRow(q.blocker)).s === 'open', 'open')
-    const real = await call(bearer, {
+    // The office key is a machine (#385): it cannot answer, whatever name it sends.
+    const viaKey = await call(bearer, {
+      p_blocker_id: q.blocker,
+      p_answer: 'Yes, do it',
+      p_by: 'grant',
+    })
+    check(
+      '0608 the office key cannot answer, even naming itself grant',
+      viaKey.status === 403 && (await blockerRow(q.blocker)).s === 'open',
+      `http ${String(viaKey.status)}`,
+    )
+    const real = await call((await harnessSession(db, ref)).access, {
       p_blocker_id: q.blocker,
       p_answer: 'Yes, do it',
       p_by: 'attacker',
     })
     const b = await blockerRow(q.blocker)
     check(
-      '0608 an authenticated answer is recorded as the verified principal, whatever name the client sent',
-      real.status === 200 && /answered by grant/.test(String(b.r)) && !/attacker/.test(String(b.r)),
+      '0608 a signed-in answer is recorded as the verified principal (the test member, on a declared test), whatever name the client sent',
+      real.status === 200 &&
+        /answered by verify-operator/.test(String(b.r)) &&
+        !/attacker/.test(String(b.r)),
       `http ${String(real.status)}; ${String(b.r)}`,
     )
   }

@@ -235,6 +235,7 @@
     "deploy:hq-page": "tsx scripts/deploy/hq-page-delta.ts",
     "verify:run1-live": "tsx scripts/verify/run1-live.ts",
     "verify:run2-live": "tsx scripts/verify/run2-live.ts",
+    "verify:run3-live": "tsx scripts/verify/run3-live.ts",
     "coverage": "tsx scripts/coverage.ts",
     "verify:duties": "tsx scripts/verify/duties.ts",
     "verify:notebook": "tsx scripts/verify/notebook.ts",

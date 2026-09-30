@@ -14,6 +14,7 @@
 import { governOutward } from '../../src/agents/approval.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { fingerprint } from '../../src/jobs/checkpoint.ts'
+import { harnessSession } from './lib/harness-session.ts'
 import { officeKey } from './lib/sign-in.ts'
 import { testOrigins } from './lib/test-origin.ts'
 
@@ -30,6 +31,23 @@ const check = (what: string, ok: boolean, detail: string) => {
 const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>
 const run = Date.now().toString(36)
 const bearer = await officeKey(db)
+/*
+  The office key is a machine and cannot answer (#385, 0614); the suite drives the gateway as the TEST member,
+  a real signed-in session the database lets decide only test traffic. Every question this suite asks is on a
+  fixture job, so that is enough - and what it cannot do (take a No back, which is a PERSON's) it does through
+  the same function with the gateway's claims, and says so.
+*/
+const testBearer = (await harnessSession(db, ref)).access
+/** What the gateway does for a signed-in PERSON: the same function, called with the service claims. */
+const withdrawAsPerson = async (id: string, by: string) =>
+  json(
+    (
+      await one(
+        `select app.withdraw_refusal(${lit(id)}::uuid, ${lit(by)})::text as r
+           from (select set_config('request.jwt.claims', '{"role":"service_role"}', true)) c`,
+      )
+    ).r,
+  )
 const origins = await testOrigins(db, 'verify:run2-live')
 const GRANT = String(
   (
@@ -245,7 +263,7 @@ const question = async (fp: string | null, kind: 'plan' | 'duty' = 'plan') => {
   return { id: String(b.id), job: String(b.job) }
 }
 const answer = (id: string, option: string) =>
-  gateway(bearer, 'answer_blocker', { p_blocker_id: id, p_answer: option, p_by: 'mallory' })
+  gateway(testBearer, 'answer_blocker', { p_blocker_id: id, p_answer: option, p_by: 'mallory' })
 const fpA = await fingerprint({ live: 'A', run })
 const fpB = await fingerprint({ live: 'B', run })
 {
@@ -264,8 +282,8 @@ const fpB = await fingerprint({ live: 'B', run })
     `select answered_option as o, answered_by as by, state::text as s from public.blockers where blocker_id = ${lit(q.id)}::uuid`,
   )
   check(
-    'the answer is a column, attributed to the verified principal whatever p_by the page sent',
-    row.o === 'Yes, do it' && row.by === 'grant' && row.s === 'resolved',
+    'the answer is a column, attributed to the verified principal (the test member) whatever p_by the page sent',
+    row.o === 'Yes, do it' && row.by === 'verify-operator' && row.s === 'resolved',
     JSON.stringify(row),
   )
   const same = await decide({ tool: 'notion.write', fp: fpA, job: q.job, project })
@@ -429,14 +447,36 @@ await answer(qn.id, 'No, leave it')
   const open = await one(
     `select count(*)::int as n from public.blockers where state = 'open' and requested_action like ${lit(`Run 2 live proof%${run}`)}`,
   )
-  const w = await gateway(bearer, 'withdraw_refusal', { p_blocker_id: qn.id, p_by: 'mallory' })
+  const viaKey = await gateway(bearer, 'withdraw_refusal', { p_blocker_id: qn.id, p_by: 'grant' })
+  check(
+    'the office KEY cannot take a No back, even naming itself grant (#385)',
+    viaKey.status === 403 && viaKey.body.error === 'person_required',
+    `http ${String(viaKey.status)}`,
+  )
+  const viaTest = await gateway(testBearer, 'withdraw_refusal', { p_blocker_id: qn.id })
+  check(
+    "a TEST member cannot take a No back either: it is a person's door",
+    JSON.stringify(viaTest.body).includes('Only a person'),
+    JSON.stringify(viaTest.body).slice(0, 90),
+  )
+  const stillNo = await decide({
+    tool: 'notion.write',
+    fp: fpN,
+    job: await question(null).then((x) => x.job),
+    project,
+  })
+  check('and the No still stands after both', stillNo.verdict === 'refuse', stillNo.verdict)
+  // The person's own session is proved through the REAL handler in the isolated suites (principals.ts,
+  // refusal-reversal.ts); production has one person and the suite must not borrow him. What is proved
+  // live is the function the gateway calls for him, called with the gateway's claims.
+  const w = await withdrawAsPerson(qn.id, 'grant')
   const who = await one(
     `select refusal_withdrawn_by as by from public.blockers where blocker_id = ${lit(qn.id)}::uuid`,
   )
   check(
-    'authenticated Grant reopens it: recorded as the verified principal',
-    w.status === 200 && w.result.ok === true && who.by === 'grant',
-    `http ${String(w.status)} by ${String(who.by)}`,
+    'a person reopens it: recorded as the principal the gateway verified',
+    w.ok === true && who.by === 'grant',
+    `${JSON.stringify(w).slice(0, 60)} by ${String(who.by)}`,
   )
   const after = await decide({
     tool: 'notion.write',
@@ -458,7 +498,7 @@ await answer(qn.id, 'No, leave it')
   )
   check('and nothing ran', executed === 0, `${String(executed)} children`)
   const dutyNo = (globalThis as { __dutyNo?: string }).__dutyNo
-  if (dutyNo) await gateway(bearer, 'withdraw_refusal', { p_blocker_id: dutyNo })
+  if (dutyNo) await withdrawAsPerson(dutyNo, 'grant')
   void open
   const gov = await gateway(bearer, 'governance', {}).catch(() => null)
   void gov
@@ -533,7 +573,7 @@ await answer(qn.id, 'No, leave it')
       typeof unknown.error === 'string',
       String(unknown.error).slice(0, 40),
     )
-    const ticked = await gateway(bearer, 'task_state', {
+    const ticked = await gateway(testBearer, 'task_state', {
       p_task_id: x.t,
       p_state: 'done',
       p_by: 'mallory',
@@ -542,10 +582,10 @@ await answer(qn.id, 'No, leave it')
       `select b.state::text as bs, b.answered_by as by, b.answered_option as o from public.blockers b where b.blocker_id = ${lit(x.b)}::uuid`,
     )
     check(
-      'a tick through the gateway answers through hq_answer_blocker as the verified principal',
+      'a tick through the gateway answers through hq_answer_blocker as the verified principal (the test member, on a fixture)',
       ticked.status === 200 &&
         s2.bs === 'resolved' &&
-        s2.by === 'grant' &&
+        s2.by === 'verify-operator' &&
         s2.o === 'Yes, do it' &&
         ticked.result.undo == null,
       JSON.stringify({ http: ticked.status, s2 }),

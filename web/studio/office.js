@@ -182,6 +182,16 @@ export async function act(action, args = {}) {
     token.clear()
     throw new Error('You are not signed in any more. Sign in again to change anything.')
   }
+  /*
+    The office key is a machine and cannot decide, speak or connect as a person (#385). A browser that
+    still holds only the old key gets this, and the credential is NOT cleared: it is genuine, it still
+    reads, and the way forward is to sign in, not to be signed out.
+  */
+  if (r.status === 403 && body.error === 'person_required') {
+    throw new Error(
+      body.message ?? 'This needs you signed in. The office key cannot decide or speak as a person.',
+    )
+  }
   if (!r.ok) throw new Error(body.error ?? `The server returned ${r.status}`)
   if (body.result?.error) throw new Error(body.result.error)
   // Only on the way out, and only after both refusal checks: an action that was

@@ -34,13 +34,19 @@ export type SignedIn = {
   readonly landedOn: string
 }
 
-/** The address the office answers to. Read from the office, never invented. */
+/**
+ * The TEST member the office lists, read from the office, never invented.
+ *
+ * Not a person: the office key mints a session for a test member only (#385, 0614), and what the
+ * test member's session may decide is only test traffic. A suite that needs a signed-in writer
+ * signs in as this member; it can never sign in as Grant, which is the point.
+ */
 export async function anOfficeMember(db: SqlExecutor): Promise<string> {
   const { rows } = await db.execute(
-    `select email from public.office_members order by added_at, email limit 1`,
+    `select email from public.office_members where kind = 'harness' order by added_at, email limit 1`,
   )
   const email = String((rows[0] as { email?: string } | undefined)?.email ?? '')
-  if (email === '') throw new Error('the office has no members, so nobody can sign in')
+  if (email === '') throw new Error('the office lists no test member, so a suite cannot sign in')
   return email
 }
 
