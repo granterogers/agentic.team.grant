@@ -9,6 +9,18 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
+> ## 2026-09-30 — Architecture Run 4 (durable origin, lifecycle) is deployed and verified on `main`
+>
+> Migrations 0619-0622 are applied; `worker` v868, `hq-api` v803 and `telegram-webhook` are deployed. A job now
+> records where it came from (root, why it exists, trust class, command, channel) once, at creation; a worker
+> finishes only a job it still holds (fence + heartbeat); a retried parent finds its child; an answer grants a
+> further attempt; a retry can commit; a typed yes answers a question he was shown and a forwarded message never
+> answers. Run 3's debts #389/#391/#393 are untouched by design; #392 and #394 are partly closed - the residual
+> is exact in `docs/ARCHITECTURE-RUN-4.md` (Remaining debt). Decision: ADR-0055. Live: `npm run verify:run4-live`
+> (24/24), and Run 1-3 live suites green. **Traps learned:** a suite that fabricates a `sent` delivery row must
+> delete it in teardown or `check:leaks` reads it as harness traffic reaching a destination; an attempt number is
+> never handed out twice (the fence and child slots are keyed on it).
+>
 > ## 2026-09-30 — Architecture Run 1 is deployed and verified on `main`
 >
 > Migrations 0607–0610 are applied; `worker`, `hq-api` and `telegram-webhook`
