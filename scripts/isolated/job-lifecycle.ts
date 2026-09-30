@@ -342,6 +342,207 @@ const fp = 'a'.repeat(64)
     .catch(() => undefined)
 }
 
+// ---- two workers racing for one job: one wins -----------------------------------------------------------------------------
+{
+  const id = await newJob()
+  const other = await isolated(process.argv[2] ?? 'life620')
+  const [a, b] = await Promise.all([
+    dequeue(db, `race-a-${run}`, true, true, [KIND], scope),
+    dequeue(other, `race-b-${run}`, true, true, [KIND], scope),
+  ])
+  await other.end()
+  const j = await job(id)
+  check(
+    'two workers dequeuing at once: exactly one gets the job, and it is leased to that one',
+    [a, b].filter((x) => x !== null).length === 1 &&
+      Number(j.attempt) === 1 &&
+      String(j.leased_by).startsWith('race-'),
+    `${String(a?.jobId === id)}/${String(b?.jobId === id)} leased_by ${String(j.leased_by)}`,
+  )
+  // a duplicate queue delivery of the same command makes one job
+  await db.execute(
+    `update public.jobs set state = 'failed', state_reason = 'proof done', leased_by = null, leased_until = null where job_id = ${lit(id)}::uuid`,
+  )
+}
+
+// ---- a job paused by its own handler is still held by that worker; a later claimant is not confused with it ----------------
+{
+  const id = await newJob()
+  const w = await dequeue(db, `own-${run}`, true, true, [KIND], scope)
+  await blockerFor(id)
+  await db.execute(
+    `select app.pause_job(${lit(id)}::uuid, 'awaiting_approval', 'asks a question', 'when he answers', false, null, null, ${lit(fp)})`,
+  )
+  const mine = await one(
+    `select app.job_held(${lit(id)}::uuid, ${lit(`own-${run}`)}, ${String(w?.attempt)}) as h`,
+  )
+  const elder = await one(
+    `select app.job_held(${lit(id)}::uuid, ${lit(`own-${run}`)}, ${String(Number(w?.attempt) - 1)}) as h`,
+  )
+  check(
+    'the worker that parked its own job still holds that attempt (it has an output to write); an older attempt does not',
+    mine.h === true && elder.h === false,
+    `${String(mine.h)}/${String(elder.h)}`,
+  )
+  await db.execute(
+    `update public.jobs set state = 'cancelled', state_reason = 'proof done' where job_id = ${lit(id)}::uuid`,
+  )
+}
+
+// ---- a job carrying no claim (an older worker, a caller that did not dequeue) is written exactly as before ----------------
+{
+  const id = await newJob()
+  const got = await dequeue(db, `plain-${run}`, true, true, [KIND], scope)
+  const unclaimed = { ...(got as object), leasedBy: undefined } as never
+  const fast: Handler = {
+    reach: 'internal',
+    kind: KIND,
+    handle: async () => out('an unclaimed job still completes'),
+  }
+  const r = await runJob(db, unclaimed, [fast], review)
+  check(
+    'a job object with no claim on it (version skew: an older dequeue) completes as it always did',
+    r.finalState === 'complete' && (await outputs(id)) === 1,
+    `${r.finalState}`,
+  )
+}
+
+// ---- a stale worker whose REVIEW returns after takeover is refused at its next write (the fence in moveTo) --------------------
+{
+  const id = await newJob()
+  const w1 = await dequeue(db, `rv1-${run}`, true, true, [KIND], scope)
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((res) => {
+    release = res
+  })
+  const quick: Handler = {
+    reach: 'internal',
+    kind: KIND,
+    handle: async () => ({
+      body: 'reviewed slowly',
+      confidence: 'medium' as const,
+      evidence: 'inferred' as const,
+      sources: [],
+      contradictions: null,
+      path: 'inference' as const,
+      model: 'isolated-stub',
+    }),
+  }
+  const slowReview = async () => {
+    await gate
+    return { status: 'approved' as const, notes: 'late' }
+  }
+  const first = runJob(db, w1 as never, [quick], slowReview)
+  await new Promise((r) => setTimeout(r, 400))
+  const at = await job(id)
+  await db.execute(
+    `update public.jobs set leased_until = now() - interval '1 minute' where job_id = ${lit(id)}::uuid`,
+  )
+  await db.execute(`select * from app.recover_stalled_jobs()`)
+  await db.execute(`select app.requeue_retrying()`)
+  const w2 = await dequeue(db, `rv2-${run}`, true, true, [KIND], scope)
+  await runJob(db, w2 as never, [quick], review)
+  release()
+  let outcome = ''
+  try {
+    outcome = (await first).finalState
+  } catch (e) {
+    outcome = `threw: ${String((e as Error).message).slice(0, 60)}`
+  }
+  const j = await job(id)
+  check(
+    'a stale worker whose slow review returns after takeover abandons (does not throw, does not touch the job)',
+    String(at.s) === 'quality_review' &&
+      outcome === 'abandoned' &&
+      j.s === 'complete' &&
+      String(j.leased_by).startsWith('rv2-'),
+    `held at ${String(at.s)}; stale outcome ${outcome}; job ${JSON.stringify(j)}`,
+  )
+}
+
+// ---- D7: a retry can commit what its predecessor left behind (0621) --------------------------------------------------
+{
+  const inferred: Handler = {
+    reach: 'internal',
+    kind: KIND,
+    handle: async () => ({
+      body: 'a reviewed answer',
+      confidence: 'medium' as const,
+      evidence: 'inferred' as const,
+      sources: [],
+      contradictions: null,
+      path: 'inference' as const,
+      model: 'isolated-stub',
+    }),
+  }
+  const verdicts = (...v: ('rejected' | 'approved')[]) => {
+    let i = 0
+    return async () => ({
+      status: v[Math.min(i++, v.length - 1)] as 'rejected' | 'approved',
+      notes: 'isolated verdict',
+    })
+  }
+  const attempt = async (id: string, worker: string, rev: ReturnType<typeof verdicts>) => {
+    await db.execute(`select app.requeue_retrying()`)
+    const got = await dequeue(db, worker, true, true, [KIND], scope)
+    if (got?.jobId !== id) throw new Error('did not get the job')
+    return runJob(db, got as never, [inferred], rev)
+  }
+  // rejected, then approved on the retry: it commits (it never could)
+  const id = await newJob()
+  const rev = verdicts('rejected', 'approved')
+  const first = await attempt(id, `rj1-${run}`, rev)
+  const second = await attempt(id, `rj2-${run}`, rev)
+  const statuses = String(
+    (
+      await one(
+        `select string_agg(reviewer_status::text, ',' order by created_at) as s from public.outputs where job_id = ${lit(id)}::uuid`,
+      )
+    ).s,
+  )
+  check(
+    'D7: rejected once, approved on the retry: the job completes (before 0621 it stranded in committing and failed)',
+    first.finalState === 'retrying' &&
+      second.finalState === 'complete' &&
+      statuses === 'rejected,approved',
+    `${first.finalState} -> ${second.finalState} / outputs ${statuses}`,
+  )
+  // the control: a retry that is rejected too does not commit, so the gate is loosened, not removed
+  const id2 = await newJob('2')
+  const rev2 = verdicts('rejected', 'rejected')
+  await attempt(id2, `rj3-${run}`, rev2)
+  const last = await attempt(id2, `rj4-${run}`, rev2)
+  const j2 = await job(id2)
+  check(
+    'D7 control: rejected on the retry as well, the job fails and nothing is committed',
+    last.finalState === 'failed' && j2.s === 'failed',
+    `${last.finalState} / ${String(j2.s)}`,
+  )
+  // a dead attempt's unreviewed output is superseded, not left to block the retry
+  const id3 = await newJob()
+  const w = await dequeue(db, `dead-${run}`, true, true, [KIND], scope)
+  await db.execute(`insert into public.outputs (job_id, body, confidence, evidence, sources, deterministic)
+    values (${lit(id3)}::uuid, 'written by an attempt that died before review', 'medium', 'inferred', '[]'::jsonb, false)`)
+  await db.execute(
+    `update public.jobs set leased_until = now() - interval '1 minute' where job_id = ${lit(id3)}::uuid`,
+  )
+  await db.execute(`select * from app.recover_stalled_jobs()`)
+  void w
+  const third = await attempt(id3, `live-${run}`, verdicts('approved'))
+  const st = String(
+    (
+      await one(
+        `select string_agg(reviewer_status::text, ',' order by created_at) as s from public.outputs where job_id = ${lit(id3)}::uuid`,
+      )
+    ).s,
+  )
+  check(
+    'D7: an output the dead attempt never reviewed is marked superseded, and the retry commits',
+    third.finalState === 'complete' && st === 'superseded,approved',
+    `${third.finalState} / ${st}`,
+  )
+}
+
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

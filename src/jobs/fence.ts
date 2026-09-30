@@ -50,7 +50,7 @@ const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
 export const fenceClause = (job: Claimed | undefined): string =>
   job?.leasedBy === undefined
     ? ''
-    : ` and leased_by = ${lit(job.leasedBy)} and attempt = ${String(job.attempt)}`
+    : ` and attempt = ${String(job.attempt)} and (leased_by = ${lit(job.leasedBy)} or (leased_by is null and state = 'paused'))`
 
 /** Throws unless this worker still holds the job. A job this process took no claim for is not asked about. */
 export const assertHeld = async (db: SqlExecutor, job: Claimed): Promise<void> => {

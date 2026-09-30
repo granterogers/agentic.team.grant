@@ -56,12 +56,19 @@ stable
 security definer
 set search_path = ''
 as $fn$
+  /*
+    Held: this attempt, leased to this worker - OR parked by its own handler. A handler that asks a question
+    pauses its own job (which clears the lease) and the worker then still has an output to write and review;
+    that is the same attempt, and only its holder can be running it. The attempt number is what keeps a stale
+    worker out: whoever claims the job next has a higher one.
+  */
   select exists (
     select 1 from public.jobs j
      where j.job_id = p_job
-       and j.leased_by = p_worker
        and j.attempt = p_attempt
-       and j.state in ('running', 'output_created', 'quality_review', 'committing', 'committed', 'notifying'))
+       and ((j.leased_by = p_worker
+             and j.state in ('running', 'output_created', 'quality_review', 'committing', 'committed', 'notifying'))
+            or (j.leased_by is null and j.state = 'paused')))
 $fn$;
 
 create or replace function app.renew_lease(p_job uuid, p_worker text, p_attempt integer)

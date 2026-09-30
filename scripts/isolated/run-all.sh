@@ -17,5 +17,8 @@ for t in destination-retirement:ret381 history-shapes:hist381 test-origins:orig3
   f=${t%%:*}; db=${t##*:}; echo "== $f"; fresh $db cand
   npx tsx scripts/isolated/$f.ts $db > /tmp/iso-$f.txt 2>&1; rc=$?; grep -E "passed|^FAIL" /tmp/iso-$f.txt | tail -3; [ $rc -eq 0 ] || status=1
 done
+echo "== version skew: new worker on the old schema (before 0619 and 0620)"; $P -c "drop database if exists skew_old" >/dev/null 2>&1; $P -c "create database skew_old template post"
+for m in $(ls migrations/*.sql | awk -F/ '{print $2}' | awk '$0 >= "0613" && $0 < "0619"'); do $P -d skew_old -v ON_ERROR_STOP=1 -f migrations/$m >/dev/null || { echo "FAIL applying $m to skew_old"; exit 1; }; done
+npx tsx scripts/isolated/job-skew.ts skew_old > /tmp/iso-job-skew.txt 2>&1; rc=$?; grep -E "passed|^FAIL" /tmp/iso-job-skew.txt | tail -3; [ $rc -eq 0 ] || status=1
 echo "== 0596 overlapping answers"; bash scripts/isolated/approval-race.sh > /tmp/iso-race.txt 2>&1 && tail -1 /tmp/iso-race.txt || { cat /tmp/iso-race.txt; status=1; }
 exit $status

@@ -1473,6 +1473,26 @@ const runJobHeld = async (
   }
   const outputId = String((inserted.rows[0] as { id?: string } | undefined)?.id)
 
+  /*
+    AN EARLIER ATTEMPT'S UNREVIEWED OUTPUT IS SUPERSEDED BY THIS ONE (Run 4, D7).
+
+    An attempt that died after writing its output and before reviewing it left that row `pending`, and the commit
+    gate counts every pending output of the job - so the retry, having done everything right, could not commit and
+    the job stranded in `committing`, which can only go to `failed`. Found by the fence test, where a stale worker's
+    output and its successor's met. The dead attempt's row is marked `superseded` (0621), with the reason in words: neither pending nor
+    rejected, which block the commit, and not deterministic, which would be a claim nobody made.
+  */
+  await db
+    .execute(
+      `update public.outputs
+          set reviewer_status = 'superseded', reviewed_at = app.now_utc(),
+              review_notes = 'superseded: a later attempt of this job wrote its own output'
+        where job_id = ${lit(job.jobId)}::uuid
+          and output_id <> ${lit(outputId)}::uuid
+          and reviewer_status = 'pending' and not deterministic`,
+    )
+    .catch(() => undefined)
+
   // Before the notifier is anywhere near it. `combinedNotifier` reads
   // `jobs.announce` as its first act, so a handler's verdict has to be on the
   // row by then rather than passed alongside it.
