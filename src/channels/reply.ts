@@ -127,6 +127,7 @@ export function replyChannel(db: SqlExecutor): {
         purpose: 'result',
         correlationId: job.correlationId,
         jobId: job.jobId,
+        blockerId: context.blockerId,
         staffId: null,
         body: {
           text:

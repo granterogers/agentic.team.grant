@@ -47,6 +47,8 @@ export interface SlackDeliveryRequest {
   readonly staffId?: string | null
   readonly correlationId?: string | null
   readonly jobId?: string | null
+  /** The question this message asks (#396). */
+  readonly blockerId?: string | null
   readonly message: ResultMessage
 }
 
@@ -112,6 +114,7 @@ export class SlackOffice {
       staffId: request.staffId ?? null,
       correlationId: request.correlationId ?? null,
       jobId: request.jobId ?? null,
+      blockerId: request.blockerId ?? null,
       body,
     })
 

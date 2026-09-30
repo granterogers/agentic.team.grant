@@ -4814,11 +4814,34 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .execute(
                 // One assembly, asked here and by the test: the previous turn's tree, only a question he was
                 // SHOWN on a channel that delivers (0622, #394), or the one it said it was still waiting on.
-                `select id, what, options from app.open_questions_for_reply(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)`,
+                `select id, what, options, bindable from app.open_questions_for_reply(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)`,
               )
               .then(async (r) => {
-                const open = r.rows as { id: string; what: string; options: string[] }[]
-                if (open.length === 0) return null
+                const rows = r.rows as {
+                  id: string
+                  what: string
+                  options: string[]
+                  bindable?: boolean
+                }[]
+                if (rows.length === 0) return null
+                /*
+                  WHAT HE WAS SHOWN, BY NAME (#396, 0623). A question binds only when the office can say which
+                  message asked it: he replied to it, or it is the one open question shown in this chat and the last
+                  thing sent there. Otherwise the questions are NAMED and nothing is answered - the dashboard chat
+                  and voice have no message to point at, so their waiting questions are answered by the buttons, by
+                  id. An old schema returns no `bindable` column and behaves as before (undefined counts as bound).
+                */
+                const open = rows.filter((o) => o.bindable !== false)
+                if (open.length === 0) {
+                  return {
+                    did: false,
+                    text: `I have not answered anything — ${rows
+                      .map((o) => `"${o.what}"`)
+                      .join(
+                        ', ',
+                      )} ${rows.length > 1 ? 'are' : 'is'} waiting, and I cannot tell which of my messages you are answering. Reply to the message that asks it, or press its button.`,
+                  }
+                }
                 if (open.length > 1) {
                   return {
                     did: false,

@@ -86,6 +86,8 @@ export interface TelegramUpdate {
     forward_from?: unknown
     forward_from_chat?: unknown
     forward_sender_name?: string
+    /** The message this one REPLIES to (#396): what makes a typed answer exact rather than inferred. */
+    reply_to_message?: { message_id: number }
   }
   readonly callback_query?: {
     id: string
@@ -144,7 +146,7 @@ export interface CanonicalCommand {
    * Facts about how the message arrived that are not his words (#392). Present only when there is something to
    * say; today: `forwarded`, which says the text is somebody else's, carried by him.
    */
-  readonly context?: { readonly forwarded: true }
+  readonly context?: { readonly forwarded?: true; readonly reply_to_message_id?: string }
 }
 
 export class UnsupportedUpdateError extends Error {
@@ -186,6 +188,31 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
  * @param update The parsed Telegram update.
  * @param now Injected so `received_at` is testable.
  */
+type ArrivalContext = { readonly forwarded?: true; readonly reply_to_message_id?: string }
+
+/** What the door knows about how a message arrived that is not his words: forwarded, and what it replies to. */
+const contextOf = (
+  message: NonNullable<TelegramUpdate['message']>,
+): { readonly context: ArrivalContext } | Record<string, never> => {
+  const forwarded =
+    message.forward_origin !== undefined ||
+    message.forward_date !== undefined ||
+    message.forward_from !== undefined ||
+    message.forward_from_chat !== undefined ||
+    message.forward_sender_name !== undefined
+  const replyTo =
+    typeof message.reply_to_message?.message_id === 'number'
+      ? String(message.reply_to_message.message_id)
+      : undefined
+  if (!forwarded && replyTo === undefined) return {}
+  return {
+    context: {
+      ...(forwarded ? { forwarded: true as const } : {}),
+      ...(replyTo === undefined ? {} : { reply_to_message_id: replyTo }),
+    },
+  }
+}
+
 export function toCanonicalCommand(
   update: TelegramUpdate,
   now: Date = new Date(),
@@ -314,13 +341,8 @@ export function toCanonicalCommand(
     compensates_event_id: null,
     // Forwarded text is somebody else's words carried by him. It is recorded here, at the door, because nothing
     // later can tell (#392); what reads it is app.open_questions_for_reply (a forwarded "yes" answers nothing).
-    ...(message.forward_origin !== undefined ||
-    message.forward_date !== undefined ||
-    message.forward_from !== undefined ||
-    message.forward_from_chat !== undefined ||
-    message.forward_sender_name !== undefined
-      ? { context: { forwarded: true as const } }
-      : {}),
+    // And the message a reply points at, because that is what makes "yes" mean THIS question (#396).
+    ...contextOf(message),
   }
 }
 

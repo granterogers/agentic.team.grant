@@ -161,6 +161,11 @@ export interface HandlerOutput {
    */
   readonly deliveryScope?: string
   /**
+   * The question this output was written to ask (#396). Set by the one place that knows it - a paused job's
+   * question - so the message is recorded as asking THAT question, whatever else its job has open.
+   */
+  readonly asksBlocker?: string
+  /**
    * What this announcement is ABOUT, when a model writes the words (#360).
    *
    * `app.say_once` keeps a duty from repeating itself by fingerprinting what it
@@ -796,7 +801,11 @@ export const askedOnPause = async (
   const blocker = (open.rows[0] as { id?: string } | undefined)?.id
   if (blocker === undefined) return null
   try {
-    const sent = await notify(job, { ...output, deliveryScope: `blocker:${blocker}` }, outputId)
+    const sent = await notify(
+      job,
+      { ...output, deliveryScope: `blocker:${blocker}`, asksBlocker: blocker },
+      outputId,
+    )
     return `asked: ${sent.note}`.slice(0, 160)
   } catch (error) {
     return `asking failed: ${String((error as Error).message).slice(0, 120)}`

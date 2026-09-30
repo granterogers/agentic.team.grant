@@ -338,6 +338,7 @@ export function slackChannel(
         staffId: context.staffId,
         correlationId: job.correlationId,
         jobId: job.jobId,
+        blockerId: context.blockerId,
         message: {
           staffTitle: context.staff?.title ?? null,
           body: output.body,

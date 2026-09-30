@@ -19,6 +19,10 @@ export async function markShown(
     (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
     values ('${channel}', 'shown-${crypto.randomUUID()}', 'isolated', '${chat.replace(/'/g, "''")}', 'blocker',
             '${jobId}'::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
+  // 0623: a message names the question it asked. The fixture's message asked this job's newest question.
+  await db.execute(`update public.deliveries d set blocker_id = b.blocker_id
+      from (select blocker_id from public.blockers where job_id = '${jobId}'::uuid order by created_at desc limit 1) b
+     where d.job_id = '${jobId}'::uuid and d.blocker_id is null and d.dedupe_key like 'shown-%'`)
 }
 
 /**

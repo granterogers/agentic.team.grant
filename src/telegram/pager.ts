@@ -109,6 +109,8 @@ export class TelegramPager {
     readonly routine?: boolean
     readonly severity: PagerSeverity
     readonly actions: readonly ActionId[]
+    /** The question the buttons belong to (#396); recorded on the delivery. */
+    readonly blockerId?: string | null
   }): Promise<PagerResult> {
     // A reply is not an interruption.
     //
@@ -216,6 +218,7 @@ export class TelegramPager {
       staffId: input.staffId,
       correlationId: input.job.correlationId,
       jobId: input.job.jobId,
+      blockerId: input.blockerId ?? null,
       body: {
         text: pagerText(message),
         keyboard: inlineKeyboard(input.actions, input.job.correlationId, projectUrl),

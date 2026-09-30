@@ -86,7 +86,7 @@ interface PendingRow {
  * is still information, and rather than guessed at, because attaching it to the
  * wrong output would be worse than attaching it to nothing.
  */
-const PENDING = (limit: number): string => `
+export const PENDING = (limit: number): string => `
   with press as (
     select c.command_id, c.callback_action, c.origin_channel, c.origin_ref, c.actor
     from public.inbound_commands c
@@ -114,6 +114,10 @@ const PENDING = (limit: number): string => `
     on d.channel = press.origin_channel
    and d.target_ref = split_part(press.origin_ref, ':', 1)
    and d.message_ref = split_part(press.origin_ref, ':', 2)
+   -- Two bots number their own messages in the same private chat, so chat + message id alone matched two
+   -- deliveries for one press (8 such groups in production). The press knows which bot it came through.
+   and (app.command_account(press.command_id) is null
+        or d.account_ref = app.command_account(press.command_id))
   left join public.jobs j on j.job_id = d.job_id
   left join lateral (
     -- Through the delivery's JOB, not through its correlation. A correlation
@@ -509,7 +513,12 @@ export const processCallbacks = async (
           ) as r
           from (select b.blocker_id, b.approval_options, b.decline_option
                   from public.blockers b
-                 where b.blocker_id = app.approval_for_delivery(${lit(row.delivery_id)}::uuid)) q
+                 where b.blocker_id = app.approval_for_delivery(${lit(row.delivery_id)}::uuid)
+                   -- A press that did not come through a production door (stamped synthetic) may only answer
+                   -- test traffic: it must not bind a REAL question, whoever its subject resolves to.
+                   and (not coalesce((select c.synthetic from public.inbound_commands c
+                                       where c.command_id = ${lit(row.command_id)}::uuid), false)
+                        or app.harness_job(b.job_id))) q
         `)
           const r = (answered[0] as { r: Record<string, unknown> | null } | undefined)?.r ?? null
           await resolveNotification(db, row, action === 'approve' ? 'acted' : 'dismissed')

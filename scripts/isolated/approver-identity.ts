@@ -363,8 +363,8 @@ const buttonCase = async (
 ) => {
   const q = await make()
   msg += 1
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
-    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q.job)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at)
+    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q.job)}::uuid, ${lit(q.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
   await db.execute(`set local application_name = 'PostgREST 14.5';
     insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
     values ('telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(actor)}, '', ${lit(`telegram:callback:${run}${msg}:${actor}`)}, ${subject === null ? 'null' : lit(subject)}, ${lit(action)})`)
@@ -470,8 +470,8 @@ const buttonCase = async (
   // 1. The first message's button is pressed AFTER a second question was raised on the same job.
   const q1 = await planQuestion(['Yes, do it', 'No, leave it'], 'No, leave it')
   msg += 1
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
-    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q1.job)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at)
+    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q1.job)}::uuid, ${lit(q1.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
   const q2 = String((await secondQuestion(q1.job)).id)
   await db.execute(`set local application_name = 'PostgREST 14.5';
     insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
@@ -487,8 +487,8 @@ const buttonCase = async (
   // 2. The first question was answered some other way; the same stale button must not reach the second.
   const r1 = await planQuestion(['Yes, do it', 'No, leave it'], 'No, leave it')
   msg += 1
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
-    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(r1.job)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at)
+    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(r1.job)}::uuid, ${lit(r1.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
   await db.execute(`select app.hq_answer_blocker(${lit(r1.id)}::uuid, 'No, leave it', 'grant')`)
   const r2 = String((await secondQuestion(r1.job)).id)
   await db.execute(`set local application_name = 'PostgREST 14.5';

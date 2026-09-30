@@ -155,6 +155,11 @@ const storeCommand = async (
       dedupe_key: command.dedupe_key,
       callback_action: command.callback_action,
       compensates_event_id: command.compensates_event_id,
+      // How it arrived (#396/#397): the thread root it replies under, and whether it is a shared message. Written
+      // WITH the command, before enqueue_inbound, so nothing that reads the turn can see it without them.
+      ...('context' in command && command.context !== undefined
+        ? { context: command.context }
+        : {}),
       received_at: command.received_at,
     },
     'resolution=merge-duplicates,return=representation',

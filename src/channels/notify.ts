@@ -72,6 +72,12 @@ export interface ResultContext {
   readonly routine: boolean
   readonly actions: readonly ActionId[]
   readonly projectUrl: string | null
+  /**
+   * The question the approve/decline buttons on this message belong to, or null when it asks none (#396).
+   * Decided HERE, once, and carried into the delivery row so a press or a reply is bound by this id and not by
+   * which question its job happened to have latest.
+   */
+  readonly blockerId: string | null
 }
 
 export async function resultContext(
@@ -79,6 +85,8 @@ export async function resultContext(
   job: Job,
   outputId: string,
   projectUrlBase?: string | null,
+  /** The question this output was written to ask, when the writer knows (a paused job's question). */
+  asksBlocker?: string | null,
 ): Promise<ResultContext> {
   // Who to present as. There is no assignment table and deliberately so — §9's
   // roster IS the record of who was convened, and `routing_decisions` holds it
@@ -141,8 +149,19 @@ export async function resultContext(
   const asking = await db.execute(`
     select app.open_approval_for_job(${lit(job.jobId)}::uuid) as id
   `)
-  if ((asking.rows[0] as { id?: string | null } | undefined)?.id != null) {
-    return { staff, staffId, reviewed, routine, actions: ['approve', 'decline'], projectUrl }
+  const askedId = (asking.rows[0] as { id?: string | null } | undefined)?.id ?? null
+  if (askedId !== null) {
+    return {
+      staff,
+      staffId,
+      reviewed,
+      routine,
+      actions: ['approve', 'decline'],
+      projectUrl,
+      // The writer's own question wins over "the latest open one": a job with two open questions asks about the
+      // one it wrote this message for.
+      blockerId: asksBlocker ?? askedId,
+    }
   }
 
   // Undo is offered only when there is something to undo — an offer that does
@@ -190,7 +209,7 @@ export async function resultContext(
           action !== 'more_detail')),
   )
 
-  return { staff, staffId, reviewed, routine, actions, projectUrl }
+  return { staff, staffId, reviewed, routine, actions, projectUrl, blockerId: null }
 }
 
 export interface CombinedOptions {
@@ -297,7 +316,13 @@ export function combinedNotifier(
       return { delivered: false, note: `not sent: ${refusal.reason}`.slice(0, 200) }
     }
 
-    const context = await resultContext(db, job, outputId, options.projectUrlBase)
+    const context = await resultContext(
+      db,
+      job,
+      outputId,
+      options.projectUrlBase,
+      output.asksBlocker ?? null,
+    )
     const notes: string[] = []
     let delivered = false
 
@@ -389,6 +414,7 @@ export function pagerChannel(
         routine: context.routine,
         severity: output.severity ?? severity,
         actions: context.actions,
+        blockerId: context.blockerId,
       })
     },
   }

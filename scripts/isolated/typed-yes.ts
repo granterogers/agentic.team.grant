@@ -44,16 +44,24 @@ const ask = async (job: string, sentTo: string | null) => {
     ).id,
   )
   if (sentTo !== null) {
-    await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
-      values ('telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(sentTo)}, 'blocker', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
+    await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
+      values ('telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(sentTo)}, 'blocker', ${lit(job)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
   }
   return b
 }
 const forNext = async (command: string) =>
-  (await db.execute(`select id from app.open_questions_for_reply(${lit(command)}::uuid)`)).rows.map(
-    (r) => String((r as { id: string }).id),
-  )
+  // only what the reply may BIND to: a question named but not bindable is one the office asks about (0623)
+  (
+    await db.execute(
+      `select id from app.open_questions_for_reply(${lit(command)}::uuid) where bindable`,
+    )
+  ).rows.map((r) => String((r as { id: string }).id))
 
+const settleAll = () =>
+  db.execute(`do $x$ declare r record; begin
+    for r in select blocker_id from public.blockers where state = 'open' loop
+      perform app.hq_answer_blocker(r.blocker_id, 'No', 'grant');
+    end loop; end $x$`)
 // ---- shown: delivered to his chat -------------------------------------------------------------------------------
 {
   const prev = await turn('do the thing that needs a go-ahead')
@@ -113,6 +121,7 @@ const forNext = async (command: string) =>
 }
 // ---- two open, one shown: the yes does not guess, and does not pick the unseen one ------------------------------------------
 {
+  await settleAll()
   const prev = await turn('a fifth thing that needs two go-aheads')
   const shown = await ask(prev.job, CHAT)
   await ask(prev.job, null)
@@ -154,17 +163,25 @@ const forNext = async (command: string) =>
 }
 // ---- #392: a FORWARDED yes is somebody else's words ------------------------------------------------------------------------------
 {
+  await settleAll() // earlier cases left questions shown in this chat: two shown is not what this control is about
   const prev = await turn('a sixth thing that needs a go-ahead')
   const q = await ask(prev.job, CHAT)
   const typed = await turn('yes')
   const a = await forNext(typed.command)
+  await settleAll() // otherwise TWO are shown and the forwarded yes answers nothing for the wrong reason
   const prev2 = await turn('a seventh thing that needs a go-ahead')
-  await ask(prev2.job, CHAT)
+  const q2 = await ask(prev2.job, CHAT)
+  const controlTyped = await turn('yes')
+  const c2 = await forNext(controlTyped.command)
+  // the forwarded yes must sit directly behind ITS question's turn, or it answers nothing for the wrong reason
+  await settleAll()
+  const prev3 = await turn('an eighth-and-a-half thing that needs a go-ahead')
+  await ask(prev3.job, CHAT)
   const forwarded = await turn('yes', { forwarded: true })
   const b = await forNext(forwarded.command)
   check(
     '#392: the same "yes", forwarded from somebody else, answers nothing - and typed by him it still does (the control)',
-    a.length === 1 && a[0] === q && b.length === 0,
+    a.length === 1 && a[0] === q && c2.length === 1 && c2[0] === q2 && b.length === 0,
     `typed ${String(a.length)}, forwarded ${String(b.length)}`,
   )
 }

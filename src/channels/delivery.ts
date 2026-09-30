@@ -119,6 +119,12 @@ export interface DeliveryRequest {
   readonly staffId?: string | null
   readonly correlationId?: string | null
   readonly jobId?: string | null
+  /**
+   * The question this message asks, when it asks one (#396, 0623). Recorded on the delivery BEFORE the message is
+   * sent, so a press or a reply to it names exactly this question - not the latest one its job happened to have.
+   * A message that asks nothing leaves it out, and a press on it answers nothing.
+   */
+  readonly blockerId?: string | null
   /** Whatever the transport needs to send. Opaque here, by design. */
   readonly body: unknown
 }
@@ -159,6 +165,19 @@ export class DeliveryService {
   async deliver(request: DeliveryRequest): Promise<DeliveryResult> {
     const claim = await this.claim(request)
     const base = { deliveryId: claim.delivery_id, attempt: claim.attempt, errorCode: null }
+    // Named before it can be answered. Never throws: a message that could not be bound still goes out, and a press
+    // or a reply on it answers nothing (fail closed), which is better than a question nobody was told about.
+    if (
+      request.blockerId !== undefined &&
+      request.blockerId !== null &&
+      ['claimed', 'reclaimed', 'already_sent'].includes(claim.outcome)
+    ) {
+      await this.db
+        .execute(
+          `select app.bind_delivery(${lit(claim.delivery_id)}::uuid, ${lit(request.blockerId)}::uuid)`,
+        )
+        .catch(() => undefined)
+    }
 
     switch (claim.outcome) {
       case 'already_sent':

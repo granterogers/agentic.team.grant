@@ -33,6 +33,12 @@ export interface CanonicalCommand {
   readonly voice_seconds: null
   readonly callback_action: string | null
   readonly compensates_event_id: string | null
+  /**
+   * How the message arrived, when that is not just his words (#396, #397): the thread root it replies under, and
+   * whether it is a SHARED message (Slack's attachment `is_share`/`is_msg_unfurl`, the closest thing the
+   * provider exposes to a forward - a plain paste of somebody's text is indistinguishable from typing it).
+   */
+  readonly context?: { readonly forwarded?: true; readonly thread_ts?: string }
   /** Slack-specific routing the core does not interpret, only carries. */
   readonly slack: {
     readonly team_id: string
@@ -42,6 +48,30 @@ export interface CanonicalCommand {
     readonly is_dm: boolean
     /** Present for reaction events; the emoji name without colons. */
     readonly reaction: string | null
+  }
+}
+
+/**
+ * What a Slack message says about how it arrived. A reply names its thread ROOT (Slack threads are flat), and a
+ * message that is itself the root of a thread carries its own ts there, which is not a reply to anything.
+ */
+const slackContext = (
+  event: SlackEventBase,
+  ts: string,
+): { readonly context?: { readonly forwarded?: true; readonly thread_ts?: string } } => {
+  const forwarded = (event.attachments ?? []).some(
+    (a) => a.is_share === true || a.is_msg_unfurl === true,
+  )
+  const threadRoot =
+    event.thread_ts !== undefined && event.thread_ts !== '' && event.thread_ts !== ts
+      ? event.thread_ts
+      : undefined
+  if (!forwarded && threadRoot === undefined) return {}
+  return {
+    context: {
+      ...(forwarded ? { forwarded: true as const } : {}),
+      ...(threadRoot === undefined ? {} : { thread_ts: threadRoot }),
+    },
   }
 }
 
@@ -74,6 +104,7 @@ interface SlackEventBase {
   subtype?: string
   reaction?: string
   item?: { type?: string; channel?: string; ts?: string }
+  attachments?: { is_share?: boolean; is_msg_unfurl?: boolean }[]
 }
 
 export interface SlackEnvelope {
@@ -266,6 +297,7 @@ export const toCanonicalCommand = (
       voice_file_id: null,
       voice_seconds: null,
       compensates_event_id: null,
+      ...slackContext(event, ts),
       slack: {
         team_id: teamId,
         channel_id: event.channel ?? null,
