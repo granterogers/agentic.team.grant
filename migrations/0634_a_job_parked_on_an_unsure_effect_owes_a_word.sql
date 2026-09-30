@@ -7,8 +7,9 @@
 -- with no answer has to say so somewhere he looks" did not.
 --
 -- A parked turn is owed a word when: it is a root job of a real conversation, it is paused, it holds an open
--- NON-resumable pause, no question to him is open (a question reaches him by its own delivery), and nothing has been
--- delivered for it yet. Built from the LIVE definition so one predicate moves and nothing else does; it refuses to
+-- NON-resumable pause, no question to him is open (a question reaches him by its own delivery), it is not harness
+-- traffic (so no output row and no announce flip is ever made for a test, whatever the delivery layer would say), and
+-- nothing has been delivered for it yet. Built from the LIVE definition so one predicate moves and nothing else does; it refuses to
 -- apply when the predicate it means to widen is not there.
 
 do $m$
@@ -20,7 +21,8 @@ declare
               and exists (select 1 from public.job_pauses p
                            where p.job_id = j.job_id and p.resumed_at is null and p.resumable = false)
               and not exists (select 1 from public.blockers b
-                               where b.job_id = j.job_id and b.state = ''open'')))';
+                               where b.job_id = j.job_id and b.state = ''open'')
+              and not app.harness_job(j.job_id)))';
 begin
   v_def := pg_get_functiondef('app.owed_a_word(uuid)'::regprocedure);
   if position(v_old in v_def) = 0 then

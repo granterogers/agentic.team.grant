@@ -1769,6 +1769,10 @@ async function pairWithNearby(
        and coalesce(c.subject, c.actor) = coalesce(self.subject, self.actor)
        and c.paired_with is null
        and c.callback_action is null
+       -- Forwarded words are content, not intent: a forwarded sentence never completes his link, and his link never
+       -- completes a forwarded sentence (the pairing would hand somebody else's words to a typed job).
+       and coalesce((c.context ->> 'forwarded')::boolean, false) = false
+       and coalesce((self.context ->> 'forwarded')::boolean, false) = false
        and abs(extract(epoch from (c.received_at - self.received_at)))
              < ${String(PAIRING_WINDOW_MINUTES * 60)}
      order by abs(extract(epoch from (c.received_at - self.received_at))) asc
@@ -3327,7 +3331,16 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         semantic layer fell back, `requests` is `[instruction]` and every call
         below is byte-for-byte what it is today.
       */
+      /*
+        FORWARDED WORDS ARE CONTENT, NOT INTENT - the readers below are the OTHER half of the class (final audit).
+        `entitled` closes the ten permitting readers; these two closures are the door the task writers, the file
+        request and the extraction reader go through, and a forwarded turn was still reading through them: a
+        forwarded "mark the call Kevin one done" ticked a task, "cancel it" cancelled one, "add a task to wire the
+        deposit" created one. So the door itself is silent for a forwarded turn, and a reader cannot be added behind
+        it without being silent too.
+      */
       const firstOf = <T>(read: (text: string) => T | null): T | null => {
+        if (forwarded) return null
         for (const text of requests) {
           const got = read(text)
           if (got !== null) return got
@@ -3406,6 +3419,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ...understood.surviving.filter((r) => HIS_OWN.has(r.kind)).map((r) => r.text),
       ]
       const firstOfHis = <T>(read: (text: string) => T | null): T | null => {
+        if (forwarded) return null
         for (const text of hisRequests) {
           const got = read(text)
           if (got !== null) return got
@@ -4308,7 +4322,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         flat-task readers - which otherwise filed his whole sentence as the
         title of a task with no parent.
       */
-      const subOf = isBranch ? null : (firstOfHis(subtaskRequest) ?? subtaskRequest(turn.kept))
+      const subOf =
+        isBranch || forwarded ? null : (firstOfHis(subtaskRequest) ?? subtaskRequest(turn.kept))
       const forGrant =
         wantsFile !== null || isBranch || changesHis !== null || subOf !== null || forwarded
           ? null
@@ -4559,7 +4574,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         tasks THIS conversation made, and acted on only when exactly one fits.
       */
       const settles =
-        noted !== null || wantsFile !== null || isBranch
+        noted !== null || wantsFile !== null || isBranch || forwarded
           ? null
           : // His literal words too: a withdrawal has no surviving intent (R26, R42).
             (firstOfHis(taskStateChange) ?? taskStateChange(turn.kept))

@@ -172,6 +172,37 @@ const park = (id: string, reason: string, resumable: boolean) =>
   )
 }
 
+{
+  // Harness traffic: a test turn parked for good owes nobody a word, so no output row and no announce flip is made.
+  const key = `teamhq:verifyparked:${Date.now().toString(36)}.1`
+  const cmd = await one(`set local application_name = 'PostgREST 14.5';
+    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values ('teamhq', ${lit(`verify-parked:${Date.now()}`)}, 'verify-parked', 'a test turn', ${lit(key)}, 'verify-parked')
+    returning command_id::text as id`)
+  const enq = await one(
+    `set local application_name = 'PostgREST 14.5'; select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`,
+  )
+  const v = (typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v) as { job_id: string }
+  const j = await dequeue(
+    db,
+    `parked-harness-${Date.now().toString(36)}`,
+    true,
+    true,
+    ['office.instruction'],
+    String(
+      (await one(`select requested_by as r from public.jobs where job_id = ${lit(v.job_id)}::uuid`))
+        .r,
+    ),
+  )
+  if (j !== null) await park(j.jobId, 'needs_reconciliation', false)
+  const harness = await one(`select app.harness_job(${lit(v.job_id)}::uuid) as h`)
+  check(
+    'control: a parked TEST turn owes nobody a word (harness traffic makes no output and flips no flag)',
+    j !== null && harness.h === true && (await owed(v.job_id)) === 0,
+    `harness=${String(harness.h)}; ${await owed(v.job_id)} row(s)`,
+  )
+}
+
 // ---- through the real tick: the worker speaks, once, and only for the turn that is owed -------------------------------
 {
   const driveOnce = async (resumable: boolean, reason: string) => {

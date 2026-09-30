@@ -143,6 +143,37 @@ check(
   ) === 0,
   'gone',
 )
+
+// ---- the two states nothing writes (D9 / invariant 29) ------------------------------------------------------------
+/*
+  `waiting_user` and `waiting_external` are legal states with no recovery of their own: a job there is released only by
+  `let_job_go` on a blocker answer. That is bounded ONLY while no product function puts a job there, so the property
+  is asserted: no function in `app` or `public` assigns or moves to either. A reader may name them; a writer may not.
+*/
+const writers = async (exec: { execute: typeof db.execute }) =>
+  (
+    await exec.execute(
+      `select n.nspname || '.' || p.proname as f from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where p.prokind = 'f' and n.nspname in ('app', 'public')
+          and pg_get_functiondef(p.oid) ~* $re$set[[:space:]]+state[[:space:]]*=[[:space:]]*'waiting_(user|external)'$re$`,
+    )
+  ).rows.map((r) => String((r as { f: string }).f))
+const found = await writers(db)
+check(
+  'no product function moves a job to waiting_user or waiting_external',
+  found.length === 0,
+  JSON.stringify(found),
+)
+await db.execute(
+  `create or replace function public.zz_waiting_probe() returns void language sql as $$ update public.jobs set state = 'waiting_user' where false $$`,
+)
+const probe = await writers(db)
+check(
+  'control: a function that does so IS found (the detector can fail)',
+  probe.includes('public.zz_waiting_probe'),
+  JSON.stringify(probe),
+)
+await db.execute(`drop function public.zz_waiting_probe()`)
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${results.length - failed}/${results.length} passed`)
 await db.end?.()
