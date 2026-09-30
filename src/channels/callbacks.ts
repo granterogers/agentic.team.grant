@@ -346,6 +346,23 @@ export const processCallbacks = async (
     switch (action) {
       case 'useful':
       case 'not_useful': {
+        /*
+          Only a person the office knows can give feedback or take something back
+          (#388). This used to record `feedback.given_by = row.actor` for anybody the
+          Slack door let through, and a stranger's press could claim Grant's undo
+          offer and leave him without it. The door refuses strangers now, so this is
+          the second lock, for an edge function that has not been redeployed.
+        */
+        if ((await pressedBy(db, row)) === null) {
+          await resolveNotification(db, row, 'dismissed')
+          done.push({
+            commandId: row.command_id,
+            action,
+            outcome: 'unresolvable',
+            note: 'I could not tell who pressed that, so nothing was recorded',
+          })
+          break
+        }
         await recordFeedback(db, row, action)
         await resolveNotification(db, row, 'acted')
 
@@ -385,6 +402,16 @@ export const processCallbacks = async (
       }
 
       case 'undo': {
+        if ((await pressedBy(db, row)) === null) {
+          await resolveNotification(db, row, 'dismissed')
+          done.push({
+            commandId: row.command_id,
+            action,
+            outcome: 'unresolvable',
+            note: 'I could not tell who pressed that, so nothing was undone',
+          })
+          break
+        }
         const outcome = await doUndo(db, row)
         if (outcome.outcome === 'acted') await resolveNotification(db, row, 'acted')
         done.push(outcome)

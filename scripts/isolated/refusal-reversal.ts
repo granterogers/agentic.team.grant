@@ -490,9 +490,24 @@ const act = async (bearer: string | null, args: Record<string, unknown>) => {
     ).by,
   )
   check(
-    'authenticated: taken back, recorded as the verified principal whatever the page sent',
-    viaToken.status === 200 && by === 'grant',
+    'the office key cannot take a No back: it is a machine (#385), and the No stands',
+    viaToken.status === 403 &&
+      by === 'null' &&
+      (await verdict(p7, x.fp, await job(p7))).verdict === 'refuse',
     `http ${String(viaToken.status)} by ${by}`,
+  )
+  const viaGrant = await act(SESSION_GRANT, { p_blocker_id: x.b, p_by: 'mallory' })
+  const by2 = String(
+    (
+      await one(
+        `select refusal_withdrawn_by as by from public.blockers where blocker_id = ${lit(x.b)}::uuid`,
+      )
+    ).by,
+  )
+  check(
+    'a signed-in person takes it back, recorded as the verified principal whatever the page sent',
+    viaGrant.status === 200 && by2 === 'grant',
+    `http ${String(viaGrant.status)} by ${by2}`,
   )
   const y = await mk('session')
   const viaSession = await act(SESSION_GRANT, { p_blocker_id: y.b })

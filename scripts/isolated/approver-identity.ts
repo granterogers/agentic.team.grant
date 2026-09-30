@@ -262,9 +262,12 @@ const act = async (bearer: string, action: string, args: Record<string, unknown>
     p_by: 'mallory',
   })
   check(
-    "gateway, bearer token: a p_by the page sent is discarded; the answer is the owner's",
-    viaToken.status === 200 && (await approvedBy(q1.job)) === 'grant',
-    `approved_by ${await approvedBy(q1.job)}`,
+    'gateway, the office key: it is a machine and cannot answer, whatever p_by it sends (#385)',
+    viaToken.status === 403 &&
+      viaToken.body.error === 'person_required' &&
+      (await stateOf(q1.id)) === 'open' &&
+      (await childrenOf(q1.job)) === 0,
+    `status ${viaToken.status}, state ${await stateOf(q1.id)}`,
   )
   const q2 = await question()
   const viaSecond = await act(SESSION_SECOND, 'answer_blocker', {
@@ -307,10 +310,10 @@ const act = async (bearer: string, action: string, args: Record<string, unknown>
     `status ${viaNothing.status}`,
   )
   const q5 = await question()
-  await act(TOKEN, 'answer_blocker', { p_blocker_id: q5.id, p_answer: 'Go ahead' })
+  await act(SESSION_GRANT, 'answer_blocker', { p_blocker_id: q5.id, p_answer: 'Go ahead' })
   const race = await Promise.all([
     act(SESSION_GRANT, 'answer_blocker', { p_blocker_id: q5.id, p_answer: 'Go ahead' }),
-    act(TOKEN, 'answer_blocker', { p_blocker_id: q5.id, p_answer: 'Go ahead' }),
+    act(SESSION_SECOND, 'answer_blocker', { p_blocker_id: q5.id, p_answer: 'Go ahead' }),
   ])
   check(
     'gateway, duplicate answers after the first: harmless, still one child',

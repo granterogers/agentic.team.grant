@@ -92,6 +92,45 @@ const rest = async (
     body: JSON.stringify(body),
   })
 
+/*
+  IS THIS SENDER SOMEBODY THE OFFICE ANSWERS (#388, 0615).
+
+  A valid Slack signature proves the request came from Slack. It says nothing
+  about which person in that workspace typed it: any member, and any Slack Connect
+  guest in a channel the bot is in, produces a correctly signed event. Until now
+  every one of them became an instruction from `slack:<their id>`, trusted as a
+  production door, with the same reach as anyone (a stranger could read the
+  project's documents through the office, and teach it a standing rule that
+  read as Grant's).
+
+  Telegram has refused a stranger at the door since 0607, from the same list
+  (`public.subject_identities`). This asks it for Slack, before anything is
+  stored: a stranger's message is acknowledged with 200 and nothing else (Slack
+  retries a non-2xx, and there is no reason to tell a stranger anything). A
+  failure to ASK is not a refusal, and answers 503 so Slack tries again.
+*/
+type Admission = 'admitted' | 'stranger' | 'unknown'
+const admission = async (actor: string, conversation: string): Promise<Admission> => {
+  const asked = await fetch(`${DB_URL}/rest/v1/rpc/sender_admitted`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_channel: 'slack', p_actor: actor, p_conversation: conversation }),
+  }).catch(() => null)
+  if (asked === null || !asked.ok) return 'unknown'
+  const said = (await asked.json().catch(() => null)) as {
+    subject?: string | null
+    declared_test?: boolean
+  } | null
+  if (said === null) return 'unknown'
+  return (typeof said.subject === 'string' && said.subject !== '') || said.declared_test === true
+    ? 'admitted'
+    : 'stranger'
+}
+
 /**
  * Persist a canonical command and its Slack routing.
  *
@@ -212,6 +251,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
       // something they cannot fix.
       return Response.json({ ok: true, ignored: 'unrecognised interaction' })
     }
+    // A stranger's press is nobody's answer: not stored, so it cannot claim an undo offer,
+    // record feedback or answer a question (#388).
+    const presser = await admission(pressed.actor, pressed.slack.channel_id ?? '')
+    if (presser === 'unknown') return new Response('could not check the sender', { status: 503 })
+    if (presser === 'stranger') return new Response('', { status: 200 })
     await storeCommand(pressed)
     // An empty 200 leaves the message exactly as it is. Slack treats a body
     // here as a REPLACEMENT for the message, so returning anything chatty would
@@ -267,6 +311,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
     throw error
   }
+
+  const sender = await admission(command.actor, command.slack.channel_id ?? '')
+  if (sender === 'unknown') return new Response('could not check the sender', { status: 503 })
+  if (sender === 'stranger') return Response.json({ ok: true, ignored: 'unrecognised sender' })
 
   const outcome = await storeCommand(command)
   if (outcome === 'failed') return new Response('storage failed', { status: 503 })

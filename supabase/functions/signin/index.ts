@@ -186,18 +186,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
   /*
     A LINK, HANDED OVER INSTEAD OF EMAILED.
 
-    Two things need this and neither is a person: an operator onboarding
-    somebody when mail is not working, and the verification suites, which have
-    to sign a browser in without an inbox and must not email Grant every run.
+    Two things need this and neither is a person: an operator onboarding a TEST
+    member, and the verification suites, which have to sign a browser in without
+    an inbox and must not email anybody every run.
 
-    It escalates nothing. It requires the OFFICE KEY -- the machine credential
-    that already opens the whole gateway -- so anybody who can call this could
-    already read and write everything by presenting the same header. What it
-    adds is the ability to do so as a named person rather than as the office,
-    which is strictly narrower.
-
-    And it still refuses an address the office does not work for, so it cannot
-    be used to mint a link for a stranger who happens to have signed up.
+    It requires the OFFICE KEY and it mints a session for a TEST member only (see
+    the refusal below). It used to mint one for any member on the argument that the
+    key already opened everything; that argument is false now that the key cannot
+    decide as a person, and a link for a person's own address would have been the
+    way round that (#385).
   */
   if (action === 'link_for_operator') {
     const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
@@ -216,9 +213,31 @@ Deno.serve(async (request: Request): Promise<Response> => {
       body: JSON.stringify({ p_email: email }),
     }).catch(() => null)
     const rows =
-      member === null ? [] : ((await member.json().catch(() => [])) as { ok?: boolean }[])
+      member === null
+        ? []
+        : ((await member.json().catch(() => [])) as { ok?: boolean; kind?: string }[])
     if (rows[0]?.ok !== true)
       return json({ error: 'not somebody the office works for' }, 403, request)
+    /*
+      THE OFFICE KEY MINTS A SESSION FOR A TEST MEMBER ONLY (#385, 0614).
+
+      This used to mint one for ANY member, and the only member was Grant - so
+      the machine key that "already opens the whole gateway" could also become
+      him: a signed-in person's session, with every approval and every reach
+      grant that carries. The comment above argued it escalated nothing because
+      the key already opened everything, which stopped being true the moment the
+      key stopped being able to decide as a person. A person signs in by mail; the
+      verification suites sign in as the test member, whose session the database
+      lets decide only test traffic. A kind the database did not say is not
+      'harness', so a database that predates 0614 mints nothing.
+    */
+    if (rows[0]?.kind !== 'harness') {
+      return json(
+        { error: 'an operator link is made only for a test member; a person signs in by mail' },
+        403,
+        request,
+      )
+    }
 
     const back = String(body.back ?? '')
     const redirect = ALLOWED_ORIGINS.some((o) => back.startsWith(o))

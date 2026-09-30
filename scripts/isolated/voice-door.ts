@@ -21,6 +21,13 @@ import type { PgExecutor } from '../../src/db/pg-executor.ts'
 
 const DB_URL = 'http://replica.invalid'
 export const DOOR_TOKEN = 'isolated-door-token'
+/*
+  The page speaks with a signed-in PERSON's session, not the office key (#385): the key is a
+  machine and the voice door refuses it under a real-looking session. This is the stand-in
+  identity service's answer for that session: Grant's own address, which the office lists.
+*/
+export const DOOR_SESSION = `aaa.bbb.${'d'.repeat(70)}`
+const DOOR_MEMBER = 'grant.e.rogers@gmail.com'
 
 type Handler = (request: Request) => Promise<Response>
 
@@ -55,6 +62,15 @@ export async function startDoor(db: PgExecutor): Promise<Handler> {
       throw new Error(`REFUSED: the isolated door may only reach the replica, not ${url}`)
     }
     const path = new URL(url).pathname
+    if (path === '/auth/v1/user') {
+      const token = String(
+        (init?.headers as Record<string, string> | undefined)?.Authorization ?? '',
+      ).replace(/^Bearer\s+/i, '')
+      return new Response(JSON.stringify(token === DOOR_SESSION ? { email: DOOR_MEMBER } : {}), {
+        status: token === DOOR_SESSION ? 200 : 401,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
     const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
     const reply = (status: number, value: unknown) =>
       new Response(JSON.stringify(value), {
@@ -67,8 +83,12 @@ export async function startDoor(db: PgExecutor): Promise<Handler> {
         const args = Object.entries(body)
           .map(([k, v]) => `${k} => ${v === null ? 'null' : lit(String(v))}`)
           .join(', ')
+        // PostgREST returns a set-returning function's rows as an ARRAY (office_member is one).
+        const asSet = fn === 'office_member'
         const { rows } = await db.execute(
-          `${AS_POSTGREST} select to_jsonb(public.${fn}(${args})) as r`,
+          asSet
+            ? `${AS_POSTGREST} select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) as r from public.${fn}(${args}) t`
+            : `${AS_POSTGREST} select to_jsonb(public.${fn}(${args})) as r`,
         )
         return reply(200, (rows[0] as { r: unknown }).r)
       }
@@ -113,7 +133,7 @@ export async function postTurn(
   const r = await door(
     new Request('https://door.invalid/functions/v1/voice/turn', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${DOOR_TOKEN}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${DOOR_SESSION}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
   )

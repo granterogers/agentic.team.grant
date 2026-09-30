@@ -79,11 +79,25 @@ const tokenMatches = async (presented: string | null): Promise<boolean> => {
   token a function merely decoded is a token anybody can write.
 */
 const SESSION_TTL_MS = 60_000
-const seenSessions = new Map<string, number>()
+/*
+  WHO IS SPEAKING (#385, 0614). A turn here is an INSTRUCTION, and an instruction from
+  a person is what turns outward work from "ask first" into "he asked for it", so the
+  speaker is the verified credential's fact and never a constant:
 
-const sessionAllowed = async (presented: string): Promise<boolean> => {
-  const until = seenSessions.get(presented)
-  if (until !== undefined && until > Date.now()) return true
+    person  - a signed-in member speaks as the configured subject (Grant);
+    harness - a signed-in TEST member speaks as itself, which the harness predicate
+              names on sight;
+    service - the office key speaks only as a declared test speaker, and only for a
+              session id that already carries a harness prefix. It cannot speak as
+              anybody real: possession of a generic key is not a voice.
+*/
+type Speaker = { readonly kind: 'person' | 'harness' | 'service'; readonly actor: string }
+const seenSessions = new Map<string, { until: number; speaker: Speaker }>()
+const TEST_SESSION = /^(fixture|verify|probe|gate|ledger-proof)-/
+
+const sessionAllowed = async (presented: string): Promise<Speaker | null> => {
+  const held = seenSessions.get(presented)
+  if (held !== undefined && held.until > Date.now()) return held.speaker
   const base = Deno.env.get('SUPABASE_URL') ?? ''
   const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   const who = await fetch(`${base}/auth/v1/user`, {
@@ -92,12 +106,12 @@ const sessionAllowed = async (presented: string): Promise<boolean> => {
       Authorization: `Bearer ${presented}`,
     },
   }).catch(() => null)
-  if (who === null || !who.ok) return false
+  if (who === null || !who.ok) return null
   const user = (await who.json().catch(() => ({}))) as { email?: string }
   const email = String(user.email ?? '')
     .trim()
     .toLowerCase()
-  if (email === '') return false
+  if (email === '') return null
   const asked = await fetch(`${base}/rest/v1/rpc/office_member`, {
     method: 'POST',
     headers: {
@@ -107,20 +121,29 @@ const sessionAllowed = async (presented: string): Promise<boolean> => {
     },
     body: JSON.stringify({ p_email: email }),
   }).catch(() => null)
-  if (asked === null || !asked.ok) return false
-  const rows = (await asked.json().catch(() => [])) as { ok?: boolean }[]
-  if (rows[0]?.ok !== true) return false
-  seenSessions.set(presented, Date.now() + SESSION_TTL_MS)
+  if (asked === null || !asked.ok) return null
+  const rows = (await asked.json().catch(() => [])) as {
+    ok?: boolean
+    owner_key?: string | null
+    kind?: string | null
+  }[]
+  if (rows[0]?.ok !== true) return null
+  // A kind the database did not say is a test member: the restrictive reading.
+  const speaker: Speaker =
+    rows[0]?.kind === 'person'
+      ? { kind: 'person', actor: SUBJECT }
+      : { kind: 'harness', actor: String(rows[0]?.owner_key ?? '') || 'verify-operator' }
+  seenSessions.set(presented, { until: Date.now() + SESSION_TTL_MS, speaker })
   if (seenSessions.size > 64) {
     for (const k of [...seenSessions.keys()].slice(0, 32)) seenSessions.delete(k)
   }
-  return true
+  return speaker
 }
 
-const allowed = async (presented: string | null): Promise<boolean> => {
-  if (presented === null || presented === '') return false
-  if (await tokenMatches(presented)) return true
-  if (presented.split('.').length !== 3 || presented.length <= 60) return false
+const allowed = async (presented: string | null): Promise<Speaker | null> => {
+  if (presented === null || presented === '') return null
+  if (await tokenMatches(presented)) return { kind: 'service', actor: 'verify-service' }
+  if (presented.split('.').length !== 3 || presented.length <= 60) return null
   return await sessionAllowed(presented)
 }
 
@@ -160,7 +183,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  if (!(await allowed(presented))) return json({ error: 'unauthorized' }, 401)
+  const speaker = await allowed(presented)
+  if (speaker === null) return json({ error: 'unauthorized' }, 401)
 
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
@@ -371,6 +395,17 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (!/^[A-Za-z0-9_-]{6,64}$/.test(session)) {
     return json({ error: 'a session id is required' }, 400)
   }
+  // The office key is not a voice: it may speak only as a declared test speaker (#385).
+  if (speaker.kind === 'service' && !TEST_SESSION.test(session)) {
+    return json(
+      {
+        error: 'person_required',
+        message:
+          'A turn is somebody asking for something. It needs a signed-in person; the office key can only speak in a declared test session.',
+      },
+      403,
+    )
+  }
 
   /*
     THE PROJECT THE PAGE IS WRITING INTO (#373).
@@ -420,7 +455,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const row = (stated: string | null, addressee: string | null): Record<string, unknown> => ({
     origin_channel: 'voice',
     origin_ref: `${talk}:${turn}`,
-    actor: SUBJECT,
+    actor: speaker.actor,
     // `subject` is NOT set here. 0056's trigger resolves it through
     // `app.subject_for`, the same way it does for Slack and Telegram — and a
     // channel that writes its own subject is a channel exempt from the

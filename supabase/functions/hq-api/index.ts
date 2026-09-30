@@ -730,7 +730,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // `set_setting` key: it lives in `autonomy_settings`, it is scoped — a project
   // can override the global — and every change is a new row so "when did it
   // start acting on its own" stays answerable.
-  autonomy_set: { fn: 'hq_autonomy_set', required: ['p_level'] },
+  autonomy_set: { fn: 'hq_autonomy_set', required: ['p_level'], by: 'p_by' },
   /*
     Answering the office when it asks for a capability (ADR-0018, #272).
 
@@ -807,10 +807,14 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   offer_connector_tool: { fn: 'offer_mcp_tool', required: ['p_discovered'] },
   approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'], by: 'p_by' },
   decline_tool: { fn: 'hq_decline_tool', required: ['p_request_id'], by: 'p_by' },
-  revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'] },
+  revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'], by: 'p_by' },
   // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
   // the two, and refuses a grant for a globally disabled tool (§11).
-  staff_tool_set: { fn: 'hq_staff_tool_set', required: ['p_slug', 'p_tool', 'p_granted'] },
+  staff_tool_set: {
+    fn: 'hq_staff_tool_set',
+    required: ['p_slug', 'p_tool', 'p_granted'],
+    by: 'p_by',
+  },
   // Hand a bot to someone, or back to the pool. `p_staff_slug` is optional
   // BECAUSE null is the meaningful value — it is how a bot is freed.
   bot_assign: { fn: 'hq_bot_assign', required: ['p_username'] },
@@ -1142,8 +1146,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     Grant does not pick — a composer that forces you to name somebody makes the
     common case the awkward one.
   */
-  say: { fn: 'say_in_project', required: ['p_project_id', 'p_text'] },
-  send_to_agent: { fn: 'send_to_agent', required: ['p_kind', 'p_id', 'p_action'] },
+  say: { fn: 'say_in_project', required: ['p_project_id', 'p_text'], by: 'p_by' },
+  send_to_agent: {
+    fn: 'send_to_agent',
+    required: ['p_kind', 'p_id', 'p_action'],
+    by: 'p_by',
+  },
   /*
     The import gate (#28, migration 0315).
 
@@ -1166,8 +1174,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   output_import: { fn: 'import_output', required: ['p_output'] },
   output_decide: { fn: 'decide_output', required: ['p_output', 'p_verdict'] },
-  document_approve: { fn: 'approve_document', required: ['p_document'] },
-  document_discard: { fn: 'discard_document', required: ['p_document'] },
+  document_approve: { fn: 'approve_document', required: ['p_document'], by: 'p_by' },
+  document_discard: { fn: 'discard_document', required: ['p_document'], by: 'p_by' },
   document_rename: { fn: 'rename_document', required: ['p_document', 'p_title'] },
   document_tag: { fn: 'tag_document', required: ['p_document', 'p_tag'] },
   collection_put: { fn: 'put_in_collection', required: ['p_document', 'p_collection_name'] },
@@ -1336,7 +1344,7 @@ const tokenMatches = async (presented: string | null): Promise<boolean> => {
 */
 const SESSION_TTL_MS = 60_000
 /** A verified session, and the owner key of the person it belongs to. */
-const seen = new Map<string, { until: number; owner: string }>()
+const seen = new Map<string, { until: number; owner: string; kind: PrincipalKind }>()
 
 const looksLikeSession = (presented: string): boolean =>
   presented.split('.').length === 3 && presented.length > 60
@@ -1384,16 +1392,36 @@ const askUpstream = async (
   return { unreachable: true }
 }
 
+/*
+  WHAT KIND OF THING PRESENTED THE CREDENTIAL (#385, 0614).
+
+    person  - a signed-in member of the office, as themselves.
+    harness - a signed-in TEST member: a real session that the database lets
+              decide only test traffic (app.authority_refusal).
+    service - the office key. A machine. It has no name here, on purpose.
+
+  The kind is the gateway's verified fact, never the page's claim, and the office
+  key is never a person: possession of a generic credential must not manufacture
+  a human's approval identity.
+*/
+type PrincipalKind = 'person' | 'harness' | 'service'
+
 interface Answer {
   readonly verdict: Verdict
   /** Who this credential is, when it is a verdict of 'yes'. Never a default. */
   readonly principal: string | null
+  /** What kind of credential it was, when the verdict is 'yes'. */
+  readonly kind: PrincipalKind | null
 }
 
 const sessionAllowed = async (presented: string): Promise<Answer> => {
   const cached = seen.get(presented)
   if (cached !== undefined && cached.until > Date.now()) {
-    return { verdict: 'yes', principal: cached.owner === '' ? null : cached.owner }
+    return {
+      verdict: 'yes',
+      principal: cached.owner === '' ? null : cached.owner,
+      kind: cached.kind,
+    }
   }
 
   const asking = await askUpstream(`${DB_URL}/auth/v1/user`, {
@@ -1402,7 +1430,7 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
       Authorization: `Bearer ${presented}`,
     },
   })
-  if ('unreachable' in asking) return { verdict: 'unknown', principal: null }
+  if ('unreachable' in asking) return { verdict: 'unknown', principal: null, kind: null }
   const who = asking.response
   /*
     401 and 403 are the identity service SAYING NO. Anything else that is not
@@ -1410,7 +1438,11 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
     must not be the same word.
   */
   if (!who.ok) {
-    return { verdict: who.status === 401 || who.status === 403 ? 'no' : 'unknown', principal: null }
+    return {
+      verdict: who.status === 401 || who.status === 403 ? 'no' : 'unknown',
+      principal: null,
+      kind: null,
+    }
   }
   const user = (await who.json().catch(() => ({}))) as {
     email?: string
@@ -1419,7 +1451,7 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
   const email = String(user.email ?? '')
     .trim()
     .toLowerCase()
-  if (email === '') return { verdict: 'no', principal: null }
+  if (email === '') return { verdict: 'no', principal: null, kind: null }
 
   const membership = await askUpstream(`${DB_URL}/rest/v1/rpc/office_member`, {
     method: 'POST',
@@ -1430,41 +1462,106 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
     },
     body: JSON.stringify({ p_email: email }),
   })
-  if ('unreachable' in membership) return { verdict: 'unknown', principal: null }
+  if ('unreachable' in membership) return { verdict: 'unknown', principal: null, kind: null }
   /*
     The membership list is this office's own table. A failure to READ it is
     never evidence that somebody is not on it -- that is exactly the direction
     0304 warns about -- so anything other than a successful answer is unknown.
   */
-  if (!membership.response.ok) return { verdict: 'unknown', principal: null }
+  if (!membership.response.ok) return { verdict: 'unknown', principal: null, kind: null }
   const rows = (await membership.response.json().catch(() => [])) as {
     ok?: boolean
     owner_key?: string | null
+    kind?: string | null
   }[]
-  if (rows[0]?.ok !== true) return { verdict: 'no', principal: null }
+  if (rows[0]?.ok !== true) return { verdict: 'no', principal: null, kind: null }
   const owner = String(rows[0]?.owner_key ?? '').trim()
   // A member with no owner key is admitted to read and is nobody to answer as.
   const principal = owner === '' ? null : owner
+  /*
+    A member whose kind the database did not say is treated as a TEST member: the
+    restrictive reading. It can read; it cannot be taken for a person. (A database
+    that predates 0614 answers no kind at all, and must not make everybody one.)
+  */
+  const kind: PrincipalKind = rows[0]?.kind === 'person' ? 'person' : 'harness'
 
-  seen.set(presented, { until: Date.now() + SESSION_TTL_MS, owner: principal ?? '' })
+  seen.set(presented, { until: Date.now() + SESSION_TTL_MS, owner: principal ?? '', kind })
   // Bounded, because this map lives as long as the isolate does.
   if (seen.size > 64) for (const k of [...seen.keys()].slice(0, 32)) seen.delete(k)
-  return { verdict: 'yes', principal }
+  return { verdict: 'yes', principal, kind }
 }
 
 /*
-  The bearer token is the OWNER'S credential (CLAUDE.md: one bearer token,
-  reuse it - "a machine presents a key"). It is attributed to the owner here,
-  explicitly and in one place, rather than every SQL wrapper assuming it.
-  Anything that would make the office multi-person starts by changing this
-  line, which is the point of it being a line.
+  The bearer token is a MACHINE's credential (CLAUDE.md: "a machine presents a
+  key") and it names nobody. Until 0614 this said 'grant', which made every
+  holder of the key Grant for every approval, standing authorization, reach
+  grant, autonomy change and refusal reversal (#385). It is the kind 'service'
+  now, with no principal to write, so a function that needs an answering person
+  refuses it by name, and SERVICE_MAY below is the short list of things a
+  machine may still do.
 */
-const TOKEN_PRINCIPAL = 'grant'
+
+/*
+  WHAT THE OFFICE KEY MAY DO (#385).
+
+  The key is a machine's, so this is an ALLOW list and the default is no: a new
+  action added tomorrow needs a signed-in person until somebody decides
+  otherwise. What is here changes data a person owns or the shape of their
+  screen; none of it decides anything, speaks as anybody, widens what the office
+  may reach or do, holds a credential, connects a source, or answers a question.
+  Everything else - answering, approving, declining, granting, revoking,
+  setting autonomy, undoing, taking a No back, saying something in a project as
+  the person, hiring, connecting, credentials, uploading material as theirs -
+  needs a session.
+*/
+const SERVICE_MAY: ReadonlySet<string> = new Set([
+  'create_project',
+  'rename_project',
+  'project_archive',
+  'project_unarchive',
+  'my_task_add',
+  'my_task_set',
+  'my_task_delete',
+  'my_task_reparent',
+  'task_add',
+  'task_update',
+  'contact_add',
+  'contact_update',
+  'contact_archive',
+  'contact_photo',
+  'contact_label_add',
+  'contact_label_rename',
+  'contact_label_remove',
+  'contact_labels_set',
+  'contact_fields_set',
+  'output_import',
+  'document_tag',
+  'document_rename',
+  'document_move',
+  'document_supersede',
+  'document_restore',
+  'document_pin',
+  'collection_put',
+  'collection_take',
+  'stop_job',
+  'retry_send',
+  'dashboard_layout_set',
+  'dashboard_layout_reset',
+  'document_order_set',
+  'document_order_reset',
+  'workspace_layout_set',
+  'workspace_layout_reset',
+  'plane_layout_set',
+  'plane_layout_reset',
+  'appearance_set',
+  'project_seen',
+  'project_look',
+])
 
 const allowed = async (presented: string): Promise<Answer> => {
-  if (presented === '') return { verdict: 'no', principal: null }
-  if (await tokenMatches(presented)) return { verdict: 'yes', principal: TOKEN_PRINCIPAL }
-  if (!looksLikeSession(presented)) return { verdict: 'no', principal: null }
+  if (presented === '') return { verdict: 'no', principal: null, kind: null }
+  if (await tokenMatches(presented)) return { verdict: 'yes', principal: null, kind: 'service' }
+  if (!looksLikeSession(presented)) return { verdict: 'no', principal: null, kind: null }
   return await sessionAllowed(presented)
 }
 
@@ -1495,7 +1592,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  const { verdict, principal } = await allowed(presented)
+  const { verdict, principal, kind } = await allowed(presented)
   if (verdict === 'no') {
     return json({ error: 'unauthorized' }, 401)
   }
@@ -1525,6 +1622,23 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const action = Object.hasOwn(ACTIONS, actionName) ? ACTIONS[actionName] : undefined
     if (action === undefined) {
       return json({ error: 'unknown action', actions: Object.keys(ACTIONS) }, 400)
+    }
+    /*
+      The office key is a machine. It may do what SERVICE_MAY lists and nothing
+      that decides, speaks or reaches as a person (#385). 403, not 401: the
+      credential is genuine and this is what it may not do, and the page must
+      not sign anybody out over it.
+    */
+    if (kind === 'service' && !SERVICE_MAY.has(actionName)) {
+      return json(
+        {
+          error: 'person_required',
+          message:
+            'This needs a signed-in person. The office key is a machine and cannot decide, approve, speak or connect as somebody.',
+          action: actionName,
+        },
+        403,
+      )
     }
     const args = { ...((body.args ?? {}) as Record<string, unknown>) }
     /*
@@ -1680,6 +1794,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     if (actionName === 'document_upload') {
+      // Material is recorded as GIVEN BY somebody; a session with no owner key is nobody (#385).
+      if (principal === null || principal === '') {
+        return json({ error: 'I cannot tell who is adding this, so it was not stored.' }, 403)
+      }
       const projectId = String(args.p_project_id ?? '')
       const name = String(args.p_name ?? '').trim()
       const mime = String(args.p_mime ?? '').trim() || 'application/octet-stream'
@@ -1759,7 +1877,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           p_storage_path: path,
           p_mime_type: mime,
           p_byte_size: bytes.byteLength,
-          p_added_by: 'grant',
+          p_added_by: principal,
           /*
             HIS, not ours (0414). `record_file_document` was written for a PDF
             the office read out of Drive and hardcoded `origin = 'made'`, so a

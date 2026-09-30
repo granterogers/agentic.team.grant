@@ -56,7 +56,7 @@ export const EXPOSURE_SQL = `
    where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
    order by 1`
 
-export const readReach = (rows: unknown[]): FnReach[] =>
+export const readReach = (rows: readonly unknown[]): FnReach[] =>
   (rows as Record<string, unknown>[]).map((r) => ({
     name: String(r.name),
     anon: r.anon === true,

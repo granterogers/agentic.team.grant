@@ -15,7 +15,8 @@
  *   - every request runs in a session whose application_name is PostgREST,
  *     which the ingress trigger reads (0541);
  *   - 23503 and 23505 are 409, any other error 400;
- *   - `GET /auth/v1/user` answers from `authUsers`, keyed by bearer token.
+ *   - `GET /auth/v1/user` answers from `authUsers`, keyed by bearer token;
+ *   - `POST /auth/v1/admin/generate_link` answers a link and records the address.
  */
 import { copyFile, mkdir } from 'node:fs/promises'
 import type { PgExecutor } from '../../src/db/pg-executor.ts'
@@ -41,6 +42,8 @@ export interface EdgeOptions {
 export interface Edge {
   call(request: Request): Promise<Response>
   readonly refusedUrls: string[]
+  /** Emails an admin sign-in link was generated for (the identity service's `generate_link`). */
+  readonly linksMinted: string[]
   outage(on: boolean, onlyFunction?: string): void
 }
 
@@ -48,6 +51,7 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
   let handler: ((r: Request) => Promise<Response>) | null = null
   let down: boolean | string = false
   const refusedUrls: string[] = []
+  const linksMinted: string[] = []
   const env: Record<string, string> = { SUPABASE_URL: DB_URL, ...o.env }
   ;(globalThis as unknown as { Deno: unknown }).Deno = {
     env: { get: (k: string) => env[k] },
@@ -81,6 +85,11 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
       const token = String(headers?.Authorization ?? '').replace(/^Bearer\s+/i, '')
       const email = o.authUsers?.[token]
       return email === undefined ? reply(401, {}) : reply(200, { email, email_confirmed_at: 'x' })
+    }
+    if (path === '/auth/v1/admin/generate_link') {
+      const asked = JSON.parse(String(init?.body ?? '{}')) as { email?: string }
+      linksMinted.push(String(asked.email ?? ''))
+      return reply(200, { action_link: `${DB_URL}/auth/v1/verify?token=isolated&type=magiclink` })
     }
     if (down === true || (typeof down === 'string' && path.endsWith(`/rpc/${down}`))) {
       return reply(503, { message: 'the database is unavailable' })
@@ -149,6 +158,7 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
   return {
     call: h,
     refusedUrls,
+    linksMinted,
     outage: (on, onlyFunction) => {
       down = on ? (onlyFunction ?? true) : false
     },
