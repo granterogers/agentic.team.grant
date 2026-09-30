@@ -113,3 +113,21 @@ drop function if exists app.job_held(uuid, text, integer);
 drop function if exists app.renew_lease(uuid, text, integer);
 drop function if exists app.settle_exhausted_jobs();
 drop function if exists app.job_situation(uuid);
+
+CREATE OR REPLACE FUNCTION app.mcp_job_status(p_job_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_catalog'
+AS $function$
+  select coalesce(
+    (select jsonb_build_object(
+              'job_id', j.job_id, 'kind', j.kind, 'state', j.state,
+              'reason', j.state_reason, 'created_at', j.created_at,
+              'finished_at', j.finished_at,
+              'output', (select left(o.body, 4000) from public.outputs o
+                          where o.job_id = j.job_id order by o.created_at desc limit 1)
+            )
+       from public.jobs j where j.job_id = p_job_id),
+    jsonb_build_object('error', 'no such job'))
+$function$;

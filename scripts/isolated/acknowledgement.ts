@@ -15,10 +15,12 @@
  * empty object, so every model-mediated path degrades and only the
  * deterministic reading can act. Nothing is sent: no notifier is constructed.
  */
+
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import { raiseBlocker } from '../../src/inference/record.ts'
 import type { Job } from '../../src/jobs/worker.ts'
 import { isolated } from './guard.ts'
+import { chatFor, markShown } from './shown.ts'
 
 const db = await isolated(process.argv[2] ?? 'ack374')
 const run = Date.now().toString(36)
@@ -72,7 +74,7 @@ const CHANNELS = ['teamhq', 'telegram', 'slack', 'voice']
 
 for (const channel of CHANNELS) {
   for (const c of CASES) {
-    const chat = `ack-${run}-${channel}-${String(seq)}`
+    const chat = chatFor(run, channel, seq)
     const asking = await turn(channel, chat, 'Draft the renewal note and send it to the venue.')
     /* As in production: the question is raised by the office.pursue job the
        turn started, a CHILD of it (conversation_before counts exactly those). */
@@ -94,6 +96,8 @@ for (const channel of CHANNELS) {
       workCanContinue: false,
     } as never)
     void blocker
+    // As in production: the question reached him (0622, #394).
+    await markShown(db, channel, chat, child)
     const reply = await turn(channel, chat, c.reply)
     let body = ''
     let thrown = ''

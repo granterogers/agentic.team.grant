@@ -122,8 +122,15 @@ describe("the handler answers only this conversation's ONE open question", () =>
     expect(
       src.indexOf("jsonb_build_object('awaiting_answer', ${lit(q.id)}::text)", i),
     ).toBeGreaterThan(i)
-    // Read back from the turn immediately before (ours), never searched for across the chat.
-    expect(src).toMatch(
+    // Read back from the turn immediately before (ours), never searched for across the chat. The query moved into
+    // app.open_questions_for_reply (0622, #394), so the property is asserted where it now lives.
+    const fn = readFileSync(
+      'migrations/0622_a_typed_yes_answers_the_question_he_was_shown.sql',
+      'utf8',
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^[ \t]*--.*$/gm, '')
+    expect(fn).toMatch(
       /or b\.blocker_id = \(select nullif\(j\.pinned_config ->> 'awaiting_answer', ''\)::uuid\s+from public\.jobs j\s+where j\.job_id = \(select job_id from ours\)\)/,
     )
   })

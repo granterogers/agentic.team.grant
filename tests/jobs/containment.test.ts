@@ -204,9 +204,7 @@ describe('containment: the worker asks before the handler', () => {
     expect(gate).toBeGreaterThan(0)
     expect(gate).toBeLessThan(onStart)
     expect(gate).toBeLessThan(handle)
-    expect(worker.slice(gate, gate + 300)).toMatch(
-      /moveTo\(db, job\.jobId, 'cancelled', contained\)/,
-    )
+    expect(worker.slice(gate, gate + 300)).toMatch(/moveJob\(db, job, 'cancelled', contained\)/)
   })
 })
 

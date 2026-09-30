@@ -263,7 +263,6 @@ check(
     ['lesson_retract', { p_lesson: ZERO }],
     ['routing_set', { p_phrase: 'x' }],
     ['attach', { p_slug: 'x', p_connector: 'notion', p_ref: 'r' }],
-    ['document_upload', { p_project_id: realProject, p_name: 'x', p_base64: 'eA==' }],
   ]
   let refused = 0
   for (const [action, args] of NO_BY) {
@@ -275,6 +274,18 @@ check(
     'a TEST member cannot reach any action whose function never asks who is deciding',
     refused === NO_BY.length,
     `${String(refused)} of ${String(NO_BY.length)} refused`,
+  )
+  // A test member MAY drop a file into a TEST project (Run 4, Phase 0: the upload suite has no other writer), and may
+  // not into a real one: refused by the fixture rule, in its own words - not by the person gate.
+  const upReal = await act(S_HARNESS, 'document_upload', {
+    p_project_id: realProject,
+    p_name: 'x.txt',
+    p_base64: 'eA==',
+  })
+  check(
+    'a TEST member cannot add material to a REAL project (refused by the test-principal rule, not by the person gate)',
+    upReal.status === 403 && /test principal/i.test(String(upReal.body.error)),
+    `http ${String(upReal.status)} ${JSON.stringify(upReal.body).slice(0, 90)}`,
   )
   const control = await act(S_GRANT, 'set_setting', {})
   check(

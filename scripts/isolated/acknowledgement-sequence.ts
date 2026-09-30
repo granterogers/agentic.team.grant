@@ -16,10 +16,12 @@
  * empty object, so every model-mediated path degrades and only the
  * deterministic reading can act. Nothing is sent: no notifier is constructed.
  */
+
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import { raiseBlocker } from '../../src/inference/record.ts'
 import type { Job } from '../../src/jobs/worker.ts'
 import { isolated } from './guard.ts'
+import { chatFor, markShown } from './shown.ts'
 
 const db = await isolated(process.argv[2] ?? 'seq374')
 const run = Date.now().toString(36)
@@ -70,7 +72,7 @@ const ask = async (channel: string, chat: string, what: string): Promise<string>
         returning job_id::text as id`)
     ).id,
   )
-  return String(
+  const raised = String(
     await raiseBlocker(db, {
       jobId: child,
       requestedAction: `Send the note about ${what}`,
@@ -81,6 +83,9 @@ const ask = async (channel: string, chat: string, what: string): Promise<string>
       workCanContinue: false,
     } as never),
   )
+  // As in production: the question reached him, AFTER it was raised (0622, #394).
+  await markShown(db, channel, chat, child)
+  return raised
 }
 const reply = async (channel: string, chat: string, said: string): Promise<string> => {
   const j = await turn(channel, chat, said)
@@ -112,7 +117,7 @@ for (const channel of ['teamhq', 'telegram', 'slack', 'voice']) {
 
   /* 1. question -> "ok thanks" -> clarification -> "yes please" */
   {
-    const chat = `seqy-${run}-${channel}`
+    const chat = chatFor(run, channel, 1)
     const q = await ask(channel, chat, 'the venue')
     const r1 = await reply(channel, chat, 'ok thanks')
     check(tag('"ok thanks" leaves the question open'), (await held(q)) === 'open', await held(q))
@@ -135,7 +140,7 @@ for (const channel of ['teamhq', 'telegram', 'slack', 'voice']) {
 
   /* 2. question -> "ok thanks" -> clarification -> "no thanks" */
   {
-    const chat = `seqn-${run}-${channel}`
+    const chat = chatFor(run, channel, 2)
     const q = await ask(channel, chat, 'the caterer')
     await reply(channel, chat, 'ok thanks')
     await reply(channel, chat, 'no thanks')
@@ -148,7 +153,7 @@ for (const channel of ['teamhq', 'telegram', 'slack', 'voice']) {
 
   /* 3. question -> "ok thanks" -> a contradiction: stays open */
   {
-    const chat = `seqc-${run}-${channel}`
+    const chat = chatFor(run, channel, 3)
     const q = await ask(channel, chat, 'the printer')
     await reply(channel, chat, 'ok thanks')
     await reply(channel, chat, 'no, go ahead')
@@ -161,7 +166,7 @@ for (const channel of ['teamhq', 'telegram', 'slack', 'voice']) {
 
   /* 4. STALE: an old question, an unrelated turn, then "yes please" */
   {
-    const chat = `seqs-${run}-${channel}`
+    const chat = chatFor(run, channel, 4)
     const q = await ask(channel, chat, 'the minibus')
     await reply(channel, chat, 'What is on the list for tomorrow?')
     await reply(channel, chat, 'yes please')
@@ -174,7 +179,7 @@ for (const channel of ['teamhq', 'telegram', 'slack', 'voice']) {
 
   /* 5. STALE: bound by "ok thanks", then answered elsewhere; "yes please" must not re-answer */
   {
-    const chat = `seqe-${run}-${channel}`
+    const chat = chatFor(run, channel, 5)
     const q = await ask(channel, chat, 'the florist')
     await reply(channel, chat, 'ok thanks')
     await db.execute(`select app.hq_answer_blocker(${lit(q)}::uuid, 'No, leave it', 'grant')`)
@@ -188,8 +193,8 @@ for (const channel of ['teamhq', 'telegram', 'slack', 'voice']) {
 
   /* 6. The binding does not cross chats. */
   {
-    const chatA = `seqxa-${run}-${channel}`
-    const chatB = `seqxb-${run}-${channel}`
+    const chatA = chatFor(run, channel, 6)
+    const chatB = chatFor(run, channel, 7)
     const q = await ask(channel, chatA, 'the tent')
     await reply(channel, chatA, 'ok thanks')
     await reply(channel, chatB, 'yes please')

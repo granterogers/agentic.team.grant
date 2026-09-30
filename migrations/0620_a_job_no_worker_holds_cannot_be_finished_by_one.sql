@@ -368,6 +368,32 @@ begin
 end;
 $fn$;
 
+/*
+  The place a person or a client asks "what is happening to this?" already exists: an MCP client polls
+  `mcp_job_status`. It said `state`, which is the machine's word - `paused` covers a question waiting for Grant, an
+  outage, and a needs-reconciliation stop that nobody must retry blind, and `running` covers a live worker and one
+  whose lease ran out. `situation` is the truthful one, from `app.job_situation`; `state` stays exactly as it was.
+*/
+create or replace function app.mcp_job_status(p_job_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = 'public', 'pg_catalog'
+as $fn$
+  select coalesce(
+    (select jsonb_build_object(
+              'job_id', j.job_id, 'kind', j.kind, 'state', j.state,
+              'situation', (app.job_situation(j.job_id) ->> 'situation'),
+              'reason', j.state_reason, 'created_at', j.created_at,
+              'finished_at', j.finished_at,
+              'output', (select left(o.body, 4000) from public.outputs o
+                          where o.job_id = j.job_id order by o.created_at desc limit 1)
+            )
+       from public.jobs j where j.job_id = p_job_id),
+    jsonb_build_object('error', 'no such job'))
+$fn$;
+
 revoke all on function app.job_held(uuid, text, integer) from public, anon, authenticated;
 revoke all on function app.renew_lease(uuid, text, integer) from public, anon, authenticated;
 revoke all on function app.settle_exhausted_jobs() from public, anon, authenticated;

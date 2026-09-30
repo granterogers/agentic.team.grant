@@ -200,6 +200,15 @@ const fp = 'a'.repeat(64)
     `select app.pause_job(${lit(id)}::uuid, 'awaiting_approval', 'asks a question', 'when he answers', false, null, null, ${lit(fp)})`,
   )
   const waiting = await situation(id)
+  const polled = (await one(`select app.mcp_job_status(${lit(id)}::uuid) as s`)).s as {
+    state: string
+    situation: string
+  }
+  check(
+    'a client polling the job is told the truthful thing: state paused, situation waiting_for_grant',
+    polled.state === 'paused' && polled.situation === 'waiting_for_grant',
+    `${polled.state} / ${polled.situation}`,
+  )
   await db.execute(`select app.let_job_go(${lit(id)}::uuid, 'he answered')`)
   const j = await job(id)
   const pauseOpen = Number(
@@ -540,6 +549,43 @@ const fp = 'a'.repeat(64)
     'D7: an output the dead attempt never reviewed is marked superseded, and the retry commits',
     third.finalState === 'complete' && st === 'superseded,approved',
     `${third.finalState} / ${st}`,
+  )
+}
+
+// ---- cancelled from outside while a worker is running it: the worker abandons, cleanly -------------------------------------------
+{
+  const id = await newJob()
+  const w = await dequeue(db, `cx-${run}`, true, true, [KIND], scope)
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((res) => {
+    release = res
+  })
+  const slow: Handler = {
+    reach: 'internal',
+    kind: KIND,
+    handle: async () => {
+      await gate
+      return out('finished a job that was called off')
+    },
+  }
+  const running = runJob(db, w as never, [slow], review)
+  await new Promise((r) => setTimeout(r, 300))
+  await db.execute(
+    `update public.jobs set state = 'cancelled', finished_at = app.now_utc(), state_reason = 'called off from outside' where job_id = ${lit(id)}::uuid`,
+  )
+  release()
+  let outcome = ''
+  try {
+    outcome = (await running).finalState
+  } catch (e) {
+    outcome = `threw: ${String((e as Error).message).slice(0, 70)}`
+  }
+  check(
+    'a job called off while a worker is running it: the worker abandons - no error, no output written for a cancelled job',
+    outcome === 'abandoned' &&
+      (await outputs(id)) === 0 &&
+      String((await job(id)).s) === 'cancelled',
+    `${outcome} / outputs ${String(await outputs(id))}`,
   )
 }
 
