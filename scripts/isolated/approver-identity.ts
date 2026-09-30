@@ -338,13 +338,27 @@ const secret = await one(
 await db.execute(`insert into public.telegram_bots (bot_id, username, staff_slug, is_pager, token_ref)
   values (${lit(BOT)}, 'isolated_chief_bot', 'chief-of-staff', true, ${lit(String(secret.id))}) on conflict do nothing`)
 let msg = 100000 + (Date.now() % 800000)
+/** A plan step's question (two options, the No named) or a Drive-shaped one (three, the last is the No). */
+const planQuestion = async (options: string[], declineOption: string | null) => {
+  const job = await realParent(db)
+  const id = String(
+    (
+      await one(`insert into public.blockers (job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+        values (${lit(job)}::uuid, ${lit(`Plan step ${run}`)}, 'proof', 'Nothing happens until somebody answers this question.',
+          array[${options.map(lit).join(',')}], 'chief-of-staff', false, ${declineOption === null ? 'null' : lit(declineOption)})
+        returning blocker_id::text as id`)
+    ).id,
+  )
+  return { job, id }
+}
 const buttonCase = async (
   label: string,
   actor: string,
   subject: string | null,
   action: 'approve' | 'decline' | 'mute_24h',
+  make: () => Promise<{ job: string; id: string }> = question,
 ) => {
-  const q = await question()
+  const q = await make()
   msg += 1
   await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
     values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q.job)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
@@ -391,6 +405,53 @@ const buttonCase = async (
         `select count(*)::int as c from public.preference_instructions where subject = 'grant'`,
       )) > 0,
     JSON.stringify(gm.done),
+  )
+}
+// The buttons answer through the one door, so a question that is NOT a generation approval is
+// answered as what it is: no notebook.generate child, the right option recorded, who pressed.
+{
+  const answered = async (id: string) =>
+    await one(
+      `select state::text as s, answered_option as o, answered_by as by from public.blockers where blocker_id = ${lit(id)}::uuid`,
+    )
+  const yes = await buttonCase('Grant approves a plan step', CHAT, 'grant', 'approve', () =>
+    planQuestion(['Yes, do it', 'No, leave it'], 'No, leave it'),
+  )
+  const ya = await answered(yes.q.id)
+  check(
+    'button: approving a plan-step question records its first option as Grant and starts no generation',
+    yes.done?.outcome === 'acted' &&
+      ya.s === 'resolved' &&
+      ya.o === 'Yes, do it' &&
+      ya.by === 'grant' &&
+      (await childrenOf(yes.q.job)) === 0,
+    JSON.stringify({ done: yes.done, ya }),
+  )
+  const no = await buttonCase('Grant declines a plan step', CHAT, 'grant', 'decline', () =>
+    planQuestion(['Yes, do it', 'No, leave it'], 'No, leave it'),
+  )
+  const na = await answered(no.q.id)
+  check(
+    'button: declining records the option its writer named as the No',
+    no.done?.outcome === 'acted' && na.o === 'No, leave it' && na.by === 'grant',
+    JSON.stringify(na),
+  )
+  const drive = await buttonCase(
+    'Grant declines a three-option question',
+    CHAT,
+    'grant',
+    'decline',
+    () =>
+      planQuestion(
+        ['Add them as source documents', 'Add them from now on without asking me', 'Ignore these'],
+        null,
+      ),
+  )
+  const da = await answered(drive.q.id)
+  check(
+    'button: a three-option question is declined with its LAST option, not its second',
+    drive.done?.outcome === 'acted' && da.o === 'Ignore these',
+    JSON.stringify(da),
   )
 }
 check(

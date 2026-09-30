@@ -149,6 +149,8 @@ export const mayAct = async (
      * whose answer counts is `job`, which is the one running.
      */
     readonly fingerprint?: string | null | undefined
+    /** The pre-0611 shape of the same fingerprint, for a step already in flight (0611). */
+    readonly legacyFingerprint?: string | null | undefined
     readonly job?: string | null | undefined
   },
 ): Promise<Decision> => {
@@ -173,7 +175,8 @@ export const mayAct = async (
        p_staff => ${where.staff === null || where.staff === undefined ? 'null' : lit(where.staff)},
        p_audience => ${where.audience === null || where.audience === undefined ? 'null' : lit(where.audience)},
        p_fingerprint => ${where.fingerprint === null || where.fingerprint === undefined ? 'null' : lit(where.fingerprint)},
-       p_job => ${uuidOrNull(where.job)}) as d`,
+       p_job => ${uuidOrNull(where.job)},
+       p_legacy_fingerprint => ${where.legacyFingerprint === null || where.legacyFingerprint === undefined ? 'null' : lit(where.legacyFingerprint)}) as d`,
   )
   const raw = rows[0]?.d as RawDecision | string | undefined
   const parsed: RawDecision =
@@ -320,6 +323,9 @@ export const governOutward = async (
     tool: what.tool,
     jobAskedFor: what.jobId,
     job: what.jobId,
+    // The specialist doing it. A tool Grant takes away from them on the Team page
+    // stops the duty, standing authorization or not.
+    staff: what.agent,
   })
 
   if (what.empty || decision.verdict === 'proceed') {
@@ -331,8 +337,10 @@ export const governOutward = async (
     the refusal window, and a duty that asks every hour would teach him to
     stop reading the questions. Nothing is raised and nothing is recorded as
     an impediment (it is not a fault). The job still records why it did not
-    act, but `quiet` tells the caller not to announce it: the standing
-    question is his to reopen by changing the dial or granting the tool.
+    act, but `quiet` tells the caller not to announce it. He reopens it with
+    "Let it ask again" on the Governance page, or overrides it by granting the
+    tool a standing yes; changing the dial does not, because a No stands until
+    it is taken back.
   */
   if (decision.remembered) {
     return { go: false, decision, said: refusalSentence(decision), blocker: null, quiet: true }

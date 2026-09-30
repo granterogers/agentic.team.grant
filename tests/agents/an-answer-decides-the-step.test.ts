@@ -12,7 +12,8 @@ describe('an answer already given decides the step (R45)', () => {
   const pursue = readFileSync('src/handlers/pursue.ts', 'utf8')
   const worker = readFileSync('src/jobs/worker.ts', 'utf8')
   it('the step asks the ONE boundary, carrying the exact action, who acts and who it reaches', () => {
-    const call = /const decision = await mayAct\(db, \{([\s\S]*?)\}\)/.exec(perform)?.[1] ?? ''
+    const call =
+      /const decision = await mayAct\(db, \{([\s\S]*?)\n {8}\}\)/.exec(perform)?.[1] ?? ''
     for (const wired of [
       'staff: step.specialist',
       'audience: step.audience',

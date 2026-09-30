@@ -55,9 +55,7 @@ stable
 security definer
 set search_path = public, pg_catalog
 as $$
-  with days as (
-    select coalesce((select (value #>> '{}')::integer from public.system_config
-                      where key = 'approval.refusal_days'), 30) as d),
+  with days as (select app.refusal_days() as d),
   latest as (
     select distinct on (coalesce(b.action_fingerprint, 'tool:' || b.standing_tool || ':' || coalesce(b.project_id::text, '')))
            b.*

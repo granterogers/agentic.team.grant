@@ -22,7 +22,10 @@ import type { PgExecutor } from '../../src/db/pg-executor.ts'
 
 export const DB_URL = 'http://replica.invalid'
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
-const AS_POSTGREST = "set local application_name = 'PostgREST 14.5';"
+// The edge functions call PostgREST with the SERVICE key, so the request's claims carry that role
+// (app.withdraw_refusal refuses a call that did not arrive this way).
+const AS_POSTGREST =
+  "set local application_name = 'PostgREST 14.5'; select set_config('request.jwt.claims', '{\"role\":\"service_role\"}', true);"
 
 export interface EdgeOptions {
   db: PgExecutor

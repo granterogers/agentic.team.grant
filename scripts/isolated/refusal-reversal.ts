@@ -68,11 +68,13 @@ const answer = async (b: string, a: string, by = 'grant') =>
     (await one(`select app.hq_answer_blocker(${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`))
       .r,
   )
+/** As the gateway calls it: through PostgREST with the service key, which sets the request's claims. */
+const SERVICE = `select set_config('request.jwt.claims', '{"role":"service_role"}', true);`
 const withdraw = async (b: string, by: string | null) =>
   json(
     (
       await one(
-        `select app.withdraw_refusal(${lit(b)}::uuid, ${by === null ? 'null' : lit(by)})::text as r`,
+        `${SERVICE} select app.withdraw_refusal(${lit(b)}::uuid, ${by === null ? 'null' : lit(by)})::text as r`,
       )
     ).r,
   )
@@ -281,6 +283,37 @@ await answer(bB, 'No, leave it')
   check(
     'and the No is still remembered after all of those',
     (await verdict(p4, fp, await job(p4))).verdict === 'refuse',
+    'refused',
+  )
+}
+{
+  const p4b = await project('claims')
+  const fp = await fingerprint({ action: 'claims', run })
+  const b = await ask(p4b, await job(p4b), fp)
+  await answer(b, 'No, leave it')
+  const direct = json(
+    (await one(`select app.withdraw_refusal(${lit(b)}::uuid, 'grant')::text as r`)).r,
+  )
+  check(
+    'called as plain SQL, the way a handler or a job would, it is refused even for the right name',
+    typeof direct.error === 'string' && /Only the gateway/.test(String(direct.error)),
+    String(direct.error).slice(0, 60),
+  )
+  const anon = json(
+    (
+      await one(
+        `select set_config('request.jwt.claims', '{"role":"anon"}', true); select app.withdraw_refusal(${lit(b)}::uuid, 'grant')::text as r`,
+      )
+    ).r,
+  )
+  check(
+    'called with the anon key it is refused even if the grant leaked',
+    typeof anon.error === 'string' && /Only the gateway/.test(String(anon.error)),
+    String(anon.error).slice(0, 60),
+  )
+  check(
+    'and the No still stands after both',
+    (await verdict(p4b, fp, await job(p4b))).verdict === 'refuse',
     'refused',
   )
 }

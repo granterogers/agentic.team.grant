@@ -347,8 +347,19 @@ export function validate(
     const specialist =
       typeof s?.specialist === 'string' && s.specialist.trim() !== '' ? s.specialist.trim() : null
     const declared = typeof s?.audience === 'string' ? s.audience.trim() : ''
+    /*
+      A label the validator does not know is treated as OUTSIDE, not as nothing (0611).
+      "client", "external" and "customer" all mean somebody outside the office, and an
+      unrecognised word falling to null made them the one spelling the boundary's floor
+      never saw. Only a missing label is null. The direction is the safe one: it can only
+      add a question.
+    */
     const audience: PlanStep['audience'] =
-      declared === 'office' || declared === 'grant' || declared === 'outside' ? declared : null
+      declared === 'office' || declared === 'grant' || declared === 'outside'
+        ? declared
+        : declared === ''
+          ? null
+          : 'outside'
 
     if (id === '' || seen.has(id)) {
       refused.push(`a step had ${id === '' ? 'no id' : `a repeated id (${id})`}`)

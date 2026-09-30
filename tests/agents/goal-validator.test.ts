@@ -376,19 +376,35 @@ describe('validate — a delivery capability may not reach outside the office', 
     expect(got.steps).toHaveLength(1)
   })
 
-  it('an unrecognised audience word is treated as unstated, not as permission', () => {
+  it('an unrecognised audience word is treated as OUTSIDE, never as permission (0611)', () => {
     /*
-      A model returning "everyone" or "" must not thereby escape the check by
-      failing to say the forbidden word. Unstated means the guard does not
-      fire — the approval policy is still there — but it must never mean the
-      guard is satisfied.
+      A model returning "client", "everyone" or "external" must not escape the
+      check by failing to say the one word the validator knows. It used to fall
+      to null, which meant the guard did not fire AND the authorization floor never
+      saw it. Only a MISSING label is null; a word nobody recognised means somebody
+      outside, which can only add a question.
     */
-    const got = validate(
+    for (const word of ['everyone', 'client', 'external']) {
+      const draft = validate(
+        { goal: 'g', steps: [step({ capability: 'draft.create', audience: word })] },
+        CATALOGUE,
+        ROSTER,
+      )
+      expect(draft.steps[0]?.audience).toBe('outside')
+    }
+    const delivery = validate(
       { goal: 'g', steps: [step({ capability: 'slack.post', audience: 'everyone' })] },
       CATALOGUE,
       ROSTER,
     )
-    expect(got.steps[0]?.audience).toBeNull()
+    expect(delivery.steps).toHaveLength(0)
+    // Control: a missing label is still null, and a stated one is kept.
+    const missing = validate(
+      { goal: 'g', steps: [step({ capability: 'draft.create' })] },
+      CATALOGUE,
+      ROSTER,
+    )
+    expect(missing.steps[0]?.audience).toBeNull()
   })
 })
 

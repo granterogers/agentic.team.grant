@@ -704,6 +704,15 @@ export const compile = (
           staff: step.specialist,
           audience: step.audience,
           fingerprint: await fingerprint(binds),
+          // A question raised before 0611 was fingerprinted without audience,
+          // specialist or request; the same step, in that old shape, still finds it.
+          legacyFingerprint: await fingerprint({
+            step: binds.step,
+            capability: binds.capability,
+            project: binds.project,
+            why: binds.why,
+            needs: binds.needs,
+          }),
           job: jobId,
         })
         /*
@@ -775,9 +784,12 @@ export const compile = (
           const pause: Paused = {
             reason: 'awaiting_approval',
             detail: `${step.capability}: ${decision.because}`,
-            resumeWhen: `Grant answers, or raises this project's autonomy above ${
-              decision.autonomy ?? 'its current level'
-            }.`,
+            resumeWhen:
+              decision.reason === 'outside_audience'
+                ? 'Grant answers. This reaches somebody outside the office, which no autonomy setting lifts.'
+                : `Grant answers, or raises this project's autonomy above ${
+                    decision.autonomy ?? 'its current level'
+                  }.`,
             /*
               Not resumable by a tick. `resumable_now` lists the four reasons
               that wait on something other than a person, and this is not one

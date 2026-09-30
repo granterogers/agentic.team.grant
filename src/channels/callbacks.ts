@@ -455,14 +455,31 @@ export const processCallbacks = async (
           })
           break
         }
+        /*
+          Through app.hq_answer_blocker, the one door that knows what answering
+          MEANS: it queues the follow-on for a generation approval, releases the
+          parked job, performs what the question promised (a standing grant, the
+          files a Drive question named) and records who answered. The buttons used
+          to call app.answer_generation_approval directly, which queued a
+          notebook.generate for ANY question with a button, released nothing, and
+          stored the wrong option for a three-option question.
+
+          Approve is the question's first option and Decline is the option its
+          writer named as the No (decline_option), else the last one - the same
+          convention the Drive question already follows ("Ignore these").
+        */
         const { rows: answered } = await db.execute(`
-          select app.answer_generation_approval(
-            app.open_approval_for_job(${lit(row.job_id)}::uuid),
-            ${action === 'approve' ? 'true' : 'false'},
+          select app.hq_answer_blocker(
+            q.blocker_id,
+            case when ${action === 'approve' ? 'true' : 'false'} then q.approval_options[1]
+                 else coalesce(q.decline_option, q.approval_options[array_length(q.approval_options, 1)]) end,
             -- Whoever pressed, as the office knows them; refused inside the
             -- function when it does not (0608). Never a default.
             app.command_principal(${lit(row.command_id)}::uuid)
           ) as r
+          from (select b.blocker_id, b.approval_options, b.decline_option
+                  from public.blockers b
+                 where b.blocker_id = app.open_approval_for_job(${lit(row.job_id)}::uuid)) q
         `)
         const r = (answered[0] as { r: Record<string, unknown> | null } | undefined)?.r ?? null
         await resolveNotification(db, row, action === 'approve' ? 'acted' : 'dismissed')
@@ -479,8 +496,12 @@ export const processCallbacks = async (
               : r.already === true
                 ? `already ${String(r.state)}`
                 : action === 'approve'
-                  ? `approved — queued as ${String(r.job_id).slice(0, 8)}`
-                  : 'declined; nothing was generated',
+                  ? r.job_id === undefined
+                    ? 'approved'
+                    : `approved — queued as ${String(r.job_id).slice(0, 8)}`
+                  : r.kind === undefined && r.approved === undefined
+                    ? 'declined'
+                    : 'declined; nothing was generated',
         })
         break
       }

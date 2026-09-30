@@ -97,8 +97,25 @@ update public.blockers b
  where b.blocker_id = o.blocker_id and o.opt is not null;
 -- BACKFILL-END
 
--- What answered this exact action, for this job.
-create or replace function app.action_answer(p_job uuid, p_fingerprint text)
+-- How many days a No lasts, in ONE place.
+create or replace function app.refusal_days()
+returns integer
+language sql
+stable
+security definer
+set search_path = public, pg_catalog
+as $$
+  select coalesce((select (value #>> '{}')::integer from public.system_config
+                    where key = 'approval.refusal_days'), 30)
+$$;
+
+revoke all on function app.refusal_days() from public;
+grant execute on function app.refusal_days() to ai_team_app, service_role;
+
+-- What answered this exact action, for this job. A step in flight when this landed was
+-- fingerprinted by the OLD shape (no audience, specialist or request); the caller passes
+-- that as well and either matches.
+create or replace function app.action_answer(p_job uuid, p_fingerprint text, p_legacy text default null)
 returns text
 language sql
 stable
@@ -110,20 +127,20 @@ as $$
            -- A No that was taken back decides nothing, and must not let an OLDER
            -- yes on the same action speak: taking a No back never approves.
            when b.refusal_withdrawn_at is not null then null
-           when b.answered_option = coalesce(b.decline_option, b.approval_options[2]) then 'no'
+           when b.answered_option = b.decline_option then 'no'
            when b.answered_option = b.approval_options[1] then 'yes'
            else 'unclear'
          end
     from public.blockers b
    where b.job_id = p_job
-     and b.action_fingerprint = p_fingerprint
+     and b.action_fingerprint in (p_fingerprint, coalesce(p_legacy, p_fingerprint))
      and b.state = 'resolved'
    order by b.resolved_at desc
    limit 1
 $$;
 
-revoke all on function app.action_answer(uuid, text) from public;
-grant execute on function app.action_answer(uuid, text) to ai_team_app, service_role;
+revoke all on function app.action_answer(uuid, text, text) from public;
+grant execute on function app.action_answer(uuid, text, text) to ai_team_app, service_role;
 
 /*
   THE DECISION BOUNDARY.
@@ -151,7 +168,8 @@ create or replace function app.authorize_effect(
   p_staff       text default null,
   p_audience    text default null,
   p_fingerprint text default null,
-  p_job         uuid default null)
+  p_job         uuid default null,
+  p_legacy_fingerprint text default null)
 returns jsonb
 language plpgsql
 stable
@@ -187,7 +205,7 @@ begin
     anything" (0421); a recorded refusal is a refusal.
   */
   if p_job is not null and p_fingerprint is not null then
-    v_answer := app.action_answer(p_job, p_fingerprint);
+    v_answer := app.action_answer(p_job, p_fingerprint, p_legacy_fingerprint);
     if v_answer in ('no', 'unclear') then
       return v || jsonb_build_object(
         'verdict', 'refuse', 'declined', true, 'reason', 'declined',
@@ -195,7 +213,9 @@ begin
     end if;
   end if;
 
-  if p_audience = 'outside' and v_verdict = 'proceed' then
+  -- Reading is not reaching: the floor starts at level 1, where something is written.
+  if p_audience = 'outside' and v_verdict = 'proceed'
+     and coalesce((v ->> 'action_level')::integer, 0) >= 1 then
     v_verdict := 'ask';
     v := v || jsonb_build_object(
       'verdict', 'ask', 'standing', null, 'reason', 'outside_audience',
@@ -226,8 +246,7 @@ begin
   end if;
 
   v_real := not coalesce(app.harness_job(p_job), false);
-  v_days := coalesce((select (value #>> '{}')::integer from public.system_config
-                       where key = 'approval.refusal_days'), 30);
+  v_days := app.refusal_days();
   select b.resolved_at,
          (b.answered_option = b.decline_option and b.refusal_withdrawn_at is null) as declined
     into v_last
@@ -254,8 +273,8 @@ begin
 end;
 $$;
 
-revoke all on function app.authorize_effect(uuid, text, uuid, text, text, text, uuid) from public;
-grant execute on function app.authorize_effect(uuid, text, uuid, text, text, text, uuid) to ai_team_app, service_role;
+revoke all on function app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text) from public;
+grant execute on function app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text) to ai_team_app, service_role;
 
 /*
   TAKING A NO BACK, explicitly.
@@ -269,10 +288,13 @@ grant execute on function app.authorize_effect(uuid, text, uuid, text, text, tex
       (authorize_effect) and the action is only ever approved by an answer.
     * It is attributed: the caller must be a principal the office knows (0608),
       and never a specialist or a harness name.
-    * It is for a PERSON's door. Execute is granted to service_role only, the
-      role the gateway uses - not to ai_team_app, which is what the worker and
-      every handler run as - so no job, specialist, synthetic or not, can call
-      it; a task tick never does; and src/ contains no call (a test reads it).
+    * It is for a PERSON's door. The function itself refuses any call that did
+      not arrive through PostgREST with the service key (request.jwt.claims), so
+      the anon key and SQL run by a handler or a job are refused whatever the
+      grants say; execute is granted to service_role only; a task tick never
+      calls it; and nothing in src/ names it (a test reads it). The worker
+      connects as a database owner, so the GRANT alone would restrict nobody
+      there - the claims check is what does.
     * Only a No, only a resolved question, only inside its window. Taking back a
       Yes, or something already expired, is refused with a reason.
     * It does not touch a standing authorization: that is a different row and a
@@ -290,6 +312,17 @@ declare
   v_refusal text;
   v_days    integer;
 begin
+  /*
+    Only through the gateway. PostgREST sets request.jwt.claims for the request,
+    with the role of the key that was presented: the gateway presents the service
+    key, and a call with the anon key, or from SQL that never came through
+    PostgREST (a handler, a job, a script), carries no such role and is refused
+    here whatever the grants say. The worker connects as a database owner, so the
+    grant alone restricts nobody there; this is the check that does.
+  */
+  if coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', '') <> 'service_role' then
+    return jsonb_build_object('error', 'Only the gateway, acting for a signed-in person, can take a No back.');
+  end if;
   v_refusal := app.principal_refusal(v_by);
   if v_refusal is not null then
     return jsonb_build_object('error', v_refusal);
@@ -310,8 +343,7 @@ begin
   if b.refusal_withdrawn_at is not null then
     return jsonb_build_object('ok', true, 'already', true, 'withdrawn_at', b.refusal_withdrawn_at);
   end if;
-  v_days := coalesce((select (value #>> '{}')::integer from public.system_config
-                       where key = 'approval.refusal_days'), 30);
+  v_days := app.refusal_days();
   if b.resolved_at <= app.now_utc() - make_interval(days => v_days) then
     return jsonb_build_object('error', 'That No has already run out, so the office may ask again without this.');
   end if;
@@ -321,12 +353,19 @@ begin
    where blocker_id = p_blocker;
 
   perform public.append_event(
-    extensions.gen_random_uuid(), 'user', v_by, 'approval', 'refusal.withdrawn',
-    false, b.project_id,
-    jsonb_build_object('remembered_no', true),
-    jsonb_build_object('remembered_no', false),
-    format('%s took back the No to: %s', v_by, left(b.requested_action, 120)),
-    '[]'::jsonb, null, b.standing_tool, null, b.job_id);
+    p_correlation_id => extensions.gen_random_uuid(),
+    p_actor_kind => 'user',
+    p_actor => v_by,
+    p_trigger => 'approval',
+    p_action_type => 'refusal.withdrawn',
+    p_reversible => false,
+    p_project_id => b.project_id,
+    p_before_state => jsonb_build_object('remembered_no', true),
+    p_after_state => jsonb_build_object('remembered_no', false),
+    p_rationale_summary => format('%s took back the No to: %s', v_by, left(b.requested_action, 120)),
+    p_source_refs => '[]'::jsonb,
+    p_tool_used => b.standing_tool,
+    p_related_job_id => b.job_id);
 
   return jsonb_build_object('ok', true, 'withdrawn', p_blocker, 'by', v_by,
     'note', 'Nothing was approved. The next attempt may ask again.');
@@ -719,7 +758,10 @@ begin
       'that was not taken: the question this to-do stands for was not answered by somebody the office can name, so it is still open');
   end if;
 
-  if p_state is distinct from v_was then
+  -- No undo for a to-do that stands for a question: taking the tick back would flip the
+  -- to-do and leave the question answered and the job released.
+  if p_state is distinct from v_was
+     and not exists (select 1 from public.tasks where task_id = v_id and satisfies_blocker is not null) then
     v_undo := app.undo_offer(
       'task.state',
       format('%s marked %s', left(v_title, 60), p_state),
@@ -779,7 +821,10 @@ begin
        set state = coalesce(nullif(old.state, ''), 'todo'), done_at = null, completed_by = null,
            blocked_on = coalesce(old.blocked_on, '')
      where task_id = new.task_id;
-    if b.job_id is not null then
+    -- Only when somebody was named and refused. An external board pulling 'done' names
+    -- nobody and is reconciled on every sync; recording each one would add an
+    -- append-only row every fifteen minutes for ever.
+    if b.job_id is not null and new.completed_by is not null then
       perform app.cannot(b.job_id, 'not_capable', 'answer a question from a completed to-do',
                          'task_answers_blocker', left(r ->> 'error', 400), null);
     end if;
@@ -789,30 +834,40 @@ end;
 $$;
 
 /*
-  THE IDENTITY-BEARING WRAPPERS ARE THE GATEWAY'S ALONE.
+  THE IDENTITY-BEARING AND AUTHORITY-SETTING WRAPPERS ARE THE GATEWAY'S ALONE.
 
-  Each of these takes the answering principal as an argument and trusts it,
-  because the gateway (hq-api, running as service_role) supplies it from the
-  credential it verified. Supabase grants EXECUTE on every new public function to
-  anon and authenticated by default, and 0607/0608 revoked only from PUBLIC, so
-  anybody holding the project's anon key could call them directly and NAME
-  themselves: p_by => 'grant'. Found by reading the live ACLs during the Run 2
-  review; 272 of 275 security-definer functions in public are open the same
-  way, which is recorded as its own follow-up rather than swept here.
-
-  This closes the ones that decide who approved something. The gateway, the
-  telegram webhook and the worker all use service_role, and nothing in the
-  product calls these as anon or authenticated.
+  Each of these takes the answering principal as an argument and trusts it (the
+  gateway, running as service_role, supplies it from the credential it
+  verified), or sets what the office may do (the dial, a specialist's tools, the
+  document review gate) with 'grant' hardcoded as the actor. Supabase grants
+  EXECUTE on every new public function to anon and authenticated by default, and
+  0607/0608 revoked only from PUBLIC, so anybody holding the project's anon key
+  could call them directly and NAME themselves: p_by => 'grant'. (The product
+  does not publish that key: it is in no page, script or repository file, only
+  in the functions' environment and the Supabase dashboard.) Found by reading the
+  live ACLs in the Run 2 review; 272 of 275 security-definer functions in public
+  were open the same way. THIS closes every public function that names p_by and
+  the four setters that feed the boundary; the rest is recorded as its own
+  follow-up rather than swept here. The gateway, the telegram webhook and the
+  worker all use service_role, and nothing in the product calls these as anon or
+  authenticated.
 */
-revoke all on function public.hq_answer_blocker(uuid, text, text) from public, anon, authenticated;
-revoke all on function public.hq_approve_tool(uuid, jsonb, text) from public, anon, authenticated;
-revoke all on function public.hq_decline_tool(uuid, text, text) from public, anon, authenticated;
-revoke all on function public.hq_grant_standing(text, text, uuid, timestamptz, text) from public, anon, authenticated;
-revoke all on function public.hq_revoke_standing(uuid, text, text) from public, anon, authenticated;
-revoke all on function public.sender_admitted(text, text, text) from public, anon, authenticated;
-grant execute on function public.hq_answer_blocker(uuid, text, text) to service_role;
-grant execute on function public.hq_approve_tool(uuid, jsonb, text) to service_role;
-grant execute on function public.hq_decline_tool(uuid, text, text) to service_role;
-grant execute on function public.hq_grant_standing(text, text, uuid, timestamptz, text) to service_role;
-grant execute on function public.hq_revoke_standing(uuid, text, text) to service_role;
-grant execute on function public.sender_admitted(text, text, text) to service_role;
+-- REVOKE-BEGIN
+do $revoke$
+declare f record;
+begin
+  for f in
+    select p.oid::regprocedure as sig
+      from pg_proc p
+     where p.pronamespace = 'public'::regnamespace
+       and p.prokind = 'f'
+       and ( pg_get_function_arguments(p.oid) ~ '\mp_by\M'
+          or p.proname in ('hq_autonomy_set', 'hq_staff_tool_set', 'approve_document',
+                           'discard_document', 'sender_admitted', 'hq_withdraw_refusal', 'hq_task_state') )
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', f.sig);
+    execute format('grant execute on function %s to service_role', f.sig);
+  end loop;
+end
+$revoke$;
+-- REVOKE-END

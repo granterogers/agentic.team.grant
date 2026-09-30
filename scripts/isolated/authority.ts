@@ -643,7 +643,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const body = String(
     (
       await one(
-        `select pg_get_functiondef('app.authorize_effect(uuid, text, uuid, text, text, text, uuid)'::regprocedure) as d`,
+        `select pg_get_functiondef('app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text)'::regprocedure) as d`,
       )
     ).d,
   )
@@ -844,6 +844,242 @@ const answer = async (b: string, a: string, by = 'grant') =>
   }
 }
 
+// ---- 13. what the third review found -------------------------------------------------------------
+{
+  const p = await project('third-review', 'suggest')
+  // (a) reading is not reaching: the floor starts where something is written
+  const read = await mayAct(db as never, { projectId: p, tool: 'db.read', audience: 'outside' })
+  check(
+    'a READ labelled outside proceeds (the floor starts at level 1)',
+    read.verdict === 'proceed',
+    read.verdict,
+  )
+  const write = await mayAct(db as never, {
+    projectId: p,
+    tool: 'draft.create',
+    audience: 'outside',
+  })
+  check('control: a write labelled outside still asks', write.verdict === 'ask', write.verdict)
+
+  // (b) the duty is held to its specialist's grant too
+  const [holder, bare] = (
+    await db.execute(`select slug from public.staff order by slug limit 2`)
+  ).rows.map((r) => String((r as { slug: string }).slug))
+  await db.execute(
+    `insert into public.staff_tools (staff_slug, tool) values (${lit(String(holder))}, 'notion.write') on conflict do nothing`,
+  )
+  await db.execute(
+    `delete from public.staff_tools where staff_slug = ${lit(String(bare))} and tool = 'notion.write'`,
+  )
+  const duty = async (agent: string) => {
+    const j = await job(p, 'duty:third-review', 'google.write_calendar_tasks')
+    return governOutward(db as never, {
+      jobId: j,
+      projectId: p,
+      tool: 'notion.write',
+      summary: 's',
+      detail: 'd',
+      empty: false,
+      agent,
+    })
+  }
+  const granted = await duty(String(holder))
+  check(
+    'a duty by a specialist who holds the tool asks as it always did (control)',
+    !granted.go && granted.blocker !== null,
+    `blocker ${String(granted.blocker).slice(0, 8)}`,
+  )
+  const ungranted = await duty(String(bare))
+  check(
+    'a duty by a specialist whose grant was taken away is refused, whatever else holds',
+    !ungranted.go &&
+      ungranted.decision.reason === 'specialist_not_granted' &&
+      ungranted.blocker === null,
+    String(ungranted.decision.reason),
+  )
+  await db.execute(
+    `select app.grant_standing('notion.write', ${lit(p)}::uuid, 'third review', 'grant', null)`,
+  )
+  const standingToo = await duty(String(bare))
+  check(
+    'even with a standing authorization for the tool',
+    !standingToo.go && standingToo.decision.reason === 'specialist_not_granted',
+    String(standingToo.decision.reason),
+  )
+
+  // (c) a question in flight when 0611 lands still finds its answer under the NEW fingerprint
+  const pf = await project('legacy', 'act')
+  const jf = await job(pf, 'telegram:grant-legacy', 'office.pursue')
+  await db
+    .execute(
+      `update public.jobs set state = 'running', started_at = now(), leased_until = now() + interval '5 minutes', lease_owner = 'authority' where job_id = ${lit(jf)}::uuid`,
+    )
+    .catch(() => undefined)
+  const why = `LEGACY ${run}`
+  const oldShape = {
+    step: 'k9:task.create',
+    capability: 'task.create',
+    project: pf,
+    why,
+    needs: [] as string[],
+  }
+  await pauseJob(db as never, jf, {
+    reason: 'awaiting_approval',
+    detail: 'legacy',
+    resumeWhen: 'an answer',
+    resumable: false,
+    binds: oldShape,
+  })
+  const bf = String(
+    (
+      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (${lit(pf)}::uuid, ${lit(jf)}::uuid, 'Legacy proof', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+    ).id,
+  )
+  const sql = readFileSync(
+    'migrations/0611_authorization_is_asked_once_and_a_no_is_remembered.sql',
+    'utf8',
+  )
+  await db.execute(/-- BACKFILL-BEGIN([\s\S]*?)-- BACKFILL-END/.exec(sql)?.[1] ?? 'select 1')
+  await answer(bf, 'No, leave it')
+  const legacyStep = (capability: 'task.create') => ({
+    goal: 'legacy',
+    steps: [{ id: 'k9', capability, why, needs: [], specialist: null, audience: 'outside' }],
+    unreachable: [],
+    refused: [],
+    how: 'fallback',
+  })
+  const [st] = compile(legacyStep('task.create') as never, db as never, jf, pf, 'legacy proof')
+  const res = await st?.run({})
+  check(
+    'a pre-0611 question answered No is honoured by the step that resumes under the new fingerprint, at a level where it would otherwise proceed',
+    (res?.outcome as { declined?: boolean } | undefined)?.declined === true,
+    JSON.stringify(res?.outcome ?? res?.pause ?? {}).slice(0, 80),
+  )
+
+  // (d) the revoke block, run against Supabase-style default privileges, closes every door it names
+  const names = [
+    'hq_answer_blocker',
+    'hq_approve_tool',
+    'hq_decline_tool',
+    'hq_grant_standing',
+    'hq_revoke_standing',
+    'sender_admitted',
+    'hq_withdraw_refusal',
+    'hq_task_state',
+    'hq_autonomy_set',
+    'hq_staff_tool_set',
+    'approve_document',
+    'discard_document',
+  ]
+  await db.execute(`do $g$ declare f record; begin
+      for f in select p.oid::regprocedure as sig from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in (${names.map(lit).join(',')})
+      loop execute format('grant execute on function %s to public, anon, authenticated', f.sig); end loop; end $g$`)
+  const open = async () =>
+    Number(
+      (
+        await one(
+          `select count(*)::int as n from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in (${names.map(lit).join(',')}) and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute'))`,
+        )
+      ).n,
+    )
+  const before = await open()
+  check(
+    'control: with the default grants restored, those functions are open to anon and authenticated',
+    before >= names.length,
+    `${String(before)} open`,
+  )
+  const block = /-- REVOKE-BEGIN([\s\S]*?)-- REVOKE-END/.exec(sql)?.[1] ?? ''
+  await db.execute(block)
+  const after = await open()
+  check(
+    'the revoke block closes every one, and the gateway role keeps them',
+    after === 0 &&
+      Number(
+        (
+          await one(
+            `select count(*)::int as n from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in (${names.map(lit).join(',')}) and not has_function_privilege('service_role', p.oid, 'execute')`,
+          )
+        ).n,
+      ) === 0,
+    `${String(after)} still open`,
+  )
+  const pBy = Number(
+    (
+      await one(
+        `select count(*)::int as n from pg_proc p where p.pronamespace = 'public'::regnamespace and pg_get_function_arguments(p.oid) ~ '\\mp_by\\M' and (has_function_privilege('anon', p.oid, 'execute'))`,
+      )
+    ).n,
+  )
+  check(
+    'and no public function that names p_by is left open to anon',
+    pBy === 0,
+    `${String(pBy)} open`,
+  )
+
+  // (e) the set of enabled level-1 tools is a decision, not an accident
+  const level1 = (
+    await db.execute(
+      `select tool from public.tool_permissions where level = 1 and enabled order by tool`,
+    )
+  ).rows.map((r) => String((r as { tool: string }).tool))
+  check(
+    'the enabled level-1 tools are exactly the ones classified as internal or read-only (a new one must be decided)',
+    JSON.stringify(level1) ===
+      JSON.stringify([
+        'document.create',
+        'draft.create',
+        'preference.update',
+        'task.create',
+        'task.extract',
+        'web.read',
+      ]),
+    level1.join(','),
+  )
+
+  // (f) a tick from nobody writes no impediment, and a tick that answered offers no undo
+  const j6 = await job(p, 'telegram:grant-third-tick')
+  const b6 = String(
+    (
+      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (${lit(p)}::uuid, ${lit(j6)}::uuid, 'Quiet tick proof', 'third review', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+    ).id,
+  )
+  const t6 = String(
+    (
+      await one(
+        `select task_id::text as id from public.tasks where satisfies_blocker = ${lit(b6)}::uuid`,
+      )
+    ).id,
+  )
+  await db.execute(
+    `update public.tasks set state = 'done', done_at = now() where task_id = ${lit(t6)}::uuid`,
+  )
+  await db.execute(
+    `update public.tasks set state = 'done', done_at = now() where task_id = ${lit(t6)}::uuid`,
+  )
+  const imp = Number(
+    (
+      await one(
+        `select count(*)::int as n from public.job_impediments where job_id = ${lit(j6)}::uuid`,
+      )
+    ).n,
+  )
+  check(
+    'an external "done" with no principal is reconciled quietly: no append-only row per sync',
+    imp === 0,
+    `${String(imp)} impediments`,
+  )
+  const ok = json(
+    (await one(`select app.hq_task_state(${lit(t6)}, 'done', null, 'grant')::text as r`)).r,
+  )
+  check(
+    'a tick that answers the question offers no undo (it could not take the answer back)',
+    ok.undo === null || ok.undo === undefined,
+    JSON.stringify(ok).slice(0, 80),
+  )
+}
+
 // ---- 10. review findings, each with the state it would have corrupted --------
 {
   const p = await project('review')
@@ -928,7 +1164,9 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await db.execute(
     `alter table public.blockers drop column action_fingerprint, drop column decline_option`,
   )
-  await db.execute(`drop function app.authorize_effect(uuid, text, uuid, text, text, text, uuid)`)
+  await db.execute(
+    `drop function app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text)`,
+  )
   const boundary = await mayAct(db as never, {
     projectId: p,
     tool: 'notion.write',
