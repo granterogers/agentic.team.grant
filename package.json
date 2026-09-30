@@ -333,6 +333,7 @@
     "verify:lastword": "tsx scripts/verify/lastword.ts",
     "check:undo": "tsx scripts/check-undo.ts",
     "check:believes": "tsx scripts/check-believes.ts",
+    "check:anon-exposure": "tsx scripts/check-anon-exposure.ts",
     "check:answerable": "tsx scripts/check-answerable.ts",
     "check:voice-sessions": "tsx scripts/check-voice-sessions.ts",
     "check:door-origins": "tsx scripts/check-door-origins.ts",

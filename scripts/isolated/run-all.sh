@@ -5,9 +5,9 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd); cd "$ROOT"
 SOCK=${ISOLATED_PG_SOCKET:-/tmp/pgs}; PORT=${ISOLATED_PG_PORT:-55432}; P="psql -h $SOCK -p $PORT -U postgres -q"
 fresh() { $P -c "drop database if exists $1" >/dev/null 2>&1; $P -c "create database $1 template $2"; }
 status=0
-# The candidate: production's schema (post) plus every migration on this branch after it.
+# The candidate: production's schema (post, through 0612) plus every migration on this branch after it (MIG_FLOOR).
 fresh cand post
-for m in $(ls migrations/*.sql | awk -F/ '{print $2}' | awk '$0 >= "0601"'); do
+for m in $(ls migrations/*.sql | awk -F/ '{print $2}' | awk -v f="${MIG_FLOOR:-0613}" '$0 >= f'); do
   $P -d cand -v ON_ERROR_STOP=1 -f migrations/$m >/dev/null || { echo "FAIL applying $m to cand"; exit 1; }
   echo "   cand + $m"
 done

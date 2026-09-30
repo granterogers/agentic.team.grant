@@ -623,5 +623,6 @@
   "0609_a_wait_is_not_an_attempt.sql": "91cdd8c1f43c5a9f7efe6414ec3549fdbc4c26a1bbf89fc155aa4e669a34713a",
   "0610_an_answer_may_perform_what_the_question_promised.sql": "065906933c557b1707761c8b01e33513d6b9caf6572c37ed8d9132978ed7f88d",
   "0611_authorization_is_asked_once_and_a_no_is_remembered.sql": "8ca075c3c816dceb1b47fbbf98f436765f0c56fd3ef73add2c685697039d1265",
-  "0612_internal_office_work_proceeds_and_a_no_can_be_taken_back.sql": "8884c84e4bb580f637368e4be56e0483b63e7575a264c3d574e8918273daa9b4"
+  "0612_internal_office_work_proceeds_and_a_no_can_be_taken_back.sql": "8884c84e4bb580f637368e4be56e0483b63e7575a264c3d574e8918273daa9b4",
+  "0613_the_public_key_reaches_no_function.sql": "c012fcecdc535782819212ecd59315093617d2ed8344656ecd5d91ed34f62809"
 }
