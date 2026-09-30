@@ -633,5 +633,9 @@
   "0619_a_job_keeps_where_it_came_from.sql": "9f1f0dff57552f910bcc73f9cbc8c6c64658bfaf15e3ee79a6d42de86221f3d7",
   "0620_a_job_no_worker_holds_cannot_be_finished_by_one.sql": "edd1d268269cf12a74ea95c70ac1e65f7d7c1d3dbfdbc9a117ba780886be6701",
   "0621_a_retry_can_commit_what_its_predecessor_left.sql": "3a0cc74a9bcb521b981e9bbfc580c68969d843a3238f20b4a7e0dd2026c9caf4",
-  "0622_a_typed_yes_answers_the_question_he_was_shown.sql": "f410ba351c046753d1e2d0ee4cd9ac108630dabc6e24f5351d45680ffdbd7557"
+  "0622_a_typed_yes_answers_the_question_he_was_shown.sql": "f410ba351c046753d1e2d0ee4cd9ac108630dabc6e24f5351d45680ffdbd7557",
+  "0623_a_message_names_the_question_it_asked.sql": "3d2999ffcb1cc0fcf364310254389b439f93d7cc243a8c9f5f1ffbd64469ea10",
+  "0624_forwarded_content_is_not_intent.sql": "1b0a33b566b9d7c85e0065a59895eab322ff5c84b78cfb1c78e676a95dcbe6fd",
+  "0625_a_child_has_an_author_and_an_attempt_a_name.sql": "fae407ba076742998536c029aa3f5ffd1a942d96ab53acf8e94b53a011f5b418",
+  "0626_a_voice_note_dispatch_asks_the_ci_ledger.sql": "bc9ab1ff66b44cc74acf4397bc61025a4924724e9a77dc2a8d1cee7e395fc336"
 }

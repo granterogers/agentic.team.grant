@@ -20,7 +20,7 @@ declared complete**: rows marked OP or AD remain, and the next run is *Final Aud
 | A3 | Harness lineage reached third-party writes (Notion, NotebookLM, Google...) | `containmentRefusal` at `runJob` from `app.job_origin` | 0603 | `external-containment` 19/19, `containment.test` | Run 1-4 live suites cancel fixtures before the worker runs them | PP | none |
 | A4 | Unknown origin read as real traffic | positive origin model, `adapter_key_ok`, `internal_root_ok` | 0603-0605 | `synthetic-origins` 36/36, `legit-origins` 24/24 | Run 3 identity 26/26 live | PP | exact impersonation with the service key is the **stated limit** (AD) |
 | A5 | Harness turns visible in the dashboard chat | `conversation_history` asks `harness_job` | 0602 | `chat-containment` 4/4 | `verify:history` on replica; not driven live in Run 5 | IO | none known |
-| A6 | Dormant direct sends: telegram-webhook voice refusal and GitHub dispatch (#380) | voice dispatch now asks the CI ledger; refusal send is reachable only by a signed voice update (transcription `api`) | 0626 (Run 5) | `ci-voice-ledger` 8/8, `telegram-voice-dispatch-ledger.test` | see ARCHITECTURE-RUN-5.md Production | see Run 5 | refusal-message send itself stays dormant (AD) |
+| A6 | Dormant direct sends: telegram-webhook voice refusal and GitHub dispatch (#380) | voice dispatch now asks the CI ledger; refusal send is reachable only by a signed voice update (transcription `api`) | 0626 (Run 5) | `ci-voice-ledger` 8/8, `telegram-voice-dispatch-ledger.test` | see ARCHITECTURE-RUN-5.md Production | PP: run5-live 20/20 + ledger reserve/release live | refusal-message send itself stays dormant (AD) |
 | A7 | `is_fixture`-only display readers and briefing branches (#380) | filtered where they reach outward; the rest display only | 0597-0604 | `check:leaks` | 0 harness rows reach them | AD | #380 stays open |
 | A8 | Reads are ungated (`browser.gather` etc.) | none, by design | - | - | - | AD | stated in the audit |
 | A9 | `provision_missing_channels` is time-gated, not lineage-gated | 0419 15-minute rule, 0477 one-attempt-a-day | 0419, 0477 | `verify:identity` | live before this campaign | AD | #380 |
@@ -60,7 +60,7 @@ declared complete**: rows marked OP or AD remain, and the next run is *Final Aud
 |---|---|---|---|---|---|---|
 | D1 | Slack sender not admitted (#388) | `sender_admitted` | `slack-sender` | run3 live | PP | issue still open for the team_id half |
 | D2 | `staff_for_bot` failure read as "unknown bot"; enqueue failure swallowed into a 200 (message loss) | fail closed, 503 | `sender-authorization` | run3 | PP | none |
-| D3 | Forwarded message carries his authority (#392.1, #397) | recorded at Telegram and Slack doors; answers nothing; not "asked for" at `may_act` | `typed-yes`, `forwarded-authority` 8/8 | Run 5 Production | see Run 5 | a forwarded turn is still `trusted` for provenance (it IS his message) - the authority to act unasked is what is withheld |
+| D3 | Forwarded message carries his authority (#392.1, #397) | recorded at Telegram and Slack doors; answers nothing; not "asked for" at `may_act` | `typed-yes`, `forwarded-authority` 8/8 | run5-live 20/20 (live) | none | a forwarded turn is still `trusted` for provenance (it IS his message) - the authority to act unasked is what is withheld |
 | D4 | Telegram bar is a shared secret plus a public user id; no replay protection (#392.2) | none (credential-strength) | - | - | AD | rotate on suspicion; per-bot secret |
 | D5 | Slack `team_id` unbound (#392.3) | none | - | - | OP | needs a workspace allow-list; fixtures pollute `slack_workspaces` |
 
@@ -71,11 +71,11 @@ declared complete**: rows marked OP or AD remain, and the next run is *Final Aud
 | E1 | A job forgot where it came from | origin columns written once by trigger | `job-origin` | run4 live 24/24 | PP | legacy jobs keep inference |
 | E2 | A stale worker finished a job another held | fence (leased_by, attempt) | `job-lifecycle` 27/27 | run4 live | PP | superseded by the claim (E5) |
 | E3 | Retried parent duplicated children | `job_child_slots` | `job-delegation` | run4 live | PP | E6 |
-| E4 | Typed yes bound to the job's last message (#394, #396) | a delivery names its question (0623) | `question-binding` 27/27, `typed-yes` | Run 5 Production | see Run 5 | dashboard/voice by tree only (Cross-channel debt) |
-| E5 | A refunded attempt number could pass a zombie (#398.3) | `jobs.claim_gen` (0625) | `job-fence` 14/14 | Run 5 Production | see Run 5 | none |
-| E6 | `enqueue_child` cannot tell who asks (#398.1-2) | caller args, stale caller refused, deferral keyed on its own claim, dead parent refuses | `job-fence`, architecture test | Run 5 Production | see Run 5 | `agents/perform.ts` step still passes no caller (AD, named in the test) |
-| E7 | assertHeld then insert not atomic (#398.4) | same-statement `job_held` on the output insert | `job-fence` | Run 5 Production | see Run 5 | other writes still use the pair |
-| E8 | Voice-note dispatch bypassed the CI ledger (#391) | 0626 | `ci-voice-ledger` | Run 5 Production | see Run 5 | none |
+| E4 | Typed yes bound to the job's last message (#394, #396) | a delivery names its question (0623) | `question-binding` 27/27, `typed-yes` | run5-live 20/20 (live) | none | dashboard/voice by tree only (Cross-channel debt) |
+| E5 | A refunded attempt number could pass a zombie (#398.3) | `jobs.claim_gen` (0625) | `job-fence` 14/14 | run5-live 20/20 (live) | none | none |
+| E6 | `enqueue_child` cannot tell who asks (#398.1-2) | caller args, stale caller refused, deferral keyed on its own claim, dead parent refuses | `job-fence`, architecture test | run5-live 20/20 (live) | none | `agents/perform.ts` step still passes no caller (AD, named in the test) |
+| E7 | assertHeld then insert not atomic (#398.4) | same-statement `job_held` on the output insert | `job-fence` | run5-live 20/20 (live) | none | other writes still use the pair |
+| E8 | Voice-note dispatch bypassed the CI ledger (#391) | 0626 | `ci-voice-ledger` | run5-live 20/20 (live) | none | none |
 
 ## F. Totals
 

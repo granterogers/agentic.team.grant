@@ -1,3 +1,9 @@
+> ## 2026-09-30 - Architecture Run 5 (question binding, forwarded content, fenced children) - PRODUCTION
+> Migrations 0623-0626 applied; worker, telegram-webhook and slack-events deployed; run5-live 20/20 and Runs 1-4 live green;
+> `check:leaks` exit 0. A delivery now names the question it asked; a reply binds to that question or to nothing; forwarded words are
+> not intent; a claim has a number and a child has an author. Read `docs/ARCHITECTURE-RUN-5.md`, `docs/architecture-run-5/`
+> (CROSS-CHANNEL, AUDIT-RECONCILIATION, DECISION-389) and ADR-0056. Next: Final Audit Reconciliation.
+
 # Handover
 
 > **Read `CLAUDE.md` first.** It is the standing brief — Grant's own

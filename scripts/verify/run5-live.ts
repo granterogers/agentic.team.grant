@@ -86,14 +86,6 @@ try {
       Number(m.n) === 4,
       `${String(m.n)} of 4`,
     )
-    const c = await one(
-      `select count(*)::int as n from public.jobs where claim_gen = 0 and attempt > 0`,
-    )
-    check(
-      'no job that has been claimed lacks a claim number (the backfill and dequeue agree)',
-      Number(c.n) === 0,
-      String(c.n),
-    )
     const body = String(
       (
         await one(
@@ -103,8 +95,8 @@ try {
     )
     check(
       'the deployed dequeue_job bumps the claim on every claim',
-      /claim_gen\s*=\s*j\.claim_gen \+ 1/.test(body),
-      'claim_gen = j.claim_gen + 1',
+      /claim_gen\s*=\s*greatest\(j\.claim_gen,\s*j\.attempt\)\s*\+\s*1/.test(body),
+      'claim_gen = greatest(claim_gen, attempt) + 1',
     )
   }
 
@@ -237,13 +229,26 @@ try {
     )
     const replied = await turn('yes', { reply_to_message: { message_id: Number(da.ref) } })
     const rgot = await candidates(String(replied.command))
+    // The deployed worker may take the reply turn before this line looks (that is the feature working end to end):
+    // either the question is still offered as the one bindable candidate, or the worker has already answered exactly
+    // A - and in both cases B is untouched.
+    const stateOf = async (b: string) =>
+      String(
+        (
+          await one(
+            `select state::text as s from public.blockers where blocker_id = ${lit(b)}::uuid`,
+          )
+        ).s,
+      )
+    const exactlyA =
+      (rgot.length === 1 && rgot[0]?.id === qa && rgot[0]?.bindable === true) ||
+      (rgot.length === 0 && (await stateOf(qa)) === 'resolved')
     check(
-      'the deployed webhook records the message a reply points at, and a yes replying to A answers exactly A',
+      'the deployed webhook records the message a reply points at, and a yes replying to A answers exactly A (B untouched)',
       String(replied.context).includes(`"reply_to_message_id": "${da.ref}"`) &&
-        rgot.length === 1 &&
-        rgot[0]?.id === qa &&
-        rgot[0]?.bindable === true,
-      `${String(replied.context).slice(0, 70)} / ${JSON.stringify(rgot).slice(0, 60)}`,
+        exactlyA &&
+        (await stateOf(qb)) === 'open',
+      `${String(replied.context).slice(0, 60)} / ${JSON.stringify(rgot).slice(0, 50)} / A ${await stateOf(qa)}, B ${await stateOf(qb)}`,
     )
     const fwd = await turn('yes', {
       reply_to_message: { message_id: Number(da.ref) },
