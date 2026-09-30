@@ -581,32 +581,60 @@ try {
       })
       return r.status
     }
+    /*
+      THE DOOR, then the function. These two writes decide who is on a project and what a specialist is told, so
+      the gateway wants a signed-in PERSON (#385): the office key is a machine and is refused by name. This suite
+      holds the key, and production has one person a suite must not borrow. So it proves the two halves it can:
+      the door refuses the key BY NAME (the wiring is real - a route that did not exist would say unknown action),
+      and the function the door calls does what the sheet asks. A signed-in press is proved in the isolated
+      suites, where a person can be signed in.
+    */
     const wrote = await post('project_staff', {
       p_slug: SLUG,
       p_staff_slug: 'quality-director',
       p_on: false,
     })
+    check(
+      'the door reaches the action and refuses the office key by name (a credential is not a person)',
+      `http ${String(wrote)}`,
+      wrote === 403,
+    )
+    await db.execute(`select public.set_project_staff(${lit(SLUG)}, 'quality-director', false)`)
     const nowOff = ((await one(`select public.staff_on_project(${lit(projectId)}::uuid) as s`)).s ??
       []) as string[]
     check(
-      'and a write action over HTTP actually changes the office',
-      `http ${String(wrote)}, grace on project=${String(nowOff.includes('quality-director'))}`,
-      wrote === 200 && !nowOff.includes('quality-director'),
+      'and the function it calls changes the office (a specialist taken off the project)',
+      `grace on project=${String(nowOff.includes('quality-director'))}`,
+      !nowOff.includes('quality-director'),
     )
     await db.execute(`select public.set_project_staff(${lit(SLUG)}, 'quality-director', true)`)
 
     /*
-      Clearing a brief, over HTTP, which is the one argument in the whole
-      action map whose EMPTY value is a value. The endpoint treats an empty
-      required argument as missing — right for every other action it guards,
-      and it made this one unreachable with `missing: p_instruction` until
-      0327.
+      Clearing a brief, which is the one argument in the whole action map whose EMPTY value is a value. The
+      endpoint treats an empty required argument as missing - right for every other action it guards, and it made
+      this one unreachable with `missing: p_instruction` until 0327. A refusal for being a machine is NOT a
+      refusal for a missing argument, and the message says which.
     */
-    const cleared = await post('project_instruction', {
-      p_slug: SLUG,
-      p_staff_slug: 'research-director',
-      p_instruction: '',
+    const clearedResponse = await fetch(base, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${hqToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'project_instruction',
+        args: { p_slug: SLUG, p_staff_slug: 'research-director', p_instruction: '' },
+      }),
     })
+    const clearedBody = await clearedResponse.text()
+    check(
+      'and clearing a brief is refused as a machine, not read as a missing argument',
+      `http ${String(clearedResponse.status)} ${clearedBody.slice(0, 60)}`,
+      clearedResponse.status === 403 &&
+        clearedBody.includes('person_required') &&
+        !clearedBody.includes('missing'),
+    )
+    await db.execute(
+      `select public.set_project_instruction(${lit(SLUG)}, 'research-director', 'Prefer the interview transcripts over the summaries on this one.')`,
+    )
+    await db.execute(`select public.set_project_instruction(${lit(SLUG)}, 'research-director', '')`)
     const emmaNow = String(
       (
         await one(
@@ -615,9 +643,9 @@ try {
       ).v ?? '',
     )
     check(
-      'and clearing a brief reaches the office rather than being read as a missing argument',
-      `http ${String(cleared)}, brief=${emmaNow === '' ? '(cleared)' : emmaNow}`,
-      cleared === 200 && emmaNow === '',
+      'and the function accepts an EMPTY brief as a value (clearing works)',
+      `brief=${emmaNow === '' ? '(cleared)' : emmaNow}`,
+      emmaNow === '',
     )
 
     const unauthorised = await fetch(`${base}?section=project_export&id=${projectId}`)
@@ -673,7 +701,8 @@ try {
     (
       await one(`
         select count(*)::int as n from public.responsibilities
-         where slug like ${lit('settings-proof-%')} or created_by = 'grant' and project_id is null
+         where slug like ${lit('settings-proof-%')}
+            or responsibility_id::text = any (array[${['', ...madeAutomations].map(lit).join(', ')}]::text[])
       `)
     ).n,
   )

@@ -1641,7 +1641,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const mayDo =
       kind === 'person' ||
       SERVICE_MAY.has(actionName) ||
-      (kind === 'harness' && action.by !== undefined)
+      (kind === 'harness' && action.by !== undefined) ||
+      // A test member may drop a file into a TEST project (checked below): the upload verification suite has
+      // no other way to be a writer now that the office key is a machine (Run 4, Phase 0).
+      (kind === 'harness' && actionName === 'document_upload')
     if (!mayDo) {
       return json(
         {
@@ -1837,6 +1840,26 @@ Deno.serve(async (request: Request): Promise<Response> => {
       const b64 = String(args.p_base64 ?? '')
       if (!/^[0-9a-f-]{36}$/i.test(projectId)) return json({ error: 'which project?' }, 400)
       if (name === '') return json({ error: 'the file needs a name' }, 400)
+      if (kind === 'harness') {
+        // A test member decides only test traffic (0614/0618); adding material to a REAL project is not that.
+        const shown = await fetch(
+          `${DB_URL}/rest/v1/projects?project_id=eq.${projectId}&select=is_fixture&limit=1`,
+          { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+        ).catch(() => null)
+        const rows =
+          shown !== null && shown.ok
+            ? ((await shown.json().catch(() => [])) as { is_fixture?: boolean }[])
+            : []
+        if (rows[0]?.is_fixture !== true) {
+          return json(
+            {
+              error:
+                'A test principal cannot add material to something real; it may only use a test project.',
+            },
+            403,
+          )
+        }
+      }
 
       /*
         Decoded here so the SIZE is the real one. A base64 string is a third

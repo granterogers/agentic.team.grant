@@ -28,6 +28,7 @@
  */
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { harnessSession } from './lib/harness-session.ts'
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN
 if (supabase === undefined || supabase === '') {
@@ -71,10 +72,21 @@ const projectId = String(
   ).id ?? '',
 )
 
+let held: Awaited<ReturnType<typeof harnessSession>> | null = null
+const testMember = async () => {
+  held ??= await harnessSession(db, ref)
+  return held
+}
+
 const post = async (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
   const r = await fetch(`https://${ref}.supabase.co/functions/v1/hq-api`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
+    // A dropped file is a person's act (#385): the office key is refused by name. The test member is a real
+    // signed-in session the database lets act only on test traffic, and this suite's project is a fixture.
+    headers: {
+      Authorization: `Bearer ${(await testMember()).access}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ action: 'document_upload', args }),
   })
   const body = (await r.json().catch(() => ({}))) as Record<string, unknown>

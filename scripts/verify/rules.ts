@@ -35,6 +35,7 @@
  * the assertions happen here in TypeScript against what that select returned.
  */
 
+import { readFile } from 'node:fs/promises'
 import { readCorrection } from '../../src/agents/correction.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
@@ -349,27 +350,65 @@ if (apiToken === '') {
     return { status: response.status, body: await response.text() }
   }
 
-  const absent = await post({
+  /*
+    THE DOOR, then the function (#385). Deciding a suggestion is a person's press, so the gateway refuses the
+    office key by name - which proves the action is registered and routed (a route that did not exist would say
+    "unknown action"). The function's OWN refusals are then asked directly, as the operator, because the door
+    would never let this suite through: what is proved here is that the wrapper resolves and the function
+    refuses an id that cannot exist, in its own words.
+  */
+  const viaKey = await post({
     p_suggestion_id: '00000000-0000-0000-0000-000000000000',
     p_accept: true,
   })
   check(
-    'the action exists and reaches the function',
-    `http ${String(absent.status)} ${absent.body.slice(0, 80)}`,
-    absent.status === 200 && absent.body.includes('there is no such suggestion'),
+    'the action is routed, and the door refuses the office key by name',
+    `http ${String(viaKey.status)} ${viaKey.body.slice(0, 80)}`,
+    viaKey.status === 403 && viaKey.body.includes('person_required'),
+  )
+  const absent = String(
+    (
+      await one(
+        `select public.decide_suggestion('00000000-0000-0000-0000-000000000000'::uuid, true)::text as v`,
+      )
+    ).v,
+  )
+  check(
+    'the function it calls refuses an id that cannot exist, in its own words',
+    absent.slice(0, 80),
+    absent.includes('there is no such suggestion'),
   )
 
   /*
-    And a missing verdict is refused rather than defaulted.
-
-    A boolean that defaults to false would turn a dropped field into a silent
-    DECLINE, and a decline cannot be undone here: the offer never comes back.
+    And a missing verdict is refused rather than defaulted: a boolean that defaults to false would turn a dropped
+    field into a silent DECLINE, which cannot be undone here. The door enforces `required` - but it asks WHO is
+    asking first (403 for the office key), so this suite cannot reach that refusal without a signed-in person.
+    What it CAN prove is the declaration the door enforces, read from the source it is deployed from, and that
+    the function itself has no default for the verdict (a call that omits it does not resolve at all).
   */
-  const noVerdict = await post({ p_suggestion_id: '00000000-0000-0000-0000-000000000000' })
+  const source = await readFile(
+    new URL('../../supabase/functions/hq-api/index.ts', import.meta.url),
+    'utf8',
+  )
   check(
-    'a press with no verdict is refused, not read as a decline',
-    `http ${String(noVerdict.status)} ${noVerdict.body.slice(0, 80)}`,
-    noVerdict.status === 400 && noVerdict.body.includes('p_accept'),
+    'the door declares the verdict REQUIRED for this action',
+    'declared in supabase/functions/hq-api/index.ts',
+    /suggestion_decide:\s*\{[^}]*required:\s*\[[^\]]*'p_accept'/.test(source),
+  )
+  const omitted = await db
+    .execute(
+      `select public.decide_suggestion('00000000-0000-0000-0000-000000000000'::uuid)::text as v`,
+    )
+    .then(
+      () => 'resolved (a default exists)',
+      (e: unknown) => String((e as Error).message).slice(0, 80),
+    )
+  check(
+    'and the function has no default for it: a call that omits the verdict does not resolve',
+    omitted,
+    omitted.includes('42883') ||
+      omitted.includes('does not exist') ||
+      omitted.includes('No function matches'),
   )
 }
 

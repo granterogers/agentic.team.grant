@@ -745,18 +745,58 @@ section = 'the presses'
     ).v ?? '',
   )
   const gateway = `https://${REF}.supabase.co/functions/v1/hq-api`
+  /*
+    These three presses are a signed-in PERSON's (#385): the gateway refuses the office key for each, by name
+    (asserted below). This suite holds the key, so it presses them the way the gateway does for a person - the
+    function the action is routed to, named in the action map - as the operator. The door and the effect are
+    proved separately, which is the honest shape: a signed-in press is proved in the isolated suites.
+  */
+  const FUNCTIONS: Record<string, string> = {
+    register_connector: 'register_mcp_provider',
+    offer_connector_tool: 'offer_mcp_tool',
+    revoke_connector: 'revoke_mcp_provider',
+  }
   const press = async (
     action: string,
     args: Record<string, unknown>,
   ): Promise<Record<string, unknown>> => {
+    const named = Object.entries(args)
+      .map(([k, v]) => `${k} => ${v === null ? 'null' : lit(String(v))}`)
+      .join(', ')
+    const { rows } = await db.execute(`select public.${FUNCTIONS[action]}(${named})::text as r`)
+    const raw = (rows[0] as { r?: string } | undefined)?.r ?? '{}'
+    const parsed = (() => {
+      try {
+        return JSON.parse(raw) as unknown
+      } catch {
+        return { value: raw }
+      }
+    })()
+    return (typeof parsed === 'object' && parsed !== null ? parsed : { value: parsed }) as Record<
+      string,
+      unknown
+    >
+  }
+  for (const action of Object.keys(FUNCTIONS)) {
     const r = await fetch(gateway, {
       method: 'POST',
       headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, args }),
+      body: JSON.stringify({
+        action,
+        args: {
+          p_name: 'x',
+          p_endpoint: 'https://example.invalid',
+          p_provider: 'x',
+          p_discovered: 'x',
+        },
+      }),
     })
-    const body = (await r.json()) as { result?: unknown; error?: string }
-    if (!r.ok) throw new Error(body.error ?? `http ${String(r.status)}`)
-    return (body.result ?? {}) as Record<string, unknown>
+    const t = await r.text()
+    ok(
+      `the door refuses the office key for ${action}, by name`,
+      r.status === 403 && t.includes('person_required'),
+      `http ${String(r.status)}`,
+    )
   }
   const inventory = async (): Promise<Record<string, unknown> | undefined> => {
     const r = await fetch(`${gateway}?section=connectors`, {

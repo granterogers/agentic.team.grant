@@ -567,7 +567,10 @@ try {
       insert into public.slack_channel_map (channel_id, team_id, project_id, channel_name, purpose, active)
       values (${lit(realChan)}, ${lit(team)}, pr, ${lit(`zz rollback ${run}`)}, 'project', true);
       insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key)
-      values ('slack', ${lit(`${realChan}:1790000000.000900`)}, 'U0RBACTOR01',
+      values ('slack', ${lit(`${realChan}:1790000000.000900`)},
+              -- A REAL turn is from a sender the office admits (0615): Grant's own Slack id. The fixture used to
+              -- be a made-up user, which was a stranger by the rule the door now enforces (Run 4, Phase 0).
+              (select actor from public.subject_identities where origin_channel = 'slack' and subject = 'grant' limit 1),
               ${lit(`Asked in a real channel ${run}`)}, ${lit(`slack:message:${realChan}:1790000000.000900`)})
       returning command_id into c;
       e := app.enqueue_inbound(c);
@@ -981,24 +984,38 @@ try {
       does not — `verify:search` found exactly that shape — so both legs are
       driven rather than one standing in for the other.
     */
+    /*
+      Saying something in a project is a person's act (#385): the gateway refuses the office key by name, and a
+      TEST member may not speak in a REAL project (0618) - which is what `mine` is, on purpose (#45). So the two
+      halves are driven separately: the door's refusal of the key, and the function it routes to, pressed as the
+      person it stands for, in a project declared a test origin so the door still writes the turn synthetic.
+    */
     const posted = await fetch(base, {
       method: 'POST',
       headers: { Authorization: `Bearer ${hqToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'say',
-        args: { p_project_id: mine, p_text: `Said over HTTP ${run}` },
+        args: { p_project_id: mine, p_text: `Refused over HTTP ${run}` },
       }),
     })
-    // A read section answers `{data}`; an action answers `{action, result}`.
-    // Two shapes on one endpoint, and reading the wrong one reports http 200
-    // with ok=undefined — which looks like a broken action and is a broken test.
-    const postedBody = (await posted.json().catch(() => ({}))) as {
-      result?: { ok?: boolean; error?: string }
+    const postedText = await posted.text()
+    check(
+      'the door refuses the office key for say, by name (a credential is not a person)',
+      `http ${String(posted.status)}`,
+      posted.status === 403 && postedText.includes('person_required'),
+    )
+    const said = await one(`
+      select public.say_in_project(${lit(mine)}::uuid, ${lit(`Said over HTTP ${run}`)}, null, '{}'::text[], 'grant')::text as r`)
+    let postedBody: { result?: { ok?: boolean; error?: string } } = {}
+    try {
+      postedBody = { result: JSON.parse(String(said.r)) as { ok?: boolean } }
+    } catch {
+      postedBody = {}
     }
     check(
-      'and the studio can SAY something over HTTP, not only read',
-      `http ${String(posted.status)}, ok=${String(postedBody.result?.ok)}`,
-      posted.ok && postedBody.result?.ok === true,
+      'and the function it routes to says it, as the person, in a declared test project',
+      `ok=${String(postedBody.result?.ok)}`,
+      postedBody.result?.ok === true,
     )
     /*
       Through the whole chain, and contained (#381): the gateway wrote the

@@ -30,6 +30,7 @@ import { readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { dequeue, runJob } from '../../src/jobs/worker.ts'
 import { buildPass } from '../../src/office/pass.ts'
+import { harnessSession } from './lib/harness-session.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -66,10 +67,25 @@ if (bearer === '') {
   process.exit(2)
 }
 
+/*
+  Ticking a task is a person's act (#385): the office key is refused by name, and the TEST member - a real
+  signed-in session the database lets decide only test traffic - is what a suite can be. `task_state` is the one
+  action here that needs it; the my_task_* family is open to the key, as it always was.
+*/
+let member: { access: string } | null = null
+const bearerFor = async (action: string): Promise<string> => {
+  if (action !== 'task_state') return bearer
+  member ??= await harnessSession(db, ref)
+  return member.access
+}
+
 const press = async (action: string, args: Record<string, unknown>): Promise<unknown> => {
   const r = await fetch(ENDPOINT, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${await bearerFor(action)}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ action, args }),
   })
   const body = (await r.json()) as { result?: unknown; error?: string }
@@ -758,9 +774,9 @@ check(
 )
 
 // Ticking it.
-await db.execute(`
-  update public.tasks set state = 'done', done_at = app.now_utc()
-   where task_id = ${lit(String(made.id))}::uuid`)
+// Through the door a person ticks it by (#385): the test member, on a task raised by this suite's own harness job.
+// A raw UPDATE of the row has no principal, and answering a question is refused for that (0608) - correctly.
+await press('task_state', { p_task_id: String(made.id), p_state: 'done' })
 /*
   "Let go" is a TRANSITION, not a state. The deployed worker ticks every
   minute and took this fixture job 0.9s after it was queued (a job with no

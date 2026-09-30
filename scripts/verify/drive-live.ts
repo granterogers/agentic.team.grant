@@ -16,6 +16,7 @@
  * the browse response is checked for anything credential-shaped.
  */
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { pressAsPerson } from './lib/as-person.ts'
 
 let pass = 0
 let fail = 0
@@ -64,16 +65,18 @@ const browse = async (
   const body = JSON.parse(raw) as { data?: { files?: DriveFile[] } }
   return { status: r.status, files: body.data?.files ?? [], raw }
 }
+/*
+  Picking a file out of Drive is a person's press (#385): the gateway refuses the office key by name. This suite
+  holds the key, so the press goes to the function the action is routed to, as the operator (lib/as-person.ts),
+  and the result is wrapped in the shape the gateway would have answered with. Whether the DOOR refuses the key
+  is asserted in verify:run3-effects-live, where it does not depend on Grant's Google account being connected.
+*/
 const act = async (
   action: string,
   args: Record<string, unknown>,
 ): Promise<Record<string, unknown>> => {
-  const r = await fetch(API, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, args }),
-  })
-  return { status: r.status, ...((await r.json().catch(() => ({}))) as Record<string, unknown>) }
+  const result = await pressAsPerson(db, action, args)
+  return { status: 200, action, result }
 }
 
 /* --- 1. the office can see Drive at all ---------------------------------- */

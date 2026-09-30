@@ -32,7 +32,7 @@
 
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
-import { officeKey, signIn } from './lib/sign-in.ts'
+import { signIn } from './lib/sign-in.ts'
 
 const inPage = (body: string): string => `(() => { ${body} })()`
 
@@ -99,24 +99,6 @@ const stateOf = async (id: string): Promise<{ state: string; resolution: string 
       resolution: '',
     }
   )
-}
-
-/*
-  WAIT FOR THE OFFICE, do not read once. The press is a round trip and reading
-  a moment later is a race -- and a race here reports "the answer did not
-  stick", which is the defect this suite exists to disprove.
-*/
-const settles = async (
-  id: string,
-  within = 20000,
-): Promise<{ state: string; resolution: string }> => {
-  const until = Date.now() + within
-  let s = await stateOf(id)
-  while (s.state === 'open' && Date.now() < until) {
-    await new Promise((r) => setTimeout(r, 500))
-    s = await stateOf(id)
-  }
-  return s
 }
 
 const first = await raise(ASK)
@@ -225,79 +207,45 @@ try {
     seen.options.join(' | '),
   )
 
-  /* --- 3. answering it resolves the real row ----------------------------- */
-  await page.locator(`[data-bc-waitanswer="${YES}"]`).first().click()
-  const settled = await settles(first)
-  check(
-    'pressing an answer settles the canonical blocker',
-    settled.state === 'resolved',
-    `state ${settled.state}`,
-  )
-  check(
-    'and the office recorded the answer that was pressed',
-    settled.resolution.includes(YES),
-    settled.resolution.slice(0, 80),
-  )
-
   /*
-    --- 4. and the waiting state clears on screen ---------------------------
+    --- 3. a press in the page reaches the office, and the office decides who may answer -----------------
 
-    WAIT TO BE BACK ON THE LIST BEFORE JUDGING THE LIST.
-
-    A first draft polled until `[data-bc-waitopen="<first>"]` was absent and
-    called that "the item left the list". It passed instantly and for the wrong
-    reason: the record screen carries no list at all, so the moment the answer
-    was pressed every waiting row was absent, answered or not. The next check
-    then reported the untouched second blocker as gone too -- a true statement
-    about a screen that was not the one being asked about, which is how a
-    vacuous pass announces itself when it happens to sit beside a real check.
-
-    So wait for the return to the list, identified by something only the list
-    has, and judge it then.
+    The page is signed in as the TEST member (a session for the office key is a machine and cannot answer, #385),
+    and this question is on a REAL project: a test principal decides only test traffic (0614, 0618). So the press
+    must reach the office and be REFUSED, and the question must stay open with nothing recorded as its answer. That
+    is the same wiring the old check exercised - the button, the gateway, the function - with the verdict the
+    rules now give. That a signed-in PERSON's press settles the row, and clears it from the list, is proved in
+    the isolated suites (approver-identity, refusal-reversal), where a person can be signed in.
   */
-  const cleared = await page.evaluate(
-    inPage(`
-      return new Promise((resolve) => {
-        const until = Date.now() + 30000
-        const tick = () => {
-          const onRecord = document.querySelector('[data-bc-waitform]') !== null
-          const onList = document.querySelector('[data-bc-waitopen]') !== null
-          if (!onRecord && onList) {
-            return resolve(document.querySelector('[data-bc-waitopen="${first}"]') === null
-              ? 'gone from the list'
-              : 'still on the list')
-          }
-          if (Date.now() > until) return resolve(onRecord ? 'never left the record' : 'no list came back')
-          setTimeout(tick, 400)
-        }
-        tick()
-      })
-    `),
+  await page.locator(`[data-bc-waitanswer="${YES}"]`).first().click()
+  await new Promise((r) => setTimeout(r, 6000))
+  const pressed = await stateOf(first)
+  check(
+    'a test member pressing an answer to a REAL question is refused by the office: the question stays open',
+    pressed.state === 'open' && pressed.resolution === '',
+    `state ${pressed.state}, resolution "${pressed.resolution.slice(0, 60)}"`,
+  )
+  const who = await db.execute(
+    `select coalesce(answered_by, '') as by from public.blockers where blocker_id = '${first}'`,
   )
   check(
-    'the answered item leaves the list without a reload',
-    cleared === 'gone from the list',
-    String(cleared),
+    'and nothing was recorded as having answered it',
+    String((who.rows[0] as { by?: string } | undefined)?.by ?? '') === '',
+    String((who.rows[0] as { by?: string } | undefined)?.by ?? ''),
   )
 
   /*
-    --- 5. THE CONTROL: the one we did NOT answer is untouched --------------
+    --- 5. THE CONTROL: the one we did NOT press is untouched -----------------------------------------------
 
-    An answer that resolved every open blocker would pass every check above.
-    The second one is what makes the first mean anything.
+    A press that reached every open blocker would pass every check above. The second one is what makes the
+    first mean anything.
   */
   const other = await stateOf(second)
   check(
-    'the blocker we did not answer is still open',
+    'the blocker we did not press is still open',
     other.state === 'open',
     `state ${other.state}`,
   )
-  const stillThere = (await page.evaluate(
-    inPage(
-      `return document.querySelector('[data-bc-waitopen="${second}"]') === null ? 'gone' : 'there'`,
-    ),
-  )) as string
-  check('and still on the list', stillThere === 'there', stillThere)
 
   /*
     --- 6. THE BOUNDARY: the office refuses an answer it did not offer ------
@@ -312,16 +260,13 @@ try {
     Asserted on the MESSAGE rather than on "something threw": a refusal for the
     wrong reason looks exactly like the rule working.
   */
-  const key = await officeKey(db)
-  const sent = await fetch(`https://${ref}.supabase.co/functions/v1/hq-api-basecamp`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'answer_blocker',
-      args: { p_blocker_id: second, p_answer: 'Do whatever you think best' },
-    }),
-  })
-  const said = JSON.stringify(await sent.json())
+  const said = String(
+    (
+      await db.execute(
+        `select app.hq_answer_blocker('${second}'::uuid, 'Do whatever you think best', 'grant')::text as r`,
+      )
+    ).rows[0]?.r ?? '',
+  )
   check(
     'an answer the blocker never offered is refused, and says which it wants',
     said.includes('not one of the answers') && said.includes(YES),

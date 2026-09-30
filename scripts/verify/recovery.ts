@@ -30,6 +30,7 @@
 
 import { readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { pressAsPerson, refusedForTheKey } from './lib/as-person.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -65,15 +66,24 @@ if (bearer === '') {
   process.exit(2)
 }
 
-const press = async (action: string, args: Record<string, unknown>): Promise<unknown> => {
-  const r = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, args }),
+/*
+  These presses are a signed-in person's (#385); the office key is refused by name at the door (asserted below).
+  This suite holds the key, so it presses them as the gateway does for a person: the function each action is
+  routed to, as the operator. See lib/as-person.ts.
+*/
+const press = (action: string, args: Record<string, unknown>): Promise<unknown> =>
+  pressAsPerson(db, action, args)
+
+for (const action of ['detach', 'reattach', 'browser_session_forget']) {
+  const d = await refusedForTheKey(ENDPOINT, bearer, action, {
+    p_attachment_id: '00000000-0000-4000-8000-000000000000',
+    p_session: '00000000-0000-4000-8000-000000000000',
   })
-  const body = (await r.json()) as { result?: unknown; error?: string }
-  if (!r.ok) throw new Error(body.error ?? `http ${String(r.status)}`)
-  return body.result
+  check(
+    `the door refuses the office key for ${action}, by name (a credential is not a person)`,
+    `http ${String(d.status)}`,
+    d.status === 403 && d.named,
+  )
 }
 const ask = async (section: string): Promise<unknown> => {
   const r = await fetch(`${ENDPOINT}?section=${section}`, {
