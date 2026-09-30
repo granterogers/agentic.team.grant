@@ -489,23 +489,46 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (queued !== null && command.voice_file_id !== null) {
     const gh = (await rpcOne('github_dispatch')) as { repository?: string; token?: string }
     if (typeof gh?.token === 'string' && gh.token !== '' && typeof gh.repository === 'string') {
-      woke = true
-      const dispatch = fetch(`https://api.github.com/repos/${gh.repository}/dispatches`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${gh.token}`,
-          Accept: 'application/vnd.github+json',
-          'Content-Type': 'application/json',
-          'User-Agent': 'ai-team-hq-webhook',
-        },
-        // No payload beyond the type. The job is already in the queue; the
-        // runner's job is to drain it, not to be told what is in it.
-        body: JSON.stringify({ event_type: 'voice-note' }),
-      }).catch(() => undefined)
-      const keep = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
-        .EdgeRuntime?.waitUntil
-      if (keep === undefined) void dispatch
-      else keep(dispatch)
+      // The Actions-minutes ceiling is asked BEFORE anything is dispatched (#391, 0626): a dispatch the ledger
+      // has not counted is minutes nobody is watching. A refusal only means no runner is started for this note -
+      // the note is queued either way and the next worker that can hear takes it.
+      const reservation = (await rpcOne('ci_reserve', {
+        p_workflow: 'voice-note',
+        p_event_type: 'voice-note',
+        p_reason: 'a voice note was queued',
+        p_by: 'grant',
+        p_job: /^[0-9a-f-]{36}$/i.test(String(queued)) ? queued : null,
+      })) as { may?: boolean; ci_run_id?: string } | null
+      if (reservation?.may === true && typeof reservation.ci_run_id === 'string') {
+        woke = true
+        const ciRun = reservation.ci_run_id
+        const dispatch = (async () => {
+          const sent = await fetch(`https://api.github.com/repos/${gh.repository}/dispatches`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${gh.token}`,
+              Accept: 'application/vnd.github+json',
+              'Content-Type': 'application/json',
+              'User-Agent': 'ai-team-hq-webhook',
+            },
+            // No payload beyond the type. The job is already in the queue; the
+            // runner's job is to drain it, not to be told what is in it.
+            body: JSON.stringify({ event_type: 'voice-note', client_payload: { ci_run_id: ciRun } }),
+          }).catch(() => null)
+          // GitHub refusing (or not answering) means no run exists: release the reservation rather than
+          // leave it counted against the month.
+          if (sent === null || !sent.ok) {
+            await rpcOne('ci_release', {
+              p_ci_run: ciRun,
+              p_why: `GitHub did not accept the dispatch (${sent === null ? 'no answer' : String(sent.status)})`,
+            })
+          }
+        })()
+        const keep = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+          .EdgeRuntime?.waitUntil
+        if (keep === undefined) void dispatch
+        else keep(dispatch)
+      }
     }
   }
 
