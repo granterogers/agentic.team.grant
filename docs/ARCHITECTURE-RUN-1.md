@@ -119,6 +119,34 @@ had zero live jobs when checked).
   allowlist = refuse non-synthetic production-door Slack commands whose subject is null, mirroring 0607, after
   excluding bot/app messages; not enabled here.
 
-## STATUS: RUN 2 NOT READY
-Blocker: applying migrations 0607–0610 and deploying worker / hq-api / telegram-webhook to production was denied
-by the session's permission classifier. Nothing has been applied or deployed; production is unchanged.
+## Production integration performed (2026-09-30, approved by Grant)
+| Step | Result |
+|---|---|
+| `npm run migrate` | applied 0607, 0608, 0609, 0610 (1.0-1.1 s each); 623 recorded; `applied.json` committed |
+| `npm run deploy:worker` | worker ACTIVE, liveness ok, unauthenticated kick 401, authenticated kick 200 |
+| `npm run deploy:hq` | hq-api ACTIVE (unauthenticated 401, authenticated 200). **The Vercel page step failed** (`Request body too large. Limit: 10mb`); the page is unchanged from `bbe9956c`, so the page already live is byte-for-byte what main serves. This is a pre-existing deploy-size limit, not a Run 1 effect, and is carried forward as VERIFICATION/DEPLOY DEBT. |
+| `npm run deploy:telegram` | telegram-webhook ACTIVE, liveness ok, `setWebhook` ok, 0 pending, no last error |
+Deployed versions after the operation: worker v852, hq-api v785, telegram-webhook v605 (before: v848 / v781 / v601).
+Migration position check afterwards: head 0610. Prod function definitions for all 16 functions 0607-0610 touch are
+md5-identical to the candidate database the isolated suites ran against.
+
+## Production verification (`scripts/verify/run1-live.ts`, 14/14)
+Every conversation is declared test traffic before it knocks (synthetic at the door); the question a turn answers is a
+fixture blocker on a job cancelled in the statement that creates it, so the deployed worker never runs it.
+LIVE VERIFIED, through the deployed doors:
+- 0607: a stranger in a private chat, a stranger naming Grant's chat id, and an update with no sender are all HTTP 200 `ignored: unrecognised sender` and change nothing (chats, commands, jobs, lessons, blockers, Grant's delivery chats unchanged); Grant's id resolves to Grant; Grant's id in a declared test chat is admitted as Grant and stamped synthetic.
+- Bare "No." with a waiting question: blocker resolved "No, leave it - answered by grant"; the reply is "Taken as a no", not "what did I get wrong".
+- Mixed turn "Yes - and remind me tomorrow.": blocker resolved "Yes, do it"; the reply names the remainder ("You also said ... I have not acted on that part").
+- A qualified yes ("Do that, but dont send it.") approves nothing.
+- Negative control, nothing waiting: "Yes, do it. Create the task to book the hall." stays an ordinary command (task filed, no "Taken as a yes").
+- 0608: unauthenticated answer 401 and the question stays open; authenticated answer is recorded "answered by grant" whatever `p_by` the client sent; an absent principal at the database is refused and does not become "grant".
+- Containment: `npm run check:leaks` exit 0 after teardown (55 sent messages traced, harness sent 0, declared-test sent 0, witness and predicate disagree on 0). Debris from the run (five personal to-dos, two blockers, one fixture task) was removed through `my_task_delete`, `answer_blocker` and `purge:fixtures --go`.
+- Ordinary Claire use: a real dashboard question in `ai-team-hq-test` ("which projects do we have open?") completed and returned the four open projects; no failed or retrying jobs since deploy. Its wording ("I have not done this yet, and nothing has been changed" in front of a correct list) is pre-existing: the same phrase appears in outputs from 22-28 September, before Run 1.
+PRODUCTION-EQUIVALENT VERIFIED (not run live): 0609 (a wait is not an attempt; provider outage still counts) and 0610 (an answer performs what the question promised; unsupported options not offered) - by function-body identity with the candidate database plus the isolated suites `fan-in-waits`, `drive-options`, `channel-options`, `outward-options`. Hostile-resolver entitlement (`turn-entitlement` 12/12): NOT SAFE TO VERIFY LIVE (it needs a sabotaged shared resolver); the deployed code is the tested code.
+Not exercised live: a competent model on the standing-preference remainder case ("Yes, do it. Also from now on ...") because it would store a real standing rule attributed to Grant; covered by `mixed-turns`.
+
+## Run 1 still-open residuals (carried unchanged)
+R1 understand() placement (ENGINEERING DEBT); R2 degraded-model multi-clause task title, seen again live ("do it. Create the task to book the hall") (BUG); R3 "Save this link..." stored as a standing preference (BUG, semantic classification); R4 task-tick approval door (ARCHITECTURAL, Run 2); R5 a declined action is re-asked (ARCHITECTURAL, Run 2); R6 Slack sender allowlist (MISSING CAPABILITY, do not enable blindly); R7 isolated suites outside `npm run gate` (VERIFICATION GAP); R8 competent-model mixed-turn evidence (VERIFICATION GAP); R9 telegram-webhook returns 200 "ignored" when `staff_for_bot` returns no row (BUG, confirmed still true).
+The `correction-containment` change is a FIXTURE-ONLY integration correction (test file); no production behaviour changed for it.
+
+## STATUS: RUN 1 PRODUCTION GATE PASSED (earlier 'blocked' note superseded by Grant's approval)

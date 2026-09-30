@@ -686,28 +686,28 @@ const SECTIONS: Readonly<
   the browser only claims. An action that records authority and has no `by`
   is the gap this exists to close.
 */
-const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]; by?: string }>> =
-  {
-    // `p_force` is optional and deliberately not required: without it the RPC
-    // returns the candidates and creates nothing (0153), which is the behaviour
-    // every caller should get by default. Passing it is a person having looked at
-    // those candidates and said "no, a new one".
-    create_project: { fn: 'hq_create_project', required: ['p_name', 'p_connector', 'p_ref'] },
-    rename_project: { fn: 'hq_rename_project', required: ['p_slug', 'p_name'] },
-    attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'] },
-    detach: { fn: 'hq_detach', required: ['p_attachment_id'] },
-    // Recording that a project deliberately has no Notion page — §3's fifth
-    // option, and the only one that does not end in an attachment. `p_reason` is
-    // optional because "not now" is a complete answer on its own.
-    connection_choose: {
-      fn: 'hq_connection_choose',
-      required: ['p_slug', 'p_connector', 'p_choice'],
-    },
-    // One setter over an allow-list of six keys, enforced in the function rather
-    // than here — the page is not the only thing that could call this, and a
-    // guard in the caller is a guard in one of the callers.
-    set_setting: { fn: 'hq_set_setting', required: ['p_key', 'p_value'] },
-    /*
+type ActionSpec = { fn: string; required: readonly string[]; by?: string }
+const ACTIONS: Readonly<Record<string, ActionSpec>> = {
+  // `p_force` is optional and deliberately not required: without it the RPC
+  // returns the candidates and creates nothing (0153), which is the behaviour
+  // every caller should get by default. Passing it is a person having looked at
+  // those candidates and said "no, a new one".
+  create_project: { fn: 'hq_create_project', required: ['p_name', 'p_connector', 'p_ref'] },
+  rename_project: { fn: 'hq_rename_project', required: ['p_slug', 'p_name'] },
+  attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'] },
+  detach: { fn: 'hq_detach', required: ['p_attachment_id'] },
+  // Recording that a project deliberately has no Notion page — §3's fifth
+  // option, and the only one that does not end in an attachment. `p_reason` is
+  // optional because "not now" is a complete answer on its own.
+  connection_choose: {
+    fn: 'hq_connection_choose',
+    required: ['p_slug', 'p_connector', 'p_choice'],
+  },
+  // One setter over an allow-list of six keys, enforced in the function rather
+  // than here — the page is not the only thing that could call this, and a
+  // guard in the caller is a guard in one of the callers.
+  set_setting: { fn: 'hq_set_setting', required: ['p_key', 'p_value'] },
+  /*
     Send it again (#202).
 
     Takes a JOB, not a delivery, because that is the vocabulary the thread has
@@ -716,22 +716,22 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     that reached Telegram and not Slack does not send the Telegram one twice;
     the idempotency is #195's and is used rather than restated.
   */
-    retry_send: { fn: 'retry_job_deliveries', required: ['p_job_id'] },
-    // Editing a person, and retiring one. There is no delete and there will not
-    // be: outputs, routing decisions and deliveries all name a staff member, and
-    // a roster that can lose a row is a history that stops explaining itself.
-    staff_update: { fn: 'hq_staff_update', required: ['p_slug'] },
-    // Withdrawing a written-down procedure (#50). On the configuring side of the
-    // line: `skills` is append-only, so this writes a retirement row rather than
-    // removing anything, and writing the procedure again undoes it. `p_reason` is
-    // optional — the RPC supplies an honest default rather than an empty string.
-    retire_skill: { fn: 'hq_retire_skill', required: ['p_skill_id'] },
-    // How much the office does without asking (#15). Its own action rather than a
-    // `set_setting` key: it lives in `autonomy_settings`, it is scoped — a project
-    // can override the global — and every change is a new row so "when did it
-    // start acting on its own" stays answerable.
-    autonomy_set: { fn: 'hq_autonomy_set', required: ['p_level'] },
-    /*
+  retry_send: { fn: 'retry_job_deliveries', required: ['p_job_id'] },
+  // Editing a person, and retiring one. There is no delete and there will not
+  // be: outputs, routing decisions and deliveries all name a staff member, and
+  // a roster that can lose a row is a history that stops explaining itself.
+  staff_update: { fn: 'hq_staff_update', required: ['p_slug'] },
+  // Withdrawing a written-down procedure (#50). On the configuring side of the
+  // line: `skills` is append-only, so this writes a retirement row rather than
+  // removing anything, and writing the procedure again undoes it. `p_reason` is
+  // optional — the RPC supplies an honest default rather than an empty string.
+  retire_skill: { fn: 'hq_retire_skill', required: ['p_skill_id'] },
+  // How much the office does without asking (#15). Its own action rather than a
+  // `set_setting` key: it lives in `autonomy_settings`, it is scoped — a project
+  // can override the global — and every change is a new row so "when did it
+  // start acting on its own" stays answerable.
+  autonomy_set: { fn: 'hq_autonomy_set', required: ['p_level'] },
+  /*
     Answering the office when it asks for a capability (ADR-0018, #272).
 
     `tool_requests` is where an agent that hit the same wall three times asks
@@ -752,7 +752,7 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     as `staff_tool_set(granted=false)`: that sets a per-person grant, this
     records a withdrawal against the request that earned it.
   */
-    /*
+  /*
     Saying "do not ask me about this again", and taking it back (#15).
 
     `p_project` is optional and its absence is meaningful: no project means
@@ -764,9 +764,9 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     `hq_approve_tool` does — an agent cannot widen its own permissions because
     there is no argument through which to try.
   */
-    grant_standing: { fn: 'hq_grant_standing', required: ['p_tool', 'p_reason'], by: 'p_by' },
-    revoke_standing: { fn: 'hq_revoke_standing', required: ['p_authorization'], by: 'p_by' },
-    /*
+  grant_standing: { fn: 'hq_grant_standing', required: ['p_tool', 'p_reason'], by: 'p_by' },
+  revoke_standing: { fn: 'hq_revoke_standing', required: ['p_authorization'], by: 'p_by' },
+  /*
     Registering and disconnecting an outside provider (#265).
 
     Deliberately NOT an action for enabling a discovered tool. Offering one
@@ -774,11 +774,11 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     path, which already has its own action and its own record. A second door
     to the same decision is how the invariant erodes.
   */
-    register_connector: {
-      fn: 'register_mcp_provider',
-      required: ['p_name', 'p_endpoint'],
-    },
-    /*
+  register_connector: {
+    fn: 'register_mcp_provider',
+    required: ['p_name', 'p_endpoint'],
+  },
+  /*
     Establishing a signed-in session for a project (#135).
 
     The jar arrives in the body and goes straight into `app.store_secret`
@@ -786,36 +786,36 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     returned: what comes back is a session id and a site. That is why the
     action is a thin pass-through rather than three steps in TypeScript.
   */
-    browser_session_establish: {
-      fn: 'browser_session_establish',
-      required: ['p_project', 'p_site', 'p_purpose', 'p_jar'],
-    },
-    /*
+  browser_session_establish: {
+    fn: 'browser_session_establish',
+    required: ['p_project', 'p_site', 'p_purpose', 'p_jar'],
+  },
+  /*
     Forgetting one. Removes the Vault row as well as the reference, in that
     order, because a dangling reference is worse than a missing credential
     (0350 took down every job in the building).
   */
-    browser_session_forget: {
-      fn: 'browser_session_forget',
-      required: ['p_session'],
-    },
-    /*
+  browser_session_forget: {
+    fn: 'browser_session_forget',
+    required: ['p_session'],
+  },
+  /*
     Stop. A column the runner reads between steps, not a socket.
   */
-    stop_job: { fn: 'request_stop', required: ['p_job'] },
-    revoke_connector: { fn: 'revoke_mcp_provider', required: ['p_provider'] },
-    offer_connector_tool: { fn: 'offer_mcp_tool', required: ['p_discovered'] },
-    approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'], by: 'p_by' },
-    decline_tool: { fn: 'hq_decline_tool', required: ['p_request_id'], by: 'p_by' },
-    revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'] },
-    // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
-    // the two, and refuses a grant for a globally disabled tool (§11).
-    staff_tool_set: { fn: 'hq_staff_tool_set', required: ['p_slug', 'p_tool', 'p_granted'] },
-    // Hand a bot to someone, or back to the pool. `p_staff_slug` is optional
-    // BECAUSE null is the meaningful value — it is how a bot is freed.
-    bot_assign: { fn: 'hq_bot_assign', required: ['p_username'] },
-    staff_retire: { fn: 'hq_staff_retire', required: ['p_slug', 'p_active'] },
-    /*
+  stop_job: { fn: 'request_stop', required: ['p_job'] },
+  revoke_connector: { fn: 'revoke_mcp_provider', required: ['p_provider'] },
+  offer_connector_tool: { fn: 'offer_mcp_tool', required: ['p_discovered'] },
+  approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'], by: 'p_by' },
+  decline_tool: { fn: 'hq_decline_tool', required: ['p_request_id'], by: 'p_by' },
+  revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'] },
+  // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
+  // the two, and refuses a grant for a globally disabled tool (§11).
+  staff_tool_set: { fn: 'hq_staff_tool_set', required: ['p_slug', 'p_tool', 'p_granted'] },
+  // Hand a bot to someone, or back to the pool. `p_staff_slug` is optional
+  // BECAUSE null is the meaningful value — it is how a bot is freed.
+  bot_assign: { fn: 'hq_bot_assign', required: ['p_username'] },
+  staff_retire: { fn: 'hq_staff_retire', required: ['p_slug', 'p_active'] },
+  /*
     Tasks (#11, migrations 0238-0239).
 
     `public.tasks` has had a good schema for weeks and ZERO ROWS, because
@@ -826,20 +826,20 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     Found while building Calendar sync (#94), whose whole job is putting dated
     tasks in a diary: the plan query correctly returned nothing to do.
   */
-    /*
+  /*
     `p_project` stays required and may now be an EMPTY STRING, which means the
     task belongs to no dashboard project (#173, migration 0281). Required
     rather than optional deliberately: omitting it would make "I forgot to say
     which project" and "this belongs to none" the same request, and only one of
     those should file a task where Grant is not looking.
   */
-    task_add: { fn: 'hq_task_add', required: ['p_project', 'p_title'] },
-    // Contacts (#24, #99). A name and a project; everything else — role, org,
-    // email, phone, Instagram, website, kind, note — is optional, because a form
-    // that demands nine fields before it will take "Ben, referrer" is a form
-    // people route around.
-    contact_add: { fn: 'hq_contact_add', required: ['p_project', 'p_name'] },
-    /*
+  task_add: { fn: 'hq_task_add', required: ['p_project', 'p_title'] },
+  // Contacts (#24, #99). A name and a project; everything else — role, org,
+  // email, phone, Instagram, website, kind, note — is optional, because a form
+  // that demands nine fields before it will take "Ben, referrer" is a form
+  // people route around.
+  contact_add: { fn: 'hq_contact_add', required: ['p_project', 'p_name'] },
+  /*
     Labels Grant defines, and fields he adds (#110, migration 0285).
 
     The last two things the studio kept in `localStorage`, and ADR-0021 is why
@@ -854,7 +854,7 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     undo, and impossible to half-apply. §5 still holds; the RPC validates every
     entry and writes nothing if one is malformed.
   */
-    /*
+  /*
     Correcting one (0534).
 
     Grant: *"If information about a contact is displayed as user-managed
@@ -863,17 +863,17 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     other argument is null-means-leave-it-alone, so a caller changing one note
     sends one field.
   */
-    contact_update: { fn: 'hq_contact_update', required: ['p_contact_id'] },
-    contact_archive: { fn: 'hq_contact_archive', required: ['p_contact_id'] },
-    /*
+  contact_update: { fn: 'hq_contact_update', required: ['p_contact_id'] },
+  contact_archive: { fn: 'hq_contact_archive', required: ['p_contact_id'] },
+  /*
     Registered here as well as handled above, because the dispatcher checks
     this map BEFORE anything else runs - an action missing from it is
     "unknown action" however complete its handler is. `document_upload` is the
     precedent and it is listed for the same reason: the storage half happens
     before the RPC, and the RPC named here is the one the handler ends in.
   */
-    contact_photo: { fn: 'hq_contact_photo_set', required: ['p_contact_id', 'p_project_id'] },
-    /*
+  contact_photo: { fn: 'hq_contact_photo_set', required: ['p_contact_id', 'p_project_id'] },
+  /*
     PICKING A FILE OUT OF DRIVE.
 
     A reference, not a copy: the office records which file it is and where it
@@ -881,16 +881,16 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     canonical writer and picking the same file twice is one document, because
     the index says so.
   */
-    drive_link: {
-      fn: 'hq_document_link',
-      required: ['p_project_id', 'p_external_ref', 'p_title'],
-    },
-    contact_label_add: { fn: 'hq_contact_label_add', required: ['p_name'] },
-    contact_label_rename: { fn: 'hq_contact_label_rename', required: ['p_label_id', 'p_name'] },
-    contact_label_remove: { fn: 'hq_contact_label_remove', required: ['p_label_id'] },
-    contact_labels_set: { fn: 'hq_contact_labels_set', required: ['p_contact_id', 'p_labels'] },
-    contact_fields_set: { fn: 'hq_contact_fields_set', required: ['p_contact_id', 'p_fields'] },
-    /*
+  drive_link: {
+    fn: 'hq_document_link',
+    required: ['p_project_id', 'p_external_ref', 'p_title'],
+  },
+  contact_label_add: { fn: 'hq_contact_label_add', required: ['p_name'] },
+  contact_label_rename: { fn: 'hq_contact_label_rename', required: ['p_label_id', 'p_name'] },
+  contact_label_remove: { fn: 'hq_contact_label_remove', required: ['p_label_id'] },
+  contact_labels_set: { fn: 'hq_contact_labels_set', required: ['p_contact_id', 'p_labels'] },
+  contact_fields_set: { fn: 'hq_contact_fields_set', required: ['p_contact_id', 'p_fields'] },
+  /*
     Answering a blocker, wherever you are standing (#151, migration 0289).
 
     The landing page has shown "2 things waiting on you" since 0240 and a
@@ -904,11 +904,11 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     would resolve the row and strand the job, which is the worst outcome
     available: the interface would report success.
   */
-    answer_blocker: { fn: 'hq_answer_blocker', required: ['p_blocker_id', 'p_answer'], by: 'p_by' },
-    // `p_reason` is optional here and required by the RPC when the state is
-    // `blocked` — the schema's own check constraint, said in a sentence.
-    task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'] },
-    /*
+  answer_blocker: { fn: 'hq_answer_blocker', required: ['p_blocker_id', 'p_answer'], by: 'p_by' },
+  // `p_reason` is optional here and required by the RPC when the state is
+  // `blocked` — the schema's own check constraint, said in a sentence.
+  task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'] },
+  /*
     The arrangement of a project's dashboard (#81, migration 0250).
 
     Configuration, squarely -- it changes what a page looks like and nothing
@@ -921,16 +921,16 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     half-saved layout is worse than an unsaved one -- so this list does not
     try to check it here. §5: the page translates, the RPC decides.
   */
-    dashboard_layout_set: { fn: 'hq_dashboard_layout_set', required: ['p_slug', 'p_panels'] },
-    /*
+  dashboard_layout_set: { fn: 'hq_dashboard_layout_set', required: ['p_slug', 'p_panels'] },
+  /*
     The order Grant put a project's documents in (§§29-31). A list of ids
     rather than a position per document, so "the order he chose" and "the order
     they arrived in" stay two different facts.
   */
-    document_order_set: { fn: 'hq_document_order_set', required: ['p_slug', 'p_ids'] },
-    document_order_reset: { fn: 'hq_document_order_reset', required: ['p_slug'] },
-    dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', required: ['p_slug'] },
-    /*
+  document_order_set: { fn: 'hq_document_order_set', required: ['p_slug', 'p_ids'] },
+  document_order_reset: { fn: 'hq_document_order_reset', required: ['p_slug'] },
+  dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', required: ['p_slug'] },
+  /*
     And the home screen's own (#219, migration 0376).
 
     Same argument as the pair above, one scope up. Grant asked for the homepage
@@ -944,31 +944,31 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     conflict target would have stopped constraining anything for precisely these
     rows.
   */
-    workspace_layout_set: { fn: 'hq_workspace_layout_set', required: ['p_panels'] },
-    workspace_layout_reset: { fn: 'hq_workspace_layout_reset', required: [] },
-    // Bringing someone in (0233). The other half of `staff_retire`, which has
-    // existed alone since 0079 — the studio had a "+ Bring someone in" button
-    // wired to nothing at all.
-    //
-    // `p_justification` and `p_expires_at` are required HERE as well as in the
-    // RPC, which is not belt and braces: this list is what the page is allowed
-    // to call, and a hire that reaches the function without a reason or an end
-    // should be refused before it costs a round trip. The function refuses it
-    // too, because the page is not the only possible caller.
-    staff_hire: {
-      fn: 'hq_staff_hire',
-      required: ['p_name', 'p_title', 'p_justification', 'p_expires_at'],
-    },
-    // Write-only by construction: there is no matching section that reads it
-    // back, and `hq_google` reports only whether one exists.
-    // Where he dragged the cards, and how far he zoomed (#25, 0380).
-    plane_layout_set: {
-      fn: 'hq_plane_layout_set',
-      required: ['p_project_id', 'p_at', 'p_view'],
-    },
-    plane_layout_reset: { fn: 'hq_plane_layout_reset', required: ['p_project_id'] },
-    project_seen: { fn: 'hq_project_seen', required: ['p_project_id'] },
-    /*
+  workspace_layout_set: { fn: 'hq_workspace_layout_set', required: ['p_panels'] },
+  workspace_layout_reset: { fn: 'hq_workspace_layout_reset', required: [] },
+  // Bringing someone in (0233). The other half of `staff_retire`, which has
+  // existed alone since 0079 — the studio had a "+ Bring someone in" button
+  // wired to nothing at all.
+  //
+  // `p_justification` and `p_expires_at` are required HERE as well as in the
+  // RPC, which is not belt and braces: this list is what the page is allowed
+  // to call, and a hire that reaches the function without a reason or an end
+  // should be refused before it costs a round trip. The function refuses it
+  // too, because the page is not the only possible caller.
+  staff_hire: {
+    fn: 'hq_staff_hire',
+    required: ['p_name', 'p_title', 'p_justification', 'p_expires_at'],
+  },
+  // Write-only by construction: there is no matching section that reads it
+  // back, and `hq_google` reports only whether one exists.
+  // Where he dragged the cards, and how far he zoomed (#25, 0380).
+  plane_layout_set: {
+    fn: 'hq_plane_layout_set',
+    required: ['p_project_id', 'p_at', 'p_view'],
+  },
+  plane_layout_reset: { fn: 'hq_plane_layout_reset', required: ['p_project_id'] },
+  project_seen: { fn: 'hq_project_seen', required: ['p_project_id'] },
+  /*
     A document is a row you can edit, not only one you can read (#152).
 
     The same idiom as the task writes: the previous value is captured in the
@@ -976,32 +976,32 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     comes back in the result — so `act`'s one chokepoint offers the strip and no
     button here has to know that undo exists.
   */
-    /*
+  /*
     Rename is NOT here: `document_rename` already existed, below, calling
     `rename_document`. 0383 gave that one the undo the issue asks for rather
     than adding a second function that writes the same column — which is the
     trap this repository has recorded twice.
   */
-    document_move: { fn: 'hq_document_move', required: ['p_document_id', 'p_project_id'] },
-    document_supersede: {
-      fn: 'hq_document_supersede',
-      required: ['p_document_id', 'p_by_document_id'],
-    },
-    // `p_state` optional: an undo carries the state the document was in, and a
-    // press of "this one is current again" carries nothing and means approved.
-    document_restore: { fn: 'hq_document_restore', required: ['p_document_id'] },
-    document_pin: { fn: 'hq_document_pin', required: ['p_document_id', 'p_pinned'] },
-    /*
+  document_move: { fn: 'hq_document_move', required: ['p_document_id', 'p_project_id'] },
+  document_supersede: {
+    fn: 'hq_document_supersede',
+    required: ['p_document_id', 'p_by_document_id'],
+  },
+  // `p_state` optional: an undo carries the state the document was in, and a
+  // press of "this one is current again" carries nothing and means approved.
+  document_restore: { fn: 'hq_document_restore', required: ['p_document_id'] },
+  document_pin: { fn: 'hq_document_pin', required: ['p_document_id', 'p_pinned'] },
+  /*
     Handled above rather than dispatched, because it carries bytes (#126). It
     is listed here so the whitelist is still the one place that says which
     actions exist, and so an unknown-action error names it.
   */
-    document_upload: {
-      fn: 'record_file_document',
-      required: ['p_project_id', 'p_name', 'p_base64'],
-    },
-    set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
-    /*
+  document_upload: {
+    fn: 'record_file_document',
+    required: ['p_project_id', 'p_name', 'p_base64'],
+  },
+  set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
+  /*
     Both Google values at once (§35, 0377).
 
     The page used to send the ID through `set_setting` and the secret through
@@ -1011,21 +1011,21 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     Settings page. One call sorts them by shape, the way 0359 already does for
     Slack. Both are required by name and either may be empty.
   */
-    set_google_credentials: {
-      fn: 'hq_set_google_credentials',
-      required: ['p_client_id', 'p_secret'],
-    },
-    // #210. Both halves together: a bot token without a signing secret can post
-    // and cannot verify anything inbound, which reads as connected and is half a
-    // connection. Reinstalling produces both at the same moment.
-    set_slack_credentials: {
-      fn: 'hq_set_slack_credentials',
-      required: ['p_bot_token', 'p_signing_secret'],
-    },
-    // The way back out. There was a way in and none out, which made a consent
-    // granted through a browser effectively permanent from this page's side.
-    forget_google: { fn: 'hq_forget_google', required: [] },
-    /*
+  set_google_credentials: {
+    fn: 'hq_set_google_credentials',
+    required: ['p_client_id', 'p_secret'],
+  },
+  // #210. Both halves together: a bot token without a signing secret can post
+  // and cannot verify anything inbound, which reads as connected and is half a
+  // connection. Reinstalling produces both at the same moment.
+  set_slack_credentials: {
+    fn: 'hq_set_slack_credentials',
+    required: ['p_bot_token', 'p_signing_secret'],
+  },
+  // The way back out. There was a way in and none out, which made a consent
+  // granted through a browser effectively permanent from this page's side.
+  forget_google: { fn: 'hq_forget_google', required: [] },
+  /*
     Disconnecting anything (#90, migration 0252).
 
     `forget_google` stays, because the Setting up page calls it by name and a
@@ -1037,8 +1037,8 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     is how it reaches him. It returns a refusal with the reason rather than a
     cheerful ok, and this list does not second-guess it. §5.
   */
-    disconnect: { fn: 'hq_disconnect', required: ['p_service'] },
-    /*
+  disconnect: { fn: 'hq_disconnect', required: ['p_service'] },
+  /*
     How a dashboard project looks (#83, migration 0253).
 
     Only the slug is required: every other argument is an edit, and `p_clear`
@@ -1047,8 +1047,8 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     the page; the RPC caps it at 96 KB, which can only be exceeded if that
     resize did not run and is worth refusing loudly rather than storing.
   */
-    project_look: { fn: 'hq_project_look', required: ['p_slug'] },
-    /*
+  project_look: { fn: 'hq_project_look', required: ['p_slug'] },
+  /*
     Editing a task (#106, migration 0255).
 
     Only the id is required: everything else is an edit, and `p_clear` says
@@ -1060,12 +1060,12 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     functions writing one column is how a constraint gets violated by the one
     that forgot.
   */
-    task_update: { fn: 'hq_task_update', required: ['p_task_id'] },
-    // One setter over three kinds of routing change, allow-listed inside the
-    // function for the same reason `set_setting` is: the page is not the only
-    // possible caller.
-    routing_set: { fn: 'hq_routing_set', required: ['p_what', 'p_value'] },
-    /*
+  task_update: { fn: 'hq_task_update', required: ['p_task_id'] },
+  // One setter over three kinds of routing change, allow-listed inside the
+  // function for the same reason `set_setting` is: the page is not the only
+  // possible caller.
+  routing_set: { fn: 'hq_routing_set', required: ['p_what', 'p_value'] },
+  /*
     Taking something back (#118, migrations 0263-0265).
 
     Every write above that has an EXACT inverse now records it at the moment it
@@ -1081,9 +1081,9 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     is listed so that undoing a detach goes through the same door as everything
     else rather than through a private one.
   */
-    undo: { fn: 'hq_undo', required: ['p_action_id'] },
-    reattach: { fn: 'hq_reattach', required: ['p_attachment_id'] },
-    /*
+  undo: { fn: 'hq_undo', required: ['p_action_id'] },
+  reattach: { fn: 'hq_reattach', required: ['p_attachment_id'] },
+  /*
     Governance (#54, migration 0302).
 
     `lesson_retract` is on the configuring side of the line by construction:
@@ -1097,7 +1097,7 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     raised again while the row stands, which is what makes a decline stick
     rather than becoming a nag. Reopening is allowed and is a person's call.
   */
-    /*
+  /*
     Pointing a project at something we cannot log into (#35, migration 0306).
 
     Only the slug and the link are required: the kind and the title are
@@ -1111,7 +1111,7 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     real delete here while `detach` only disables — a connector has a corpus
     behind it and ADR-0013 keeps it; a pointer does not.
   */
-    /*
+  /*
     The asset model, reachable (#29, migration 0312).
 
     Rename, tag and file were a page's private business — `put_in_collection`
@@ -1123,14 +1123,14 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     `put_in_collection`'s own choice: a caller holding a document and the word
     "Research" should not have to look a uuid up first.
   */
-    /*
+  /*
     Send an asset to the team with a NAMED action (#27, migration 0313).
 
     Only the asset and the verb are required. Who it goes to is optional — with
     nobody named the Chief of Staff takes it, as everywhere else — and so is the
     second asset, which only `compare` needs and the RPC refuses without.
   */
-    /*
+  /*
     Saying something in a project, with no asset attached (#26, #193).
 
     `send_to_agent` above is the asset path — send THIS document to Emma. This
@@ -1141,9 +1141,9 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     Grant does not pick — a composer that forces you to name somebody makes the
     common case the awkward one.
   */
-    say: { fn: 'say_in_project', required: ['p_project_id', 'p_text'] },
-    send_to_agent: { fn: 'send_to_agent', required: ['p_kind', 'p_id', 'p_action'] },
-    /*
+  say: { fn: 'say_in_project', required: ['p_project_id', 'p_text'] },
+  send_to_agent: { fn: 'send_to_agent', required: ['p_kind', 'p_id', 'p_action'] },
+  /*
     The import gate (#28, migration 0315).
 
     "Approving is what moves an artifact into the project", and until now that
@@ -1155,7 +1155,7 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     fields are filled in is a sheet he closes; approving with nothing chosen
     means "yes, and I have nothing to add".
   */
-    /*
+  /*
     IMPORT TO PROJECT — where an output becomes a document (#28, 0317).
 
     Only the output is required. The other five are the sheet's fields, and a
@@ -1163,21 +1163,21 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     closes: importing with nothing chosen means "yes, and I have nothing to
     add".
   */
-    output_import: { fn: 'import_output', required: ['p_output'] },
-    output_decide: { fn: 'decide_output', required: ['p_output', 'p_verdict'] },
-    document_approve: { fn: 'approve_document', required: ['p_document'] },
-    document_discard: { fn: 'discard_document', required: ['p_document'] },
-    document_rename: { fn: 'rename_document', required: ['p_document', 'p_title'] },
-    document_tag: { fn: 'tag_document', required: ['p_document', 'p_tag'] },
-    collection_put: { fn: 'put_in_collection', required: ['p_document', 'p_collection_name'] },
-    collection_take: {
-      fn: 'take_out_of_collection',
-      required: ['p_document', 'p_collection_name'],
-    },
-    reference_add: { fn: 'add_project_reference', required: ['p_slug', 'p_url'] },
-    reference_remove: { fn: 'remove_project_reference', required: ['p_reference_id'] },
-    lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
-    /*
+  output_import: { fn: 'import_output', required: ['p_output'] },
+  output_decide: { fn: 'decide_output', required: ['p_output', 'p_verdict'] },
+  document_approve: { fn: 'approve_document', required: ['p_document'] },
+  document_discard: { fn: 'discard_document', required: ['p_document'] },
+  document_rename: { fn: 'rename_document', required: ['p_document', 'p_title'] },
+  document_tag: { fn: 'tag_document', required: ['p_document', 'p_tag'] },
+  collection_put: { fn: 'put_in_collection', required: ['p_document', 'p_collection_name'] },
+  collection_take: {
+    fn: 'take_out_of_collection',
+    required: ['p_document', 'p_collection_name'],
+  },
+  reference_add: { fn: 'add_project_reference', required: ['p_slug', 'p_url'] },
+  reference_remove: { fn: 'remove_project_reference', required: ['p_reference_id'] },
+  lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
+  /*
     ACCEPT OR DECLINE A DRAFTED STANDING RULE (#147).
 
     `p_accept` is required rather than defaulted, because a missing boolean
@@ -1189,8 +1189,8 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     Accepting is the ONLY path by which a correction becomes a rule. Nothing in
     the answering handler stores one.
   */
-    suggestion_decide: { fn: 'decide_suggestion', required: ['p_suggestion_id', 'p_accept'] },
-    /*
+  suggestion_decide: { fn: 'decide_suggestion', required: ['p_suggestion_id', 'p_accept'] },
+  /*
     HOW THE STUDIO LOOKS (#124, migration 0400).
 
     The whole object at once, because that is how the page holds it and a
@@ -1199,9 +1199,9 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
 
     ADR-0021: localStorage is the cache in front of this and never the record.
   */
-    appearance_set: { fn: 'hq_appearance_set', required: ['p_settings'] },
-    proposal_decide: { fn: 'decide_proposal', required: ['p_proposal_id', 'p_state'] },
-    /*
+  appearance_set: { fn: 'hq_appearance_set', required: ['p_settings'] },
+  proposal_decide: { fn: 'decide_proposal', required: ['p_proposal_id', 'p_state'] },
+  /*
     Project Settings (#36, migrations 0323-26).
 
     `p_instruction` is required on `project_instruction` and the empty string
@@ -1218,8 +1218,8 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     reversible and is what this sheet offers; `app.project_delete` exists for a
     person at a terminal who has read ADR-0014, which is not a button.
   */
-    project_staff: { fn: 'set_project_staff', required: ['p_slug', 'p_staff_slug', 'p_on'] },
-    /*
+  project_staff: { fn: 'set_project_staff', required: ['p_slug', 'p_staff_slug', 'p_on'] },
+  /*
     `p_instruction` is deliberately NOT required, and it is the only argument in
     this map for which that is true.
 
@@ -1230,29 +1230,29 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     "no brief sent" and "clear the brief" mean the same thing — which is the
     only reading under which both are true.
   */
-    project_instruction: { fn: 'set_project_instruction', required: ['p_slug', 'p_staff_slug'] },
-    automation_create: { fn: 'create_automation', required: ['p_slug', 'p_instruction'] },
-    automation_set: { fn: 'set_automation', required: ['p_automation', 'p_on'] },
-    automation_remove: { fn: 'remove_automation', required: ['p_automation'] },
-    project_archive: { fn: 'archive_project', required: ['p_slug'] },
-    project_unarchive: { fn: 'unarchive_project', required: ['p_slug'] },
-    /*
+  project_instruction: { fn: 'set_project_instruction', required: ['p_slug', 'p_staff_slug'] },
+  automation_create: { fn: 'create_automation', required: ['p_slug', 'p_instruction'] },
+  automation_set: { fn: 'set_automation', required: ['p_automation', 'p_on'] },
+  automation_remove: { fn: 'remove_automation', required: ['p_automation'] },
+  project_archive: { fn: 'archive_project', required: ['p_slug'] },
+  project_unarchive: { fn: 'unarchive_project', required: ['p_slug'] },
+  /*
     And the two writes it needs (#259). Completing and reopening go through
     `task_state`, which already exists and already does both for either kind of
     task — ADR-0041's "one set of writers".
   */
-    my_task_add: { fn: 'my_task_add', required: ['p_title'] },
-    my_task_set: { fn: 'my_task_set', required: ['p_task_id'] },
-    /*
+  my_task_add: { fn: 'my_task_add', required: ['p_title'] },
+  my_task_set: { fn: 'my_task_set', required: ['p_task_id'] },
+  /*
     And the two 0513/0514 added, because a task you cannot remove and a
     relationship you cannot make are both features that exist only in the
     schema. `my_task_delete` refuses anything that is not Grant's own, so the
     boundary is enforced in the function rather than by this list being
     careful.
   */
-    my_task_delete: { fn: 'my_task_delete', required: ['p_task_id'] },
-    my_task_reparent: { fn: 'my_task_reparent', required: ['p_task_id'] },
-    /*
+  my_task_delete: { fn: 'my_task_delete', required: ['p_task_id'] },
+  my_task_reparent: { fn: 'my_task_reparent', required: ['p_task_id'] },
+  /*
     Connecting a task provider, and letting it go (#259, Phase 2).
 
     Three arguments, all required, because a connection with two of them is not
@@ -1264,12 +1264,12 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     Disconnecting takes the credential with it (0520) and says what it removed,
     so "disconnect" means what the word means.
   */
-    vikunja_connect: {
-      fn: 'hq_set_vikunja',
-      required: ['p_base_url', 'p_project_id', 'p_api_token'],
-    },
-    vikunja_forget: { fn: 'hq_forget_vikunja', required: [] },
-  }
+  vikunja_connect: {
+    fn: 'hq_set_vikunja',
+    required: ['p_base_url', 'p_project_id', 'p_api_token'],
+  },
+  vikunja_forget: { fn: 'hq_forget_vikunja', required: [] },
+}
 
 /**
  * Constant-time comparison.
