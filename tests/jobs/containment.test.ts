@@ -239,6 +239,27 @@ describe('containment: nothing in the office sends around the delivery guard', (
       .filter((f) => SENDS.test(readFileSync(f, 'utf8')))
     expect(offenders).toEqual([])
   })
+  /*
+    V8 of the original audit: the edge functions are outside src/ and were never scanned. A direct send from one of
+    them is a message no guard saw. The one that exists answers the chat an ADMITTED sender's voice update came from
+    (the sender is checked before it runs, and a declared test chat is the only other door), and only when
+    transcription is switched off - dormant since `voice.transcription = 'api'`. Named so a second one must argue.
+  */
+  const EDGE_ALLOWED: Record<string, string> = {
+    'supabase/functions/telegram-webhook/index.ts':
+      'the voice-refusal reply to the chat an admitted sender wrote from; dormant while voice.transcription is api (#380)',
+  }
+  it('the edge functions are scanned too, and the one direct send is named with its reason', () => {
+    const files = walk('supabase/functions')
+    expect(files.length).toBeGreaterThanOrEqual(8)
+    const offenders = files.filter(
+      (f) => EDGE_ALLOWED[f] === undefined && SENDS.test(readFileSync(f, 'utf8')),
+    )
+    expect(offenders).toEqual([])
+    // and the exception is still a real one: if it stops sending, the entry must go
+    for (const f of Object.keys(EDGE_ALLOWED))
+      expect(SENDS.test(readFileSync(f, 'utf8'))).toBe(true)
+  })
   it('the pattern catches the shape it exists for', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the source text of the defect, quoted verbatim
     expect(SENDS.test('await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {')).toBe(
