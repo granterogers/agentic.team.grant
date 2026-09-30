@@ -457,6 +457,53 @@ const buttonCase = async (
     JSON.stringify(da),
   )
 }
+// ---- a button answers the question its message SHOWED (0617), not the newest on the job ----------------
+{
+  const answeredRow = async (id: string) =>
+    await one(
+      `select state::text as s, answered_option as o from public.blockers where blocker_id = ${lit(id)}::uuid`,
+    )
+  const secondQuestion = (job: string) =>
+    one(`insert into public.blockers (job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+      values (${lit(job)}::uuid, ${lit(`Second question ${run}`)}, 'proof', 'Nothing happens until somebody answers this question.',
+        array['Yes, do it','No, leave it'], 'chief-of-staff', false, 'No, leave it') returning blocker_id::text as id`)
+  // 1. The first message's button is pressed AFTER a second question was raised on the same job.
+  const q1 = await planQuestion(['Yes, do it', 'No, leave it'], 'No, leave it')
+  msg += 1
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
+    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q1.job)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
+  const q2 = String((await secondQuestion(q1.job)).id)
+  await db.execute(`set local application_name = 'PostgREST 14.5';
+    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
+    values ('telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(CHAT)}, '', ${lit(`telegram:callback:${run}${msg}:s1`)}, 'grant', 'approve')`)
+  const p1 = (await processCallbacks(db)).find((d) => d.action === 'approve')
+  check(
+    'button: an Approve on the FIRST message answers the first question and leaves a newer one untouched',
+    p1?.outcome === 'acted' &&
+      (await answeredRow(q1.id)).o === 'Yes, do it' &&
+      (await stateOf(q2)) === 'open',
+    JSON.stringify({ p1, q1: await answeredRow(q1.id), q2: await stateOf(q2) }),
+  )
+  // 2. The first question was answered some other way; the same stale button must not reach the second.
+  const r1 = await planQuestion(['Yes, do it', 'No, leave it'], 'No, leave it')
+  msg += 1
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
+    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(r1.job)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
+  await db.execute(`select app.hq_answer_blocker(${lit(r1.id)}::uuid, 'No, leave it', 'grant')`)
+  const r2 = String((await secondQuestion(r1.job)).id)
+  await db.execute(`set local application_name = 'PostgREST 14.5';
+    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
+    values ('telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(CHAT)}, '', ${lit(`telegram:callback:${run}${msg}:s2`)}, 'grant', 'approve')`)
+  const p2 = (await processCallbacks(db)).find((d) => d.action === 'approve')
+  check(
+    'button: a stale Approve after the question was answered says so, and does NOT approve the newer question',
+    /already/.test(String(p2?.note)) &&
+      (await stateOf(r2)) === 'open' &&
+      (await answeredRow(r1.id)).o === 'No, leave it',
+    JSON.stringify({ p2, r2: await stateOf(r2) }),
+  )
+}
+
 check(
   'nothing tried to leave the replica',
   gw.refusedUrls.length === 0,

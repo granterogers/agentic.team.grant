@@ -39,6 +39,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { claimExternal, failedCleanly, finishStep } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
   ARTIFACT_KINDS,
@@ -49,6 +50,7 @@ import {
   officeKind,
 } from '../notebook/actions.ts'
 import { nothingToDo, type Plan } from '../tools/plan.ts'
+import { checkApproval, mayStart, mayWrite, refusedApproval } from './approval-gate.ts'
 import { allowance, deferUntil, describe, record, refused } from './meter.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -322,8 +324,12 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         // generation — an instruction, an MCP client, a scheduled retry — and a
         // gate on the one door he watches is no gate at all on the two he does
         // not. The only thing that writes an approval is a button press.
-        const approvedBy = payload.approved_by
-        if (approvedBy === undefined || approvedBy === null || String(approvedBy) === '') {
+        //
+        // 0616: not the PRESENCE of `approved_by` - anything that writes a job's config can write
+        // that - but the question it names: real, answered yes by a person, on the job that asked,
+        // not taken back, and still about exactly this request.
+        const approval = await checkApproval(db, job.jobId)
+        if (approval.state === 'none') {
           const forecast = await allowance(db, kind)
           const { rows: asked } = await db.execute(`
             select app.request_generation_approval(
@@ -366,6 +372,11 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           } satisfies HandlerOutput
         }
 
+        const start = await mayStart(db, job, approval, 'notebook.write')
+        if (!start.ok) {
+          return await refusedApproval(db, job, `make the ${LABEL[kind] ?? kind}`, start.why)
+        }
+
         // The meter, before spending anything (0078). Google's allowance is
         // compute-based since 2 September and cannot be queried, so this is our
         // own ledger — and the honest thing to do when it says no is to
@@ -398,11 +409,42 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         // artifact appears in the listing minutes later under an id that has
         // nothing to do with the task, so the only reliable answer to "which
         // one is ours" is "the one that was not there a moment ago".
+        /*
+          EXACTLY ONCE (0616). Starting a generation spends the notebook's allowance and makes an
+          artifact, and this job is retried on any throw. The claim is made BEFORE the call: an
+          attempt that started it and did not finish leaves the step open, and the retry parks for a
+          person to look in the notebook rather than start a second one. Ambiguous notebook writes are
+          reconciled, never guessed (the same rule `artifact.report` follows).
+        */
+        const { name: claimName, gate: claim } = await claimExternal(
+          db,
+          job.jobId,
+          'generate',
+          'notebook.generate@1',
+        )
+        if (claim.kind === 'skip') {
+          return deterministic(
+            `${sentence(LABEL[kind] ?? kind)} is already under way for this approval, so I have not started another.`,
+            notebook,
+          )
+        }
+        if (claim.kind === 'paused') {
+          return deterministic(
+            `I stopped before starting the ${LABEL[kind] ?? kind}: ${claim.pause.detail} ${claim.pause.resumeWhen}`,
+            notebook,
+          )
+        }
         const before = await actions.artifacts(notebook.id)
         let started: Awaited<ReturnType<typeof actions.generate>>
         try {
           started = await actions.generate(notebook.id, kind as ArtifactKind, instructions)
         } catch (error) {
+          // Google REFUSED this (it says so): nothing was started, so the claim is spent and the
+          // next attempt may go ahead. Anything else - a timeout, a dropped connection - may have
+          // reached Google, and leaves the claim open for a person to reconcile.
+          if (error instanceof NotebookActionError) {
+            await failedCleanly(db, job.jobId, claimName, error.detail)
+          }
           if (error instanceof NotebookActionError && error.quota) {
             // The measurement. Refused having spent what we spent, so the real
             // ceiling is at most that — and 0078 lowers ours to match, once.
@@ -456,6 +498,13 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           returning artifact_id
         `)
         const artifactId = String((made[0] as { artifact_id: string }).artifact_id)
+        await finishStep(
+          db,
+          job.jobId,
+          claimName,
+          { artifact: artifactId },
+          started.taskId === null ? undefined : String(started.taskId),
+        )
 
         // Ninety seconds is the floor Google has never beaten in measurement,
         // so a sooner poll would only spend a notebook call learning nothing.
@@ -530,6 +579,17 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         const url = String(payload.url ?? '')
         if (!/^https?:\/\//.test(url)) throw new Error(`${url} is not a link I can add`)
 
+        // The boundary (0616): the dial, a switched-off tool and a No that stands all apply to a link
+        // he pasted as they do to everything else the office writes outside itself.
+        const mayAdd = await mayWrite(db, job, 'notebook.write', {
+          what: 'add_source',
+          notebook: notebook.id,
+          url,
+        })
+        if (!mayAdd.ok) {
+          return await refusedApproval(db, job, `add ${url} to the notebook`, mayAdd.why)
+        }
+
         const meter = await allowance(db, 'add_url')
         if (!meter.allowed) {
           const when = deferUntil(meter)
@@ -552,9 +612,33 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           )
         }
 
+        // ONCE (0616): "asking again is how one source becomes three". The claim is made before the
+        // call, an interrupted attempt parks for a person, and one Google REFUSED may be tried again.
+        const { name: addName, gate: addGate } = await claimExternal(
+          db,
+          job.jobId,
+          'add_source',
+          'notebook.add_source@1',
+        )
+        if (addGate.kind === 'skip') {
+          return deterministic(
+            `${url} is already in "${notebook.name}" — I have not added it again.`,
+            notebook,
+          )
+        }
+        if (addGate.kind === 'paused') {
+          return deterministic(
+            `I stopped before adding ${url}: ${addGate.pause.detail} ${addGate.pause.resumeWhen}`,
+            notebook,
+          )
+        }
         try {
           await actions.addUrl(notebook.id, url)
+          await finishStep(db, job.jobId, addName, { url })
         } catch (error) {
+          if (error instanceof NotebookActionError) {
+            await failedCleanly(db, job.jobId, addName, error.detail)
+          }
           if (error instanceof NotebookActionError && error.quota) {
             await refused(db, 'add_url', error.detail)
             throw new Error(
@@ -627,11 +711,48 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           // project must not be pushable into another's notebook.
           throw new Error(`no document ${documentId} in this project`)
         }
-        const sourceId = await actions.addText(
-          notebook.id,
-          String(doc.content),
-          String(doc.title ?? 'From AI Team HQ'),
+        // The boundary and the claim (0616), as for a link: a client pushing a document is asking
+        // for it, and the dial, a switched-off tool and a No that stands still apply.
+        const mayPush = await mayWrite(db, job, 'notebook.write', {
+          what: 'push_document',
+          notebook: notebook.id,
+          document: documentId,
+        })
+        if (!mayPush.ok) {
+          return await refusedApproval(db, job, 'push that document into the notebook', mayPush.why)
+        }
+        const { name: pushName, gate: pushGate } = await claimExternal(
+          db,
+          job.jobId,
+          'push_document',
+          'notebook.push_document@1',
         )
+        if (pushGate.kind === 'skip') {
+          return deterministic(
+            `"${String(doc.title)}" is already in the notebook — I have not pushed it again.`,
+            notebook,
+          )
+        }
+        if (pushGate.kind === 'paused') {
+          return deterministic(
+            `I stopped before pushing "${String(doc.title)}": ${pushGate.pause.detail} ${pushGate.pause.resumeWhen}`,
+            notebook,
+          )
+        }
+        let sourceId: string | null
+        try {
+          sourceId = await actions.addText(
+            notebook.id,
+            String(doc.content),
+            String(doc.title ?? 'From AI Team HQ'),
+          )
+        } catch (error) {
+          if (error instanceof NotebookActionError) {
+            await failedCleanly(db, job.jobId, pushName, error.detail)
+          }
+          throw error
+        }
+        await finishStep(db, job.jobId, pushName, { source: sourceId ?? '' })
         // Cheap, but not free: Google processes a source on the way in, and a
         // meter that counts only the expensive things drifts (0078).
         await record(db, 'add_text', {

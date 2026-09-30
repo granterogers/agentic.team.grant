@@ -10,6 +10,7 @@
  * ASSUMPTIONS, stated because a test is only as honest as its stand-ins:
  *   - `POST /rest/v1/rpc/<fn>` calls `public.<fn>` with named arguments and
  *     returns its JSON (a set-returning function returns an array);
+ *   - `GET /rest/v1/<table>?select=..&col=eq.v&limit=n` is a filtered read (eq only);
  *   - `POST /rest/v1/<table>` inserts one row and returns it (201, array);
  *     `Prefer: resolution=ignore-duplicates` on a duplicate returns 201 [];
  *   - every request runs in a session whose application_name is PostgREST,
@@ -93,6 +94,32 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
     }
     if (down === true || (typeof down === 'string' && path.endsWith(`/rpc/${down}`))) {
       return reply(503, { message: 'the database is unavailable' })
+    }
+    if (
+      (init?.method ?? 'GET') === 'GET' &&
+      path.startsWith('/rest/v1/') &&
+      !path.includes('/rpc/')
+    ) {
+      // A filtered read: `?select=a,b&col=eq.value&limit=n`, the only shape an edge function here uses.
+      const q = new URL(url).searchParams
+      const table = path.slice('/rest/v1/'.length)
+      const cols = (q.get('select') ?? '*')
+        .split(',')
+        .filter((c) => /^[a-z_*]+$/.test(c))
+        .join(', ')
+      const where = [...q.entries()]
+        .filter(([k, v]) => /^[a-z_]+$/.test(k) && v.startsWith('eq.'))
+        .map(([k, v]) => `${k}::text = ${lit(v.slice(3))}`)
+        .join(' and ')
+      const limit = Number(q.get('limit') ?? '100')
+      try {
+        const { rows } = await o.db.execute(`${AS_POSTGREST}
+          select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) as r
+            from (select ${cols || '*'} from public.${table} ${where === '' ? '' : `where ${where}`} limit ${String(limit)}) t`)
+        return reply(200, (rows[0] as { r: unknown }).r)
+      } catch (e) {
+        return reply(400, { message: String((e as Error).message) })
+      }
     }
     const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
     const prefer = String((init?.headers as Record<string, string> | undefined)?.Prefer ?? '')

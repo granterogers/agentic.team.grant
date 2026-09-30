@@ -104,17 +104,30 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   // Which bot was written to, resolved rather than believed.
   const claimed = new URL(request.url).searchParams.get('bot') ?? DEFAULT_BOT_ID
-  const speakers = (await (
-    await fetch(`${DB_URL}/rest/v1/rpc/staff_for_bot`, {
-      method: 'POST',
-      headers: {
-        apikey: SERVICE_KEY,
-        Authorization: `Bearer ${SERVICE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ p_bot_id: claimed }),
-    })
-  ).json()) as { staff_slug?: string | null; staff_name?: string | null; username?: string }[]
+  /*
+    FAILING TO ASK IS NOT AN ANSWER (#388). This used to read the reply's body without looking at its
+    status, so a database error, a throttle or a non-JSON body all came out as "no such bot" and were
+    acknowledged with 200 - Telegram does not retry a 200, and the message was gone. Only a successful
+    answer that names nobody is an unknown bot.
+  */
+  const asked = await fetch(`${DB_URL}/rest/v1/rpc/staff_for_bot`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_bot_id: claimed }),
+  }).catch(() => null)
+  const answered = asked !== null && asked.ok ? await asked.json().catch(() => null) : null
+  if (!Array.isArray(answered)) {
+    return new Response('could not resolve the bot', { status: 503 })
+  }
+  const speakers = answered as {
+    staff_slug?: string | null
+    staff_name?: string | null
+    username?: string
+  }[]
   const speaker = speakers[0]
   if (speaker === undefined) {
     // An unregistered or disabled bot. 200 rather than 4xx: Telegram retries a
@@ -354,19 +367,43 @@ Deno.serve(async (request: Request): Promise<Response> => {
     command.voice_file_id !== null
   ) {
     const stored = (await response.json().catch(() => [])) as { command_id?: string }[]
-    const commandId = stored[0]?.command_id
+    let commandId = stored[0]?.command_id
+    /*
+      A REDELIVERY OF A MESSAGE WHOSE JOB WAS NEVER MADE (#388). The insert ignores a duplicate and
+      returns nothing, so when the first delivery stored the row and then failed to enqueue it, every
+      retry found the row, made no job, and answered 200: the instruction was stored and never worked.
+      A duplicate that has no job yet is finished here; `enqueue_inbound` is idempotent, so one that
+      already has a job answers `already` and makes none.
+    */
+    if (commandId === undefined) {
+      const existing = await fetch(
+        `${DB_URL}/rest/v1/inbound_commands?dedupe_key=eq.${encodeURIComponent(command.dedupe_key)}&select=command_id,job_id&limit=1`,
+        { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+      ).catch(() => null)
+      const rows =
+        existing !== null && existing.ok
+          ? ((await existing.json().catch(() => [])) as {
+              command_id?: string
+              job_id?: string | null
+            }[])
+          : []
+      if (rows[0]?.command_id !== undefined && (rows[0].job_id ?? null) === null) {
+        commandId = rows[0].command_id
+      }
+    }
     if (commandId !== undefined) {
-      const enqueued = (await (
-        await fetch(`${DB_URL}/rest/v1/rpc/enqueue_inbound`, {
-          method: 'POST',
-          headers: {
-            apikey: SERVICE_KEY,
-            Authorization: `Bearer ${SERVICE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ p_command_id: commandId }),
-        })
-      ).json()) as { job_id?: string; error?: string }
+      const call = await fetch(`${DB_URL}/rest/v1/rpc/enqueue_inbound`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_command_id: commandId }),
+      }).catch(() => null)
+      // The instruction is stored; if it could not be turned into work, say so, so Telegram tries again.
+      if (call === null || !call.ok) return new Response('could not queue it', { status: 503 })
+      const enqueued = (await call.json().catch(() => ({}))) as { job_id?: string; error?: string }
       queued = enqueued.job_id ?? enqueued.error ?? null
     }
   }
@@ -395,7 +432,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   //
   // 0133's `voice.transcription` decides. 'none' means say so; anything else
   // means carry on and let the runner path below handle it.
-  if (command.voice_file_id !== null) {
+  // Only the delivery that STORED (or finished) the command says so: Telegram redelivers an update it
+  // was not answered promptly, and a refusal sent on every redelivery is the same message N times.
+  if (command.voice_file_id !== null && queued !== null) {
     const refusal = (await rpcOne('voice_refusal', { p_bot_id: claimed })) as {
       refuse?: boolean
       token?: string

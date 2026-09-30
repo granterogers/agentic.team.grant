@@ -30,6 +30,7 @@
 
 import { buildVaultExport, sendSealedVault } from '../backup/vault-export.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { beginStep, finishStep } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { pagerBot } from '../telegram/roster.ts'
 import { count } from '../text/plain.ts'
@@ -70,6 +71,52 @@ export function vaultExportHandler(db: SqlExecutor): Handler {
         } satisfies HandlerOutput
       }
 
+      /*
+        HIS OWN PRIVATE CHAT, not "the newest chat registered under his name" (#386).
+
+        `telegram_chat_for` answers the newest deliverable chat attributed to him. Since 0607 only a private
+        chat is attributed, and only to the person the office lists, but a credential export is not the
+        place to lean on that: the chat must BE the Telegram user id the office lists for him. A private
+        chat's id is its user's id, so his is on the list and a group's (negative) never is. Anything else
+        is refused before a single secret is decrypted.
+      */
+      const own = (
+        await db.execute(
+          `select actor from public.subject_identities
+            where subject = 'grant' and origin_channel = 'telegram' and kind = 'person'`,
+        )
+      ).rows.map((r) => String((r as { actor: string }).actor))
+      if (!own.includes(String(chatId))) {
+        return {
+          ...base,
+          body:
+            'The chat registered for Grant is not his own private chat, so the vault was not built ' +
+            'and nothing was sent. A copy of every credential goes only to him, and only there.',
+        } satisfies HandlerOutput
+      }
+
+      /*
+        ONCE (#386). Sending a copy of the vault cannot be undone, and the passphrase that opens it exists
+        only in this process: a retry after "the file went and the passphrase did not" would build a
+        DIFFERENT file. So the claim is made before anything is decrypted, and an attempt that started
+        and did not finish is reconciled by a person rather than repeated.
+      */
+      const claim = await beginStep(db, job.jobId, 'send', 0, 'external', 'office.vault_export@1')
+      if (claim.kind === 'skip') {
+        return {
+          ...base,
+          body: 'A copy of the vault has already been sent for this run. I have not sent another.',
+        } satisfies HandlerOutput
+      }
+      if (claim.kind === 'paused') {
+        return {
+          ...base,
+          body:
+            `I stopped before sending the vault: ${claim.pause.detail} ` +
+            `${claim.pause.resumeWhen}`,
+        } satisfies HandlerOutput
+      }
+
       // Read LAST, and only once there is a destination. A decrypted vault
       // sitting in this process while we work out where to send it is a
       // decrypted vault in a crash dump for no reason.
@@ -82,6 +129,7 @@ export function vaultExportHandler(db: SqlExecutor): Handler {
 
       const sealed = await buildVaultExport(rows)
       await sendSealedVault(pager.token, String(chatId), sealed)
+      await finishStep(db, job.jobId, 'send', { credentials: sealed.items })
 
       return {
         ...base,

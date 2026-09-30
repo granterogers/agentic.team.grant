@@ -118,6 +118,121 @@ export type RunEnd =
       readonly outcomes: Readonly<Record<string, Outcome>>
     }
 
+/** What `app.step_begin` said about one step, as the caller has to act on it. */
+export type StepGate =
+  | { readonly kind: 'do' }
+  | { readonly kind: 'skip'; readonly outcome: Outcome }
+  | { readonly kind: 'paused'; readonly pause: Paused }
+
+/**
+ * Ask whether a step may run, and pause the job when it may not.
+ *
+ * The one implementation of the four answers (`do`, `skip`, `park`, `stale`): `runSteps` calls it for
+ * every step, and a handler with ONE external effect it must not repeat calls it directly rather than
+ * being rewritten as a list of steps. A step that acts outside the office and was interrupted answers
+ * `paused`, never `do`.
+ */
+export async function beginStep(
+  db: SqlExecutor,
+  jobId: string,
+  name: string,
+  index: number,
+  effect: Effect,
+  codeVersion: string,
+): Promise<StepGate> {
+  const { rows } = await db.execute(
+    `select app.step_begin(${lit(jobId)}::uuid, ${lit(name)}, ${String(index)},
+                           ${lit(effect)}, ${String(CHECKPOINT_SCHEMA)},
+                           ${lit(codeVersion)}) as r`,
+  )
+  const raw = rows[0]?.r
+  const verdict = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>
+  if (typeof verdict.error === 'string') {
+    throw new Error(`checkpointing "${name}" failed: ${verdict.error}`)
+  }
+  if (verdict.skip === true) {
+    return { kind: 'skip', outcome: (verdict.outcome as Outcome | undefined) ?? {} }
+  }
+  if (verdict.park === true) {
+    const pause: Paused = {
+      detail: String(verdict.why ?? 'an interrupted external write'),
+      reason: 'needs_reconciliation',
+      resumable: false,
+      resumeWhen:
+        `Check whether "${name}" actually happened outside the office. ` +
+        'If it did, mark the step finished; if it did not, clear it and I will run it again.',
+    }
+    await pauseJob(db, jobId, pause)
+    return { kind: 'paused', pause }
+  }
+  if (verdict.stale === true) {
+    const pause: Paused = {
+      detail: String(verdict.why ?? 'the checkpoint was written by different code'),
+      reason: 'checkpoint_stale',
+      resumable: false,
+      resumeWhen: 'A person decides whether the earlier steps still hold under the current code.',
+    }
+    await pauseJob(db, jobId, pause)
+    return { kind: 'paused', pause }
+  }
+  return { kind: 'do' }
+}
+
+/**
+ * Claim the ONE external effect a handler must not repeat, allowing for an attempt that failed CLEANLY.
+ *
+ * `job_steps` is written once, so a claim cannot be released. Two different ways to fail need two
+ * different records: an attempt the remote system REFUSED (it knows nothing happened) is finished with
+ * `failed: true` by `failedCleanly`, and the next attempt claims the next name (`base.retry1`); an
+ * attempt that may or may not have reached the remote system is left open, and the next attempt to claim
+ * that name parks. A step that finished with a result is `skip`.
+ */
+export async function claimExternal(
+  db: SqlExecutor,
+  jobId: string,
+  base: string,
+  codeVersion: string,
+): Promise<{ readonly name: string; readonly gate: StepGate }> {
+  for (let n = 0; n < 6; n += 1) {
+    const name = n === 0 ? base : `${base}.retry${String(n)}`
+    const gate = await beginStep(db, jobId, name, n, 'external', codeVersion)
+    if (gate.kind === 'skip' && gate.outcome.failed === true) continue
+    return { name, gate }
+  }
+  const pause: Paused = {
+    detail: `${base} was refused six times in a row`,
+    reason: 'needs_reconciliation',
+    resumable: false,
+    resumeWhen: 'A person looks at why the other side keeps refusing, and asks again.',
+  }
+  await pauseJob(db, jobId, pause)
+  return { name: base, gate: { kind: 'paused', pause } }
+}
+
+/** The remote system refused this attempt, so nothing happened and the next attempt may go ahead. */
+export async function failedCleanly(
+  db: SqlExecutor,
+  jobId: string,
+  name: string,
+  why: string,
+): Promise<void> {
+  await finishStep(db, jobId, name, { failed: true, why: why.slice(0, 200) })
+}
+
+/** Record that a step finished, and what it produced. */
+export async function finishStep(
+  db: SqlExecutor,
+  jobId: string,
+  name: string,
+  outcome: Outcome,
+  effectRef?: string,
+): Promise<void> {
+  await db.execute(
+    `select app.step_done(${lit(jobId)}::uuid, ${lit(name)}, ${json(outcome)},
+                          ${effectRef === undefined ? 'null' : lit(effectRef)})`,
+  )
+}
+
 /**
  * Run the steps, skipping what is already recorded.
  *
@@ -145,44 +260,12 @@ export async function runSteps(
     if (await stopRequested(db, jobId)) {
       return { at: step.name, kind: 'stopped', outcomes }
     }
-    const effect: Effect = step.effect ?? 'none'
-    const { rows } = await db.execute(
-      `select app.step_begin(${lit(jobId)}::uuid, ${lit(step.name)}, ${String(index)},
-                             ${lit(effect)}, ${String(CHECKPOINT_SCHEMA)},
-                             ${lit(codeVersion)}) as r`,
-    )
-    const raw = rows[0]?.r
-    const verdict = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>
-
-    if (typeof verdict.error === 'string') {
-      throw new Error(`checkpointing "${step.name}" failed: ${verdict.error}`)
-    }
-    if (verdict.skip === true) {
-      outcomes[step.name] = (verdict.outcome as Outcome | undefined) ?? {}
+    const gate = await beginStep(db, jobId, step.name, index, step.effect ?? 'none', codeVersion)
+    if (gate.kind === 'skip') {
+      outcomes[step.name] = gate.outcome
       continue
     }
-    if (verdict.park === true) {
-      const pause: Paused = {
-        detail: String(verdict.why ?? 'an interrupted external write'),
-        reason: 'needs_reconciliation',
-        resumable: false,
-        resumeWhen:
-          `Check whether "${step.name}" actually happened outside the office. ` +
-          'If it did, mark the step finished; if it did not, clear it and I will run it again.',
-      }
-      await pauseJob(db, jobId, pause)
-      return { at: step.name, kind: 'paused', pause }
-    }
-    if (verdict.stale === true) {
-      const pause: Paused = {
-        detail: String(verdict.why ?? 'the checkpoint was written by different code'),
-        reason: 'checkpoint_stale',
-        resumable: false,
-        resumeWhen: 'A person decides whether the earlier steps still hold under the current code.',
-      }
-      await pauseJob(db, jobId, pause)
-      return { at: step.name, kind: 'paused', pause }
-    }
+    if (gate.kind === 'paused') return { at: step.name, kind: 'paused', pause: gate.pause }
 
     const result = await step.run(outcomes)
     if (result.pause !== undefined) {
@@ -195,11 +278,7 @@ export async function runSteps(
       await pauseJob(db, jobId, result.pause)
       return { at: step.name, kind: 'paused', pause: result.pause }
     }
-    await db.execute(
-      `select app.step_done(${lit(jobId)}::uuid, ${lit(step.name)},
-                            ${json(result.outcome ?? {})},
-                            ${result.effectRef === undefined ? 'null' : lit(result.effectRef)})`,
-    )
+    await finishStep(db, jobId, step.name, result.outcome ?? {}, result.effectRef)
     outcomes[step.name] = result.outcome ?? {}
   }
 

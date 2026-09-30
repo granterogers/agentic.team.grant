@@ -575,6 +575,7 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'no service the office is delivering through is described to its agents as unreachable',
   ],
   ['check:answerable', 'every question open on his dashboard has somewhere for an answer to go'],
+  ['check:anon-exposure', 'no function in public can be executed with a public key (#384)'],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 

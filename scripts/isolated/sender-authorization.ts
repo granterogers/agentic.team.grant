@@ -251,6 +251,129 @@ check(
   `status ${down.status}`,
 )
 
+// ---- failing to resolve the BOT is not an unknown bot (#388) -------------------
+{
+  const before = Number(
+    (
+      await one(
+        `select count(*)::int as c from public.inbound_commands where origin_channel = 'telegram'`,
+      )
+    ).c,
+  )
+  door.outage(true, 'staff_for_bot')
+  const r = await door.post(msg({ id: Number(GRANT) }, Number(GRANT), `Bot lookup down ${run}`))
+  door.outage(false)
+  check(
+    'the bot lookup failing answers 503 (Telegram retries), not 200 "unknown bot" (it does not)',
+    r.status === 503 &&
+      Number(
+        (
+          await one(
+            `select count(*)::int as c from public.inbound_commands where origin_channel = 'telegram'`,
+          )
+        ).c,
+      ) === before,
+    `status ${r.status} ${JSON.stringify(r.body)}`,
+  )
+}
+
+// ---- a stored message whose job could not be made is finished by the retry (#388) ----
+{
+  const text = `Enqueue down then retried ${run}`
+  const update = msg({ id: Number(GRANT) }, Number(GRANT), text)
+  door.outage(true, 'enqueue_inbound')
+  const first = await door.post(update)
+  door.outage(false)
+  const stored = await one(
+    `select command_id::text as id, job_id::text as job from public.inbound_commands where instruction = ${lit(text)}`,
+  )
+  check(
+    'enqueue failing after the store answers 503 so Telegram retries, and the row is there with no job',
+    first.status === 503 && typeof stored?.id === 'string' && stored?.job === null,
+    `status ${first.status} ${JSON.stringify(stored)}`,
+  )
+  const again = await door.post(update)
+  const finished = await one(
+    `select count(*)::int as c, count(distinct job_id)::int as j from public.inbound_commands where instruction = ${lit(text)}`,
+  )
+  const jobs = await one(
+    `select count(*)::int as c from public.jobs j join public.inbound_commands c on c.job_id = j.job_id where c.instruction = ${lit(text)}`,
+  )
+  check(
+    'the retry finishes it: one command, one job',
+    again.status === 200 && Number(finished.c) === 1 && Number(jobs.c) === 1,
+    `status ${again.status} commands ${String(finished.c)} jobs ${String(jobs.c)}`,
+  )
+  const third = await door.post(update)
+  const jobs2 = await one(
+    `select count(*)::int as c from public.jobs j join public.inbound_commands c on c.job_id = j.job_id where c.instruction = ${lit(text)}`,
+  )
+  check(
+    'and a third delivery makes no second job (exactly once)',
+    third.status === 200 && Number(jobs2.c) === 1,
+    `jobs ${String(jobs2.c)}`,
+  )
+}
+
+// ---- a voice note carries the same identity, and the same authority, as text (#388) ------
+{
+  const voice = (from: unknown, chatId: number, fileId: string) => ({
+    update_id: n(),
+    message: {
+      message_id: n(),
+      date: Math.floor(Date.now() / 1000),
+      voice: { file_id: fileId, duration: 3 },
+      chat: { id: chatId, type: 'private' },
+      from,
+    },
+  })
+  const sent = () => door.refusedUrls.filter((u) => u.includes('/sendMessage')).length
+  const stranger = voice({ id: Number(STRANGER) }, Number(STRANGER), `AgAD-stranger-${run}`)
+  const s0 = await snapshot()
+  const sBefore = sent()
+  const rs = await door.post(stranger)
+  const s1 = await snapshot()
+  check(
+    "a stranger's voice note is refused at the door: stored nowhere, no job, and no reply sent to them",
+    rs.status === 200 &&
+      rs.body.ignored === 'unrecognised sender' &&
+      unchanged(s0, s1) &&
+      sent() === sBefore,
+    JSON.stringify(rs.body),
+  )
+  const grantVoice = voice({ id: Number(GRANT) }, Number(GRANT), `AgAD-grant-${run}`)
+  const rg = await door.post(grantVoice)
+  const cmd = await one(
+    `select command_id::text as id, subject, job_id::text as job from public.inbound_commands where voice_file_id = ${lit(`AgAD-grant-${run}`)}`,
+  )
+  const job = await one(
+    `select requested_by, pinned_config ->> 'voice_file_id' as v from public.jobs where job_id = ${lit(String(cmd?.job))}::uuid`,
+  )
+  check(
+    "Grant's voice note is his: the same subject and the same requester as a typed message, the recording kept as provenance",
+    rg.status === 200 &&
+      cmd?.subject === 'grant' &&
+      job?.requested_by === 'telegram:grant' &&
+      job?.v === `AgAD-grant-${run}`,
+    `${JSON.stringify(cmd)} ${JSON.stringify(job)}`,
+  )
+  const afterFirst = sent()
+  check(
+    'and he is told once that voice notes are switched off',
+    afterFirst === sBefore + 1,
+    `${String(afterFirst - sBefore)} reply attempt(s)`,
+  )
+  const again = await door.post(grantVoice)
+  const jobs = await count(
+    `select count(*)::int as c from public.jobs j join public.inbound_commands c on c.job_id = j.job_id where c.voice_file_id = ${lit(`AgAD-grant-${run}`)}`,
+  )
+  check(
+    'a redelivery of the same recording makes no second job and sends no second reply',
+    again.status === 200 && jobs === 1 && sent() === afterFirst,
+    `jobs ${String(jobs)}, replies ${String(sent() - sBefore)}`,
+  )
+}
+
 // ---- synthetic / declared test sender ----------------------------------------
 const FIX = `-7${String(n()).padStart(13, '0')}`
 const FIXUSER = String(4242000 + (n() % 1000))
@@ -353,9 +476,11 @@ check(
   'subject reset',
 )
 
+// The one thing the door may try to send is the single "voice notes are off" reply to Grant himself,
+// once, to the bot's own api (the voice section above proves it is once and only to him).
 check(
-  'nothing tried to leave the replica',
-  door.refusedUrls.length === 0,
+  'nothing tried to leave the replica but the one voice-note reply to Grant',
+  door.refusedUrls.length === 1 && door.refusedUrls.every((u) => /\/sendMessage$/.test(u)),
   JSON.stringify(door.refusedUrls.slice(0, 3)),
 )
 

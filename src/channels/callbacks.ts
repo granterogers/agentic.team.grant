@@ -68,6 +68,8 @@ interface PendingRow {
   output_id: string | null
   /** The job the pressed message came from, for 0083's approval lookup. */
   job_id: string | null
+  /** The message itself: which question its buttons showed is decided from when it was sent (0617). */
+  delivery_id: string | null
 }
 
 /**
@@ -99,6 +101,7 @@ const PENDING = (limit: number): string => `
     press.origin_channel          as origin_channel,
     press.origin_ref              as origin_ref,
     press.actor                   as actor,
+    d.delivery_id::text           as delivery_id,
     d.correlation_id::text        as correlation_id,
     j.project_id::text            as project_id,
     j.job_id::text                as job_id,
@@ -473,7 +476,7 @@ export const processCallbacks = async (
         // payload. The payload round-trips through a client and §10 forbids
         // free-form input reaching a lookup; the delivery row is ours, and 0037
         // already established it as the trustworthy end of a button press.
-        if (row.job_id === null) {
+        if (row.job_id === null || row.delivery_id === null) {
           done.push({
             commandId: row.command_id,
             action,
@@ -506,7 +509,7 @@ export const processCallbacks = async (
           ) as r
           from (select b.blocker_id, b.approval_options, b.decline_option
                   from public.blockers b
-                 where b.blocker_id = app.open_approval_for_job(${lit(row.job_id)}::uuid)) q
+                 where b.blocker_id = app.approval_for_delivery(${lit(row.delivery_id)}::uuid)) q
         `)
         const r = (answered[0] as { r: Record<string, unknown> | null } | undefined)?.r ?? null
         await resolveNotification(db, row, action === 'approve' ? 'acted' : 'dismissed')

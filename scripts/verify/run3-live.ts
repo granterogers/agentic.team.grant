@@ -84,12 +84,17 @@ try {
       })
     ).json()) as { name: string; api_key: string }[]
     const anon = keys.find((k) => k.name === 'anon')?.api_key ?? ''
-    for (const fn of [
-      'vault_inventory',
-      'callback_ack',
-      'hq_revoke_tool',
-      'register_mcp_provider',
-    ]) {
+    // Valid named arguments for each: a call PostgREST cannot resolve answers 404, which proves nothing.
+    const probes: [string, Record<string, unknown>][] = [
+      ['vault_inventory', {}],
+      ['callback_ack', { p_bot_id: '1', p_action: 'approve' }],
+      ['hq_revoke_tool', { p_slug: 'chief-of-staff', p_tool: 'db.read' }],
+      [
+        'register_mcp_provider',
+        { p_name: 'run3-live-probe', p_endpoint: 'https://example.invalid/mcp' },
+      ],
+    ]
+    for (const [fn, args] of probes) {
       const r = await fetch(`https://${ref}.supabase.co/rest/v1/rpc/${fn}`, {
         method: 'POST',
         headers: {
@@ -97,7 +102,7 @@ try {
           Authorization: `Bearer ${anon}`,
           'content-type': 'application/json',
         },
-        body: '{}',
+        body: JSON.stringify(args),
       })
       const t = await r.text()
       check(
