@@ -88,6 +88,11 @@ export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promis
       `standingOption ${JSON.stringify(draft.standingOption)} is not one of the approval options`,
     )
   }
+  if (draft.declineOption !== undefined && !draft.approvalOptions.includes(draft.declineOption)) {
+    throw new Error(
+      `declineOption ${JSON.stringify(draft.declineOption)} is not one of the approval options`,
+    )
+  }
   // Same rule for the option that PERFORMS something, and for the same reason:
   // `hq_answer_blocker` refuses an answer outside the list, so an `onAnswer`
   // naming an option nobody offered is work nobody could ever trigger.
@@ -102,7 +107,7 @@ export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promis
     insert into public.blockers
       (project_id, job_id, requested_action, why_needed, consequences_of_delay,
        approval_options, originating_agent, work_can_continue,
-       standing_tool, standing_option, on_answer)
+       standing_tool, standing_option, on_answer, action_fingerprint, decline_option)
     values
       (${nullableLit(draft.projectId)}::uuid, ${lit(draft.jobId)}::uuid,
        ${lit(draft.requestedAction)}, ${lit(draft.whyNeeded)},
@@ -110,7 +115,8 @@ export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promis
        array[${options}]::text[], ${lit(draft.originatingAgent)},
        ${draft.workCanContinue ? 'true' : 'false'},
        ${nullableLit(draft.standingTool)}, ${nullableLit(draft.standingOption)},
-       ${draft.onAnswer === undefined ? 'null' : `${lit(JSON.stringify(draft.onAnswer))}::jsonb`})
+       ${draft.onAnswer === undefined ? 'null' : `${lit(JSON.stringify(draft.onAnswer))}::jsonb`},
+       ${nullableLit(draft.actionFingerprint)}, ${nullableLit(draft.declineOption)})
     returning blocker_id::text as blocker_id
   `)
   const id = rows[0]?.blocker_id

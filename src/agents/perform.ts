@@ -608,44 +608,6 @@ export const performable = (): readonly string[] => Object.keys(EXECUTORS)
 /** The options a plan step offers, in order: the first is consent. */
 export const STEP_OPTIONS = ['Yes, do it', 'No, leave it'] as const
 
-/**
- * What he answered to THIS step's question, if he has (ledger R45).
- *
- * The question is the blocker raised with the most recent approval pause
- * bound to this step's fingerprint; the answer is its resolution. Consent is
- * the FIRST option the writer offered, compared as data rather than read as
- * English, and anything else that is not the second option is "unclear" —
- * never taken as a yes.
- */
-export async function answerFor(
-  db: SqlExecutor,
-  jobId: string,
-  binds: unknown,
-): Promise<'yes' | 'no' | 'unclear' | null> {
-  const fp = await fingerprint(binds)
-  const { rows } = await db.execute(`
-    with p as (
-      select at from public.job_pauses
-       where job_id = '${jobId.replace(/'/g, "''")}'::uuid and reason = 'awaiting_approval'
-         and binds_to = '${fp}'
-       order by at desc limit 1)
-    select b.resolution, b.approval_options from public.blockers b, p
-     where b.job_id = '${jobId.replace(/'/g, "''")}'::uuid and b.state = 'resolved'
-       and b.resolved_at >= p.at
-       and b.created_at between p.at - interval '10 seconds' and p.at + interval '10 seconds'
-     order by b.resolved_at desc limit 1`)
-  const row = rows[0] as { resolution?: string | null; approval_options?: unknown } | undefined
-  if (row === undefined) return null
-  const said = String(row.resolution ?? '').trim()
-  const options = Array.isArray(row.approval_options)
-    ? row.approval_options.map(String)
-    : [...STEP_OPTIONS]
-  const [yes, no] = [options[0] ?? STEP_OPTIONS[0], options[1] ?? STEP_OPTIONS[1]]
-  if (said.startsWith(yes)) return 'yes'
-  if (said.startsWith(no)) return 'no'
-  return 'unclear'
-}
-
 export const compile = (
   plan: GoalPlan,
   db: SqlExecutor,
@@ -718,9 +680,20 @@ export const compile = (
           derivation as consent would make LLM interpretation into
           authorization, which is the one thing the whole design forbids.
         */
+        const binds = {
+          step: `${step.id}:${step.capability}`,
+          capability: step.capability,
+          project: projectId,
+          why: step.why,
+          needs: [...step.needs],
+        }
         const decision = await mayAct(db, {
           projectId,
           tool: step.capability,
+          staff: step.specialist,
+          audience: step.audience,
+          fingerprint: await fingerprint(binds),
+          job: jobId,
         })
         /*
           REFUSE AND ASK ARE DIFFERENT ANSWERS, AND THE FIRST DRAFT TREATED
@@ -746,9 +719,7 @@ export const compile = (
           action — #131: *"Approving something you cannot see is not an
           approval. It is consent to a category."*
         */
-        if (decision.verdict === 'refuse') {
-          return { outcome: nothing(step.capability, refusalSentence(decision)) }
-        }
+
         /*
           AN ANSWER ALREADY GIVEN DECIDES THE STEP (ledger R45).
 
@@ -769,31 +740,21 @@ export const compile = (
           step's own description and inputs are what it will DO, so they are
           bound too, and a changed step is asked about afresh.
         */
-        const binds = {
-          step: `${step.id}:${step.capability}`,
-          capability: step.capability,
-          project: projectId,
-          why: step.why,
-          needs: [...step.needs],
+        if (decision.verdict === 'refuse' && !decision.declined) {
+          return { outcome: nothing(step.capability, refusalSentence(decision)) }
         }
-        const hisAnswer = decision.verdict === 'ask' ? await answerFor(db, jobId, binds) : null
-        if (hisAnswer === 'no') {
+        if (decision.declined) {
           return {
             outcome: {
-              ...nothing(step.capability, 'the answer to this step was to leave it'),
+              ...nothing(
+                step.capability,
+                decision.remembered ? decision.because : 'the answer to this step was to leave it',
+              ),
               declined: true,
             },
           }
         }
-        if (hisAnswer === 'unclear') {
-          return {
-            outcome: {
-              ...nothing(step.capability, 'the answer to this step was not a yes'),
-              declined: true,
-            },
-          }
-        }
-        if (decision.verdict === 'ask' && hisAnswer !== 'yes') {
+        if (decision.verdict === 'ask') {
           /*
             The plan stops here rather than skipping ahead. A later step
             depending on this one would otherwise run against an absence and
@@ -836,6 +797,8 @@ export const compile = (
             whyNeeded: decision.because,
             consequencesOfDelay: 'The rest of the plan waits until you answer.',
             approvalOptions: [...STEP_OPTIONS],
+            actionFingerprint: await fingerprint(binds),
+            declineOption: STEP_OPTIONS[1],
             originatingAgent: 'chief-of-staff',
             workCanContinue: false,
           }).catch(async (error: unknown) => {

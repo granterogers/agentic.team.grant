@@ -4700,7 +4700,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   }
                 }
                 const set = await deps.db.execute(
-                  `select app.hq_task_state(${lit(target.id)}, ${lit(settles.state)}) as r`,
+                  `select app.hq_task_state(${lit(target.id)}, ${lit(settles.state)}, null,
+                     app.command_principal(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
                 )
                 const out = (set.rows[0] as { r?: unknown })?.r
                 const got = (typeof out === 'string' ? JSON.parse(out) : out) as {

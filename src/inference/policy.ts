@@ -185,6 +185,18 @@ export interface BlockerDraft {
   readonly standingTool?: string | undefined
   readonly standingOption?: string | undefined
   /**
+   * The exact action this question asks about, as `fingerprint()` computes it
+   * (the value `job_pauses.binds_to` holds). An answer approves or declines
+   * THIS action and nothing that merely resembles it (0611).
+   */
+  readonly actionFingerprint?: string | undefined
+  /**
+   * Which of `approvalOptions` is the No. Named by the writer, as
+   * `standingOption` names the standing Yes, so nothing reads English to find
+   * out. An option not in the list is refused, for the same reason (0611).
+   */
+  readonly declineOption?: string | undefined
+  /**
    * What answering with a particular option PERFORMS (#257).
    *
    * A job kind and one payload per thing, written HERE rather than read out of

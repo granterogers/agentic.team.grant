@@ -71,8 +71,10 @@ describe('the handler acts through the writer and counts only what changed', () 
     expect(src).toMatch(/my_task_referent\([\s\S]{0,160}?p_any_task => true/)
   })
   it('presses app.hq_task_state with the resolved id', () => {
+    // With the principal the door recorded (0611): a to-do that stands for a
+    // question is only an answer from somebody the office can name.
     expect(src).toMatch(
-      /app\.hq_task_state\(\$\{lit\(target\.id\)\}, \$\{lit\(settles\.state\)\}\)/,
+      /app\.hq_task_state\(\$\{lit\(target\.id\)\}, \$\{lit\(settles\.state\)\}, null,\s*app\.command_principal\(/,
     )
   })
   it('claims a change only when the writer returned that state', () => {

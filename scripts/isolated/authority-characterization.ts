@@ -10,7 +10,7 @@
  * pins a behaviour Run 2 exists to change: when a gap is closed its check flips
  * and is rewritten as the property, never deleted.
  */
-import { governOutward, mayAct } from '../../src/agents/approval.ts'
+import { mayAct } from '../../src/agents/approval.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'authchar')
@@ -135,91 +135,11 @@ for (const [level, want] of Object.entries(EXPECT)) {
   )
 }
 
-// ---- KNOWN GAP 1: a specialist's grant is not consulted when a step runs ---
-{
-  const staff = String(
-    (await one(`select slug from public.staff where slug <> 'chief-of-staff' limit 1`)).slug,
-  )
-  await db.execute(
-    `delete from public.staff_tools where staff_slug = ${lit(staff)} and tool = 'task.create'`,
-  )
-  const may = (await one(`select app.staff_may_use(${lit(staff)}, 'task.create') as m`)).m
-  const p = await project('staffgap')
-  await setDial(p, 'act')
-  const d = await mayAct(db as never, { projectId: p, tool: 'task.create' })
-  check(
-    'KNOWN GAP staff_may_use: the specialist has NO grant, yet the policy answers proceed and no caller can pass the specialist',
-    may === false && d.verdict === 'proceed',
-    `staff_may_use=${String(may)}, may_act=${d.verdict}`,
-  )
-}
-
-// ---- KNOWN GAP 2: a decline is not remembered by the caller that asked -----
-{
-  const p = await project('decline')
-  await setDial(p, 'suggest')
-  const ask = async () => {
-    const j = await job(p, 'duty:isolated-decline', 'google.write_calendar_tasks')
-    return governOutward(db as never, {
-      jobId: j,
-      projectId: p,
-      tool: 'notion.write',
-      summary: 'The copy is behind',
-      detail: '1. Update "A"',
-      empty: false,
-      agent: 'operations-director',
-    })
-  }
-  const first = await ask()
-  await db.execute(
-    `select app.hq_answer_blocker(${lit(String(first.blocker))}::uuid, 'No, leave it', 'grant')`,
-  )
-  const second = await ask()
-  check(
-    'KNOWN GAP durable refusal: after "No, leave it" the next run asks the same question again',
-    first.blocker !== null && second.blocker !== null && second.blocker !== first.blocker,
-    `${String(first.blocker).slice(0, 8)} then ${String(second.blocker).slice(0, 8)}`,
-  )
-}
-
-// ---- KNOWN GAP 3: ticking the to-do answers the question as nobody ---------
-{
-  const p = await project('tick')
-  const j = await job(p, 'telegram:grant-tick')
-  await db
-    .execute(
-      `update public.jobs set state = 'running', started_at = now() where job_id = ${lit(j)}::uuid`,
-    )
-    .catch(() => undefined)
-  const b = String(
-    (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
-          approval_options, originating_agent, work_can_continue, standing_tool, standing_option)
-        values (${lit(p)}::uuid, ${lit(j)}::uuid, 'Characterise the tick', 'characterising the tick door', 'Nothing happens until somebody answers this question.',
-          array['Yes, keep doing it without asking me', 'No, leave it'], 'chief-of-staff', false,
-          'notion.write', 'Yes, keep doing it without asking me') returning blocker_id::text as id`)
-    ).id,
-  )
-  await db.execute(
-    `update public.tasks set state = 'done' where satisfies_blocker = ${lit(b)}::uuid`,
-  )
-  const after = await one(
-    `select state::text as s, resolution as r from public.blockers where blocker_id = ${lit(b)}::uuid`,
-  )
-  const standing = await one(
-    `select count(*)::int as n from public.standing_authorizations where tool = 'notion.write' and project_id = ${lit(p)}::uuid`,
-  )
-  check(
-    'KNOWN GAP task-tick: the tick resolves the question with NO principal named in the resolution',
-    after.s === 'resolved' && !/answered by/.test(String(after.r)),
-    String(after.r),
-  )
-  check(
-    'KNOWN GAP task-tick: and it never runs what answering promises (no standing row written)',
-    Number(standing.n) === 0,
-    `${String(standing.n)} standing rows`,
-  )
-}
+/*
+  The three KNOWN GAP checks that stood here (a specialist's grant not consulted,
+  a decline not remembered, a tick answering as nobody) were flipped by 0611 and
+  live on as properties in scripts/isolated/authority.ts.
+*/
 
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)

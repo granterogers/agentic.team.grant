@@ -72,6 +72,14 @@ export interface Decision {
   readonly standing: Standing | null
   /** Whether a person asked for this run, rather than a schedule (0423). */
   readonly askedFor: boolean
+  /** He said yes to exactly this action (0611). */
+  readonly approved: boolean
+  /** He said no to this, now or inside the refusal window (0611). */
+  readonly declined: boolean
+  /** The No was given before this run - the office must not ask again (0611). */
+  readonly remembered: boolean
+  /** Why, as a code a caller can branch on without reading English. */
+  readonly reason: string | null
 }
 
 interface RawDecision {
@@ -81,6 +89,10 @@ interface RawDecision {
   action_level?: number
   autonomy?: string
   asked_for?: boolean
+  approved?: boolean
+  declined?: boolean
+  remembered?: boolean
+  reason?: string
   standing?: {
     id?: string
     scope?: string
@@ -124,10 +136,29 @@ export const mayAct = async (
      * for anything a caller is unsure about.
      */
     readonly jobAskedFor?: string | null | undefined
+    /**
+     * The specialist doing this, when a specialist is (0611). Named, they must
+     * hold the tool: what a plan says or a prompt claims is not a grant. Absent
+     * means the office acting as itself.
+     */
+    readonly staff?: string | null | undefined
+    /** Who this reaches. `outside` can never proceed on its own (0611). */
+    readonly audience?: 'office' | 'grant' | 'outside' | null | undefined
+    /**
+     * The exact action, for an answer already given to bind to (0611). The job
+     * whose answer counts is `job`, which is the one running.
+     */
+    readonly fingerprint?: string | null | undefined
+    readonly job?: string | null | undefined
   },
 ): Promise<Decision> => {
   const { rows } = await db.execute(
-    `select app.may_act(${uuidOrNull(where.projectId)}, ${lit(where.tool)}, ${uuidOrNull(where.jobAskedFor)}) as d`,
+    `select app.authorize_effect(${uuidOrNull(where.projectId)}, ${lit(where.tool)},
+       ${uuidOrNull(where.jobAskedFor)},
+       ${where.staff === null || where.staff === undefined ? 'null' : lit(where.staff)},
+       ${where.audience === null || where.audience === undefined ? 'null' : lit(where.audience)},
+       ${where.fingerprint === null || where.fingerprint === undefined ? 'null' : lit(where.fingerprint)},
+       ${uuidOrNull(where.job)}) as d`,
   )
   const raw = rows[0]?.d as RawDecision | string | undefined
   const parsed: RawDecision =
@@ -149,6 +180,10 @@ export const mayAct = async (
     actionLevel: typeof parsed.action_level === 'number' ? parsed.action_level : null,
     autonomy: typeof parsed.autonomy === 'string' ? parsed.autonomy : null,
     askedFor: parsed.asked_for === true,
+    approved: parsed.approved === true,
+    declined: parsed.declined === true,
+    remembered: parsed.remembered === true,
+    reason: typeof parsed.reason === 'string' ? parsed.reason : null,
     standing:
       s === null || s === undefined || typeof s.id !== 'string'
         ? null
@@ -269,6 +304,18 @@ export const governOutward = async (
     return { go: true, decision, said: '', blocker: null }
   }
 
+  /*
+    A NO ALREADY GIVEN IS NOT ASKED AGAIN (0611). He said no to this, inside
+    the refusal window, and a duty that asks every hour would teach him to
+    stop reading the questions. Nothing is raised, nothing is recorded as an
+    impediment (it is not a fault) and nothing is said: silence is the
+    answer, and the standing question is his to reopen by changing the dial or
+    granting the tool.
+  */
+  if (decision.remembered) {
+    return { go: false, decision, said: '', blocker: null }
+  }
+
   if (decision.verdict === 'refuse') {
     await recordRefusal(db, {
       jobId: what.jobId,
@@ -304,6 +351,7 @@ export const governOutward = async (
       action it approves, which is a different piece of work.
     */
     approvalOptions: [option, 'No, leave it'],
+    declineOption: 'No, leave it',
     originatingAgent: what.agent,
     // The rest of the office carries on. This is a question, not a halt.
     workCanContinue: true,

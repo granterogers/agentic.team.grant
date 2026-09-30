@@ -1,0 +1,486 @@
+/**
+ * Run 2: an effect is authorised once, an ask is bound to the exact action, and a No is remembered.
+ *
+ *   npx tsx scripts/isolated/authority.ts <replica-db>
+ *
+ * The REAL `mayAct` (-> `app.authorize_effect`), `governOutward`, `compile`, the blocker functions and the
+ * to-do trigger, against an isolated replica carrying migration 0611. Each property has its NEGATIVE
+ * control (a grant that exists, an action that differs, a window that has passed, a principal that is known)
+ * so a boundary that refuses everything cannot pass. Effects are read from canonical state.
+ */
+import { governOutward, mayAct } from '../../src/agents/approval.ts'
+import { compile } from '../../src/agents/perform.ts'
+import { fingerprint } from '../../src/jobs/checkpoint.ts'
+import { isolated } from './guard.ts'
+
+const db = await isolated(process.argv[2] ?? 'authority')
+const run = Date.now().toString(36)
+const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
+const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<string, unknown>
+const results: { ok: boolean }[] = []
+const check = (what: string, ok: boolean, detail: string) => {
+  results.push({ ok })
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${what} - ${detail}`)
+}
+const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>
+const project = async (label: string, dial = 'suggest'): Promise<string> => {
+  const id = String(
+    json(
+      (
+        await one(`select app.hq_create_project(${lit(`Authority ${label} ${run}`)}, 'upload', ${lit(`authority-${label}-${run}`)},
+          ${lit(`Authority ${label} ${run}`)}, true) as v`)
+      ).v,
+    ).project_id,
+  )
+  await db.execute(
+    `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(id)}::uuid, ${lit(dial)}, 'grant', 'authority proof')`,
+  )
+  return id
+}
+const job = async (p: string, by: string, kind = 'office.instruction'): Promise<string> =>
+  String(
+    (
+      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
+        values (${lit(kind)}, ${lit(by)}, ${lit(p)}::uuid, 'au-' || gen_random_uuid(), gen_random_uuid())
+        returning job_id::text as id`)
+    ).id,
+  )
+const OPTS = ['Yes, do it', 'No, leave it']
+/** A question about one exact action, as a plan step raises it. */
+const ask = async (p: string, j: string, fp: string, tool = 'task.create') =>
+  String(
+    (
+      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+          approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
+        values (${lit(p)}::uuid, ${lit(j)}::uuid, ${lit(`Do the thing for ${tool}`)}, 'authority proof',
+          'Nothing happens until somebody answers this question.', array[${OPTS.map(lit).join(',')}],
+          'chief-of-staff', true, ${lit(fp)}, 'No, leave it') returning blocker_id::text as id`)
+    ).id,
+  )
+const answer = async (b: string, a: string, by = 'grant') =>
+  json(
+    (await one(`select app.hq_answer_blocker(${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`))
+      .r,
+  )
+
+// ---- 1. a specialist's grant is a runtime input ----------------------------
+{
+  const p = await project('staff', 'act')
+  const [holder, bare] = (
+    await db.execute(`select slug from public.staff order by slug limit 2`)
+  ).rows.map((r) => String((r as { slug: string }).slug))
+  await db.execute(
+    `insert into public.staff_tools (staff_slug, tool) values (${lit(String(holder))}, 'task.create') on conflict do nothing`,
+  )
+  await db.execute(
+    `delete from public.staff_tools where staff_slug = ${lit(String(bare))} and tool = 'task.create'`,
+  )
+  const yes = await mayAct(db as never, { projectId: p, tool: 'task.create', staff: holder })
+  const no = await mayAct(db as never, { projectId: p, tool: 'task.create', staff: bare })
+  const nobody = await mayAct(db as never, { projectId: p, tool: 'task.create' })
+  check('a specialist who holds the tool may (control)', yes.verdict === 'proceed', yes.verdict)
+  check(
+    'a specialist who does NOT hold it is refused, and the sentence names them',
+    no.verdict === 'refuse' &&
+      no.reason === 'specialist_not_granted' &&
+      no.because.includes(String(bare)),
+    `${no.verdict} - ${no.because.slice(0, 70)}`,
+  )
+  check(
+    'no specialist named is the office acting as itself, unchanged',
+    nobody.verdict === 'proceed',
+    nobody.verdict,
+  )
+  const off = await mayAct(db as never, { projectId: p, tool: 'gmail.send', staff: holder })
+  check(
+    'a grant cannot lift a tool the registry has switched off',
+    off.verdict === 'refuse',
+    off.verdict,
+  )
+}
+
+// ---- 2. an outside audience never proceeds on its own ----------------------
+{
+  const p = await project('outside', 'act')
+  const person = await job(p, 'telegram:grant-out')
+  await db.execute(
+    `select app.grant_standing('slack.post', ${lit(p)}::uuid, 'authority proof', 'grant', null)`,
+  )
+  const inside = await mayAct(db as never, { projectId: p, tool: 'slack.post', audience: 'office' })
+  const out = await mayAct(db as never, {
+    projectId: p,
+    tool: 'slack.post',
+    audience: 'outside',
+    jobAskedFor: person,
+  })
+  check(
+    'control: the same tool for the office at act proceeds',
+    inside.verdict === 'proceed',
+    inside.verdict,
+  )
+  check(
+    'an outside audience asks even at act, with a standing row and a person having asked',
+    out.verdict === 'ask' && out.reason === 'outside_audience',
+    `${out.verdict}/${String(out.reason)}`,
+  )
+  const j = await job(p, 'telegram:grant-out2')
+  const fp = await fingerprint({ tool: 'slack.post', to: 'the supplier', text: run })
+  const b = await ask(p, j, fp, 'slack.post')
+  await answer(b, 'Yes, do it')
+  const said = await mayAct(db as never, {
+    projectId: p,
+    tool: 'slack.post',
+    audience: 'outside',
+    fingerprint: fp,
+    job: j,
+  })
+  check(
+    'and his yes to exactly that message proceeds',
+    said.verdict === 'proceed' && said.approved,
+    said.verdict,
+  )
+}
+
+// ---- 3. an approval binds the exact action ---------------------------------
+{
+  const p = await project('exact')
+  const j = await job(p, 'telegram:grant-exact')
+  const fp1 = await fingerprint({ step: 's1', why: `file ${run}` })
+  const fp2 = await fingerprint({ step: 's1', why: `file something else ${run}` })
+  const b = await ask(p, j, fp1)
+  const before = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp1,
+    job: j,
+  })
+  check('unanswered: asks', before.verdict === 'ask', before.verdict)
+  await answer(b, 'Yes, do it')
+  const same = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp1,
+    job: j,
+  })
+  const changed = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp2,
+    job: j,
+  })
+  const other = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp1,
+    job: await job(p, 'telegram:grant-exact2'),
+  })
+  check('yes to THIS action proceeds', same.verdict === 'proceed' && same.approved, same.verdict)
+  check('the same yes does not cover a changed action', changed.verdict === 'ask', changed.verdict)
+  check("and is not another job's yes", other.verdict === 'ask', other.verdict)
+}
+
+// ---- 4. a No is durable, specific, and expires ------------------------------
+{
+  const p = await project('declined')
+  const j = await job(p, 'telegram:grant-no')
+  const fp = await fingerprint({ step: 's2', why: `send ${run}` })
+  const fpOther = await fingerprint({ step: 's2', why: `send a different thing ${run}` })
+  const b = await ask(p, j, fp)
+  const r = await answer(b, 'No, leave it')
+  const same = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp,
+    job: j,
+  })
+  check(
+    'the No is recorded as a column and by whom',
+    String(
+      (
+        await one(
+          `select answered_option || ' / ' || answered_by as v from public.blockers where blocker_id = ${lit(b)}::uuid`,
+        )
+      ).v,
+    ) === 'No, leave it / grant',
+    JSON.stringify(r).slice(0, 60),
+  )
+  check(
+    'this job: the declined action is refused, not asked',
+    same.verdict === 'refuse' && same.declined,
+    same.verdict,
+  )
+  const later = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp,
+    job: await job(p, 'telegram:grant-no2'),
+  })
+  check(
+    'a later job proposing the SAME action is refused and told why, not asked',
+    later.verdict === 'refuse' && later.remembered,
+    `${later.verdict} - ${later.because.slice(0, 60)}`,
+  )
+  const diff = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fpOther,
+    job: await job(p, 'telegram:grant-no3'),
+  })
+  check(
+    'a different action is asked afresh (the No is specific)',
+    diff.verdict === 'ask',
+    diff.verdict,
+  )
+  await db.execute(
+    `update public.blockers set resolved_at = resolved_at - interval '31 days' where blocker_id = ${lit(b)}::uuid`,
+  )
+  const expired = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp,
+    job: await job(p, 'telegram:grant-no4'),
+  })
+  check('past the window it may be asked again', expired.verdict === 'ask', expired.verdict)
+  // cancelling the job is NOT a refusal of the action
+  const j2 = await job(p, 'telegram:grant-cancel')
+  const fp3 = await fingerprint({ step: 's3', why: `cancel ${run}` })
+  await ask(p, j2, fp3)
+  await db.execute(`update public.jobs set state = 'cancelled' where job_id = ${lit(j2)}::uuid`)
+  const cancelled = await mayAct(db as never, {
+    projectId: p,
+    tool: 'task.create',
+    fingerprint: fp3,
+    job: await job(p, 'telegram:grant-cancel2'),
+  })
+  check(
+    'cancelling the objective is not a refusal of the action',
+    cancelled.verdict === 'ask',
+    cancelled.verdict,
+  )
+}
+
+// ---- 5. a duty does not ask again after a No --------------------------------
+{
+  const p = await project('duty')
+  const ask2 = async () => {
+    const j = await job(p, 'duty:authority-proof', 'google.write_calendar_tasks')
+    return {
+      j,
+      g: await governOutward(db as never, {
+        jobId: j,
+        projectId: p,
+        tool: 'notion.write',
+        summary: 'The copy is behind',
+        detail: '1. A',
+        empty: false,
+        agent: 'operations-director',
+      }),
+    }
+  }
+  const first = await ask2()
+  await answer(String(first.g.blocker), 'No, leave it')
+  const blockersBefore = Number(
+    (await one(`select count(*)::int as n from public.blockers where project_id = ${lit(p)}::uuid`))
+      .n,
+  )
+  const second = await ask2()
+  const blockersAfter = Number(
+    (await one(`select count(*)::int as n from public.blockers where project_id = ${lit(p)}::uuid`))
+      .n,
+  )
+  const impediments = Number(
+    (
+      await one(
+        `select count(*)::int as n from public.job_impediments where job_id = ${lit(second.j)}::uuid`,
+      )
+    ).n,
+  )
+  check(
+    'after "No, leave it" the next run raises nothing, says nothing and records no fault',
+    !second.g.go &&
+      second.g.blocker === null &&
+      second.g.said === '' &&
+      blockersAfter === blockersBefore &&
+      impediments === 0,
+    `blockers ${String(blockersBefore)}->${String(blockersAfter)}, impediments ${String(impediments)}`,
+  )
+  await db.execute(
+    `select app.grant_standing('notion.write', ${lit(p)}::uuid, 'he changed his mind', 'grant', null)`,
+  )
+  const third = await ask2()
+  check(
+    'and a standing yes he gives later reopens it (control)',
+    third.g.go,
+    `go=${String(third.g.go)}`,
+  )
+}
+
+// ---- 6. the to-do tick is an answer through the one door --------------------
+{
+  const p = await project('tick')
+  const makeAsk = async (label: string) => {
+    const j = await job(p, `telegram:grant-tick-${label}`)
+    const b = String(
+      (
+        await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+            approval_options, originating_agent, work_can_continue, standing_tool, standing_option, decline_option)
+          values (${lit(p)}::uuid, ${lit(j)}::uuid, ${lit(`Keep it in step ${label}`)}, 'authority proof',
+            'Nothing happens until somebody answers this question.',
+            array['Yes, keep doing it without asking me', 'No, leave it'], 'chief-of-staff', false,
+            'notion.write', 'Yes, keep doing it without asking me', 'No, leave it') returning blocker_id::text as id`)
+      ).id,
+    )
+    const t = String(
+      (
+        await one(
+          `select task_id::text as id from public.tasks where satisfies_blocker = ${lit(b)}::uuid`,
+        )
+      ).id,
+    )
+    return { b, t }
+  }
+  const nobody = await makeAsk('nobody')
+  await db.execute(
+    `update public.tasks set state = 'done', done_at = now() where task_id = ${lit(nobody.t)}::uuid`,
+  )
+  const stillOpen = await one(
+    `select b.state::text as bs, t.state::text as ts from public.blockers b, public.tasks t where b.blocker_id = ${lit(nobody.b)}::uuid and t.task_id = ${lit(nobody.t)}::uuid`,
+  )
+  check(
+    'a tick from nobody the office can name reopens the to-do and leaves the question open',
+    stillOpen.bs === 'open' && stillOpen.ts === 'todo',
+    `${String(stillOpen.bs)}/${String(stillOpen.ts)}`,
+  )
+  const stranger = await makeAsk('stranger')
+  await db.execute(`select app.hq_task_state(${lit(stranger.t)}, 'done', null, 'somebody-unknown')`)
+  const s2 = await one(
+    `select b.state::text as bs, t.state::text as ts from public.blockers b, public.tasks t where b.blocker_id = ${lit(stranger.b)}::uuid and t.task_id = ${lit(stranger.t)}::uuid`,
+  )
+  check(
+    'and so does an unknown principal',
+    s2.bs === 'open' && s2.ts === 'todo',
+    `${String(s2.bs)}/${String(s2.ts)}`,
+  )
+  const known = await makeAsk('grant')
+  await db.execute(`select app.hq_task_state(${lit(known.t)}, 'done', null, 'grant')`)
+  const k = await one(
+    `select b.state::text as bs, b.answered_by as by, b.answered_option as opt, (select count(*)::int from public.standing_authorizations where tool = 'notion.write' and project_id = ${lit(p)}::uuid and revoked_at is null) as standing from public.blockers b where b.blocker_id = ${lit(known.b)}::uuid`,
+  )
+  check(
+    'a tick by a known principal answers through hq_answer_blocker: who, which option, and what it promised',
+    k.bs === 'resolved' &&
+      k.by === 'grant' &&
+      k.opt === 'Yes, keep doing it without asking me' &&
+      Number(k.standing) === 1,
+    JSON.stringify(k),
+  )
+}
+
+// ---- 7. duplicate answers ---------------------------------------------------
+{
+  const p = await project('dup')
+  const j = await job(p, 'telegram:grant-dup')
+  const b = await ask(p, j, await fingerprint({ dup: run }))
+  const first = await answer(b, 'Yes, do it')
+  const second = await answer(b, 'No, leave it')
+  check(
+    'a second answer does not overwrite the first',
+    first.ok === true &&
+      second.already === true &&
+      String(
+        (
+          await one(
+            `select answered_option as o from public.blockers where blocker_id = ${lit(b)}::uuid`,
+          )
+        ).o,
+      ) === 'Yes, do it',
+    JSON.stringify(second).slice(0, 80),
+  )
+}
+
+// ---- 8. the plan executor asks the same boundary, per step -------------------
+{
+  const p = await project('steps', 'act')
+  const [holder, bare] = (
+    await db.execute(`select slug from public.staff order by slug limit 2`)
+  ).rows.map((r) => String((r as { slug: string }).slug))
+  await db.execute(
+    `insert into public.staff_tools (staff_slug, tool) values (${lit(String(holder))}, 'task.create') on conflict do nothing`,
+  )
+  await db.execute(
+    `delete from public.staff_tools where staff_slug = ${lit(String(bare))} and tool = 'task.create'`,
+  )
+  const step = (id: string, specialist: string | null, audience: 'office' | 'outside') => ({
+    goal: 'authority proof',
+    steps: [
+      { id, capability: 'task.create', why: `AUTH ${id} ${run}`, needs: [], specialist, audience },
+    ],
+    unreachable: [],
+    refused: [],
+    how: 'fallback',
+  })
+  const perform = async (id: string, specialist: string | null, audience: 'office' | 'outside') => {
+    const j = await job(p, 'telegram:grant-steps', 'office.pursue')
+    const [s] = compile(
+      step(id, specialist, audience) as never,
+      db as never,
+      j,
+      p,
+      'authority proof',
+    )
+    return { j, done: await s?.run({}) }
+  }
+  const tasks = async (id: string) =>
+    Number(
+      (
+        await one(
+          `select count(*)::int as n from public.tasks where title like ${lit(`%AUTH ${id} ${run}%`)} and satisfies_blocker is null`,
+        )
+      ).n,
+    )
+  const ok = await perform('held', holder ?? null, 'office')
+  check(
+    'a step naming a specialist who holds the tool performs it',
+    ok.done?.outcome !== undefined && (await tasks('held')) === 1,
+    `tasks ${String(await tasks('held'))}`,
+  )
+  const denied = await perform('bare', bare ?? null, 'office')
+  check(
+    'a step naming a specialist who does NOT hold it performs nothing and says why',
+    (await tasks('bare')) === 0 &&
+      String(
+        (denied.done?.outcome as { impediment?: string } | undefined)?.impediment ?? '',
+      ).includes('not been given'),
+    String((denied.done?.outcome as { impediment?: string } | undefined)?.impediment ?? '').slice(
+      0,
+      80,
+    ),
+  )
+  const outside = await perform('outside', null, 'outside')
+  check(
+    'a step reaching outside the office pauses for approval even at act, and performs nothing',
+    outside.done?.pause?.reason === 'awaiting_approval' && (await tasks('outside')) === 0,
+    String(outside.done?.pause?.reason),
+  )
+  const q = await one(
+    `select blocker_id::text as id, action_fingerprint as fp, decline_option as d from public.blockers where job_id = ${lit(outside.j)}::uuid`,
+  )
+  check(
+    'the question it raised names the exact action and which option is the No',
+    typeof q.fp === 'string' && q.d === 'No, leave it',
+    `${String(q.fp).slice(0, 10)}... / ${String(q.d)}`,
+  )
+  await answer(String(q.id), 'No, leave it')
+  const again = await perform('outside', null, 'outside')
+  check(
+    'after that No a fresh run of the same step is declined without asking',
+    (again.done?.outcome as { declined?: boolean } | undefined)?.declined === true &&
+      (await tasks('outside')) === 0,
+    JSON.stringify(again.done?.outcome ?? {}).slice(0, 80),
+  )
+}
+
+const failed = results.filter((r) => !r.ok).length
+console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
+await db.end()
+process.exitCode = failed === 0 ? 0 : 1

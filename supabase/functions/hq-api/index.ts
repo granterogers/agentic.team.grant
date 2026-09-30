@@ -907,7 +907,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   answer_blocker: { fn: 'hq_answer_blocker', required: ['p_blocker_id', 'p_answer'], by: 'p_by' },
   // `p_reason` is optional here and required by the RPC when the state is
   // `blocked` — the schema's own check constraint, said in a sentence.
-  task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'] },
+  task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'], by: 'p_by' },
   /*
     The arrangement of a project's dashboard (#81, migration 0250).
 
