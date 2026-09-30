@@ -508,6 +508,52 @@ const root = await realParent(db)
   )
 }
 {
+  // dashboard and voice bind by the session's own turn chain: an intervening turn, or twelve hours, ends the binding
+  const dash2 = async (
+    channel: 'teamhq' | 'voice',
+    session: string,
+    text: string,
+    ageHours = 0,
+  ) => {
+    const key =
+      channel === 'voice'
+        ? `voice:turn:s${session}.${String(Math.floor(Math.random() * 9000) + 1000)}`
+        : `teamhq:message:${crypto.randomUUID().replace(/-/g, '')}`
+    const cmd = await one(`${DOOR}
+      insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, received_at)
+      values (${lit(channel)}, ${lit(`${session}:${crypto.randomUUID().slice(0, 8)}`)}, 'grant', ${lit(text)}, ${lit(key)}, 'grant', app.now_utc() - ${lit(`${String(ageHours)} hours`)}::interval)
+      returning command_id::text as id`)
+    const enq = await one(
+      `${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`,
+    )
+    const v = typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v
+    return { command: String(cmd.id), job: String((v as { job_id?: string }).job_id ?? '') }
+  }
+  for (const channel of ['teamhq', 'voice'] as const) {
+    const sess = `${run.slice(0, 4)}${channel === 'voice' ? 'w' : 'h'}`
+    const t1 = await dash2(channel, sess, 'a thing that needs a go-ahead')
+    const q = await ask(t1.job, `raised by ${channel}`)
+    await dash2(channel, sess, 'an unrelated question in between')
+    const yes = await dash2(channel, sess, 'yes')
+    const got = await forNext(yes.command)
+    check(
+      `${channel}: a yes after an INTERVENING turn is not bound to the earlier turn's question`,
+      !got.some((g) => g.id === q && g.bindable),
+      JSON.stringify(got).slice(0, 80),
+    )
+    const sess2 = `${sess}x`
+    const old1 = await dash2(channel, sess2, 'an old thing that needed a go-ahead', 13)
+    const oq = await ask(old1.job, `stale ${channel}`)
+    const late = await dash2(channel, sess2, 'yes')
+    const lgot = await forNext(late.command)
+    check(
+      `${channel}: a yes thirteen hours later answers nothing`,
+      !lgot.some((g) => g.id === oq),
+      String(lgot.length),
+    )
+  }
+}
+{
   // (c) stale channel: shown more than twelve hours ago is not "what he was shown"
   const t = await turn('a stale channel proof')
   const j = await child(t.job)

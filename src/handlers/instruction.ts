@@ -3919,7 +3919,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           model: null,
         } satisfies HandlerOutput
       }
-      const sent = isBranch ? null : entitled.link(turn.kept)
+      // A link inside a FORWARDED message is material, never an instruction to attach it or file it (#393): attaching a
+      // notebook or database is what later authorizes writes there.
+      const sent = isBranch || forwarded ? null : entitled.link(turn.kept)
       const linked = sent === null ? null : await handleLinks(deps.db, job, sent)
 
       // Does this ask for something to be MADE? If so, make it, and let the
