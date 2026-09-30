@@ -28,7 +28,7 @@ const sites = (): Site[] => {
   for (const file of walk(root)) {
     const s = readFileSync(file, 'utf8')
     const pat =
-      /app\.enqueue_child(?:_once)?\(|'app\.enqueue_child_once' : 'app\.enqueue_child'\}\(/g
+      /app\.(?:enqueue_child(?:_once)?|fan_in_over)\(|'app\.enqueue_child_once' : 'app\.enqueue_child'\}\(/g
     for (let m = pat.exec(s); m !== null; m = pat.exec(s)) {
       const ls = s.lastIndexOf('\n', m.index) + 1
       const before = s.slice(ls, m.index)

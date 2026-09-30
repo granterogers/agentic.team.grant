@@ -253,6 +253,67 @@ const refused = async (fn: () => Promise<unknown>) => {
     .execute(`update public.jobs set state = 'cancelled' where job_id = ${lit(id)}::uuid`)
     .catch(() => undefined)
 }
+
+// ---- findings of the second independent review ------------------------------------------------------------------------------
+{
+  // a job that ran before 0625 has claim_gen 0 and an attempt of 3: its next claim is numbered above both
+  const id = await newJob()
+  await db.execute(
+    `update public.jobs set attempt = 3, max_attempts = 9 where job_id = ${lit(id)}::uuid`,
+  )
+  const j = await claim(id, 'legacy')
+  check(
+    'a job claimed for the first time since 0625, with attempts already spent, is numbered above every number it could have held',
+    (j.claimGen ?? 0) >= 4,
+    `attempt ${String(j.attempt)}, claim ${String(j.claimGen)}`,
+  )
+  // an incomplete caller is refused, not silently unfenced
+  const half = await refused(() =>
+    one(
+      `select app.enqueue_child(${lit(id)}::uuid, 'verify.fence', '{}'::jsonb, interval '0', true, null, ${lit(id)}::uuid)::text`,
+    ),
+  )
+  check(
+    'a caller that names the job but not the worker and claim is refused',
+    /incomplete caller/.test(half),
+    half.slice(0, 60),
+  )
+  // a failed parent may still have live children that defer
+  await db
+    .execute(`update public.jobs set state = 'failed' where job_id = ${lit(id)}::uuid`)
+    .catch(() => undefined)
+  const late = await refused(() => child(id, 'verify.fence', '{"late":1}'))
+  const st = String(
+    (await one(`select state::text as s from public.jobs where job_id = ${lit(id)}::uuid`)).s,
+  )
+  check(
+    'a FAILED parent is not refused a child (a live child deferring under it must be able to)',
+    st !== 'failed' || late === '',
+    `${st} ${late.slice(0, 50)}`,
+  )
+  // fan_in_over: a stale caller opens no branch group
+  const fid = await newJob()
+  const fa = await claim(fid, 'fan-a')
+  await waitAndWake(fa)
+  const fb = await claim(fid, 'fan-b')
+  const staleFan = await refused(() =>
+    one(
+      `select app.fan_in_over(${lit(fid)}::uuid, 'objective', '[]'::jsonb, 'office.synthesise', null${callerArgs({ ...fa, leasedBy: fb.leasedBy ?? '' } as Job)})::text`,
+    ),
+  )
+  const groups = Number(
+    (
+      await one(
+        `select count(*)::int as n from public.branch_groups where parent_job_id = ${lit(fid)}::uuid`,
+      )
+    ).n,
+  )
+  check(
+    'a stale caller of fan_in_over is refused and opens no group',
+    /stale caller/.test(staleFan) && groups === 0,
+    `${staleFan.slice(0, 50)} / ${String(groups)} groups`,
+  )
+}
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

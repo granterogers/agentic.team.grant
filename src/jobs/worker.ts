@@ -661,6 +661,40 @@ const recordOnLedger = async (
   }
 }
 
+/**
+ * The number of the claim just made (0625). Only a schema WITHOUT the column (42703) means "ask the attempt as it
+ * always did"; a throttle or a dropped connection is retried, and if it cannot be read the dequeue FAILS - the job's
+ * lease lapses and it is recovered - rather than running with the fence quietly switched off.
+ */
+const readClaimGen = async (
+  db: SqlExecutor,
+  jobId: string,
+  workerId: string,
+  attempt: number,
+): Promise<number | undefined> => {
+  let last: unknown
+  for (let i = 0; i < 4; i++) {
+    try {
+      const g = await db.execute(
+        `select claim_gen from public.jobs
+          where job_id = ${lit(jobId)}::uuid and leased_by = ${lit(workerId)} and attempt = ${String(attempt)}`,
+      )
+      const v = (g.rows[0] as { claim_gen?: unknown } | undefined)?.claim_gen
+      return v === undefined || v === null ? undefined : Number(v)
+    } catch (error) {
+      if (
+        /42703|claim_gen.*does not exist|column .* does not exist/i.test(
+          String((error as Error).message),
+        )
+      )
+        return undefined
+      last = error
+      await new Promise((r) => setTimeout(r, 250 * (i + 1)))
+    }
+  }
+  throw last
+}
+
 export const dequeue = async (
   db: SqlExecutor,
   workerId: string,
@@ -730,13 +764,7 @@ export const dequeue = async (
   // The number of the claim just made (0625). Read back by the claim itself - this worker, this attempt - because
   // changing what dequeue_job RETURNS would break a worker running the old shape. A schema without the column
   // answers an error, and the fence then asks the attempt as it always did.
-  const gen = await db
-    .execute(
-      `select claim_gen from public.jobs
-        where job_id = ${lit(String(r.job_id))}::uuid and leased_by = ${lit(workerId)} and attempt = ${String(Number(r.attempt))}`,
-    )
-    .then((g) => (g.rows[0] as { claim_gen?: unknown } | undefined)?.claim_gen)
-    .catch(() => undefined)
+  const gen = await readClaimGen(db, String(r.job_id), workerId, Number(r.attempt))
   return {
     jobId: String(r.job_id),
     kind: String(r.kind),
@@ -1076,6 +1104,18 @@ const runJobHeld = async (
     output = await handler.handle(job, db)
     output = { ...output, body: withoutStrayQuotes(output.body) }
   } catch (error) {
+    /*
+      A zombie writes nothing (review of Run 5). A handler that lost its claim - or was refused as a stale caller by
+      enqueue_child - lands here, and everything below records something about THIS job: a failure signature, a
+      degradation trace, a 'ran out of attempts' impediment. None of that is a zombie's to write about a job the live
+      worker holds. Ask first; a stale worker is abandoned before it touches anything.
+    */
+    if (error instanceof StaleWorkerError) throw error
+    if (/stale caller/i.test((error as Error).message ?? '')) {
+      job.lost = true
+      throw new StaleWorkerError(job.jobId, job.leasedBy ?? '', job.attempt)
+    }
+    await assertHeld(db, job)
     const retryable = await mayRetry(db, job)
     /*
       Recognise it (#132).

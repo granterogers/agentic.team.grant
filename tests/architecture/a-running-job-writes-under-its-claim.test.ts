@@ -33,7 +33,8 @@ describe('the running path writes under its claim', () => {
   })
   it('asks whether it still holds the job immediately before the output insert', () => {
     const codeOnly = running.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
-    const guard = codeOnly.indexOf('await assertHeld(db, job)')
+    const insert0 = codeOnly.indexOf('insert into public.outputs')
+    const guard = codeOnly.lastIndexOf('await assertHeld(db, job)', insert0)
     const insert = codeOnly.indexOf('insert into public.outputs')
     expect(guard).toBeGreaterThan(0)
     expect(insert).toBeGreaterThan(guard)

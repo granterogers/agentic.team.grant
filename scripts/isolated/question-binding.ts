@@ -64,6 +64,11 @@ const deliver = async (
         returning delivery_id::text as id`)
     ).id,
   )
+  // A question exists before the message that asks it: the fixture's blocker is dated a second before its message.
+  if (opts.blocker !== undefined && opts.blocker !== null)
+    await db.execute(
+      `update public.blockers set created_at = least(created_at, (select created_at from public.deliveries where delivery_id = ${lit(id)}::uuid) - interval '1 second') where blocker_id = ${lit(opts.blocker)}::uuid`,
+    )
   const bound =
     opts.blocker === undefined || opts.blocker === null
       ? null
@@ -167,6 +172,7 @@ const root = await realParent(db)
   const jA = await child(root)
   const jB = await child(root)
   const qB = await ask(jB, 'foreign B')
+  const qA0 = await ask(jA, 'own A first', 5)
   const dA = await deliver(jA, { blocker: null })
   const foreign = (
     await one(`select app.bind_delivery(${lit(dA.id)}::uuid, ${lit(qB)}::uuid) as b`)
@@ -179,7 +185,7 @@ const root = await realParent(db)
     foreign === false && fabricated === false && (await forDelivery(dA.id)) === null,
     `${String(foreign)}/${String(fabricated)}/${String(await forDelivery(dA.id))}`,
   )
-  const qA = await ask(jA, 'own A')
+  const qA = qA0
   const named = await one(`select app.bind_delivery(${lit(dA.id)}::uuid, ${lit(qA)}::uuid) as b`)
   const rename = await db
     .execute(
@@ -191,7 +197,7 @@ const root = await realParent(db)
     )
   check(
     'a message names its question once: it cannot be renamed afterwards',
-    named.b === true && /written once|not its own/.test(rename),
+    named.b === true && /written once|not its own|came after/.test(rename),
     rename.slice(0, 80),
   )
   const plain = await deliver(jA, { blocker: null })
@@ -513,6 +519,105 @@ const root = await realParent(db)
     'a question shown thirteen hours ago binds to nothing',
     !got.some((g) => g.bindable),
     String(got.length),
+  )
+}
+
+// ---- findings of the first independent review ----------------------------------------------------------------------------
+{
+  // 1. an acknowledgement pinned Q2 as "what I am waiting on"; a reply that POINTS at Q1's old message must not answer Q2
+  const t = await turn('review finding one')
+  const j1 = await child(t.job)
+  const j2 = await child(t.job)
+  const q1 = await ask(j1, 'F1 first')
+  const q2 = await ask(j2, 'F1 second')
+  const d1 = await deliver(j1, { blocker: q1, ago: 0 })
+  await deliver(j2, { blocker: q2, ago: 0 })
+  await answer(q1)
+  await db.execute(
+    `update public.jobs set pinned_config = coalesce(pinned_config, '{}'::jsonb) || jsonb_build_object('awaiting_answer', ${lit(q2)}) where job_id = ${lit(t.job)}::uuid`,
+  )
+  const yes = await turn('yes', { reply_to_message_id: d1.ref })
+  const got = await forNext(yes.command)
+  check(
+    'a reply that points at an old message never answers a DIFFERENT question the office was waiting on',
+    !got.some((g) => g.id === q2 && g.bindable),
+    JSON.stringify(got).slice(0, 100),
+  )
+  // the previous turn is now the reply above: the office's last reply (to that turn) is what pins the awaiting question
+  await db.execute(
+    `update public.jobs set pinned_config = coalesce(pinned_config, '{}'::jsonb) || jsonb_build_object('awaiting_answer', ${lit(q2)}) where job_id = ${lit(yes.job)}::uuid`,
+  )
+  const plain = await turn('yes')
+  const pg = await forNext(plain.command)
+  check(
+    'the awaiting question still binds a plain yes (control)',
+    pg.some((g) => g.id === q2 && g.bindable),
+    JSON.stringify(pg).slice(0, 80),
+  )
+}
+{
+  // 5. a synthetic command may answer only harness work
+  const t = await turn('review finding five')
+  const j = await child(t.job)
+  const q = await ask(j, 'F5 real question')
+  await deliver(j, { blocker: q })
+  const cmd =
+    await one(`insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, synthetic)
+    values ('telegram', ${lit(`${chatNow}:9999`)}, ${lit(chatNow)}, 'yes', ${lit(`telegram:message:${BOT}:${chatNow}:9999`)}, 'grant', true) returning command_id::text as id`)
+  const rows = await forNext(String(cmd.id))
+  const harnessJob = String((await one(`select app.harness_job(${lit(j)}::uuid)::text as h`)).h)
+  check(
+    "a synthetic typed yes is not offered a real job's question",
+    harnessJob === 'true' || !rows.some((r) => r.id === q),
+    `harness ${harnessJob}, ${String(rows.length)} rows`,
+  )
+}
+{
+  // 6 and 9. a message cannot be turned into the answer to a question raised after it; a job-less delivery names nothing
+  const j = await child(root)
+  const early = await deliver(j, { blocker: null, ago: 5 })
+  const late = await ask(j, 'F6 raised after the message')
+  const r = (await one(`select app.bind_delivery(${lit(early.id)}::uuid, ${lit(late)}::uuid) as b`))
+    .b
+  check(
+    'a message made before a question existed cannot name it',
+    r === false && (await forDelivery(early.id)) === null,
+    String(r),
+  )
+  const orphan = String(
+    (
+      await one(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, state, lease_expires_at, sent_at, message_ref)
+    values ('telegram', ${lit(`qb-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(chatNow)}, 'notice', 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '8') returning delivery_id::text as id`)
+    ).id,
+  )
+  const nullJobBlocker = String(
+    (
+      await one(`insert into public.blockers (project_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+    values (app.unnamed_project(), ${lit(`F9 ${run}`)}, 'isolated', 'nothing', array['Yes','No'], 'chief-of-staff', false, 'No') returning blocker_id::text as id`).catch(
+        () => ({ id: '' }),
+      )
+    ).id,
+  )
+  if (nullJobBlocker !== '') {
+    const o = (
+      await one(`select app.bind_delivery(${lit(orphan)}::uuid, ${lit(nullJobBlocker)}::uuid) as b`)
+    ).b
+    check('a delivery with no job names no question, even a job-less one', o === false, String(o))
+  }
+}
+{
+  // 3. the forwarded flag cannot be cleared by a second write of the same message
+  const t = await turn('a forwarded thing', { forwarded: true })
+  await db.execute(
+    `update public.inbound_commands set context = '{"thread_ts":"1.1"}'::jsonb where command_id = ${lit(t.command)}::uuid`,
+  )
+  const c = await one(
+    `select context ->> 'forwarded' as f from public.inbound_commands where command_id = ${lit(t.command)}::uuid`,
+  )
+  check(
+    'an upsert of the same message cannot clear the forwarded flag',
+    c.f === 'true',
+    String(c.f),
   )
 }
 void realTelegramKey

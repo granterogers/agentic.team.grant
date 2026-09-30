@@ -498,7 +498,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         p_reason: 'a voice note was queued',
         p_by: 'grant',
         p_job: /^[0-9a-f-]{36}$/i.test(String(queued)) ? queued : null,
-      })) as { may?: boolean; ci_run_id?: string } | null
+      })) as { may?: boolean; ci_run_id?: string; reused?: boolean } | null
       if (reservation?.may === true && typeof reservation.ci_run_id === 'string') {
         woke = true
         const ciRun = reservation.ci_run_id
@@ -520,7 +520,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           }).catch(() => null)
           // GitHub refusing (or not answering) means no run exists: release the reservation rather than
           // leave it counted against the month.
-          if (sent === null || !sent.ok) {
+          if ((sent === null || !sent.ok) && reservation.reused !== true) {
             await rpcOne('ci_release', {
               p_ci_run: ciRun,
               p_why: `GitHub did not accept the dispatch (${sent === null ? 'no answer' : String(sent.status)})`,

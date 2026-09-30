@@ -57,9 +57,14 @@ begin
     raise exception 'the question delivery % asked is written once and cannot be changed', old.delivery_id
       using errcode = '23514';
   end if;
+  -- Its own job's question, and one that EXISTED when the message was made: a message that asked nothing cannot be
+  -- turned into the answer to a question raised after it (review of Run 5, finding 6). A delivery with no job names nothing.
   if new.blocker_id is not null
-     and not exists (select 1 from public.blockers b where b.blocker_id = new.blocker_id and b.job_id is not distinct from new.job_id) then
-    raise exception 'delivery % cannot name a question that is not its own job''s', new.delivery_id
+     and (new.job_id is null
+          or not exists (select 1 from public.blockers b
+                          where b.blocker_id = new.blocker_id and b.job_id = new.job_id
+                            and b.created_at <= coalesce(new.created_at, app.now_utc()))) then
+    raise exception 'delivery % cannot name a question that is not its own job''s, or that came after it', new.delivery_id
       using errcode = '23514';
   end if;
   return new;
@@ -135,7 +140,8 @@ as $fn$
            coalesce(c.subject, c.actor) as who, c.command_id,
            coalesce(c.context ->> 'forwarded', 'false') = 'true' as forwarded,
            nullif(coalesce(c.context ->> 'reply_to_message_id', c.context ->> 'thread_ts'), '') as points_at,
-           app.command_account(c.command_id) as account
+           app.command_account(c.command_id) as account,
+           coalesce(c.synthetic, false) as synthetic
       from public.inbound_commands c
      where c.command_id = p_command
   ), ours as (
@@ -186,7 +192,8 @@ as $fn$
   )
   select b.blocker_id::text, b.requested_action, coalesce(b.approval_options, array[]::text[]),
          coalesce(case
-           when b.blocker_id = (select blocker_id from awaiting) then true   -- the turn before pinned exactly this one (#374)
+           -- the one question the office's last reply said it was waiting on - unless this reply POINTS somewhere
+           when (select points_at from me) is null and b.blocker_id = (select blocker_id from awaiting) then true   -- the turn before pinned exactly this one (#374)
            when (select points_at from me) is not null then (select n from replied_open) = 1   -- exactly the one it points at
            when (select ch from me) in ('telegram', 'slack') then
              (select n from open_shown) = 1 and b.blocker_id = (select blocker_id from last_sent)
@@ -211,10 +218,27 @@ as $fn$
          )
        )
        -- or the one question the office's previous reply said it was still waiting on (#374)
-       or b.blocker_id = (select blocker_id from awaiting)
+       or ((select points_at from me) is null and b.blocker_id = (select blocker_id from awaiting))
      )
+     -- a command a harness declared may answer only harness work (the press path says the same)
+     and (not (select synthetic from me) or app.harness_job(b.job_id))
    order by b.created_at desc limit 5
 $fn$;
+
+/* the forwarded flag is add-only: an upsert of the same message (merge-duplicates) cannot clear it (review, finding 3) */
+create or replace function app.inbound_forwarded_is_add_only()
+returns trigger language plpgsql set search_path = '' as $fn$
+begin
+  if coalesce(old.context ->> 'forwarded', 'false') = 'true'
+     and coalesce(new.context ->> 'forwarded', 'false') <> 'true' then
+    new.context := coalesce(new.context, '{}'::jsonb) || jsonb_build_object('forwarded', true);
+  end if;
+  return new;
+end;
+$fn$;
+drop trigger if exists inbound_forwarded_add_only on public.inbound_commands;
+create trigger inbound_forwarded_add_only before update of context on public.inbound_commands
+  for each row execute function app.inbound_forwarded_is_add_only();
 
 revoke all on function app.bind_delivery(uuid, uuid) from public, anon, authenticated;
 revoke all on function app.command_account(uuid) from public, anon, authenticated;

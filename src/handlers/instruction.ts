@@ -2893,7 +2893,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 ),
               )}::jsonb,
               'office.synthesise',
-              app.now_utc() + interval '20 minutes')
+              app.now_utc() + interval '20 minutes'${callerArgs(job)})
           `)
           /*
             A REFUSAL IS NOT A THROW, AND THIS ONLY CAUGHT THROWS (0563).
@@ -3833,8 +3833,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         Nothing about the marked path changes, so this is backward
         compatible by construction.
       */
+      // Forwarded words are content, not intent (0624, #397): a rule found in a forwarded message is OFFERED to him,
+      // never stored as his, and a personal task found in one is not filed. A schema without the function reads false.
+      const forwarded = await deps.db
+        .execute(`select app.job_forwarded(${lit(job.jobId)}::uuid) as f`)
+        .then((r) => (r.rows[0] as { f?: unknown } | undefined)?.f === true)
+        .catch(() => false)
       const ruleOffered =
-        teaching !== null && teaching.kind === 'lesson' && !teaching.marked
+        teaching !== null && teaching.kind === 'lesson' && (!teaching.marked || forwarded)
           ? await offerRule(
               deps.db,
               {
@@ -4292,7 +4298,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const subOf = isBranch ? null : (firstOfHis(subtaskRequest) ?? subtaskRequest(turn.kept))
       const forGrant =
-        wantsFile !== null || isBranch || changesHis !== null || subOf !== null ? null : deferred
+        wantsFile !== null || isBranch || changesHis !== null || subOf !== null || forwarded
+          ? null
+          : deferred
       const noted =
         forGrant === null
           ? null
@@ -4815,7 +4823,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .execute(
                 // One assembly, asked here and by the test: the previous turn's tree, only a question he was
                 // SHOWN on a channel that delivers (0622, #394), or the one it said it was still waiting on.
-                `select id, what, options, bindable from app.open_questions_for_reply(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)`,
+                `select * from app.open_questions_for_reply(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)`,
               )
               .then(async (r) => {
                 const rows = r.rows as {

@@ -39,11 +39,26 @@ $fn$;
 
 create or replace function public.ci_reserve(p_workflow text, p_event_type text, p_reason text, p_by text, p_job uuid)
 returns jsonb
-language sql
+language plpgsql
 security definer
 set search_path = 'public', 'pg_catalog'
 as $fn$
-  select app.ci_reserve(p_workflow, p_event_type, p_reason, p_by, p_job)
+declare
+  v_open uuid;
+begin
+  -- worker.yml runs one drain at a time (a concurrency group) and reports no minutes back, so each voice note
+  -- reserving five would charge the month for runs that collapse into one. A reservation still open from the
+  -- last twenty minutes is reused rather than doubled (review of Run 5); the caller must not release a reused one.
+  if p_workflow = 'voice-note' then
+    select ci_run_id into v_open from public.ci_runs
+     where workflow = 'voice-note' and settled_at is null and dispatched_at > app.now_utc() - interval '20 minutes'
+     order by dispatched_at desc limit 1;
+    if v_open is not null then
+      return jsonb_build_object('may', true, 'ci_run_id', v_open, 'reserved', 0, 'reused', true);
+    end if;
+  end if;
+  return app.ci_reserve(p_workflow, p_event_type, p_reason, p_by, p_job);
+end;
 $fn$;
 
 create or replace function public.ci_release(p_ci_run uuid, p_why text)

@@ -12,7 +12,7 @@
       can no longer take a slot in the live attempt and make the live worker's identical call a duplicate. A
       deferral (a sibling re-enqueueing itself under the same parent) is keyed on its OWN caller and claim, so a
       child that retries and defers again finds the deferral it made instead of taking the next slot.
-    * a job that is cancelled or failed cannot be given children at all, caller or not: calling a conversation off
+    * a job that is cancelled cannot be given children at all, caller or not (a failed parent may still have live children that defer): calling a conversation off
       must not be undone by the worker that had not yet noticed.
     * job_child_slots.attempt holds the claim_gen for a new caller-aware call (the column is the slot's claim; it
       was named for the attempt number that used to be the claim). A call with no caller keeps the attempt number.
@@ -23,7 +23,9 @@
   ROLLBACK: docs/architecture-run-5/rollback-0625.sql (tested on a replica).
 */
 alter table public.jobs add column if not exists claim_gen bigint not null default 0;
-update public.jobs set claim_gen = attempt where claim_gen = 0 and attempt > 0;
+-- No backfill: an UPDATE of every job would touch updated_at on all of them (jobs_touch_updated_at) and the briefing
+-- would report the whole history as finished overnight (review of Run 5). The next claim of any job is numbered
+-- greatest(claim_gen, attempt) + 1, which is above every number it could have held.
 
 CREATE OR REPLACE FUNCTION app.dequeue_job(p_worker text, p_can_transcribe boolean DEFAULT true, p_can_subprocess boolean DEFAULT true, p_kinds text[] DEFAULT NULL::text[], p_requested_by text DEFAULT NULL::text)
  RETURNS TABLE(job_id uuid, kind text, correlation_id uuid, project_id uuid, idempotency_key text, attempt integer, pinned_config jsonb)
@@ -139,7 +141,7 @@ begin
       leased_by    = p_worker,
       leased_until = now() + make_interval(secs => v_lease),
       attempt      = j.attempt + 1,
-      claim_gen    = j.claim_gen + 1,
+      claim_gen    = greatest(j.claim_gen, j.attempt) + 1,
       state_reason = format('dequeued by %s', p_worker)
   where j.job_id = v_job_id;
 
@@ -213,17 +215,21 @@ declare
   v_scope text := '';
   v_slot_attempt integer;
 begin
-  select * into v_parent from public.jobs where job_id = p_parent;
+  select * into v_parent from public.jobs where job_id = p_parent for share;
   if not found then
     raise exception 'no job % to hang a child on', p_parent using errcode = '23503';
   end if;
-  -- A job called off, or dead, is given no more work: whoever had not yet noticed cannot undo the stop.
-  if v_parent.state in ('cancelled', 'failed') then
+  -- A job called off is given no more work: whoever had not yet noticed cannot undo the stop.
+  if v_parent.state = 'cancelled' then
     raise exception 'job % is % and cannot be given children', p_parent, v_parent.state using errcode = '55000';
   end if;
   -- The caller is asked, when it says who it is: a worker that no longer holds its job takes no slot anywhere.
-  if p_caller is not null and p_caller_worker is not null then
-    select * into v_caller from public.jobs where job_id = p_caller;
+  if (p_caller is not null or p_caller_worker is not null or p_caller_gen is not null)
+     and (p_caller is null or p_caller_worker is null or p_caller_gen is null) then
+    raise exception 'an incomplete caller: name the job, the worker and the claim, or none' using errcode = '22023';
+  end if;
+  if p_caller is not null then
+    select * into v_caller from public.jobs where job_id = p_caller for share;
     if not found or not app.job_held(p_caller, p_caller_worker, v_caller.attempt, p_caller_gen) then
       raise exception 'stale caller: % no longer holds job %', p_caller_worker, p_caller using errcode = '40001';
     end if;
@@ -292,15 +298,19 @@ declare
   v_payload jsonb;
   v_caller public.jobs;
 begin
-  select * into v_parent from public.jobs where job_id = p_parent;
+  select * into v_parent from public.jobs where job_id = p_parent for share;
   if not found then
     raise exception 'no job % to hang a child on', p_parent using errcode = '23503';
   end if;
-  if v_parent.state in ('cancelled', 'failed') then
+  if v_parent.state = 'cancelled' then
     raise exception 'job % is % and cannot be given children', p_parent, v_parent.state using errcode = '55000';
   end if;
-  if p_caller is not null and p_caller_worker is not null then
-    select * into v_caller from public.jobs where job_id = p_caller;
+  if (p_caller is not null or p_caller_worker is not null or p_caller_gen is not null)
+     and (p_caller is null or p_caller_worker is null or p_caller_gen is null) then
+    raise exception 'an incomplete caller: name the job, the worker and the claim, or none' using errcode = '22023';
+  end if;
+  if p_caller is not null then
+    select * into v_caller from public.jobs where job_id = p_caller for share;
     if not found or not app.job_held(p_caller, p_caller_worker, v_caller.attempt, p_caller_gen) then
       raise exception 'stale caller: % no longer holds job %', p_caller_worker, p_caller using errcode = '40001';
     end if;
@@ -353,5 +363,128 @@ begin
      limit 1;
     return jsonb_build_object('job_id', v_live, 'created', false);
   end;
+end;
+$function$;
+
+-- fan_in_over opens a branch group and its synthesis: a stale caller opens neither.
+drop function app.fan_in_over(uuid, text, jsonb, text, timestamp with time zone);
+CREATE OR REPLACE FUNCTION app.fan_in_over(p_parent uuid, p_objective text, p_branches jsonb, p_synthesis_kind text DEFAULT 'office.synthesise'::text, p_deadline timestamp with time zone DEFAULT NULL::timestamp with time zone, p_caller uuid DEFAULT NULL::uuid, p_caller_worker text DEFAULT NULL::text, p_caller_gen bigint DEFAULT NULL::bigint)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_catalog'
+AS $function$
+declare
+  v_group uuid; v_cap integer; v_count integer; v_branch jsonb;
+  v_synth uuid; v_seen jsonb := '[]'::jsonb;
+begin
+  -- A caller that says who it is must still hold its job: a zombie opens no branch group (review of Run 5, 0625).
+  if p_caller is not null and p_caller_worker is not null and p_caller_gen is not null
+     and not app.job_held(p_caller, p_caller_worker, (select attempt from public.jobs where job_id = p_caller), p_caller_gen) then
+    raise exception 'stale caller: % no longer holds job %', p_caller_worker, p_caller using errcode = '40001';
+  end if;
+  if not exists (select 1 from public.jobs where job_id = p_parent) then
+    return jsonb_build_object('error', 'no such parent job');
+  end if;
+  if exists (select 1 from public.branch_groups where parent_job_id = p_parent) then
+    -- Idempotent: a retried parent must not ask for a second answer.
+    return jsonb_build_object('ok', true, 'already', true,
+      'group', (select group_id from public.branch_groups where parent_job_id = p_parent));
+  end if;
+
+  v_count := coalesce(jsonb_array_length(p_branches), 0);
+  /*
+    0563. ONE IS ENOUGH.
+
+    This refused fewer than two branches, matching the `>= 2` gate in
+    `instruction.ts`, and canonical traffic says two has never happened:
+
+        convened specialists   real turns
+        0                      5138
+        1                         2
+        2 or more                 0
+
+    So both halves agreed with each other and neither was reachable, which is
+    CLAUDE.md's 0282/0293 trap for the third time — a caller loosened while
+    the function that pre-checks the same thing stayed strict. Lowering the
+    gate in TypeScript alone changed nothing, silently, because this returns
+    an error OBJECT rather than raising and the caller only caught throws.
+
+    Zero is still refused: a fan-in over no branches has nothing to wait for
+    and would pause for ever.
+  */
+  if v_count < 1 then
+    return jsonb_build_object('error',
+      'a fan-in over no branches has nothing to wait for');
+  end if;
+  /*
+    `system_config.value` is JSONB, not text.
+
+    The first version wrote `nullif(value, '')::integer` and every call raised
+    22P02 from inside a SECURITY DEFINER function — an empty string is not
+    valid JSON, so the comparison itself threw before the cast was reached.
+    `#>> '{}'` is how you get the scalar out, and CLAUDE.md's rule applies:
+    query `information_schema` for the TYPE before writing the expression.
+  */
+  select coalesce(nullif(value #>> '{}', '')::integer, 3) into v_cap
+    from public.system_config where key = 'agents.max_specialists_per_job';
+  v_cap := coalesce(v_cap, 3);
+  if v_count > v_cap then
+    return jsonb_build_object('error',
+      format('%s branches and the office allows %s at once', v_count, v_cap), 'cap', v_cap);
+  end if;
+
+  /*
+    Every branch is checked BEFORE anything is written.
+
+    The first version validated inside the insert loop, so a bad third branch
+    returned an error and left a group with two branches in it — a refusal that
+    changed something, which is the shape of a teardown that matches nothing.
+    A function that says no must leave nothing behind.
+  */
+  for v_branch in select * from jsonb_array_elements(p_branches) loop
+    if not exists (select 1 from public.staff where slug = v_branch ->> 'agent') then
+      return jsonb_build_object('error',
+        format('%L is nobody on the roster', v_branch ->> 'agent'));
+    end if;
+    if not exists (select 1 from public.jobs
+                    where job_id = (v_branch ->> 'job_id')::uuid
+                      and parent_job_id = p_parent) then
+      -- A branch that is not a child of this parent is somebody else's work,
+      -- and a group that could claim it would make the collaboration record a
+      -- claim rather than a fact.
+      return jsonb_build_object('error',
+        format('job %L is not a child of this one', v_branch ->> 'job_id'));
+    end if;
+  end loop;
+
+  insert into public.branch_groups (parent_job_id, objective, deadline)
+  values (p_parent, p_objective, p_deadline)
+  returning group_id into v_group;
+
+  for v_branch in select * from jsonb_array_elements(p_branches) loop
+    insert into public.job_branches (group_id, job_id, agent, purpose, required)
+    values (v_group, (v_branch ->> 'job_id')::uuid, v_branch ->> 'agent',
+            coalesce(nullif(btrim(coalesce(v_branch ->> 'purpose', '')), ''),
+                     'part of the question'),
+            coalesce((v_branch ->> 'required')::boolean, false));
+    v_seen := v_seen || jsonb_build_object('job_id', v_branch ->> 'job_id',
+                                           'agent', v_branch ->> 'agent');
+  end loop;
+
+  /*
+    The answer is a child too, queued immediately.
+
+    It does not wait in the database; it wakes, asks `fan_in_ready`, and pauses
+    itself with `dependency_wait` when the branches are not in yet (#263). That
+    is cheaper than a scheduler and it means a person looking at the job can
+    see, in words, which branch it is waiting for.
+  */
+  v_synth := app.enqueue_child(p_parent, p_synthesis_kind,
+    jsonb_build_object('group', v_group, 'objective', p_objective), interval '0', true, null, p_caller, p_caller_worker, p_caller_gen);
+  update public.branch_groups set synthesis_job_id = v_synth where group_id = v_group;
+
+  return jsonb_build_object('ok', true, 'group', v_group,
+    'branches', v_seen, 'synthesis', v_synth);
 end;
 $function$;

@@ -565,7 +565,11 @@ export const buildPass = async (
     // Button presses first. Approving a generation enqueues it, so pressing the
     // button and getting the artifact in the same pass is the difference
     // between "it works" and "it works eventually".
-    const pressed = await processCallbacks(db)
+    // A pass never dies on the press step (a schema older than the code, a transient error): the drain follows.
+    const pressed = await processCallbacks(db).catch((error: unknown) => {
+      log(`button step failed: ${String((error as Error).message).slice(0, 120)}`)
+      return [] as Awaited<ReturnType<typeof processCallbacks>>
+    })
     for (const p of pressed) log(`button ${p.action}: ${p.outcome} — ${p.note.slice(0, 100)}`)
 
     // An instruction that never became a job, before anything else.

@@ -80,6 +80,9 @@ AS $function$
    limit 1
 $function$
 ;
+-- Revert the CODE first (worker, webhook, slack-events): code built for 0623 reads app.command_account and the bindable column.
+drop trigger if exists inbound_forwarded_add_only on public.inbound_commands;
+drop function if exists app.inbound_forwarded_is_add_only();
 drop trigger if exists deliveries_blocker_once on public.deliveries;
 drop function if exists app.deliveries_blocker_is_written_once();
 drop function if exists app.bind_delivery(uuid, uuid);

@@ -53,6 +53,26 @@ const again = parse(
   (await one(`select public.ci_release(${lit(String(taken.ci_run_id))}::uuid, 'again') as v`)).v,
 )
 check('releasing twice is harmless and changes nothing', again.ok === false, JSON.stringify(again))
+// a second note while the first reservation is still open reuses it instead of charging the month again
+{
+  const one1 = parse(
+    (await one(`select public.ci_reserve('voice-note', 'voice-note', 'first', 'grant', null) as v`))
+      .v,
+  )
+  const two = parse(
+    (
+      await one(
+        `select public.ci_reserve('voice-note', 'voice-note', 'second', 'grant', null) as v`,
+      )
+    ).v,
+  )
+  check(
+    'a second voice note within twenty minutes reuses the open reservation (worker.yml is one drain at a time and reports no minutes)',
+    two.reused === true && two.ci_run_id === one1.ci_run_id,
+    JSON.stringify(two).slice(0, 80),
+  )
+  await db.execute(`select public.ci_release(${lit(String(one1.ci_run_id))}::uuid, 'proof')`)
+}
 // the ceiling refuses when the month is spent
 await db.execute(
   `update public.system_config set value = '1'::jsonb where key = 'ci.monthly_minutes'`,
