@@ -593,6 +593,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:office-edges',
     'every owned edge is enforced by the database - composite keys, write-once, derived guards, row security (multi-user P2)',
   ],
+  [
+    'check:office-conversion',
+    'no new office-sensitive function ships unclassified; the legacy-unscoped set only shrinks (multi-user P3)',
+  ],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 

@@ -38,12 +38,18 @@ export type Entry = {
 }
 
 const OWNED = 'OFFICE_CARRIER|OFFICE_DERIVED'
-const manifest = JSON.parse(readFileSync('docs/multi-user/ownership-manifest.json', 'utf8')).tables as Record<
-  string,
-  { class: string }
->
-const ownedTables = new Set(Object.entries(manifest).filter(([, v]) => OWNED.includes(v.class)).map(([k]) => k))
-const systemTables = new Set(Object.entries(manifest).filter(([, v]) => v.class === 'SYSTEM').map(([k]) => k))
+const manifest = JSON.parse(readFileSync('docs/multi-user/ownership-manifest.json', 'utf8'))
+  .tables as Record<string, { class: string }>
+const ownedTables = new Set(
+  Object.entries(manifest)
+    .filter(([, v]) => OWNED.includes(v.class))
+    .map(([k]) => k),
+)
+const systemTables = new Set(
+  Object.entries(manifest)
+    .filter(([, v]) => v.class === 'SYSTEM')
+    .map(([k]) => k),
+)
 
 const db = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
@@ -71,32 +77,50 @@ const rows = (
   body: string
 }[]
 
-const fnId = (r: { schema: string; name: string; ident: string }) => `${r.schema}.${r.name}(${r.ident})`
+const fnId = (r: { schema: string; name: string; ident: string }) =>
+  `${r.schema}.${r.name}(${r.ident})`
 const byName = new Map<string, typeof rows>()
 for (const r of rows) byName.set(r.name, [...(byName.get(r.name) ?? []), r])
 
 // ---- who can reach a function from outside the database --------------------------------------------------------------
 const strip = (t: string): string =>
-  t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ').replace(/--[^\n]*/g, ' ')
-const read = (cmd: string): string => strip(execSync(cmd, { maxBuffer: 256 * 1024 * 1024 }).toString())
+  t
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    .replace(/--[^\n]*/g, ' ')
+const read = (cmd: string): string =>
+  strip(execSync(cmd, { maxBuffer: 256 * 1024 * 1024 }).toString())
 
 const gatewaySrc = strip(readFileSync('supabase/functions/hq-api/index.ts', 'utf8'))
-const gatewayFns = new Set([...gatewaySrc.matchAll(/\bfn:\s*'([a-z0-9_]+)'/g)].map((m) => m[1] as string))
-const gatewayInline = new Set([...gatewaySrc.matchAll(/rpc\/([a-z0-9_]+)/g)].map((m) => m[1] as string))
+const gatewayFns = new Set(
+  [...gatewaySrc.matchAll(/\bfn:\s*'([a-z0-9_]+)'/g)].map((m) => m[1] as string),
+)
+const gatewayInline = new Set(
+  [...gatewaySrc.matchAll(/rpc\/([a-z0-9_]+)/g)].map((m) => m[1] as string),
+)
 
 const edgeRoot = (dir: string): Set<string> => {
   const code = read(`find supabase/functions/${dir} -type f -name '*.ts' -print0 | xargs -0 cat`)
   return new Set(
-    [...code.matchAll(/(?:rpc\/|rpcOne\(\s*'|rpc\(\s*'|rpcJson\(\s*'|call\(\s*')([a-z0-9_]+)/g)].map((m) => m[1] as string),
+    [
+      ...code.matchAll(/(?:rpc\/|rpcOne\(\s*'|rpc\(\s*'|rpcJson\(\s*'|call\(\s*')([a-z0-9_]+)/g),
+    ].map((m) => m[1] as string),
   )
 }
 const edge: Record<string, Set<string>> = {}
-for (const d of ['mcp', 'slack-events', 'telegram-webhook', 'voice', 'voice-token', 'google-oauth', 'signin', 'worker'])
+for (const d of [
+  'mcp',
+  'slack-events',
+  'telegram-webhook',
+  'voice',
+  'voice-token',
+  'google-oauth',
+  'signin',
+  'worker',
+])
   edge[d] = edgeRoot(d)
 
-const srcCode = read(
-  "find src -type f -name '*.ts' ! -name '*.test.ts' -print0 | xargs -0 cat",
-)
+const srcCode = read("find src -type f -name '*.ts' ! -name '*.test.ts' -print0 | xargs -0 cat")
 const srcCalls = (name: string): boolean =>
   new RegExp(`(?:\\bapp|\\bpublic)\\.${name}\\s*\\(|\\.rpc\\(\\s*['"]${name}['"]`).test(srcCode)
 
@@ -123,7 +147,11 @@ for (const r of rows) {
 }
 
 const direct = new Map<string, string[]>()
-for (const r of rows) direct.set(qn(r), [...new Set([...(direct.get(qn(r)) ?? []), ...touches(r.body, ownedTables)])].sort())
+for (const r of rows)
+  direct.set(
+    qn(r),
+    [...new Set([...(direct.get(qn(r)) ?? []), ...touches(r.body, ownedTables)])].sort(),
+  )
 const viaCalls = new Map<string, Set<string>>()
 const reach = (name: string, seen: Set<string>): Set<string> => {
   const hit = new Set<string>(direct.get(name) ?? [])
@@ -137,13 +165,16 @@ const reach = (name: string, seen: Set<string>): Set<string> => {
 for (const r of rows) viaCalls.set(qn(r), reach(qn(r), new Set([qn(r)])))
 
 // ---- classify --------------------------------------------------------------------------------------------------------
-const idRe = /^p_(?:project|job|task|document|doc|blocker|command|contact|delivery|action|collection|attachment|request|skill|lesson|trigger|signal|source|output|parent|root|from_job|origin)(?:_id)?$/
+const idRe =
+  /^p_(?:project|job|task|document|doc|blocker|command|contact|delivery|action|collection|attachment|request|skill|lesson|trigger|signal|source|output|parent|root|from_job|origin)(?:_id)?$/
 const entries: Entry[] = []
 for (const r of rows) {
   const argNames = r.argnames
   const hasOffice = argNames.some((a) => /^p_office(_id)?$/.test(a))
   const officeDefaulted = hasOffice && /p_office(?:_id)?\s+uuid\s+DEFAULT/i.test(r.args)
-  const ambient = [...r.args.matchAll(/(\w+)\s+text\s+DEFAULT\s+'(grant|chief-of-staff)'/gi)].map((m) => `${m[1]}=${m[2]}`)
+  const ambient = [...r.args.matchAll(/(\w+)\s+text\s+DEFAULT\s+'(grant|chief-of-staff)'/gi)].map(
+    (m) => `${m[1]}=${m[2]}`,
+  )
   const ownedAll = [...(viaCalls.get(qn(r)) ?? [])].sort()
   const ownedDirect = direct.get(qn(r)) ?? []
   const external: string[] = []
@@ -179,14 +210,53 @@ const tally = (key: (e: Entry) => string) => {
   for (const e of entries) t.set(key(e), (t.get(key(e)) ?? 0) + 1)
   return [...t.entries()].sort((a, b) => b[1] - a[1])
 }
-console.log(`functions: ${entries.length}  (app ${entries.filter((e) => e.fn.startsWith('app.')).length}, public ${entries.filter((e) => e.fn.startsWith('public.')).length})`)
-console.log('by class:', tally((e) => e.class).map(([k, v]) => `${k}=${v}`).join('  '))
+console.log(
+  `functions: ${entries.length}  (app ${entries.filter((e) => e.fn.startsWith('app.')).length}, public ${entries.filter((e) => e.fn.startsWith('public.')).length})`,
+)
+console.log(
+  'by class:',
+  tally((e) => e.class)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('  '),
+)
 console.log('ambient-person defaults:', entries.filter((e) => e.ambient.length > 0).length)
 console.log(
   'LEGACY_UNSCOPED by door:',
-  tally((e) => (e.class === 'LEGACY_UNSCOPED' ? e.external.join('+') || 'ambient-only' : '')).filter(([k]) => k !== '').map(([k, v]) => `${k}=${v}`).join('  '),
+  tally((e) => (e.class === 'LEGACY_UNSCOPED' ? e.external.join('+') || 'ambient-only' : ''))
+    .filter(([k]) => k !== '')
+    .map(([k, v]) => `${k}=${v}`)
+    .join('  '),
 )
-console.log('triggers:', entries.filter((e) => e.trigger).length, ' gateway fns:', gatewayFns.size, ' inline:', gatewayInline.size)
-console.log('edge doors:', Object.entries(edge).map(([k, v]) => `${k}=${v.size}`).join(' '))
+console.log(
+  'triggers:',
+  entries.filter((e) => e.trigger).length,
+  ' gateway fns:',
+  gatewayFns.size,
+  ' inline:',
+  gatewayInline.size,
+)
+console.log(
+  'edge doors:',
+  Object.entries(edge)
+    .map(([k, v]) => `${k}=${v.size}`)
+    .join(' '),
+)
 const jsonOut = process.argv.indexOf('--json')
-if (jsonOut > -1) writeFileSync(process.argv[jsonOut + 1] as string, JSON.stringify(entries, null, 1))
+const manOut = process.argv.indexOf('--manifest')
+if (manOut > -1) {
+  const m: Record<string, { class: string; doors: string[] }> = {}
+  for (const e of entries) m[e.fn.replace(/\(.*$/s, '')] = { class: e.class, doors: e.external }
+  writeFileSync(
+    process.argv[manOut + 1] as string,
+    JSON.stringify(
+      {
+        generated: 'npm run p3:inventory -- --manifest docs/multi-user/conversion-manifest.json',
+        functions: m,
+      },
+      null,
+      1,
+    ),
+  )
+}
+if (jsonOut > -1)
+  writeFileSync(process.argv[jsonOut + 1] as string, JSON.stringify(entries, null, 1))

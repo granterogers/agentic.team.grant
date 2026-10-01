@@ -342,6 +342,8 @@
     "check:machine-key": "tsx scripts/check-machine-key.ts",
     "check:ownership": "tsx scripts/check-ownership.ts",
     "check:office-edges": "tsx scripts/check-office-edges.ts",
+    "check:office-conversion": "tsx scripts/check-office-conversion.ts",
+    "p3:inventory": "tsx scripts/p3/inventory.ts",
     "check:answerable": "tsx scripts/check-answerable.ts",
     "check:voice-sessions": "tsx scripts/check-voice-sessions.ts",
     "check:door-origins": "tsx scripts/check-door-origins.ts",
