@@ -12,7 +12,7 @@ const gateway = strip(read('supabase/functions/hq-api/index.ts'))
 
 describe('the connection and creation acts carry a verified person, never a claimed one', () => {
   it('attach and the Vikunja connection carry the principal for every credential, and the database refuses a non-person', () => {
-    expect(gateway).toMatch(/attach: \{ fn: 'hq_attach', required: \[[^\]]*\], by: 'p_by' \}/)
+    expect(gateway).toMatch(/attach: \{ fn: 'hq_attach', (?:office: true, )?required: \[[^\]]*\], by: 'p_by' \}/)
     expect(gateway).toMatch(/vikunja_connect: \{[^}]*by: 'p_by'/)
   })
 

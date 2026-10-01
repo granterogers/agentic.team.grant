@@ -227,21 +227,21 @@ const SECTIONS: Readonly<
     }
   >
 > = {
-  overview: { fn: 'hq_overview' },
+  overview: { fn: 'hq_overview', office: true },
   staff: { fn: 'hq_staff' },
-  usage: { fn: 'hq_usage' },
-  activity: { fn: 'hq_activity', args: { p_limit: 50 } },
-  series: { fn: 'hq_series', args: { p_days: 30 } },
+  usage: { fn: 'hq_usage', office: true },
+  activity: { fn: 'hq_activity', office: true, args: { p_limit: 50 } },
+  series: { fn: 'hq_series', office: true, args: { p_days: 30 } },
   connections: { fn: 'hq_connections' },
-  projects: { fn: 'hq_projects' },
-  artifacts: { fn: 'hq_artifacts' },
+  projects: { fn: 'hq_projects', office: true },
+  artifacts: { fn: 'hq_artifacts', office: true },
   settings: { fn: 'hq_settings' },
   team: { fn: 'hq_team' },
   // Everything the studio renders, in the shape web/studio/data.js already
   // exports (#68, ADR-0019). One call rather than nine: the studio paints the
   // whole shell at once and a page that fetches per section feels broken while
   // being correct — the argument 0120 made for the tool catalogue.
-  studio: { fn: 'hq_studio' },
+  studio: { fn: 'hq_studio', office: true },
   /*
     "Has anything changed" (#117, migration 0262).
 
@@ -252,7 +252,7 @@ const SECTIONS: Readonly<
     Its own section rather than a field on `studio`, because the whole point is
     that it can be asked without paying for the payload it guards.
   */
-  pulse: { fn: 'hq_pulse' },
+  pulse: { fn: 'hq_pulse', office: true },
   // The Settings viewer, in the shapes settings.js already exports (#68).
   studio_settings: { fn: 'hq_studio_settings' },
   /*
@@ -264,7 +264,7 @@ const SECTIONS: Readonly<
     *"a fraction of what's being spent over a monthly, weekly, daily quota"*.
     `web/studio/usage.js` was written in its exact shape.
   */
-  usage_overview: { fn: 'usage_overview', args: { p_days: 30 } },
+  usage_overview: { fn: 'usage_overview', office: true, args: { p_days: 30 } },
   /*
     One document, in full (#95).
 
@@ -278,7 +278,7 @@ const SECTIONS: Readonly<
     characters, and forty of those is not a first paint. So the grid gets
     metadata and opening one fetches it — the same reasoning as `lately`.
   */
-  document: { fn: 'studio_document', arg: 'p_document_id' },
+  document: { fn: 'studio_document', office: true, arg: 'p_document_id' },
   /*
     ONE OUTPUT, so the thing the team made can be READ (§19).
 
@@ -286,7 +286,7 @@ const SECTIONS: Readonly<
     one: importing it and deciding on it were both verdicts on something
     nobody could see.
   */
-  output: { fn: 'hq_output', arg: 'p_output_id' },
+  output: { fn: 'hq_output', office: true, arg: 'p_output_id' },
   /*
     One project's conversation, both sides, in order (#192).
 
@@ -309,8 +309,8 @@ const SECTIONS: Readonly<
     empty mapping, which is the row-list-built-twice defect with a screen in
     front of it.
   */
-  task_sync: { fn: 'task_sync_panel' },
-  conversation: { fn: 'conversation_history', arg: 'p_project_id' },
+  task_sync: { fn: 'task_sync_panel', office: true },
+  conversation: { fn: 'conversation_history', office: true, arg: 'p_project_id' },
   /*
     How fast the conversation is growing, and how much room is left (#204).
 
@@ -321,7 +321,7 @@ const SECTIONS: Readonly<
     interface for maintaining and extending the system." A number an agent has
     to run something to get is a number Grant does not have.
   */
-  conversation_growth: { fn: 'conversation_growth' },
+  conversation_growth: { fn: 'conversation_growth', office: true },
   /*
     Which state each conversation surface is in (#198).
 
@@ -330,7 +330,7 @@ const SECTIONS: Readonly<
     wrong with it right now" — which needs the credential AND the traffic AND
     the last day of delivery failures together. Two questions, two sections.
   */
-  conversation_channels: { fn: 'conversation_channels' },
+  conversation_channels: { fn: 'conversation_channels', office: true },
   /*
     The MCP server, as a page (#91).
 
@@ -341,9 +341,9 @@ const SECTIONS: Readonly<
     Nothing in the RPC selects `token_sha256`. This tab gets captured by
     `npm run shots` and attached to a build step on a public page.
   */
-  mcp: { fn: 'hq_mcp' },
+  mcp: { fn: 'hq_mcp', office: true },
   // What the office did and what is being built, as one page (#68).
-  lately: { fn: 'hq_studio_lately', args: { p_limit: 40 } },
+  lately: { fn: 'hq_studio_lately', office: true, args: { p_limit: 40 } },
   // The first-run checklist, for the Setting up pane (#68). `setup` already
   // exists above and serves the same function; named apart so the studio's
   // fetch is legible next to `studio` and `studio_settings`.
@@ -352,7 +352,7 @@ const SECTIONS: Readonly<
   // What to do next, for a person who has just opened this for the first time.
   setup: { fn: 'hq_setup' },
   // What each kind of work costs, measured and modelled (§11).
-  cost: { fn: 'hq_cost_per_outcome', args: { p_days: 30 } },
+  cost: { fn: 'hq_cost_per_outcome', office: true, args: { p_days: 30 } },
   // Which bot speaks as whom, and which are spare.
   bots: { fn: 'hq_bots' },
   // Who may message Grant directly, how loud a thing has to be to reach his
@@ -369,7 +369,7 @@ const SECTIONS: Readonly<
     portfolio task list is a screen you navigate TO. Folding it in would make
     every page load pay for a list most loads never render.
   */
-  portfolio_tasks: { fn: 'hq_portfolio_tasks', args: { p_limit: 200 } },
+  portfolio_tasks: { fn: 'hq_portfolio_tasks', office: true, args: { p_limit: 200 } },
   /*
     What the office learned, what it wants, what it noticed and what each agent
     could not do (#54, migration 0302).
@@ -421,7 +421,7 @@ const SECTIONS: Readonly<
     type, and a page that drew an anchor regardless would be the fabricated
     link this Issue forbids.
   */
-  project_artifacts: { fn: 'project_artifacts', arg: 'p_project' },
+  project_artifacts: { fn: 'project_artifacts', office: true, arg: 'p_project' },
   /*
     What the team has made and Grant has not decided about (#28, #276).
 
@@ -434,7 +434,7 @@ const SECTIONS: Readonly<
     life: it filtered a state nothing writes. 0471 widened it to the states
     that exist and gave it the row the page needs.
   */
-  review: { fn: 'awaiting_review', arg: 'p_project' },
+  review: { fn: 'awaiting_review', office: true, arg: 'p_project' },
   /*
     WHO IS ASSIGNED TO A PROJECT, which is not the same question as who has
     touched it (§16).
@@ -450,7 +450,7 @@ const SECTIONS: Readonly<
     configured, and a configuration screen that cannot see the thing it
     configures is the dial-with-no-reader defect with the parts swapped.
   */
-  assigned: { fn: 'staff_on_project', arg: 'p_project_id' },
+  assigned: { fn: 'staff_on_project', office: true, arg: 'p_project_id' },
   /*
     THE WAY BACK FROM ARCHIVING (#276, migration 0480).
 
@@ -469,7 +469,7 @@ const SECTIONS: Readonly<
     No argument: it is global, like the governance sections, because a project
     you are trying to find is one you are not inside.
   */
-  archived: { fn: 'recoverable_projects' },
+  archived: { fn: 'recoverable_projects', office: true },
   /*
     MY TASKS (#259, ADR-0041).
 
@@ -528,7 +528,7 @@ const SECTIONS: Readonly<
     the office can offer six, and none of them be reachable until Grant
     approves. Showing only what was offered would read as reach.
   */
-  connectors: { fn: 'mcp_inventory' },
+  connectors: { fn: 'mcp_inventory', office: true },
   /*
     The sessions a project has with sites the office is signed in to (#135).
 
@@ -537,7 +537,7 @@ const SECTIONS: Readonly<
     stored" from "and here is a bit of it" would make every screenshot of the
     Browser tab a leak.
   */
-  browser_sessions: { fn: 'browser_sessions_for', arg: 'p_project' },
+  browser_sessions: { fn: 'browser_sessions_for', office: true, arg: 'p_project' },
   /*
     What the office has actually opened, most recent first (#135).
 
@@ -545,7 +545,7 @@ const SECTIONS: Readonly<
     this repository has had to arrange that and the first time it was arranged
     before anybody saw a suite's rows on a real page.
   */
-  browser_lately: { fn: 'browser_lately', arg: 'p_project', args: { p_limit: 30 } },
+  browser_lately: { fn: 'browser_lately', office: true, arg: 'p_project', args: { p_limit: 30 } },
   /*
     The present tense (#135).
 
@@ -553,7 +553,7 @@ const SECTIONS: Readonly<
     for, and pages it already read. Grant asked to SEE the browser, and what it
     is doing this second appeared nowhere on the surface built to show it.
   */
-  browser_now: { fn: 'browser_now', arg: 'p_project' },
+  browser_now: { fn: 'browser_now', office: true, arg: 'p_project' },
   /*
     What is left of today's ten free browser-minutes (#16).
 
@@ -561,7 +561,7 @@ const SECTIONS: Readonly<
     sessions so the answer to "why did it not open anything" is on the same
     screen as the question.
   */
-  browser_budget: { fn: 'browser_budget' },
+  browser_budget: { fn: 'browser_budget', office: true },
   /*
     Where this month's GitHub Actions minutes went (#17).
 
@@ -588,6 +588,7 @@ const SECTIONS: Readonly<
   */
   search: {
     fn: 'studio_search',
+    office: true,
     args: { p_limit: 12 },
     textArg: { param: 'q', arg: 'p_query' },
     scoped: true,
@@ -603,7 +604,12 @@ const SECTIONS: Readonly<
     a fixed vocabulary, and the RPC's own CHECK constraint is what validates it
     rather than a second copy of the list here.
   */
-  relations: { fn: 'relations_of', arg: 'p_id', textArg: { param: 'kind', arg: 'p_kind' } },
+  relations: {
+    fn: 'relations_of',
+    office: true,
+    arg: 'p_id',
+    textArg: { param: 'kind', arg: 'p_kind' },
+  },
   /*
     HOW A PROJECT GOT HERE (#156, migrations 0401-0402).
 
@@ -612,7 +618,7 @@ const SECTIONS: Readonly<
     its whole history on every page load, for a panel most visits never open.
     `documents` and `plane` are lazy for the same reason.
   */
-  history: { fn: 'project_history', arg: 'p_project' },
+  history: { fn: 'project_history', office: true, arg: 'p_project' },
   /** The named actions, so no page hard-codes them (#27). */
   actions: { fn: 'asset_actions' },
   /*
@@ -623,7 +629,7 @@ const SECTIONS: Readonly<
     payload every project switch carries would make a drag on the home board a
     reason to re-read every project.
   */
-  workspace: { fn: 'hq_workspace_layout' },
+  workspace: { fn: 'hq_workspace_layout', office: true },
   /*
     Whether the office can think at all (#240, migration 0372).
 
@@ -639,7 +645,7 @@ const SECTIONS: Readonly<
     slow-moving structural one means re-reading every project to find out
     whether the model provider is answering.
   */
-  thinking: { fn: 'office_health' },
+  thinking: { fn: 'office_health', office: true },
   /*
     Project Settings (#36, migrations 0323-26).
 
@@ -658,13 +664,13 @@ const SECTIONS: Readonly<
     a screen nobody may open.
   */
   // What has arrived on each project since he last opened it (#122, 0381).
-  unseen: { fn: 'studio_unseen' },
+  unseen: { fn: 'studio_unseen', office: true },
   // What each agent has actually done lately (#155, 0385).
-  team_work: { fn: 'studio_team_work' },
-  plane: { fn: 'studio_plane', arg: 'p_project_id' },
-  plane_layout: { fn: 'hq_plane_layout', arg: 'p_project_id' },
-  project_team: { fn: 'project_team', arg: 'p_project_id' },
-  project_automations: { fn: 'project_automations', arg: 'p_project_id' },
+  team_work: { fn: 'studio_team_work', office: true },
+  plane: { fn: 'studio_plane', office: true, arg: 'p_project_id' },
+  plane_layout: { fn: 'hq_plane_layout', office: true, arg: 'p_project_id' },
+  project_team: { fn: 'project_team', office: true, arg: 'p_project_id' },
+  project_automations: { fn: 'project_automations', office: true, arg: 'p_project_id' },
   /*
     The whole project, as the neutral package §13 names.
 
@@ -672,7 +678,7 @@ const SECTIONS: Readonly<
     Coaching Course today, and it grows with the corpus. It is fetched when
     Grant presses Export and at no other time.
   */
-  project_export: { fn: 'project_export', arg: 'p_project_id' },
+  project_export: { fn: 'project_export', office: true, arg: 'p_project_id' },
 }
 
 /**
@@ -720,18 +726,25 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // may still make a test project; it carries no principal and so records nothing.
   create_project: {
     fn: 'hq_create_project',
+    office: true,
     required: ['p_name', 'p_connector', 'p_ref'],
     personBy: 'p_by',
   },
-  rename_project: { fn: 'hq_rename_project', required: ['p_slug', 'p_name'] },
+  rename_project: { fn: 'hq_rename_project', office: true, required: ['p_slug', 'p_name'] },
   // `by`: connecting a Notion database is the yes to writing into it, and only a person's connecting counts (0641).
-  attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'], by: 'p_by' },
-  detach: { fn: 'hq_detach', required: ['p_attachment_id'] },
+  attach: {
+    fn: 'hq_attach',
+    office: true,
+    required: ['p_slug', 'p_connector', 'p_ref'],
+    by: 'p_by',
+  },
+  detach: { fn: 'hq_detach', office: true, required: ['p_attachment_id'] },
   // Recording that a project deliberately has no Notion page — §3's fifth
   // option, and the only one that does not end in an attachment. `p_reason` is
   // optional because "not now" is a complete answer on its own.
   connection_choose: {
     fn: 'hq_connection_choose',
+    office: true,
     required: ['p_slug', 'p_connector', 'p_choice'],
   },
   // One setter over an allow-list of six keys, enforced in the function rather
@@ -747,7 +760,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     that reached Telegram and not Slack does not send the Telegram one twice;
     the idempotency is #195's and is used rather than restated.
   */
-  retry_send: { fn: 'retry_job_deliveries', required: ['p_job_id'] },
+  retry_send: { fn: 'retry_job_deliveries', office: true, required: ['p_job_id'] },
   // Editing a person, and retiring one. There is no delete and there will not
   // be: outputs, routing decisions and deliveries all name a staff member, and
   // a roster that can lose a row is a history that stops explaining itself.
@@ -807,6 +820,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   register_connector: {
     fn: 'register_mcp_provider',
+    office: true,
     required: ['p_name', 'p_endpoint'],
   },
   /*
@@ -819,6 +833,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   browser_session_establish: {
     fn: 'browser_session_establish',
+    office: true,
     required: ['p_project', 'p_site', 'p_purpose', 'p_jar'],
   },
   /*
@@ -828,14 +843,15 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   browser_session_forget: {
     fn: 'browser_session_forget',
+    office: true,
     required: ['p_session'],
   },
   /*
     Stop. A column the runner reads between steps, not a socket.
   */
   stop_job: { fn: 'request_stop', required: ['p_job'], by: 'p_who' },
-  revoke_connector: { fn: 'revoke_mcp_provider', required: ['p_provider'] },
-  offer_connector_tool: { fn: 'offer_mcp_tool', required: ['p_discovered'] },
+  revoke_connector: { fn: 'revoke_mcp_provider', office: true, required: ['p_provider'] },
+  offer_connector_tool: { fn: 'offer_mcp_tool', office: true, required: ['p_discovered'] },
   approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'], by: 'p_by' },
   decline_tool: { fn: 'hq_decline_tool', required: ['p_request_id'], by: 'p_by' },
   revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'], by: 'p_by' },
@@ -873,7 +889,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // email, phone, Instagram, website, kind, note — is optional, because a form
   // that demands nine fields before it will take "Ben, referrer" is a form
   // people route around.
-  contact_add: { fn: 'hq_contact_add', required: ['p_project', 'p_name'] },
+  contact_add: { fn: 'hq_contact_add', office: true, required: ['p_project', 'p_name'] },
   /*
     Labels Grant defines, and fields he adds (#110, migration 0285).
 
@@ -898,8 +914,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     other argument is null-means-leave-it-alone, so a caller changing one note
     sends one field.
   */
-  contact_update: { fn: 'hq_contact_update', required: ['p_contact_id'] },
-  contact_archive: { fn: 'hq_contact_archive', required: ['p_contact_id'] },
+  contact_update: { fn: 'hq_contact_update', office: true, required: ['p_contact_id'] },
+  contact_archive: { fn: 'hq_contact_archive', office: true, required: ['p_contact_id'] },
   /*
     Registered here as well as handled above, because the dispatcher checks
     this map BEFORE anything else runs - an action missing from it is
@@ -907,7 +923,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     precedent and it is listed for the same reason: the storage half happens
     before the RPC, and the RPC named here is the one the handler ends in.
   */
-  contact_photo: { fn: 'hq_contact_photo_set', required: ['p_contact_id', 'p_project_id'] },
+  contact_photo: {
+    fn: 'hq_contact_photo_set',
+    office: true,
+    required: ['p_contact_id', 'p_project_id'],
+  },
   /*
     PICKING A FILE OUT OF DRIVE.
 
@@ -924,13 +944,26 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   google_connect_start: { fn: 'hq_google_connect_start', required: [], by: 'p_by' },
   drive_link: {
     fn: 'hq_document_link',
+    office: true,
     required: ['p_project_id', 'p_external_ref', 'p_title'],
   },
-  contact_label_add: { fn: 'hq_contact_label_add', required: ['p_name'] },
-  contact_label_rename: { fn: 'hq_contact_label_rename', required: ['p_label_id', 'p_name'] },
-  contact_label_remove: { fn: 'hq_contact_label_remove', required: ['p_label_id'] },
-  contact_labels_set: { fn: 'hq_contact_labels_set', required: ['p_contact_id', 'p_labels'] },
-  contact_fields_set: { fn: 'hq_contact_fields_set', required: ['p_contact_id', 'p_fields'] },
+  contact_label_add: { fn: 'hq_contact_label_add', office: true, required: ['p_name'] },
+  contact_label_rename: {
+    fn: 'hq_contact_label_rename',
+    office: true,
+    required: ['p_label_id', 'p_name'],
+  },
+  contact_label_remove: { fn: 'hq_contact_label_remove', office: true, required: ['p_label_id'] },
+  contact_labels_set: {
+    fn: 'hq_contact_labels_set',
+    office: true,
+    required: ['p_contact_id', 'p_labels'],
+  },
+  contact_fields_set: {
+    fn: 'hq_contact_fields_set',
+    office: true,
+    required: ['p_contact_id', 'p_fields'],
+  },
   /*
     Answering a blocker, wherever you are standing (#151, migration 0289).
 
@@ -963,15 +996,19 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     half-saved layout is worse than an unsaved one -- so this list does not
     try to check it here. §5: the page translates, the RPC decides.
   */
-  dashboard_layout_set: { fn: 'hq_dashboard_layout_set', required: ['p_slug', 'p_panels'] },
+  dashboard_layout_set: {
+    fn: 'hq_dashboard_layout_set',
+    office: true,
+    required: ['p_slug', 'p_panels'],
+  },
   /*
     The order Grant put a project's documents in (§§29-31). A list of ids
     rather than a position per document, so "the order he chose" and "the order
     they arrived in" stay two different facts.
   */
-  document_order_set: { fn: 'hq_document_order_set', required: ['p_slug', 'p_ids'] },
-  document_order_reset: { fn: 'hq_document_order_reset', required: ['p_slug'] },
-  dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', required: ['p_slug'] },
+  document_order_set: { fn: 'hq_document_order_set', office: true, required: ['p_slug', 'p_ids'] },
+  document_order_reset: { fn: 'hq_document_order_reset', office: true, required: ['p_slug'] },
+  dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', office: true, required: ['p_slug'] },
   /*
     And the home screen's own (#219, migration 0376).
 
@@ -986,8 +1023,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     conflict target would have stopped constraining anything for precisely these
     rows.
   */
-  workspace_layout_set: { fn: 'hq_workspace_layout_set', required: ['p_panels'] },
-  workspace_layout_reset: { fn: 'hq_workspace_layout_reset', required: [] },
+  workspace_layout_set: { fn: 'hq_workspace_layout_set', office: true, required: ['p_panels'] },
+  workspace_layout_reset: { fn: 'hq_workspace_layout_reset', office: true, required: [] },
   // Bringing someone in (0233). The other half of `staff_retire`, which has
   // existed alone since 0079 — the studio had a "+ Bring someone in" button
   // wired to nothing at all.
@@ -1006,10 +1043,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // Where he dragged the cards, and how far he zoomed (#25, 0380).
   plane_layout_set: {
     fn: 'hq_plane_layout_set',
+    office: true,
     required: ['p_project_id', 'p_at', 'p_view'],
   },
-  plane_layout_reset: { fn: 'hq_plane_layout_reset', required: ['p_project_id'] },
-  project_seen: { fn: 'hq_project_seen', required: ['p_project_id'] },
+  plane_layout_reset: { fn: 'hq_plane_layout_reset', office: true, required: ['p_project_id'] },
+  project_seen: { fn: 'hq_project_seen', office: true, required: ['p_project_id'] },
   /*
     A document is a row you can edit, not only one you can read (#152).
 
@@ -1024,15 +1062,20 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     than adding a second function that writes the same column — which is the
     trap this repository has recorded twice.
   */
-  document_move: { fn: 'hq_document_move', required: ['p_document_id', 'p_project_id'] },
+  document_move: {
+    fn: 'hq_document_move',
+    office: true,
+    required: ['p_document_id', 'p_project_id'],
+  },
   document_supersede: {
     fn: 'hq_document_supersede',
+    office: true,
     required: ['p_document_id', 'p_by_document_id'],
   },
   // `p_state` optional: an undo carries the state the document was in, and a
   // press of "this one is current again" carries nothing and means approved.
-  document_restore: { fn: 'hq_document_restore', required: ['p_document_id'] },
-  document_pin: { fn: 'hq_document_pin', required: ['p_document_id', 'p_pinned'] },
+  document_restore: { fn: 'hq_document_restore', office: true, required: ['p_document_id'] },
+  document_pin: { fn: 'hq_document_pin', office: true, required: ['p_document_id', 'p_pinned'] },
   /*
     Handled above rather than dispatched, because it carries bytes (#126). It
     is listed here so the whitelist is still the one place that says which
@@ -1040,6 +1083,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   document_upload: {
     fn: 'record_file_document',
+    office: true,
     required: ['p_project_id', 'p_name', 'p_base64'],
   },
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
@@ -1089,7 +1133,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     the page; the RPC caps it at 96 KB, which can only be exceeded if that
     resize did not run and is worth refusing loudly rather than storing.
   */
-  project_look: { fn: 'hq_project_look', required: ['p_slug'] },
+  project_look: { fn: 'hq_project_look', office: true, required: ['p_slug'] },
   /*
     Editing a task (#106, migration 0255).
 
@@ -1124,7 +1168,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     else rather than through a private one.
   */
   undo: { fn: 'hq_undo', office: true, required: ['p_action_id'] },
-  reattach: { fn: 'hq_reattach', required: ['p_attachment_id'] },
+  reattach: { fn: 'hq_reattach', office: true, required: ['p_attachment_id'] },
   /*
     Governance (#54, migration 0302).
 
@@ -1183,9 +1227,10 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     Grant does not pick — a composer that forces you to name somebody makes the
     common case the awkward one.
   */
-  say: { fn: 'say_in_project', required: ['p_project_id', 'p_text'], by: 'p_by' },
+  say: { fn: 'say_in_project', office: true, required: ['p_project_id', 'p_text'], by: 'p_by' },
   send_to_agent: {
     fn: 'send_to_agent',
+    office: true,
     required: ['p_kind', 'p_id', 'p_action'],
     by: 'p_by',
   },
@@ -1209,19 +1254,24 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     closes: importing with nothing chosen means "yes, and I have nothing to
     add".
   */
-  output_import: { fn: 'import_output', required: ['p_output'] },
-  output_decide: { fn: 'decide_output', required: ['p_output', 'p_verdict'] },
-  document_approve: { fn: 'approve_document', required: ['p_document'], by: 'p_by' },
-  document_discard: { fn: 'discard_document', required: ['p_document'], by: 'p_by' },
-  document_rename: { fn: 'rename_document', required: ['p_document', 'p_title'] },
-  document_tag: { fn: 'tag_document', required: ['p_document', 'p_tag'] },
-  collection_put: { fn: 'put_in_collection', required: ['p_document', 'p_collection_name'] },
-  collection_take: {
-    fn: 'take_out_of_collection',
+  output_import: { fn: 'import_output', office: true, required: ['p_output'] },
+  output_decide: { fn: 'decide_output', office: true, required: ['p_output', 'p_verdict'] },
+  document_approve: { fn: 'approve_document', office: true, required: ['p_document'], by: 'p_by' },
+  document_discard: { fn: 'discard_document', office: true, required: ['p_document'], by: 'p_by' },
+  document_rename: { fn: 'rename_document', office: true, required: ['p_document', 'p_title'] },
+  document_tag: { fn: 'tag_document', office: true, required: ['p_document', 'p_tag'] },
+  collection_put: {
+    fn: 'put_in_collection',
+    office: true,
     required: ['p_document', 'p_collection_name'],
   },
-  reference_add: { fn: 'add_project_reference', required: ['p_slug', 'p_url'] },
-  reference_remove: { fn: 'remove_project_reference', required: ['p_reference_id'] },
+  collection_take: {
+    fn: 'take_out_of_collection',
+    office: true,
+    required: ['p_document', 'p_collection_name'],
+  },
+  reference_add: { fn: 'add_project_reference', office: true, required: ['p_slug', 'p_url'] },
+  reference_remove: { fn: 'remove_project_reference', office: true, required: ['p_reference_id'] },
   lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
   /*
     ACCEPT OR DECLINE A DRAFTED STANDING RULE (#147).
@@ -1264,7 +1314,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     reversible and is what this sheet offers; `app.project_delete` exists for a
     person at a terminal who has read ADR-0014, which is not a button.
   */
-  project_staff: { fn: 'set_project_staff', required: ['p_slug', 'p_staff_slug', 'p_on'] },
+  project_staff: {
+    fn: 'set_project_staff',
+    office: true,
+    required: ['p_slug', 'p_staff_slug', 'p_on'],
+  },
   /*
     `p_instruction` is deliberately NOT required, and it is the only argument in
     this map for which that is true.
@@ -1276,12 +1330,20 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     "no brief sent" and "clear the brief" mean the same thing — which is the
     only reading under which both are true.
   */
-  project_instruction: { fn: 'set_project_instruction', required: ['p_slug', 'p_staff_slug'] },
-  automation_create: { fn: 'create_automation', required: ['p_slug', 'p_instruction'] },
-  automation_set: { fn: 'set_automation', required: ['p_automation', 'p_on'] },
-  automation_remove: { fn: 'remove_automation', required: ['p_automation'] },
-  project_archive: { fn: 'archive_project', required: ['p_slug'] },
-  project_unarchive: { fn: 'unarchive_project', required: ['p_slug'] },
+  project_instruction: {
+    fn: 'set_project_instruction',
+    office: true,
+    required: ['p_slug', 'p_staff_slug'],
+  },
+  automation_create: {
+    fn: 'create_automation',
+    office: true,
+    required: ['p_slug', 'p_instruction'],
+  },
+  automation_set: { fn: 'set_automation', office: true, required: ['p_automation', 'p_on'] },
+  automation_remove: { fn: 'remove_automation', office: true, required: ['p_automation'] },
+  project_archive: { fn: 'archive_project', office: true, required: ['p_slug'] },
+  project_unarchive: { fn: 'unarchive_project', office: true, required: ['p_slug'] },
   /*
     And the two writes it needs (#259). Completing and reopening go through
     `task_state`, which already exists and already does both for either kind of
