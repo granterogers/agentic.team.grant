@@ -1767,6 +1767,7 @@ const json = (body: unknown, status = 200): Response =>
   Nothing is written to storage unless it says ok, and the path is built from what it returned.
 */
 const uploadTarget = async (
+  office: string,
   uploadKind: 'contact_photo' | 'document_upload',
   projectId: string,
   contactId: string | null,
@@ -1780,6 +1781,8 @@ const uploadTarget = async (
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      // The verified office: a target is judged inside it (a foreign project and a missing one are the same refusal).
+      p_office: office,
       p_kind: uploadKind,
       p_project_id: projectId,
       p_contact_id: contactId,
@@ -1963,7 +1966,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           Authorization: `Bearer ${SERVICE_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ p_ref: ref }),
+        body: JSON.stringify({ p_office: office, p_ref: ref }),
       })
         .then((r) => (r.ok ? r.json() : false))
         .catch(() => false)
@@ -2025,7 +2028,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
         The contact must be this project's, and a test member only reaches a test project. Asked BEFORE the
         photograph is decoded or stored, and the path below is built from the project the database returns.
       */
+      if (!office) return json({ error: 'no_office' }, 403)
       const target = await uploadTarget(
+        office,
         'contact_photo',
         projectId,
         contactId,
@@ -2062,6 +2067,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
       if (b64 === '') {
         const removed = await callRpc('hq_contact_photo_set', {
+          p_office: office,
           p_contact_id: contactId,
           p_path: null,
         })
@@ -2106,6 +2112,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         return json({ error: 'the photograph could not be stored' }, 502)
       }
       const recorded = await callRpc('hq_contact_photo_set', {
+        p_office: office,
         p_contact_id: contactId,
         p_path: path,
       })
@@ -2165,7 +2172,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       }
 
       /* Authorized against the database BEFORE the bytes are decoded or stored (0650). */
-      const target = await uploadTarget('document_upload', projectId, null, principal)
+      if (!office) return json({ error: 'no_office' }, 403)
+      const target = await uploadTarget(office, 'document_upload', projectId, null, principal)
       if ('error' in target) {
         return json(
           { error: target.error },
@@ -2240,6 +2248,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          p_office: office,
           p_project_id: projectId,
           p_title: name.slice(0, 200),
           p_storage_path: path,
