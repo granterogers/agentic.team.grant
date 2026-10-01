@@ -146,7 +146,12 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
       const hoursLeft = expiresAt === 0 ? 0 : Math.round(secondsUntilExpiry(expiresAt) / 360) / 10
       const decision = await governEffect(db, job, {
         tool: 'slack.rotate',
-        material: { expiresAt },
+        // An unknown expiry would make one fingerprint for every future rotation, so a No (or a yes) would outlive
+        // the rotation it was about. Bucket it by day instead.
+        material: {
+          expiresAt:
+            expiresAt === 0 ? `unknown:${new Date().toISOString().slice(0, 10)}` : expiresAt,
+        },
         summary:
           'Rotate the Slack configuration token? It expires ' +
           (expiresAt === 0

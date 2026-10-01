@@ -53,7 +53,7 @@ describe('the four duties ask through the one gate, and nothing opens it with a 
 
   it('rotation asks for each expiry, never a standing yes', () => {
     const t = strip(read('src/handlers/slack-rotation.ts'))
-    expect(t).toMatch(/tool: 'slack\.rotate',\s*material: \{ expiresAt \}/)
+    expect(t).toMatch(/tool: 'slack\.rotate',\s*material: \{\s*expiresAt:\s*expiresAt === 0/)
     expect(t).not.toMatch(/standingOption|standingTool/)
   })
 
@@ -75,5 +75,21 @@ describe('retrieval widens only through the office, and says where each source i
     expect(t).toMatch(/app\.sibling_projects\(/)
     expect(t).toMatch(/app\.projects_named_in\(/)
     expect(t).not.toMatch(/from public\.projects/)
+  })
+})
+
+describe('review findings: the delete budget never strands an approval (1 October)', () => {
+  const src = readFileSync('src/handlers/tasks-sync.ts', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+  it('the budget turns off raising a question, not the check', () => {
+    expect(src).toMatch(/noQuestion:\s*asked\s*>=\s*MAX_DELETE_QUESTIONS_PER_ROUND/)
+    expect(src).not.toMatch(/if\s*\(\s*asked\s*>=\s*MAX_DELETE_QUESTIONS_PER_ROUND\s*\)\s*return/)
+  })
+  it('the adopt handler mints no authority', () => {
+    const adopt = readFileSync('src/handlers/notion-adopt.ts', 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+    expect(adopt).not.toMatch(/record_destination_authority/)
   })
 })

@@ -244,14 +244,18 @@ export async function rotateAndPersist(
     six times a day. Written AFTER the pair is safely stored and as its own statement: a failure here costs one spurious
     question, never the credential. Production's row still reads 10 September for this reason.
   */
-  await deps
-    .execute(
-      `update public.slack_app_credentials
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const wrote = await deps
+      .execute(
+        `update public.slack_app_credentials
           set config_token_expires_at = to_timestamp(${String(Math.floor(pair.expiresAt))}),
               config_token_rotated_at = app.now_utc(), rotation_failures = 0, last_rotation_error = null
         where slack_app_id = ${sqlLit(appId)}`,
-    )
-    .catch(() => undefined)
+      )
+      .then(() => true)
+      .catch(() => false)
+    if (wrote) break
+  }
 
   return { kind: 'rotated', expiresAt: pair.expiresAt }
 }

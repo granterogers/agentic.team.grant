@@ -250,27 +250,46 @@ check(
   'none',
 )
 
-// ---- 6. the chat path: an adopt a person asked for connects; one a duty ran does not ------------------------------
+// ---- 6. letting go withdraws the yes; adopt mints nothing -----------------------------------------------------
 const E = await project('e')
-const adoptJob = await w.childOf(turn, 'office.notion_adopt', E.id)
-const adoptOk = json(
+const eRef = `db-detach-${w.run}`
+await attachAsPerson(E.slug, eRef, 'document')
+const live = (await standing(E.id)).length
+const eAtt = String(
   (
     await one(
-      `select app.record_destination_authority('notion.write', ${lit(E.id)}::uuid, ${lit(`notion:db-adopt-${w.run}`)}, null, ${lit(adoptJob.jobId)}::uuid, 'adopted') as r`,
+      `select attachment_id::text as id from public.project_attachments where project_id = ${lit(E.id)}::uuid and external_ref = ${lit(eRef)}`,
     )
-  ).r,
+  ).id,
 )
-const dutyAdopt = await w.dutyJob('office.notion_adopt', E.id)
+await w.asPerson('detach', { p_attachment_id: eAtt })
+const afterDetach = (await standing(E.id)).length
+await one(
+  `update public.project_attachments set enabled = true where project_id = ${lit(E.id)}::uuid and external_ref = ${lit(eRef)} returning 1 as x`,
+).catch(() => undefined)
+check(
+  'disconnecting a database withdraws its standing yes, and re-enabling the row does not bring it back',
+  live === 1 && afterDetach === 0 && (await standing(E.id)).length === 0,
+  `${String(live)} -> ${String(afterDetach)} -> ${String((await standing(E.id)).length)}`,
+)
+const turn2 = await w.personTurn()
+const adoptJob = await w.childOf(turn2, 'office.notion_adopt', E.id)
 const adoptDuty = json(
   (
     await one(
-      `select app.record_destination_authority('notion.write', ${lit(E.id)}::uuid, ${lit(`notion:db-adopt-duty-${w.run}`)}, null, ${lit(dutyAdopt.jobId)}::uuid, 'adopted') as r`,
+      `select app.record_destination_authority('notion.write', ${lit(E.id)}::uuid, ${lit(`notion:db-adopt-duty-${w.run}`)}, null, ${lit((await w.dutyJob('office.notion_adopt', E.id)).jobId)}::uuid, 'adopted') as r`,
     )
   ).r,
 )
 check(
-  "an adopt that is a person's own request records the connection; one a duty ran records nothing",
-  adoptOk.ok === true && adoptDuty.ok === false,
-  `${String(adoptOk.ok)} / ${String(adoptDuty.ok)}`,
+  'a duty-run job can never mint, and the adopt handler itself does not call the minter',
+  adoptDuty.ok === false &&
+    !/record_destination_authority/.test(
+      (await import('node:fs'))
+        .readFileSync('src/handlers/notion-adopt.ts', 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, ''),
+    ) &&
+    adoptJob.jobId.length > 0,
+  String(adoptDuty.ok),
 )
 await w.finish()

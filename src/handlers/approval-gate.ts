@@ -182,6 +182,8 @@ export interface EffectAsk {
   readonly summary: string
   readonly detail?: string | undefined
   readonly agent: string
+  /** Check only: when nothing already permits it, do not raise a new question (a round's budget of questions is spent). */
+  readonly noQuestion?: boolean | undefined
   readonly onYes?:
     | {
         readonly yes: string
@@ -267,6 +269,10 @@ export const governEffect = async (
       blocker: null,
       quiet: false,
     }
+  }
+
+  if (e.noQuestion === true) {
+    return { ok: false, said: own.because, blocker: null, quiet: true }
   }
 
   const open = (

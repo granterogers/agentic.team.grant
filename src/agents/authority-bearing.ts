@@ -37,14 +37,40 @@
 const TO_GRANT =
   /\b(?:send|email|e-?mail|mail|message|text|dm|call|phone|ring|ping|tell|notify|alert|remind|show|give|cc|bcc|copy)\s+(?:me|us|myself)\b/gi
 
+/** Telling or showing Grant something, with the casing/flags the reader needs once. */
+const TO_GRANT_ONLY = new RegExp(TO_GRANT.source, 'i')
+
 const GRANTS_PERMISSION =
   /\b(?:you\s+(?:may|can|could|are\s+(?:allowed|permitted|free|authori[sz]ed)\s+to|have\s+(?:my\s+)?(?:permission|approval|authori[sz]ation)|(?:don'?t|do\s+not)\s+(?:need|have)\s+to)|go\s+ahead\s+and|feel\s+free\s+to|no\s+need\s+to\s+(?:ask|check|confirm|run\s+it\s+by)|without\s+(?:asking|checking|confirming|approval|permission|my\s+(?:say|ok|okay|approval))|on\s+my\s+behalf|in\s+my\s+name|(?:i\s+)?(?:authori[sz]e|permit|allow)\b|pre-?approved?|standing\s+(?:approval|permission|authori[sz]ation)|always\s+(?:say\s+yes|approve))/i
 
-const DIRECTS_AN_EFFECT =
-  /\b(?:send|email|e-?mail|mail|message|text|dm|call|phone|ring|post|publish|share|invite|book|schedule|reserve|pay|transfer|refund|invoice|delete|remove|cancel|forward|reply|respond|contact|notify|alert|order|buy|purchase|subscribe|submit|sign|approve|hire|fire|reach\s+out|follow\s+up|chase|ping|loop\s+in|cc|bcc|file|upload|push|deploy|merge)\b/i
+/*
+  Somebody other than Grant, named the way people are named in a sentence: a role noun, or a Capitalised word that is
+  not the first of its sentence. Case-sensitive on purpose (a name is the one thing capitals still say in a spoken
+  rule), so it is tested without the `i` flag.
+*/
+const PERSON_WORD =
+  /(?:[A-Z][a-z]{1,}|(?:(?:my|our|the|a|an|each|every|all|any)\s+(?:\w+\s+)?)?(?:client|customer|supplier|vendor|accountant|lawyer|solicitor|colleague|staff|contractor|candidate|investor|partner|team|everyone|anyone|someone|somebody|people|recipient|board|venue)s?)\b/
+const CONTACT_THEN_PERSON = new RegExp(
+  String.raw`\b(?:send|email|e-?mail|mail|message|text|dm|call|phone|ring|ping|tell|notify|alert|inform|update|remind|cc|bcc|forward|copy|invite|loop\s+in|reach\s+out\s+to|contact|write\s+to|reply\s+to|respond\s+to|follow\s+up\s+with|chase|give|share|post|keep)\b(?:\s+\S+){0,3}?\s+` +
+    PERSON_WORD.source,
+)
+/** Acts whose effect lands outside the office whoever the audience is (money, orders, deletion, publishing). */
+const OUTWARD_ACT =
+  /\b(?:pay|transfer|refund|invoice|order|buy|purchase|subscribe|book|reserve|hire|fire|deploy|merge|publish|submit|sign|approve|delete|remove|cancel|upload|push)\s+(?:the\s+|a\s+|an\s+|any\s+|all\s+|my\s+|our\s+)?(?!(?:as|in|is|to|of|for|with|and|or|on|at|it|them)\b)\w+/i
+/** "the word delete" names a word; it does not do it. */
+const QUOTED_WORD = /\b(?:the\s+(?:word|term|phrase)s?|words?\s+like)\s+["'“‘]?[\w-]+["'”’]?/gi
 
 const SETS_SOMETHING_RUNNING =
-  /\b(?:every|each)\s+(?:day|morning|afternoon|evening|night|week|weekday|weekend|month|quarter|year|hour|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\b(?:daily|weekly|monthly|hourly|nightly|fortnightly|quarterly|annually)\b|\b(?:whenever|as\s+soon\s+as|automatically|on\s+a\s+schedule|recurring|on\s+repeat|each\s+time)\b/i
+  /\b(?:every|each)\s+(?:day|morning|afternoon|evening|night|week|weekday|weekend|month|quarter|year|hour|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\b(?:daily|weekly|monthly|hourly|nightly|fortnightly|quarterly|annually)\b|\b(?:whenever|as\s+soon\s+as|automatically|on\s+a\s+schedule|recurring|on\s+repeat|each\s+time)\b|\bwhen\s+(?:a|an|any|someone|somebody|the|my)\s+\w+(?:\s+\w+)?\s+(?:writes|emails|messages|calls|sends|asks|replies|contacts|arrives|comes\s+in|lands|signs|pays|books|cancels)\b|\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\bby\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|noon|midday|midnight|end\s+of\s+(?:the\s+)?(?:day|week|month))\b/i
+
+/*
+  The POSITIVE side. A teaching is stored on its own only when it is recognised as being about how the office WRITES
+  or PRESENTS: a dimension the office orders (length, form, links, due dates) or one of the plain presentation words
+  below. Everything else is not recognised and so is offered - unknown is not benign (0304's asymmetry), which is what
+  a list of dangerous phrasings could never give: a "handle refunds yourselves" is simply not about presentation.
+*/
+const PRESENTATION =
+  /\b(?:(?:open|start|begin|end|finish|close|lead)\s+(?:with|by)|at\s+the\s+(?:top|bottom|end|start)|(?:first|last)\s+(?:thing|line|paragraph)|the\s+(?:word|term|phrase)s?|spell(?:ing)?|british|american|english|language|tone|formal(?:ly)?|informal(?:ly)?|friendly|polite|warm|casual|wording|phrasing|vocabulary|jargon|capitali[sz](?:e|ation)|bold|italics?|heading|headline|font|emoji|emojis|punctuation|oxford\s+comma|(?:conclusion|answer|summary|result|recommendation|number|headline)s?\s+first|first\s+(?:line|sentence)|lead\s+with|structure|order|format|layout|refer\s+to\s+\w+(?:\s+\w+)?\s+as|call\s+(?:it|them|the\s+\w+)\s+(?:a|an|the)?\s*\w+|say\s+["'“‘]|(?:in|to)\s+(?:the\s+)?(?:first|second|third)\s+person|sign\s+off|greeting)\b/i
 
 export interface AuthorityReading {
   /** True when the office must not store this as an order without his explicit yes. */
@@ -60,14 +86,30 @@ export interface AuthorityReading {
  */
 export const readAuthority = (body: string, dimension: string | null): AuthorityReading => {
   const text = String(body ?? '')
-  // Telling or showing Grant something is not reaching anybody else.
-  const aboutOthers = text.replace(TO_GRANT, ' ')
+  // Telling or showing Grant something is not reaching anybody else; a word named as a word does nothing.
+  const aboutOthers = text
+    .replace(TO_GRANT, ' ')
+    .replace(QUOTED_WORD, ' ')
+    // A sentence or clause opens with a capital that is not a name: lower it, so a verb that starts one is still a verb.
+    .replace(
+      /(^|[.!?]\s+|,\s+)([A-Z])(?=[a-z])/g,
+      (_m, lead: string, c: string) => lead + c.toLowerCase(),
+    )
   const because: string[] = []
   if (dimension === 'asking-first')
     because.push('it is about when the office may act without asking')
   if (GRANTS_PERMISSION.test(text)) because.push('it gives the office permission')
-  if (DIRECTS_AN_EFFECT.test(aboutOthers)) because.push('it directs something outside the office')
+  if (CONTACT_THEN_PERSON.test(aboutOthers) || OUTWARD_ACT.test(aboutOthers))
+    because.push('it directs something outside the office')
   if (SETS_SOMETHING_RUNNING.test(text))
     because.push('it sets something running on a schedule or a trigger')
+  if (because.length === 0) {
+    const presentation =
+      (dimension !== null && dimension !== 'asking-first') ||
+      PRESENTATION.test(text) ||
+      TO_GRANT_ONLY.test(text)
+    if (!presentation)
+      because.push('I cannot tell that it is only about how I write or present things')
+  }
   return { bearsAuthority: because.length > 0, because }
 }

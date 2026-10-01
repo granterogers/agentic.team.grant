@@ -142,9 +142,12 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
       let because = ''
       let spend = false
       if (!(await provisioner.hasChannel(row.id))) {
-        const authority = (
-          await db.execute(`select app.channel_authority(${lit(row.id)}::uuid) as a`)
-        ).rows[0] as { a?: unknown } | undefined
+        // A database without the authority function (a rolled-back migration) means nobody can be said to have
+        // authorised it, so it ASKS rather than failing the sweep.
+        const authority = (await db
+          .execute(`select app.channel_authority(${lit(row.id)}::uuid) as a`)
+          .then((r) => r.rows[0])
+          .catch(() => undefined)) as { a?: unknown } | undefined
         const a = (typeof authority?.a === 'string' ? JSON.parse(authority.a) : authority?.a) as
           | { authorized_by?: string }
           | null
@@ -173,7 +176,10 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
               announce: false,
             }
           }
-          because = 'because you said yes to creating it'
+          because =
+            d.how === 'approved'
+              ? 'because you said yes to creating it'
+              : 'because the settings allowed it'
         }
       }
 

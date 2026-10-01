@@ -68,6 +68,8 @@ returns jsonb language sql stable security definer set search_path to 'public', 
                             'source_job', a.source_job)
     from public.slack_channel_authority a
    where a.project_id = p_project and a.consumed_at is null
+     -- The reason is about a project made just now, not a standing licence: it lapses (review, 1 October).
+     and a.created_at > app.now_utc() - interval '3 days'
 $f$;
 
 create function app.consume_channel_authority(p_project uuid, p_job uuid)

@@ -142,8 +142,8 @@ export function tasksSyncHandler(db: SqlExecutor, deps: TasksSyncDeps = {}): Han
           return writeOk
         },
         mayDelete: async ({ title, externalId }) => {
-          // A round that has already raised its share of questions raises no more: they are asked next time.
-          if (asked >= MAX_DELETE_QUESTIONS_PER_ROUND) return false
+          // A round that has already raised its share of questions raises no more (they are asked next time), but an
+          // approval already given is still honoured: the check runs either way.
           const d = await governEffect(db, job, {
             tool: 'task.board.delete',
             material: { provider: 'vikunja', board, externalId },
@@ -151,6 +151,7 @@ export function tasksSyncHandler(db: SqlExecutor, deps: TasksSyncDeps = {}): Han
             detail:
               'Nothing is deleted there without your yes. If you say no, it stays there and is not asked about again for a while.',
             agent: 'operations-director',
+            noQuestion: asked >= MAX_DELETE_QUESTIONS_PER_ROUND,
             onYes: { yes: 'Yes, delete it in Vikunja', no: 'No, leave it there' },
           })
           if (d.ok) return true

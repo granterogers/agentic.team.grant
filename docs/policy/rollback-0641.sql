@@ -51,4 +51,6 @@ $f$;
 -- The standing rows minted by the connections are withdrawn with the mechanism that minted them.
 update public.standing_authorizations set revoked_at = app.now_utc(), revoked_reason = 'rolled back with 0641'
  where tool in ('task.board.write', 'notion.write') and scope_ref is not null and revoked_at is null;
+drop trigger if exists project_attachments_withdraw_notion_authority on public.project_attachments;
+drop function if exists app.withdraw_notion_authority();
 commit;

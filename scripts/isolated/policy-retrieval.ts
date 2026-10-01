@@ -181,4 +181,20 @@ check(
   fenced.includes('FROM OUTSIDE THIS OFFICE') && mail !== '',
   'fenced',
 )
+
+// ---- review finding: ONE shared common word is not a reason to read another project -----------------------------------
+const bait = await doc(
+  B.id,
+  'Bravo meeting note',
+  `The weekly meeting is held in the main hall. ${WORD}z notes follow.`,
+)
+const weak = await retrieveAcrossOffice(db, 'what is the weather like for the meeting today', null)
+const weakA = await retrieveAcrossOffice(db, 'what is the weather like for the meeting today', A.id)
+check(
+  'a question sharing only the word "meeting" with a sibling project pulls nothing from it (nobody named, nothing of its own)',
+  !weak.some((h) => h.scope !== 'this_project') &&
+    !weakA.some((h) => h.scope !== 'this_project') &&
+    bait !== undefined,
+  `${String(weak.length)}/${String(weakA.length)} hit(s)`,
+)
 await w.finish()

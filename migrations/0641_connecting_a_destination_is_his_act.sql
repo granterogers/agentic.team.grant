@@ -84,28 +84,26 @@ returns jsonb language sql security definer set search_path to 'public', 'pg_cat
   select app.hq_attach(p_slug, p_connector, p_ref, p_role, p_kind, p_display, p_by)
 $f$;
 
--- ---- a Notion database that was already connected by him, on the evidence ---------------------------------------
--- Not blanket: a project's enabled Notion `home` database is given its standing yes only where a COMPLETED
--- `office.notion_adopt` job of a person's own turn exists for the project (the production adopt was a telegram:grant
--- job on 9 September). `record_destination_authority` re-decides that from the job's origin, so a job that was not a
--- person's turn mints nothing. The row says it was recorded by this migration from that request.
-do $m$
-declare r record; v jsonb;
+-- ---- letting go of a database withdraws the yes that connecting it gave -------------------------------------------
+-- A trigger on the attachment, so EVERY route that detaches or disables it (the page, an undo, a sweep) takes the
+-- authority with it, and re-enabling the same database later does not quietly bring it back: connecting again, as a
+-- person, is the only way to mint it. (Review, 1 October: detach left the row live.)
+--
+-- There is deliberately NO backfill for databases attached before this migration, and `office.notion_adopt` mints
+-- nothing: adopt chooses a database by its TITLE among whatever is shared with the integration, which is not the
+-- same as Grant deliberately connecting that destination. Press Connect on the database once and it is his yes.
+create function app.withdraw_notion_authority()
+returns trigger language plpgsql security definer set search_path to 'public', 'pg_catalog' as $f$
 begin
-  for r in
-    select a.project_id, a.external_ref, a.display_name,
-           (select j.job_id from public.jobs j
-             where j.project_id = a.project_id and j.kind = 'office.notion_adopt' and j.state = 'complete'
-               and j.requested_by not like 'duty:%'
-             order by j.created_at desc limit 1) as adopt_job
-      from public.project_attachments a
-     where a.connector = 'notion' and a.role = 'home' and a.enabled
-  loop
-    continue when r.adopt_job is null;
-    v := app.record_destination_authority(
-      'notion.write', r.project_id, 'notion:' || r.external_ref, null, r.adopt_job,
-      format('the Notion database %s (recorded by migration 0641 from your request that connected it)',
-             coalesce(r.display_name, r.external_ref)));
-    raise notice '0641: % -> %', r.external_ref, v;
-  end loop;
-end $m$;
+  if tg_op = 'DELETE' or (tg_op = 'UPDATE' and old.enabled and not new.enabled) then
+    update public.standing_authorizations
+       set revoked_at = app.now_utc(), revoked_reason = 'the database was disconnected from the project'
+     where tool = 'notion.write' and project_id = old.project_id and scope_ref = 'notion:' || old.external_ref
+       and revoked_at is null;
+  end if;
+  return coalesce(new, old);
+end;
+$f$;
+create trigger project_attachments_withdraw_notion_authority
+  after update or delete on public.project_attachments
+  for each row when (old.connector = 'notion') execute function app.withdraw_notion_authority();

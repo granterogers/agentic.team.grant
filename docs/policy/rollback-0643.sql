@@ -1,3 +1,6 @@
+-- SAFE ONLY TOGETHER WITH THE CODE ROLLBACK: the worker that shipped with this migration calls what it removes. A
+-- database-only rollback leaves a worker that fails (0640/0643) or degrades to its own project (0644) or reports that it
+-- could not offer the teaching (0645); roll the worker back to the previous version first, then run this.
 -- Rollback of 0643: hq_create_project loses p_by; the provenance table goes. A project made while 0643 was live keeps its
 -- channel if it already has one; one that has not been provisioned yet is then provisioned through the unprompted path
 -- (which asks).

@@ -1,3 +1,6 @@
+-- SAFE ONLY TOGETHER WITH THE CODE ROLLBACK: the worker that shipped with this migration calls what it removes. A
+-- database-only rollback leaves a worker that fails (0640/0643) or degrades to its own project (0644) or reports that it
+-- could not offer the teaching (0645); roll the worker back to the previous version first, then run this.
 -- Rollback of 0640: standing authorizations are tool-wide again; the four tools are disabled (never deleted - a listed
 -- gap can become a proposal, a deleted one cannot), and destination-scoped rows are removed with the column.
 begin;

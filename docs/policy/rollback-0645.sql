@@ -1,4 +1,7 @@
--- Rollback of 0645: a procedure is stored from his marked words again (the caller falls back to storing it).
+-- SAFE ONLY TOGETHER WITH THE CODE ROLLBACK: the worker that shipped with this migration calls what it removes. A
+-- database-only rollback leaves a worker that fails (0640/0643) or degrades to its own project (0644) or reports that it
+-- could not offer the teaching (0645); roll the worker back to the previous version first, then run this.
+-- Rollback of 0645: a procedure is stored from his marked words again (it does NOT: the handler then says it could not put the teaching in front of him; roll the worker back first).
 begin;
 do $m$
 declare v_def text; v_a int; v_b int;

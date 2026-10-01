@@ -83,6 +83,17 @@ if (expiresAt !== 0 && !shouldRotate(expiresAt) && !process.argv.includes('--for
   process.exit(0)
 }
 
+// Every rotation needs Grant's explicit approval (final policy closure, decision 4). The duty asks him as a
+// question; this operator command is the other door and is only ever run on his say-so, so it refuses unless the
+// person running it states that he has given it. It is not a way for an agent to rotate on its own.
+if (!process.argv.includes('--approved-by-grant')) {
+  console.error("\nrefusing: a Slack token rotation needs Grant's explicit yes.")
+  console.error(
+    "If he has given it, run again with --approved-by-grant (or answer the duty's question on the dashboard).",
+  )
+  process.exit(2)
+}
+
 // The sequence lives in `src/slack/rotation.ts` so its failure path can be
 // tested — §18's *invalid refresh token* case, and the one path here that can
 // lock us out of Slack. This script is the caller and the reporting.

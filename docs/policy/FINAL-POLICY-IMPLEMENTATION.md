@@ -139,3 +139,29 @@ permitted it (audit AD3, ten ungated external kinds named in
 
 Isolated replica suites (new `policy-*.ts`), each with a sabotage that must turn it red; Vitest for the pure parts;
 the complete canonical regression; adversarial review; deploy; a live policy section.
+
+## Independent adversarial review (1 October 2026) and what was done about it
+
+A fresh agent with no part in the build tried to break each boundary on replica copies. Eight defects were confirmed;
+each is fixed and has a regression.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | D5 was a denylist: "handle refunds yourselves", "keep my accountant informed", "when a client writes, tell Priya" were stored | Inverted: a teaching is stored on its own only when POSITIVELY recognised as presentation (a dimension or a plain presentation word) or as addressed to Grant; anything else is offered. Contact-a-named-person, outward acts and triggers (including "when a client writes", "at 9am") are named signals. 15 attack shapes pinned. |
+| 2 | D5 false positives on his own presentation rules ("paste the image URLs into the reply") | Same rewrite; "reply"/"message"/"email" are no longer effects without a third party. 10 presentation shapes pinned as stored. |
+| 3 | D2 at dial Act an unprompted sweep made the channel, and the body said "because you said yes" | `slack.channel` is level 3: asks at every dial setting, no standing yes can exist. The sentence now follows the real reason. |
+| 4 | D2 a broad standing `slack.channel` could be granted | Level 3 refuses it structurally (trigger); tested tool-wide and per project. |
+| 5 | D3 detaching a Notion database left its standing yes live | Trigger on `project_attachments` withdraws it on delete or disable, from any route; re-enabling does not bring it back. |
+| 6 | D3 `office.notion_adopt` minted authority for a database it picked by title; the backfill minted for every home database | Adopt mints nothing; the backfill is removed. Pressing Connect on a database, as a person, is the yes. |
+| 7 | Rollback notes claimed the code falls back | Corrected; each rollback states it is safe only with the matching worker rollback. `retrieveAcrossOffice` and the channel handler now degrade (own project / ask) when the schema is rolled back. |
+| 8 | D6 one shared common word pulled another project's document | With nothing of its own and nobody named, a sibling is searched for a document holding every significant word. |
+
+Plausible concerns also taken: the delete-question budget no longer strands an approval already given (the check runs,
+only raising a new question stops); an unknown rotation expiry no longer yields one fingerprint for every future
+rotation; the expiry write after a successful rotation is retried; `scripts/slack/rotate.ts` refuses without
+`--approved-by-grant`; a project-creation reason lapses after three days. Left as bounded: harness jobs on a real
+project can read that office's other real projects (same user; the single `app.sibling_projects` boundary is where a
+future user filter goes), and the channel for `#the_team` is not a project channel.
+
+Sabotage of the review fixes (each landed, each went red): `slack.channel` back to level 2 (3 checks red), the withdraw
+trigger dropped (1 red), the authority lapse removed (1 red).

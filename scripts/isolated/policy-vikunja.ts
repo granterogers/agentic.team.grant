@@ -359,4 +359,29 @@ check(
   staleDecision.verdict !== 'proceed',
   `verdict ${String(staleDecision.verdict)}`,
 )
+
+// ---- review finding: a spent question budget must not strand an approval that was already given ------------------
+{
+  const { governEffect } = await import('../../src/handlers/approval-gate.ts')
+  const job = await w.dutyJob('tasks.sync')
+  const ask = {
+    tool: 'task.board.delete',
+    material: { provider: 'vikunja', board: 'budget-proof', externalId: `x${w.run}` },
+    summary: 'Delete the budget proof task?',
+    agent: 'operations-director',
+    onYes: { yes: 'Yes, delete it', no: 'No, leave it' },
+  }
+  const before = Number(
+    (await one(`select count(*)::int as n from public.blockers where state = 'open'`)).n,
+  )
+  const quiet = await governEffect(db, job, { ...ask, noQuestion: true })
+  const after = Number(
+    (await one(`select count(*)::int as n from public.blockers where state = 'open'`)).n,
+  )
+  check(
+    'with the question budget spent, the check runs and raises NOTHING (so an approval already given can still be honoured)',
+    quiet.ok === false && after === before,
+    `${String(before)} -> ${String(after)}`,
+  )
+}
 await w.finish()

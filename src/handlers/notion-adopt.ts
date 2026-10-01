@@ -125,15 +125,11 @@ export function notionAdoptHandler(deps: NotionAdoptDeps): Handler {
             set enabled = true, disabled_reason = null, updated_at = app.now_utc()
         `)
         /*
-          Connecting a database he asked me to connect IS his yes to writing into that database, and only that one
-          (final policy closure, decision 3). Whether this job is a person's own request is the database's to say, from
-          the job's origin: an adopt that a duty or a forwarded message started leaves no authority behind.
+          This mints NO authority. Adopt picks a database by its title among whatever is shared with the integration,
+          which is not Grant deliberately connecting that destination; pressing Connect on it (a person's attach,
+          0641) is what gives the standing yes for that one database. An independent review found the earlier mint
+          here made any shared database called "Tasks" a standing-write target.
         */
-        await db.execute(`
-          select app.record_destination_authority(
-            'notion.write', ${lit(job.projectId)}::uuid, ${lit(`notion:${only.id}`)}, null,
-            ${lit(job.jobId)}::uuid, ${lit(`the Notion database ${only.title}`)})
-        `)
         attached.push(only.title)
       }
 

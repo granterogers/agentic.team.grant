@@ -124,6 +124,7 @@ async function searchProject(
   query: string,
   projectId: string | null,
   limit: number,
+  match: 'any' | 'all' = 'any',
 ): Promise<readonly Hit[]> {
   const { rows } = await db.execute(`
     select s.document_id::text as document_id, coalesce(s.title, '(untitled)') as title,
@@ -134,7 +135,7 @@ async function searchProject(
       -- coaching and mentoring" requires "material" and "say" to appear, and it
       -- matched nothing against a corpus whose one document is about exactly
       -- that. 0060 has the measurement.
-      from app.search_documents(${lit(query)}, ${projectId === null ? 'app.unnamed_project()' : `${lit(projectId)}::uuid`}, ${String(limit)}, 'any') s
+      from app.search_documents(${lit(query)}, ${projectId === null ? 'app.unnamed_project()' : `${lit(projectId)}::uuid`}, ${String(limit)}, ${lit(match)}) s
       join public.documents d on d.document_id = s.document_id
   `)
   return (
@@ -193,25 +194,36 @@ export async function retrieveAcrossOffice(
   const read = (r: { rows: readonly Record<string, unknown>[] }): Sibling[] =>
     r.rows as unknown as Sibling[]
   const asking = projectId === null ? 'null' : `${lit(projectId)}::uuid`
-  const named = read(
-    await db.execute(
-      `select project_id::text as project_id, name, account_level from app.projects_named_in(${lit(query)}, ${asking})`,
-    ),
-  )
-  let targets: Sibling[] = named
-  if (targets.length === 0 && own.length === 0) {
-    targets = read(
+  let targets: Sibling[] = []
+  let fallback = false
+  try {
+    const named = read(
       await db.execute(
-        `select project_id::text as project_id, name, account_level from app.sibling_projects(${asking})
-          order by account_level desc, name limit ${String(SIBLING_SEARCH_CAP)}`,
+        `select project_id::text as project_id, name, account_level from app.projects_named_in(${lit(query)}, ${asking})`,
       ),
     )
+    targets = named
+    // Nobody named, and this project had nothing: look wider, but only for a document that holds EVERY significant word
+    // of the question. One shared common word ("meeting") is not a reason to put another project's material in front of
+    // a model (review, 1 October).
+    fallback = targets.length === 0 && own.length === 0
+    if (fallback) {
+      targets = read(
+        await db.execute(
+          `select project_id::text as project_id, name, account_level from app.sibling_projects(${asking})
+          order by account_level desc, name limit ${String(SIBLING_SEARCH_CAP)}`,
+        ),
+      )
+    }
+  } catch {
+    // The sibling functions are absent (a rolled-back schema) or failed: the answer is the asking project's own.
+    return own
   }
   if (targets.length === 0) return own
 
   const found: Hit[] = []
   for (const t of targets) {
-    for (const h of await searchProject(db, query, t.project_id, 3)) {
+    for (const h of await searchProject(db, query, t.project_id, 3, fallback ? 'all' : 'any')) {
       found.push({
         ...h,
         scope: t.account_level ? 'account' : 'other_project',

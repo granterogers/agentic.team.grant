@@ -334,4 +334,43 @@ check(
   (await channelsFor(F)) === 0 && (await questionsFor(F)) === 0 && /fixture/.test(fixtureOut.body),
   fixtureOut.body.slice(0, 80),
 )
+
+// ---- 6. review findings: the most permissive dial does not make an unprompted channel, nothing broad is standing,
+//         and a stale reason lapses --------------------------------------------------------------------------------
+await one(`select app.hq_autonomy_set('act', null, 'grant') as r`)
+const U = await mk('unprompted-act', 'sql')
+const atAct = await handler().handle(await sweepJob(U), db)
+await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+check(
+  'dial at "Act", nobody asked: still no channel, and a question is raised (a channel cannot be deleted)',
+  (await channelsFor(U)) === 0 &&
+    (await questionsFor(U)) === 1 &&
+    !/said yes|created it/.test(atAct.body),
+  atAct.body.slice(0, 90),
+)
+const broad = json(
+  (await one(`select app.grant_standing('slack.channel', null, 'anywhere', 'grant') as r`)).r,
+)
+const broadProject = json(
+  (
+    await one(
+      `select app.grant_standing('slack.channel', ${lit(U)}::uuid, 'anywhere', 'grant') as r`,
+    )
+  ).r,
+)
+check(
+  'no standing yes can cover slack.channel, tool-wide or per project',
+  broad.ok === false && broadProject.ok === false,
+  String(broad.error).slice(0, 80),
+)
+const L = await mk('lapsed', 'person')
+await one(
+  `update public.slack_channel_authority set created_at = created_at - interval '10 days' where project_id = ${lit(L)}::uuid returning 1 as x`,
+)
+const lapsed = await handler().handle(await sweepJob(L), db)
+check(
+  'a creation reason ten days old has lapsed: the channel asks instead of being made',
+  (await channelsFor(L)) === 0 && (await questionsFor(L)) === 1,
+  lapsed.body.slice(0, 90),
+)
 await w.finish()
