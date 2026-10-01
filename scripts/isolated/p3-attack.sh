@@ -10,7 +10,7 @@ P="psql -h ${ISOLATED_PG_SOCKET:-/tmp/pgs} -p ${ISOLATED_PG_PORT:-55432} -U post
 $P -d postgres -c "drop database if exists $NAME"
 $P -d postgres -c "create database $NAME template post"
 $P -d "$NAME" -c "insert into auth.users(id,email) select gen_random_uuid(), e from (values ('grant.e.rogers@gmail.com'),('verify.operator@example.com')) v(e) where not exists (select 1 from auth.users u where lower(u.email) = v.e)"
-for f in "$ROOT"/migrations/06[5-9][0-9]_*.sql; do
+for f in "$ROOT"/migrations/0[6-9][0-9][0-9]_*.sql; do
   [ -e "$f" ] || continue
   n=$(basename "$f" | cut -c1-4)
   [ "$n" \< "0654" ] && continue
