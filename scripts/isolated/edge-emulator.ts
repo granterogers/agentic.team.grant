@@ -19,7 +19,7 @@
  *   - `GET /auth/v1/user` answers from `authUsers`, keyed by bearer token;
  *   - `POST /auth/v1/admin/generate_link` answers a link and records the address.
  */
-import { copyFile, mkdir } from 'node:fs/promises'
+import { copyFile, mkdir, readFile } from 'node:fs/promises'
 import type { PgExecutor } from '../../src/db/pg-executor.ts'
 
 export const DB_URL = 'http://replica.invalid'
@@ -45,6 +45,8 @@ export interface Edge {
   readonly refusedUrls: string[]
   /** Emails an admin sign-in link was generated for (the identity service's `generate_link`). */
   readonly linksMinted: string[]
+  /** Every object a function tried to write to storage (never forwarded anywhere). */
+  readonly storageWrites: { method: string; path: string; bytes: number }[]
   outage(on: boolean, onlyFunction?: string): void
 }
 
@@ -53,6 +55,7 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
   let down: boolean | string = false
   const refusedUrls: string[] = []
   const linksMinted: string[] = []
+  const storageWrites: { method: string; path: string; bytes: number }[] = []
   const env: Record<string, string> = { SUPABASE_URL: DB_URL, ...o.env }
   ;(globalThis as unknown as { Deno: unknown }).Deno = {
     env: { get: (k: string) => env[k] },
@@ -121,6 +124,17 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
         return reply(400, { message: String((e as Error).message) })
       }
     }
+    if (path.startsWith('/storage/v1/')) {
+      // Storage is not replicated: it is RECORDED, so a proof can count the objects a function tried to write.
+      const method = init?.method ?? 'GET'
+      const raw = init?.body
+      const size = raw instanceof Uint8Array ? raw.byteLength : String(raw ?? '').length
+      if (method === 'POST' && path.includes('/object/sign/')) {
+        return reply(200, { signedURL: `${path.replace('/storage/v1', '')}?token=isolated` })
+      }
+      storageWrites.push({ method, path, bytes: size })
+      return reply(200, { Key: path.replace('/storage/v1/object/', '') })
+    }
     const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
     const prefer = String((init?.headers as Record<string, string> | undefined)?.Prefer ?? '')
     try {
@@ -171,12 +185,22 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
   */
   const name = o.edgeFile.split('/').slice(-2, -1)[0] ?? 'edge'
   const dir = new URL(`../../.out/edge-${name}/`, import.meta.url)
-  await mkdir(dir, { recursive: true })
-  await copyFile(new URL(`../../${o.edgeFile}`, import.meta.url), new URL('index.ts', dir))
-  for (const [src, as] of o.beside ?? []) {
-    await copyFile(new URL(`../../${src}`, import.meta.url), new URL(as, dir))
+  /*
+    A function that imports shared code by its repository path (`../../../src/...`, as voice, voice-token and
+    anything bundled the way the worker is) must run WHERE it lives, or the import points outside the checkout.
+    One that imports nothing keeps the unmodified-copy arrangement it always had.
+  */
+  const sourceText = await readFile(new URL(`../../${o.edgeFile}`, import.meta.url), 'utf8')
+  if (/from '\.\.\/\.\.\/\.\.\/src\//.test(sourceText)) {
+    await import(new URL(`../../${o.edgeFile}?run=${Date.now()}`, import.meta.url).href)
+  } else {
+    await mkdir(dir, { recursive: true })
+    await copyFile(new URL(`../../${o.edgeFile}`, import.meta.url), new URL('index.ts', dir))
+    for (const [src, as] of o.beside ?? []) {
+      await copyFile(new URL(`../../${src}`, import.meta.url), new URL(as, dir))
+    }
+    await import(new URL(`index.ts?run=${Date.now()}`, dir).href)
   }
-  await import(new URL(`index.ts?run=${Date.now()}`, dir).href)
   if (handler === null) {
     globalThis.fetch = realFetch
     throw new Error(`${o.edgeFile} did not call Deno.serve`)
@@ -186,6 +210,7 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
     call: h,
     refusedUrls,
     linksMinted,
+    storageWrites,
     outage: (on, onlyFunction) => {
       down = on ? (onlyFunction ?? true) : false
     },

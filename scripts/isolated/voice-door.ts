@@ -1,8 +1,8 @@
 /**
  * The REAL `/voice/turn` door, run in Node against the isolated replica.
  *
- * `supabase/functions/voice/index.ts` is one file with no imports, and it
- * touches the runtime in exactly two places, `Deno.env.get` and `Deno.serve`.
+ * `supabase/functions/voice/index.ts` imports one shared module (`src/auth/speaker.ts`, P1.1) and
+ * is run where it lives; it touches the runtime in exactly two places, `Deno.env.get` and `Deno.serve`.
  * So this supplies a stand-in `Deno`, captures the handler `Deno.serve` is
  * given, and answers the door's `fetch` calls to the database with a minimal
  * PostgREST emulator over the replica. The adapter's own code is what runs,

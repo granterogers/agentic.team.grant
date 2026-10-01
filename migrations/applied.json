@@ -658,5 +658,6 @@
   "0644_the_same_office_has_siblings_and_only_they_are_searched.sql": "79dbe8d21abd98519718b7d45a491f107fb9505330fb8b2741c0aa4ce1a8a458",
   "0645_a_procedure_he_taught_is_offered_before_it_is_kept.sql": "a62ba13165f811f17fee80c28719afabfc2f451973bdae5c4b3cbca9a600d725",
   "0646_the_dial_says_what_proactive_means.sql": "5a049b43264ee34463a3f174131acbfa4808b6123a7622e0d988df1b2db04027",
-  "0647_who_may_operate_the_deployment.sql": "577feed9762b14b79aa1a9905dfcf194a3a57f2b98efe505dcb5ce7b68c91407"
+  "0647_who_may_operate_the_deployment.sql": "577feed9762b14b79aa1a9905dfcf194a3a57f2b98efe505dcb5ce7b68c91407",
+  "0648_one_resolver_for_deployment_credentials.sql": "3bb7a01c1c588e13c4462e95ee0bf558faa9b690330130da0d4f36cedcd878c5"
 }

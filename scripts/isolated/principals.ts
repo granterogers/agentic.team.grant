@@ -414,7 +414,11 @@ check(
   )
   check(
     "a test member cannot change a REAL specialist's grants",
-    still === 1 && /test principal/i.test(JSON.stringify(r.body)),
+    // Refused at the gateway (403, an operator is required - P1.3) or by the database's own test-principal rule;
+    // the property is that the grant is unchanged, not which layer said no first.
+    still === 1 &&
+      r.status === 403 &&
+      (/test principal/i.test(JSON.stringify(r.body)) || r.body.error === 'operator_required'),
     `held ${String(still)} ${JSON.stringify(r.body).slice(0, 90)}`,
   )
 }

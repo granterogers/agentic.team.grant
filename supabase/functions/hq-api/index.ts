@@ -1689,6 +1689,46 @@ const json = (body: unknown, status = 200): Response =>
     },
   })
 
+/*
+  AUTHORIZE THE TARGET BEFORE ANYTHING IS WRITTEN (multi-user P1.4, 0650).
+
+  An upload used to build its storage path from the request's own project and contact ids, write the object, and
+  only afterwards ask the database whether either was real. The order is the defect: authenticate, then
+  authorize the DATABASE target, then write the object. `hq_upload_target` answers with the canonical project
+  (read from the row, never from the request) or the SAME refusal for a missing, mismatched or off-limits target.
+  Nothing is written to storage unless it says ok, and the path is built from what it returned.
+*/
+const uploadTarget = async (
+  uploadKind: 'contact_photo' | 'document_upload',
+  projectId: string,
+  contactId: string | null,
+  by: string | null,
+): Promise<{ projectId: string } | { error: string }> => {
+  const asked = await fetch(`${DB_URL}/rest/v1/rpc/hq_upload_target`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      p_kind: uploadKind,
+      p_project_id: projectId,
+      p_contact_id: contactId,
+      p_by: by,
+    }),
+  }).catch(() => null)
+  if (asked === null || !asked.ok) return { error: 'could not check the target' }
+  const answer = (await asked.json().catch(() => ({}))) as {
+    ok?: boolean
+    project_id?: string
+    error?: string
+  }
+  return answer.ok === true && typeof answer.project_id === 'string'
+    ? { projectId: answer.project_id }
+    : { error: String(answer.error ?? 'no such target') }
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return json({ ok: true })
 
@@ -1899,6 +1939,23 @@ Deno.serve(async (request: Request): Promise<Response> => {
       if (!/^[0-9a-f-]{36}$/i.test(contactId)) return json({ error: 'which contact?' }, 400)
       if (!/^[0-9a-f-]{36}$/i.test(projectId)) return json({ error: 'which project?' }, 400)
 
+      /*
+        The contact must be this project's, and a test member only reaches a test project. Asked BEFORE the
+        photograph is decoded or stored, and the path below is built from the project the database returns.
+      */
+      const target = await uploadTarget(
+        'contact_photo',
+        projectId,
+        contactId,
+        kind === 'service' ? null : principal,
+      )
+      if ('error' in target) {
+        return json(
+          { error: target.error },
+          target.error === 'could not check the target' ? 503 : 404,
+        )
+      }
+
       /* Removing one is the same action with nothing attached. */
       /*
         Whether the RPC accepted the write. The response below is unchanged
@@ -1951,7 +2008,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           .split('/')[1]
           ?.replace(/[^a-z0-9]+/g, '')
           .slice(0, 5) ?? 'jpg'
-      const path = `${projectId}/contacts/${contactId}.${ext}`
+      const path = `${target.projectId}/contacts/${contactId}.${ext}`
       const put = await fetch(`${DB_URL}/storage/v1/object/files/${path}`, {
         method: 'POST',
         headers: {
@@ -2025,6 +2082,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
         }
       }
 
+      /* Authorized against the database BEFORE the bytes are decoded or stored (0650). */
+      const target = await uploadTarget('document_upload', projectId, null, principal)
+      if ('error' in target) {
+        return json(
+          { error: target.error },
+          target.error === 'could not check the target' ? 503 : 404,
+        )
+      }
+
       /*
         Decoded here so the SIZE is the real one. A base64 string is a third
         larger than what it stands for, and refusing on the encoded length
@@ -2067,7 +2133,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '')
         .slice(0, 8)
-      const path = `${projectId}/upload/${crypto.randomUUID()}${ext === '' ? '' : `.${ext}`}`
+      const path = `${target.projectId}/upload/${crypto.randomUUID()}${ext === '' ? '' : `.${ext}`}`
 
       const put = await fetch(`${DB_URL}/storage/v1/object/files/${path}`, {
         method: 'POST',
