@@ -8,7 +8,7 @@
 > `LEGACY-BRANCH-REVIEW.md`. The original audit stays closed. **Three present-day weaknesses were found and are NOT fixed**
 > (change freeze): `voice-token` has no authentication (E1, HIGH); any signed-in session or the machine key can browse
 > Grant's Google Drive (E13); a `person` session may run system-wide actions (E14). They are Phase 1 of the plan and do not
-> depend on the rest.
+> depend on the rest. Issues: #400 (voice), #401 (Drive/operator actions), #402 (implementation tracker), #399 (commented).
 
 > ## 2026-10-01 - FINAL POLICY CLOSURE: ORIGINAL ARCHITECTURE AUDIT: CLOSED
 >
