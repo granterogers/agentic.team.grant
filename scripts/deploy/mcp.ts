@@ -16,7 +16,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { bundleForm } from './lib/bundle.ts'
 import { DeliveryService } from '../../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
@@ -36,13 +36,10 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 // --- deploy -----------------------------------------------------------------
 
-const entrypoint = await readFile('supabase/functions/mcp/index.ts', 'utf8')
-const form = new FormData()
-form.append(
-  'metadata',
-  JSON.stringify({ name: 'mcp', entrypoint_path: 'index.ts', verify_jwt: false }),
-)
-form.append('file', new File([entrypoint], 'index.ts', { type: 'application/typescript' }))
+// The function asks src/auth/speaker.ts who is consenting, so it ships its import graph (as voice does).
+const mcpBundle = await bundleForm('mcp', 'supabase/functions/mcp/index.ts')
+const form = mcpBundle.form
+console.log(`mcp: bundling ${String(mcpBundle.files)} file(s) from the import graph`)
 
 const deployed = await fetch(`${api}/functions/deploy?slug=mcp`, {
   method: 'POST',
@@ -131,8 +128,7 @@ if (token !== null) {
   const chat =
     pager === null
       ? null
-      : (await db.execute(`select app.operator_chat(${lit(pager.botId)}) as c`))
-          .rows[0]?.c
+      : (await db.execute(`select app.operator_chat(${lit(pager.botId)}) as c`)).rows[0]?.c
   if (pager === null || chat === null || chat === undefined) {
     console.error(
       '\nThe client is registered but the token could not be delivered: no Telegram chat.\n' +

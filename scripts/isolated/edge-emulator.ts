@@ -88,7 +88,18 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
       const headers = init?.headers as Record<string, string> | undefined
       const token = String(headers?.Authorization ?? '').replace(/^Bearer\s+/i, '')
       const email = o.authUsers?.[token]
-      return email === undefined ? reply(401, {}) : reply(200, { email, email_confirmed_at: 'x' })
+      if (email === undefined) return reply(401, {})
+      // The identity service also answers the auth user's id (P3: the office is resolved from the id, not the address).
+      const found = await o.db
+        .execute(
+          `select id::text as id from auth.users where lower(email) = ${lit(email.toLowerCase())} limit 1`,
+        )
+        .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+      return reply(200, {
+        id: (found.rows[0] as { id?: string } | undefined)?.id,
+        email,
+        email_confirmed_at: 'x',
+      })
     }
     if (path === '/auth/v1/admin/generate_link') {
       const asked = JSON.parse(String(init?.body ?? '{}')) as { email?: string }
@@ -140,11 +151,24 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
     try {
       if (path.startsWith('/rest/v1/rpc/')) {
         const fn = path.slice('/rest/v1/rpc/'.length)
-        const args = Object.entries(body)
-          .map(
-            ([k, v]) =>
-              `${k} => ${v === null ? 'null' : typeof v === 'boolean' || typeof v === 'number' ? String(v) : typeof v === 'object' ? `${lit(JSON.stringify(v))}::jsonb` : lit(String(v))}`,
+        // PostgREST converts a JSON array to the parameter's own type; the stand-in does the same for text[] parameters.
+        const signature = (
+          await o.db.execute(
+            `select string_agg(pg_get_function_arguments(p.oid), ' | ') as a from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = ${lit(fn)}`,
           )
+        ).rows[0] as { a?: string | null } | undefined
+        const textArray = (k: string): boolean =>
+          new RegExp(`\\b${k} text\\[\\]`).test(signature?.a ?? '')
+        const args = Object.entries(body)
+          .map(([k, v]) => {
+            if (v === null) return `${k} => null`
+            if (typeof v === 'boolean' || typeof v === 'number') return `${k} => ${String(v)}`
+            if (Array.isArray(v) && textArray(k))
+              return `${k} => array[${v.map((x) => lit(String(x))).join(', ')}]::text[]`
+            return typeof v === 'object'
+              ? `${k} => ${lit(JSON.stringify(v))}::jsonb`
+              : `${k} => ${lit(String(v))}`
+          })
           .join(', ')
         const sql = setReturning.has(fn)
           ? `${AS_POSTGREST} select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) as r from public.${fn}(${args}) t`

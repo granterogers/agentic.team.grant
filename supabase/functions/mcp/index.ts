@@ -38,6 +38,8 @@
  * everything rather than waving requests through.
  */
 
+import { resolveSpeaker } from '../../../src/auth/speaker.ts'
+
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
@@ -417,7 +419,7 @@ const consentPage = (
   ${[...params.entries()]
     .map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`)
     .join('')}
-  <input type="password" name="hq_password" placeholder="Team HQ password" autofocus
+  <input type="password" name="hq_password" placeholder="Your Team HQ sign-in token" autofocus
     autocomplete="current-password">
   <button type="submit">Allow</button>
   ${error === undefined ? '' : `<div class="err">${escapeHtml(error)}</div>`}
@@ -431,7 +433,10 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** Constant-time-ish comparison of the one password this accepts. */
+/** A Supabase session is a three-part JWT of real length; the machine key is not. */
+const looksLikeSession = (v: string): boolean => v.split('.').length === 3 && v.length > 60
+
+/** Constant-time-ish comparison of the machine key (binds to the TEST office only). */
 const passwordMatches = async (presented: string): Promise<boolean> => {
   if (HQ_TOKEN === '' || presented === '') return false
   const [a, b] = await Promise.all([sha256(presented), sha256(HQ_TOKEN)])
@@ -528,14 +533,39 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return html(consentPage(shown, params))
     }
 
-    if (!(await passwordMatches(params.get('hq_password') ?? ''))) {
+    /*
+      WHO IS CONSENTING decides WHICH OFFICE this client will belong to for the rest of its life (P3). The machine key
+      names nobody, so it can no longer consent for a real office: it binds the client to the TEST office (the office
+      every harness credential belongs to). A signed-in person consents with their own session, and the client is bound to
+      the office THEIR LOGIN resolved to. Neither can name an office; nothing in the form can.
+    */
+    const offered = params.get('hq_password') ?? ''
+    let consentOffice: string | null = null
+    if (looksLikeSession(offered)) {
+      const who = await resolveSpeaker(offered, {
+        hqToken: HQ_TOKEN,
+        supabaseUrl: DB_URL,
+        anonKey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        serviceKey: SERVICE_KEY,
+      })
+      if (who !== null && who.kind !== 'service' && who.office !== null) consentOffice = who.office
+    } else if (await passwordMatches(offered)) {
+      const machine = (await rpc('resolve_machine_office', {}).catch(() => null)) as {
+        ok?: boolean
+        office_id?: string
+      } | null
+      if (machine?.ok === true && typeof machine.office_id === 'string')
+        consentOffice = machine.office_id
+    }
+    if (consentOffice === null) {
       const retry = new URLSearchParams(params)
       retry.delete('hq_password')
-      return html(consentPage(shown, retry, 'That password was not accepted.'), 401)
+      return html(consentPage(shown, retry, 'That was not accepted.'), 401)
     }
 
     const code = randomToken('mcpa')
     const issued = (await rpc('mcp_issue_code', {
+      p_office: consentOffice,
       p_client_id: clientId,
       p_redirect_uri: redirectUri,
       p_code_sha256: await sha256(code),
@@ -622,9 +652,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const clients = (await rpc('mcp_client_for', { p_token_sha256: await sha256(presented) })) as {
     client_id?: string
     scopes?: string[]
+    office_id?: string
   }[]
   const client = clients[0]
-  if (client?.client_id === undefined) {
+  // A client with no office is not a client: the credential itself must establish the office (P3).
+  if (client?.client_id === undefined || typeof client.office_id !== 'string') {
     return new Response(JSON.stringify({ error: 'unauthorized' }), {
       status: 401,
       headers: {
@@ -635,6 +667,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     })
   }
 
+  const clientOffice: string = client.office_id
   let body: { jsonrpc?: string; id?: unknown; method?: string; params?: Record<string, unknown> }
   try {
     body = (await request.json()) as typeof body
@@ -694,6 +727,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
     if (spec === undefined) {
       await rpc('mcp_record_call', {
+        p_office: clientOffice,
         p_client_id: client.client_id,
         p_tool: name,
         p_arguments: input,
@@ -716,9 +750,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
         return rpcError(id, -32_602, `${name} needs the write scope; this client is read-only`)
       }
 
-      const result = await rpc(spec.fn, spec.args(input, client.client_id))
+      // The OFFICE is the client's own - resolved from the token, never from anything the model sent.
+      const result = await rpc(spec.fn, {
+        p_office: clientOffice,
+        ...spec.args(input, client.client_id),
+      })
       const rows = Array.isArray(result) ? result.length : 1
       await rpc('mcp_record_call', {
+        p_office: clientOffice,
         p_client_id: client.client_id,
         p_tool: name,
         p_arguments: input,
@@ -736,6 +775,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       })
     } catch (error) {
       await rpc('mcp_record_call', {
+        p_office: clientOffice,
         p_client_id: client.client_id,
         p_tool: name,
         p_arguments: input,
