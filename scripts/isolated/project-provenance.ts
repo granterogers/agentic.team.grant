@@ -238,10 +238,18 @@ const name = (id: unknown) =>
   await db.execute(`insert into public.outputs (job_id, body, confidence, evidence, sources, deterministic)
     values (${lit(String(a.job))}::uuid, ${lit(`The answer for A ${run}`)}, 'high', 'verified', '["db:test"]'::jsonb, true)`)
   const inA = String(
-    (await one(`select public.conversation_history(${lit(A)}::uuid, 50, null)::text as t`)).t,
+    (
+      await one(
+        `select public.conversation_history(app.test_office(), ${lit(A)}::uuid, 50, null)::text as t`,
+      )
+    ).t,
   )
   const inB = String(
-    (await one(`select public.conversation_history(${lit(B)}::uuid, 50, null)::text as t`)).t,
+    (
+      await one(
+        `select public.conversation_history(app.test_office(), ${lit(B)}::uuid, 50, null)::text as t`,
+      )
+    ).t,
   )
   check(
     "9. A's answer is in A's conversation",

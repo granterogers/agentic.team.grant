@@ -60,7 +60,7 @@ type Row = {
 console.log('\nverify:lately\n')
 
 const page = (
-  (await db.execute(`select app.hq_studio_lately(40) as v`)).rows[0] as {
+  (await db.execute(`select app.hq_studio_lately(app.sole_person_office(), 40) as v`)).rows[0] as {
     v: Record<string, unknown>
   }
 ).v
@@ -155,7 +155,7 @@ check(
 const onFixtures = (
   await db.execute(`
     select count(*)::int as n
-      from jsonb_array_elements(app.hq_studio_lately(40) -> 'office') r
+      from jsonb_array_elements(app.hq_studio_lately(app.sole_person_office(), 40) -> 'office') r
       join public.projects p on p.name = (r ->> 'project')
      where p.is_fixture
   `)

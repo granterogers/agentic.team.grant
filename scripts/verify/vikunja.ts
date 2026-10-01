@@ -367,14 +367,14 @@ try {
     String(
       (
         await one(`
-      select count(*)::int as n from jsonb_array_elements(app.task_sync_trouble(${lit(PROVIDER)})) e
+      select count(*)::int as n from jsonb_array_elements(app.task_sync_trouble(app.test_office(), ${lit(PROVIDER)})) e
        where e ->> 'task_id' = ${lit(c)}`)
       ).n,
     ),
     Number(
       (
         await one(`
-      select count(*)::int as n from jsonb_array_elements(app.task_sync_trouble(${lit(PROVIDER)})) e
+      select count(*)::int as n from jsonb_array_elements(app.task_sync_trouble(app.test_office(), ${lit(PROVIDER)})) e
        where e ->> 'task_id' = ${lit(c)}`)
       ).n,
     ) === 1,

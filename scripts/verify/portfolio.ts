@@ -67,7 +67,8 @@ interface Portfolio {
 }
 
 const portfolio = async (): Promise<Portfolio> =>
-  ((await one('select app.hq_portfolio_tasks() as p')).p ?? {}) as unknown as Portfolio
+  ((await one('select app.hq_portfolio_tasks(app.test_office()) as p')).p ??
+    {}) as unknown as Portfolio
 
 /*
   Real subjects, and NOT marked `verify:` — Issue #45's trap, walked into once

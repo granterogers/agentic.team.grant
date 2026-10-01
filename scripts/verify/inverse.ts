@@ -523,7 +523,11 @@ check(
 
 console.log('\nand the strip the person actually sees')
 
-const studio = ((await db.execute('select app.hq_studio() as d')).rows[0] as { d: unknown }).d
+const studio = (
+  (await db.execute('select app.hq_studio(app.sole_person_office()) as d')).rows[0] as {
+    d: unknown
+  }
+).d
 
 const server = createServer(async (rq, rs) => {
   let f = join('web/studio', decodeURIComponent((rq.url ?? '/').split('?')[0] ?? '/'))

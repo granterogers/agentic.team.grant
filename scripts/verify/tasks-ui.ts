@@ -1140,7 +1140,7 @@ try {
           `"${String(await page.locator('[data-vikunja-token]').inputValue())}"`,
           (await page.locator('[data-vikunja-token]').inputValue()) === '',
         )
-        const panel = (await one('select app.task_sync_panel() as v')).v as
+        const panel = (await one('select app.task_sync_panel(app.test_office()) as v')).v as
           | Record<string, unknown>
           | string
         const read = (typeof panel === 'string' ? JSON.parse(panel) : panel) as {

@@ -69,7 +69,9 @@ check(
   `harness_job ${String(c.h)}/${String(c.r)}, is_fixture ${String(c.f)}`,
 )
 
-const hist = (await one(`select app.conversation_history(${lit(project)}::uuid, 100) as v`)).v as {
+const hist = (
+  await one(`select app.conversation_history(app.test_office(), ${lit(project)}::uuid, 100) as v`)
+).v as {
   body: string
   kind: string
 }[]

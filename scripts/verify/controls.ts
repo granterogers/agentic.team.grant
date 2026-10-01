@@ -84,11 +84,11 @@ const TYPES: Record<string, string> = {
   empty-state action — which is forty-odd controls more than one.
 */
 const HQ_SECTIONS: Readonly<Record<string, string>> = {
-  overview: 'app.hq_overview()',
+  overview: 'app.hq_overview(app.sole_person_office())',
   staff: 'app.hq_staff()',
-  usage: 'app.hq_usage()',
-  activity: 'app.hq_activity(50)',
-  series: 'app.hq_series(30)',
+  usage: 'app.hq_usage(app.sole_person_office())',
+  activity: 'app.hq_activity(app.sole_person_office(), 50)',
+  series: 'app.hq_series(app.sole_person_office(), 30)',
   connections: 'app.hq_connections()',
   projects: 'app.hq_projects()',
   artifacts: 'app.hq_artifacts()',
@@ -96,7 +96,7 @@ const HQ_SECTIONS: Readonly<Record<string, string>> = {
   team: 'app.hq_team()',
   google: 'app.hq_google()',
   setup: 'app.hq_setup()',
-  cost: 'app.hq_cost_per_outcome(30)',
+  cost: 'app.hq_cost_per_outcome(app.sole_person_office(), 30)',
   bots: 'app.hq_bots()',
   routing: 'app.hq_routing()',
   build: 'app.hq_build()',

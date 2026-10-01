@@ -173,6 +173,10 @@ const db = new ManagementApiExecutor(
   token,
 )
 
+// P3: these read the dashboard of the person whose pages are being captured, so they name that office first.
+const OFFICE_FIRST = new Set(['hq_studio', 'usage_overview', 'hq_studio_lately'])
+const callOf = (fn: string, args: string): string =>
+  `app.${fn}(${OFFICE_FIRST.has(fn) ? `app.sole_person_office()${args === '' ? '' : `, ${args}`}` : args})`
 const sections: Record<string, unknown> = {}
 for (const [name, fn] of SECTIONS) {
   // Two of these take an argument, and calling them without one is a different
@@ -187,7 +191,7 @@ for (const [name, fn] of SECTIONS) {
         : fn === 'hq_governance'
           ? '40'
           : ''
-  const { rows } = await db.execute(`select app.${fn}(${args}) as d`)
+  const { rows } = await db.execute(`select ${callOf(fn, args)} as d`)
   sections[name] = (rows[0] as { d: unknown }).d
 }
 console.log(`Captured ${String(Object.keys(sections).length)} sections of real data.\n`)
