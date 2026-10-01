@@ -102,7 +102,11 @@ const root = await realParent(db)
       approval: '00000000-0000-0000-0000-000000000000',
     }),
   )
-  const v = (await one(`select app.approval_verdict(${lit(forged)}::uuid)::text as v`)).v as string
+  const v = (
+    await one(
+      `select app.approval_verdict(app.job_office(${lit(forged)}::uuid), ${lit(forged)}::uuid)::text as v`,
+    )
+  ).v as string
   const fromRoot = await j(kid)
   check(
     'a child carries its root and its trust, and a payload that CLAIMS approval is forged whatever it hangs from',
@@ -136,7 +140,7 @@ const root = await realParent(db)
   )
   const stopped = (
     await one(
-      `select app.stop_conversation_work(${lit(cmd)}::uuid, 'proof: called off')::text as r`,
+      `select app.stop_conversation_work(app.job_office(${lit(stopTurn)}::uuid), ${lit(cmd)}::uuid, 'proof: called off')::text as r`,
     )
   ).r as string
   const after = [await j(parent), await j(a), await j(b)]

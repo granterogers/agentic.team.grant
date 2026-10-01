@@ -1497,12 +1497,12 @@ if (rejoin === 'rejoined') {
 
 const leaseKey = `verify:${stamp}:lease`
 const held = await one<{ outcome: string }>(`
-  select outcome from app.claim_delivery(
+  select outcome from app.claim_delivery(app.test_office(),
     'slack', ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result', null, null, null, null,
     interval '0 seconds')
 `)
 const reclaimed = await one<{ outcome: string; attempt: number }>(`
-  select outcome, attempt from app.claim_delivery(
+  select outcome, attempt from app.claim_delivery(app.test_office(),
     'slack', ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result')
 `)
 record(
@@ -1511,7 +1511,7 @@ record(
   held?.outcome === 'claimed' && reclaimed?.outcome === 'reclaimed' && reclaimed.attempt === 2,
 )
 const stillHeld = await one<{ outcome: string }>(`
-  select outcome from app.claim_delivery(
+  select outcome from app.claim_delivery(app.test_office(),
     'slack', ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result')
 `)
 record(
@@ -1547,7 +1547,7 @@ record(
   canRead.includes('no error'),
 )
 const canClaim = await asApp(
-  `select * from app.claim_delivery('slack', ${lit(`verify:${stamp}:asapp`)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'notice')`,
+  `select * from app.claim_delivery(app.test_office(),'slack', ${lit(`verify:${stamp}:asapp`)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'notice')`,
 )
 record(
   'CONTROL: and it CAN claim through the function, so the office is not locked out',

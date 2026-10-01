@@ -44,7 +44,9 @@ const STATES: ReadonlySet<string> = new Set([
 ])
 
 export const checkApproval = async (db: SqlExecutor, jobId: string): Promise<ApprovalCheck> => {
-  const { rows } = await db.execute(`select app.approval_verdict(${lit(jobId)}::uuid) as v`)
+  const { rows } = await db.execute(
+    `select app.approval_verdict(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid) as v`,
+  )
   const raw = rows[0]?.v
   const v = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {})) as Record<string, unknown>
   // An answer nobody recognises is not an approval.

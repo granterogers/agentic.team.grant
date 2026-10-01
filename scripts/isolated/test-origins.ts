@@ -124,7 +124,8 @@ const origin = async (job: string) =>
 const claim = async (job: string, key: string, target = CHAT, channel = 'telegram') =>
   one(`select outcome, coalesce((select suppressed_reason from public.deliveries
         where dedupe_key = ${lit(key)}), '') as why
-      from app.claim_delivery(${lit(channel)}, ${lit(key)}, ${lit(BOT)}, ${lit(target)}, 'result',
+      from app.claim_delivery(app.job_office(${lit(job)}::uuid),
+        ${lit(channel)}, ${lit(key)}, ${lit(BOT)}, ${lit(target)}, 'result',
         null, null, null, ${lit(job)}::uuid)`)
 const child = async (parent: string, kind = 'office.synthesise') =>
   String(

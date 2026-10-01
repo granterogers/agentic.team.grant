@@ -102,8 +102,11 @@ for (const fragment of FRAGMENTS) {
         returning command_id::text as v`)
     ).v ?? '',
   )
-  const history = (await db.execute(`select app.recent_exchange(${lit(cmd)}::uuid, 90, 12) as t`))
-    .rows[0] as { t?: unknown[] } | undefined
+  const history = (
+    await db.execute(
+      `select app.recent_exchange((select office.office_id from public.inbound_commands office where office.command_id = ${lit(cmd)}::uuid), ${lit(cmd)}::uuid, 90, 12) as t`,
+    )
+  ).rows[0] as { t?: unknown[] } | undefined
   console.log(`\n"${fragment}"`)
   console.log(`  history it saw   : ${String((history?.t ?? []).length)} turn(s)`)
   const resolved = await resolveAgainstThread(db, router, cmd, fragment)

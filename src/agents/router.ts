@@ -226,20 +226,35 @@ export const NO_DISTINCTIVE_TERMS = '(no distinctive terms)'
  * one the POC gates kept teaching: a check that cannot fail is not a check,
  * and a schema can enforce that a search happened without noticing that the
  * search was pointed at the wrong column.
+ *
+ * It looks only at the CALLER'S OFFICE's jobs (multi-user P3). It used to match on subject terms alone, with the
+ * project as an optional narrowing - so an instruction with no project could be "linked to" a live job of ANOTHER
+ * office that shared two words with it. The office is the claimed job's (`jobId`), else the project's, else the test
+ * office (a harness with neither is harness traffic).
  */
 export const scanForDuplicates = async (
   db: SqlExecutor,
   instruction: string,
   options: {
-    /** SQL for the office the scan is confined to: the CLAIMED job's (app.job_office of it). */
-    office: string
+    /** SQL for the office the scan is confined to, when the caller names it (the claimed job's, or a script's). */
+    office?: string | undefined
     projectId?: string | undefined
-  },
+    jobId?: string | undefined
+  } = {},
 ): Promise<DuplicateScan> => {
   const derived = searchTerms(instruction)
   const terms = derived.length > 0 ? derived : [NO_DISTINCTIVE_TERMS]
 
-  const coverage = await db.execute(`select app.unrouted_live_jobs() as n`)
+  const office =
+    options.office !== undefined && options.office !== ''
+      ? options.office
+      : options.jobId !== undefined && options.jobId !== ''
+        ? `app.job_office(${lit(options.jobId)}::uuid)`
+        : options.projectId !== undefined && options.projectId !== ''
+          ? `(select p.office_id from public.projects p where p.project_id = ${lit(options.projectId)}::uuid)`
+          : 'app.test_office()'
+
+  const coverage = await db.execute(`select app.unrouted_live_jobs(${office}) as n`)
   const unroutedLiveJobs = Number(coverage.rows[0]?.n ?? 0)
 
   if (derived.length === 0) {
@@ -272,7 +287,7 @@ export const scanForDuplicates = async (
            s.terms::text as shared_terms, cardinality(s.terms) as matched
     from shared s
     join public.jobs j on j.job_id = s.job_id
-    where j.office_id = ${options.office}
+    where j.office_id = ${office}
       and j.state not in ('complete', 'cancelled', 'failed')
       ${scopeClause}
     order by matched desc, j.created_at desc

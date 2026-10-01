@@ -195,10 +195,11 @@ check(
 )
 
 // ---- 3. create authority cannot delete --------------------------------------------------------------------------
+const deleteJob = (await w.dutyJob('tasks.sync')).jobId
 const decision = json(
   (
     await one(
-      `select app.authorize_effect(p_project => null, p_tool => 'task.board.delete', p_job => ${lit((await w.dutyJob('tasks.sync')).jobId)}::uuid,
+      `select app.authorize_effect(p_office => app.job_office(${lit(deleteJob)}::uuid), p_project => null, p_tool => 'task.board.delete', p_job => ${lit(deleteJob)}::uuid,
          p_fingerprint => 'x', p_scope => ${lit(`vikunja:${BOARD}#7`)}) as d`,
     )
   ).d,
@@ -359,10 +360,11 @@ check(
   live.length === 1 && live[0]?.scope_ref === 'vikunja:https://other.example.test#9',
   JSON.stringify(live),
 )
+const staleJob = (await w.dutyJob('tasks.sync')).jobId
 const staleDecision = json(
   (
     await one(
-      `select app.authorize_effect(p_project => null, p_tool => 'task.board.write', p_job => ${lit((await w.dutyJob('tasks.sync')).jobId)}::uuid,
+      `select app.authorize_effect(p_office => app.job_office(${lit(staleJob)}::uuid), p_project => null, p_tool => 'task.board.write', p_job => ${lit(staleJob)}::uuid,
          p_scope => ${lit(`vikunja:${BOARD}#7`)}) as d`,
     )
   ).d,

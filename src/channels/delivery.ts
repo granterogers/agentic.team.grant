@@ -120,6 +120,13 @@ export interface DeliveryRequest {
   readonly correlationId?: string | null
   readonly jobId?: string | null
   /**
+   * The office this message is sent FOR. Almost every sender has a job and leaves this out: the office is then the
+   * job's (`app.delivery_office`). A sender with no job passes it, or - if the destination is a registered test
+   * destination or the sender a registered operator - gets the test or the operator's office. Never a value taken from
+   * a request: a delivery claimed for the wrong office is a message sent in the wrong person's name.
+   */
+  readonly officeId?: string | null
+  /**
    * The question this message asks, when it asks one (#396, 0623). Recorded on the delivery BEFORE the message is
    * sent, so a press or a reply to it names exactly this question - not the latest one its job happened to have.
    * A message that asks nothing leaves it out, and a press on it answers nothing.
@@ -163,7 +170,8 @@ export class DeliveryService {
    * because then nothing about the claim can be trusted.
    */
   async deliver(request: DeliveryRequest): Promise<DeliveryResult> {
-    const claim = await this.claim(request)
+    const office = this.officeFor(request)
+    const claim = await this.claim(request, office)
     const base = { deliveryId: claim.delivery_id, attempt: claim.attempt, errorCode: null }
     // Named before it can be answered. Never throws: a message that could not be bound still goes out, and a press
     // or a reply on it answers nothing (fail closed), which is better than a question nobody was told about.
@@ -174,7 +182,7 @@ export class DeliveryService {
     ) {
       await this.db
         .execute(
-          `select app.bind_delivery(${lit(claim.delivery_id)}::uuid, ${lit(request.blockerId)}::uuid)`,
+          `select app.bind_delivery(${office}, ${lit(claim.delivery_id)}::uuid, ${lit(request.blockerId)}::uuid)`,
         )
         .catch(() => undefined)
     }
@@ -208,11 +216,11 @@ export class DeliveryService {
         body: request.body,
       })
     } catch (error) {
-      return this.recordFailure(claim, error)
+      return this.recordFailure(claim, error, office)
     }
 
     const recorded = await this.one<{ outcome: string }>(
-      `select app.record_delivery_sent(${lit(claim.delivery_id)}::uuid, ${lit(result.messageRef)}, ${nul(result.link)}) as outcome`,
+      `select app.record_delivery_sent(${office}, ${lit(claim.delivery_id)}::uuid, ${lit(result.messageRef)}, ${nul(result.link)}) as outcome`,
     )
 
     return {
@@ -238,6 +246,8 @@ export class DeliveryService {
     readonly targetRef: string
     readonly dedupeKey: string
     readonly threadRef?: string | null
+    /** The delivery's office. Left out, it is the office the delivery row itself belongs to. */
+    readonly officeId?: string | null
   }): Promise<{ readonly resolution: string; readonly messageRef: string | null }> {
     if (this.transport.reconcile === undefined) {
       return { resolution: 'unreconcilable', messageRef: null }
@@ -252,8 +262,14 @@ export class DeliveryService {
       request.threadRef,
     )
 
+    // No job to derive an office from here (this is an operator's reconciliation of a row): the row is the held id, so
+    // its own office is the delivery's. An explicit office, when the caller has one, is checked against the row.
+    const office =
+      request.officeId === undefined || request.officeId === null
+        ? `(select d.office_id from public.deliveries d where d.delivery_id = ${lit(request.deliveryId)}::uuid)`
+        : `${lit(request.officeId)}::uuid`
     const row = await this.one<{ resolution: string }>(
-      `select app.resolve_indeterminate_delivery(${lit(request.deliveryId)}::uuid, ${nul(found)}) as resolution`,
+      `select app.resolve_indeterminate_delivery(${office}, ${lit(request.deliveryId)}::uuid, ${nul(found)}) as resolution`,
     )
     return { resolution: row?.resolution ?? 'unknown', messageRef: found }
   }
@@ -264,10 +280,24 @@ export class DeliveryService {
     return this.transport.retract(targetRef, messageRef)
   }
 
-  private async claim(request: DeliveryRequest): Promise<ClaimRow> {
+  /**
+   * The SQL expression for the office this request is sent for: the explicit one, else the job's (the claimed job the
+   * sender holds), else - for a job-less sender - the test office for a registered test destination or the operator's.
+   * Evaluated in the database, once per statement, from rows the sender already holds.
+   */
+  private officeFor(request: DeliveryRequest): string {
+    if (request.officeId !== undefined && request.officeId !== null)
+      return `${lit(request.officeId)}::uuid`
+    const job =
+      request.jobId === null || request.jobId === undefined ? 'null' : `${lit(request.jobId)}::uuid`
+    return `app.delivery_office(${job}, ${lit(this.transport.channel)}, ${lit(request.targetRef)})`
+  }
+
+  private async claim(request: DeliveryRequest, office: string): Promise<ClaimRow> {
     const row = await this.one<ClaimRow>(`
       select delivery_id::text as delivery_id, outcome, message_ref, attempt
       from app.claim_delivery(
+        ${office},
         ${lit(this.transport.channel)},
         ${lit(request.dedupeKey)},
         ${lit(request.accountRef)},
@@ -283,7 +313,11 @@ export class DeliveryService {
     return row
   }
 
-  private async recordFailure(claim: ClaimRow, error: unknown): Promise<DeliveryResult> {
+  private async recordFailure(
+    claim: ClaimRow,
+    error: unknown,
+    office: string,
+  ): Promise<DeliveryResult> {
     if (!(error instanceof TransportError)) throw error
 
     // `indeterminate` is NOT recorded as retryable. Releasing the lease would
@@ -292,7 +326,7 @@ export class DeliveryService {
     // `resolveIndeterminate` — which requires having actually looked.
     const retryable = error.kind === 'retryable'
     await this.db.execute(
-      `select app.record_delivery_failure(${lit(claim.delivery_id)}::uuid, ${lit(error.code.slice(0, 200))}, ${retryable ? 'true' : 'false'}) as outcome`,
+      `select app.record_delivery_failure(${office}, ${lit(claim.delivery_id)}::uuid, ${lit(error.code.slice(0, 200))}, ${retryable ? 'true' : 'false'}) as outcome`,
     )
 
     return {

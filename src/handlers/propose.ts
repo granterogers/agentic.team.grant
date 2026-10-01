@@ -94,9 +94,11 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
 
         Fixtures excluded, which is the parameter's whole point (0297).
       */
-      const row = (await db.execute(`select app.raise_proposals(30, 3, false) as r`)).rows[0] as
-        | { r?: unknown }
-        | undefined
+      // The round is one OFFICE's: the claimed job's (multi-user P3), so the tally, the proposals and the delivered
+      // mark are all that office's, and a second office's duty raises and tells its own person only.
+      const office = `app.job_office('${job.jobId.replace(/'/g, "''")}'::uuid)`
+      const row = (await db.execute(`select app.raise_proposals(${office}, 30, 3, false) as r`))
+        .rows[0] as { r?: unknown } | undefined
       const raw = row?.r
       const outcome = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {})) as {
         raised?: number
@@ -174,7 +176,9 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
         rest keep their turn on the next round.
       */
       const waiting = asWaiting(
-        (await db.execute(`select app.proposals_to_send(5) as r`)).rows[0] as { r?: unknown },
+        (await db.execute(`select app.proposals_to_send(${office}, 5) as r`)).rows[0] as {
+          r?: unknown
+        },
       )
       if (waiting.length === 0) return { ...base, body: withRestored } satisfies HandlerOutput
 
@@ -205,7 +209,7 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
         the defect it exists to prevent.
       */
       await db.execute(
-        `select app.proposals_sent(array[${waiting
+        `select app.proposals_sent(${office}, array[${waiting
           .map((w) => `'${w.id.replace(/'/g, "''")}'::uuid`)
           .join(', ')}], '${job.jobId.replace(/'/g, "''")}'::uuid) as n`,
       )

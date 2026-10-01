@@ -18,7 +18,7 @@ const verdict = async (tool: string, audience: string | null = null): Promise<st
   const job = await w.dutyJob('office.chores')
   const r = (
     await one(
-      `select (app.authorize_effect(p_project => null, p_tool => ${lit(tool)}, p_audience => ${audience === null ? 'null' : lit(audience)},
+      `select (app.authorize_effect(p_office => app.job_office(${lit(job.jobId)}::uuid), p_project => null, p_tool => ${lit(tool)}, p_audience => ${audience === null ? 'null' : lit(audience)},
                  p_job => ${lit(job.jobId)}::uuid, p_fingerprint => ${lit(`fp-${tool}-${w.run}`)})) ->> 'verdict' as v`,
     )
   ).v

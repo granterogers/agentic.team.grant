@@ -431,7 +431,7 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
     made it invisible to 0491's guard on purpose -- and two crashed runs then
     sat in Grant's morning briefing for five days as the ONLY two rows in it,
     named to him as things that had failed three times. The office writes a
-    signature from exactly one place, app.failure_seen(job.kind, ...), so a
+    signature from exactly one place, failure_seen (job.kind, ...), so a
     genuine one always names a kind some job has had; the reader enforces that
     now, and this control has to use a real kind or it is asserting against
     the fix.
@@ -505,11 +505,11 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
       do $notice$
       begin
         begin
-          perform app.failure_seen(${lit(realKind)}, 'noticeproof',
+          perform app.failure_seen(app.job_office(${lit(String(real.id))}::uuid), ${lit(realKind)}, 'noticeproof',
                                    ${lit(subject)}, ${lit(String(real.id))}::uuid);
-          perform app.failure_seen(${lit(realKind)}, 'noticeproof',
+          perform app.failure_seen(app.job_office(${lit(String(real.id))}::uuid), ${lit(realKind)}, 'noticeproof',
                                    ${lit(subject)}, ${lit(String(real.id))}::uuid);
-          perform app.failure_seen(${lit(realKind)}, 'noticeproof',
+          perform app.failure_seen(app.job_office(${lit(String(real.id))}::uuid), ${lit(realKind)}, 'noticeproof',
                                    ${lit(subject)}, ${lit(String(real.id))}::uuid);
 
           if (select count(*) from app.recurring_failures(app.test_office(), 3, 14) f
@@ -545,7 +545,7 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
   */
   for (let i = 0; i < 3; i++) {
     await db.execute(`
-      select app.failure_seen(${lit(neverRan)}, 'drive', 'sub',
+      select app.failure_seen(app.job_office(${lit(String(real.id))}::uuid), ${lit(neverRan)}, 'drive', 'sub',
                               ${lit(String(real.id))}::uuid)`)
   }
   const hidden = await all(`

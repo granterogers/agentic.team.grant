@@ -215,7 +215,13 @@ const park = (id: string, reason: string, resumable: boolean) =>
     ).c,
   )
   const work = JSON.parse(
-    String((await one(`select app.conversation_work(${lit(cmd)}::uuid)::text as w`)).w),
+    String(
+      (
+        await one(
+          `select app.conversation_work((select office.office_id from public.inbound_commands office where office.command_id = ${lit(cmd)}::uuid), ${lit(cmd)}::uuid)::text as w`,
+        )
+      ).w,
+    ),
   ) as { obligation: string | null; waiting_on_you: number }
   check(
     'a turn parked with no child of its own is what "what is happening with that?" reports: waiting on a person',

@@ -367,6 +367,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           `)
           const { rows: asked } = await db.execute(`
             select app.request_generation_approval(
+              app.job_office(${lit(job.jobId)}::uuid),
               ${lit(job.jobId)}::uuid, ${lit(kind)},
               ${lit(`${LABEL[kind] ?? kind} for “${notebook.name}”`)},
               ${lit(`It costs about ${String(forecast.operationCost ?? 5)} of the notebook's allowance. ${describe(forecast)}`)}

@@ -58,7 +58,7 @@ const fanIn = async () => {
   if (branch === undefined) throw new Error('no branch job')
   const made = json(
     (
-      await one(`select app.fan_in_over(${lit(parent)}::uuid, 'What do the two of you make of the venue?',
+      await one(`select app.fan_in_over(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'What do the two of you make of the venue?',
         ${lit(JSON.stringify([{ agent: 'research-director', job_id: branch, purpose: 'what research makes of it' }]))}::jsonb,
         'office.synthesise', app.now_utc() + interval '20 minutes') as v`)
     ).v,

@@ -61,8 +61,8 @@ const contained = async (what: string, job: string | null) => {
     return
   }
   const pre = await one(`select app.harness_job(${lit(job)}::uuid) as h`)
-  const claim =
-    await one(`select outcome from app.claim_delivery('telegram', ${lit(`syn:${job}`)}, 'acct', ${lit(CHAT)},
+  const claim = await one(`select outcome from app.claim_delivery(app.job_office(${lit(job)}::uuid),
+      'telegram', ${lit(`syn:${job}`)}, 'acct', ${lit(CHAT)},
       'result', null, null, null, ${lit(job)}::uuid)`)
   const why = String(
     (

@@ -77,7 +77,7 @@ const gateway = async (auth: string | null, action: string, args: Record<string,
   )
   check('migrations 0616, 0617 and 0618 are applied', Number(m.n) === 3, `${String(m.n)} of 3`)
   const f = await one(
-    `select to_regprocedure('app.approval_verdict(uuid)') is not null as v, to_regprocedure('app.approval_for_delivery(uuid)') is not null as d, exists (select 1 from public.system_config where key = 'approval.fingerprints_from') as c`,
+    `select to_regprocedure('app.approval_verdict(uuid,uuid)') is not null as v, to_regprocedure('app.approval_for_delivery(uuid)') is not null as d, exists (select 1 from public.system_config where key = 'approval.fingerprints_from') as c`,
   )
   check(
     'the verdict, the delivery binding and the legacy cutoff exist',
@@ -181,7 +181,13 @@ const fixtureJob = async (kind: string, config: Record<string, unknown>) => {
   return c
 }
 const verdict = async (job: string) =>
-  json((await one(`select app.approval_verdict(${lit(job)}::uuid)::text as v`)).v)
+  json(
+    (
+      await one(
+        `select app.approval_verdict(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid)::text as v`,
+      )
+    ).v,
+  )
 
 // ---- approval binding: the verdict is decided by the question, not by the claim --------------------------------
 {

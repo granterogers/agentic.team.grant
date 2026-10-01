@@ -110,7 +110,9 @@ const name = (id: unknown) =>
     seq.map((x) => name(x.project)).join(' '),
   )
   const before = (
-    await one(`select app.conversation_before(${lit(String(seq[2]?.command))}::uuid)::text as t`)
+    await one(
+      `select app.conversation_before((select office.office_id from public.inbound_commands office where office.command_id = ${lit(String(seq[2]?.command))}::uuid), ${lit(String(seq[2]?.command))}::uuid)::text as t`,
+    )
   ).t
   const said = (JSON.parse(String(before)) as { said: string }[]).map((t) => t.said)
   check(

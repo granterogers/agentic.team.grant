@@ -602,7 +602,9 @@ try {
           )
         ).id,
       )
-      await one(`select app.bind_delivery(${lit(d)}::uuid, ${lit(blocker)}::uuid) as b`)
+      await one(
+        `select app.bind_delivery((select office.office_id from public.deliveries office where office.delivery_id = ${lit(d)}::uuid), ${lit(d)}::uuid, ${lit(blocker)}::uuid) as b`,
+      )
       return { d, ref: String(n) }
     }
     const da = await show(ja, qa)
@@ -614,15 +616,20 @@ try {
       (await named(da.d)) === qa && (await named(db2.d)) === qb,
       'A/B',
     )
-    const stale = await one(`select app.bind_delivery(${lit(da.d)}::uuid, ${lit(qb)}::uuid) as b`)
+    const stale = await one(
+      `select app.bind_delivery((select office.office_id from public.deliveries office where office.delivery_id = ${lit(da.d)}::uuid), ${lit(da.d)}::uuid, ${lit(qb)}::uuid) as b`,
+    )
     check(
       'a foreign-job question cannot be named by a message (foreign-project answer fails)',
       stale.b === false,
       String(stale.b),
     )
     const cands = async (cmd: string) =>
-      (await db.execute(`select id, bindable from app.open_questions_for_reply(${lit(cmd)}::uuid)`))
-        .rows as { id: string; bindable: boolean }[]
+      (
+        await db.execute(
+          `select id, bindable from app.open_questions_for_reply((select office.office_id from public.inbound_commands office where office.command_id = ${lit(cmd)}::uuid), ${lit(cmd)}::uuid)`,
+        )
+      ).rows as { id: string; bindable: boolean }[]
     const bare = await turn('yes')
     const got = await cands(String(bare.command))
     check(
@@ -681,7 +688,7 @@ try {
         String(
           (
             await one(
-              `select app.authorize_effect(p_project => ${lit(project)}::uuid, p_tool => 'notion.write', p_fingerprint => ${lit(f)}, p_job => ${job === null ? 'null' : `${lit(job)}::uuid`})::text as d`,
+              `select app.authorize_effect(p_office => (select x.office_id from public.projects x where x.project_id = ${lit(project)}::uuid), p_project => ${lit(project)}::uuid, p_tool => 'notion.write', p_fingerprint => ${lit(f)}, p_job => ${job === null ? 'null' : `${lit(job)}::uuid`})::text as d`,
             )
           ).d,
         ),
@@ -904,7 +911,7 @@ try {
       const planBlocker = String(
         (
           await one(
-            `select app.request_approval(${lit(j)}::uuid, 'Run the plan', 'final-audit-live fixture', 'office.execute_plan')::text as b`,
+            `select app.request_approval(app.job_office(${lit(j)}::uuid), ${lit(j)}::uuid, 'Run the plan', 'final-audit-live fixture', 'office.execute_plan')::text as b`,
           )
         ).b,
       )

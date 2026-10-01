@@ -28,8 +28,9 @@ describe('a scheduled duty says it once', () => {
   it('asks app.say_once with the OUTPUT BODY before writing announce', () => {
     // The body is what makes the question answerable. Passing the job alone
     // would compare nothing, and would pass a check that only sought the name.
+    // ...inside the CLAIMED job's office (0782): the first argument is derived from the job, never from the output.
     expect(worker).toMatch(
-      /app\.say_once\(\$\{lit\(job\.jobId\)\}::uuid,\s*\$\{lit\(output\.body\)\}/,
+      /app\.say_once\(app\.job_office\(\$\{lit\(job\.jobId\)\}::uuid\),\s*\$\{lit\(job\.jobId\)\}::uuid,\s*\$\{lit\(output\.body\)\}/,
     )
     /*
       AND THE TOPIC (#360), which is what lets it see past a rewording.

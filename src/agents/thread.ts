@@ -85,10 +85,17 @@ export async function exchange(
   commandId: string,
   minutes = 90,
   limit = 12,
+  jobId?: string,
 ): Promise<Turn[]> {
   if (commandId === '') return []
+  // Only this office's conversation (0783). The office is the claimed job's when the caller holds one; a caller with
+  // only the command (a harness, an operator script) reads it in the command's own office.
+  const office =
+    jobId !== undefined && jobId !== ''
+      ? `app.job_office(${lit(jobId)}::uuid)`
+      : `(select c.office_id from public.inbound_commands c where c.command_id = ${lit(commandId)}::uuid)`
   const { rows } = await db.execute(
-    `select app.recent_exchange(${lit(commandId)}::uuid, ${String(minutes)}, ${String(limit)}) as t`,
+    `select app.recent_exchange(${office}, ${lit(commandId)}::uuid, ${String(minutes)}, ${String(limit)}) as t`,
   )
   const turns = (rows[0] as { t?: Turn[] } | undefined)?.t
   return Array.isArray(turns) ? turns : []
@@ -113,7 +120,7 @@ export async function resolveAgainstThread(
   if (router === null) return untouched
   if (!needsResolving(instruction)) return untouched
 
-  const turns = await exchange(db, commandId)
+  const turns = await exchange(db, commandId, 90, 12, options.jobId)
   if (turns.length === 0) return untouched
 
   const script = turns.map((t) => `${t.who === 'grant' ? 'Grant' : t.who}: ${t.text}`).join('\n')

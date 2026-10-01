@@ -97,7 +97,8 @@ const reaches = async (what: string, job: string | null) => {
   }
   const claim = await one(`select outcome, coalesce((select suppressed_reason from public.deliveries
       where dedupe_key = ${lit(`legit:${job}`)}), '') as why
-    from app.claim_delivery('telegram', ${lit(`legit:${job}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'result',
+    from app.claim_delivery(app.job_office(${lit(job)}::uuid),
+      'telegram', ${lit(`legit:${job}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'result',
       null, null, null, ${lit(job)}::uuid)`)
   check(
     `${what}: its answer may reach Grant`,
@@ -277,7 +278,8 @@ const reaches = async (what: string, job: string | null) => {
 /* The office's own notices and a registered test destination (no job at all) */
 {
   const op = await one(
-    `select outcome from app.claim_delivery('telegram', ${lit(`build:legit:${run}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'notice')`,
+    `select outcome from app.claim_delivery(app.operator_office(),
+       'telegram', ${lit(`build:legit:${run}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'notice')`,
   )
   check('an operator notice may reach Grant', op.outcome === 'claimed', String(op.outcome))
   await db.execute(`insert into public.test_destinations (channel, target_ref, why)
@@ -290,7 +292,8 @@ const reaches = async (what: string, job: string | null) => {
     ).target_ref,
   )
   const t = await one(
-    `select outcome from app.claim_delivery('telegram', ${lit(`anything:${run}`)}, ${lit(BOT)}, ${lit(td)}, 'notice')`,
+    `select outcome from app.claim_delivery(app.test_office(),
+       'telegram', ${lit(`anything:${run}`)}, ${lit(BOT)}, ${lit(td)}, 'notice')`,
   )
   check(
     'a registered test destination may receive anything',

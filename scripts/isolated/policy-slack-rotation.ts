@@ -126,18 +126,20 @@ for (const dial of ['act', 'act_with_review', 'suggest']) {
   await one(`select app.hq_autonomy_set(${lit(dial)}, null, 'grant') as r`)
   await run(await w.dutyJob('office.slack_rotate'))
 }
+const rotationJob1 = (await w.dutyJob('office.slack_rotate')).jobId
 const decisionAtAct = json(
   (
     await one(
-      `select app.authorize_effect(p_project => null, p_tool => 'slack.rotate', p_job => ${lit((await w.dutyJob('office.slack_rotate')).jobId)}::uuid, p_fingerprint => 'x') as d`,
+      `select app.authorize_effect(p_office => app.job_office(${lit(rotationJob1)}::uuid), p_project => null, p_tool => 'slack.rotate', p_job => ${lit(rotationJob1)}::uuid, p_fingerprint => 'x') as d`,
     )
   ).d,
 )
 await one(`select app.hq_autonomy_set('act', null, 'grant') as r`)
+const rotationJob2 = (await w.dutyJob('office.slack_rotate')).jobId
 const atAct = json(
   (
     await one(
-      `select app.authorize_effect(p_project => null, p_tool => 'slack.rotate', p_job => ${lit((await w.dutyJob('office.slack_rotate')).jobId)}::uuid, p_fingerprint => 'x') as d`,
+      `select app.authorize_effect(p_office => app.job_office(${lit(rotationJob2)}::uuid), p_project => null, p_tool => 'slack.rotate', p_job => ${lit(rotationJob2)}::uuid, p_fingerprint => 'x') as d`,
     )
   ).d,
 )
@@ -160,7 +162,7 @@ const parent = await w.dutyJob('office.slack_rotate')
 const other = String(
   (
     await one(
-      `select app.request_generation_approval(${lit(parent.jobId)}::uuid, 'notebook.generate', 'a deck', 'proof') as id`,
+      `select app.request_generation_approval(app.job_office(${lit(parent.jobId)}::uuid), ${lit(parent.jobId)}::uuid, 'notebook.generate', 'a deck', 'proof') as id`,
     )
   ).id,
 )

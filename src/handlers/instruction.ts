@@ -515,14 +515,22 @@ interface HisTask {
   function is answered with the old one-argument call, mapped to the same
   shape; any other error still throws, because a failing query is not an
   absent one.
+
+  0783 gave it an office too: the conversation it reads is the CLAIMED job's
+  office's. Against a database from before 0783 the same fall-back applies - the
+  office-first call does not exist there either, and the one-argument call is
+  what that database answers.
 */
 export async function referentCandidates(
   db: SqlExecutor,
   commandId: string,
+  jobId: string,
 ): Promise<{ readonly rows: readonly unknown[] }> {
   const id = lit(commandId === '' ? '00000000-0000-0000-0000-000000000000' : commandId)
   try {
-    return await db.execute(`select app.my_task_referent(${id}::uuid, p_any_task => true) as t`)
+    return await db.execute(
+      `select app.my_task_referent(app.job_office(${lit(jobId)}::uuid), ${id}::uuid, p_any_task => true) as t`,
+    )
   } catch (error) {
     if (!/does not exist|42883|p_any_task/.test(String((error as Error).message))) throw error
     const r = await db.execute(`select app.my_task_referent(${id}::uuid) as t`)
@@ -1893,11 +1901,14 @@ async function recallOlder(
   db: SqlExecutor,
   commandId: string,
   instruction: string,
+  jobId: string,
 ): Promise<Memory> {
   if (commandId === '') return NOTHING_OLDER
 
+  // The conversation is the CLAIMED job's office's (0783), never one found by chat and speaker alone.
+  const office = `app.job_office(${lit(jobId)}::uuid)`
   const extent = await db
-    .execute(`select app.conversation_extent(${lit(commandId)}::uuid) as e`)
+    .execute(`select app.conversation_extent(${office}, ${lit(commandId)}::uuid) as e`)
     .then(
       (r) =>
         (r.rows[0] as { e?: Record<string, number> } | undefined)?.e ?? {
@@ -1918,7 +1929,7 @@ async function recallOlder(
 
   const recalled = await db
     .execute(
-      `select app.recall_conversation(${lit(commandId)}::uuid, ${lit(instruction.slice(0, 500))}, 3) as r`,
+      `select app.recall_conversation(${office}, ${lit(commandId)}::uuid, ${lit(instruction.slice(0, 500))}, 3) as r`,
     )
     .then((r) => (r.rows[0] as { r?: unknown } | undefined)?.r)
     .then((raw) =>
@@ -1962,6 +1973,7 @@ async function recallOlder(
 async function conversationBefore(
   db: SqlExecutor,
   commandId: string,
+  jobId: string,
 ): Promise<
   readonly {
     said: string
@@ -1972,7 +1984,10 @@ async function conversationBefore(
   }[]
 > {
   if (commandId === '') return []
-  const { rows } = await db.execute(`select app.conversation_before(${lit(commandId)}::uuid) as t`)
+  // Only this office's conversation (0783): the office is the claimed job's, never found from the command alone.
+  const { rows } = await db.execute(
+    `select app.conversation_before(app.job_office(${lit(jobId)}::uuid), ${lit(commandId)}::uuid) as t`,
+  )
   const raw = (rows[0] as { t: unknown } | undefined)?.t
   if (!Array.isArray(raw)) return []
   return raw
@@ -2297,7 +2312,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       > | null = null
       /** The turn before this one, read at most once and only when a gate needs it. */
       const previousTurn = () =>
-        (previous ??= conversationBefore(deps.db, String(payload.command_id ?? ''))
+        (previous ??= conversationBefore(deps.db, String(payload.command_id ?? ''), job.jobId)
           .catch(() => [])
           .then((turns) => turns.at(-1)))
       const rejects = rejectsWithoutSaying(cleanedWords)
@@ -2630,6 +2645,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.conversation_work(
+                  app.job_office(${lit(job.jobId)}::uuid),
                   ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
                   interval '24 hours',
                   ${lit(job.jobId)}::uuid) as r`)
@@ -2740,6 +2756,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.another_pair_of_eyes(
+                  app.job_office(${lit(job.jobId)}::uuid),
                   ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
                   ${lit(job.jobId)}::uuid) as r`)
               .then(async (r) => {
@@ -2899,7 +2916,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         */
         await deps.db
           .execute(`
-            select public.record_consultation(${lit(job.jobId)}::uuid, ${lit(other)},
+            select app.record_consultation(app.job_office(${lit(job.jobId)}::uuid),
+              ${lit(job.jobId)}::uuid, ${lit(other)},
               ${lit(who.slug)},
               ${lit(`convened alongside ${who.slug}: ${who.reason}`.slice(0, 400))}, 0)
           `)
@@ -2943,6 +2961,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         await deps.db
           .execute(`
             select app.fan_in_over(
+              app.job_office(${lit(job.jobId)}::uuid),
               ${lit(job.jobId)}::uuid,
               ${lit(instruction.slice(0, 1_000))},
               ${lit(
@@ -3034,7 +3053,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         */
         const said = await deps.db
           .execute(`
-            select public.record_consultation(${lit(job.jobId)}::uuid, ${lit(who.slug)},
+            select app.record_consultation(app.job_office(${lit(job.jobId)}::uuid),
+              ${lit(job.jobId)}::uuid, ${lit(who.slug)},
               'chief-of-staff', ${lit(who.reason)}, 0) as r
           `)
           .catch((error: unknown) => ({
@@ -3119,6 +3139,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         `)
         await deps.db.execute(`
           select app.request_approval(
+            app.job_office(${lit(job.jobId)}::uuid),
             ${lit(job.jobId)}::uuid,
             ${lit(`Carry out ${String(plan.steps.length)} steps: ${plan.instruction.slice(0, 160)}`)},
             ${lit(
@@ -3443,7 +3464,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const hisLastTurn = wantsAntecedent(turn.kept)
         ? // His last three turns, so "and another for the caterers" after "also one
           // to book the minibus" still reaches the turn that said "task".
-          (await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => []))
+          (
+            await conversationBefore(deps.db, String(payload.command_id ?? ''), job.jobId).catch(
+              () => [],
+            )
+          )
             .slice(-3)
             .map((t) => t.said)
             .join(' ')
@@ -3560,6 +3585,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   question rather than the other way round.
                 */
                 `select app.conversation_work(
+                   app.job_office(${lit(job.jobId)}::uuid),
                    ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
                    interval '24 hours', null,
                    ${wantsTheirAnswers ? "interval '24 hours'" : "interval '30 minutes'"}) as r`,
@@ -3716,6 +3742,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(
                 `select app.stop_conversation_work(
+                   app.job_office(${lit(job.jobId)}::uuid),
                    ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
                    ${lit(`you asked me to stop: ${instruction.slice(0, 120)}`)}) as r`,
               )
@@ -4658,7 +4685,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 which is the boundary a clock cannot express.
               */
               .execute(
-                `select app.my_task_referent(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as t`,
+                `select app.my_task_referent(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as t`,
               )
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
@@ -4747,7 +4774,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const settledTask: { text: string; did: boolean } | null =
         settles === null
           ? null
-          : await referentCandidates(deps.db, String(payload.command_id ?? ''))
+          : await referentCandidates(deps.db, String(payload.command_id ?? ''), job.jobId)
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
                 const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
@@ -4829,7 +4856,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const subbed: { text: string; did: boolean } | null =
         subOf === null
           ? null
-          : await referentCandidates(deps.db, String(payload.command_id ?? ''))
+          : await referentCandidates(deps.db, String(payload.command_id ?? ''), job.jobId)
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
                 const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
@@ -4902,7 +4929,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .execute(
                 // One assembly, asked here and by the test: the previous turn's tree, only a question he was
                 // SHOWN on a channel that delivers (0622, #394), or the one it said it was still waiting on.
-                `select * from app.open_questions_for_reply(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)`,
+                `select * from app.open_questions_for_reply(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)`,
               )
               .then(async (r) => {
                 const rows = r.rows as {
@@ -5477,7 +5504,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? String((payload as { coherence_note?: unknown }).coherence_note).slice(0, 600)
           : null
 
-      const turnsBefore = await conversationBefore(deps.db, String(payload.command_id ?? ''))
+      const turnsBefore = await conversationBefore(
+        deps.db,
+        String(payload.command_id ?? ''),
+        job.jobId,
+      )
       const turns = turnsBefore
 
       /*
@@ -5520,7 +5551,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         establish.
       */
       const commandId = String(payload.command_id ?? '')
-      const memory = await recallOlder(deps.db, commandId, instruction)
+      const memory = await recallOlder(deps.db, commandId, instruction, job.jobId)
 
       /*
         Asked what was said earlier, in a conversation with nothing earlier
@@ -6381,6 +6412,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const scan = await scanForDuplicates(deps.db, instruction, {
         office: `app.job_office(${lit(job.jobId)}::uuid)`,
         ...(job.projectId === null ? {} : { projectId: job.projectId }),
+        jobId: job.jobId,
       })
       const decided = route(instruction, scan)
       /*

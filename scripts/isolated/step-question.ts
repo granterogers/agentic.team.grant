@@ -27,7 +27,7 @@ const parent = await realParent(db)
 const planBlocker = String(
   (
     await one(
-      `select app.request_approval(${lit(parent)}::uuid, 'Run the plan', 'it writes into the notebook', 'office.execute_plan')::text as b`,
+      `select app.request_approval(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'Run the plan', 'it writes into the notebook', 'office.execute_plan')::text as b`,
     )
   ).b,
 )
@@ -113,7 +113,7 @@ check(
 // The generation answer, on its own terms: a recorded decline option decides, not English.
 const p2 = await realParent(db)
 await one(
-  `select app.request_approval(${lit(p2)}::uuid, 'Run the plan', 'it writes', 'office.execute_plan')::text as b`,
+  `select app.request_approval(app.job_office(${lit(p2)}::uuid), ${lit(p2)}::uuid, 'Run the plan', 'it writes', 'office.execute_plan')::text as b`,
 )
 const b2 = String(
   (
