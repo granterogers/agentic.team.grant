@@ -19,7 +19,8 @@
  */
 import { execSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
+import { PgExecutor } from '../../src/db/pg-executor.ts'
 
 export type Entry = {
   fn: string
@@ -51,10 +52,18 @@ const systemTables = new Set(
     .map(([k]) => k),
 )
 
-const db = new ManagementApiExecutor(
-  process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
-  process.env.SUPABASE_ACCESS_TOKEN ?? '',
-)
+// P3_DB=<clone> reads a local clone instead of production (the converted state of an unreleased branch).
+const local = process.env.P3_DB
+const db: SqlExecutor = (() => {
+  if (local === undefined)
+    return new ManagementApiExecutor(
+      process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
+      process.env.SUPABASE_ACCESS_TOKEN ?? '',
+    )
+  const pg = new PgExecutor(`postgresql://postgres@/${local}?host=/tmp/pgs&port=55432`)
+  return pg
+})()
+if (db instanceof PgExecutor) await db.connect()
 
 const rows = (
   await db.execute(`
@@ -260,3 +269,4 @@ if (manOut > -1) {
 }
 if (jsonOut > -1)
   writeFileSync(process.argv[jsonOut + 1] as string, JSON.stringify(entries, null, 1))
+if (db instanceof PgExecutor) await db.end()

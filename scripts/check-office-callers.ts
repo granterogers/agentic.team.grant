@@ -140,17 +140,46 @@ if (process.argv[1]?.endsWith('check-office-callers.ts')) {
   ).map((r) => r.proname)
   let all = calls(names)
   let bad = offenders(all)
+  // The database calls itself too, and tsc and grep cannot see inside a plpgsql body. A function that still calls a
+  // converted function without an office is a defect that only shows on first use (a plpgsql body is parsed, not run).
+  const bodies = (
+    await db.execute(`
+      select n.nspname || '.' || p.proname as fn,
+             regexp_replace(regexp_replace(coalesce(p.prosrc, ''), '/[*].*?[*]/', ' ', 'gs'), '--[^' || chr(10) || ']*', ' ', 'g') as body
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname in ('app', 'public') and p.prokind = 'f'`)
+  ).rows as { fn: string; body: string }[]
+  const dbBad: string[] = []
+  if (names.length > 0) {
+    const reDb = new RegExp(`\\b(?:app|public)\\.(${names.join('|')})\\s*\\(`, 'g')
+    for (const f of bodies) {
+      const callerName = f.fn.split('.')[1] as string
+      for (const m of f.body.matchAll(reDb)) {
+        if (m[1] === callerName) continue
+        const first = firstArgument(f.body, (m.index ?? 0) + m[0].length)
+        if (
+          first !== '' &&
+          !OK_FIRST.test(first) &&
+          !/^v_office|^c\.office_id|^new\.office_id|^b\.office_id|^p_office|^t\.office_id|^r\.office_id|^d\.office_id|^v_parent\.office_id/.test(
+            first,
+          )
+        )
+          dbBad.push(`${f.fn} calls ${m[1] as string}(${first.slice(0, 40)}`)
+      }
+    }
+  }
   if (process.argv.includes('--fix-suites')) {
     console.log(`rewrote ${String(fixSuites(bad))} suite call site(s) to work in the test office`)
     all = calls(names)
     bad = offenders(all)
   }
   console.log(
-    `${String(names.length)} office-explicit functions, ${String(all.length)} call sites, ${String(bad.length)} without an office`,
+    `${String(names.length)} office-explicit functions, ${String(all.length)} call sites, ${String(bad.length)} without an office, ${String(dbBad.length)} database calls without one`,
   )
   for (const b of bad)
     console.error(`FAIL ${b.file}:${String(b.line)} ${b.fn}(${b.first.slice(0, 50)}`)
-  if (bad.length > 0) process.exitCode = 1
+  for (const b of dbBad) console.error(`FAIL (database) ${b}`)
+  if (bad.length > 0 || dbBad.length > 0) process.exitCode = 1
   else console.log('check:office-callers OK')
   if (db instanceof PgExecutor) await db.end()
 }
