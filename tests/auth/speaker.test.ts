@@ -16,7 +16,8 @@ const jwt = `${'a'.repeat(30)}.${'b'.repeat(30)}.${'c'.repeat(30)}`
 
 type Member = { ok: boolean; owner_key?: string | null; kind?: string | null }
 /** A fake Supabase: /auth/v1/user answers for `email`, office_member answers for `member`. */
-const world = (email: string | null, member: Member | null) => {
+const OFFICE = '2a2cd4d4-48c9-41ba-8271-a798631997da'
+const world = (email: string | null, member: Member | null, office: string | null = OFFICE) => {
   const calls: string[] = []
   const fetcher = (async (url: string | URL | Request) => {
     const u = String(url)
@@ -25,6 +26,14 @@ const world = (email: string | null, member: Member | null) => {
       return email === null
         ? new Response('{}', { status: 401 })
         : new Response(JSON.stringify({ email }), { status: 200 })
+    }
+    if (u.endsWith('/rpc/resolve_office')) {
+      return new Response(
+        JSON.stringify(
+          office === null ? { ok: false, reason: 'no_office' } : { ok: true, office_id: office },
+        ),
+        { status: 200 },
+      )
     }
     if (u.endsWith('/rpc/office_member')) {
       return member === null
@@ -36,6 +45,33 @@ const world = (email: string | null, member: Member | null) => {
   return { fetcher, calls }
 }
 const fresh = () => new Map<string, { until: number; speaker: never }>() as never
+
+describe('the office comes from the verified login (P3)', () => {
+  it('refuses a signed-in member whose login has no active office - it is never defaulted to the person', async () => {
+    const w = world('sam@example.com', { ok: true, owner_key: 'sam', kind: 'person' }, null)
+    expect(await resolveSpeaker(jwt, env, { fetch: w.fetcher, cache: fresh() })).toBeNull()
+  })
+
+  it('carries the office the database resolved, and the machine key carries none', async () => {
+    const w = world('sam@example.com', { ok: true, owner_key: 'sam', kind: 'harness' })
+    expect((await resolveSpeaker(jwt, env, { fetch: w.fetcher, cache: fresh() }))?.office).toBe(
+      OFFICE,
+    )
+    expect((await resolveSpeaker('machine-key-for-tests', env, {}))?.office).toBeNull()
+  })
+
+  it('does not trust an office named in the request: the resolver is asked about the auth user id only', async () => {
+    const asked: string[] = []
+    const w = world('sam@example.com', { ok: true, owner_key: 'sam', kind: 'person' })
+    const spy = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/rpc/resolve_office')) asked.push(String(init?.body))
+      return await w.fetcher(url, init)
+    }) as typeof fetch
+    await resolveSpeaker(jwt, env, { fetch: spy, cache: fresh() })
+    expect(asked).toHaveLength(1)
+    expect(Object.keys(JSON.parse(asked[0] as string))).toEqual(['p_auth_user_id'])
+  })
+})
 
 describe('resolveSpeaker', () => {
   it('refuses a caller who presents nothing (the unauthenticated mint)', async () => {
@@ -66,7 +102,7 @@ describe('resolveSpeaker', () => {
   it('speaks a signed-in person as THEIR OWN owner key, never a configured subject', async () => {
     const w = world('sam@example.com', { ok: true, owner_key: 'sam', kind: 'person' })
     const s = await resolveSpeaker(jwt, env, { fetch: w.fetcher, cache: fresh() })
-    expect(s).toEqual({ kind: 'person', actor: 'sam' })
+    expect(s).toEqual({ kind: 'person', actor: 'sam', office: OFFICE })
   })
 
   it('fails closed for a person with no owner key instead of defaulting to anybody', async () => {
@@ -111,9 +147,9 @@ describe('resolveSpeaker', () => {
     const ok = world('sam@example.com', { ok: true, owner_key: 'sam', kind: 'person' })
     await resolveSpeaker(jwt, env, { fetch: ok.fetcher, cache, now: () => t })
     await resolveSpeaker(jwt, env, { fetch: ok.fetcher, cache, now: () => t + 59_000 })
-    expect(ok.calls.length).toBe(2) // one lookup pair, then served from the cache
+    expect(ok.calls.length).toBe(3) // one lookup triple, then served from the cache
     await resolveSpeaker(jwt, env, { fetch: ok.fetcher, cache, now: () => t + 61_000 })
-    expect(ok.calls.length).toBe(4)
+    expect(ok.calls.length).toBe(6)
 
     const bad = world(null, null)
     const refusals = fresh()

@@ -700,7 +700,14 @@ const SECTIONS: Readonly<
  * sent: it is for an action the office key may also do (a machine making a test project) where the person's identity
  * adds provenance and its absence adds nothing - a machine never makes a project that counts as a person's.
  */
-type ActionSpec = { fn: string; required: readonly string[]; by?: string; personBy?: string }
+type ActionSpec = {
+  fn: string
+  required: readonly string[]
+  by?: string
+  personBy?: string
+  /** The function takes `p_office` first; the gateway writes the verified one (P3). */
+  office?: true
+}
 const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // `p_force` is optional and deliberately not required: without it the RPC
   // returns the candidates and creates nothing (0153), which is the behaviour
@@ -1373,7 +1380,7 @@ const tokenMatches = async (presented: string | null): Promise<boolean> => {
 */
 const SESSION_TTL_MS = 60_000
 /** A verified session, and the owner key of the person it belongs to. */
-const seen = new Map<string, { until: number; owner: string; kind: PrincipalKind }>()
+const seen = new Map<string, { until: number; owner: string; kind: PrincipalKind; office: string }>()
 
 const looksLikeSession = (presented: string): boolean =>
   presented.split('.').length === 3 && presented.length > 60
@@ -1396,7 +1403,7 @@ const looksLikeSession = (presented: string): boolean =>
   of a "no". `unknown` grants nothing -- it is answered with 503, which says
   the office could not check rather than that it checked and said no.
 */
-type Verdict = 'yes' | 'no' | 'unknown'
+type Verdict = 'yes' | 'no' | 'unknown' | 'no_office'
 
 /** One request, retried once on a throttle, because a 429 is a wait. */
 const askUpstream = async (
@@ -1441,6 +1448,11 @@ interface Answer {
   readonly principal: string | null
   /** What kind of credential it was, when the verdict is 'yes'. */
   readonly kind: PrincipalKind | null
+  /**
+    The office the VERIFIED LOGIN belongs to (P3). Resolved from the auth user id, never from a request. A session
+    that resolves to no active office is refused ('no_office'); the machine key names none.
+  */
+  readonly office?: string | null
 }
 
 const sessionAllowed = async (presented: string): Promise<Answer> => {
@@ -1450,6 +1462,7 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
       verdict: 'yes',
       principal: cached.owner === '' ? null : cached.owner,
       kind: cached.kind,
+      office: cached.office,
     }
   }
 
@@ -1474,6 +1487,7 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
     }
   }
   const user = (await who.json().catch(() => ({}))) as {
+    id?: string
     email?: string
     email_confirmed_at?: string
   }
@@ -1514,10 +1528,30 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
   */
   const kind: PrincipalKind = rows[0]?.kind === 'person' ? 'person' : 'harness'
 
-  seen.set(presented, { until: Date.now() + SESSION_TTL_MS, owner: principal ?? '', kind })
+  /*
+    THE OFFICE comes from the verified auth user id and from nothing the caller said. No office, a disabled one, or an
+    ambiguous answer is a refusal - never a default, never Grant. A failure to ASK is unknown, not no (0304).
+  */
+  const asked = await askUpstream(`${DB_URL}/rest/v1/rpc/resolve_office`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ p_auth_user_id: String(user.id ?? '') }),
+  })
+  if ('unreachable' in asked || !asked.response.ok)
+    return { verdict: 'unknown', principal: null, kind: null }
+  const resolved = (await asked.response.json().catch(() => ({}))) as { ok?: boolean; office_id?: string }
+  if (resolved.ok !== true || typeof resolved.office_id !== 'string' || resolved.office_id === '')
+    return { verdict: 'no_office', principal: null, kind: null }
+  const office = resolved.office_id
+
+  seen.set(presented, { until: Date.now() + SESSION_TTL_MS, owner: principal ?? '', kind, office })
   // Bounded, because this map lives as long as the isolate does.
   if (seen.size > 64) for (const k of [...seen.keys()].slice(0, 32)) seen.delete(k)
-  return { verdict: 'yes', principal, kind }
+  return { verdict: 'yes', principal, kind, office }
 }
 
 /*
@@ -1740,7 +1774,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  const { verdict, principal, kind } = await allowed(presented)
+  const { verdict, principal, kind, office } = await allowed(presented)
+  if (verdict === 'no_office') return json({ error: 'no_office' }, 403)
   if (verdict === 'no') {
     return json({ error: 'unauthorized' }, 401)
   }
@@ -1850,6 +1885,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
       delete args[action.by]
       if (principal !== null && principal !== '') args[action.by] = principal
     }
+    // The client never supplies an office. Whatever arrived under these names is discarded here; the resolved office is
+    // written only into a function that declares it (P3 wave 2 onward).
+    for (const k of ['p_office', 'office_id', 'owner_key']) delete args[k]
+    if (action.office === true && office) args.p_office = office
     if (action.personBy !== undefined) {
       delete args[action.personBy]
       if (kind === 'person' && principal !== null && principal !== '') {

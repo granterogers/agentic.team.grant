@@ -30,6 +30,12 @@
 export type Speaker = {
   readonly kind: 'person' | 'harness' | 'service'
   readonly actor: string
+  /**
+   * The office the VERIFIED LOGIN belongs to (P3). Resolved from the auth user id by `public.resolve_office`; null
+   * only for the machine key, which names no office. A session whose login resolves to no active office is not a
+   * speaker at all - it is never defaulted to the person.
+   */
+  readonly office: string | null
 }
 
 export type SpeakerEnv = {
@@ -92,7 +98,7 @@ const sessionSpeaker = async (
     })
     .catch(() => null)
   if (who === null || !who.ok) return null
-  const user = (await who.json().catch(() => ({}))) as { email?: string }
+  const user = (await who.json().catch(() => ({}))) as { id?: string; email?: string }
   const email = String(user.email ?? '')
     .trim()
     .toLowerCase()
@@ -114,15 +120,32 @@ const sessionSpeaker = async (
   const row = rows[0]
   if (row?.ok !== true) return null
 
+  const found = await deps
+    .fetch(`${env.supabaseUrl}/rest/v1/rpc/resolve_office`, {
+      method: 'POST',
+      headers: {
+        apikey: env.serviceKey,
+        Authorization: `Bearer ${env.serviceKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ p_auth_user_id: String(user.id ?? '') }),
+    })
+    .catch(() => null)
+  if (found === null || !found.ok) return null
+  const resolved = (await found.json().catch(() => ({}))) as { ok?: boolean; office_id?: string }
+  if (resolved.ok !== true || typeof resolved.office_id !== 'string' || resolved.office_id === '')
+    return null
+  const office = resolved.office_id
+
   const ownerKey = String(row.owner_key ?? '').trim()
   let speaker: Speaker
   if (row.kind === 'person') {
     // A person speaks as THEMSELVES. No owner key means no identity to attribute an instruction to.
     if (ownerKey === '') return null
-    speaker = { kind: 'person', actor: ownerKey }
+    speaker = { kind: 'person', actor: ownerKey, office }
   } else {
     // A kind the database did not say is a test member: the restrictive reading.
-    speaker = { kind: 'harness', actor: ownerKey === '' ? 'verify-operator' : ownerKey }
+    speaker = { kind: 'harness', actor: ownerKey === '' ? 'verify-operator' : ownerKey, office }
   }
 
   deps.cache.set(presented, { until: deps.now() + SESSION_TTL_MS, speaker })
@@ -139,7 +162,8 @@ export const resolveSpeaker = async (
   deps: SpeakerDeps = {},
 ): Promise<Speaker | null> => {
   if (presented === null || presented === '') return null
-  if (await tokenMatches(presented, env.hqToken)) return { kind: 'service', actor: SERVICE_ACTOR }
+  if (await tokenMatches(presented, env.hqToken))
+    return { kind: 'service', actor: SERVICE_ACTOR, office: null }
   // A Supabase session is a three-part JWT of real length; anything else is not worth a network call.
   if (presented.split('.').length !== 3 || presented.length <= 60) return null
   return await sessionSpeaker(presented, env, {
