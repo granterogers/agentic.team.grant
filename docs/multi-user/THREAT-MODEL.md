@@ -18,7 +18,7 @@ office and decisive with two; those are addressed by the design and are listed s
 | **E3** | `app.enqueue_child` accepts any `p_project` | `coalesce(p_project, v_parent.project_id)` (0625:273); no check against the parent | LOW (needs a compromised or injected handler) | **latent HIGH** across offices; the composite FK closes it structurally |
 | **E4** | Slack `tokens_revoked` / `app_uninstalled` PATCH `slack_workspaces` by the envelope's `team_id` before any workspace/sender check | `slack-events/index.ts:317-333`. The envelope is signature-verified and Slack fills `team_id`, so a team can only affect its own row. | LOW / informational | gains the workspace check for consistency |
 | **E5** | `hq_answer_blocker` and `resume_job` authenticate by id and role, not by ownership | 0632; `principal_refusal` asks only "is `p_by` a known person" | none (one owner) | **latent CRITICAL** — the central gap; closed by `p_office` + composite FKs |
-| **E6** | `app.search_documents(…, p_project => null)` searches **every project in the deployment** | 0464; TypeScript substitutes `unnamed_project()` so agents are safe; any other caller (the MCP read surface was not read this session) is not | **UNVERIFIED** — needs a P0 check of `src/mcp` and `supabase/functions/mcp` | latent HIGH |
+| **E6** | `app.search_documents(…, p_project => null)` searches **every project in the deployment**, and the **MCP server exposes exactly that** to any MCP client | 0464; TypeScript substitutes `unnamed_project()` so *agents* are safe (`retrieval.ts:138`); but `supabase/functions/mcp/index.ts:76-97` defines the `search_documents` tool as *"Full-text search across every document the team holds"* and maps an absent `project` to `p_project: null` | none (one owner, and it is the documented behaviour) | **latent CRITICAL**: an MCP token must resolve to one office, and `mcp_search`, `mcp_projects`, `read_document` and the other `mcp_*` functions join the conversion set (`mcp_clients.office_id` is a carrier) |
 | **E7** | `standing_authorizations.project_id is null` is **deployment-global** | `standing_live_globally` unique index (0421) | none (one grant, Grant's) | latent: B would inherit A's global yes |
 | **E8** | The gateway trusts caller-supplied `p_project_id`, `p_job_id`, `p_blocker_id`, `p_request_id` for any signed-in member | `hq-api` (UUID-shape check only) | none (one owner) | latent CRITICAL |
 | **E9** | Telegram uses **one** webhook secret for all bots; `?bot=` selects the bot | `telegram-webhook:96` | LOW | acceptable if bots are shared infrastructure (design keeps them so) |
@@ -33,8 +33,8 @@ server-side session; scope `voice_state`) is Phase 3 of `IMPLEMENTATION-PLAN.md`
 rest of multi-user**: it is a two-file change that is independent of `offices`. Recommended: raise it to the owner now
 as a separate hotfix decision.
 
-**Not verified this session** (stated rather than assumed): whether `supabase/functions/mcp` and `signin` carry their
-own identity logic; live Vault and `system_config` *values* (only key names were read); whether E1 is reachable from
+**Not verified this session** (stated rather than assumed): whether `signin` carries its own identity logic beyond
+what the agent inventory reported; live Vault and `system_config` *values* (only key names were read); whether E1 is reachable from
 the public internet (function URLs are normally public on Supabase; the project reference is also the default in
 `scripts/`, so treat it as discoverable).
 
