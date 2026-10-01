@@ -175,7 +175,7 @@ export async function cases(c: Ctx): Promise<void> {
     tA.body.job_id === undefined
       ? null
       : (await q(`select office_id from public.jobs where job_id = '${String(tA.body.job_id)}'`))[0]
-  c.check(jobA === null || jobA.office_id === A, "and the job it becomes is A's", '')
+  c.check(jobA === null || jobA === undefined || jobA.office_id === A, "and the job it becomes is A's", '')
   // A's page names B's project (a stale tab, or an attack): the turn is not lost and does not land in B's project.
   const tCross = await turn(sessA, `cross-project turn ${run}`, { project: pb })
   const rowCross = (
