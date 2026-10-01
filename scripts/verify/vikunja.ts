@@ -542,7 +542,7 @@ try {
   const refused = j(
     (
       await one(`
-    select app.hq_set_vikunja(${lit(token)}, 1, ${lit(token)}) as v`)
+    select app.hq_set_vikunja(app.owner_office('grant'), ${lit(token)}, 1, ${lit(token)}) as v`)
     ).v,
   )
   check(
@@ -553,7 +553,7 @@ try {
   const wired = j(
     (
       await one(`
-    select app.hq_set_vikunja(${lit(url)}, ${String(projectId)}, ${lit(token)}) as v`)
+    select app.hq_set_vikunja(app.owner_office('grant'), ${lit(url)}, ${String(projectId)}, ${lit(token)}) as v`)
     ).v,
   )
   check(
@@ -637,7 +637,7 @@ try {
        where title like ${lit(`fixture-vik-${run}%`)} and state <> 'done'`)
     ).n,
   )
-  const forgot = j((await one('select app.hq_forget_vikunja() as v')).v)
+  const forgot = j((await one(`select app.hq_forget_vikunja(app.owner_office('grant')) as v`)).v)
   const afterForget = Number(
     (
       await one(`
@@ -717,7 +717,7 @@ try {
     that lives in this container. Run unconditionally, so a crash halfway
     through cannot leave a quarter-hourly duty calling a dead address.
   */
-  await db.execute('select app.hq_forget_vikunja()').catch(() => undefined)
+  await db.execute(`select app.hq_forget_vikunja(app.owner_office('grant'))`).catch(() => undefined)
   await db
     .execute(`delete from public.task_links where provider = ${lit(PROVIDER)}`)
     .catch(() => undefined)

@@ -96,7 +96,7 @@ for (const [label, standing] of [
     const answered = json(
       (
         await one(
-          `select app.hq_answer_blocker(${lit(String(q.blocker))}::uuid, ${lit(option)}, 'grant') as r`,
+          `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(String(q.blocker))}::uuid), app.test_office()), ${lit(String(q.blocker))}::uuid, ${lit(option)}, 'grant') as r`,
         )
       ).r,
     )

@@ -65,7 +65,7 @@ const ask = async (p: string, j: string, fp: string) =>
   )
 const answer = async (b: string, a: string, by = 'grant') =>
   json(
-    (await one(`select app.hq_answer_blocker(${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`))
+    (await one(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`))
       .r,
   )
 /** As the gateway calls it: through PostgREST with the service key, which sets the request's claims. */
@@ -74,7 +74,7 @@ const withdraw = async (b: string, by: string | null) =>
   json(
     (
       await one(
-        `${SERVICE} select app.withdraw_refusal(${lit(b)}::uuid, ${by === null ? 'null' : lit(by)})::text as r`,
+        `${SERVICE} select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, ${by === null ? 'null' : lit(by)})::text as r`,
       )
     ).r,
   )
@@ -292,7 +292,7 @@ await answer(bB, 'No, leave it')
   const b = await ask(p4b, await job(p4b), fp)
   await answer(b, 'No, leave it')
   const direct = json(
-    (await one(`select app.withdraw_refusal(${lit(b)}::uuid, 'grant')::text as r`)).r,
+    (await one(`select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, 'grant')::text as r`)).r,
   )
   check(
     'called as plain SQL, the way a handler or a job would, it is refused even for the right name',
@@ -302,7 +302,7 @@ await answer(bB, 'No, leave it')
   const anon = json(
     (
       await one(
-        `select set_config('request.jwt.claims', '{"role":"anon"}', true); select app.withdraw_refusal(${lit(b)}::uuid, 'grant')::text as r`,
+        `select set_config('request.jwt.claims', '{"role":"anon"}', true); select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, 'grant')::text as r`,
       )
     ).r,
   )
@@ -460,7 +460,7 @@ const act = async (bearer: string | null, args: Record<string, unknown>) => {
     await answer(b, 'No, leave it')
     return { fp, b }
   }
-  const gov = json((await one(`select app.hq_governance()::text as r`)).r) as {
+  const gov = json((await one(`select app.hq_governance(app.owner_office('grant'))::text as r`)).r) as {
     refusals?: { id: string }[]
   }
   const x = await mk('anon')

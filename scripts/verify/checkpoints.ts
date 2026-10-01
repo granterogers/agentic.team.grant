@@ -127,7 +127,7 @@ section = 'a second attempt sees what the first one did'
     select (select v from r where k = 'b1') as gather_again,
            (select v from r where k = 'b2') as draft_again,
            (select v from r where k = 'b3') as store_first,
-           app.job_progress(${JOB}) as progress;
+           app.job_progress(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${JOB}), app.test_office()), ${JOB}) as progress;
     rollback;`)
 
   const gather = asJson(got.gather_again)
@@ -311,7 +311,7 @@ section = 'pausing, and what may resume on a tick'
 
     select (select state::text from public.jobs where job_id = ${JOB}) as state,
            (select waiting_on from public.jobs where job_id = ${JOB}) as waiting_on,
-           app.job_progress(${JOB}) -> 'paused' as paused,
+           app.job_progress(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${JOB}), app.test_office()), ${JOB}) -> 'paused' as paused,
            (select count(*) from jsonb_array_elements(app.resumable_now()) x
              where (x ->> 'job_id')::uuid = ${JOB}) as on_a_tick;
     rollback;`)

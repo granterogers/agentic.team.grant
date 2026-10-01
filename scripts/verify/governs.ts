@@ -112,7 +112,7 @@ type Payload = {
   }[]
 }
 const governance = async (): Promise<Payload> =>
-  ((await one('select public.hq_governance(200) as g')).g ?? {}) as Payload
+  ((await one(`select public.hq_governance(app.owner_office('grant'), 200) as g`)).g ?? {}) as Payload
 
 console.log(`\nverify:governs — ${run}\n`)
 
@@ -252,7 +252,7 @@ try {
   const before = Number((await one('select count(*)::int as n from public.lessons')).n)
   const gone = (
     await one(`
-      select public.retract_lesson(${lit(lessonId)}::uuid,
+      select public.retract_lesson(coalesce((select zz_o.office_id from public.lessons zz_o where zz_o.lesson_id = ${lit(lessonId)}::uuid), app.test_office()), ${lit(lessonId)}::uuid,
         'Written by a verification run.', 'verify:governs') as r
     `)
   ).r as { ok?: boolean; retraction?: string }
@@ -299,7 +299,7 @@ try {
   console.log('\n   retracting twice, and retracting a retraction')
 
   const twice = (
-    await one(`select public.retract_lesson(${lit(lessonId)}::uuid, null, 'verify:governs') as r`)
+    await one(`select public.retract_lesson(coalesce((select zz_o.office_id from public.lessons zz_o where zz_o.lesson_id = ${lit(lessonId)}::uuid), app.test_office()), ${lit(lessonId)}::uuid, null, 'verify:governs') as r`)
   ).r as { ok?: boolean; already?: boolean }
   const stillOne = Number(
     (
@@ -323,7 +323,7 @@ try {
   )
   const nested = (
     await one(
-      `select public.retract_lesson(${lit(retractionId)}::uuid, null, 'verify:governs') as r`,
+      `select public.retract_lesson(coalesce((select zz_o.office_id from public.lessons zz_o where zz_o.lesson_id = ${lit(retractionId)}::uuid), app.test_office()), ${lit(retractionId)}::uuid, null, 'verify:governs') as r`,
     )
   ).r as { ok?: boolean; error?: string }
   /*
@@ -360,7 +360,7 @@ try {
 
   const declined = (
     await one(`
-      select public.decide_proposal(${lit(proposalId)}::uuid, 'declined',
+      select public.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = ${lit(proposalId)}::uuid), app.test_office()), ${lit(proposalId)}::uuid, 'declined',
         'Not this time — a probe.', 'verify:governs') as r
     `)
   ).r as { ok?: boolean; was?: string; now?: string }
@@ -397,7 +397,7 @@ try {
 
   const reopened = (
     await one(`
-      select public.decide_proposal(${lit(proposalId)}::uuid, 'open', null, 'verify:governs') as r
+      select public.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = ${lit(proposalId)}::uuid), app.test_office()), ${lit(proposalId)}::uuid, 'open', null, 'verify:governs') as r
     `)
   ).r as { ok?: boolean; now?: string }
   check(

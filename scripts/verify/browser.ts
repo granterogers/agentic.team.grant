@@ -405,7 +405,7 @@ section = 'stop is a column'
     values (${ID(PROJECT)}, gen_random_uuid(), ${lit(`verify:browser-${run}`)}, 'browser.gather',
             ${lit(`verify:browser-${run}`)}, 'running', 'direct_command');
     ${KEEP('before', `to_jsonb(app.stop_requested(${JOB}))`)}
-    ${KEEP('asked', `app.request_stop(${JOB}, 'grant')`)}
+    ${KEEP('asked', `app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${JOB}), app.test_office()), ${JOB}, 'grant')`)}
     ${KEEP('after', `to_jsonb(app.stop_requested(${JOB}))`)}
     select ${GET('before')} as before, ${GET('asked')} as asked, ${GET('after')} as after;
     rollback;`)
@@ -421,7 +421,8 @@ section = 'stop is a column'
                              requested_by, state, intent_class, finished_at)
     values (${ID(PROJECT)}, gen_random_uuid(), ${lit(`verify:browser-done-${run}`)}, 'browser.gather',
             ${lit(`verify:browser-done-${run}`)}, 'complete', 'direct_command', app.now_utc());
-    select app.request_stop((select job_id from public.jobs
+    select app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = (select job_id from public.jobs
+             where requested_by = ${lit(`verify:browser-done-${run}`)} limit 1)), app.test_office()), (select job_id from public.jobs
              where requested_by = ${lit(`verify:browser-done-${run}`)} limit 1), 'grant') as asked;
     rollback;`)
   ok(

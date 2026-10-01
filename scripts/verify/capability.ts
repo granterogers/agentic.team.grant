@@ -433,13 +433,13 @@ const post = async (
   const q = (v: unknown): string => (v === undefined || v === null ? 'null' : lit(String(v)))
   const call =
     action === 'decline_tool'
-      ? `public.hq_decline_tool(${q(args.p_request_id)}::uuid, ${q(args.p_reason)}, 'grant')`
+      ? `public.hq_decline_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${q(args.p_request_id)}::uuid), app.test_office()), ${q(args.p_request_id)}::uuid, ${q(args.p_reason)}, 'grant')`
       : action === 'approve_tool'
-        ? `public.hq_approve_tool(${q(args.p_request_id)}::uuid, null, 'grant')`
+        ? `public.hq_approve_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${q(args.p_request_id)}::uuid), app.test_office()), ${q(args.p_request_id)}::uuid, null, 'grant')`
         : action === 'revoke_tool'
-          ? `public.hq_revoke_tool(${q(args.p_slug)}, ${q(args.p_tool)}, 'grant')`
+          ? `public.hq_revoke_tool(app.owner_office('grant'), ${q(args.p_slug)}, ${q(args.p_tool)}, 'grant')`
           : action === 'staff_tool_set'
-            ? `public.hq_staff_tool_set(${q(args.p_slug)}, ${q(args.p_tool)}, ${args.p_granted === true ? 'true' : 'false'}, 'grant')`
+            ? `public.hq_staff_tool_set(app.owner_office('grant'), ${q(args.p_slug)}, ${q(args.p_tool)}, ${args.p_granted === true ? 'true' : 'false'}, 'grant')`
             : null
   if (call === null) return viaKey(action, args)
   const out = (await db.execute(`select ${call}::text as r`)).rows[0] as { r: string }
@@ -523,7 +523,7 @@ if (apiToken === '') {
   const seen = (
     await db.execute(`
       select coalesce((
-        select jsonb_agg(r) from jsonb_array_elements(app.hq_governance(40) -> 'requests') r
+        select jsonb_agg(r) from jsonb_array_elements(app.hq_governance(app.owner_office('grant'), 40) -> 'requests') r
          where r ->> 'id' = ${lit(open1)}
       ), '[]'::jsonb) ->> 0 as v`)
   ).rows[0] as { v: string | null }

@@ -141,9 +141,9 @@ check(
   mixed.body.slice(0, 110),
 )
 // The most permissive dial speaks for a class of work; this authority is about one destination, so it does not widen it.
-await one(`select app.hq_autonomy_set('act', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'act', null, 'grant') as r`)
 const atAct = await importAs(await w.dutyJob('office.notion_import', B.id))
-await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'suggest', null, 'grant') as r`)
 check(
   'even with the dial at "Act", an import into a database nobody connected still waits',
   atAct.wrote === 0 && /not imported/.test(atAct.body),

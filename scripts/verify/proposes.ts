@@ -369,7 +369,7 @@ try {
 
   const declined = (
     await one(`
-    select public.decide_proposal(${lit(String(rows[0]?.id))}::uuid, 'declined',
+    select public.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = ${lit(String(rows[0]?.id))}::uuid), app.test_office()), ${lit(String(rows[0]?.id))}::uuid, 'declined',
       'not worth it for now') as r
   `)
   ).r as { ok?: boolean }
@@ -531,7 +531,7 @@ check(
   the first time the office raises a real one; "no row the page shows Grant is
   a harness row" survives every future run.
 */
-const shown = (await one(`select app.hq_governance(40) as g`)).g as { proposals?: unknown }
+const shown = (await one(`select app.hq_governance(app.owner_office('grant'), 40) as g`)).g as { proposals?: unknown }
 const parsed = typeof shown === 'string' ? (JSON.parse(shown) as { proposals?: unknown }) : shown
 const onPage = Array.isArray(parsed?.proposals)
   ? (parsed.proposals as { title?: string }[]).map((p) => String(p.title ?? ''))

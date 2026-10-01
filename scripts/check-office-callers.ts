@@ -16,7 +16,7 @@ import { ManagementApiExecutor, type SqlExecutor } from '../src/db/executor.ts'
 
 const ROOTS = ['src', 'supabase', 'scripts', 'tests']
 const OK_FIRST =
-  /^(p_office\s*(=>|:=)|null::uuid|uuid\b.*|app\.test_office\s*\(|app\.job_office\s*\(|app\.require_office\s*\(|.*\boffice\b.*|.*\bOFFICE\b.*|[A-Za-z_.]*\.office\b|\$\{[^}]*(office|Office|OFFICE)[^}]*\}|'?\$\{)/
+  /^(p_office\s*(=>|:=)|null::uuid|uuid\b.*|app\.test_office\s*\(|app\.job_office\s*\(|app\.owner_office\s*\(|.*\boffice_id\b.*|app\.require_office\s*\(|.*\boffice\b.*|.*\bOFFICE\b.*|[A-Za-z_.]*\.office\b|\$\{[^}]*(office|Office|OFFICE)[^}]*\}|'?\$\{)/
 
 export type Call = { file: string; line: number; fn: string; first: string }
 

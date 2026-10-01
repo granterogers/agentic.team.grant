@@ -148,7 +148,7 @@ const age = (jobId: string) =>
     `update public.blockers set created_at = created_at - interval '3 minutes' where job_id = '${jobId}'`,
   )
 const answer = (blocker: string, a: string) =>
-  db.execute(`select app.hq_answer_blocker('${blocker}'::uuid, '${a}', 'grant')`)
+  db.execute(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${blocker}'::uuid), app.test_office()), '${blocker}'::uuid, '${a}', 'grant')`)
 
 // 1. A genuine question is delivered, once, under its blocker's scope.
 const real = await make('telegram:grant')

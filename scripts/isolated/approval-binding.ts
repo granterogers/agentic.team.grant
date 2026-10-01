@@ -160,7 +160,7 @@ const blockerOf = async (job: string) =>
   )
 const answer = async (id: string, option: string, by = 'grant') =>
   json(
-    (await one(`select app.hq_answer_blocker(${lit(id)}::uuid, ${lit(option)}, ${lit(by)}) as r`))
+    (await one(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, ${lit(option)}, ${lit(by)}) as r`))
       .r,
   )
 const childOf = async (parent: string) =>

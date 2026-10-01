@@ -263,7 +263,7 @@ try {
   const said = String(
     (
       await db.execute(
-        `select app.hq_answer_blocker('${second}'::uuid, 'Do whatever you think best', 'grant')::text as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${second}'::uuid), app.test_office()), '${second}'::uuid, 'Do whatever you think best', 'grant')::text as r`,
       )
     ).rows[0]?.r ?? '',
   )

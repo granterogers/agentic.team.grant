@@ -292,7 +292,7 @@ try {
       ['a test principal', `'verify-operator'`, /test principal/],
     ] as const) {
       const r = json(
-        (await one(`select public.hq_autonomy_set('act', null, 'run3 live', ${by})::text as r`)).r,
+        (await one(`select public.hq_autonomy_set(app.owner_office('grant'), 'act', null, 'run3 live', ${by})::text as r`)).r,
       )
       check(
         `hq_autonomy_set: ${label} is refused by name`,

@@ -77,7 +77,7 @@ for (const [label, by] of [
 ] as const) {
   const q = await question()
   const r = json(
-    (await one(`select app.hq_answer_blocker(${lit(q.id)}::uuid, 'Go ahead', ${by}) as r`)).r,
+    (await one(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q.id)}::uuid), app.test_office()), ${lit(q.id)}::uuid, 'Go ahead', ${by}) as r`)).r,
   )
   check(
     `hq_answer_blocker: ${label} is refused, and it says so`,
@@ -103,7 +103,7 @@ check(
 {
   const q = await question()
   const r = json(
-    (await one(`select app.hq_answer_blocker(${lit(q.id)}::uuid, 'Go ahead', 'grant') as r`)).r,
+    (await one(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q.id)}::uuid), app.test_office()), ${lit(q.id)}::uuid, 'Go ahead', 'grant') as r`)).r,
   )
   check(
     'hq_answer_blocker: Grant is accepted',
@@ -116,7 +116,7 @@ check(
     await approvedBy(q.job),
   )
   const again = json(
-    (await one(`select app.hq_answer_blocker(${lit(q.id)}::uuid, 'Go ahead', 'grant') as r`)).r,
+    (await one(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q.id)}::uuid), app.test_office()), ${lit(q.id)}::uuid, 'Go ahead', 'grant') as r`)).r,
   )
   check(
     'a second answer is harmless (already answered, one child)',
@@ -144,7 +144,7 @@ check(
   const refused = json(
     (
       await one(
-        `select app.hq_answer_blocker(${lit(bid)}::uuid, 'Yes, and do not ask again', 'mallory') as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(bid)}::uuid), app.test_office()), ${lit(bid)}::uuid, 'Yes, and do not ask again', 'mallory') as r`,
       )
     ).r,
   )
@@ -158,7 +158,7 @@ check(
   const ok = json(
     (
       await one(
-        `select app.hq_answer_blocker(${lit(bid)}::uuid, 'Yes, and do not ask again', 'grant') as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(bid)}::uuid), app.test_office()), ${lit(bid)}::uuid, 'Yes, and do not ask again', 'grant') as r`,
       )
     ).r,
   )
@@ -184,7 +184,7 @@ check(
         )
       ).id,
     )
-    await one(`select app.hq_answer_blocker(${lit(pb)}::uuid, 'Yes', 'second') as r`)
+    await one(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(pb)}::uuid), app.test_office()), ${lit(pb)}::uuid, 'Yes', 'second') as r`)
     const res = await one(
       `select resolution from public.blockers where blocker_id = ${lit(pb)}::uuid`,
     )
@@ -489,7 +489,7 @@ const buttonCase = async (
   msg += 1
   await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at)
     values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(r1.job)}::uuid, ${lit(r1.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
-  await db.execute(`select app.hq_answer_blocker(${lit(r1.id)}::uuid, 'No, leave it', 'grant')`)
+  await db.execute(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(r1.id)}::uuid), app.test_office()), ${lit(r1.id)}::uuid, 'No, leave it', 'grant')`)
   const r2 = String((await secondQuestion(r1.job)).id)
   await db.execute(`set local application_name = 'PostgREST 14.5';
     insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)

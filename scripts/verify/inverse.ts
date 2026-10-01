@@ -419,7 +419,7 @@ made.push(...photoRows.map((r) => r.id))
   it by signing the office out of something real would be a verification with a
   side effect Grant did not ask for.
 */
-const refused = { r: await did(`public.hq_disconnect('openrouter')`) }
+const refused = { r: await did(`public.hq_disconnect(app.owner_office('grant'), 'openrouter')`) }
 check(
   'a refused disconnect carries no undo, because it changed nothing',
   String((refused.r as Record<string, unknown>).error ?? '').slice(0, 46),

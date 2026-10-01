@@ -825,7 +825,7 @@ const secondBlocker = await one(`
           array['Done', 'Not now']::text[], 'marcus', false)
   returning blocker_id::text as id`)
 await db.execute(
-  `select app.hq_answer_blocker(${lit(String(secondBlocker.id))}::uuid, 'Done', 'grant')`,
+  `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(String(secondBlocker.id))}::uuid), app.test_office()), ${lit(String(secondBlocker.id))}::uuid, 'Done', 'grant')`,
 )
 const cleared = await one(`
   select state from public.tasks where satisfies_blocker = ${lit(String(secondBlocker.id))}::uuid`)

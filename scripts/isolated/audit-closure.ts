@@ -307,9 +307,9 @@ const kid = String(
     })
   const [a = { r: '' }, b = { r: '' }] = (
     await Promise.all([
-      psql(`select app.approve_tool(${lit(req)}::uuid, 'grant')::text`),
+      psql(`select app.approve_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(req)}::uuid), app.test_office()), ${lit(req)}::uuid, 'grant')::text`),
       psql(
-        `select app.decline_tool(${lit(req)}::uuid, 'grant', 'declined for the race proof')::text`,
+        `select app.decline_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(req)}::uuid), app.test_office()), ${lit(req)}::uuid, 'grant', 'declined for the race proof')::text`,
       ),
     ])
   ).map((r) => ({ r }))
@@ -550,7 +550,7 @@ const kid = String(
   const lb = String(lr.blocker ?? lr.blocker_id ?? '')
   const liveAns = JSON.parse(
     String(
-      (await one(`select app.hq_answer_blocker(${lit(lb)}::uuid, 'Go ahead', 'grant')::text as r`))
+      (await one(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(lb)}::uuid), app.test_office()), ${lit(lb)}::uuid, 'Go ahead', 'grant')::text as r`))
         .r,
     ),
   ) as Record<string, unknown>
@@ -573,7 +573,7 @@ const kid = String(
   )
   const ans = JSON.parse(
     String(
-      (await one(`select app.hq_answer_blocker(${lit(db2)}::uuid, 'Go ahead', 'grant')::text as r`))
+      (await one(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(db2)}::uuid), app.test_office()), ${lit(db2)}::uuid, 'Go ahead', 'grant')::text as r`))
         .r,
     ),
   ) as Record<string, unknown>
@@ -601,7 +601,7 @@ const kid = String(
     String(
       (
         await one(
-          `select app.answer_generation_approval(${lit(db3)}::uuid, true, 'grant')::text as r`,
+          `select app.answer_generation_approval(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(db3)}::uuid), app.test_office()), ${lit(db3)}::uuid, true, 'grant')::text as r`,
         )
       ).r,
     ),

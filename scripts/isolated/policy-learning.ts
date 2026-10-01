@@ -239,7 +239,7 @@ const verdicts = async () =>
   Promise.all(TOOLS.map(async ([t, a]) => `${t}:${String(await gated(t, a))}`))
 const before = await verdicts()
 for (const dial of ['suggest', 'act_with_review', 'act']) {
-  await one(`select app.hq_autonomy_set(${lit(dial)}, null, 'grant') as r`)
+  await one(`select app.hq_autonomy_set(app.owner_office('grant'), ${lit(dial)}, null, 'grant') as r`)
   const base = await verdicts()
   // The most permission-claiming rule there is, stored by the writer a specialist or a script could reach: no gate.
   await one(
@@ -255,7 +255,7 @@ for (const dial of ['suggest', 'act_with_review', 'act']) {
     after.join(' ').slice(0, 120),
   )
 }
-await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'suggest', null, 'grant') as r`)
 check(
   'and that matches what it was before any of it',
   JSON.stringify(await verdicts()) === JSON.stringify(before),

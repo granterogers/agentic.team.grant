@@ -62,7 +62,7 @@ const ask = async (p: string, j: string, fp: string, tool = 'notebook.write') =>
   )
 const answer = async (b: string, a: string, by = 'grant') =>
   json(
-    (await one(`select app.hq_answer_blocker(${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`))
+    (await one(`select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`))
       .r,
   )
 
@@ -766,7 +766,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const late = json(
     (
       await one(
-        `select app.answer_generation_approval(${lit(b3)}::uuid, false, 'grant')::text as r`,
+        `select app.answer_generation_approval(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b3)}::uuid), app.test_office()), ${lit(b3)}::uuid, false, 'grant')::text as r`,
       )
     ).r,
   )
@@ -781,7 +781,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const lockSrc = String(
     (
       await one(
-        `select pg_get_functiondef('app.answer_generation_approval(uuid, boolean, text)'::regprocedure) as d`,
+        `select pg_get_functiondef('app.answer_generation_approval(uuid, uuid, boolean, text)'::regprocedure) as d`,
       )
     ).d,
   )
@@ -824,9 +824,9 @@ const answer = async (b: string, a: string, by = 'grant') =>
 
   // (e) the identity-bearing wrappers are not open to the anonymous and authenticated roles
   for (const fn of [
-    'public.hq_answer_blocker(uuid, text, text)',
-    'public.hq_approve_tool(uuid, jsonb, text)',
-    'public.hq_decline_tool(uuid, text, text)',
+    'public.hq_answer_blocker(uuid, uuid, text, text)',
+    'public.hq_approve_tool(uuid, uuid, jsonb, text)',
+    'public.hq_decline_tool(uuid, uuid, text, text)',
     'public.hq_grant_standing(text, text, uuid, timestamptz, text)',
     'public.hq_revoke_standing(uuid, text, text)',
     'public.hq_withdraw_refusal(uuid, text)',
@@ -1116,7 +1116,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const j2 = await job(p, 'telegram:grant-button')
   const fp = await fingerprint({ button: run })
   const b2 = await ask(p, j2, fp)
-  await db.execute(`select app.answer_generation_approval(${lit(b2)}::uuid, false, 'grant')`)
+  await db.execute(`select app.answer_generation_approval(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b2)}::uuid), app.test_office()), ${lit(b2)}::uuid, false, 'grant')`)
   const viaButton = await mayAct(db as never, {
     projectId: p,
     tool: 'notebook.write',

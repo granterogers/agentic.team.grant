@@ -504,6 +504,9 @@ export const processCallbacks = async (
         */
           const { rows: answered } = await db.execute(`
           select app.hq_answer_blocker(
+            -- The office of the job the message came from: the delivery row is ours, so this is not a value
+            -- the press carried.
+            app.job_office(${lit(row.job_id)}::uuid),
             q.blocker_id,
             case when ${action === 'approve' ? 'true' : 'false'} then q.approval_options[1]
                  else coalesce(q.decline_option, q.approval_options[array_length(q.approval_options, 1)]) end,

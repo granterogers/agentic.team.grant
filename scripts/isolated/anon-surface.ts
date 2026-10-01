@@ -55,8 +55,8 @@ for (const [fn, call] of [
   ['google_oauth_state_consume', `select public.google_oauth_state_consume('x')`],
   ['vault_inventory', `select * from public.vault_inventory()`],
   ['callback_ack', `select public.callback_ack('1', 'approve')`],
-  ['hq_disconnect', `select public.hq_disconnect('notion')`],
-  ['hq_revoke_tool', `select public.hq_revoke_tool('chief-of-staff', 'db.read')`],
+  ['hq_disconnect', `select public.hq_disconnect(app.owner_office('grant'), 'notion')`],
+  ['hq_revoke_tool', `select public.hq_revoke_tool(app.owner_office('grant'), 'chief-of-staff', 'db.read')`],
   [
     'append_event',
     `select public.append_event(gen_random_uuid(), 'agent', 'forged', 'probe', 'probe.forged', false)`,

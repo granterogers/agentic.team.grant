@@ -92,7 +92,7 @@ const asPerson = async (
   void action
   const q = (v: string) => `'${v.replace(/'/g, "''")}'`
   const { rows } = await db.execute(
-    `select app.hq_staff_tool_set(${q(args.p_slug)}, ${q(args.p_tool)}, ${String(args.p_granted)}, 'grant')::text as r`,
+    `select app.hq_staff_tool_set(app.owner_office('grant'), ${q(args.p_slug)}, ${q(args.p_tool)}, ${String(args.p_granted)}, 'grant')::text as r`,
   )
   return { status: 200, body: String((rows[0] as { r: unknown }).r) }
 }

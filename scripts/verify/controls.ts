@@ -85,20 +85,20 @@ const TYPES: Record<string, string> = {
 */
 const HQ_SECTIONS: Readonly<Record<string, string>> = {
   overview: 'app.hq_overview()',
-  staff: 'app.hq_staff()',
+  staff: "app.hq_staff(app.owner_office('grant'))",
   usage: 'app.hq_usage()',
   activity: 'app.hq_activity(50)',
   series: 'app.hq_series(30)',
-  connections: 'app.hq_connections()',
+  connections: "app.hq_connections(app.owner_office('grant'))",
   projects: 'app.hq_projects()',
   artifacts: 'app.hq_artifacts()',
-  settings: 'app.hq_settings()',
-  team: 'app.hq_team()',
+  settings: "app.hq_settings(app.owner_office('grant'))",
+  team: "app.hq_team(app.owner_office('grant'))",
   google: 'app.hq_google()',
-  setup: 'app.hq_setup()',
+  setup: "app.hq_setup(app.owner_office('grant'))",
   cost: 'app.hq_cost_per_outcome(30)',
   bots: 'app.hq_bots()',
-  routing: 'app.hq_routing()',
+  routing: "app.hq_routing(app.owner_office('grant'))",
   build: 'app.hq_build()',
 }
 

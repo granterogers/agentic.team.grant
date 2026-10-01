@@ -384,7 +384,7 @@ const granted = JSON.parse(
   String(
     (
       await one(
-        `select (public.hq_grant_standing(${lit(TOOL)}, 'Stop asking me about this.', p_by => 'grant'))::text as d`,
+        `select (public.hq_grant_standing(app.owner_office('grant'), ${lit(TOOL)}, 'Stop asking me about this.', p_by => 'grant'))::text as d`,
       )
     ).d,
   ),
@@ -407,7 +407,7 @@ check(
     String(
       (
         await one(
-          `select (public.hq_grant_standing(${lit(TOOL)}, '   ', p_by => 'grant'))::text as d`,
+          `select (public.hq_grant_standing(app.owner_office('grant'), ${lit(TOOL)}, '   ', p_by => 'grant'))::text as d`,
         )
       ).d,
     ),
@@ -424,7 +424,7 @@ check(
     String(
       (
         await one(
-          `select (public.hq_revoke_standing(${lit(String(granted.authorization))}::uuid, 'done', p_by => 'grant'))::text as d`,
+          `select (public.hq_revoke_standing(coalesce((select zz_o.office_id from public.standing_authorizations zz_o where zz_o.authorization_id = ${lit(String(granted.authorization))}::uuid), app.test_office()), ${lit(String(granted.authorization))}::uuid, 'done', p_by => 'grant'))::text as d`,
         )
       ).d,
     ),
@@ -444,7 +444,7 @@ check(
     String(
       (
         await one(
-          `select (public.hq_revoke_standing(${lit(String(granted.authorization))}::uuid, 'again', p_by => 'grant'))::text as d`,
+          `select (public.hq_revoke_standing(coalesce((select zz_o.office_id from public.standing_authorizations zz_o where zz_o.authorization_id = ${lit(String(granted.authorization))}::uuid), app.test_office()), ${lit(String(granted.authorization))}::uuid, 'again', p_by => 'grant'))::text as d`,
         )
       ).d,
     ),
@@ -531,7 +531,7 @@ const answered = JSON.parse(
   String(
     (
       await one(
-        `select (public.hq_answer_blocker(${lit(blockerId)}::uuid, ${lit(OPTION)}, 'grant'))::text as d`,
+        `select (public.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(blockerId)}::uuid), app.test_office()), ${lit(blockerId)}::uuid, ${lit(OPTION)}, 'grant'))::text as d`,
       )
     ).d,
   ),
@@ -595,7 +595,8 @@ console.log('\nanswering "add them" adds them')
               'payloads', jsonb_build_array(
                 jsonb_build_object('file_id', 'fixture-one', 'folder_id', 'fixture-folder'),
                 jsonb_build_object('file_id', 'fixture-two', 'folder_id', 'fixture-folder'))));
-    select app.hq_answer_blocker(
+    select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = (select blocker_id from public.blockers
+        where requested_action = ${lit(`Two files have appeared (${run}). What would you like me to do?`)})), app.test_office()), 
       (select blocker_id from public.blockers
         where requested_action = ${lit(`Two files have appeared (${run}). What would you like me to do?`)}),
       ${lit(DO_IT)}, 'grant');
@@ -640,7 +641,8 @@ console.log('\nanswering "add them" adds them')
             array[${lit(DO_IT)}, 'Ignore these'], 'chief-of-staff', true,
             jsonb_build_object('option', ${lit(DO_IT)}, 'kind', 'drive.read_file',
               'payloads', jsonb_build_array(jsonb_build_object('file_id', 'fixture-one'))));
-    select app.hq_answer_blocker(
+    select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = (select blocker_id from public.blockers
+        where requested_action = ${lit(`Ignore probe (${run})`)})), app.test_office()), 
       (select blocker_id from public.blockers
         where requested_action = ${lit(`Ignore probe (${run})`)}), 'Ignore these', 'grant');
     select (select count(*)::int from public.jobs

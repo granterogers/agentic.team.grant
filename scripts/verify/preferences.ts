@@ -106,7 +106,7 @@ const mk = async (name: string): Promise<string> => {
   prefix, so it can never reach a rule anything else owns.
 */
 const swept = await db.execute(`
-  select app.retract_lesson(l.lesson_id, ${lit(BY)}, 'Superseded by a later run of verify:preferences.') as r
+  select app.retract_lesson(coalesce((select zz_o.office_id from public.lessons zz_o where zz_o.lesson_id = l.lesson_id), app.test_office()), l.lesson_id, ${lit(BY)}, 'Superseded by a later run of verify:preferences.') as r
     from public.lessons_live l
    where l.learned_by like 'verify:preferences-%' and l.learned_by <> ${lit(BY)}`)
 console.log(`  (retired ${String(swept.rows.length)} rule(s) left live by an earlier run)`)
