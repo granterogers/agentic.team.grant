@@ -127,6 +127,11 @@ export interface Job {
   readonly leasedBy?: string
   /** The claim's number (0625, see fence.ts); absent on a schema from before it. */
   readonly claimGen?: number
+  /**
+   * The office this job belongs to, fixed when the job was made and never changed (P3). Read back at the claim from the
+   * job row; absent only on a job built by a test. Anything the job does is done inside it.
+   */
+  readonly officeId?: string
   /** Set when a renewal finds the claim gone. */
   lost?: boolean
 }
@@ -767,6 +772,11 @@ export const dequeue = async (
   // changing what dequeue_job RETURNS would break a worker running the old shape. A schema without the column
   // answers an error, and the fence then asks the attempt as it always did.
   const gen = await readClaimGen(db, String(r.job_id), workerId, Number(r.attempt))
+  const officeRow = (
+    await db.execute(
+      `select office_id::text as o from public.jobs where job_id = ${lit(String(r.job_id))}::uuid`,
+    )
+  ).rows[0] as { o?: string } | undefined
   return {
     jobId: String(r.job_id),
     kind: String(r.kind),
@@ -774,6 +784,7 @@ export const dequeue = async (
     projectId: r.project_id === null ? null : String(r.project_id),
     idempotencyKey: String(r.idempotency_key),
     attempt: Number(r.attempt),
+    ...(officeRow?.o === undefined ? {} : { officeId: officeRow.o }),
     // The claim this worker now holds, so every later write can ask whether it still does (Run 4, D1).
     leasedBy: workerId,
     ...(gen === undefined || gen === null ? {} : { claimGen: Number(gen) }),
