@@ -662,5 +662,6 @@
   "0648_one_resolver_for_deployment_credentials.sql": "3bb7a01c1c588e13c4462e95ee0bf558faa9b690330130da0d4f36cedcd878c5",
   "0649_retire_the_raw_vault_readers.sql": "a17be1a4670e1b79ee65f1a3c7e6cf452217e469011a8c0b279837a23e9ae87b",
   "0650_authorize_the_target_before_writing_the_object.sql": "9006285a8c8be76052777dfa8de7ce42acf12ccd92b3c6652a90d770b3629b70",
-  "0651_a_legacy_github_token_name_has_a_class.sql": "6c0a83e036e790bdef2be3df2ae210260a6834b2dadff766bf8534fe7a286e6f"
+  "0651_a_legacy_github_token_name_has_a_class.sql": "6c0a83e036e790bdef2be3df2ae210260a6834b2dadff766bf8534fe7a286e6f",
+  "0652_no_member_is_grant_by_default.sql": "601d6e371c8664354ad2404efc89bf992fb79390c0d4e1518e124b3bd92e70ea"
 }

@@ -25,7 +25,7 @@ const S_GRANT = `aaa.bbb.${'g'.repeat(70)}`
 const S_SECOND = `aaa.bbb.${'s'.repeat(70)}`
 const S_HARNESS = `aaa.bbb.${'h'.repeat(70)}`
 const S_STRANGER = `aaa.bbb.${'x'.repeat(70)}`
-const SECOND_EMAIL = 'second.person@example.com'
+const SECOND_EMAIL = 'p1-second-person@example.com'
 const SECOND_KEY = 'p1-second-person'
 
 // The second person exists for this run only, and is removed in the finally block below.
@@ -48,6 +48,14 @@ const operatorNow = async (key: string) =>
 
 let exit = 1
 try {
+  const secondRow = await db.execute(
+    `select owner_key from public.office_members where email = ${lit(SECOND_EMAIL)}`,
+  )
+  check(
+    "the second person exists for this run under their own key (not another suite's leftover)",
+    (secondRow.rows[0] as { owner_key?: string } | undefined)?.owner_key === SECOND_KEY,
+    JSON.stringify(secondRow.rows[0] ?? null),
+  )
   check('Grant is an operator', await operatorNow('grant'), 'seeded from the existing person')
   check('the second person is not', !(await operatorNow(SECOND_KEY)), SECOND_KEY)
   check('a harness member is not', !(await operatorNow('verify-operator')), 'verify-operator')
@@ -210,6 +218,65 @@ try {
     dGrant.status !== 403 && dGrant.status !== 401,
     `http ${String(dGrant.status)}`,
   )
+
+  // 4b. no member is Grant by default (0652): the one-line insert for a second human must not make them the first
+  const tryInsert = async (sql: string) => {
+    try {
+      await db.execute(sql)
+      return 'inserted'
+    } catch (e) {
+      return String((e as Error).message)
+    }
+  }
+  const noKey = await tryInsert(
+    `insert into public.office_members (email, note) values ('nokey.${SECOND_KEY}@example.com', 'p1 proof')`,
+  )
+  check(
+    'a member added WITHOUT an owner key is refused (it used to become grant)',
+    noKey.includes('owner_key') && noKey.includes('null value'),
+    noKey.slice(0, 90),
+  )
+  const reserved = await tryInsert(
+    `insert into public.office_members (email, note, owner_key) values ('reserved.${SECOND_KEY}@example.com', 'p1 proof', 'chief-of-staff')`,
+  )
+  check(
+    'a PERSON may not take a reserved name',
+    reserved.includes('office_members_person_key_not_reserved'),
+    reserved.slice(0, 90),
+  )
+  const harnessName = await tryInsert(
+    `insert into public.office_members (email, note, owner_key) values ('hn.${SECOND_KEY}@example.com', 'p1 proof', 'verify-sam')`,
+  )
+  check(
+    'nor a harness-shaped name (the office would read them as a test principal)',
+    harnessName.includes('office_members_person_key_not_reserved'),
+    harnessName.slice(0, 90),
+  )
+  const shape = await tryInsert(
+    `insert into public.office_members (email, note, owner_key) values ('sh.${SECOND_KEY}@example.com', 'p1 proof', 'telegram:grant')`,
+  )
+  check(
+    'a key with a colon is refused (it would add a field to requested_by)',
+    shape.includes('office_members_owner_key_shape'),
+    shape.slice(0, 90),
+  )
+  const dup = await tryInsert(
+    `insert into public.office_members (email, note, owner_key) values ('dup.${SECOND_KEY}@example.com', 'p1 proof', 'grant')`,
+  )
+  check(
+    'two people cannot share a key (a second "grant" is refused)',
+    dup.includes('office_members_one_person_per_key'),
+    dup.slice(0, 90),
+  )
+  const okRow = await tryInsert(
+    `insert into public.office_members (email, note, owner_key) values ('ok.${SECOND_KEY}@example.com', 'p1 proof', ${lit(`${SECOND_KEY}-b`)})`,
+  )
+  check(
+    'POSITIVE CONTROL: a member with their own key is added',
+    okRow === 'inserted',
+    okRow.slice(0, 90),
+  )
+  await db.execute(`delete from public.office_members where email = 'ok.${SECOND_KEY}@example.com'`)
 
   // 5. becoming an operator is a row, and only a row
   await db.execute(
