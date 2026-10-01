@@ -346,6 +346,7 @@
     "check:office-gateway": "tsx scripts/check-office-gateway.ts",
     "verify:p3-app": "tsx scripts/isolated/p3-app-attack.ts",
     "p3:inventory": "tsx scripts/p3/inventory.ts",
+    "check:office-raw-sql": "tsx scripts/p3/raw-sql.ts --check",
     "check:answerable": "tsx scripts/check-answerable.ts",
     "check:voice-sessions": "tsx scripts/check-voice-sessions.ts",
     "check:door-origins": "tsx scripts/check-door-origins.ts",

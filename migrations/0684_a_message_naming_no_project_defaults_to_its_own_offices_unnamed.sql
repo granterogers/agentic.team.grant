@@ -24,7 +24,6 @@ end
 $f$;
 revoke all on function app.default_to_offices_unnamed_project() from public, anon, authenticated, service_role;
 
-set local lock_timeout = '10s';
 alter table public.inbound_commands alter column project_id drop default;
 alter table public.duty_said alter column project_id drop default;
 

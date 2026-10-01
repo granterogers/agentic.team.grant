@@ -1,0 +1,6 @@
+{
+ "note": "Inline SQL touching an owned table that does not name an office. May only shrink; give each remaining entry a reason.",
+ "reasons": {
+  "undefined": ""
+ }
+}

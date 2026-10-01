@@ -594,6 +594,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'every owned edge is enforced by the database - composite keys, write-once, derived guards, row security (multi-user P2)',
   ],
   [
+    'check:office-raw-sql',
+    'no new inline SQL touches an owned table without naming an office; the unscoped set only shrinks (multi-user P3)',
+  ],
+  [
     'check:office-conversion',
     'no new office-sensitive function ships unclassified; the legacy-unscoped set only shrinks (multi-user P3)',
   ],

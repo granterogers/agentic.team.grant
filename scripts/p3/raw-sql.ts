@@ -7,8 +7,9 @@
  *   npx tsx scripts/p3/raw-sql.ts [--json out.json] [--list]
  * A statement is a template literal or string containing select/insert/update/delete AND a table reference.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
 
 const manifest = JSON.parse(readFileSync('docs/multi-user/ownership-manifest.json', 'utf8'))
   .tables as Record<string, { class: string }>
@@ -20,7 +21,17 @@ const ownedRe = new RegExp(
   'gi',
 )
 
-export type Site = { file: string; line: number; tables: string[]; scoped: boolean }
+export type Site = { file: string; line: number; tables: string[]; scoped: boolean; key: string }
+const keyOf = (file: string, body: string): string =>
+  `${file}#${createHash('sha1')
+    .update(
+      body
+        .replace(/\$\{[^}]*\}/g, '${}')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    )
+    .digest('hex')
+    .slice(0, 12)}`
 const files = execFileSync('git', ['ls-files', 'src', 'supabase/functions'], { encoding: 'utf8' })
   .split('\n')
   .filter((f) => /\.ts$/.test(f) && !/\.test\.ts$/.test(f))
@@ -56,3 +67,49 @@ console.log(
 )
 for (const [f, n] of [...byFile].sort((a, b) => b[1] - a[1]).slice(0, 25))
   console.log(`  ${String(n).padStart(4)}  ${f}`)
+
+// The ratchet: an unscoped statement that is not in the baseline is a NEW unscoped read or write of an owned table.
+const BASELINE = 'docs/multi-user/raw-sql-baseline.json'
+if (process.argv.includes('--write-baseline')) {
+  const keys = [...new Set(sites.filter((x) => !x.scoped).map((x) => x.key))].sort()
+  let previous: Record<string, string> = {}
+  try {
+    previous =
+      (JSON.parse(readFileSync(BASELINE, 'utf8')) as { reasons?: Record<string, string> })
+        .reasons ?? {}
+  } catch {
+    previous = {}
+  }
+  const reasons = Object.fromEntries(keys.map((k) => [k, previous[k] ?? '']))
+  writeFileSync(
+    BASELINE,
+    JSON.stringify(
+      {
+        note: 'Inline SQL touching an owned table that does not name an office. May only shrink; give each remaining entry a reason.',
+        reasons,
+      },
+      null,
+      1,
+    ),
+  )
+  console.log(`baseline: ${String(keys.length)} unscoped statement(s)`)
+}
+if (process.argv.includes('--check')) {
+  const base = new Set(
+    Object.keys(
+      (JSON.parse(readFileSync(BASELINE, 'utf8')) as { reasons: Record<string, string> }).reasons,
+    ),
+  )
+  const fresh = sites.filter((x) => !x.scoped && !base.has(x.key))
+  const live = new Set(sites.map((x) => x.key))
+  const gone = [...base].filter((k) => !live.has(k)).length
+  for (const f of fresh)
+    console.error(
+      `FAIL ${f.file}:${String(f.line)} new inline SQL on ${f.tables.join(',')} names no office`,
+    )
+  console.log(
+    `raw SQL ratchet: ${String(sites.filter((x) => !x.scoped).length)} unscoped (baseline ${String(base.size)}, ${String(gone)} since converted or removed)`,
+  )
+  if (fresh.length > 0) process.exitCode = 1
+  else console.log('check:office-raw-sql OK')
+}
