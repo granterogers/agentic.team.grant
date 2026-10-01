@@ -577,7 +577,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ],
   ['check:answerable', 'every question open on his dashboard has somewhere for an answer to go'],
   ['check:anon-exposure', 'no function in public can be executed with a public key (#384)'],
-  ['check:ownership', 'every table has an ownership class and a derived table proves its owner (multi-user P0)'],
+  [
+    'check:ownership',
+    'every table has an ownership class and a derived table proves its owner (multi-user P0)',
+  ],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 
