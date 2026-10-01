@@ -33,11 +33,17 @@ export async function prepare(
     do $r$ begin
       if not exists (select 1 from pg_roles where rolname = 'p2_worker') then create role p2_worker nologin bypassrls; end if;
     end $r$;
+    -- service_role is given what Supabase gives it - the public tables - and NOTHING in schema app. An earlier version of
+    -- this setup also granted it usage on app and execute on every app function; that hid, for a whole afternoon, the
+    -- fact that the ownership guards called a function service_role cannot reach, and the live Telegram webhook (which
+    -- writes through PostgREST as service_role) answered 503 to every update.
     grant all on all tables in schema public to p2_worker, service_role;
-    grant usage on schema public, app to p2_worker, service_role;
-    grant execute on all functions in schema app to p2_worker, service_role;
-    grant execute on all functions in schema public to p2_worker, service_role;
-    grant usage on all sequences in schema public to p2_worker, service_role;`)
+    grant usage on schema public to p2_worker, service_role;
+    grant usage on all sequences in schema public to p2_worker, service_role;
+    -- p2_worker stands in for the postgres role the worker connects as: it can use schema app and everything in it.
+    grant usage on schema app to p2_worker;
+    grant execute on all functions in schema app to p2_worker;
+    grant execute on all functions in schema public to p2_worker;`)
   for (const [auth, mail] of [
     [AUTH_A, 'person.a@example.invalid'],
     [AUTH_B, 'person.b@example.invalid'],
@@ -137,8 +143,13 @@ export async function suite(db: Db): Promise<Result[]> {
     }
   }
   const roles = ['service_role', 'p2_worker'] as const
-  const refused = async (what: string, sql: string, ...needles: string[]) => {
-    for (const role of roles) {
+  const refusedAs = async (
+    as: readonly string[],
+    what: string,
+    sql: string,
+    ...needles: string[]
+  ) => {
+    for (const role of as) {
       const msg = await run(role, sql)
       const ok = msg !== '' && needles.every((n) => msg.includes(n))
       check(
@@ -152,6 +163,14 @@ export async function suite(db: Db): Promise<Result[]> {
       )
     }
   }
+  const refused = (what: string, sql: string, ...needles: string[]) =>
+    refusedAs(roles, what, sql, ...needles)
+  /*
+    Some tables are not writable by service_role in production at all - deliveries and outputs carry older triggers that
+    call app.now_utc() as the invoker, so only the worker (the postgres role) ever writes them. An attack on one of those
+    is run as the worker alone; running it as service_role would test a privilege failure that predates this work.
+  */
+  const workerOnly = ['p2_worker'] as const
   const accepted = async (what: string, sql: string, role = 'service_role') => {
     const msg = await run(role, sql)
     check(msg === '', what, msg === '' ? 'accepted' : msg.slice(0, 160))
@@ -170,6 +189,17 @@ export async function suite(db: Db): Promise<Result[]> {
     'the attacking roles BYPASS row security and are not superusers',
     bypass.map((r) => `${r.rolname}: bypassrls=${String(r.rolbypassrls)}`).join('; '),
   )
+
+  {
+    const reach = await run('service_role', `select app.sole_person_office()`)
+    check(
+      reach.includes('42501'),
+      'the attacking service role really cannot reach schema app (so a guard that depended on it would fail here as it did live)',
+      reach === ''
+        ? 'it CAN reach app: this suite is not modelling production'
+        : reach.slice(0, 90),
+    )
+  }
 
   const job = (n: number, extra = '', val = '', office = A) =>
     `insert into public.jobs (job_id, correlation_id, idempotency_key, kind, requested_by, office_id${extra}) values ('${id(n)}', '${id(n)}', 'atk-key-${n}', 'probe', 'verify:atk', '${office}'${val})`
@@ -261,7 +291,8 @@ export async function suite(db: Db): Promise<Result[]> {
     '23503',
     'inbound_commands_paired_with_same_office',
   )
-  await refused(
+  await refusedAs(
+    workerOnly,
     "A's delivery for B's job",
     `insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, lease_expires_at, office_id, job_id) values ('slack','atk:d:one','a','CATK0001','notice', now(), '${A}', '${id(12)}')`,
     '23503',
@@ -347,7 +378,8 @@ export async function suite(db: Db): Promise<Result[]> {
     '23502',
     'project_id',
   )
-  await refused(
+  await refusedAs(
+    workerOnly,
     'a derived output with no job (its path is NOT NULL)',
     `insert into public.outputs (job_id, body, confidence, evidence) values (null, 'x', (select e.enumlabel from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'confidence_level' order by e.enumsortorder limit 1)::public.confidence_level, (select e.enumlabel from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'evidence_type' order by e.enumsortorder limit 1)::public.evidence_type)`,
     '23502',

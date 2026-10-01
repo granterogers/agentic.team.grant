@@ -594,6 +594,24 @@ await answer(qn.id, 'No, leave it')
   }
 }
 // ---- teardown and containment ---------------------------------------------------------------------------------------
+/*
+  THE TO-DO A QUESTION MAKES IS ON HIS LIST, AND THIS SUITE'S QUESTIONS ARE NOT HIS.
+
+  Raising a blocker also files a to-do on the personal list of the person who must answer it, and this suite raises
+  blockers against fixture jobs. Nothing removed those to-dos: ten of them (the same ten twice, in two gate runs)
+  sat on Grant's personal list until check:leaks reported them (0530's class). Swept by CLASS, not by this run's token,
+  so an earlier crashed run's are collected too: a to-do that satisfies one of this suite's fixture questions, or that
+  carries this suite's title, and that was made by a harness job.
+*/
+const sweptTodos = await db.execute(`
+  delete from public.tasks t
+   where t.assigned_to_human
+     and exists (select 1 from public.jobs j where j.job_id = t.job_id and app.harness_job(j.job_id))
+     and (t.satisfies_blocker in (select b.blocker_id from public.blockers b where b.why_needed in ('run1-live fixture', 'run2-live fixture'))
+          or t.title ~ '^(Run 2 live (proof|tick)|Send the renewal note to the venue)')
+   returning t.task_id`)
+console.log(`swept ${String(sweptTodos.rows.length)} fixture to-do(s) from his personal list`)
+
 await origins.release()
 const leftover = await one(
   `select count(*)::int as n from public.jobs where kind = 'verify.ask' and state in ('queued','running','retrying')`,

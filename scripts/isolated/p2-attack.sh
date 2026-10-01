@@ -12,6 +12,8 @@ $P -d postgres -c "create database $NAME template post"
 $P -d "$NAME" -c "insert into auth.users(id,email) select gen_random_uuid(), e from (values ('grant.e.rogers@gmail.com'),('verify.operator@example.com')) v(e) where not exists (select 1 from auth.users u where lower(u.email) = v.e)"
 for f in "$ROOT"/migrations/065[4-9]_*.sql "$ROOT"/migrations/066[0-9]_*.sql; do
   [ -e "$f" ] || continue
+  # P2_SKIP="0664 ..." leaves migrations out, to show the suite goes red without them
+  case " ${P2_SKIP:-} " in *" $(basename "$f" | cut -c1-4) "*) echo "skipping $(basename "$f")"; continue;; esac
   $P -d "$NAME" -v ON_ERROR_STOP=1 -f "$f" >/dev/null
 done
 echo "$NAME ready: $($P -d "$NAME" -tA -c 'select count(*) from public.offices') office(s)"

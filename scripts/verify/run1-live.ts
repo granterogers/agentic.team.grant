@@ -344,6 +344,9 @@ try {
   const released = // Rows written to model 'the question reached him' were never sent to anybody: removed, so the leak witness cannot
     // read a fabricated row as harness traffic reaching a destination.
     await db.execute(`delete from public.deliveries where dedupe_key like 'run1-live-%'`)
+  await db.execute(
+    `delete from public.tasks t where t.assigned_to_human and exists (select 1 from public.jobs j where j.job_id = t.job_id and app.harness_job(j.job_id)) and (t.satisfies_blocker in (select b.blocker_id from public.blockers b where b.why_needed in ('run1-live fixture', 'run2-live fixture')) or t.title ~ '^(Run 2 live (proof|tick)|Send the renewal note to the venue)')`,
+  )
   await origins.release()
   console.log(`released ${String(released)} declaration(s)`)
 }

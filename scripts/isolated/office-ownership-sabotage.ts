@@ -162,6 +162,21 @@ const sabotages: Sabotage[] = [
     gates: ['edges'],
   },
   {
+    name: 'run the bridge as its invoker again (the live 503 on the Telegram webhook)',
+    break: 'alter function app.office_bridge_trigger() security invoker',
+    prove:
+      "select count(*)::int as n from pg_proc where proname = 'office_bridge_trigger' and prosecdef",
+    restore: 'alter function app.office_bridge_trigger() security definer',
+    suiteRed: [
+      'a project with no office, written by a bypass role',
+      'while Grant is the only real office a legacy writer',
+      'a harness-named writer with no office lands in the TEST office',
+      'with Person A and B active the same unscoped',
+      'a sample office alone with Grant also makes the bridge ambiguous',
+    ],
+    gates: [],
+  },
+  {
     name: 'remove the compatibility bridge from jobs',
     break: 'drop trigger a0_office_bridge on public.jobs',
     prove:
