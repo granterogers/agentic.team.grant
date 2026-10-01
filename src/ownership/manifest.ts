@@ -117,6 +117,26 @@ export const readCatalogue = (value: unknown): Catalogue => {
 const same = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((v, i) => v === b[i])
 
+/**
+ * A foreign key whose last column is `office_id`, beside a foreign key on the same leading columns to the same parent.
+ * The second is the edge the manifest acknowledges; the first is what stops it crossing offices.
+ */
+export const isSameOfficeTwin = (f: CatalogueFk, cat: Catalogue): boolean => {
+  const last = f.columns[f.columns.length - 1]
+  if (last === undefined || last.column !== 'office_id' || f.columns.length < 2) return false
+  const lead = f.columns.slice(0, -1).map((c) => c.column)
+  return cat.fks.some(
+    (g) =>
+      g.child === f.child &&
+      g.parent === f.parent &&
+      g.constraint !== f.constraint &&
+      same(
+        g.columns.map((c) => c.column),
+        lead,
+      ),
+  )
+}
+
 const isOwned = (cls: OwnershipClass | undefined): boolean =>
   cls === 'OFFICE_CARRIER' || cls === 'OFFICE_DERIVED'
 
@@ -254,6 +274,9 @@ export const validate = (manifest: Manifest, cat: Catalogue): string[] => {
   for (const f of cat.fks) {
     const child = entries[f.child]
     if (child === undefined || !isOwned(child.class) || !isOwned(clsOf(f.parent))) continue
+    // A composite (column, office_id) key is the ENFORCEMENT of an edge that is already acknowledged through its
+    // single-column twin, not a second edge. That it exists is asserted by `enforcementProblems`.
+    if (isSameOfficeTwin(f, cat)) continue
     const chosen = [...(child.path ?? []), ...(child.also ?? [])].some(
       (p) => p.constraint === f.constraint,
     )

@@ -7,6 +7,8 @@ fresh() { $P -c "drop database if exists $1" >/dev/null 2>&1; $P -c "create data
 status=0
 # The candidate: production's schema (post, through 0612) plus every migration on this branch after it (MIG_FLOOR).
 fresh cand post
+# the replica has no logins for the two office_members (0646); production does, and 0654 binds the offices to them
+$P -d cand -c "insert into auth.users(id,email) select gen_random_uuid(), e from (values ('grant.e.rogers@gmail.com'),('verify.operator@example.com')) v(e) where not exists (select 1 from auth.users u where lower(u.email) = v.e)" >/dev/null
 for m in $(ls migrations/*.sql | awk -F/ '{print $2}' | awk -v f="${MIG_FLOOR:-0613}" '$0 >= f'); do
   $P -d cand -v ON_ERROR_STOP=1 -f migrations/$m >/dev/null || { echo "FAIL applying $m to cand"; exit 1; }
   echo "   cand + $m"
@@ -17,6 +19,11 @@ for t in destination-retirement:ret381 history-shapes:hist381 test-origins:orig3
   f=${t%%:*}; db=${t##*:}; echo "== $f"; fresh $db cand
   npx tsx scripts/isolated/$f.ts $db > /tmp/iso-$f.txt 2>&1; rc=$?; grep -E "passed|^FAIL" /tmp/iso-$f.txt | tail -3; [ $rc -eq 0 ] || status=1
 done
+echo "== P2 ownership: attacks (Person A / Person B / Sample / Test / System), sabotage, planted inconsistencies"
+bash scripts/isolated/p2-attack.sh >/dev/null 2>&1 || { echo FAIL building p2_attack; status=1; }
+npx tsx scripts/isolated/office-ownership.ts p2_attack > /tmp/iso-p2-attacks.txt 2>&1; rc=$?; grep -E "checks passed|^FAIL" /tmp/iso-p2-attacks.txt | tail -3; [ $rc -eq 0 ] || status=1
+npx tsx scripts/isolated/office-ownership-sabotage.ts p2_attack > /tmp/iso-p2-sabotage.txt 2>&1; rc=$?; grep -E "behaved|misbehaved|^FAIL" /tmp/iso-p2-sabotage.txt | tail -3; [ $rc -eq 0 ] || status=1
+npx tsx scripts/isolated/p2-backfill-plants.ts > /tmp/iso-p2-plants.txt 2>&1; rc=$?; grep -E "every plant|check\(s\) failed|^FAIL" /tmp/iso-p2-plants.txt | tail -3; [ $rc -eq 0 ] || status=1
 echo "== version skew: new worker on the old schema (before 0619 and 0620)"; $P -c "drop database if exists skew_old" >/dev/null 2>&1; $P -c "create database skew_old template post"
 for m in $(ls migrations/*.sql | awk -F/ '{print $2}' | awk '$0 >= "0613" && $0 < "0619"'); do $P -d skew_old -v ON_ERROR_STOP=1 -f migrations/$m >/dev/null || { echo "FAIL applying $m to skew_old"; exit 1; }; done
 npx tsx scripts/isolated/job-skew.ts skew_old > /tmp/iso-job-skew.txt 2>&1; rc=$?; grep -E "passed|^FAIL" /tmp/iso-job-skew.txt | tail -3; [ $rc -eq 0 ] || status=1

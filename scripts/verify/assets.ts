@@ -67,7 +67,7 @@ await db.execute(`delete from public.projects where slug = 'verify-assets-fixtur
 const proj = await one(`
   insert into public.projects (slug, name, purpose, status)
   values ('verify-assets-fixture', 'Asset verification', 'Thrown away', 'paused')
-  on conflict (slug) do update set name = excluded.name
+  on conflict (office_id, slug) do update set name = excluded.name
   returning project_id
 `)
 const pid = String(proj.project_id)

@@ -341,6 +341,7 @@
     "check:system-secrets": "tsx scripts/check-system-secrets.ts",
     "check:machine-key": "tsx scripts/check-machine-key.ts",
     "check:ownership": "tsx scripts/check-ownership.ts",
+    "check:office-edges": "tsx scripts/check-office-edges.ts",
     "check:answerable": "tsx scripts/check-answerable.ts",
     "check:voice-sessions": "tsx scripts/check-voice-sessions.ts",
     "check:door-origins": "tsx scripts/check-door-origins.ts",

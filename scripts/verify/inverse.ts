@@ -167,7 +167,7 @@ await db.execute(`
   values (${lit(SLUG)}, 'Inverse verification', 'active',
           'Exercises the undo path. Deleted by the suite that made it.',
           'flask', 'p-moss')
-  on conflict (slug) do update set name = excluded.name, status = 'active',
+  on conflict (office_id, slug) do update set name = excluded.name, status = 'active',
     icon = excluded.icon, icon_hue = excluded.icon_hue;
   /*
     channel_prefix is DERIVED from the name -- hq_rename_project recomputes it

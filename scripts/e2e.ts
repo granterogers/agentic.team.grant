@@ -589,6 +589,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:ownership',
     'every table has an ownership class and a derived table proves its owner (multi-user P0)',
   ],
+  [
+    'check:office-edges',
+    'every owned edge is enforced by the database - composite keys, write-once, derived guards, row security (multi-user P2)',
+  ],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 

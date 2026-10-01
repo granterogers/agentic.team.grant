@@ -30,7 +30,11 @@ import {
   validate,
 } from '../src/ownership/manifest.ts'
 
-const MANIFEST_PATH = new URL('../docs/multi-user/ownership-manifest.json', import.meta.url)
+// OWNERSHIP_MANIFEST names another manifest file; only the sabotage proofs use it, to show a misclassification is caught.
+const MANIFEST_PATH =
+  process.env.OWNERSHIP_MANIFEST === undefined
+    ? new URL('../docs/multi-user/ownership-manifest.json', import.meta.url)
+    : new URL(`file://${process.env.OWNERSHIP_MANIFEST}`)
 
 export const loadManifest = (): Manifest =>
   JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as Manifest
@@ -165,6 +169,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       .join(', ')}`,
   )
 
+  if (argv.includes('--suggest')) {
+    const known = new Set(Object.keys(manifest.tables))
+    for (const t of cat.tables.filter((x) => !known.has(x)))
+      console.log(`suggest ${suggest(t, manifest, cat)}`)
+  }
+  if (problems.length > 0) {
+    console.log(`FAIL ${String(problems.length)} problem(s):`)
+    for (const p of problems.slice(0, 25)) console.log(`  ${p}`)
+    process.exit(1)
+  }
+  // The controls only matter once the result is clean; a real problem is reported as itself.
   const ctl = controls(manifest, cat)
   const dead = ctl.filter((c) => c.raised.length === 0)
   for (const c of ctl) {
@@ -177,15 +192,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1)
   }
 
-  if (argv.includes('--suggest')) {
-    const known = new Set(Object.keys(manifest.tables))
-    for (const t of cat.tables.filter((x) => !known.has(x)))
-      console.log(`suggest ${suggest(t, manifest, cat)}`)
-  }
-  if (problems.length > 0) {
-    console.log(`FAIL ${String(problems.length)} problem(s):`)
-    for (const p of problems.slice(0, 25)) console.log(`  ${p}`)
-    process.exit(1)
-  }
   console.log('ok   every table is classified and every derived table proves its owner')
 }

@@ -750,9 +750,25 @@
         }
       ]
     },
+    "office_backfill_report": {
+      "class": "SYSTEM",
+      "why": "The P2 ownership backfill's own record of which rule proved how many rows of which table. Append-only deployment evidence; no person reads it."
+    },
+    "office_bridge_use": {
+      "class": "SYSTEM",
+      "why": "Counts how often a legacy writer relied on the compatibility bridge to be given an office. Deployment telemetry that ends when P3 removes the bridge."
+    },
+    "office_edge_exceptions": {
+      "class": "SYSTEM",
+      "why": "Names the few existing append-only rows whose edge crosses offices and cannot be corrected; the matching key stays NOT VALID and a check keeps the list from growing."
+    },
     "office_members": {
       "class": "SYSTEM",
       "why": "Legacy email-keyed sign-in allow-list; to be retired when offices exist. Not an ownership key."
+    },
+    "offices": {
+      "class": "SYSTEM",
+      "why": "The ownership primitive itself: one row per office (person, sample, test, system), immutable identity, never deleted. An office is not owned by an office."
     },
     "operator_senders": {
       "class": "SYSTEM",

@@ -107,7 +107,7 @@ export const provisionWorld = async (db: SqlExecutor): Promise<WorldReport> => {
     await db.execute(`
       insert into public.projects (slug, name, status)
       values (${lit(slug)}, ${lit(project.name)}, ${lit(status)})
-      on conflict (slug) do update set name = excluded.name, status = excluded.status;
+      on conflict (office_id, slug) do update set name = excluded.name, status = excluded.status;
       ${
         archived
           ? ''

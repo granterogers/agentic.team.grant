@@ -81,9 +81,16 @@ const byTest = await w.asTest('vikunja_connect', {
   p_project_id: 7,
   p_api_token: TOK,
 })
+// P1.3 made connecting a board an operator-only act, so the gateway refuses a test member at the door (403, operator_required
+// or person_required) instead of answering 200 with an error inside the result. Any of them is a refusal; what must hold
+// is that it WAS refused and that nothing was minted.
 check(
   'a TEST member cannot connect one either, and mints no authorization',
-  typeof json(byTest.body.result).error === 'string' &&
+  (byTest.status === 403
+    ? ['operator_required', 'person_required'].includes(
+        String((byTest.body as { error?: unknown }).error),
+      )
+    : typeof json(byTest.body.result).error === 'string') &&
     Number(
       (
         await one(

@@ -103,7 +103,7 @@ const projectId = String(
       with created as (
         insert into public.projects (slug, name, status)
         values ('fixture-recovers', 'Fixture: recovers', 'active')
-        on conflict (slug) do update set status = 'active'
+        on conflict (office_id, slug) do update set status = 'active'
         returning project_id
       ),
       -- ADR-0014: an active project reads from and writes to somewhere real,
@@ -578,7 +578,7 @@ try {
     A warning that fires on correct behaviour is one somebody learns to
     ignore, and this repository has already paid for that twice. Archiving it
     here costs nothing: the setup above re-activates it with
-    `on conflict (slug) do update set status = 'active'`, so the next run
+    `on conflict (office_id, slug) do update set status = 'active'`, so the next run
     finds it exactly as it expects.
   */
   const slept = await one(`

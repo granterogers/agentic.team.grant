@@ -108,7 +108,7 @@ console.log('tasks —')
 const proj = await one(`
   insert into public.projects (slug, name, purpose, status)
   values ('verify-tasks-fixture', 'Task verification', 'Thrown away', 'paused')
-  on conflict (slug) do update set name = excluded.name
+  on conflict (office_id, slug) do update set name = excluded.name
   returning project_id
 `)
 const pid = String(proj.project_id)
