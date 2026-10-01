@@ -301,6 +301,10 @@ const reach = async () =>
         and (has_table_privilege('anon', c.oid, 'insert') or has_table_privilege('authenticated', c.oid, 'insert')
              or has_table_privilege('anon', c.oid, 'select') or has_table_privilege('authenticated', c.oid, 'select'))`,
   )
+// The proof models the state BEFORE 0642: a public key holding grants on tables with row security off. Later migrations
+// (0663 turned row security on everywhere) have already closed them, so reopen the ones under test, or the control
+// ("they were open first") would be vacuous and prove nothing.
+for (const t of AUTH_TABLES) await db.execute(`alter table public.${t} disable row level security`)
 const opened = await reach()
 await db.execute(migration)
 const closed = await reach()
