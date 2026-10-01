@@ -151,7 +151,7 @@ export async function beginStep(
   held?: Claimed,
 ): Promise<StepGate> {
   const { rows } = await db.execute(
-    `select app.step_begin(${lit(claimOn)}::uuid, ${lit(name)}, ${String(index)},
+    `select app.step_begin(app.job_office(${lit(jobId)}::uuid), ${lit(claimOn)}::uuid, ${lit(name)}, ${String(index)},
                            ${lit(effect)}, ${String(CHECKPOINT_SCHEMA)},
                            ${lit(codeVersion)}) as r`,
   )
@@ -241,7 +241,7 @@ export async function finishStep(
   effectRef?: string,
 ): Promise<void> {
   await db.execute(
-    `select app.step_done(${lit(jobId)}::uuid, ${lit(name)}, ${json(outcome)},
+    `select app.step_done(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, ${lit(name)}, ${json(outcome)},
                           ${effectRef === undefined ? 'null' : lit(effectRef)})`,
   )
 }

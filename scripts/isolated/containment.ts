@@ -92,7 +92,7 @@ for (const [what, make] of synthetic) {
   const child = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(parent)}::uuid, p_kind => 'office.synthesise', p_payload => '{}'::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(parent)}::uuid), p_parent => ${lit(parent)}::uuid, p_kind => 'office.synthesise', p_payload => '{}'::jsonb)::text as v`,
       )
     ).v,
   )
@@ -163,11 +163,11 @@ for (const [what, make, channel, target] of genuine) {
 // has material, so a fixture document is given both.
 const BODY = 'containment proof material. '.repeat(40)
 await db.execute(`insert into public.documents (project_id, connector, external_ref, title, doc_type, content, content_fingerprint, content_chars, fetched_at, added_by)
-  values (app.unnamed_project(), 'upload', ${lit(`seed-${run}`)}, 'seed', 'source', ${lit(BODY)}, encode(extensions.digest(${lit(BODY)}, 'sha256'), 'hex'), ${String(BODY.length)}, now(), 'grant')`)
+  values (app.unnamed_project(app.test_office()), 'upload', ${lit(`seed-${run}`)}, 'seed', 'source', ${lit(BODY)}, encode(extensions.digest(${lit(BODY)}, 'sha256'), 'hex'), ${String(BODY.length)}, now(), 'grant')`)
 const doc = async (added: string, ref: string): Promise<string> => {
   const d = await one(`
     insert into public.documents (project_id, connector, external_ref, title, doc_type, content, content_fingerprint, content_chars, fetched_at, added_by)
-    values (app.unnamed_project(), 'notebooklm', ${lit(ref)}, ${lit(`containment ${run} ${ref.slice(-6)}`)}, 'source', ${lit(BODY + ref)}, encode(extensions.digest(${lit(BODY + ref)}, 'sha256'), 'hex'), ${String(BODY.length)}, now(), ${lit(added)})
+    values (app.unnamed_project(app.test_office()), 'notebooklm', ${lit(ref)}, ${lit(`containment ${run} ${ref.slice(-6)}`)}, 'source', ${lit(BODY + ref)}, encode(extensions.digest(${lit(BODY + ref)}, 'sha256'), 'hex'), ${String(BODY.length)}, now(), ${lit(added)})
     returning document_id::text as id`)
   const j = await one(
     `select job_id::text as id from public.jobs where pinned_config ->> 'document_id' = ${lit(String(d.id))} limit 1`,

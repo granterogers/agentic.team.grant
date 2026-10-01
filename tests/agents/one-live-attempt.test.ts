@@ -140,7 +140,7 @@ describe('the hand-off is the fan-out that actually happens', () => {
   */
   it('the roster hand-off goes through the once-door', () => {
     const handoff =
-      /select app\.enqueue_child_once\(\s*\$\{lit\(job\.jobId\)\}::uuid, 'office\.instruction'/.exec(
+      /select app\.enqueue_child_once\(\s*app\.job_office\(\$\{lit\(job\.jobId\)\}::uuid\), \$\{lit\(job\.jobId\)\}::uuid, 'office\.instruction'/.exec(
         withoutComments,
       )
     expect(handoff).not.toBeNull()

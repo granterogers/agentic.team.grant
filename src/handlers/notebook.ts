@@ -291,6 +291,7 @@ async function again(
   // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
   await db.execute(`
     select app.enqueue_child(
+      app.job_office(${lit(job.jobId)}::uuid),
       coalesce(
         (select parent_job_id from public.jobs where job_id = ${lit(job.jobId)}::uuid),
         ${lit(job.jobId)}::uuid
@@ -431,6 +432,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
           await db.execute(`
             select app.enqueue_child(
+              app.job_office(${lit(job.jobId)}::uuid),
               coalesce(
                 (select parent_job_id from public.jobs where job_id = ${lit(job.jobId)}::uuid),
                 ${lit(job.jobId)}::uuid
@@ -509,6 +511,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
             await db.execute(`
               select app.enqueue_child(
+                app.job_office(${lit(job.jobId)}::uuid),
                 coalesce(
                   (select parent_job_id from public.jobs where job_id = ${lit(job.jobId)}::uuid),
                   ${lit(job.jobId)}::uuid
@@ -570,7 +573,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         // so a sooner poll would only spend a notebook call learning nothing.
         await db.execute(`
           select app.enqueue_child(
-            ${lit(job.jobId)}::uuid, 'notebook.collect',
+            app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'notebook.collect',
             jsonb_build_object('artifact', ${lit(artifactId)}, 'tick', 1),
             interval '90 seconds', true${callerArgs(job)}
           )
@@ -657,6 +660,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
           await db.execute(`
             select app.enqueue_child(
+              app.job_office(${lit(job.jobId)}::uuid),
               coalesce(
                 (select parent_job_id from public.jobs where job_id = ${lit(job.jobId)}::uuid),
                 ${lit(job.jobId)}::uuid
@@ -994,7 +998,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           if (direct) {
             await db.execute(`
               select app.enqueue_child(
-                ${lit(job.jobId)}::uuid, 'notebook.collect_artifact',
+                app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'notebook.collect_artifact',
                 jsonb_build_object(
                   'notebook_id', ${lit(notebook.id)},
                   'artifact_id', ${lit(mine.artifactId)},
@@ -1056,6 +1060,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
             await db.execute(`
               select app.enqueue_child(
+                app.job_office(${lit(job.jobId)}::uuid),
                 coalesce(
                   (select parent_job_id from public.jobs where job_id = ${lit(job.jobId)}::uuid),
                   ${lit(job.jobId)}::uuid

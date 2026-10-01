@@ -107,8 +107,9 @@ const jobRow = async (
   // that merely NAMES telegram:grant is an origin no production component creates, and "a person asked" is no longer
   // read off the name.
   if (by === 'telegram:grant') {
+    const hangOn = parent ?? (await realParent(db))
     const hung = await one(
-      `select app.enqueue_child(${lit(parent ?? (await realParent(db)))}::uuid, ${lit(kind)}, ${lit(JSON.stringify(config))}::jsonb, interval '0', true, ${lit(p)}::uuid)::text as id`,
+      `select app.enqueue_child(app.job_office(${lit(hangOn)}::uuid), ${lit(hangOn)}::uuid, ${lit(kind)}, ${lit(JSON.stringify(config))}::jsonb, interval '0', true, ${lit(p)}::uuid)::text as id`,
     )
     const id = String(hung.id).match(/[0-9a-f-]{36}/)?.[0] as string
     const row = await one(
@@ -235,6 +236,7 @@ const verdict = async (job: string) =>
   // different job carrying the same approval. One yes is one generation, whichever job carries it.
   const sib = await one(`
     select app.enqueue_child(
+      app.job_office(${lit(child.jobId)}::uuid),
       (select parent_job_id from public.jobs where job_id = ${lit(child.jobId)}::uuid),
       'notebook.generate',
       (select pinned_config from public.jobs where job_id = ${lit(child.jobId)}::uuid),

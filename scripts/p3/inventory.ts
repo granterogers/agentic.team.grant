@@ -36,7 +36,16 @@ export type Entry = {
   idParams: string[]
   class: string
   derivedClass: string
+  /** True when anon, authenticated or public can execute it: a browser role. An override is refused for such a function. */
+  browserExecutable: boolean
+  /** The reviewed class from docs/multi-user/conversion-overrides.json, when one applied. */
+  override?: { class: string; reason: string; proof: string }
+  /** An override names this function but was NOT applied (the function is browser-executable). */
+  overrideRefused?: string
 }
+
+export type Override = { class: string; reason: string; proof: string }
+const OVERRIDE_CLASSES = new Set(['OFFICE_TRUSTED_DERIVED', 'GLOBAL', 'SYSTEM'])
 
 const OWNED = 'OFFICE_CARRIER|OFFICE_DERIVED'
 const manifest = JSON.parse(readFileSync('docs/multi-user/ownership-manifest.json', 'utf8'))
@@ -51,6 +60,18 @@ const systemTables = new Set(
     .filter(([, v]) => v.class === 'SYSTEM')
     .map(([k]) => k),
 )
+
+// Reviewed classifications of functions that touch owned data, are not a door a person can reach, and take no office
+// (a job-bound reader, a deployment scan, a resolver). Each names the case that PROVES it
+// (scripts/isolated/p3-cases/*.ts) and applies only while no browser role can execute the function.
+export const overrides: Record<string, Override> = JSON.parse(
+  readFileSync('docs/multi-user/conversion-overrides.json', 'utf8'),
+) as Record<string, Override>
+for (const [fn, o] of Object.entries(overrides))
+  if (!OVERRIDE_CLASSES.has(o.class) || o.reason.trim() === '' || o.proof.trim() === '')
+    throw new Error(
+      `conversion-overrides.json: ${fn} needs a class (${[...OVERRIDE_CLASSES].join('|')}), a reason and a proof`,
+    )
 
 // P3_DB=<clone> reads a local clone instead of production (the converted state of an unreleased branch).
 const local = process.env.P3_DB
@@ -71,6 +92,8 @@ const rows = (
            pg_get_function_arguments(p.oid) as args, p.prosecdef as secdef,
            coalesce(p.proargnames, '{}'::text[]) as argnames,
            exists (select 1 from pg_trigger t where t.tgfoid = p.oid and not t.tgisinternal) as is_trigger,
+           (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute')
+            or has_function_privilege('public', p.oid, 'execute')) as browser_executable,
            regexp_replace(regexp_replace(coalesce(p.prosrc, ''), '/[*].*?[*]/', ' ', 'gs'), '--[^' || chr(10) || ']*', ' ', 'g') as body
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname in ('app', 'public') and p.prokind = 'f'
@@ -83,6 +106,7 @@ const rows = (
   secdef: boolean
   argnames: string[]
   is_trigger: boolean
+  browser_executable: boolean
   body: string
 }[]
 
@@ -197,6 +221,19 @@ for (const r of rows) {
   else if (ownedAll.length === 0) derivedClass = sysOnly ? 'SYSTEM' : 'GLOBAL'
   else if (external.length > 0 || ambient.length > 0) derivedClass = 'LEGACY_UNSCOPED'
   else derivedClass = 'OFFICE_TRUSTED_DERIVED'
+  // A reviewed override moves a LEGACY function out of the debt only while no browser role can execute it.
+  const named = overrides[fnId(r)]
+  let finalClass = derivedClass
+  let applied: Override | undefined
+  let refused: string | undefined
+  if (named !== undefined && derivedClass === 'LEGACY_UNSCOPED') {
+    if (r.browser_executable)
+      refused = `${fnId(r)} is executable by a browser role (anon, authenticated or public)`
+    else {
+      finalClass = named.class
+      applied = named
+    }
+  }
   entries.push({
     fn: fnId(r),
     args: r.args,
@@ -209,10 +246,16 @@ for (const r of rows) {
     ambient,
     officeParam: hasOffice ? (officeDefaulted ? 'defaulted' : 'required') : 'none',
     idParams: argNames.filter((a) => idRe.test(a)),
-    class: derivedClass,
+    class: finalClass,
     derivedClass,
+    browserExecutable: r.browser_executable,
+    ...(applied === undefined ? {} : { override: applied }),
+    ...(refused === undefined ? {} : { overrideRefused: refused }),
   })
 }
+// An override that names a function nothing defines is stale: say so rather than keep a reviewed claim about nothing.
+const liveIds = new Set(entries.map((e) => e.fn))
+export const staleOverrides = Object.keys(overrides).filter((k) => !liveIds.has(k))
 
 const tally = (key: (e: Entry) => string) => {
   const t = new Map<string, number>()
@@ -250,6 +293,21 @@ console.log(
     .map(([k, v]) => `${k}=${v.size}`)
     .join(' '),
 )
+console.log(
+  `reviewed overrides: ${String(entries.filter((e) => e.override !== undefined).length)} applied of ${String(Object.keys(overrides).length)} named`,
+)
+const problems = [
+  ...entries
+    .filter((e) => e.overrideRefused !== undefined)
+    .map(
+      (e) =>
+        `${e.overrideRefused as string}: an override is refused while a browser role can execute the function`,
+    ),
+  ...staleOverrides.map((k) => `${k}: an override names a function that does not exist`),
+]
+const problemsOut = process.argv.indexOf('--problems')
+if (problemsOut > -1)
+  writeFileSync(process.argv[problemsOut + 1] as string, JSON.stringify(problems))
 const jsonOut = process.argv.indexOf('--json')
 const manOut = process.argv.indexOf('--manifest')
 if (manOut > -1) {

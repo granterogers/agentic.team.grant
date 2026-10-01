@@ -120,8 +120,8 @@ export const PENDING = (limit: number): string => `
    and d.message_ref = split_part(press.origin_ref, ':', 2)
    -- Two bots number their own messages in the same private chat, so chat + message id alone matched two
    -- deliveries for one press (8 such groups in production). The press knows which bot it came through.
-   and (app.command_account(press.command_id) is null
-        or d.account_ref = app.command_account(press.command_id))
+   and (app.command_account(press.office_id, press.command_id) is null
+        or d.account_ref = app.command_account(press.office_id, press.command_id))
   left join public.jobs j on j.job_id = d.job_id and j.office_id = press.office_id
   left join lateral (
     -- Through the delivery's JOB, not through its correlation. A correlation
@@ -300,7 +300,7 @@ const doUndo = async (db: SqlExecutor, row: PendingRow): Promise<ProcessedCallba
   }
 
   const { rows } = await db.execute(`
-    select app.request_undo(${lit(offer.id)}::uuid, ${lit(row.actor)},
+    select app.request_undo(${lit(row.office_id)}::uuid, ${lit(offer.id)}::uuid, ${lit(row.actor)},
       ${lit(`${row.origin_channel}:button`)})::text as status
   `)
   return {
@@ -330,8 +330,8 @@ export interface ProcessOptions {
  */
 const pressedBy = async (db: SqlExecutor, row: PendingRow): Promise<string | null> => {
   const { rows } = await db.execute(`
-    select app.command_principal(${lit(row.command_id)}::uuid) as who,
-           app.principal_refusal(app.command_principal(${lit(row.command_id)}::uuid)) as refusal
+    select app.command_principal(${lit(row.office_id)}::uuid, ${lit(row.command_id)}::uuid) as who,
+           app.principal_refusal(app.command_principal(${lit(row.office_id)}::uuid, ${lit(row.command_id)}::uuid)) as refusal
   `)
   const r = rows[0] as { who?: string | null; refusal?: string | null } | undefined
   if (r === undefined || r.refusal !== null || typeof r.who !== 'string' || r.who === '')
@@ -518,12 +518,12 @@ export const processCallbacks = async (
                  else coalesce(q.decline_option, q.approval_options[array_length(q.approval_options, 1)]) end,
             -- Whoever pressed, as the office knows them; refused inside the
             -- function when it does not (0608). Never a default.
-            app.command_principal(${lit(row.command_id)}::uuid)
+            app.command_principal(${lit(row.office_id)}::uuid, ${lit(row.command_id)}::uuid)
           ) as r
           from (select b.blocker_id, b.approval_options, b.decline_option
                   from public.blockers b
                  where b.office_id = ${lit(row.office_id)}::uuid
-                   and b.blocker_id = app.approval_for_delivery(${lit(row.delivery_id)}::uuid)
+                   and b.blocker_id = app.approval_for_delivery(${lit(row.office_id)}::uuid, ${lit(row.delivery_id)}::uuid)
                    -- A press that did not come through a production door (stamped synthetic) may only answer
                    -- test traffic: it must not bind a REAL question, whoever its subject resolves to.
                    and (not coalesce((select c.synthetic from public.inbound_commands c

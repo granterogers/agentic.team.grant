@@ -25,7 +25,7 @@ const child = async (parent: string, kind = 'office.instruction', payload = '{}'
   String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, ${lit(kind)}, ${lit(payload)}::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, ${lit(kind)}, ${lit(payload)}::jsonb)::text as c`,
       )
     ).c,
   )

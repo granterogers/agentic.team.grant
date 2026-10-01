@@ -362,7 +362,8 @@ const SABOTAGES: readonly Sabotage[] = [
     proves: 'a rule from a turn carrying no project is global, not scoped to "unnamed"',
     file: 'src/agents/remember.ts',
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the anchor quotes a real source line verbatim; a template literal here would interpolate it
-    anchor: '              select case when ${uuid(projectId)} = app.unnamed_project()',
+    anchor:
+      '              select case when ${uuid(projectId)} = app.unnamed_project(${officeOf(office)})',
     replacement: '              select case when false',
     check: 'tests/agents/the-unnamed-project-is-not-a-project.test.ts',
   },

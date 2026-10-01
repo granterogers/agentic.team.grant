@@ -241,7 +241,7 @@ try {
       !t.map((m) => String(m.body)).some((b) => b.includes('Mine')),
   )
 
-  const unnamed = String((await one(`select app.unnamed_project() as v`)).v ?? '')
+  const unnamed = String((await one(`select app.unnamed_project(app.test_office()) as v`)).v ?? '')
   check(
     'the reserved Unnamed project exists and is not one of these',
     unnamed.slice(0, 8),
@@ -630,7 +630,9 @@ try {
     than to a guess — and the setting is asserted in BOTH positions, because a
     switch only proven in its default state is a switch nobody has tested.
   */
-  const unnamedProject = String((await one(`select app.unnamed_project() as v`)).v ?? '')
+  const unnamedProject = String(
+    (await one(`select app.unnamed_project(app.test_office()) as v`)).v ?? '',
+  )
   check(
     '0341 — a message naming nothing lands in Unnamed, not in a guess',
     `-> ${orphanLanded.slice(0, 8)} (Unnamed is ${unnamedProject.slice(0, 8)})`,

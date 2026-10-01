@@ -44,7 +44,7 @@ export async function cases(c: Ctx): Promise<void> {
   const child = String(
     await c.exec(
       'p2_worker',
-      `select app.enqueue_child('${ja}', 'probe', '{}'::jsonb, '0'::interval, false)`,
+      `select app.enqueue_child('${A}', '${ja}', 'probe', '{}'::jsonb, '0'::interval, false)`,
     ),
   )
   const co = (
@@ -57,7 +57,7 @@ export async function cases(c: Ctx): Promise<void> {
   )
   const once = (await c.exec(
     'p2_worker',
-    `select app.enqueue_child_once('${jb}', 'probe', 'ask once')`,
+    `select app.enqueue_child_once('${B}', '${jb}', 'probe', 'ask once')`,
   )) as { job_id: string }
   c.check(
     (await q(`select office_id from public.jobs where job_id = '${once.job_id}'`))[0]?.office_id ===
@@ -69,11 +69,11 @@ export async function cases(c: Ctx): Promise<void> {
   // ---- a foreign project and a nonexistent project are refused alike -----------------------------------------------------------
   const foreign = await c.refusal(
     'p2_worker',
-    `select app.enqueue_child('${ja}', 'probe', '{}'::jsonb, '0'::interval, false, '${pb}')`,
+    `select app.enqueue_child('${A}', '${ja}', 'probe', '{}'::jsonb, '0'::interval, false, '${pb}')`,
   )
   const missing = await c.refusal(
     'p2_worker',
-    `select app.enqueue_child('${ja}', 'probe', '{}'::jsonb, '0'::interval, false, '${c.nobody()}')`,
+    `select app.enqueue_child('${A}', '${ja}', 'probe', '{}'::jsonb, '0'::interval, false, '${c.nobody()}')`,
   )
   c.check(
     foreign.includes('no project') && norm(foreign) === norm(missing),
@@ -82,7 +82,7 @@ export async function cases(c: Ctx): Promise<void> {
   )
   const foreignOnce = await c.refusal(
     'p2_worker',
-    `select app.enqueue_child_once('${ja}', 'probe', 'r2', '{}'::jsonb, false, '${pb}')`,
+    `select app.enqueue_child_once('${A}', '${ja}', 'probe', 'r2', '{}'::jsonb, false, '${pb}')`,
   )
   c.check(
     foreignOnce.includes('no project'),
@@ -91,7 +91,7 @@ export async function cases(c: Ctx): Promise<void> {
   )
   const strayCaller = await c.refusal(
     'p2_worker',
-    `select app.enqueue_child('${ja}', 'probe', '{}'::jsonb, '0'::interval, false, null, '${jb}', 'w', 1)`,
+    `select app.enqueue_child('${A}', '${ja}', 'probe', '{}'::jsonb, '0'::interval, false, null, '${jb}', 'w', 1)`,
   )
   c.check(
     strayCaller.includes('stale caller'),

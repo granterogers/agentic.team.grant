@@ -74,7 +74,7 @@ async function trace(
   const n = (v: number | undefined): string => (v === undefined ? 'null' : String(v))
   try {
     await db.execute(
-      `select app.job_trace_add(${lit(jobId)}::uuid, ${lit(kind)},
+      `select app.job_trace_add(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, ${lit(kind)},
          ${lit(JSON.stringify(redactDeep(detail)))}::jsonb,
          ${n(numbers.tokensIn)}, ${n(numbers.tokensOut)},
          ${n(numbers.pence)}, ${n(numbers.ms)})`,
@@ -102,7 +102,7 @@ async function recordPlan(db: SqlExecutor, job: Job, handler: Handler): Promise<
         ? `array[]::text[]`
         : `array[${plan.reaches.map((r) => lit(r)).join(', ')}]`
     await db.execute(
-      `select app.job_plan_set(${lit(job.jobId)}::uuid, ${lit(plan.tool)}, ${reaches},
+      `select app.job_plan_set(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, ${lit(plan.tool)}, ${reaches},
          ${lit(steps)}::jsonb, ${lit(summarise(plan))}, ${String(plannedWrites(plan))})`,
     )
     await trace(db, job.jobId, 'plan', {
@@ -773,7 +773,7 @@ export const dequeue = async (
 ): Promise<Job | null> => {
   const { rows } = await db.execute(
     `select job_id::text as job_id, kind, correlation_id::text as correlation_id,
-            project_id::text as project_id, idempotency_key, attempt
+            project_id::text as project_id, idempotency_key, attempt, office_id::text as office_id
      from app.dequeue_job(${lit(workerId)}, ${canTranscribe ? 'true' : 'false'},
                           ${canSubprocess ? 'true' : 'false'},
                           ${
@@ -789,11 +789,9 @@ export const dequeue = async (
   // changing what dequeue_job RETURNS would break a worker running the old shape. A schema without the column
   // answers an error, and the fence then asks the attempt as it always did.
   const gen = await readClaimGen(db, String(r.job_id), workerId, Number(r.attempt))
-  const officeRow = (
-    await db.execute(
-      `select office_id::text as o from public.jobs where job_id = ${lit(String(r.job_id))}::uuid`,
-    )
-  ).rows[0] as { o?: string } | undefined
+  // The claim returns the job whole, with the office it belongs to (0852): every later call passes it on.
+  const officeId =
+    r.office_id === null || r.office_id === undefined ? undefined : String(r.office_id)
   return {
     jobId: String(r.job_id),
     kind: String(r.kind),
@@ -801,7 +799,7 @@ export const dequeue = async (
     projectId: r.project_id === null ? null : String(r.project_id),
     idempotencyKey: String(r.idempotency_key),
     attempt: Number(r.attempt),
-    ...(officeRow?.o === undefined ? {} : { officeId: officeRow.o }),
+    ...(officeId === undefined ? {} : { officeId }),
     // The claim this worker now holds, so every later write can ask whether it still does (Run 4, D1).
     leasedBy: workerId,
     ...(gen === undefined || gen === null ? {} : { claimGen: Number(gen) }),
@@ -1791,7 +1789,7 @@ const runJobHeld = async (
     try {
       await db.execute(`
         select app.enqueue_child(
-          ${lit(job.jobId)}::uuid, 'office.instruction',
+          app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.instruction',
           jsonb_build_object(
             'instruction', ${lit(output.handoff.clause.slice(0, 4_000))},
             'addressed_to', ${lit(output.handoff.to)},

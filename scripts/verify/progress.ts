@@ -75,7 +75,9 @@ console.log('progress on long work (#282) —\n')
   and a project created per run is CLAUDE.md's pile of archived debris being
   rebuilt.
 */
-const projectId = String((await one('select app.unnamed_project()::text as v')).v ?? '')
+const projectId = String(
+  (await one('select app.unnamed_project(app.test_office())::text as v')).v ?? '',
+)
 const job = await one(`
   insert into public.jobs
     (kind, state, project_id, requested_by, idempotency_key, pinned_config,

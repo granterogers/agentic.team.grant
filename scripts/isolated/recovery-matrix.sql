@@ -6,7 +6,7 @@ returns uuid language plpgsql as $$
 declare v uuid; s text;
 begin
   insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-  values ('office.instruction', 'teamhq:verify-matrix', app.unnamed_project(), 'verify-matrix-' || p_label, gen_random_uuid())
+  values ('office.instruction', 'teamhq:verify-matrix', app.unnamed_project(app.test_office()), 'verify-matrix-' || p_label, gen_random_uuid())
   returning job_id into v;
   foreach s in array p_path loop
     if s = 'output_created' and p_output then

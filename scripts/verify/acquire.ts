@@ -163,7 +163,9 @@ try {
       `)
     ).id,
   )
-  await db.execute(`select app.skill_used(${lit(skillId)}::uuid, ${lit(jobId)}::uuid)`)
+  await db.execute(
+    `select app.skill_used(app.job_office(${lit(jobId)}::uuid), ${lit(skillId)}::uuid, ${lit(jobId)}::uuid)`,
+  )
   const used = Number(
     (
       await one(`

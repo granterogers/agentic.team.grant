@@ -16,7 +16,7 @@ import { PgExecutor } from '../src/db/pg-executor.ts'
 
 const ROOTS = ['src', 'supabase', 'scripts', 'tests']
 const OK_FIRST =
-  /^(office_id\b|app\.operator_office\s*\(|o\.office_id|p_office\s*(=>|:=)|null::uuid|uuid\b.*|app\.test_office\s*\(|app\.sole_person_office\s*\(|app\.job_office\s*\(|app\.require_office\s*\(|.*\boffice\b.*|.*\bOFFICE\b.*|[A-Za-z_.]*\.office\b|\$\{[^}]*(office|Office|OFFICE)[^}]*\}|'?\$\{)/
+  /^(office_id\b|app\.operator_office\s*\(|o\.office_id|p_office\s*(=>|:=)|null::uuid|uuid\b.*|app\.test_office\s*\(|app\.sole_person_office\s*\(|app\.job_office\s*\(|app\.require_office\s*\(|.*\boffice\b.*|.*\bOFFICE\b.*|[A-Za-z_.]*\.office\b|\$\{[^}]*(office|Office|OFFICE)[^}]*\}|'?\$\{|[A-Za-z_]+\.office_id\b|\(\s*select\s+[A-Za-z_]+\.office_id\b|\(\s*select\s+office_id\b)/
 
 export type Call = { file: string; line: number; fn: string; first: string }
 

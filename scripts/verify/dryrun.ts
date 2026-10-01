@@ -197,7 +197,7 @@ const jobRow = await one(`
 const JOB = String(jobRow.id)
 
 const wrote = await one(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'notion.write', array['notion'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'notion.write', array['notion'],
     ${lit(JSON.stringify(sample.steps))}::jsonb, ${lit(summarise(sample))},
     ${String(plannedWrites(sample))}) as r
 `)
@@ -223,7 +223,7 @@ check(
   which is live.
 */
 await db.execute(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'calendar.write', array['google:calendar'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'calendar.write', array['google:calendar'],
     '[{"verb":"remove","what":"one event","where":"Google Calendar","writes":1}]'::jsonb,
     '1 to take away in Google Calendar', 1)
 `)
@@ -243,7 +243,7 @@ check(
 // A malformed step must refuse the WHOLE plan. A half-recorded plan is exactly
 // the shape that makes an approval screen lie.
 const malformed = await one(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'notion.write', array['notion'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'notion.write', array['notion'],
     '[{"verb":"create","what":"fine","where":"Notion","writes":1},
       {"verb":"create","what":"no writes key","where":"Notion"}]'::jsonb, 'x', 2) as r
 `)
@@ -263,7 +263,7 @@ check(
 )
 
 const bogusVerb = await one(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'notion.write', array['notion'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'notion.write', array['notion'],
     '[{"verb":"obliterate","what":"x","where":"Notion","writes":1}]'::jsonb, 'x', 1) as r
 `)
 check(
@@ -288,7 +288,7 @@ console.log('\nand the person being asked can see what they are agreeing to')
   shape all over again.
 */
 await db.execute(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'notion.write', array['notion'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'notion.write', array['notion'],
     ${lit(JSON.stringify(sample.steps))}::jsonb, ${lit(summarise(sample))},
     ${String(plannedWrites(sample))})
 `)

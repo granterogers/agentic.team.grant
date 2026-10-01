@@ -233,7 +233,7 @@ const park = (id: string, reason: string, resumable: boolean) =>
   const kid = String(
     (
       await one(
-        `select app.enqueue_child(${lit(root.jobId)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(root.jobId)}::uuid), ${lit(root.jobId)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
       )
     ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string

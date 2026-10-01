@@ -130,7 +130,7 @@ const claim = async (job: string, key: string, target = CHAT, channel = 'telegra
 const child = async (parent: string, kind = 'office.synthesise') =>
   String(
     (
-      await one(`select app.enqueue_child(p_parent => ${lit(parent)}::uuid, p_kind => ${lit(kind)},
+      await one(`select app.enqueue_child(p_office => app.job_office(${lit(parent)}::uuid), p_parent => ${lit(parent)}::uuid, p_kind => ${lit(kind)},
         p_payload => '{}'::jsonb)::text as v`)
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] ?? ''

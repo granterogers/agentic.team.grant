@@ -264,7 +264,9 @@ export async function recordSkillUse(
   if (jobId === null || jobId === '' || skills.length === 0) return
   for (const s of skills) {
     try {
-      await db.execute(`select app.skill_used(${lit(s.skillId)}::uuid, ${lit(jobId)}::uuid)`)
+      await db.execute(
+        `select app.skill_used(app.job_office(${lit(jobId)}::uuid), ${lit(s.skillId)}::uuid, ${lit(jobId)}::uuid)`,
+      )
     } catch {
       // Deliberately silent.
     }

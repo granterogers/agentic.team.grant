@@ -171,7 +171,7 @@ try {
     const id = String(
       (
         await one(
-          `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb)::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb)::text as c`,
         )
       ).c,
     ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -259,7 +259,7 @@ try {
       String(
         (
           await one(
-            `select app.enqueue_child(${lit(P)}::uuid, 'verify.ask', ${lit(payload)}::jsonb)::text as c`,
+            `select app.enqueue_child(app.job_office(${lit(P)}::uuid), ${lit(P)}::uuid, 'verify.ask', ${lit(payload)}::jsonb)::text as c`,
           )
         ).c,
       ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -416,7 +416,7 @@ try {
         // A row only: nothing is sent, and the target is a declared test chat.
         // The bot the turn came through (0623: what he was shown is per bot) and the question the message named.
         await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
-          values ('telegram', ${lit(`run4-live-${crypto.randomUUID()}`)}, coalesce(app.command_account(${lit(String(turnJob.command))}::uuid), 'run4-live'), ${lit(chat)}, 'blocker', ${lit(c)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
+          values ('telegram', ${lit(`run4-live-${crypto.randomUUID()}`)}, coalesce(app.command_account((select ic.office_id from public.inbound_commands ic where ic.command_id = ${lit(String(turnJob.command))}::uuid), ${lit(String(turnJob.command))}::uuid), 'run4-live'), ${lit(chat)}, 'blocker', ${lit(c)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
       }
       return b
     }

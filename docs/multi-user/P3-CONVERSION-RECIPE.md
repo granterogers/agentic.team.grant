@@ -207,3 +207,39 @@ Things that bit:
 * Never nest one template literal inside another: the ratchet's regex truncates the statement. Precompute the fragment.
 * Replace the literal `'grant'` with `app.office_actor(office)`.
 * Proof: `scripts/isolated/p3-cases/95-raw-sql-handlers.ts` and `tests/handlers/raw-sql-names-the-claimed-office.test.ts`.
+
+## 9. Worker-side functions: converted, job-bound, scan, resolver (k-worker-internal, migrations 0850-0853)
+
+A function the worker calls and no browser reaches is one of four things, and `docs/multi-user/conversion-overrides.json` records the
+reviewed answer for the three that keep their signature. An override moves a LEGACY function out of the debt **only while no browser
+role (anon, authenticated, public) can execute it**, and `check:office-conversion` fails when the proof it names is not a literal case
+title in `scripts/isolated/p3-cases/`, when the function is browser-executable, or when it no longer exists.
+
+* **Converted (A)** - it is handed ids a payload, a model answer or a recorded config could point at another office (`enqueue_child`
+  takes a parent, a project and a caller; `step_begin` takes the job an approval was asked on). `p_office` first, from
+  `app.job_office(<claimed job>)`; every id is checked against it and a foreign one reads as a missing one.
+* **Job-bound (B)** - the id IS the claim (`job_depth`, `pause_job`, `renew_lease`...). No `p_office`: it would be one more argument for
+  the fence to trust. What must hold: every OTHER row it reads is reached through that job's office, so an id written into the job's
+  data (a pinned `command_id`, a duty slug, an origin command) that belongs to another office reads as one that does not exist.
+* **Deployment scan (C)** - global by design. Each row keeps its own office, nothing is carried between offices, and a scan that moves
+  work toward running (`requeue_retrying`, `resume_paused`, `settle_exhausted_jobs`, `recover_stalled_jobs`, `enqueue_orphans`,
+  `dispatch_due_responsibilities`, `provision_missing_channels`, `chores_for_credentials`) skips an office that is not active, as
+  `dequeue_job` has since 0681. Housekeeping by the clock (`expire_undo_offers`, `mcp_expire_codes`, `job_trace_prune`) starts nothing.
+* **Resolver (D)** - it IS the trusted resolution (`job_office`, `delivery_office`, `operator_chat`, `principal_refusal`): it takes no
+  office from a caller and is service-only.
+
+Things that bit:
+
+* **A pointer inside a job is data.** `harness_job` and `jobs_stamp_origin` looked the command a job names up by id alone, so a job of
+  A pinned to (or filed under) a harness or trusted command of B took B's classification. Grep every reader of
+  `pinned_config ->> 'command_id'` and of an `inbound-<uuid>` key for the office comparison.
+* **A default on the new signature can make the old one ambiguous.** `approve_tool(p_office, id, by, p_limits default null)` and the old
+  `approve_tool(id, by default 'grant', p_limits default null)` both match a three-argument call. Give the new function no defaults while
+  the old overload lives.
+* **`app.append_event(p_office, ...)` exists and `public.append_event(...)` (no office, bridge-filled) still does.** Callers move to the
+  first; the second goes with its last database caller.
+* **A key that is still global limits a test, not just a feature.** `sync_runs_one_at_a_time`, `staff_tools (staff_slug, tool)`,
+  `tool_requests_one_open` and `connection_health (service, credential)` are deployment-wide; the cases name their subjects per run and
+  insert-recover-insert where the key allows one live row.
+* **Suites that need a project-less job** call `app.unnamed_project(app.test_office())`; a query that wants "a real, named project"
+  asks `slug <> 'unnamed'`, which survives the next office.

@@ -175,7 +175,7 @@ const withQuestion = async (chat: string) => {
   const child = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(String(first.cmd.job))}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(String(first.cmd.job))}::uuid), p_parent => ${lit(String(first.cmd.job))}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0]
@@ -191,7 +191,7 @@ const withQuestion = async (chat: string) => {
   // 0623: the message names the question it asked, and is per bot (the bot the turn came through).
   await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
     values ('telegram', ${lit(`run1-live-${crypto.randomUUID()}`)},
-      coalesce((select app.command_account(c.command_id) from public.inbound_commands c
+      coalesce((select app.command_account(c.office_id, c.command_id) from public.inbound_commands c
                  where c.origin_channel = 'telegram' and c.origin_ref like ${lit(`${chat}:%`)}
                  order by c.received_at desc limit 1), 'run1-live'),
       ${lit(chat)}, 'blocker', ${lit(child)}::uuid, ${lit(String(b.id))}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)

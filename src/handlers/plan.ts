@@ -353,7 +353,7 @@ async function child(
   // as success.
   await db.execute(`
     select app.enqueue_child(
-      ${lit(job.jobId)}::uuid, ${lit(kind)},
+      app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, ${lit(kind)},
       ${lit(JSON.stringify(payload))}::jsonb,
       ${lit(delay)}::interval, true, ${lit(projectId)}::uuid${callerArgs(job)}
     )
