@@ -578,6 +578,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ['check:answerable', 'every question open on his dashboard has somewhere for an answer to go'],
   ['check:anon-exposure', 'no function in public can be executed with a public key (#384)'],
   [
+    'check:machine-key',
+    'the office key reaches no person-defaulting function that is not pinned with a reason (#400)',
+  ],
+  [
     'check:system-secrets',
     'every human-integration credential is read through the one resolver, and every vault secret has a class (#400)',
   ],

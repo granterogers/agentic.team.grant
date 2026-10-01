@@ -256,7 +256,12 @@ try {
     )
     check(
       "the test member cannot change a real specialist's grants",
-      held === 1 && /test principal/i.test(JSON.stringify(grants.body)),
+      // Refused at the gateway (an operator is required, P1.3) or by the database's own test-principal rule: the
+      // property is that the grant is unchanged and the request was refused, not which layer said no first.
+      held === 1 &&
+        grants.status === 403 &&
+        (/test principal/i.test(JSON.stringify(grants.body)) ||
+          (grants.body as { error?: string }).error === 'operator_required'),
       `held ${String(held)}`,
     )
     const q = await one(`select blocker_id::text as id from public.blockers b
