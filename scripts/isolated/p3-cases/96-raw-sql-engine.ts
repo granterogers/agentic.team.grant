@@ -901,19 +901,19 @@ export async function cases(c: Ctx): Promise<void> {
   const ownJob = await failedJob(`rawsql-${run}-lw2`, cmdAVoice)
   const o2 = await lastWord(c.db, ownJob, notify)
   c.check(
-    o1 === 'told' && o2 === 'told' && sayings.length === 2,
-    'both failed turns are answered',
+    o1 !== 'told' && o2 === 'told' && sayings.length === 1,
+    "a failed turn that points at B's command is owed nothing (the command is data, and B's is not this job's to read); A's own failed turn is answered",
     `${o1}/${o2} ${String(sayings.length)}`,
   )
   c.check(
-    sayings[0]?.includes('what you asked me') === true,
-    "a turn that points at B's voice note is NOT told it was spoken (B's command is not A's to read)",
+    !sayings.some((s) => s.includes(c.canary.B) || s.includes('voice-b')),
+    "nothing said to A carries anything of B's voice note",
     String(sayings[0]).slice(0, 60),
   )
   c.check(
-    sayings[1]?.includes('what you sent me') === true,
+    sayings[0]?.includes('what you sent me') === true,
     "the positive control: A's own voice note is recognised as spoken",
-    String(sayings[1]).slice(0, 60),
+    String(sayings[0]).slice(0, 60),
   )
   c.check(
     (await c.snapshot(B, ['inbound_commands'])) === outputsB,

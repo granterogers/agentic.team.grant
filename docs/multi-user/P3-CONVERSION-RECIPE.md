@@ -187,9 +187,9 @@ Things that bit:
 * **A window sweep by a global key deletes the other office's rows.** `delete ... where calendar_id = X and starts_at
   between ...` and `update mail_messages set vanished_at ... where message_id not in (...)` need the office too.
 * **A correlation id, a notebook ref and a remote parent id are not office boundaries.** `app.reconcile_vanished` matched a
-  SHARED remote notebook by its id alone, so one office's sync archived another office's documents (0830 adds the
-  office-explicit form; the four-argument original stays for `app.drive_reconcile`, `public.reconcile_vanished` and
-  `verify:knowledge`, which belong to other clusters).
+  SHARED remote notebook by its id alone, so one office's sync archived another office's documents (0801 gives
+  it an office and drops the four-argument original together with its public door; the same function was also written
+  as a separate 0830 by the inline-SQL pass, and that duplicate was removed in the merge).
 * **The scanner has two blind spots.** A nested template literal (`${cond ? `...` : ''}`) splits one statement into
   fragments, and a fragment with no verb is invisible (`src/knowledge/retrieval.ts`, `worker.ts` `append_event`); and the
   prose word "office" in a comment or message counts as scoped (`simulation/canonical.ts`, `channels/callbacks.ts:505`,

@@ -1044,8 +1044,16 @@ export async function cases(c: Ctx): Promise<void> {
     slug: string
     job_kind: string
   }
-  const mkDuty = async (office: string) =>
-    String(
+  const mkDuty = async (office: string) => {
+    // A duty is internal work only when the responsibility belongs to the job's OWN office (app.internal_root_ok),
+    // so the second office gets a duty of its own with the same slug and kind: Grant's does not make B's job internal.
+    await c.db.execute(
+      `insert into public.responsibilities (slug, staff_id, description, job_kind, period_minutes, office_id)
+       select r.slug, r.staff_id, 'A duty of this office, for the fixture that needs one', r.job_kind, 60, '${office}'
+         from public.responsibilities r where r.slug = ${q(duty.slug)} limit 1
+       on conflict (office_id, slug) do nothing`,
+    )
+    return String(
       (
         await one(
           `insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, office_id)
@@ -1053,6 +1061,7 @@ export async function cases(c: Ctx): Promise<void> {
         )
       ).job_id,
     )
+  }
   const dutyG = await mkDuty(G)
   const dutyB = await mkDuty(B)
   const origin = async (j: string) =>

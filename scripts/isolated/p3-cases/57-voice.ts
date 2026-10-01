@@ -57,8 +57,12 @@ export async function cases(c: Ctx): Promise<void> {
       )[0]?.project_id,
     )
   }
-  const nameA = `Voiceproject ${c.canary.A}`
-  const nameB = `Voiceproject ${c.canary.B}`
+  // This file's own tokens: other case files give A a project whose name carries B's canary on purpose (overlapping
+  // names are part of their design), so a check on the shared canary would trip on A's legitimate project.
+  const tokA = `VOICEA-${run}`
+  const tokB = `VOICEB-${run}`
+  const nameA = `Voiceproject ${tokA}`
+  const nameB = `Voiceproject ${tokB}`
   const pa = await proj(A, `voice-${run}`, nameA)
   const pb = await proj(B, `voice-${run}`, nameB)
 
@@ -99,12 +103,12 @@ export async function cases(c: Ctx): Promise<void> {
   const ma = await mint(sessA, `voice-${run}`)
   const mb = await mint(sessB, `voice-${run}`)
   c.check(
-    ma.status === 200 && ma.brief.includes(nameA) && !ma.brief.includes(c.canary.B),
+    ma.status === 200 && ma.brief.includes(nameA) && !ma.brief.includes(tokB),
     "A's realtime briefing names A's project and nothing of B's",
     `status ${String(ma.status)}`,
   )
   c.check(
-    mb.status === 200 && mb.brief.includes(nameB) && !mb.brief.includes(c.canary.A),
+    mb.status === 200 && mb.brief.includes(nameB) && !mb.brief.includes(tokA),
     "B's briefing names B's project and nothing of A's (same slug, different project)",
     '',
   )
@@ -116,7 +120,7 @@ export async function cases(c: Ctx): Promise<void> {
   )
   const mk = await mint(MACHINE)
   c.check(
-    mk.status === 200 && !mk.brief.includes(c.canary.A) && !mk.brief.includes(c.canary.B),
+    mk.status === 200 && !mk.brief.includes(tokA) && !mk.brief.includes(tokB),
     'the machine key mints a call in the test office - which holds neither A nor B',
     `status ${String(mk.status)}`,
   )
@@ -204,7 +208,7 @@ export async function cases(c: Ctx): Promise<void> {
     ans.status === 200 &&
       ans.body.did === 'answered' &&
       String(ans.body.speak).includes(nameA) &&
-      !String(ans.body.speak).includes(c.canary.B) &&
+      !String(ans.body.speak).includes(tokB) &&
       String(ans.body.speak).startsWith(`${String(activeA)} active`),
     "a spoken question about projects is answered from A's office only",
     String(ans.body.speak ?? ans.body.did).slice(0, 80),
@@ -213,7 +217,7 @@ export async function cases(c: Ctx): Promise<void> {
   c.check(
     ansB.status === 200 &&
       (ansB.body.did === 'answered'
-        ? String(ansB.body.speak).includes(nameB) && !String(ansB.body.speak).includes(c.canary.A)
+        ? String(ansB.body.speak).includes(nameB) && !String(ansB.body.speak).includes(tokA)
         : true),
     "and B's from B's",
     '',
@@ -228,7 +232,7 @@ export async function cases(c: Ctx): Promise<void> {
   )
   const lj = JSON.stringify(await look.json())
   c.check(
-    look.status === 200 && !lj.includes(c.canary.B) && !lj.includes(pb),
+    look.status === 200 && !lj.includes(tokB) && !lj.includes(pb),
     "looking up B's project by its exact name tells A nothing about it",
     lj.slice(0, 80),
   )

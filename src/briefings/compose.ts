@@ -194,7 +194,7 @@ export const generateBriefing = async (
     values (${lit(office)}::uuid, ${lit(kind)}::public.briefing_kind, ${lit(forDate)}::date,
             ${scopeRef === null ? `app.office_actor(${lit(office)}::uuid)` : lit(scopeRef)},
             ${lit(body)}, ${lit(JSON.stringify(inputs))}::jsonb)
-    on conflict (kind, scope_ref, for_date) do nothing
+    on conflict (office_id, kind, scope_ref, for_date) do nothing
     returning briefing_id::text as id
   `)
 

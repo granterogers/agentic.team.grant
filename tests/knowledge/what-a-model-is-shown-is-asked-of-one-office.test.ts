@@ -177,6 +177,22 @@ describe('every call in src/ to a converted function names an office first', () 
     expect(bad.map((b) => `${b.file}: app.${b.name}(${b.first}`)).toEqual([])
   })
 
+  it('a RetrievalOffice is never interpolated bare: it is an object, and the SQL it would build is invalid', () => {
+    // A bare interpolation compiles (any value goes into a template literal), reaches the database as the text
+    // "[object Object]", and the reader's catch turns the resulting error into an empty answer: a guard that cannot
+    // fail loudly. Found after a merge left it in guidance.ts, where it silently emptied every agent's lessons.
+    const bare = /\$\{office\}/
+    const offenders: string[] = []
+    for (const file of walk('src')) {
+      const text = strip(readFileSync(file, 'utf8'))
+      if (/\boffice: RetrievalOffice\b/.test(text) && bare.test(text)) offenders.push(file)
+    }
+    expect(offenders).toEqual([])
+    // the control: the same scan has to see a file that does it
+    const sample = strip('function f(office: RetrievalOffice) { return `where o = ${office}` }')
+    expect(/\boffice: RetrievalOffice\b/.test(sample) && bare.test(sample)).toBe(true)
+  })
+
   it('and the control can fail: a call that leaves the office out is seen as bad', () => {
     const sample = strip('select app.lessons_for(${uuid(projectId)}, null, null, 8)')
     const m = /\bapp\.lessons_for\(\s*([^,)]*(?:\([^)]*\))?[^,)]*)/.exec(sample)

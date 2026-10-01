@@ -432,13 +432,21 @@ export async function cases(c: Ctx): Promise<void> {
       Number(dayB.blockers) - Number(dayB0.blockers),
     ]),
   )
-  const deployment = await one(
-    `select count(*)::int as n from public.blockers where state = 'open'`,
-  )
+  // The property, not a comparison with the deployment's total (which equals A's own when no other office holds one):
+  // each office's window is exactly the open questions that office holds.
+  const openQuestionsOf = async (office: string) =>
+    Number(
+      (
+        await one(
+          `select count(*)::int as n from public.blockers where state = 'open' and office_id = '${office}'`,
+        )
+      ).n,
+    )
   c.check(
-    Number(dayA.blockers) < Number(deployment.n),
-    "the capacity window answers A's own count, not the deployment's (the clone holds open questions of other offices)",
-    c.json([dayA.blockers, deployment.n]),
+    Number(dayA.blockers) === (await openQuestionsOf(A)) &&
+      Number(dayB.blockers) === (await openQuestionsOf(B)),
+    "the capacity window answers each office's own count of open questions, not the deployment's",
+    c.json([dayA.blockers, await openQuestionsOf(A), dayB.blockers, await openQuestionsOf(B)]),
   )
 
   // ======================================================================================================================

@@ -6,6 +6,10 @@
  * prints, and DIFFERENT numbers of everything, so that a counter that sums across offices cannot equal both. The
  * rows are written once (fixed ids, `on conflict do nothing`) so the file can be run again against the same clone,
  * which the sabotage runs do.
+ *
+ * It sorts FIRST (05) on purpose. Its counters are absolute ("the office has exactly N live jobs"), so they hold only
+ * against offices nothing else has written to; the other case files add jobs, offers, messages and labels to the same
+ * two offices. Run after them it reported seven correct counters as wrong. Do not renumber it.
  */
 import { createHash } from 'node:crypto'
 import { type Ctx, callerRoles, lit } from '../p3-app-lib.ts'

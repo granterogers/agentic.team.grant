@@ -262,12 +262,18 @@ export async function cases(c: Ctx): Promise<void> {
     "a document added over MCP lands in A's project of that slug, not B's",
     add.text.slice(0, 60),
   )
-  const noProj = await call(tokA, 'add_to_project', { project: 'only-b', title: 'x', content: 'y' })
+  // A slug of this run's own: other case files give A and B projects called only-b on purpose.
+  const privateSlug = `mcp-only-b-${run}`
+  const noProj = await call(tokA, 'add_to_project', {
+    project: privateSlug,
+    title: 'x',
+    content: 'y',
+  })
   await c.db.execute(
-    `insert into public.projects (slug, name, status, office_id) values ('only-b', 'B only', 'paused', '${B}') on conflict do nothing`,
+    `insert into public.projects (slug, name, status, office_id) values ('${privateSlug}', 'B only', 'paused', '${B}') on conflict do nothing`,
   )
   const noProj2 = await call(tokA, 'add_to_project', {
-    project: 'only-b',
+    project: privateSlug,
     title: 'x',
     content: 'y',
   })
