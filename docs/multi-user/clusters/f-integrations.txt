@@ -1,0 +1,11 @@
+browser_budget
+browser_lately
+browser_now
+browser_session_establish
+browser_session_forget
+browser_sessions_for
+hq_mcp
+mcp_inventory
+offer_mcp_tool
+register_mcp_provider
+revoke_mcp_provider
