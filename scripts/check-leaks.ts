@@ -528,7 +528,7 @@ const piles = await db.execute(`
       This check passed throughout, because it did not know the reader existed.
     */
     (select count(*)
-       from jsonb_array_elements(app.hq_studio_lately(200) -> 'office') e,
+       from jsonb_array_elements(app.hq_studio_lately(app.sole_person_office(), 200) -> 'office') e,
             jsonb_to_record(e) as x(who text)
       where app.harness_label(x.who)) as harness_on_his_activity_panel,
     /*

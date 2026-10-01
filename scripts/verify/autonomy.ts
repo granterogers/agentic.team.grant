@@ -527,9 +527,10 @@ record(
 // ===========================================================================
 
 const scope = `fixture-brief-${run}`
+const briefOffice = String((await db.execute('select app.test_office() as o')).rows[0]?.o ?? '')
 const forDate = localDate(new Date(), 'Europe/London')
 
-const first = await generateBriefing(db, 'morning', forDate, scope)
+const first = await generateBriefing(db, 'morning', forDate, scope, briefOffice)
 record(
   'briefings',
   'a morning briefing is generated from live counts',
@@ -543,7 +544,7 @@ record(
 // WILL be re-attempted - "read state, continue" guarantees it - and a second
 // morning briefing is the failure most likely to make a person stop reading
 // them.
-const second = await generateBriefing(db, 'morning', forDate, scope)
+const second = await generateBriefing(db, 'morning', forDate, scope, briefOffice)
 const count = await one(`
   select count(*)::int as n from public.briefings
   where scope_ref = ${lit(scope)} and kind = 'morning' and for_date = ${lit(forDate)}::date
@@ -556,7 +557,7 @@ record(
 )
 
 // Evening is a different briefing, not a duplicate.
-const evening = await generateBriefing(db, 'evening', forDate, scope)
+const evening = await generateBriefing(db, 'evening', forDate, scope, briefOffice)
 record(
   'briefings',
   'the evening briefing on the same day is not blocked by the morning one',
@@ -566,7 +567,7 @@ record(
 
 // And tomorrow's morning is not blocked by today's.
 const tomorrow = localDate(new Date(Date.now() + 86_400_000), 'Europe/London')
-const nextDay = await generateBriefing(db, 'morning', tomorrow, scope)
+const nextDay = await generateBriefing(db, 'morning', tomorrow, scope, briefOffice)
 record(
   'briefings',
   "tomorrow's morning briefing is not blocked by today's",
@@ -634,7 +635,7 @@ record(
 
 const attention = await db.execute(`
   select slug, open_blockers, live_jobs, stalled_jobs, has_brief, brief_is_stale
-  from app.project_attention()
+  from app.project_attention(app.sole_person_office())
 `)
 record(
   'monitoring',

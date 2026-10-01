@@ -449,7 +449,9 @@ try {
     readingNow.every((d) => d.delivery_id !== undefined),
   )
 
-  const retried = await one(`select app.retry_job_deliveries(${lit(jobId)}::uuid) as v`)
+  const retried = await one(
+    `select app.retry_job_deliveries(app.test_office(), ${lit(jobId)}::uuid) as v`,
+  )
   const r = (retried.v ?? {}) as { queued?: number; skipped?: number; says?: string }
   check(
     'a person can send it again, and only the failed one is queued',

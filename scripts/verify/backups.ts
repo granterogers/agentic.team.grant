@@ -246,7 +246,7 @@ check(
 )
 
 // ── 5. It is in the reading Grant's dashboard actually asks for ────────────
-const office = jsonOf((await one(`select app.office_health(24) as r`)).r)
+const office = jsonOf((await one(`select app.office_health(app.sole_person_office(), 24) as r`)).r)
 check(
   'backup' in office && 'progress' in office,
   'office_health carries the backup and the progress readings',

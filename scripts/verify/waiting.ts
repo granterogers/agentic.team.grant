@@ -298,7 +298,7 @@ try {
   console.log('\nand it is where the work is')
 
   const studio = (
-    (await db.execute('select app.hq_studio() as d')).rows[0] as {
+    (await db.execute('select app.hq_studio(app.sole_person_office()) as d')).rows[0] as {
       d: { projects: { slug: string; name: string; layout: unknown; waiting: unknown }[] }
     }
   ).d

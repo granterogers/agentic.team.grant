@@ -390,6 +390,10 @@ check(
 // The half a browser has to do
 // ===========================================================================
 
+// P3: these read the dashboard of the person whose pages are being captured, so they name that office first.
+const OFFICE_FIRST = new Set(['hq_studio', 'usage_overview', 'hq_studio_lately'])
+const callOf = (fn: string, args: string): string =>
+  `app.${fn}(${OFFICE_FIRST.has(fn) ? `app.sole_person_office()${args === '' ? '' : `, ${args}`}` : args})`
 const sections: Record<string, unknown> = {}
 for (const [name, fn, args] of [
   ['studio', 'hq_studio', ''],
@@ -397,7 +401,7 @@ for (const [name, fn, args] of [
   ['usage_overview', 'usage_overview', '30'],
   ['studio_setup', 'hq_setup', ''],
 ] as const) {
-  sections[name] = (await one(`select app.${fn}(${args}) as d`)).d
+  sections[name] = (await one(`select ${callOf(fn, args)} as d`)).d
 }
 
 const TYPES: Record<string, string> = {

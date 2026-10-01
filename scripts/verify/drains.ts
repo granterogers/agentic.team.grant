@@ -320,7 +320,8 @@ ok(
   dashboard.
 */
 const health = (
-  (await db.execute(`select app.office_health() -> 'waiting' as w`)).rows as {
+  (await db.execute(`select app.office_health(app.sole_person_office()) -> 'waiting' as w`))
+    .rows as {
     w: { jobs: number; oldest_minutes: number; threshold_minutes: number }
   }[]
 )[0]

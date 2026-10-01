@@ -77,8 +77,9 @@ check(
 await db.execute(
   `select app.say_in_project(app.test_office(), ${lit(good)}::uuid, ${lit(`Said from the studio ${run}`)}, 'research-director')`,
 )
-const own = ((await one(`select app.conversation_history(${lit(good)}::uuid, 100) as v`)).v ??
-  []) as Msg[]
+const own = ((
+  await one(`select app.conversation_history(app.test_office(), ${lit(good)}::uuid, 100) as v`)
+).v ?? []) as Msg[]
 check(
   'the suite’s own studio turn is hidden (0602)',
   !own.some((m) => String(m.body).includes('Said from the studio')),
@@ -88,7 +89,7 @@ const studio = await inRollback(`
   v := app.say_in_project(app.test_office(), pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
   e := app.say_in_project(app.test_office(), pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
   r := jsonb_build_object('origin', app.job_origin((v ->> 'job')::uuid), 'nobody_ok', e ->> 'ok',
-                          'history', app.conversation_history(pr, 100));`)
+                          'history', app.conversation_history(app.test_office(), pr, 100));`)
 const h = (studio.history ?? []) as Msg[]
 const said = h.find((m) => String(m.body).includes(`Said for real from the studio ${run}`))
 check(

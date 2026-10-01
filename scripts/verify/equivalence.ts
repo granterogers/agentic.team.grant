@@ -226,7 +226,7 @@ try {
   // --- and the reader shows one conversation -------------------------------
   const readBack = (
     await one(`
-    select app.conversation_history(${lit(projectId)}::uuid, 100) as v`)
+    select app.conversation_history(app.test_office(), ${lit(projectId)}::uuid, 100) as v`)
   ).v as {
     kind?: string
     body?: string

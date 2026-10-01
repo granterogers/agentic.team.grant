@@ -63,7 +63,7 @@ const db = new ManagementApiExecutor(
   with two documents proves nothing about a panel that has to hold twelve.
 */
 const studio = (
-  (await db.execute('select app.hq_studio() as d')).rows[0] as {
+  (await db.execute('select app.hq_studio(app.sole_person_office()) as d')).rows[0] as {
     d: {
       // #110. Only what this suite plants into or reads back — the payload has
       // a great deal more and typing all of it here would be a second copy of

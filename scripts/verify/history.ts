@@ -106,7 +106,7 @@ const num = async (sql: string): Promise<number> => Number((await one(sql)).n ??
 
 const history = async (project: string, limit = 50): Promise<Msg[]> => {
   const r = await one(
-    `select app.conversation_history(${lit(project)}::uuid, ${String(limit)}) as v`,
+    `select app.conversation_history(app.test_office(), ${lit(project)}::uuid, ${String(limit)}) as v`,
   )
   return (r.v ?? []) as Msg[]
 }
@@ -436,7 +436,7 @@ try {
           insert into public.outputs (job_id, body, confidence, evidence, sources, deterministic)
           values ((e ->> 'job_id')::uuid, ${lit(`A real answer ${run}`)}, 'medium', 'inferred', '[]'::jsonb, true);
           r := jsonb_build_object('harness', app.harness_job((e ->> 'job_id')::uuid),
-                                  'history', app.conversation_history(pr, 100));
+                                  'history', app.conversation_history(app.test_office(), pr, 100));
           raise exception 'ROLLED-BACK:%', r::text;
         end $x$`)
     } catch (error) {
@@ -576,7 +576,7 @@ try {
       e := app.enqueue_inbound(c);
       r := jsonb_build_object('landed', (select project_id = pr from public.inbound_commands where command_id = c),
                               'origin', app.job_origin((e ->> 'job_id')::uuid),
-                              'history', app.conversation_history(pr, 100));`)
+                              'history', app.conversation_history(app.test_office(), pr, 100));`)
     const shown = ((r.history ?? []) as Msg[]).some((m) =>
       String(m.body).includes(`Asked in a real channel ${run}`),
     )
@@ -725,7 +725,7 @@ try {
     e := app.say_in_project(app.test_office(), pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
     r := jsonb_build_object('origin', app.job_origin((v ->> 'job')::uuid),
                             'nobody_ok', e ->> 'ok',
-                            'history', app.conversation_history(pr, 100));`)
+                            'history', app.conversation_history(app.test_office(), pr, 100));`)
   const studioHistory = (studio.history ?? []) as (Msg & { backfilled?: boolean })[]
   const realSaid = studioHistory.find((m) =>
     String(m.body).includes(`Said for real from the studio ${run}`),
@@ -889,7 +889,7 @@ try {
     worth checking is the one that makes NO job.
   */
   const digest = async (): Promise<string> =>
-    JSON.stringify((await one(`select app.hq_pulse() as v`)).v)
+    JSON.stringify((await one(`select app.hq_pulse(app.sole_person_office()) as v`)).v)
 
   const before = await digest()
   await db.execute(`
