@@ -63,6 +63,8 @@ export interface RemoteTask {
   readonly priority: number | null
   readonly dueOn: string | null
   readonly externalProjectId: string
+  /** The office's own mark on this task, when the provider carries one (the canonical id it was created from). */
+  readonly canonicalId?: string | null
 }
 
 export interface UpsertResult {

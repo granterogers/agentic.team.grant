@@ -38,6 +38,16 @@ const NOT_USED = null as never
 const dbWith = (opts: { install: boolean; expiresAt: string | null; inferences: number }) => ({
   execute: async (sql: string) => {
     if (sql.includes('inference_usage')) return { rows: [{ n: opts.inferences }] }
+    // The rotation is approved (the policy and the parent lookup answer as a yes would leave them): this file is about
+    // what a model-spending branch may claim, not about whether the rotation was allowed (policy-slack-rotation).
+    if (sql.includes('authorize_effect')) {
+      return {
+        rows: [
+          { d: { verdict: 'proceed', approved: true, because: 'You said yes to exactly this.' } },
+        ],
+      }
+    }
+    if (sql.includes('parent_job_id')) return { rows: [{ p: null }] }
     if (sql.includes('slack_app_credentials')) {
       return {
         rows: opts.install

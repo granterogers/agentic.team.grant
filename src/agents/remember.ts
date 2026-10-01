@@ -25,6 +25,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { readAuthority } from './authority-bearing.ts'
 import {
   boundToThisConversation,
   dimensionOf,
@@ -317,6 +318,52 @@ export async function remember(
     }
 
     /*
+      2b. WOULD STORING IT HAND THE OFFICE AUTHORITY? (final policy closure, decision 5)
+
+      A standing rule reaches every later prompt as Grant's own order. One that gives permission, directs something
+      at somebody outside the office, or sets something running is a durable behavioural policy, and nothing the
+      office learned may become one without his explicit yes. So it is not stored here: it is offered, through the
+      same route a drafted correction takes, and the only way it becomes a rule is his press on the Governance page.
+      Ordinary preferences (how long, what form, which spelling) are untouched and are learned on their own.
+
+      This is the second layer. The first is that no authorization decision reads a lesson at all
+      (`src/agents/authority-bearing.ts` says why, and `scripts/isolated/policy-learning.ts` proves it).
+    */
+    const reading = readAuthority(teaching.body, dimension)
+    if (reading.bearsAuthority) {
+      const signals = JSON.stringify(
+        Object.fromEntries(
+          reading.because.map((b) => [b.replace(/[^a-z]+/gi, '_').toLowerCase(), true]),
+        ),
+      )
+      const proposed = await db
+        .execute(`
+          select app.propose_standing_rule(
+            ${lit(teaching.body)}, ${onAProject !== null ? "'project'" : scoped === null ? "'global'" : "'staff'"},
+            ${scoped === null ? 'null' : lit(scoped)}, ${uuid(onAProject)}, ${uuid(jobId)}, ${lit(signals)}::jsonb) as r`)
+        .then(
+          (r) =>
+            (r.rows[0] as { r?: { offered?: boolean; error?: string } })?.r ??
+            ({} as { offered?: boolean; error?: string }),
+        )
+        .catch((): { offered?: boolean; error?: string } => ({
+          error: 'the offer could not be written',
+        }))
+      const why = reading.because.join('; ')
+      return {
+        said:
+          `I have not made that a standing rule: “${teaching.body}” ` +
+          `It ${why.replace(/^it /, '')}, and nothing I have learned can do that without your say-so. ` +
+          (proposed.offered === true
+            ? 'It is waiting for your yes on the Governance page; until then nothing about what I may do has changed.'
+            : proposed.error === undefined
+              ? 'It is already on the Governance page, or you have answered it before; either way I have not stored it.'
+              : 'I could not put it in front of you, so it has not been stored; say it again and I will try once more.'),
+        stored: null,
+      }
+    }
+
+    /*
       3. DOES IT REPLACE ONE, OR REPEAT ONE?
 
       Both are `p_supersedes`, and that is the point: a repetition and an
@@ -375,60 +422,34 @@ export async function remember(
     }
   }
 
-  let raw: { error?: string; skill_id?: string }
-  try {
-    const { rows } = await db.execute(`
-      select app.teach_skill(
+  /*
+    A PROCEDURE IS A STANDING WAY OF ACTING, so it is offered and never kept on the strength of a sentence (final
+    policy closure, decision 5). The only way it is written down is his press on the Governance page
+    (`app.decide_suggestion` performs it with the same writer and the same ADR-0017 boundary as before).
+  */
+  const offered = await db
+    .execute(`
+      select app.propose_standing_procedure(
         ${lit(teaching.name)}, ${lit(teaching.whenToUse)}, ${lit(teaching.procedure)},
-        ${lit(by)},
-        ${scoped === null ? "'global'" : "'staff'"}::public.lesson_scope,
-        null, ${scoped === null ? 'null' : lit(scoped)}, null,
-        '{}'::text[], ${uuid(jobId)}, null) as r
-    `)
-    raw = (rows[0] as { r?: { error?: string; skill_id?: string } })?.r ?? {}
-  } catch (error) {
-    /*
-      The ADR-0017 boundary, reaching Grant as a sentence.
-
-      It raises rather than returning `{error}`, because it is a trigger and a
-      trigger cannot return anything else. Translating it here rather than
-      letting the job fail: he asked for something reasonable in a way the
-      office cannot store, and the useful reply says which part and what to say
-      instead.
-    */
-    const detail = error instanceof Error ? error.message : String(error)
-    const boundary = /(URL|hostname|email address|IP address)/i.exec(detail)
-    if (boundary !== null) {
-      return {
-        said:
-          `I can hold that as a procedure, but not with ${boundary[0].toLowerCase()} in it — ` +
-          'a written-down procedure that can name an address is one that could send our work ' +
-          'somewhere nobody approved, so the rule is absolute. Say which of our tools it ' +
-          'should use instead and I will store it. If we do not have that tool yet, tell me ' +
-          'and I will put the request in front of you.',
-        stored: null,
-      }
-    }
-    if (/credential|token|secret|key/i.test(detail)) {
-      return {
-        said:
-          'That looks like it has a credential in it, so I have not stored it. Send it again ' +
-          'naming the vault key rather than the value and I will keep it.',
-        stored: null,
-      }
-    }
-    throw error
-  }
-
-  if (typeof raw.error === 'string') {
-    return { said: `I could not store that: ${raw.error}`, stored: null }
-  }
+        ${scoped === null ? "'global'" : "'staff'"}, ${scoped === null ? 'null' : lit(scoped)}, null,
+        ${uuid(jobId)}, '{"it_is_a_standing_way_of_acting": true}'::jsonb) as r`)
+    .then(
+      (r) =>
+        (r.rows[0] as { r?: { offered?: boolean; error?: string } })?.r ??
+        ({} as { offered?: boolean; error?: string }),
+    )
+    .catch((): { offered?: boolean; error?: string } => ({
+      error: 'the offer could not be written',
+    }))
   return {
     said:
-      `Written down as a procedure${scoped === null ? ' for the whole team' : ''}, ` +
-      `filed under “${teaching.name}” for ${teaching.whenToUse.toLowerCase()}. ` +
-      'It goes in front of the relevant work from now on. Rename or retire it on the ' +
-      'dashboard if that is not what you meant.',
-    stored: 'skill',
+      `I have not written that down as a procedure: “${teaching.name}” for ${teaching.whenToUse.toLowerCase()}. ` +
+      'A procedure is a standing way of acting, and nothing I have learned becomes one without your say-so. ' +
+      (offered.offered === true
+        ? 'It is waiting for your yes on the Governance page; until then nothing has changed.'
+        : offered.error === undefined
+          ? 'It is already on the Governance page, or you have answered it before; either way I have not stored it.'
+          : 'I could not put it in front of you, so it has not been stored; say it again and I will try once more.'),
+    stored: null,
   }
 }

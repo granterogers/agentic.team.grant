@@ -168,7 +168,7 @@ const DECIDERS: [string, Record<string, unknown>][] = [
   ['approve_tool', { p_request_id: ZERO }],
   ['decline_tool', { p_request_id: ZERO }],
   ['revoke_tool', { p_slug: 'chief-of-staff', p_tool: 'db.read' }],
-  ['grant_standing', { p_tool: 'notion.write', p_reason: 'proof' }],
+  ['grant_standing', { p_tool: 'notebook.write', p_reason: 'proof' }],
   ['revoke_standing', { p_authorization: ZERO }],
   ['autonomy_set', { p_level: 'act', p_project_id: realProject }],
   ['staff_tool_set', { p_slug: 'chief-of-staff', p_tool: 'db.read', p_granted: false }],
@@ -262,7 +262,7 @@ check(
     ['proposal_decide', { p_proposal: ZERO, p_decision: 'approve' }],
     ['lesson_retract', { p_lesson: ZERO }],
     ['routing_set', { p_phrase: 'x' }],
-    ['attach', { p_slug: 'x', p_connector: 'notion', p_ref: 'r' }],
+    // 'attach' carries the answering person since 0641 (a Notion connection is his act); policy-notion.ts drives it.
   ]
   let refused = 0
   for (const [action, args] of NO_BY) {
@@ -496,7 +496,7 @@ check(
         approval_options, originating_agent, work_can_continue, decline_option, standing_tool, standing_option)
       values (${lit(project)}::uuid, ${lit(job)}::uuid, ${lit(`Do it from now on ${run}`)}, 'proof', 'Nothing happens until somebody answers this.',
         array['Yes, do that from now on without asking me', 'No, leave it'], 'chief-of-staff', false, 'No, leave it',
-        'notion.write', 'Yes, do that from now on without asking me') returning blocker_id::text as id`)
+        'notebook.write', 'Yes, do that from now on without asking me') returning blocker_id::text as id`)
     return String(b.id)
   }
   const count = async (project: string) =>
@@ -526,7 +526,7 @@ check(
   const direct = json(
     (
       await one(
-        `select app.grant_standing('notion.write', ${lit(realProject)}::uuid, 'proof', 'verify-operator', null) as r`,
+        `select app.grant_standing('notebook.write', ${lit(realProject)}::uuid, 'proof', 'verify-operator', null) as r`,
       )
     ).r,
   )

@@ -46,7 +46,7 @@ const freshProject = async (label: string): Promise<string> =>
       ).v,
     ).project_id,
   )
-const TOOL = 'notion.write' // level 2; no seeded standing authorization
+const TOOL = 'notebook.write' // level 2; no seeded standing authorization
 const ask = async (project: string, standingOption?: string) => {
   const job = await dutyJob(project)
   return governOutward(db as never, {

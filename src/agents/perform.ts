@@ -44,7 +44,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { raiseBlocker } from '../inference/record.ts'
 import { fingerprint, type Outcome, type Paused, type Step } from '../jobs/checkpoint.ts'
 import { type Claimed, callerArgs } from '../jobs/fence.ts'
-import { isUntrusted, retrieve } from '../knowledge/retrieval.ts'
+import { isUntrusted, retrieveAcrossOffice, whereFrom } from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { mayAct, refusalSentence } from './approval.ts'
 import type { GoalPlan, PlanStep } from './goal.ts'
@@ -241,7 +241,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         validator let through with the request as the only thing said.
       */
       const asking = (step.why === '' ? request : step.why).slice(0, 400)
-      const hits = await retrieve(db, asking, projectId, 5).catch(() => null)
+      const hits = await retrieveAcrossOffice(db, asking, projectId, 5).catch(() => null)
       if (hits === null) {
         return nothing('notebook.read', 'the knowledge index could not be searched')
       }
@@ -271,7 +271,10 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         found: true,
         ids: open.map((h) => h.documentId),
         saw: open
-          .map((h) => `"${h.title}": ${h.excerpt.replace(/\s+/g, ' ').trim().slice(0, 400)}`)
+          .map(
+            (h) =>
+              `"${h.title}"${whereFrom(h)}: ${h.excerpt.replace(/\s+/g, ' ').trim().slice(0, 400)}`,
+          )
           .join('\n'),
         searched: asking,
         documents: open.length,

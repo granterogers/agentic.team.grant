@@ -56,6 +56,17 @@ export const EXPOSURE_SQL = `
    where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
    order by 1`
 
+export type TableReach = {
+  readonly name: string
+  readonly rls: boolean
+  readonly anon: boolean
+  readonly authenticated: boolean
+}
+
+/** A table with no row policy that a public key can read or write (0642). */
+export const tableReachableByAPublicKey = (t: TableReach): boolean =>
+  !t.rls && (t.anon || t.authenticated)
+
 export const readReach = (rows: readonly unknown[]): FnReach[] =>
   (rows as Record<string, unknown>[]).map((r) => ({
     name: String(r.name),
@@ -126,6 +137,51 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(
     `control: an anon grant is caught ${String(control)}; a PUBLIC grant is caught ${String(controlPublic)}`,
   )
+  /*
+    TABLES (0642). The same question for a table: could a public key read or write it? A table WITH row-level security
+    is protected by its policies (none of which name a public role), so it is not what this asks about. One without is
+    reachable by exactly the privileges below. The control runs an injected row through the same predicate, and the
+    set must be non-empty or the check has looked at nothing.
+  */
+  const tables = (
+    await db.execute(
+      `select c.relname as name, c.relrowsecurity as rls,
+              has_table_privilege('anon', c.oid, 'select, insert, update, delete') as anon,
+              has_table_privilege('authenticated', c.oid, 'select, insert, update, delete') as authenticated
+         from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p')
+        order by 1`,
+    )
+  ).rows as { name: string; rls: boolean; anon: boolean; authenticated: boolean }[]
+  const openTables = tables.filter(tableReachableByAPublicKey)
+  const tableControl = tableReachableByAPublicKey({
+    name: 'synthetic',
+    rls: false,
+    anon: true,
+    authenticated: false,
+  })
+  const tableControlSafe = !tableReachableByAPublicKey({
+    name: 'synthetic',
+    rls: true,
+    anon: true,
+    authenticated: true,
+  })
+  console.log(
+    `inspected ${String(tables.length)} public table(s); control: an open table is caught ${String(tableControl)}, a row-policy table is not ${String(tableControlSafe)}`,
+  )
+  if (tables.length === 0 || !tableControl || !tableControlSafe) {
+    console.log('FAIL the table check cannot see anything, so its silence means nothing')
+    process.exit(1)
+  }
+  if (openTables.length > 0) {
+    console.log(
+      `FAIL ${String(openTables.length)} table(s) with no row policy are reachable by a public key: ${openTables
+        .slice(0, 8)
+        .map((t) => t.name)
+        .join(', ')}`,
+    )
+    process.exit(1)
+  }
+  console.log('ok   no table without a row policy is reachable by anon or authenticated')
   let failed = false
   if (fns.length === 0 || !control || !controlPublic) {
     console.log('FAIL the check cannot see anything, so its silence means nothing')

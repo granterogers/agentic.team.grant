@@ -130,6 +130,12 @@ describe('#131 — the plan is the thing executed', () => {
       kind: 'fake',
       execute: async (sql: string): Promise<SqlResult> => {
         if (sql.includes('app.job_plan(')) return { rows: [{ p: storedPlan }] }
+        // The import was asked for, so every destination proceeds (the gate is proved in policy-notion-destination).
+        if (sql.includes('authorize_effect')) {
+          return {
+            rows: [{ d: { verdict: 'proceed', asked_for: true, because: 'You asked for this.' } }],
+          }
+        }
         if (sql.includes('decrypted_secrets')) {
           return {
             rows: [

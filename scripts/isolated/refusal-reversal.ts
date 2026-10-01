@@ -81,7 +81,7 @@ const withdraw = async (b: string, by: string | null) =>
 const verdict = async (p: string, fp: string, j?: string) =>
   mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp,
     ...(j === undefined ? {} : { job: j }),
   })
@@ -192,7 +192,7 @@ await answer(bB, 'No, leave it')
   const b = await ask(p3, j, fp)
   await answer(b, 'No, leave it')
   await db.execute(
-    `select app.grant_standing('notion.write', ${lit(p3)}::uuid, 'reversal proof', 'grant', null)`,
+    `select app.grant_standing('notebook.write', ${lit(p3)}::uuid, 'reversal proof', 'grant', null)`,
   )
   const withStanding = await verdict(p3, fp, await job(p3))
   check(
@@ -202,7 +202,7 @@ await answer(bB, 'No, leave it')
   )
   await db
     .execute(
-      `update public.standing_authorizations set revoked_at = now(), revoked_reason = 'reversal proof' where tool = 'notion.write' and project_id = ${lit(p3)}::uuid`,
+      `update public.standing_authorizations set revoked_at = now(), revoked_reason = 'reversal proof' where tool = 'notebook.write' and project_id = ${lit(p3)}::uuid`,
     )
     .catch(() => undefined)
   const revoked = await verdict(p3, fp, await job(p3))
@@ -232,7 +232,7 @@ await answer(bB, 'No, leave it')
     return governOutward(db as never, {
       jobId: j,
       projectId: p3b,
-      tool: 'notion.write',
+      tool: 'notebook.write',
       summary: 'The copy is behind',
       detail: '1. A',
       empty: false,

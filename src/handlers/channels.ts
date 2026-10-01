@@ -42,6 +42,7 @@ import { raiseBlocker } from '../inference/record.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { SlackClient } from '../slack/api.ts'
 import { ChannelProvisioner } from '../slack/provision.ts'
+import { governEffect } from './approval-gate.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -49,6 +50,8 @@ export interface ChannelsDeps {
   readonly db: SqlExecutor
   readonly botToken: string
   readonly teamId: string
+  /** For a suite that must see every call the office makes at Slack. Absent, the real client. */
+  readonly slack?: SlackClient
 }
 
 export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
@@ -119,8 +122,72 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
         }
       }
 
-      const provisioner = new ChannelProvisioner(db, new SlackClient(botToken), teamId)
-      const result = await provisioner.ensureChannel(row.id, String(row.name ?? 'project'))
+      const provisioner = new ChannelProvisioner(
+        db,
+        deps.slack ?? new SlackClient(botToken),
+        teamId,
+      )
+      const label = String(row.name ?? 'project')
+
+      /*
+        WHY THIS CHANNEL MAY BE MADE (final policy closure, decision 2).
+
+        A channel is permanent in Slack, so making one needs a reason the office can say afterwards. There are exactly
+        two. A person made the project (`slack_channel_authority`, written only by the project-creation functions
+        from a verified principal or a person's own turn, and spent once here), or a person said yes to this exact
+        channel (a question raised below, whose yes starts a child of this job that finds the answer on its parent).
+        Anything else - a sweep finding a project with no channel, a duty - asks. Nothing in the job's payload is
+        read as a reason; it is not looked at.
+      */
+      let because = ''
+      let spend = false
+      if (!(await provisioner.hasChannel(row.id))) {
+        const authority = (
+          await db.execute(`select app.channel_authority(${lit(row.id)}::uuid) as a`)
+        ).rows[0] as { a?: unknown } | undefined
+        const a = (typeof authority?.a === 'string' ? JSON.parse(authority.a) : authority?.a) as
+          | { authorized_by?: string }
+          | null
+          | undefined
+        if (a !== null && a !== undefined && typeof a.authorized_by === 'string') {
+          because = `because ${a.authorized_by} created the project`
+          spend = true
+        } else {
+          const wantedName = await provisioner.wantedName(row.id, label)
+          const d = await governEffect(db, job, {
+            tool: 'slack.channel',
+            material: { op: 'create', name: wantedName },
+            summary: `Create the Slack channel #${wantedName} for "${label}"?`,
+            detail:
+              'Nobody asked me to make this one - the project was not created by a person through me. ' +
+              'A Slack channel cannot be deleted once it exists, so I will not make it without your yes.',
+            agent: 'operations-director',
+            onYes: { yes: 'Yes, create the channel', no: 'No, not now' },
+          })
+          if (!d.ok) {
+            await quiet()
+            return {
+              ...base,
+              facts: { changed: false, looked_at: 1 },
+              body: `${label} has no Slack channel and I have not made one: ${d.said}`,
+              announce: false,
+            }
+          }
+          because = 'because you said yes to creating it'
+        }
+      }
+
+      const result = await provisioner.ensureChannel(row.id, label)
+      if (
+        spend &&
+        (result.outcome === 'created' ||
+          result.outcome === 'adopted' ||
+          result.outcome === 'existing')
+      ) {
+        await db.execute(
+          `select app.consume_channel_authority(${lit(row.id)}::uuid, ${lit(job.jobId)}::uuid)`,
+        )
+      }
 
       /*
         `failed` is Slack refusing; `name_conflict` is a name taken by a
@@ -212,7 +279,7 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
         ...base,
         facts: { changed: made, looked_at: 1 },
         body: made
-          ? `${String(row.name)} has a Slack channel now: #${String(result.channelName)}.`
+          ? `${String(row.name)} has a Slack channel now: #${String(result.channelName)}${because === '' ? '' : ` (${because})`}.`
           : `${String(row.name)} already has #${String(result.channelName)}.`,
         announce: made,
       }

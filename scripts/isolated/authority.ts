@@ -50,7 +50,7 @@ const job = async (p: string, by: string, kind = 'office.instruction'): Promise<
   )
 const OPTS = ['Yes, do it', 'No, leave it']
 /** A question about one exact action, as a plan step raises it. */
-const ask = async (p: string, j: string, fp: string, tool = 'notion.write') =>
+const ask = async (p: string, j: string, fp: string, tool = 'notebook.write') =>
   String(
     (
       await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
@@ -153,7 +153,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const b = await ask(p, j, fp1)
   const before = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp1,
     job: j,
   })
@@ -161,19 +161,19 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await answer(b, 'Yes, do it')
   const same = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp1,
     job: j,
   })
   const changed = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp2,
     job: j,
   })
   const other = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp1,
     job: await job(p, 'telegram:grant-exact2'),
   })
@@ -192,7 +192,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const r = await answer(b, 'No, leave it')
   const same = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp,
     job: j,
   })
@@ -214,7 +214,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const later = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp,
     job: await job(p, 'telegram:grant-no2'),
   })
@@ -225,7 +225,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const diff = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fpOther,
     job: await job(p, 'telegram:grant-no3'),
   })
@@ -239,7 +239,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const expired = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp,
     job: await job(p, 'telegram:grant-no4'),
   })
@@ -251,7 +251,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await db.execute(`update public.jobs set state = 'cancelled' where job_id = ${lit(j2)}::uuid`)
   const cancelled = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp3,
     job: await job(p, 'telegram:grant-cancel2'),
   })
@@ -272,7 +272,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
       g: await governOutward(db as never, {
         jobId: j,
         projectId: p,
-        tool: 'notion.write',
+        tool: 'notebook.write',
         summary: 'The copy is behind',
         detail: '1. A',
         empty: false,
@@ -309,7 +309,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `blockers ${String(blockersBefore)}->${String(blockersAfter)}, impediments ${String(impediments)}`,
   )
   await db.execute(
-    `select app.grant_standing('notion.write', ${lit(p)}::uuid, 'he changed his mind', 'grant', null)`,
+    `select app.grant_standing('notebook.write', ${lit(p)}::uuid, 'he changed his mind', 'grant', null)`,
   )
   const third = await ask2()
   check(
@@ -331,7 +331,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
           values (${lit(p)}::uuid, ${lit(j)}::uuid, ${lit(`Keep it in step ${label}`)}, 'authority proof',
             'Nothing happens until somebody answers this question.',
             array['Yes, keep doing it without asking me', 'No, leave it'], 'chief-of-staff', false,
-            'notion.write', 'Yes, keep doing it without asking me', 'No, leave it') returning blocker_id::text as id`)
+            'notebook.write', 'Yes, keep doing it without asking me', 'No, leave it') returning blocker_id::text as id`)
       ).id,
     )
     const t = String(
@@ -368,7 +368,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const known = await makeAsk('grant')
   await db.execute(`select app.hq_task_state(${lit(known.t)}, 'done', null, 'grant')`)
   const k = await one(
-    `select b.state::text as bs, b.answered_by as by, b.answered_option as opt, (select count(*)::int from public.standing_authorizations where tool = 'notion.write' and project_id = ${lit(p)}::uuid and revoked_at is null) as standing from public.blockers b where b.blocker_id = ${lit(known.b)}::uuid`,
+    `select b.state::text as bs, b.answered_by as by, b.answered_option as opt, (select count(*)::int from public.standing_authorizations where tool = 'notebook.write' and project_id = ${lit(p)}::uuid and revoked_at is null) as standing from public.blockers b where b.blocker_id = ${lit(known.b)}::uuid`,
   )
   check(
     'a tick by a known principal answers through hq_answer_blocker: who, which option, and what it promised',
@@ -579,7 +579,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await answer(b, 'Yes, do it')
   const seen = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp,
     job: j,
   })
@@ -607,7 +607,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     )
   }
   // calendar.write is not listed: migration 0424 seeds a standing authorization for the diary duty, so it proceeds by that row.
-  for (const tool of ['notion.write', 'slack.post', 'notebook.write']) {
+  for (const tool of ['slack.post', 'notebook.write']) {
     const d = await mayAct(db as never, { projectId: p, tool })
     check(`outward ${tool} (level 2) still asks at suggest`, d.verdict === 'ask', d.verdict)
   }
@@ -643,7 +643,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const body = String(
     (
       await one(
-        `select pg_get_functiondef('app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text)'::regprocedure) as d`,
+        `select pg_get_functiondef('app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text, text)'::regprocedure) as d`,
       )
     ).d,
   )
@@ -690,11 +690,11 @@ const answer = async (b: string, a: string, by = 'grant') =>
     internal.verdict,
   )
   await db.execute(
-    `select app.grant_standing('notion.write', ${lit(p)}::uuid, 'review proof', 'grant', null)`,
+    `select app.grant_standing('notebook.write', ${lit(p)}::uuid, 'review proof', 'grant', null)`,
   )
   const withStanding = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp,
     job: j,
   })
@@ -705,7 +705,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const elsewhere = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp,
     job: await job(p, 'telegram:grant-rv2b'),
   })
@@ -723,7 +723,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await answer(hb, 'No, leave it')
   const realAsks = await mayAct(db as never, {
     projectId: pH,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fpH,
     job: await job(pH, 'telegram:grant-real'),
   })
@@ -734,7 +734,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const harnessAsks = await mayAct(db as never, {
     projectId: pH,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fpH,
     job: await job(pH, 'teamhq:verify-two-sided-b'),
   })
@@ -749,7 +749,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await answer(rb, 'No, leave it')
   const harnessUnbound = await mayAct(db as never, {
     projectId: pR,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: await fingerprint({ rv2: 'real no', run }),
     job: await job(pR, 'teamhq:verify-unbound'),
   })
@@ -866,17 +866,17 @@ const answer = async (b: string, a: string, by = 'grant') =>
     await db.execute(`select slug from public.staff order by slug limit 2`)
   ).rows.map((r) => String((r as { slug: string }).slug))
   await db.execute(
-    `insert into public.staff_tools (staff_slug, tool) values (${lit(String(holder))}, 'notion.write') on conflict do nothing`,
+    `insert into public.staff_tools (staff_slug, tool) values (${lit(String(holder))}, 'notebook.write') on conflict do nothing`,
   )
   await db.execute(
-    `delete from public.staff_tools where staff_slug = ${lit(String(bare))} and tool = 'notion.write'`,
+    `delete from public.staff_tools where staff_slug = ${lit(String(bare))} and tool = 'notebook.write'`,
   )
   const duty = async (agent: string) => {
     const j = await job(p, 'duty:third-review', 'google.write_calendar_tasks')
     return governOutward(db as never, {
       jobId: j,
       projectId: p,
-      tool: 'notion.write',
+      tool: 'notebook.write',
       summary: 's',
       detail: 'd',
       empty: false,
@@ -898,7 +898,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     String(ungranted.decision.reason),
   )
   await db.execute(
-    `select app.grant_standing('notion.write', ${lit(p)}::uuid, 'third review', 'grant', null)`,
+    `select app.grant_standing('notebook.write', ${lit(p)}::uuid, 'third review', 'grant', null)`,
   )
   const standingToo = await duty(String(bare))
   check(
@@ -1119,7 +1119,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   await db.execute(`select app.answer_generation_approval(${lit(b2)}::uuid, false, 'grant')`)
   const viaButton = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp,
     job: j2,
   })
@@ -1165,11 +1165,11 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `alter table public.blockers drop column action_fingerprint, drop column decline_option`,
   )
   await db.execute(
-    `drop function app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text)`,
+    `drop function app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text, text)`,
   )
   const boundary = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     fingerprint: fp,
     job: j2,
   }).then(

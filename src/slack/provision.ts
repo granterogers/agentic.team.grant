@@ -150,15 +150,26 @@ export class ChannelProvisioner {
    * about the project, rather than eight per project on day one: forty mostly
    * empty channels is a sidebar that teaches you to ignore the section.
    */
-  async ensureChannel(
+  /** The name this project's channel would have, from the same reading `ensureChannel` makes (so a question names what will be made). */
+  async wantedName(projectId: string, projectLabel: string): Promise<string> {
+    return (await this.wanted(projectId, projectLabel, null)).name
+  }
+
+  /** Does the project already have its lobby, recorded? (The database, asked first, as `ensureChannel` does.) */
+  async hasChannel(projectId: string): Promise<boolean> {
+    return (
+      (await this.one<{ channel_id: string }>(`
+        select channel_id from public.slack_channel_map
+         where project_id = ${lit(projectId)}::uuid and active and purpose = 'project' and discipline is null
+         limit 1`)) !== undefined
+    )
+  }
+
+  private async wanted(
     projectId: string,
     projectLabel: string,
-    staffSlug?: string | null,
-  ): Promise<ProvisionResult> {
-    // `channel_prefix` if the project has one — it is editable in the front
-    // end, which is the point — then its name, then the caller's label. A slug
-    // is a machine's name for a project; a person reading a sidebar wants the
-    // name they gave it.
+    staffSlug: string | null | undefined,
+  ) {
     const named = await this.one<{
       name: string | null
       channel_prefix: string | null
@@ -175,7 +186,19 @@ export class ChannelProvisioner {
         : named?.name !== null && named?.name !== undefined && named.name.trim() !== ''
           ? named.name
           : projectLabel
-    const name = channelNameFor(stem, staffSlug)
+    return { named, name: channelNameFor(stem, staffSlug) }
+  }
+
+  async ensureChannel(
+    projectId: string,
+    projectLabel: string,
+    staffSlug?: string | null,
+  ): Promise<ProvisionResult> {
+    // `channel_prefix` if the project has one — it is editable in the front
+    // end, which is the point — then its name, then the caller's label. A slug
+    // is a machine's name for a project; a person reading a sidebar wants the
+    // name they gave it.
+    const { named, name } = await this.wanted(projectId, projectLabel, staffSlug)
 
     const mapped = await this.one<{ channel_id: string; channel_name: string }>(`
       select channel_id, channel_name from public.slack_channel_map

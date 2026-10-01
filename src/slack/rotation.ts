@@ -235,5 +235,23 @@ export async function rotateAndPersist(
             app.store_secret(${sqlLit('slack.config_refresh_token')}, ${sqlLit(pair.refreshToken)}, ${sqlLit('Slack config refresh token')})`,
   )
 
+  /*
+    AND WHEN THE NEW PAIR EXPIRES, which nothing recorded (final policy closure).
+
+    The handler decides whether a rotation is due from `config_token_expires_at`, and this function never moved it, so
+    after the first successful rotation the row kept saying the pair had expired and the duty believed a rotation was
+    due on every tick - burning a single-use refresh token six times a day, and, now that every rotation asks, asking
+    six times a day. Written AFTER the pair is safely stored and as its own statement: a failure here costs one spurious
+    question, never the credential. Production's row still reads 10 September for this reason.
+  */
+  await deps
+    .execute(
+      `update public.slack_app_credentials
+          set config_token_expires_at = to_timestamp(${String(Math.floor(pair.expiresAt))}),
+              config_token_rotated_at = app.now_utc(), rotation_failures = 0, last_rotation_error = null
+        where slack_app_id = ${sqlLit(appId)}`,
+    )
+    .catch(() => undefined)
+
   return { kind: 'rotated', expiresAt: pair.expiresAt }
 }

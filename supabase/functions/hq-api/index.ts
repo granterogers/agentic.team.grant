@@ -686,15 +686,28 @@ const SECTIONS: Readonly<
   the browser only claims. An action that records authority and has no `by`
   is the gap this exists to close.
 */
-type ActionSpec = { fn: string; required: readonly string[]; by?: string }
+/**
+ * `by` carries the verified principal into the function for EVERY credential (a function that decides, so the database
+ * refuses a principal that is not a person). `personBy` carries it ONLY for a person and removes whatever else was
+ * sent: it is for an action the office key may also do (a machine making a test project) where the person's identity
+ * adds provenance and its absence adds nothing - a machine never makes a project that counts as a person's.
+ */
+type ActionSpec = { fn: string; required: readonly string[]; by?: string; personBy?: string }
 const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // `p_force` is optional and deliberately not required: without it the RPC
   // returns the candidates and creates nothing (0153), which is the behaviour
   // every caller should get by default. Passing it is a person having looked at
   // those candidates and said "no, a new one".
-  create_project: { fn: 'hq_create_project', required: ['p_name', 'p_connector', 'p_ref'] },
+  // `personBy`: a project a PERSON made records who (0643), so its channel is part of what was asked. The office key
+  // may still make a test project; it carries no principal and so records nothing.
+  create_project: {
+    fn: 'hq_create_project',
+    required: ['p_name', 'p_connector', 'p_ref'],
+    personBy: 'p_by',
+  },
   rename_project: { fn: 'hq_rename_project', required: ['p_slug', 'p_name'] },
-  attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'] },
+  // `by`: connecting a Notion database is the yes to writing into it, and only a person's connecting counts (0641).
+  attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'], by: 'p_by' },
   detach: { fn: 'hq_detach', required: ['p_attachment_id'] },
   // Recording that a project deliberately has no Notion page — §3's fifth
   // option, and the only one that does not end in an attachment. `p_reason` is
@@ -1276,6 +1289,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   vikunja_connect: {
     fn: 'hq_set_vikunja',
     required: ['p_base_url', 'p_project_id', 'p_api_token'],
+    // Connecting the board is the yes to create/update on it, and only a person's connecting counts (0641).
+    by: 'p_by',
   },
   vikunja_forget: { fn: 'hq_forget_vikunja', required: [] },
 }
@@ -1692,6 +1707,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (action.by !== undefined) {
       delete args[action.by]
       if (principal !== null && principal !== '') args[action.by] = principal
+    }
+    if (action.personBy !== undefined) {
+      delete args[action.personBy]
+      if (kind === 'person' && principal !== null && principal !== '') {
+        args[action.personBy] = principal
+      }
     }
     const missing = action.required.filter(
       (k) => args[k] === undefined || args[k] === null || String(args[k]).trim() === '',

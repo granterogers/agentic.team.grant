@@ -49,6 +49,7 @@ import { count } from '../text/plain.ts'
 import { scrub } from '../text/scrub.ts'
 import type { Plan, PlanStep } from '../tools/plan.ts'
 import { nothingToDo } from '../tools/plan.ts'
+import { governEffect } from './approval-gate.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -318,6 +319,40 @@ export function notionImportHandler(deps: NotionImportDeps): Handler {
       const ready = await prepare(db, job)
       if (ready.stop !== null) return await say(ready.stop)
       const { projectId, projectName, token, docsDb, projectsDb, tasksDb, sources } = ready
+
+      /*
+        EVERY DATABASE THIS WRITES TO IS A DESTINATION (final policy closure, decision 3).
+
+        Somebody asking for the import is enough (a person's own turn proceeds, as for any write below level 3). An
+        import nobody asked for - a duty, a sweep - writes only into a database whose connection a person made, which
+        left a standing yes naming exactly that database (`notion:<id>`); a database nobody connected that way, or a
+        different one, has none, and the whole import waits rather than writing to some of them. What the databases
+        CONTAIN is never consulted: contents are data, and the connection is the only thing that authorises.
+      */
+      const destinations = [docsDb, projectsDb, tasksDb].filter(
+        (id): id is string => id !== undefined,
+      )
+      const refused: string[] = []
+      for (const id of destinations) {
+        const d = await governEffect(db, job, {
+          tool: 'notion.write',
+          material: { op: 'import', destination: id },
+          scope: `notion:${id}`,
+          summary: `Import into the Notion database ${id}`,
+          agent: 'operations-director',
+        })
+        if (!d.ok) refused.push(id)
+      }
+      if (refused.length > 0) {
+        return await say(
+          `I have not imported anything into Notion: nobody asked for this, and ${
+            refused.length === 1 ? 'a database' : 'some databases'
+          } here (${refused.join(', ')}) ${
+            refused.length === 1 ? 'was' : 'were'
+          } not connected by you. Connect ${refused.length === 1 ? 'it' : 'them'} from the project, or ask me to import.`,
+          false,
+        )
+      }
 
       /*
         The approved curriculum, or a fresh one only if no plan was stored.

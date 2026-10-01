@@ -8,30 +8,27 @@ import { REACH } from '../../src/jobs/containment.ts'
 
   Every job kind that changes something in a third party's system (`reach: 'external'`) must either pass the
   canonical authorization (`mayWrite`, `governOutward`, `authorizeEffect`, `app.may_act`, the approval gate) or be
-  NAMED below with the reason it does not. The list is the honest state of the office today: nine kinds write
-  outside without asking that time, and each is held by containment (runJob refuses harness and unknown-origin
-  work) rather than by a permission. Whether any of them should ask is Grant's decision (#389, #390, #393); this
-  test does not make it, it makes it impossible for a tenth kind to join the nine unnoticed, and impossible for a
-  kind to stay on the list after it has been gated.
+  NAMED below with the reason it does not. The list is the honest state of the office today: five kinds write
+  outside without asking that time, each held by containment (runJob refuses harness and unknown-origin work) or by
+  something stronger than a permission, with the reason named below. The four #389 duties are no longer on it:
+  Grant decided how each behaves and each is now behind the one authorization (`governEffect`, 0640-0643):
+  Vikunja create/update by the board's connection and delete by an exact question, Slack channels by the
+  project's creation or an exact question, Notion import by the connected database, Slack token rotation by an
+  exact question every time. This test makes it impossible for a sixth kind to join the five unnoticed, and
+  impossible for a kind to stay on the list after it has been gated.
 */
 
 const UNGATED: Record<string, string> = {
-  'office.notion_import':
-    '#389/#393: writes to a database Grant attached; the attachment itself is ungated (#393)',
-  'office.notion_adopt': '#389/#393: adopts pages already in an attached database',
-  'office.notion_sync': "#389/#393: mirrors the office's own documents into an attached database",
+  'office.notion_adopt':
+    'reads the workspace and records an attachment in our own database; a Notion write it is not, and it mints a connection only for a person (0641)',
+  'office.notion_sync':
+    "reads shared Notion pages into our documents; it writes nothing to Notion (the destination gate is on 'office.notion_import')",
   'google.revoke':
     "#390: starts only from Grant's press on Settings (a gateway action), never from a duty",
   'ci.dispatch':
     'governed by its own ledger: ci_reserve refuses past the monthly ceiling before anything is dispatched',
-  'office.provision_channels':
-    '#389: Slack channel creation for a project at least fifteen minutes old, once a day, conflict asks',
-  'office.rename_channels': '#389: follows a rename Grant made on the dashboard',
-  'office.slack_rotate':
-    "#389: rotates the office's own Slack config token; a pre-rotation copy is stored first",
   'office.vault_export':
     'disabled unless Grant enables the export; door-gated and the destination is hard-wired',
-  'tasks.sync': "#389: the task board is dormant; create/update/delete from the office's own tasks",
 }
 
 /*
@@ -41,7 +38,7 @@ const UNGATED: Record<string, string> = {
   branches on it: `const start = await mayStart(...)` ... `if (!start.ok)`.
 */
 const CALL =
-  /\bconst\s+(\w+)\s*=\s*await\s+(?:mayWrite|mayStart|governOutward|authorizeEffect|mayAct)\s*\(/g
+  /\bconst\s+(\w+)\s*=\s*await\s+(?:mayWrite|mayStart|governOutward|governEffect|authorizeEffect|mayAct)\s*\(/g
 const isGated = (text: string): boolean =>
   [...text.matchAll(CALL)].some((m) =>
     new RegExp(`if\\s*\\(\\s*!?\\s*${m[1]}\\.(?:ok|go|verdict)\\b`).test(text),
@@ -83,6 +80,12 @@ describe('every external kind is gated or named', () => {
         'notebook.generate',
         'google.write_calendar_tasks',
         'office.execute_plan',
+        // The four #389 duties, gated by the final policy closure.
+        'tasks.sync',
+        'office.provision_channels',
+        'office.rename_channels',
+        'office.notion_import',
+        'office.slack_rotate',
       ]),
     )
   })
@@ -107,6 +110,11 @@ describe('every external kind is gated or named', () => {
       ),
     ).toBe(true)
     expect(isGated('const gate = await governOutward(db, {})\nif (!gate.go) { return }')).toBe(true)
+    // governEffect: the answer must be consumed, not merely awaited.
+    expect(isGated('const d = await governEffect(db, job, {})\nreturn run()')).toBe(false)
+    expect(isGated('const d = await governEffect(db, job, {})\nif (!d.ok) return refused()')).toBe(
+      true,
+    )
   })
 
   it('a new external kind with no gate and no entry is caught (the detector can fail)', () => {

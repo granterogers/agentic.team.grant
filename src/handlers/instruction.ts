@@ -180,7 +180,7 @@ import {
   type MailCoverage,
   mailBlock,
   mailRefs,
-  retrieve,
+  retrieveAcrossOffice,
   sourceRefs,
   waitingBlock,
 } from '../knowledge/retrieval.ts'
@@ -5534,7 +5534,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         instruction.split(/\s+/).length <= 8 && lastSaid !== ''
           ? `${lastSaid} ${instruction}`
           : instruction
-      const hits = !answering ? [] : await retrieve(deps.db, searchFor, job.projectId)
+      const hits = !answering ? [] : await retrieveAcrossOffice(deps.db, searchFor, job.projectId)
       const context = contextBlock(hits)
 
       /*

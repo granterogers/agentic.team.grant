@@ -73,6 +73,23 @@ const done = (body: string, sources: readonly string[]): HandlerOutput =>
     model: null,
   }) satisfies HandlerOutput
 
+/**
+ * A project this plan MADE is one a person asked for, so its normal Slack channel is part of what was asked
+ * (decision 2). Whether this job is a person's own turn is the database's to say (`app.person_provenance`, from the
+ * job's origin); a plan a duty or a forwarded message started leaves nothing behind and its channel asks.
+ */
+const recordChannelAuthority = async (
+  db: SqlExecutor,
+  projectId: string,
+  jobId: string,
+): Promise<void> => {
+  await db
+    .execute(
+      `select app.record_channel_authority(${lit(projectId)}::uuid, null, ${lit(jobId)}::uuid)`,
+    )
+    .catch(() => undefined)
+}
+
 export function planHandler(db: SqlExecutor): Handler {
   return {
     kind: 'office.execute_plan',
@@ -151,8 +168,10 @@ export function planHandler(db: SqlExecutor): Handler {
                 ) as r
               `)
               const made = (rows[0] as { r: { error?: string; project_id?: string } }).r
-              if (made.project_id !== undefined) acc.projectId = String(made.project_id)
-              else {
+              if (made.project_id !== undefined) {
+                acc.projectId = String(made.project_id)
+                await recordChannelAuthority(db, acc.projectId, job.jobId)
+              } else {
                 const found = await db.execute(`
                   select project_id::text as project_id from public.projects p
                    join public.project_attachments a using (project_id)
@@ -195,6 +214,7 @@ export function planHandler(db: SqlExecutor): Handler {
               ).r
               if (made.error !== undefined) throw new Error(String(made.error))
               acc.projectId = String(made.project_id)
+              await recordChannelAuthority(db, acc.projectId, job.jobId)
               acc.projectName = step.name
               // Artifacts belong here too, not just documents. Without a `home`
               // the generate handler falls back to "any notebook source", which is

@@ -152,6 +152,12 @@ export const mayAct = async (
     /** The pre-0611 shape of the same fingerprint, for a step already in flight (0611). */
     readonly legacyFingerprint?: string | null | undefined
     readonly job?: string | null | undefined
+    /**
+     * The destination being written to, for a tool that is authorised per destination (0640). A standing yes for one
+     * Notion database or one task board is honoured only for that one; absent, a scoped tool's standing yes is never
+     * seen, so forgetting to say where fails closed.
+     */
+    readonly scope?: string | null | undefined
   },
 ): Promise<Decision> => {
   /*
@@ -176,7 +182,8 @@ export const mayAct = async (
        p_audience => ${where.audience === null || where.audience === undefined ? 'null' : lit(where.audience)},
        p_fingerprint => ${where.fingerprint === null || where.fingerprint === undefined ? 'null' : lit(where.fingerprint)},
        p_job => ${uuidOrNull(where.job)},
-       p_legacy_fingerprint => ${where.legacyFingerprint === null || where.legacyFingerprint === undefined ? 'null' : lit(where.legacyFingerprint)}) as d`,
+       p_legacy_fingerprint => ${where.legacyFingerprint === null || where.legacyFingerprint === undefined ? 'null' : lit(where.legacyFingerprint)},
+       p_scope => ${where.scope === null || where.scope === undefined ? 'null' : lit(where.scope)}) as d`,
   )
   const raw = rows[0]?.d as RawDecision | string | undefined
   const parsed: RawDecision =

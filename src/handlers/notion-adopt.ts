@@ -124,6 +124,16 @@ export function notionAdoptHandler(deps: NotionAdoptDeps): Handler {
           on conflict (project_id, connector, external_ref, role) do update
             set enabled = true, disabled_reason = null, updated_at = app.now_utc()
         `)
+        /*
+          Connecting a database he asked me to connect IS his yes to writing into that database, and only that one
+          (final policy closure, decision 3). Whether this job is a person's own request is the database's to say, from
+          the job's origin: an adopt that a duty or a forwarded message started leaves no authority behind.
+        */
+        await db.execute(`
+          select app.record_destination_authority(
+            'notion.write', ${lit(job.projectId)}::uuid, ${lit(`notion:${only.id}`)}, null,
+            ${lit(job.jobId)}::uuid, ${lit(`the Notion database ${only.title}`)})
+        `)
         attached.push(only.title)
       }
 

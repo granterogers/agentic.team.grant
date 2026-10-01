@@ -112,6 +112,20 @@ interface VikunjaTask {
   readonly updated?: string
 }
 
+/**
+ * The office's own mark on a task it wrote: the canonical id, in the description.
+ *
+ * The recorded crash hazard is a crash between the remote create and `app.task_pushed`: the task then has no
+ * `external_id`, the next round creates it again, and the board holds two. A mark the office can read back turns that
+ * second create into an adoption (the round looks for its own mark before it creates). It is stripped when a task is
+ * read, so the detail Grant sees and the detail compared on a pull are what he wrote, not what the mark adds.
+ */
+const MARK = /\s*\[agentic:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]\s*/i
+export const markerOf = (description: string | undefined): string | null =>
+  MARK.exec(String(description ?? ''))?.[1]?.toLowerCase() ?? null
+export const withMark = (detail: string, id: string): string =>
+  `${detail.replace(MARK, ' ').trim()}\n\n[agentic:${id.toLowerCase()}]`.trim()
+
 /** The shape of one Vikunja task, as this office reads it. */
 export const readTask = (t: VikunjaTask): RemoteTask => ({
   externalId: String(t.id ?? ''),
@@ -123,6 +137,7 @@ export const readTask = (t: VikunjaTask): RemoteTask => ({
     literal angle brackets on Grant's phone.
   */
   detail: String(t.description ?? '')
+    .replace(MARK, ' ')
     .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ')
@@ -131,6 +146,7 @@ export const readTask = (t: VikunjaTask): RemoteTask => ({
   priority: priorityIn(typeof t.priority === 'number' ? t.priority : null),
   dueOn: dueIn(t.due_date),
   externalProjectId: String(t.project_id ?? ''),
+  canonicalId: markerOf(t.description),
 })
 
 export interface VikunjaOptions {
@@ -211,7 +227,7 @@ export class VikunjaProvider implements TaskProvider {
   async upsert(task: CanonicalTask): Promise<UpsertResult> {
     const body = {
       title: task.title.slice(0, 250),
-      description: task.detail,
+      description: withMark(task.detail, task.id),
       done: task.done,
       due_date: dueOut(task.dueOn),
       priority: priorityOut(task.priority),
@@ -223,16 +239,37 @@ export class VikunjaProvider implements TaskProvider {
       he names the same — #259 asks for duplicate prevention and this is where
       it lives.
     */
+    /*
+      A create looks for the office's own mark first. Found, the earlier create did happen and only its record was
+      lost, so this adopts it (an update) rather than making a second. The look is one listing per provider instance,
+      and only when a create is actually about to happen; a listing that fails is an outage and ends the round, which
+      is the safe direction.
+    */
+    const creating = task.externalId === null || task.externalId === ''
+    const adopted = creating ? await this.alreadyMine(task.id) : null
+    const target = creating ? adopted : task.externalId
     const got =
-      task.externalId === null || task.externalId === ''
+      target === null || target === ''
         ? await this.call('PUT', `/projects/${String(this.projectId)}/tasks`, body)
-        : await this.call('POST', `/tasks/${task.externalId}`, body)
+        : await this.call('POST', `/tasks/${target}`, body)
     const t = (got ?? {}) as VikunjaTask
     return {
       externalId: String(t.id ?? task.externalId ?? ''),
       externalRevision: String(t.updated ?? ''),
       externalProjectId: String(t.project_id ?? this.projectId),
     }
+  }
+
+  private mine: Map<string, string> | null = null
+  private async alreadyMine(id: string): Promise<string | null> {
+    if (this.mine === null) {
+      this.mine = new Map()
+      for (const r of await this.list()) {
+        if (r.canonicalId !== null && r.canonicalId !== undefined)
+          this.mine.set(r.canonicalId, r.externalId)
+      }
+    }
+    return this.mine.get(id.toLowerCase()) ?? null
   }
 
   async remove(externalId: string): Promise<void> {

@@ -6230,6 +6230,7 @@ const WALL_WORD = {
 */
 const OFFER_WORD = {
   learn: 'Accepting makes this a standing rule the team is shown.',
+  teach_skill: 'Accepting writes this down as a procedure the team follows from now on.',
 }
 
 /*
@@ -6244,6 +6245,7 @@ const OFFER_WORD = {
 */
 const KIND_WORD = {
   standing_rule: 'a rule it drafted',
+  standing_procedure: 'a procedure it drafted',
   attach: 'attach',
   routine: 'routine',
 }

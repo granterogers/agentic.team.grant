@@ -56,7 +56,7 @@ const job = async (p: string, by: string, kind = 'office.instruction'): Promise<
       )
 
 // ---- the matrix, through the real caller ---------------------------------
-const TOOLS = { read: 'db.read', write: 'task.create', outward: 'notion.write' } as const
+const TOOLS = { read: 'db.read', write: 'task.create', outward: 'notebook.write' } as const
 const EXPECT: Record<string, Record<keyof typeof TOOLS, string>> = {
   observe: { read: 'proceed', write: 'refuse', outward: 'refuse' },
   suggest: { read: 'proceed', write: 'proceed', outward: 'ask' }, // 0612
@@ -100,12 +100,12 @@ for (const [level, want] of Object.entries(EXPECT)) {
   const duty = await job(p, 'duty:isolated-ac')
   const asked = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     jobAskedFor: person,
   })
   const unprompted = await mayAct(db as never, {
     projectId: p,
-    tool: 'notion.write',
+    tool: 'notebook.write',
     jobAskedFor: duty,
   })
   check(
@@ -128,16 +128,16 @@ for (const [level, want] of Object.entries(EXPECT)) {
   const p = await project('standing')
   await setDial(p, 'suggest')
   await db.execute(
-    `select app.grant_standing('notion.write', ${lit(p)}::uuid, 'characterisation', 'grant', null)`,
+    `select app.grant_standing('notebook.write', ${lit(p)}::uuid, 'characterisation', 'grant', null)`,
   )
-  const up = await mayAct(db as never, { projectId: p, tool: 'notion.write' })
+  const up = await mayAct(db as never, { projectId: p, tool: 'notebook.write' })
   check(
     'a standing authorization upgrades ask to proceed',
     up.verdict === 'proceed' && up.standing !== null,
     up.verdict,
   )
   await setDial(p, 'observe')
-  const still = await mayAct(db as never, { projectId: p, tool: 'notion.write' })
+  const still = await mayAct(db as never, { projectId: p, tool: 'notebook.write' })
   check(
     'but never refuse: observe plus a live standing row still refuses',
     still.verdict === 'refuse',

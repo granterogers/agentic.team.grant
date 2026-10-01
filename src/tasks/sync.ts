@@ -39,6 +39,31 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const asJson = (v: unknown): Record<string, unknown> =>
   (typeof v === 'string' ? JSON.parse(v) : (v ?? {})) as Record<string, unknown>
 
+/**
+ * What the round may do outside the office, asked per effect (final policy closure).
+ *
+ * `write` is create-or-update at the provider: it is decided once per round, because what authorises it is the
+ * connection of one board (a standing yes for that destination), not anything about one task. `delete` is decided per
+ * task and always as an exact approval - a standing yes for writing never reaches it, because it is a different tool
+ * at a level that cannot hold one. A refusal here is not an error: the task stays as it is on both sides and the round
+ * goes on.
+ */
+export interface SyncGate {
+  mayWrite(verb: 'create' | 'update'): Promise<boolean>
+  /** What is deleted is the REMOTE task, so that is what an approval is about: its external id. */
+  mayDelete(what: { readonly title: string; readonly externalId: string }): Promise<boolean>
+}
+
+/**
+ * A gate that allows everything. For a suite that tests the ENGINE against a real provider (`verify:vikunja`), where the
+ * question under test is whether two lists converge, not whether anyone permitted it. A handler never uses it: the
+ * duty builds its own gate from the authorization policy, and a test pins that.
+ */
+export const permitEverything: SyncGate = {
+  mayWrite: async () => true,
+  mayDelete: async () => true,
+}
+
 export interface SyncReport {
   readonly provider: string
   readonly pushed: number
@@ -47,6 +72,8 @@ export interface SyncReport {
   readonly created: number
   readonly conflicts: number
   readonly failed: number
+  /** Effects the gate did not allow this round: they wait, on both sides, untouched. */
+  readonly held: number
   /** Set when the provider could not be reached. Nothing else ran. */
   readonly down: string | null
 }
@@ -75,6 +102,7 @@ interface Deletable {
 export async function syncOnce(
   db: SqlExecutor,
   provider: TaskProvider,
+  gate: SyncGate,
   opts: { readonly limit?: number } = {},
 ): Promise<SyncReport> {
   const name = provider.name
@@ -84,6 +112,7 @@ export async function syncOnce(
   let created = 0
   let conflicts = 0
   let failed = 0
+  let held = 0
 
   try {
     const work = asJson(
@@ -101,6 +130,10 @@ export async function syncOnce(
       const link = (d.links ?? []).find((l) => l.provider === name)
       const ext = String(link?.external_id ?? '')
       if (ext === '') continue
+      if (!(await gate.mayDelete({ title: d.title, externalId: ext }))) {
+        held += 1
+        continue
+      }
       await provider.remove(ext)
       await db.execute(`select app.task_delete_pushed(${lit(d.id)}::uuid, ${lit(name)})`)
       deleted += 1
@@ -108,6 +141,12 @@ export async function syncOnce(
 
     // --- 2. everything the office has moved ----------------------------------
     for (const t of upserts) {
+      if (
+        !(await gate.mayWrite(t.external_id === null || t.external_id === '' ? 'create' : 'update'))
+      ) {
+        held += 1
+        continue
+      }
       const task: CanonicalTask = {
         id: t.id,
         revision: t.revision,
@@ -174,6 +213,10 @@ export async function syncOnce(
           again is the only way the two lists ever agree, and `remove` is
           idempotent, so a provider that already dropped it costs one 404.
         */
+        if (!(await gate.mayDelete({ title: r.title, externalId: r.externalId }))) {
+          held += 1
+          continue
+        }
         await provider.remove(r.externalId)
         deleted += 1
         continue
@@ -194,11 +237,12 @@ export async function syncOnce(
         created,
         conflicts,
         failed,
+        held,
         down: error.detail,
       }
     }
     throw error
   }
 
-  return { provider: name, pushed, deleted, pulled, created, conflicts, failed, down: null }
+  return { provider: name, pushed, deleted, pulled, created, conflicts, failed, held, down: null }
 }

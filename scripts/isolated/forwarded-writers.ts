@@ -81,6 +81,13 @@ const task = async (id: string) =>
     `select state::text as s, due_on::text as due, title from public.tasks where task_id = ${lit(id)}::uuid`,
   )
 
+// The seed says "tomorrow", so the move target must be a weekday that is NOT tomorrow, whatever day the suite runs
+// (a fixed "Friday" was a no-op on every Thursday and the control read the product as broken).
+const dayAfterNext = new Date(Date.now() + 2 * 86400000).toLocaleDateString('en-GB', {
+  weekday: 'long',
+  timeZone: 'UTC',
+})
+
 // ---- change a task he already has ---------------------------------------------------------------------------------
 for (const [label, sentence, changed] of [
   ['complete', (n: string) => `Mark the call ${n} one done.`, (b: { s: string }) => b.s === 'done'],
@@ -91,7 +98,7 @@ for (const [label, sentence, changed] of [
   ],
   [
     'move',
-    (n: string) => `Move the call ${n} task to Friday.`,
+    (n: string) => `Move the call ${n} task to ${dayAfterNext}.`,
     (b: { s: string; due: string | null }, a: { due: string | null }) => b.due !== a.due,
   ],
 ] as const) {

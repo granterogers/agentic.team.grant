@@ -25,14 +25,19 @@
  */
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
-import { syncOnce } from '../tasks/sync.ts'
+import type { TaskProvider } from '../tasks/provider.ts'
+import { type SyncGate, syncOnce } from '../tasks/sync.ts'
 import { VikunjaProvider } from '../tasks/vikunja.ts'
+import { governEffect } from './approval-gate.ts'
 
 interface Settings {
   readonly base_url?: string | null
   readonly project_id?: number | null
   readonly configured?: boolean
 }
+
+/** Questions about deletions one round may raise; the rest are asked on the next. */
+const MAX_DELETE_QUESTIONS_PER_ROUND = 5
 
 const asJson = (v: unknown): unknown => (typeof v === 'string' ? JSON.parse(v) : v)
 
@@ -43,6 +48,7 @@ export function syncBody(r: {
   deleted: number
   conflicts: number
   failed: number
+  held?: number
   down: string | null
 }): string {
   if (r.down !== null) return `Vikunja could not be reached (${r.down}). Nothing was changed here.`
@@ -54,12 +60,24 @@ export function syncBody(r: {
     said.push(`kept the copy here for ${String(r.conflicts)} that changed in both places`)
   }
   if (r.failed > 0) said.push(`could not send ${String(r.failed)}`)
+  if ((r.held ?? 0) > 0) {
+    said.push(`${String(r.held)} waiting for your say before anything changes at Vikunja`)
+  }
   return said.length === 0
     ? 'Your tasks and Vikunja already agree.'
     : `Vikunja: ${said.join(', ')}.`
 }
 
-export function tasksSyncHandler(db: SqlExecutor): Handler {
+/** A way to make the provider, for a suite that must see every call (the real one is Vikunja). */
+export interface TasksSyncDeps {
+  readonly provider?: (config: {
+    readonly baseUrl: string
+    readonly token: string
+    readonly projectId: number
+  }) => TaskProvider
+}
+
+export function tasksSyncHandler(db: SqlExecutor, deps: TasksSyncDeps = {}): Handler {
   return {
     kind: 'tasks.sync',
     handle: async (job: Job): Promise<HandlerOutput> => {
@@ -96,16 +114,67 @@ export function tasksSyncHandler(db: SqlExecutor): Handler {
         return { ...base, announce: false, body: 'No task provider is connected.' }
       }
 
+      /*
+        What this round may do, asked per effect (final policy closure).
+
+        Create and update are one tool, `task.board.write`, authorised for THIS board by the act of connecting it
+        (a standing yes that names the board; reconnecting elsewhere withdraws it). Delete is another, level 3, which
+        can never be standing: every delete of a remote task is its own exact question, and the yes starts a child of
+        the asking run that finds the approval on its parent. A refusal holds the effect and the round goes on.
+      */
+      const board = `vikunja:${String(settings.base_url ?? '')}#${String(settings.project_id ?? 0)}`
+      let writeOk: boolean | null = null
+      let writeSaid = ''
+      let asked = 0
+      const gate: SyncGate = {
+        mayWrite: async () => {
+          if (writeOk === null) {
+            const d = await governEffect(db, job, {
+              tool: 'task.board.write',
+              material: { board },
+              scope: board,
+              summary: 'Keep your tasks in step with the connected Vikunja board',
+              agent: 'operations-director',
+            })
+            writeOk = d.ok
+            if (!d.ok) writeSaid = d.said
+          }
+          return writeOk
+        },
+        mayDelete: async ({ title, externalId }) => {
+          // A round that has already raised its share of questions raises no more: they are asked next time.
+          if (asked >= MAX_DELETE_QUESTIONS_PER_ROUND) return false
+          const d = await governEffect(db, job, {
+            tool: 'task.board.delete',
+            material: { provider: 'vikunja', board, externalId },
+            summary: `Delete "${title.slice(0, 80)}" from Vikunja? You deleted it here and Vikunja still holds it.`,
+            detail:
+              'Nothing is deleted there without your yes. If you say no, it stays there and is not asked about again for a while.',
+            agent: 'operations-director',
+            onYes: { yes: 'Yes, delete it in Vikunja', no: 'No, leave it there' },
+          })
+          if (d.ok) return true
+          if (d.blocker !== null && !d.quiet) asked += 1
+          return false
+        },
+      }
+      const config = {
+        baseUrl: String(settings.base_url ?? ''),
+        token,
+        projectId: Number(settings.project_id ?? 0),
+      }
       const report = await syncOnce(
         db,
-        new VikunjaProvider({
-          baseUrl: String(settings.base_url ?? ''),
-          token,
-          projectId: Number(settings.project_id ?? 0),
-        }),
+        deps.provider === undefined ? new VikunjaProvider(config) : deps.provider(config),
+        gate,
       )
       const moved =
-        report.pushed + report.created + report.deleted + report.conflicts + report.failed
+        report.pushed +
+        report.created +
+        report.deleted +
+        report.conflicts +
+        report.failed +
+        report.held
       return {
         ...base,
         /*
@@ -114,7 +183,10 @@ export function tasksSyncHandler(db: SqlExecutor): Handler {
           believes is connected is the one failure it may not have quietly.
         */
         announce: report.down !== null || moved > 0,
-        body: syncBody(report),
+        body:
+          writeOk === false && report.down === null
+            ? `${syncBody(report)} ${writeSaid}`.trim()
+            : syncBody(report),
       } satisfies HandlerOutput
     },
   }

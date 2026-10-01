@@ -44,7 +44,7 @@ import { readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { tasksSyncHandler } from '../../src/handlers/tasks-sync.ts'
 import { ProviderDownError, type TaskProvider } from '../../src/tasks/provider.ts'
-import { syncOnce } from '../../src/tasks/sync.ts'
+import { permitEverything, syncOnce } from '../../src/tasks/sync.ts'
 import { VikunjaProvider } from '../../src/tasks/vikunja.ts'
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN
@@ -194,7 +194,7 @@ try {
   console.log('\ncreate here, appear there')
   // =========================================================================
   const a = await add(NAME('ring the venue'), ", p_due_on => '2026-10-01'::date, p_priority => 20")
-  const r1 = await syncOnce(db, vikunja)
+  const r1 = await syncOnce(db, vikunja, permitEverything)
   check(
     'one round pushes it, and says how many of what it did',
     JSON.stringify(r1),
@@ -221,7 +221,7 @@ try {
   console.log('\nand a second round does nothing, which is the whole of idempotency')
   // =========================================================================
   const before = (await ours()).length
-  const r2 = await syncOnce(db, vikunja)
+  const r2 = await syncOnce(db, vikunja, permitEverything)
   const after = (await ours()).length
   check(
     'running the same round again creates nothing and pushes nothing',
@@ -238,7 +238,7 @@ try {
   console.log('\nedit here, update there')
   // =========================================================================
   await one(`select app.my_task_set(${lit(a)}, p_title => ${lit(NAME('ring the venue back'))})`)
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   const renamed = (await there()).find((t) => String(t.title ?? '') === NAME('ring the venue back'))
   check(
     'a rename here reaches the provider, and does not make a second task',
@@ -251,11 +251,11 @@ try {
   console.log('\ncomplete and reopen here, reflected there')
   // =========================================================================
   await one(`select app.hq_task_state(${lit(a)}, 'done', 'verify:vikunja')`)
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   const done = (await there()).find((t) => String(t.title ?? '') === NAME('ring the venue back'))
   check('ticking it here ticks it there', `done=${String(done?.done)}`, done?.done === true)
   await one(`select app.hq_task_state(${lit(a)}, 'todo', 'verify:vikunja')`)
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   const back = (await there()).find((t) => String(t.title ?? '') === NAME('ring the venue back'))
   check('and reopening it reopens it there', `done=${String(back?.done)}`, back?.done === false)
 
@@ -272,7 +272,7 @@ try {
     `http ${String(madeThere.status)}`,
     madeThere.ok,
   )
-  const r3 = await syncOnce(db, vikunja)
+  const r3 = await syncOnce(db, vikunja, permitEverything)
   const arrived = await one(`
     select task_id::text as id, due_on::text as due, priority, added_by
       from public.tasks where title = ${lit(NAME('posted a letter'))}`)
@@ -297,7 +297,7 @@ try {
     (await there()).find((t) => String(t.title ?? '') === NAME('posted a letter'))?.id ?? '',
   )
   await raw('POST', `/tasks/${extId}`, { title: NAME('posted two letters'), done: true })
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   const reconciled = await here(String(arrived.id))
   check(
     'a rename and a tick at the provider both reconcile here',
@@ -305,7 +305,7 @@ try {
     reconciled.title === NAME('posted two letters') && reconciled.state === 'done',
   )
   await raw('POST', `/tasks/${extId}`, { done: false })
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   check(
     'and reopening it there reopens it here',
     String((await here(String(arrived.id))).state),
@@ -316,7 +316,7 @@ try {
   console.log('\nboth sides at once — the conflict policy, not a coin toss')
   // =========================================================================
   const c = await add(NAME('the contested one'))
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   const cExt = String(
     (await ours()).find((t) => String(t.title ?? '') === NAME('the contested one'))?.id ?? '',
   )
@@ -377,7 +377,7 @@ try {
       ).n,
     ) === 1,
   )
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   const resolved = (await ours()).find((t) => String(t.id) === cExt)
   check(
     'the next round resolves it in the direction the invariant requires',
@@ -394,7 +394,7 @@ try {
   console.log('\ndelete here, gone there — and never resurrected')
   // =========================================================================
   const d = await add(NAME('the doomed one'))
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   const dExt = String(
     (await there()).find((t) => String(t.title ?? '') === NAME('the doomed one'))?.id ?? '',
   )
@@ -428,7 +428,7 @@ try {
     String(gone.deleted ?? gone.error ?? 'nothing'),
     gone.ok === true,
   )
-  const owed = await syncOnce(db, down)
+  const owed = await syncOnce(db, down, permitEverything)
   check(
     'a deletion that could not be delivered stays owed rather than being forgotten',
     `down=${String(owed.down)} · deleted ${String(owed.deleted)}`,
@@ -453,7 +453,7 @@ try {
         ).n,
       ) === 0,
   )
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   check(
     'and once the provider is back, the deletion is delivered',
     `${String((await ours()).filter((t) => String(t.id) === dExt).length)} left there`,
@@ -474,7 +474,7 @@ try {
     wrong to; the cost of the real rule is that one task reappears, once.
   */
   await raw('PUT', `/projects/${String(projectId)}/tasks`, { title: NAME('the doomed one') })
-  await syncOnce(db, vikunja)
+  await syncOnce(db, vikunja, permitEverything)
   const readded = Number(
     (
       await one(
@@ -492,7 +492,7 @@ try {
   console.log('\nthe provider goes away, and the office does not')
   // =========================================================================
   const o = await add(NAME('made during the outage'))
-  const r5 = await syncOnce(db, down)
+  const r5 = await syncOnce(db, down, permitEverything)
   check(
     'a round against a dead provider reports the outage rather than throwing',
     JSON.stringify({ down: r5.down, pushed: r5.pushed }),
@@ -511,7 +511,7 @@ try {
     String((await here(o)).external_id ?? 'not linked'),
     String((await here(o)).external_id ?? '') === '',
   )
-  const r6 = await syncOnce(db, vikunja)
+  const r6 = await syncOnce(db, vikunja, permitEverything)
   check(
     'and reconnecting CATCHES UP rather than reconciling from nothing',
     `pushed ${String(r6.pushed)} on the first round back`,
