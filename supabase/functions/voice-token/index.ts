@@ -213,6 +213,35 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return Response.json({ error: 'unauthorized' }, { status: 401, headers: cors })
   }
 
+  /*
+    THE OFFICE THIS CALL BELONGS TO (P3). The signed-in speaker's login resolved to it; the machine key (the deploy probe,
+    verify:talk) names no office and speaks for the TEST office. No office, no briefing, no session: a call is never opened
+    on the whole deployment's state.
+  */
+  let office: string | null = speaker.office
+  if (office === null && speaker.kind === 'service') {
+    try {
+      const machine = (await (
+        await fetch(`${DB_URL}/rest/v1/rpc/resolve_machine_office`, {
+          method: 'POST',
+          headers: {
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: '{}',
+        })
+      ).json()) as { ok?: boolean; office_id?: string }
+      office =
+        machine.ok === true && typeof machine.office_id === 'string' ? machine.office_id : null
+    } catch {
+      office = null
+    }
+  }
+  if (office === null) {
+    return Response.json({ error: 'no_office' }, { status: 403, headers: cors })
+  }
+
   if (OPENAI_KEY === '') {
     return Response.json({ error: 'voice is not configured' }, { status: 503, headers: cors })
   }
@@ -270,7 +299,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           Authorization: `Bearer ${SERVICE_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ p_about: slug }),
+        body: JSON.stringify({ p_office: office, p_about: slug }),
       })
       if (look.ok) {
         inView =
@@ -294,7 +323,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         Authorization: `Bearer ${SERVICE_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: '{}',
+      body: JSON.stringify({ p_office: office }),
     })
     if (read.ok) {
       stateBrief = `\n\n--- THE STATE OF PLAY ---\n${JSON.stringify(await read.json())}`

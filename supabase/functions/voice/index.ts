@@ -122,6 +122,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
   const speaker = await allowed(presented)
   if (speaker === null) return json({ error: 'unauthorized' }, 401)
+  /*
+    THE OFFICE THIS CALL BELONGS TO (P3): the signed-in speaker's login resolved to it, and the machine key (which names no
+    office) is the test office's. Nothing the page sends can change it. A speaker with no office is refused, never defaulted.
+  */
+  let office: string | null = speaker.office
+  if (office === null && speaker.kind === 'service') {
+    const machine = (await rpc('resolve_machine_office', {}).catch(() => null)) as {
+      ok?: boolean
+      office_id?: string
+    } | null
+    office =
+      machine?.ok === true && typeof machine.office_id === 'string' ? machine.office_id : null
+  }
+  if (office === null) return json({ error: 'no_office' }, 403)
 
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
@@ -147,7 +161,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (url.pathname.endsWith('/look')) {
     const asked = (await request.json().catch(() => ({}))) as { about?: unknown }
     const about = typeof asked.about === 'string' ? asked.about.trim() : ''
-    const found = await rpc('voice_lookup', { p_about: about })
+    const found = await rpc('voice_lookup', { p_office: office, p_about: about })
     return json({ found })
   }
 
@@ -390,6 +404,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
   */
   const talk = project === null ? session : `${session}/${project}`
   const row = (stated: string | null, addressee: string | null): Record<string, unknown> => ({
+    // Explicit, from the verified speaker: the compatibility bridge is not asked to guess.
+    office_id: office,
     origin_channel: 'voice',
     origin_ref: `${talk}:${turn}`,
     actor: speaker.actor,
