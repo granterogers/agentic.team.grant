@@ -9,6 +9,7 @@
  * a service and a harness are beliefs to weigh. Grant, and a specialist's own inference, are the controls.
  */
 import { guidanceFor } from '../../src/agents/guidance.ts'
+import { testOffice } from '../test-office.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'guid')
@@ -21,7 +22,7 @@ const check = (what: string, ok: boolean, detail: string) => {
 const run = `gs${Date.now().toString(36)}`
 const learn = async (by: string, body: string) =>
   db.execute(
-    `select app.learn('global'::public.lesson_scope, ${lit(body)}, ${lit(by)}, null, null, null, null, 0.95, null)`,
+    `select app.learn(app.test_office(), 'global'::public.lesson_scope, ${lit(body)}, ${lit(by)}, null, null, null, null, 0.95, null)`,
   )
 const authors: [string, string][] = [
   ['grant', `Always answer in short paragraphs ${run} A`],
@@ -31,7 +32,9 @@ const authors: [string, string][] = [
   ['growth-director', `Prefers bullet summaries ${run} E`],
 ]
 for (const [by, body] of authors) await learn(by, body)
-const g = await guidanceFor(db, 'growth-director', null, null, { lessons: 50 })
+const g = await guidanceFor(db, await testOffice(db), 'growth-director', null, null, {
+  lessons: 50,
+})
 const stated = (mark: string) => g.lessons.find((l) => l.body.includes(`${run} ${mark}`))?.stated
 const present = (mark: string) => g.lessons.some((l) => l.body.includes(`${run} ${mark}`))
 check(

@@ -221,7 +221,7 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
     'no-guess',
     `${SAY(`8${run}5:1`, `telegram:ctx:${run}_l`, 'none')} ${answer('unresolved')}
      v_ans := v_ans || jsonb_build_object('remembered',
-       coalesce(app.current_project('telegram_chat', '8${run}5')::text, 'NONE'));`,
+       coalesce(app.current_project(app.test_office(), 'telegram_chat', '8${run}5')::text, 'NONE'));`,
   )
   if (r.skipped === undefined) {
     /*
@@ -246,7 +246,7 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
        select 'telegram_chat', '8${run}6', project_id, 'harness', 'a synthetic switch'
          from public.projects where is_fixture and status = 'active' limit 1;
      v_ans := v_ans || jsonb_build_object('after_synthetic',
-       coalesce(app.current_project('telegram_chat', '8${run}6')::text, 'NONE'));`,
+       coalesce(app.current_project(app.test_office(), 'telegram_chat', '8${run}6')::text, 'NONE'));`,
   )
   if (r.skipped === undefined) {
     ok('a real conversation establishes its project', r.real === r.v_p)

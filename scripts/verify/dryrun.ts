@@ -538,11 +538,11 @@ console.log(
 /*
   The real decision, which is SQL and can be asked without touching anything.
 
-  `app.calendar_task_plan()` is what decides create/update/remove, and the
+  `app.calendar_task_plan` is what decides create/update/remove, and the
   planner's whole job is to shape its answer -- so exercising it here covers the
   half the switched-off branch skips, with no write and no toggle.
 */
-const sqlPlan = (await one('select app.calendar_task_plan() as p')).p as {
+const sqlPlan = (await one('select app.calendar_task_plan(app.sole_person_office()) as p')).p as {
   create?: unknown[]
   update?: unknown[]
   remove?: unknown[]

@@ -542,8 +542,11 @@ record(
   viaKey.status === 403 && viaKey.body.includes('person_required'),
 )
 const stillBlocked = String(
-  (await db.execute(`select app.staff_may_use('growth-director', 'gmail.send')::text as v`)).rows[0]
-    ?.v ?? 'x',
+  (
+    await db.execute(
+      `select app.staff_may_use(app.sole_person_office(),'growth-director', 'gmail.send')::text as v`,
+    )
+  ).rows[0]?.v ?? 'x',
 )
 record(
   'and the permission function still says no afterwards',
@@ -570,8 +573,11 @@ await asPerson('staff_tool_set', {
   p_granted: false,
 })
 const revoked = String(
-  (await db.execute(`select app.staff_may_use('growth-director', 'notebook.read')::text as v`))
-    .rows[0]?.v ?? 'x',
+  (
+    await db.execute(
+      `select app.staff_may_use(app.sole_person_office(),'growth-director', 'notebook.read')::text as v`,
+    )
+  ).rows[0]?.v ?? 'x',
 )
 await asPerson('staff_tool_set', {
   p_slug: 'growth-director',
@@ -579,8 +585,11 @@ await asPerson('staff_tool_set', {
   p_granted: true,
 })
 const restored = String(
-  (await db.execute(`select app.staff_may_use('growth-director', 'notebook.read')::text as v`))
-    .rows[0]?.v ?? 'x',
+  (
+    await db.execute(
+      `select app.staff_may_use(app.sole_person_office(),'growth-director', 'notebook.read')::text as v`,
+    )
+  ).rows[0]?.v ?? 'x',
 )
 record(
   'CONTROL: an allowed tool revokes and re-grants, so the refusal above discriminates',

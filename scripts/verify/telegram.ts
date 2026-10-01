@@ -86,7 +86,7 @@ const registered = await one<{ n: number }>(
   `select count(*)::int as n from public.telegram_chats where bot_id = ${lit(BOT_ID)}`,
 )
 const realChat = await one<{ chat_id: string | null }>(
-  `select app.telegram_chat_for('grant', ${lit(BOT_ID)}) as chat_id`,
+  `select app.telegram_chat_for(app.test_office(), 'grant', ${lit(BOT_ID)}) as chat_id`,
 )
 record(
   'the chat registry reports honestly whether there is anywhere to page',
@@ -138,7 +138,7 @@ record(
 )
 
 const found = await one<{ chat_id: string | null }>(
-  `select app.telegram_chat_for('fixture-subject', ${lit(BOT_ID)}) as chat_id`,
+  `select app.telegram_chat_for(app.test_office(), 'fixture-subject', ${lit(BOT_ID)}) as chat_id`,
 )
 record(
   'the pager can find the chat for a subject',
@@ -153,7 +153,7 @@ await db.execute(`
     'group-subject', 'A group the bot was added to')
 `)
 const groupLookup = await one<{ chat_id: string | null }>(
-  `select app.telegram_chat_for('group-subject', ${lit(BOT_ID)}) as chat_id`,
+  `select app.telegram_chat_for(app.test_office(), 'group-subject', ${lit(BOT_ID)}) as chat_id`,
 )
 record(
   'a group the bot was added to is recorded but is NEVER the pager',
@@ -162,7 +162,7 @@ record(
 )
 
 const wrongBot = await one<{ chat_id: string | null }>(
-  `select app.telegram_chat_for('fixture-subject', '999999999') as chat_id`,
+  `select app.telegram_chat_for(app.test_office(), 'fixture-subject', '999999999') as chat_id`,
 )
 record(
   'CONTROL: a chat is only offered for the bot that holds it',
@@ -622,7 +622,7 @@ record(
 // every future page would fail the same way. So the check is that the marking
 // already happened, not that a second call can do it.
 const afterBlock = await one<{ chat_id: string | null }>(
-  `select app.telegram_chat_for('fixture-subject', ${lit(BOT_ID)}) as chat_id`,
+  `select app.telegram_chat_for(app.test_office(), 'fixture-subject', ${lit(BOT_ID)}) as chat_id`,
 )
 const reason = await one<{ deliverable: boolean; undeliverable_reason: string | null }>(
   `select deliverable, undeliverable_reason from public.telegram_chats where chat_id = ${lit(FIXTURE_CHAT)}`,
@@ -640,7 +640,7 @@ const restored = await one<{ r: string }>(`
     'fixture-subject') as r
 `)
 const afterUnblock = await one<{ chat_id: string | null }>(
-  `select app.telegram_chat_for('fixture-subject', ${lit(BOT_ID)}) as chat_id`,
+  `select app.telegram_chat_for(app.test_office(), 'fixture-subject', ${lit(BOT_ID)}) as chat_id`,
 )
 record(
   'and speaking again restores it — being unblocked produces no event of its own',
@@ -669,7 +669,9 @@ record(
   directWrite.slice(0, 110),
   directWrite.includes('permission denied'),
 )
-const canLookUp = await asApp(`select app.telegram_chat_for('grant', ${lit(BOT_ID)})`)
+const canLookUp = await asApp(
+  `select app.telegram_chat_for(app.test_office(), 'grant', ${lit(BOT_ID)})`,
+)
 record(
   'CONTROL: but it CAN look one up, so the pager is not locked out',
   canLookUp.slice(0, 80),

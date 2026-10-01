@@ -200,7 +200,7 @@ console.log('briefing —')
 // --- the facts are facts ----------------------------------------------------
 
 {
-  const f = (await one('select app.morning_briefing_facts() as f')).f as {
+  const f = (await one('select app.morning_briefing_facts(app.sole_person_office()) as f')).f as {
     for_date?: string
     waiting_on_you?: unknown[]
     overnight?: { finished?: number }
@@ -258,7 +258,9 @@ console.log('briefing —')
     public.blockers directly, so the two halves of one sentence were about
     different sets — four waiting on him and fifty more behind them.
   */
-  const pressure = await one('select open_items from app.needs_me_pressure()')
+  const pressure = await one(
+    'select open_items from app.needs_me_pressure(app.sole_person_office())',
+  )
   ok(
     'and the overflow line counts the same population as the list',
     Number(pressure?.open_items) === needs.length,
@@ -302,7 +304,7 @@ console.log('briefing —')
   const firstBody = 'The first briefing written for this scope today, and the only one.'
   const first = (
     await one(`
-      select app.write_briefing('morning', ${lit(day)}::date, ${lit(firstBody)},
+      select app.write_briefing(app.test_office(), 'morning', ${lit(day)}::date, ${lit(firstBody)},
         '{"probe": true}'::jsonb, ${lit(scope)}) as r
     `)
   ).r as { already_written?: boolean; briefing_id?: string }
@@ -310,7 +312,7 @@ console.log('briefing —')
 
   const second = (
     await one(`
-      select app.write_briefing('morning', ${lit(day)}::date,
+      select app.write_briefing(app.test_office(), 'morning', ${lit(day)}::date,
         'A DIFFERENT second briefing, which must never replace the first.',
         '{"probe": true}'::jsonb, ${lit(scope)}) as r
     `)
@@ -449,7 +451,7 @@ console.log('briefing —')
 {
   const wrong = (
     await one(`
-      select app.write_briefing('lunchtime', current_date, ${lit('x'.repeat(50))},
+      select app.write_briefing(app.test_office(), 'lunchtime', current_date, ${lit('x'.repeat(50))},
         '{}'::jsonb, 'verify-nonsense') as r
     `)
   ).r as { error?: string }
@@ -468,7 +470,9 @@ console.log('briefing —')
     select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public' and p.proname in ('morning_briefing_facts', 'write_briefing')
   `)
-  ok('both RPCs have public wrappers', new Set(wrapped.map((r) => String(r.proname))).size === 2)
+  // The briefing is read and written through the office-explicit functions the worker calls; the unscoped public
+  // doors were dropped with the office conversion, and none may come back (a door nothing needs is a door to everyone).
+  ok('neither RPC has an unscoped public door', wrapped.length === 0)
 }
 
 {

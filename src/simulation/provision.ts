@@ -132,8 +132,8 @@ export const provisionWorld = async (db: SqlExecutor): Promise<WorldReport> => {
     */
     for (const nickname of project.nicknames ?? []) {
       await db.execute(`
-        select app.add_project_alias(p.project_id, ${lit(nickname)}, 'grant', 1.0)
-          from public.projects p where p.slug = ${lit(slug)}
+        select app.add_project_alias(o.office_id, o.project_id, ${lit(nickname)}, 'grant', 1.0)
+          from public.projects o where o.slug = ${lit(slug)}
       `)
     }
   }
@@ -175,7 +175,12 @@ export const assertContained = async (db: SqlExecutor): Promise<readonly string[
         where slug like ${lit(`${WORLD_PREFIX}%`)} and not is_fixture) as not_fixture,
       (select count(*)::int from public.projects
         where name like 'simgrant %' and slug not like ${lit(`${WORLD_PREFIX}%`)}) as stray_real,
-      (select jsonb_array_length(public.resolve_project_by_name('the funding one'))) as wrapper_sees,
+      -- Any DOOR a browser role could resolve a name through. The public resolver was dropped with the office
+      -- conversion (it searched every office); this asserts none has come back, which is the property.
+      (select count(*)::int from pg_proc fn join pg_namespace ns on ns.oid = fn.pronamespace
+        where ns.nspname = 'public' and fn.proname = 'resolve_project_by_name'
+          and (has_function_privilege('anon', fn.oid, 'execute')
+               or has_function_privilege('authenticated', fn.oid, 'execute'))) as wrapper_sees,
       (select count(*)::int from public.slack_channel_map m
          join public.projects p on p.project_id = m.project_id
         where p.slug like ${lit(`${WORLD_PREFIX}%`)}) as slack_channels

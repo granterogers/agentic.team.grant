@@ -42,6 +42,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
 
 export interface Reach {
   /** How a person would name it: "Notion", "Slack", "Google NotebookLM". */
@@ -124,10 +125,15 @@ export const EMPTY_CAPABILITY: Capability = {
   declined: [],
 }
 
-export async function capabilityNow(db: SqlExecutor, staffSlug?: string): Promise<Capability> {
+export async function capabilityNow(
+  db: SqlExecutor,
+  office: RetrievalOffice,
+  staffSlug?: string,
+): Promise<Capability> {
   const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+  // The reach is the OFFICE'S OWN credentials and grants (connection_health, staff_tools), never the deployment's.
   const { rows } = await db.execute(
-    `select app.capability_index(${staffSlug === undefined ? 'null' : lit(staffSlug)}) as i`,
+    `select app.capability_index(${officeOf(office)}, ${staffSlug === undefined ? 'null' : lit(staffSlug)}) as i`,
   )
   const i = (rows[0] as { i?: Record<string, unknown> } | undefined)?.i
   if (i === undefined) return EMPTY_CAPABILITY

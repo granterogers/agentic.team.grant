@@ -19,6 +19,7 @@
  * message; guessing costs a day of misfiled work.
  */
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -143,11 +144,13 @@ export const switchTo = async (
  */
 export const resolveProject = async (
   db: SqlExecutor,
+  office: RetrievalOffice,
   scope: Scope,
   explicitProjectId?: string,
 ): Promise<string | null> => {
   const { rows } = await db.execute(`
     select app.resolve_project(
+      ${officeOf(office)},
       ${lit(scope.kind)}::public.project_scope_kind,
       ${lit(scope.ref)},
       ${explicitProjectId === undefined ? 'null' : `${lit(explicitProjectId)}::uuid`}

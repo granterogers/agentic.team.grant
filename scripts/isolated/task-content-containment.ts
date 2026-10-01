@@ -73,7 +73,9 @@ check(
   `${String(pre.n)} tasks, ${String(pre.ok)}`,
 )
 
-const plan = jsonOf((await one('select app.calendar_task_plan() as p')).p) as {
+const plan = jsonOf(
+  (await one('select app.calendar_task_plan(app.sole_person_office()) as p')).p,
+) as {
   create: { title: string }[]
 }
 const planned = (t: string) => plan.create.some((r) => r.title === t)
@@ -84,9 +86,9 @@ check(
 )
 check('control: a real task is', planned(`Real task ${run}`), 'planned')
 
-const notices = (await db.execute('select body from app.notice(50)')).rows.map((r) =>
-  String(r.body),
-)
+const notices = (
+  await db.execute('select body from app.notice(app.sole_person_office(), 50)')
+).rows.map((r) => String(r.body))
 check(
   'a harness task is not in his briefing',
   !notices.some((b) => b.includes(`Harness task ${run}`)),

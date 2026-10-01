@@ -401,7 +401,7 @@ await db.execute(`delete from public.responsibilities where slug = ${lit(dutySlu
 // 3. Needs Me stays small
 // ===========================================================================
 
-const startingPressure = await one(`select * from app.needs_me_pressure()`)
+const startingPressure = await one(`select * from app.needs_me_pressure(app.sole_person_office())`)
 const cap = Number(startingPressure?.cap)
 
 /**
@@ -454,7 +454,7 @@ record(
 // silently truncated.
 for (let i = 4; i <= cap + 3; i++) await mkBlocker(i, false, true)
 
-const pressure = await one(`select * from app.needs_me_pressure()`)
+const pressure = await one(`select * from app.needs_me_pressure(app.sole_person_office())`)
 record(
   'needs me',
   'when the list outgrows the cap, the overflow is reported rather than hidden',

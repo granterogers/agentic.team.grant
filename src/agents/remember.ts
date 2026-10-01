@@ -25,6 +25,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
 import { readAuthority } from './authority-bearing.ts'
 import {
   boundToThisConversation,
@@ -53,6 +54,8 @@ export interface Remembered {
  */
 export async function remember(
   db: SqlExecutor,
+  /** Whose rules these are: the office of the CLAIMED job, never an ambient default. */
+  office: RetrievalOffice,
   teaching: Teaching,
   by: string,
   staffSlug: string | null,
@@ -130,7 +133,7 @@ export async function remember(
         ? null
         : await db
             .execute(`
-              select case when ${uuid(projectId)} = app.unnamed_project()
+              select case when ${uuid(projectId)} = app.unnamed_project(${officeOf(office)})
                           then null else ${uuid(projectId)} end as id`)
             .then((r) => (r.rows[0] as { id: string | null } | undefined)?.id ?? null)
             .catch(() => null)
@@ -179,7 +182,7 @@ export async function remember(
               with mine as (select app.harness_author(${lit(by)}) as harness)
               select f.lesson_id::text as id, f.body
                 from mine,
-                     app.lessons_for(${uuid(onAProject)}, ${scoped === null ? 'null' : lit(scoped)},
+                     app.lessons_for(${officeOf(office)}, ${uuid(onAProject)}, ${scoped === null ? 'null' : lit(scoped)},
                                      null, 200, mine.harness) f
                 join public.lessons l on l.lesson_id = f.lesson_id
                where l.is_fixture = mine.harness
@@ -265,7 +268,7 @@ export async function remember(
               with mine as (select app.harness_author(${lit(by)}) as harness)
               select f.lesson_id::text as id, f.scope::text as scope, f.body
                 from mine,
-                     app.lessons_for(null, ${scoped === null ? 'null' : lit(scoped)},
+                     app.lessons_for(${officeOf(office)}, null, ${scoped === null ? 'null' : lit(scoped)},
                                      null, 200, mine.harness) f
                 join public.lessons l on l.lesson_id = f.lesson_id
                where l.is_fixture = mine.harness
@@ -339,6 +342,7 @@ export async function remember(
       const proposed = await db
         .execute(`
           select app.propose_standing_rule(
+            ${officeOf(office)},
             ${lit(teaching.body)}, ${onAProject !== null ? "'project'" : scoped === null ? "'global'" : "'staff'"},
             ${scoped === null ? 'null' : lit(scoped)}, ${uuid(onAProject)}, ${uuid(jobId)}, ${lit(signals)}::jsonb) as r`)
         .then(
@@ -380,6 +384,7 @@ export async function remember(
 
     const { rows } = await db.execute(`
       select app.learn(
+        ${officeOf(office)},
         ${scope}::public.lesson_scope,
         ${lit(teaching.body)}, ${lit(by)}, ${uuid(onAProject)}, ${scoped === null ? 'null' : lit(scoped)},
         null, ${uuid(jobId)},
@@ -430,6 +435,7 @@ export async function remember(
   const offered = await db
     .execute(`
       select app.propose_standing_procedure(
+        ${officeOf(office)},
         ${lit(teaching.name)}, ${lit(teaching.whenToUse)}, ${lit(teaching.procedure)},
         ${scoped === null ? "'global'" : "'staff'"}, ${scoped === null ? 'null' : lit(scoped)}, null,
         ${uuid(jobId)}, '{"it_is_a_standing_way_of_acting": true}'::jsonb) as r`)

@@ -234,13 +234,13 @@ await refuses(
 
 {
   const once = await all(
-    `select times from app.impediments_tally(30, 2, true) where needed = ${lit(SOLO)}`,
+    `select times from app.impediments_tally(app.test_office(), 30, 2, true) where needed = ${lit(SOLO)}`,
   )
   ok('one occurrence is not a pattern, and does not reach the tally', once.length === 0)
 
   const tally = await all(`
     select times, staff_slug, for_instance, kind::text k
-      from app.impediments_tally(30, 2, true) where needed = ${lit(NEED)}
+      from app.impediments_tally(app.test_office(), 30, 2, true) where needed = ${lit(NEED)}
   `)
   ok(
     'a limitation that keeps recurring does',

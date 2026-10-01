@@ -75,7 +75,7 @@ const main = async (): Promise<void> => {
     .execute(
       `with reach as (
          select r ->> 'service' as service, (r ->> 'reachable')::boolean as reachable
-           from jsonb_array_elements(app.capability_index_core() -> 'reach') r
+           from jsonb_array_elements(app.capability_index_core(app.sole_person_office(), null) -> 'reach') r
        ),
        sent as (
          select d.channel, count(*) as n
@@ -149,7 +149,7 @@ const main = async (): Promise<void> => {
       `FALSE DENIAL: every agent is told ${b.service} is unreachable, and the office ` +
         `delivered ${String(b.delivered)} message(s) through it in the last ` +
         `${String(WINDOW_HOURS)} hours. Check which credential is speaking for the ` +
-        `service in app.capability_index_core (#363).`,
+        `service in app.capability_index_core, for the sole person's office (#363).`,
     )
   }
   process.exit(1)

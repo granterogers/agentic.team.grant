@@ -112,11 +112,11 @@ const searched = await one(`
     'Bellamy could not commit to the lead time and splitting it doubles the admin.',
     ${lit(REAL)}, null, null, null);
   select
-    jsonb_array_length(app.decisions_about(${lit(`who supplies our ${subject}`)})) as found,
-    (app.decisions_about(${lit(`who supplies our ${subject}`)}) -> 0 ->> 'chose') as chose,
-    (app.decisions_about(${lit(`did we ever consider Bellamy for ${subject}`)}) -> 0 ->> 'chose')
+    jsonb_array_length(app.decisions_about(app.sole_person_office(), ${lit(`who supplies our ${subject}`)})) as found,
+    (app.decisions_about(app.sole_person_office(), ${lit(`who supplies our ${subject}`)}) -> 0 ->> 'chose') as chose,
+    (app.decisions_about(app.sole_person_office(), ${lit(`did we ever consider Bellamy for ${subject}`)}) -> 0 ->> 'chose')
       as by_ruled_out,
-    jsonb_array_length(app.decisions_about(${lit(`what colour is the ${run} van`)})) as unrelated;
+    jsonb_array_length(app.decisions_about(app.sole_person_office(), ${lit(`what colour is the ${run} van`)})) as unrelated;
   rollback;
 `)
 
@@ -162,8 +162,8 @@ console.log('\nit crosses projects — a boundary that is not a privacy boundary
     -- handler calls. A check that passed one in would be testing a signature
     -- nobody uses.
     select
-      jsonb_array_length(app.decisions_about(${lit(`should the ${run} webinars be live`)})) as found,
-      (app.decisions_about(${lit(`should the ${run} webinars be live`)}) -> 0 ->> 'project') as named;
+      jsonb_array_length(app.decisions_about(app.sole_person_office(), ${lit(`should the ${run} webinars be live`)})) as found,
+      (app.decisions_about(app.sole_person_office(), ${lit(`should the ${run} webinars be live`)}) -> 0 ->> 'project') as named;
     rollback;
   `)
   check(
@@ -196,7 +196,7 @@ console.log('\nchanging its mind, without losing what it thought before')
         where question = ${lit(`Where do the ${run} module pages live?`)}) as total,
       (select count(*) from public.decisions_live
         where question = ${lit(`Where do the ${run} module pages live?`)}) as live,
-      (app.decisions_about(${lit(`where do the ${run} module pages go`)}) -> 0 ->> 'chose') as answer;
+      (app.decisions_about(app.sole_person_office(), ${lit(`where do the ${run} module pages go`)}) -> 0 ->> 'chose') as answer;
     rollback;
   `)
   check(
@@ -370,7 +370,7 @@ console.log('\nand harness traffic never reaches a prompt')
     select
       (select count(*) from public.decisions
         where decided_by = ${lit(WHO)} and is_fixture) as flagged,
-      jsonb_array_length(app.decisions_about(
+      jsonb_array_length(app.decisions_about(app.sole_person_office(),
         ${lit(`should the ${run} fixture reach a prompt`)})) as reachable,
       jsonb_array_length(app.decisions_so_far(200)) as on_the_page_before;
     rollback;

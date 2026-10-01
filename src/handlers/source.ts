@@ -103,9 +103,9 @@ export function sourceHandler(deps: {
       // is the one part of a document written to say what it is about — and a
       // full-text search seeded with six thousand characters of body matches
       // everything and ranks nothing.
-      const hits = (await retrieve(deps.db, String(doc.title ?? ''), job.projectId, 6)).filter(
-        (h) => h.documentId !== documentId,
-      )
+      const hits = (
+        await retrieve(deps.db, { jobId: job.jobId }, String(doc.title ?? ''), job.projectId, 6)
+      ).filter((h) => h.documentId !== documentId)
       const context = contextBlock(hits)
 
       await recordDecision(deps.db, job.jobId, {

@@ -234,14 +234,14 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
    */
   'notebook.read': {
     effect: 'none',
-    run: async ({ db, projectId, request, step }): Promise<Observation> => {
+    run: async ({ db, jobId, projectId, request, step }): Promise<Observation> => {
       /*
         The step's own `why` is what this step is looking for; the request is
         the fallback, because a plan whose steps carry no reason is one the
         validator let through with the request as the only thing said.
       */
       const asking = (step.why === '' ? request : step.why).slice(0, 400)
-      const hits = await retrieveAcrossOffice(db, asking, projectId, 5).catch(() => null)
+      const hits = await retrieveAcrossOffice(db, { jobId }, asking, projectId, 5).catch(() => null)
       if (hits === null) {
         return nothing('notebook.read', 'the knowledge index could not be searched')
       }

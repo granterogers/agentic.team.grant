@@ -232,7 +232,7 @@ console.log('\nand somebody is told')
 
 const noticed = (
   await db.execute(`
-    select kind, subject_ref, body, weight from app.notice(40)
+    select kind, subject_ref, body, weight from app.notice(app.test_office(), 40)
      where kind = 'failure_repeats'
   `)
 ).rows as { kind: string; subject_ref: string; body: string; weight: number }[]
@@ -274,7 +274,7 @@ check(
 await db.execute(`select app.failure_seen(${lit(ONCE)}, 'Request timed out')`)
 const onceNoticed = (
   await db.execute(`
-    select subject_ref from app.notice(40) where kind = 'failure_repeats'
+    select subject_ref from app.notice(app.test_office(), 40) where kind = 'failure_repeats'
   `)
 ).rows as { subject_ref: string }[]
 check(

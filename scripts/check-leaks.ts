@@ -378,7 +378,7 @@ const piles = await db.execute(`
       No backticks in this comment: it lives inside a template literal.
     */
     (select count(*)
-       from app.lessons_for(null, 'chief-of-staff', 'office.instruction', 500) f
+       from app.lessons_for(app.sole_person_office(), null, 'chief-of-staff', 'office.instruction', 500) f
        join public.lessons l on l.lesson_id = f.lesson_id
       where l.from_job is not null and app.harness_job(l.from_job))
       as harness_lessons_in_a_real_prompt,
@@ -392,7 +392,7 @@ const piles = await db.execute(`
       nothing about the filter.
     */
     (select count(*)
-       from app.lessons_for(null, 'chief-of-staff', 'office.instruction', 500, true) f
+       from app.lessons_for(app.sole_person_office(), null, 'chief-of-staff', 'office.instruction', 500, true) f
        join public.lessons l on l.lesson_id = f.lesson_id
       where l.from_job is not null and app.harness_job(l.from_job))
       as harness_lessons_the_filter_removes,

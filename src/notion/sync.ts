@@ -23,6 +23,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
 import type { NotionClient } from './api.ts'
 import { NotionApiError } from './api.ts'
 import { type NotionBlock, type RenderedBlock, renderBlocks, titleOf } from './content.ts'
@@ -219,10 +220,11 @@ export async function upsertDocument(
  */
 export async function containerRefs(
   db: SqlExecutor,
+  office: RetrievalOffice,
   projectId: string,
 ): Promise<ReadonlySet<string>> {
   const rows = await db.execute(`
-    select external_ref from app.container_refs(${lit(projectId)}::uuid, ${lit(CONNECTOR)})
+    select external_ref from app.container_refs(${officeOf(office)}, ${lit(projectId)}::uuid, ${lit(CONNECTOR)})
   `)
   return new Set(rows.rows.map((r) => String(r.external_ref)))
 }
@@ -276,11 +278,12 @@ export async function registerAuthored(
  */
 export async function syncNotion(
   db: SqlExecutor,
+  office: RetrievalOffice,
   notion: NotionClient,
   projectId: string,
 ): Promise<SyncOutcome> {
   const shared = await listShared(notion)
-  const containers = await containerRefs(db, projectId)
+  const containers = await containerRefs(db, office, projectId)
   let added = 0
   let changed = 0
   let unchanged = 0

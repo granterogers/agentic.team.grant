@@ -50,6 +50,8 @@ import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
 
+const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+
 interface Waiting {
   what: string
   why: string
@@ -301,7 +303,7 @@ export function briefingLines(f: Facts): string[] {
   /*
     Recommendations — his word, and the part that has to earn its place.
 
-    One source now, not two: `app.notice()` (#52), which arrives already
+    One source now, not two: the noticing pass, `app.notice` (#52), which arrives already
     ranked and already stripped of anything he has dismissed. This section
     used to render `adrift` and `office_cannot` directly, and both were
     subsets of the noticing pass — so the briefing said the same thing twice
@@ -326,7 +328,11 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
   return {
     kind: 'briefing.morning',
     handle: async (job: Job): Promise<HandlerOutput> => {
-      const facts = (await db.execute('select app.morning_briefing_facts() as f')).rows[0] as {
+      const facts = (
+        await db.execute(
+          `select app.morning_briefing_facts(app.job_office(${lit(job.jobId)}::uuid)) as f`,
+        )
+      ).rows[0] as {
         f?: Facts
       }
       const f = facts.f
@@ -368,9 +374,9 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
       */
       const written = (
         await db.execute(`
-          select app.write_briefing('morning', '${f.for_date}'::date,
+          select app.write_briefing(app.job_office(${lit(job.jobId)}::uuid), 'morning', '${f.for_date}'::date,
             $briefing$${assembled}$briefing$,
-            (select app.morning_briefing_facts())) as r
+            (select app.morning_briefing_facts(app.job_office(${lit(job.jobId)}::uuid)))) as r
         `)
       ).rows[0] as { r?: { already_written?: boolean } }
 

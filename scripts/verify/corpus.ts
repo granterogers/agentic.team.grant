@@ -43,6 +43,7 @@
 import { ManagementApiExecutor, SqlExecutionError } from '../../src/db/executor.ts'
 import type { NotionClient } from '../../src/notion/api.ts'
 import { registerAuthored, syncNotion, upsertDocument } from '../../src/notion/sync.ts'
+import { officeOfProject } from '../test-office.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -62,6 +63,9 @@ const check = (what: string, said: string, ok: boolean): void => {
 const one = async (sql: string): Promise<Record<string, unknown>> =>
   ((await db.execute(sql)).rows[0] ?? {}) as Record<string, unknown>
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+/** The office a project belongs to, as SQL: every reader of a project's documents is asked of one office. */
+const officeSqlOf = (projectId: string): string =>
+  `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
 
 const run = Math.random().toString(36).slice(2, 10)
 const slug = `fixture-corpus-${run}`
@@ -163,7 +167,7 @@ try {
 
   const refs = (
     await db.execute(
-      `select external_ref from app.container_refs(${lit(projectId)}::uuid, 'notion')`,
+      `select external_ref from app.container_refs(${officeSqlOf(projectId)},${lit(projectId)}::uuid, 'notion')`,
     )
   ).rows.map((r) => String(r.external_ref))
   check(
@@ -220,7 +224,7 @@ try {
   `)
 
   // Now the real thing: a full sync over a workspace containing a container.
-  const first = await syncNotion(db, stubNotion, projectId)
+  const first = await syncNotion(db, await officeOfProject(db, projectId), stubNotion, projectId)
   check(
     'a sync skips the container',
     `${String(first.shared)} shared, ${String(first.added)} added, skipped: ${first.skipped.join('; ') || 'nothing'}`,
@@ -233,7 +237,7 @@ try {
   )
 
   // #19's acceptance criterion, stated as it is written: a RE-sync.
-  const second = await syncNotion(db, stubNotion, projectId)
+  const second = await syncNotion(db, await officeOfProject(db, projectId), stubNotion, projectId)
   check(
     'a re-sync does not reintroduce it',
     `${String(second.added)} added, ${String(second.unchanged)} unchanged`,
@@ -300,7 +304,7 @@ try {
   check('a later sync does not revert it', afterUpsert, afterUpsert === 'made/office.notion_import')
 
   // A whole pass, not just one upsert — this is what actually runs nightly.
-  const third = await syncNotion(db, stubNotion, projectId)
+  const third = await syncNotion(db, await officeOfProject(db, projectId), stubNotion, projectId)
   check(
     'nor does a whole pass',
     `${await originOf(AUTHORED)} after ${String(third.changed)} changed`,

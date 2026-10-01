@@ -33,11 +33,15 @@ const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*
 describe('the unnamed project is treated as no project', () => {
   it('asks the database which project is the unnamed one', () => {
     /*
-      Against `app.unnamed_project()` rather than against a slug spelled out
-      here: the office has one definition of that row and a second copy of it
-      is how the two come to disagree.
+      Against `app.unnamed_project(office)` rather than against a slug spelled
+      out here: the office has one definition of that row and a second copy of
+      it is how the two come to disagree. The property is that the row asked
+      about is the OFFICE'S own catch-all (every office has one): the call
+      names the office the rule is being stored in, and never the zero-argument
+      form, which cannot tell one office's catch-all from another's.
     */
-    expect(withoutComments).toContain('app.unnamed_project()')
+    expect(withoutComments).toMatch(/app\.unnamed_project\(\$\{officeOf\(office\)\}\)/)
+    expect(withoutComments).not.toContain('app.unnamed_project()')
   })
 
   it('decides the scope from the resolved project, never from the argument', () => {

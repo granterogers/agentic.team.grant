@@ -44,6 +44,7 @@ import { ChannelProvisioner } from '../../src/slack/provision.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { TelegramPager } from '../../src/telegram/pager.ts'
 import { pagerBot } from '../../src/telegram/roster.ts'
+import { officeOfProject } from '../test-office.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -151,7 +152,7 @@ console.log(
 // something nothing read: `ask` sent every question to a model with no context
 // from the documents at all, which made ADR-0013's "retrieval plus a model
 // call" half a sentence.
-const hits = await retrieve(db, question, projectId)
+const hits = await retrieve(db, await officeOfProject(db, projectId), question, projectId)
 const context = contextBlock(hits)
 console.log(
   hits.length === 0

@@ -104,7 +104,7 @@ const arc = await one(`
   do $$
   declare v jsonb; v_id uuid; v_body text := ${lit(RULE)};
   begin
-    v := app.propose_standing_rule(v_body, 'global', null, null, null,
+    v := app.propose_standing_rule(app.test_office(), v_body, 'global', null, null, null,
            '{"signals":["it followed an answer","it is short"]}'::jsonb);
     v_id := (v ->> 'suggestion_id')::uuid;
     insert into _r values ('offered', v ->> 'offered'), ('rule', v ->> 'rule');
@@ -114,7 +114,7 @@ const arc = await one(`
       (select count(*)::text from public.lessons where body = v_body));
 
     -- The same class again, punctuated differently. It must not come back.
-    v := app.propose_standing_rule(v_body || '  ', 'global');
+    v := app.propose_standing_rule(app.test_office(), v_body || '  ', 'global');
     insert into _r values ('again', v ->> 'offered'), ('again_why', v ->> 'why');
 
     -- What the page is given: a suggestion that carries an offer is a
@@ -223,7 +223,7 @@ const declined = await one(`
   do $$
   declare v jsonb; v_id uuid; v_body text := ${lit(NO)};
   begin
-    v := app.propose_standing_rule(v_body, 'global');
+    v := app.propose_standing_rule(app.test_office(), v_body, 'global');
     v_id := (v ->> 'suggestion_id')::uuid;
     v := app.decide_suggestion(v_id, false, 'grant');
     insert into _r values ('accepted', v ->> 'accepted');
@@ -234,7 +234,7 @@ const declined = await one(`
     insert into _r values ('learned',
       (select count(*)::text from public.lessons where body = v_body));
     -- A declined offer must not come back, which is #49's own last box.
-    v := app.propose_standing_rule(v_body, 'global');
+    v := app.propose_standing_rule(app.test_office(), v_body, 'global');
     insert into _r values ('again', v ->> 'offered');
   end $$;
   select
@@ -282,7 +282,7 @@ for (const scope of ['global', 'project', 'staff', 'agent', 'kind'] as const) {
     do $$
     declare v jsonb; v_id uuid; v_body text := ${lit(body)};
     begin
-      v := app.propose_standing_rule(v_body, ${lit(scope)}, 'chief-of-staff',
+      v := app.propose_standing_rule(app.test_office(), v_body, ${lit(scope)}, 'chief-of-staff',
              (select project_id from public.projects where status = 'active' limit 1));
       insert into _r values ('offered', coalesce(v ->> 'offered', 'false')),
                             ('why', coalesce(v ->> 'error', ''));

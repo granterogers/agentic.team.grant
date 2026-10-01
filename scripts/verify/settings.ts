@@ -49,6 +49,9 @@ const check = (what: string, said: string, ok: boolean): void => {
 const one = async (sql: string): Promise<Record<string, unknown>> =>
   ((await db.execute(sql)).rows[0] ?? {}) as Record<string, unknown>
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+/** The office a project belongs to, as SQL: every reader of a project's brief is asked of one office. */
+const officeSqlOf = (projectId: string): string =>
+  `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
 
 const run = Math.random().toString(36).slice(2, 10)
 /*
@@ -252,7 +255,7 @@ try {
   const emmaSays = String(
     (
       await one(
-        `select public.project_instruction_for(${lit(projectId)}::uuid, 'research-director') as v`,
+        `select app.project_instruction_for(${officeSqlOf(projectId)},${lit(projectId)}::uuid, 'research-director') as v`,
       )
     ).v ?? '',
   )
@@ -269,7 +272,7 @@ try {
   const tomSays = String(
     (
       await one(
-        `select public.project_instruction_for(${lit(projectId)}::uuid, 'strategy-director') as v`,
+        `select app.project_instruction_for(${officeSqlOf(projectId)},${lit(projectId)}::uuid, 'strategy-director') as v`,
       )
     ).v ?? '',
   )
@@ -674,7 +677,7 @@ try {
     const emmaNow = String(
       (
         await one(
-          `select public.project_instruction_for(${lit(projectId)}::uuid, 'research-director') as v`,
+          `select app.project_instruction_for(${officeSqlOf(projectId)},${lit(projectId)}::uuid, 'research-director') as v`,
         )
       ).v ?? '',
     )

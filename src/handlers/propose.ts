@@ -52,6 +52,8 @@ import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
 
+const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+
 /** One proposal, as `app.proposals_to_send` returns it. */
 interface Waiting {
   readonly id: string
@@ -134,8 +136,13 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
         of him, and a number that mixed them would mean neither.
       */
       const noticed = Number(
-        ((await db.execute('select app.raise_suggestions(40) as n')).rows[0] as { n?: number })
-          ?.n ?? 0,
+        (
+          (
+            await db.execute(
+              `select app.raise_suggestions(app.job_office(${lit(job.jobId)}::uuid), 40) as n`,
+            )
+          ).rows[0] as { n?: number }
+        )?.n ?? 0,
       )
 
       const body =

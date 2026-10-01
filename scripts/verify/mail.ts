@@ -455,28 +455,28 @@ console.log('\nthe correspondence, and which project it belongs to (#172)')
 
     select
       (select jsonb_agg(x ->> 'message_id')
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x) as mine,
       (select jsonb_agg(x ->> 'message_id')
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugB)}), 50)) x) as theirs,
       (select x ->> 'why'
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x
         where x ->> 'message_id' = ${lit(msg('both'))}) as both_why,
       (select x ->> 'matched'
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x
         where x ->> 'message_id' = ${lit(msg('named'))}) as named_matched,
       (select count(*)
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x
         where x ->> 'message_id' = ${lit(msg('both'))}) as both_times,
       (select jsonb_agg(x ->> 'message_id')
-         from jsonb_array_elements(app.mail_search('Tidewater',
+         from jsonb_array_elements(app.mail_search(app.test_office(), 'Tidewater',
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x) as leak,
-      (select jsonb_array_length(app.mail_search('Tidewater', null, 50))) as unscoped,
-      (select app.forget_mail_before(7) ->> 'error') as too_short;
+      (select jsonb_array_length(app.mail_search(app.test_office(), 'Tidewater', null, 50))) as unscoped,
+      (select app.forget_mail_before(app.test_office(), 7) ->> 'error') as too_short;
     rollback;
   `)) as Record<string, unknown> | undefined
 
@@ -566,7 +566,7 @@ console.log('\nand what it may conclude when it cannot read the mail (#172)')
 {
   const slug = `mail-blind-${run}`
   const K = (k: string): string => `
-    insert into probe (k, v) select ${lit(k)}, app.project_knowledge(
+    insert into probe (k, v) select ${lit(k)}, app.project_knowledge(app.test_office(), 
       (select project_id from public.projects where slug = ${lit(slug)}))::text;`
   const cover = (await one(`
     begin;
@@ -700,8 +700,8 @@ console.log('\nthreads nobody has spoken in (#172)')
          ${lit(`ada-${run}@awaiting.test`)}, 1, app.now_utc() - interval '30 days', '...',
          array['CATEGORY_PROMOTIONS']);
       insert into await_res
-      select 'mine', app.mail_awaiting((select project_id from public.projects where slug = ${lit(q)}), 7, 10);
-      insert into await_res select 'elsewhere', app.mail_awaiting(gen_random_uuid(), 7, 10);
+      select 'mine', app.mail_awaiting(app.test_office(), (select project_id from public.projects where slug = ${lit(q)}), 7, 10);
+      insert into await_res select 'elsewhere', app.mail_awaiting(app.test_office(), gen_random_uuid(), 7, 10);
       select k, v from await_res;
     rollback;
   `)
@@ -811,15 +811,15 @@ console.log('\nthreads nobody has spoken in (#172)')
          'Last year', array['INBOX'], 'The words of a very old letter.',
          app.now_utc() - interval '120 days', null);
       insert into body_res
-      select 'mine', app.mail_for_project((select project_id from public.projects where slug = ${lit(b)}), 20);
-      insert into body_res select 'elsewhere', app.mail_for_project(gen_random_uuid(), 20);
+      select 'mine', app.mail_for_project(app.test_office(), (select project_id from public.projects where slug = ${lit(b)}), 20);
+      insert into body_res select 'elsewhere', app.mail_for_project(app.test_office(), gen_random_uuid(), 20);
       insert into body_res
-      select 'found', app.mail_search('what did we agree about the fee',
+      select 'found', app.mail_search(app.test_office(), 'what did we agree about the fee',
                (select project_id from public.projects where slug = ${lit(b)}), 10);
-      insert into body_res select 'swept', jsonb_build_array(app.forget_mail_bodies_before(90));
-      insert into body_res select 'floor', jsonb_build_array(app.forget_mail_bodies_before(1));
+      insert into body_res select 'swept', jsonb_build_array(app.forget_mail_bodies_before(app.test_office(), 90));
+      insert into body_res select 'floor', jsonb_build_array(app.forget_mail_bodies_before(app.test_office(), 1));
       insert into body_res
-      select 'after', app.mail_for_project((select project_id from public.projects where slug = ${lit(b)}), 20);
+      select 'after', app.mail_for_project(app.test_office(), (select project_id from public.projects where slug = ${lit(b)}), 20);
       select k, v from body_res;
     rollback;
   `)

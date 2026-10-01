@@ -637,7 +637,8 @@ const recordOnLedger = async (
     // capacity report learned the same lesson about `requested_by` and reports
     // 20 finished jobs instead of 101.
     await db.execute(`
-      select public.append_event(
+      select app.append_event(
+        app.job_office(${lit(job.jobId)}::uuid),
         ${lit(job.correlationId)}::uuid,
         -- 'agent': the office did this, not Grant and not a cron. The check
         -- constraint allows user, agent and system, and a research finding is

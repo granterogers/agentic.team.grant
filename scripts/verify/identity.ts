@@ -150,18 +150,19 @@ for (const [a, b, why] of [
     Same correction as #45's, from the other side.
   */
   const missing = await all(`
-    select p.slug, p.name
-      from public.projects p
-     where p.status = 'active'
-       and not p.is_fixture
+    select o.slug, o.name
+      from public.projects o
+     where o.status = 'active'
+       and not o.is_fixture
        and not exists (
          select 1 from public.projects q
-          where q.status = 'active' and q.project_id <> p.project_id
-            and app.normalise_name(q.name) = app.normalise_name(p.name)
+          where q.status = 'active' and q.project_id <> o.project_id
+            and q.office_id = o.office_id
+            and app.normalise_name(q.name) = app.normalise_name(o.name)
        )
        and not exists (
-         select 1 from app.resolve_project_by_name(p.name) r
-          where r.project_id = p.project_id and r.confidence >= 0.90
+         select 1 from app.resolve_project_by_name(o.office_id, o.name) r
+          where r.project_id = o.project_id and r.confidence >= 0.90
        )
   `)
   record(
@@ -199,7 +200,7 @@ if (projectId === '') {
 // would not resolve.
 {
   const rows = await all(
-    `select r.confidence::float8 c from app.resolve_project_by_name(${lit(`Identity proof ${run}`)}) r
+    `select r.confidence::float8 c from app.resolve_project_by_name(app.test_office(), ${lit(`Identity proof ${run}`)}) r
       where r.project_id = ${lit(projectId)}::uuid`,
   )
   record(
@@ -216,7 +217,9 @@ if (projectId === '') {
 const alias = `the ${run} thing`
 {
   const added = (
-    await one(`select app.add_project_alias(${lit(projectId)}::uuid, ${lit(alias)}) as r`)
+    await one(
+      `select app.add_project_alias(app.test_office(), ${lit(projectId)}::uuid, ${lit(alias)}) as r`,
+    )
   )?.r as { ok?: boolean; error?: string }
   record(
     'an alias can be taught',
@@ -230,7 +233,7 @@ const alias = `the ${run} thing`
   // a working alias as broken.
   const found = await all(
     `select r.project_id::text p, r.confidence::float8 c, r.how
-       from app.resolve_project_by_name(${lit(alias)}) r
+       from app.resolve_project_by_name(app.test_office(), ${lit(alias)}) r
       order by r.confidence desc`,
   )
   record(
@@ -256,7 +259,9 @@ const alias = `the ${run} thing`
   `)
   const otherId = String(((second?.r ?? {}) as { project_id?: string }).project_id ?? '')
   const clash = (
-    await one(`select app.add_project_alias(${lit(otherId)}::uuid, ${lit(alias)}) as r`)
+    await one(
+      `select app.add_project_alias(app.test_office(), ${lit(otherId)}::uuid, ${lit(alias)}) as r`,
+    )
   )?.r as { error?: string; conflicts_with?: string }
   record(
     'the same phrase cannot mean two projects',
@@ -351,13 +356,13 @@ const alias = `the ${run} thing`
   // and asserted so, because the new step must not have turned "I do not know"
   // into a guess.
   const blank = await one(
-    `select app.resolve_project('telegram_chat', ${lit(scope)}, null, null)::text as p`,
+    `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null, null)::text as p`,
   )
   record('with nothing to go on it still asks', String(blank?.p ?? 'null'), blank?.p === null)
 
   // A name on its own resolves it.
   const bare = await one(
-    `select app.resolve_project('telegram_chat', ${lit(scope)}, null, ${lit(alias)})::text as p`,
+    `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null, ${lit(alias)})::text as p`,
   )
   record(
     'a name on its own resolves the project',
@@ -370,7 +375,7 @@ const alias = `the ${run} thing`
   // utterance as one string, so "the wellness thing" worked and "have a look at
   // the wellness thing" found nothing.
   const inSentence = await one(`
-    select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+    select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,
       ${lit(`can you have a look at ${alias} before tomorrow`)})::text as p
   `)
   record(
@@ -381,7 +386,7 @@ const alias = `the ${run} thing`
 
   // But a short one does not get found by accident inside unrelated words.
   const shortAlias = await one(
-    `select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+    `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,
        'we should talk about the hq and the roadmap')::text as p`,
   )
   record(
@@ -407,13 +412,13 @@ const alias = `the ${run} thing`
   // project while looking entirely reasonable, so it must return null.
   const vague = `identity proof`
   const close = await all(
-    `select r.confidence::float8 c from app.resolve_project_by_name(${lit(vague)}) r
+    `select r.confidence::float8 c from app.resolve_project_by_name(app.test_office(), ${lit(vague)}) r
       order by r.confidence desc`,
   )
   const confident = close.filter((c) => Number(c.c) >= 0.9)
   const plausible = close.filter((c) => Number(c.c) >= 0.55)
   const guessed = await one(`
-    select app.resolve_project('telegram_chat', ${lit(scope)}, null, ${lit(vague)})::text as p
+    select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null, ${lit(vague)})::text as p
   `)
   record(
     'a phrase with no confident match resolves to nobody, however plausible the near misses',
@@ -462,9 +467,13 @@ const alias = `the ${run} thing`
   `)
   const rivalId = String(((rival?.r ?? {}) as { project_id?: string }).project_id ?? '')
 
-  await one(`select app.add_project_alias(${lit(projectId)}::uuid, ${lit(taken)}) as r`)
+  await one(
+    `select app.add_project_alias(app.test_office(), ${lit(projectId)}::uuid, ${lit(taken)}) as r`,
+  )
   const blocked = (
-    await one(`select app.add_project_alias(${lit(rivalId)}::uuid, ${lit(taken)}) as r`)
+    await one(
+      `select app.add_project_alias(app.test_office(), ${lit(rivalId)}::uuid, ${lit(taken)}) as r`,
+    )
   )?.r as { error?: string; conflicts_with?: string }
   record(
     'CONTROL: while the holder is active, the phrase is not free',
@@ -476,7 +485,9 @@ const alias = `the ${run} thing`
     update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid
   `)
   const freed = (
-    await one(`select app.add_project_alias(${lit(rivalId)}::uuid, ${lit(taken)}) as r`)
+    await one(
+      `select app.add_project_alias(app.test_office(), ${lit(rivalId)}::uuid, ${lit(taken)}) as r`,
+    )
   )?.r as { error?: string }
   record(
     'and an archived project stops holding a phrase a live one should get',
@@ -514,7 +525,7 @@ const alias = `the ${run} thing`
       values ('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
     `)
     const byRef = await one(`
-      select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+      select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,
         ${lit(`have a look at the notebook (id ${attachedRef.external_ref}) and tell me what is in it`)}
       )::text as p
     `)
@@ -527,7 +538,7 @@ const alias = `the ${run} thing`
     // And a sentence with no identifier still respects the switch, or the fix
     // has simply broken the thing it sits above.
     const noRef = await one(
-      `select app.resolve_project('telegram_chat', ${lit(scope)}, null, 'how is that going')::text as p`,
+      `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null, 'how is that going')::text as p`,
     )
     record(
       'and a sentence with no identifier still respects the switch',
@@ -539,7 +550,7 @@ const alias = `the ${run} thing`
 
   // An identifier we do not hold resolves to nothing — it never invents.
   const unknown = await all(
-    `select 1 from app.references_in('look at 11111111-2222-3333-4444-555555555555')`,
+    `select 1 from app.references_in(app.test_office(), 'look at 11111111-2222-3333-4444-555555555555')`,
   )
   record(
     'an identifier we are not attached to resolves to nothing',
@@ -549,7 +560,7 @@ const alias = `the ${run} thing`
 
   // An explicit id still wins over everything, including a contradicting name.
   const explicit = await one(`
-    select app.resolve_project('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid,
+    select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid,
       'something else entirely')::text as p
   `)
   record(
@@ -565,7 +576,7 @@ const alias = `the ${run} thing`
     values ('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
   `)
   const switched = await one(`
-    select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+    select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,
       'while we are here, what about something else') ::text as p
   `)
   record(
@@ -616,7 +627,7 @@ const OTHER_NAME = `Identity proof other ${run}`
 const resolves = (name: string, alias: string): string => `
   (select coalesce(
      (select (array_agg(r.project_id))[1]::text
-        from app.resolve_project_by_name(${lit(name)}) r
+        from app.resolve_project_by_name(app.test_office(), ${lit(name)}) r
        where r.confidence >= 0.90), 'null')) as ${alias}`
 
 const arc = await one(`
