@@ -54,7 +54,7 @@ const project = async (label: string): Promise<{ id: string; slug: string }> => 
   const r = json(
     (
       await one(
-        `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`n-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
+        `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`n-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
       )
     ).r,
   )
@@ -77,7 +77,7 @@ const attachAsPerson = (slug: string, ref: string, kind: string, role = 'home') 
   })
 const attachAsSystem = (slug: string, ref: string, kind: string) =>
   one(
-    `select app.hq_attach(${lit(slug)}, 'notion', ${lit(ref)}, 'home', ${lit(kind)}, ${lit(`system ${ref}`)}) as r`,
+    `select app.hq_attach(app.test_office(), ${lit(slug)}, 'notion', ${lit(ref)}, 'home', ${lit(kind)}, ${lit(`system ${ref}`)}) as r`,
   )
 const standing = (project: string) =>
   rows(

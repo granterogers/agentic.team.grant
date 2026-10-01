@@ -63,7 +63,7 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 
 const made = (
   await one(
-    `select app.hq_create_project(${lit(`Fixture connections ${run}`)}, 'upload', ${lit(`ref-${run}`)}, null, true) as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(`Fixture connections ${run}`)}, 'upload', ${lit(`ref-${run}`)}, null, true) as r`,
   )
 )?.r as { project_id?: string; slug?: string }
 const projectId = String(made?.project_id ?? '')
@@ -128,7 +128,7 @@ const stateOf = (rows: Record<string, unknown>[], connector: string): string =>
 {
   const declined = (
     await one(`
-    select app.hq_connection_choose(${lit(slug)}, 'notion', 'declined',
+    select app.hq_connection_choose(app.test_office(), ${lit(slug)}, 'notion', 'declined',
       'this one lives entirely in the notebook') as r
   `)
   )?.r as { ok?: boolean; error?: string }
@@ -160,7 +160,7 @@ const stateOf = (rows: Record<string, unknown>[], connector: string): string =>
 
 {
   await db.execute(
-    `select app.hq_connection_choose(${lit(slug)}, 'github', 'wanted', 'once the repo is public')`,
+    `select app.hq_connection_choose(app.test_office(), ${lit(slug)}, 'github', 'wanted', 'once the repo is public')`,
   )
   const rows = await connectionsFor(projectId)
   record(
@@ -184,7 +184,9 @@ const stateOf = (rows: Record<string, unknown>[], connector: string): string =>
 // ===========================================================================
 
 {
-  await db.execute(`select app.hq_connection_choose(${lit(slug)}, 'notion', 'clear')`)
+  await db.execute(
+    `select app.hq_connection_choose(app.test_office(), ${lit(slug)}, 'notion', 'clear')`,
+  )
   const rows = await connectionsFor(projectId)
   record(
     'clearing a decision returns it to never-considered, not to a third state',
@@ -193,7 +195,7 @@ const stateOf = (rows: Record<string, unknown>[], connector: string): string =>
   )
   // And put the prompt back, since clearing it is what this check just tested.
   await db.execute(
-    `select app.hq_connection_choose(${lit(slug)}, 'notion', 'wanted', 'needs a teamspace')`,
+    `select app.hq_connection_choose(app.test_office(), ${lit(slug)}, 'notion', 'wanted', 'needs a teamspace')`,
   )
 }
 
@@ -224,7 +226,9 @@ const stateOf = (rows: Record<string, unknown>[], connector: string): string =>
   // Declining something already attached is a contradiction, and the function
   // refuses rather than storing both facts.
   const contradiction = (
-    await one(`select app.hq_connection_choose(${lit(slug)}, 'notebooklm', 'declined') as r`)
+    await one(
+      `select app.hq_connection_choose(app.test_office(), ${lit(slug)}, 'notebooklm', 'declined') as r`,
+    )
   )?.r as { error?: string }
   record(
     'and it cannot also be marked as not wanted',
@@ -281,7 +285,7 @@ const stateOf = (rows: Record<string, unknown>[], connector: string): string =>
 // ===========================================================================
 
 {
-  const payload = (await one(`select app.hq_projects() as d`))?.d as
+  const payload = (await one(`select app.hq_projects(app.test_office()) as d`))?.d as
     | { slug: string; connections?: unknown[] }[]
     | undefined
   const mine = (payload ?? []).find((p) => p.slug === slug)

@@ -114,7 +114,7 @@ const history = async (project: string, limit = 50): Promise<Msg[]> => {
 /** A project with an attachment, because ADR-0014 refuses an active one without. */
 const makeProject = async (name: string): Promise<string> => {
   const r = await one(
-    `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`${PREFIX}-ref`)}, ${lit(name)}, true) as v`,
+    `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`${PREFIX}-ref`)}, ${lit(name)}, true) as v`,
   )
   const v = (r.v ?? {}) as { project_id?: string; project?: string; slug?: string }
   return String(v.project_id ?? v.project ?? '')
@@ -137,7 +137,7 @@ const inRollback = async (body: string): Promise<Record<string, unknown>> => {
       declare c uuid; e jsonb; r jsonb; pr uuid; v jsonb;
       begin
         perform set_config('application_name', 'PostgREST 14.5', true);
-        pr := (app.hq_create_project(${lit(`History real ${run}`)}, 'upload',
+        pr := (app.hq_create_project(app.test_office(), ${lit(`History real ${run}`)}, 'upload',
                  ${lit(`hreal-${run}`)}, ${lit(`History real ${run}`)}, true) ->> 'project_id')::uuid;
         ${body}
         raise exception 'ROLLED-BACK:%', r::text;
@@ -425,7 +425,7 @@ try {
         begin
           perform set_config('application_name', 'PostgREST 14.5', true);
           -- A real project as well: the suite's own are fixtures, which is harness.
-          pr := (app.hq_create_project(${lit(`Conversation shape ${run}`)}, 'upload',
+          pr := (app.hq_create_project(app.test_office(), ${lit(`Conversation shape ${run}`)}, 'upload',
                    ${lit(`shape-${run}`)}, ${lit(`Conversation shape ${run}`)}, true) ->> 'project_id')::uuid;
           insert into public.inbound_commands
             (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
@@ -689,7 +689,7 @@ try {
   */
   const spoke = (
     await one(
-      `select app.say_in_project(${lit(mine)}::uuid, ${lit(`Said from the studio ${run}`)}, 'research-director') as v`,
+      `select app.say_in_project(app.test_office(), ${lit(mine)}::uuid, ${lit(`Said from the studio ${run}`)}, 'research-director') as v`,
     )
   ).v as {
     ok?: boolean
@@ -721,8 +721,8 @@ try {
     reconstructed - and the one addressed to nobody still arriving.
   */
   const studio = await inRollback(`
-    v := app.say_in_project(pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
-    e := app.say_in_project(pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
+    v := app.say_in_project(app.test_office(), pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
+    e := app.say_in_project(app.test_office(), pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
     r := jsonb_build_object('origin', app.job_origin((v ->> 'job')::uuid),
                             'nobody_ok', e ->> 'ok',
                             'history', app.conversation_history(pr, 100));`)
@@ -749,7 +749,7 @@ try {
   */
   const badName = (
     await one(
-      `select app.say_in_project(${lit(mine)}::uuid, ${lit(`Addressed to nobody ${run}`)}, 'nobody-at-all') as v`,
+      `select app.say_in_project(app.test_office(), ${lit(mine)}::uuid, ${lit(`Addressed to nobody ${run}`)}, 'nobody-at-all') as v`,
     )
   ).v as {
     ok?: boolean
@@ -788,7 +788,9 @@ try {
       studioHistory.some((m) => String(m.body).includes(`Addressed for real to nobody ${run}`)),
   )
 
-  const empty = (await one(`select app.say_in_project(${lit(mine)}::uuid, '   ') as v`)).v as {
+  const empty = (
+    await one(`select app.say_in_project(app.test_office(), ${lit(mine)}::uuid, '   ') as v`)
+  ).v as {
     ok?: boolean
     error?: string
   }
@@ -1005,7 +1007,7 @@ try {
       posted.status === 403 && postedText.includes('person_required'),
     )
     const said = await one(`
-      select public.say_in_project(${lit(mine)}::uuid, ${lit(`Said over HTTP ${run}`)}, null, '{}'::text[], 'grant')::text as r`)
+      select public.say_in_project(app.test_office(), ${lit(mine)}::uuid, ${lit(`Said over HTTP ${run}`)}, null, '{}'::text[], 'grant')::text as r`)
     let postedBody: { result?: { ok?: boolean; error?: string } } = {}
     try {
       postedBody = { result: JSON.parse(String(said.r)) as { ok?: boolean } }

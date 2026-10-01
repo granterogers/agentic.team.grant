@@ -121,7 +121,7 @@ const fixture = String(
     String(
       (
         await one(
-          `select app.hq_create_project(${lit(`fixture retrieval ${w.run}`)}, 'upload', ${lit(`f-${w.run}`)}, 'f', true)::text as r`,
+          `select app.hq_create_project(app.test_office(), ${lit(`fixture retrieval ${w.run}`)}, 'upload', ${lit(`f-${w.run}`)}, 'f', true)::text as r`,
         )
       ).r,
     ),

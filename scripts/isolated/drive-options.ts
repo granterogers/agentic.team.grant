@@ -77,7 +77,7 @@ const setup = async (label: string) => {
     json(
       (
         await one(
-          `select app.hq_create_project(${lit(`Drive ${label} ${run}`)}, 'upload', ${lit(slug)}, ${lit(`Drive ${label} ${run}`)}, true) as v`,
+          `select app.hq_create_project(app.test_office(), ${lit(`Drive ${label} ${run}`)}, 'upload', ${lit(slug)}, ${lit(`Drive ${label} ${run}`)}, true) as v`,
         )
       ).v,
     ).project_id,

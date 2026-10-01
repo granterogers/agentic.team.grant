@@ -35,7 +35,7 @@ const project = async (label: string): Promise<string> => {
   const id = String(
     json(
       (
-        await one(`select app.hq_create_project(${lit(`Reversal ${label} ${run}`)}, 'upload', ${lit(`reversal-${label}-${run}`)},
+        await one(`select app.hq_create_project(app.test_office(), ${lit(`Reversal ${label} ${run}`)}, 'upload', ${lit(`reversal-${label}-${run}`)},
           ${lit(`Reversal ${label} ${run}`)}, true) as v`)
       ).v,
     ).project_id,

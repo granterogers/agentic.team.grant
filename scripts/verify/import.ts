@@ -64,7 +64,7 @@ let documentId = ''
 
 try {
   await one(`
-    select app.hq_create_project(${lit(`Fixture import ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Fixture import ${run}`)}, 'upload',
                                  ${lit(SLUG)}, ${lit(`Fixture import ${run}`)}, true) as r
   `)
   projectId = String(

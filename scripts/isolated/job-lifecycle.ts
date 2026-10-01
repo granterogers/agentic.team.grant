@@ -724,7 +724,7 @@ const fp = 'a'.repeat(64)
       (
         (
           await one(
-            `select app.hq_create_project(${lit(`fixture childslots ${n} ${run}`)}, 'upload', ${lit(`cs-${n}-${run}`)}, ${lit(`Fixture childslots ${n}`)}, true)::text as v`,
+            `select app.hq_create_project(app.test_office(), ${lit(`fixture childslots ${n} ${run}`)}, 'upload', ${lit(`cs-${n}-${run}`)}, ${lit(`Fixture childslots ${n}`)}, true)::text as v`,
           )
         ).v as string
       ).match(/"project_id": ?"([0-9a-f-]{36})"/)?.[1] ?? '',

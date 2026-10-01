@@ -54,7 +54,7 @@ const REAL_SLACK = 'C0C2DAPDN02'
 const realProject = String(
   jsonOf(
     (
-      await one(`select app.hq_create_project(${lit(`Origin real ${run}`)}, 'upload', ${lit(`origin-real-${run}`)},
+      await one(`select app.hq_create_project(app.test_office(), ${lit(`Origin real ${run}`)}, 'upload', ${lit(`origin-real-${run}`)},
     ${lit(`Origin real ${run}`)}, true) as v`)
     ).v,
   ).project_id,
@@ -401,7 +401,7 @@ await refusal('a Slack channel that has carried a real turn', 'slack', REAL_SLAC
   const quietProject = String(
     jsonOf(
       (
-        await one(`select app.hq_create_project(${lit(`Origin quiet ${run}`)}, 'upload', ${lit(`origin-quiet-${run}`)},
+        await one(`select app.hq_create_project(app.test_office(), ${lit(`Origin quiet ${run}`)}, 'upload', ${lit(`origin-quiet-${run}`)},
       ${lit(`Origin quiet ${run}`)}, true) as v`)
       ).v,
     ).project_id,
@@ -463,7 +463,7 @@ check(
   const p = String(
     jsonOf(
       (
-        await one(`select app.hq_create_project(${lit(`Origin dash ${run}`)}, 'upload', ${lit(`origin-dash-${run}`)},
+        await one(`select app.hq_create_project(app.test_office(), ${lit(`Origin dash ${run}`)}, 'upload', ${lit(`origin-dash-${run}`)},
       ${lit(`Origin dash ${run}`)}, true) as v`)
       ).v,
     ).project_id,
@@ -472,7 +472,7 @@ check(
   const said = jsonOf(
     (
       await one(
-        `${DOOR} select app.say_in_project(${lit(p)}::uuid, ${lit(`Dashboard test ${run}`)}) as v`,
+        `${DOOR} select app.say_in_project(app.test_office(), ${lit(p)}::uuid, ${lit(`Dashboard test ${run}`)}) as v`,
       )
     ).v,
   )
@@ -484,7 +484,7 @@ check(
   const other = jsonOf(
     (
       await one(
-        `${DOOR} select app.say_in_project(${lit(realProject)}::uuid, ${lit(`Grant on the dashboard ${run}`)}) as v`,
+        `${DOOR} select app.say_in_project(app.test_office(), ${lit(realProject)}::uuid, ${lit(`Grant on the dashboard ${run}`)}) as v`,
       )
     ).v,
   )

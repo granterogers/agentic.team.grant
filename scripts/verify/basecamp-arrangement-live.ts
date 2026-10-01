@@ -180,10 +180,12 @@ try {
     project and leaves it rearranged has changed Grant's workspace.
   */
   if (before.length === 0) {
-    await db.execute(`select app.hq_dashboard_layout_reset('${SLUG}', 'basecamp')`)
+    await db.execute(
+      `select app.hq_dashboard_layout_reset((select office_id as office from public.projects where slug = '${SLUG}'), '${SLUG}', 'basecamp')`,
+    )
   } else {
     await db.execute(
-      `select app.hq_dashboard_layout_set('${SLUG}', '${JSON.stringify(before).replace(/'/g, "''")}'::jsonb, 'basecamp')`,
+      `select app.hq_dashboard_layout_set((select office_id as office from public.projects where slug = '${SLUG}'), '${SLUG}', '${JSON.stringify(before).replace(/'/g, "''")}'::jsonb, 'basecamp')`,
     )
   }
   const after = await stored()

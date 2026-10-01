@@ -273,7 +273,7 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 */
 const created = (
   await db.execute(`
-    select public.hq_create_project(
+    select public.hq_create_project(app.test_office(), 
       ${lit(`fixture-${run}`)}, 'upload', ${lit(`fixture-ref-${run}`)}, null, true) as result
   `)
 ).rows[0] as { result?: Record<string, unknown> } | undefined

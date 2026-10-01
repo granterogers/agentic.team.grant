@@ -22,7 +22,8 @@ const check = (what: string, ok: boolean, detail: string) => {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what} — ${detail}`)
 }
 
-const made = await one(`select app.hq_create_project(${lit(`Chat proof ${run}`)}, 'upload',
+const made =
+  await one(`select app.hq_create_project(app.test_office(), ${lit(`Chat proof ${run}`)}, 'upload',
   ${lit(`chat-${run}`)}, ${lit(`Chat proof ${run}`)}, true) as v`)
 const project = String((made.v as { project_id?: string }).project_id ?? '')
 const p = await one(

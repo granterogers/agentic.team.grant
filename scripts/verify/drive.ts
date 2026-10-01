@@ -342,7 +342,7 @@ for (const [mime, expected] of [
     `update public.projects set status = 'active' where project_id = ${lit(pid)}::uuid`,
   )
   const viaPage = await one(`
-    select app.hq_attach(${lit(`driveproof-${run}`)}, 'drive',
+    select app.hq_attach(app.test_office(), ${lit(`driveproof-${run}`)}, 'drive',
       ${lit(`https://drive.google.com/drive/folders/${FOLDER}?usp=sharing`)},
       'source', null, 'Course material') as r
   `)
@@ -366,7 +366,7 @@ for (const [mime, expected] of [
 
 {
   const unknown = await one(
-    `select app.hq_attach(${lit(`driveproof-${run}`)}, 'dropbox', 'x') as r`,
+    `select app.hq_attach(app.test_office(), ${lit(`driveproof-${run}`)}, 'dropbox', 'x') as r`,
   )
   const r = unknown.r as { error?: string; connectors?: string[] }
   ok('a connector this office does not have is refused', String(r.error ?? '').includes('dropbox'))

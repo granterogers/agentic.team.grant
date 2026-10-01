@@ -178,7 +178,7 @@ for (const [a, b, why] of [
 // ===========================================================================
 
 const created = await one(`
-  select app.hq_create_project(
+  select app.hq_create_project(app.test_office(), 
     ${lit(`Identity proof ${run}`)}, 'upload', ${lit(`${SUBJECT}`)}, null, true
   ) as r
 `)
@@ -251,7 +251,7 @@ const alias = `the ${run} thing`
 // "the finance thing" is the ambiguity that made the duplicate.
 {
   const second = await one(`
-    select app.hq_create_project(${lit(`Identity proof other ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Identity proof other ${run}`)}, 'upload',
       ${lit(`${SUBJECT}-other`)}, null, true) as r
   `)
   const otherId = String(((second?.r ?? {}) as { project_id?: string }).project_id ?? '')
@@ -279,7 +279,7 @@ const alias = `the ${run} thing`
 {
   const attempt = (
     await one(`
-    select app.hq_create_project(${lit(`Identity proof ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Identity proof ${run}`)}, 'upload',
       ${lit(`${SUBJECT}-dup`)}) as r
   `)
   )?.r as { needs_confirmation?: boolean; candidates?: unknown[]; project_id?: string }
@@ -309,7 +309,7 @@ const alias = `the ${run} thing`
 {
   const near = (
     await one(`
-    select app.hq_create_project(${lit(`identity proof ${run} tracker`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`identity proof ${run} tracker`)}, 'upload',
       ${lit(`${SUBJECT}-near`)}) as r
   `)
   )?.r as { needs_confirmation?: boolean; candidates?: { name?: string }[] }
@@ -327,7 +327,7 @@ const alias = `the ${run} thing`
 {
   const forced = (
     await one(`
-    select app.hq_create_project(${lit(`Identity proof ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Identity proof ${run}`)}, 'upload',
       ${lit(`${SUBJECT}-forced`)}, null, true) as r
   `)
   )?.r as { project_id?: string }
@@ -457,7 +457,7 @@ const alias = `the ${run} thing`
     matching a prefix only covers subjects named to fall under it.
   */
   const rival = await one(`
-    select app.hq_create_project(${lit(`Identity proof ${run} rival`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Identity proof ${run} rival`)}, 'upload',
       ${lit(`${SUBJECT}-rival`)}, null, true) as r
   `)
   const rivalId = String(((rival?.r ?? {}) as { project_id?: string }).project_id ?? '')
@@ -621,15 +621,15 @@ const resolves = (name: string, alias: string): string => `
 
 const arc = await one(`
 begin;
-create temp table _dupe as select app.hq_create_project(
+create temp table _dupe as select app.hq_create_project(app.test_office(), 
   ${lit(`Identity proof ${run}`)}, 'upload', ${lit(`${SUBJECT}-dupe`)}, null, false) as r;
-create temp table _ren as select app.hq_rename_project(${lit(SLUG)}, ${lit(RENAMED)}) as r;
+create temp table _ren as select app.hq_rename_project(app.test_office(), ${lit(SLUG)}, ${lit(RENAMED)}) as r;
 create temp table _mid as
   select (select name from public.projects where project_id = ${lit(projectId)}::uuid) as nm,
          ${resolves(`Identity proof ${run}`, 'old_goes')},
          ${resolves(RENAMED, 'new_goes')};
 create temp table _clash as
-  select app.hq_rename_project(${lit(SLUG)}, ${lit(OTHER_NAME)}) as r;
+  select app.hq_rename_project(app.test_office(), ${lit(SLUG)}, ${lit(OTHER_NAME)}) as r;
 update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid;
 create temp table _arch as select ${resolves(RENAMED, 'after_archive')};
 create temp table _out as

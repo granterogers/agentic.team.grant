@@ -23,7 +23,7 @@ const check = (what: string, ok: boolean, detail: string) => {
 const mk = async (label: string): Promise<string> => {
   const name = `fixture scope ${label} ${run}`
   await one(
-    `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`scope-${label}-${run}`)}, ${lit(name)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`scope-${label}-${run}`)}, ${lit(name)}, true)::text as r`,
   )
   return String(
     (

@@ -28,7 +28,7 @@ const project = async (label: string): Promise<string> =>
   String(
     json(
       (
-        await one(`select app.hq_create_project(${lit(`Authority ${label} ${run}`)}, 'upload', ${lit(`authority-${label}-${run}`)},
+        await one(`select app.hq_create_project(app.test_office(), ${lit(`Authority ${label} ${run}`)}, 'upload', ${lit(`authority-${label}-${run}`)},
           ${lit(`Authority ${label} ${run}`)}, true) as v`)
       ).v,
     ).project_id,

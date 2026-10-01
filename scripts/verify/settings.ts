@@ -126,7 +126,7 @@ try {
   */
   const made = (
     await one(`
-      select public.hq_create_project(${lit(NAME)}, 'upload', ${lit(`settings-${run}`)},
+      select public.hq_create_project(app.test_office(), ${lit(NAME)}, 'upload', ${lit(`settings-${run}`)},
                                       ${lit(NAME)}, true) as r
     `)
   ).r as { project_id?: string; slug?: string; error?: string }
@@ -139,10 +139,14 @@ try {
   if (projectId === '') throw new Error('no subject project; the rest cannot be measured')
 
   const team = async (): Promise<Member[]> =>
-    ((await one(`select public.project_team(${lit(projectId)}::uuid) as t`)).t ?? []) as Member[]
+    ((await one(`select public.project_team(app.test_office(), ${lit(projectId)}::uuid) as t`)).t ??
+      []) as Member[]
   const automations = async (): Promise<Automation[]> =>
-    ((await one(`select public.project_automations(${lit(projectId)}::uuid) as a`)).a ??
-      []) as Automation[]
+    ((
+      await one(
+        `select public.project_automations(app.test_office(), ${lit(projectId)}::uuid) as a`,
+      )
+    ).a ?? []) as Automation[]
 
   // =========================================================================
   console.log('\nabsence means everyone, which is the whole design')
@@ -158,8 +162,9 @@ try {
     `${String(before.filter((m) => m.decided === true).length)} decision(s) recorded`,
     before.every((m) => m.decided === false),
   )
-  const slugsBefore = ((await one(`select public.staff_on_project(${lit(projectId)}::uuid) as s`))
-    .s ?? []) as string[]
+  const slugsBefore = ((
+    await one(`select public.staff_on_project(app.test_office(), ${lit(projectId)}::uuid) as s`)
+  ).s ?? []) as string[]
   check(
     'and the router is told the same thing by a different function',
     `${String(slugsBefore.length)} slug(s)`,
@@ -170,7 +175,9 @@ try {
   console.log('\ntaking someone off, and putting them back')
 
   const off = (
-    await one(`select public.set_project_staff(${lit(SLUG)}, 'finance-director', false) as r`)
+    await one(
+      `select public.set_project_staff(app.test_office(), ${lit(SLUG)}, 'finance-director', false) as r`,
+    )
   ).r as { ok?: boolean; on?: boolean }
   check('a specialist can be taken off this project', JSON.stringify(off), off.ok === true)
 
@@ -181,8 +188,9 @@ try {
     `on=${String(daniel?.on)} decided=${String(daniel?.decided)}`,
     daniel?.on === false && daniel?.decided === true,
   )
-  const slugsAfter = ((await one(`select public.staff_on_project(${lit(projectId)}::uuid) as s`))
-    .s ?? []) as string[]
+  const slugsAfter = ((
+    await one(`select public.staff_on_project(app.test_office(), ${lit(projectId)}::uuid) as s`)
+  ).s ?? []) as string[]
   check(
     'and the router no longer sees him — this is the half #36 asks to TAKE EFFECT',
     slugsAfter.join(', '),
@@ -201,10 +209,13 @@ try {
   )
 
   const back = (
-    await one(`select public.set_project_staff(${lit(SLUG)}, 'finance-director', true) as r`)
+    await one(
+      `select public.set_project_staff(app.test_office(), ${lit(SLUG)}, 'finance-director', true) as r`,
+    )
   ).r as { ok?: boolean }
-  const restored = ((await one(`select public.staff_on_project(${lit(projectId)}::uuid) as s`)).s ??
-    []) as string[]
+  const restored = ((
+    await one(`select public.staff_on_project(app.test_office(), ${lit(projectId)}::uuid) as s`)
+  ).s ?? []) as string[]
   check(
     'and putting him back works, which is what makes the switch a switch',
     `ok=${String(back.ok)} on=${String(restored.includes('finance-director'))}`,
@@ -217,7 +228,9 @@ try {
     Chief of Staff is a project that cannot report to Grant at all.
   */
   const refused = (
-    await one(`select public.set_project_staff(${lit(SLUG)}, 'chief-of-staff', false) as r`)
+    await one(
+      `select public.set_project_staff(app.test_office(), ${lit(SLUG)}, 'chief-of-staff', false) as r`,
+    )
   ).r as { ok?: boolean; refused?: boolean; error?: string }
   check(
     'the Chief of Staff cannot be taken off, and it says why rather than failing quietly',
@@ -232,7 +245,7 @@ try {
 
   const brief = (
     await one(`
-      select public.set_project_instruction(${lit(SLUG)}, 'research-director',
+      select public.set_project_instruction(app.test_office(), ${lit(SLUG)}, 'research-director',
         'Prefer the interview transcripts over the summaries on this one.') as r
     `)
   ).r as { ok?: boolean }
@@ -267,7 +280,7 @@ try {
   )
   const tooShort = (
     await one(
-      `select public.set_project_instruction(${lit(SLUG)}, 'strategy-director', 'be nice') as r`,
+      `select public.set_project_instruction(app.test_office(), ${lit(SLUG)}, 'strategy-director', 'be nice') as r`,
     )
   ).r as { ok?: boolean; error?: string }
   check(
@@ -281,7 +294,7 @@ try {
 
   const auto = (
     await one(`
-      select public.create_automation(${lit(SLUG)},
+      select public.create_automation(app.test_office(), ${lit(SLUG)},
         'Summarise anything new in the interview transcripts and say what changed.',
         1440, '08:00', 'research-director') as r
     `)
@@ -326,7 +339,9 @@ try {
   )
 
   const offAuto = (
-    await one(`select public.set_automation(${lit(String(auto.automation))}, false) as r`)
+    await one(
+      `select public.set_automation(app.test_office(), ${lit(String(auto.automation))}, false) as r`,
+    )
   ).r as { ok?: boolean }
   const quiet = (await automations()).find((a) => a.slug === auto.automation)
   check(
@@ -336,17 +351,20 @@ try {
   )
 
   // Refusals, each of which is a sentence a form can show.
-  const short = (await one(`select public.create_automation(${lit(SLUG)}, 'do the thing') as r`))
-    .r as { ok?: boolean; error?: string }
+  const short = (
+    await one(
+      `select public.create_automation(app.test_office(), ${lit(SLUG)}, 'do the thing') as r`,
+    )
+  ).r as { ok?: boolean; error?: string }
   const fast = (
     await one(`
-      select public.create_automation(${lit(SLUG)},
+      select public.create_automation(app.test_office(), ${lit(SLUG)},
         'Check the transcripts folder and report anything new that arrived.', 2) as r
     `)
   ).r as { ok?: boolean; error?: string }
   const clash = (
     await one(`
-      select public.create_automation(${lit(SLUG)},
+      select public.create_automation(app.test_office(), ${lit(SLUG)},
         'Check the transcripts folder and report anything new that arrived.', 60, '09:00') as r
     `)
   ).r as { ok?: boolean; error?: string }
@@ -361,10 +379,12 @@ try {
     produce anything and the reason would be two tables away, so it is refused
     where the decision is made.
   */
-  await db.execute(`select public.set_project_staff(${lit(SLUG)}, 'growth-director', false)`)
+  await db.execute(
+    `select public.set_project_staff(app.test_office(), ${lit(SLUG)}, 'growth-director', false)`,
+  )
   const absent = (
     await one(`
-      select public.create_automation(${lit(SLUG)},
+      select public.create_automation(app.test_office(), ${lit(SLUG)},
         'Draft a weekly note about how the launch is landing with the audience.',
         10080, null, 'growth-director') as r
     `)
@@ -374,14 +394,18 @@ try {
     String(absent.error ?? ''),
     absent.ok === false && String(absent.error ?? '').includes('Team'),
   )
-  await db.execute(`select public.set_project_staff(${lit(SLUG)}, 'growth-director', true)`)
+  await db.execute(
+    `select public.set_project_staff(app.test_office(), ${lit(SLUG)}, 'growth-director', true)`,
+  )
 
   /*
     The twelve duties that run the office are not Grant's to delete from a
     project page. A refusal beats not drawing the control only because it can
     say what to do instead; the page does not draw it either.
   */
-  const officeDuty = (await one(`select public.remove_automation('nightly-backup') as r`)).r as {
+  const officeDuty = (
+    await one(`select public.remove_automation(app.test_office(), 'nightly-backup') as r`)
+  ).r as {
     ok?: boolean
     refused?: boolean
     error?: string
@@ -473,7 +497,7 @@ try {
   */
   const live = (
     await one(`
-      select public.create_automation(${lit(SLUG)},
+      select public.create_automation(app.test_office(), ${lit(SLUG)},
         'Check the transcripts folder each week and report anything new.', 10080) as r
     `)
   ).r as { ok?: boolean; automation?: string }
@@ -485,7 +509,9 @@ try {
     live.ok === true && (await automations()).some((a) => a.on === true),
   )
 
-  const archived = (await one(`select public.archive_project(${lit(SLUG)}) as r`)).r as {
+  const archived = (
+    await one(`select public.archive_project(app.test_office(), ${lit(SLUG)}) as r`)
+  ).r as {
     ok?: boolean
     automations_stopped?: number
     reversible?: boolean
@@ -516,7 +542,9 @@ try {
     Number(liveDuties.n) === 0,
   )
 
-  const backOut = (await one(`select public.unarchive_project(${lit(SLUG)}) as r`)).r as {
+  const backOut = (
+    await one(`select public.unarchive_project(app.test_office(), ${lit(SLUG)}) as r`)
+  ).r as {
     ok?: boolean
     still_off?: string[]
   }
@@ -599,15 +627,20 @@ try {
       `http ${String(wrote)}`,
       wrote === 403,
     )
-    await db.execute(`select public.set_project_staff(${lit(SLUG)}, 'quality-director', false)`)
-    const nowOff = ((await one(`select public.staff_on_project(${lit(projectId)}::uuid) as s`)).s ??
-      []) as string[]
+    await db.execute(
+      `select public.set_project_staff(app.test_office(), ${lit(SLUG)}, 'quality-director', false)`,
+    )
+    const nowOff = ((
+      await one(`select public.staff_on_project(app.test_office(), ${lit(projectId)}::uuid) as s`)
+    ).s ?? []) as string[]
     check(
       'and the function it calls changes the office (a specialist taken off the project)',
       `grace on project=${String(nowOff.includes('quality-director'))}`,
       !nowOff.includes('quality-director'),
     )
-    await db.execute(`select public.set_project_staff(${lit(SLUG)}, 'quality-director', true)`)
+    await db.execute(
+      `select public.set_project_staff(app.test_office(), ${lit(SLUG)}, 'quality-director', true)`,
+    )
 
     /*
       Clearing a brief, which is the one argument in the whole action map whose EMPTY value is a value. The
@@ -632,9 +665,11 @@ try {
         !clearedBody.includes('missing'),
     )
     await db.execute(
-      `select public.set_project_instruction(${lit(SLUG)}, 'research-director', 'Prefer the interview transcripts over the summaries on this one.')`,
+      `select public.set_project_instruction(app.test_office(), ${lit(SLUG)}, 'research-director', 'Prefer the interview transcripts over the summaries on this one.')`,
     )
-    await db.execute(`select public.set_project_instruction(${lit(SLUG)}, 'research-director', '')`)
+    await db.execute(
+      `select public.set_project_instruction(app.test_office(), ${lit(SLUG)}, 'research-director', '')`,
+    )
     const emmaNow = String(
       (
         await one(
