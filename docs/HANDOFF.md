@@ -1,3 +1,15 @@
+> ## 2026-10-01 - MULTI-USER RESEARCH COMPLETE (design only; nothing applied)
+>
+> The research the policy closure named as next has been done on `claude/multi-user-research`, against `41de1965`
+> (migrations through 0646). **Production was read, not changed**: no migration, deploy, RLS change or user was created.
+> Read `docs/multi-user/` - start with `ARCHITECTURE.md`, then `REVIEWS.md` (two adversarial reviews and what changed) and
+> `IMPLEMENTATION-PLAN.md`; the decision is ADR-0060 (proposed). Issue #399 is resolved architecturally in
+> `TABLE-REVIEW-399.md` (all 129 tables). **There is no historical multi-user branch in this repository** - see
+> `LEGACY-BRANCH-REVIEW.md`. The original audit stays closed. **Three present-day weaknesses were found and are NOT fixed**
+> (change freeze): `voice-token` has no authentication (E1, HIGH); any signed-in session or the machine key can browse
+> Grant's Google Drive (E13); a `person` session may run system-wide actions (E14). They are Phase 1 of the plan and do not
+> depend on the rest.
+
 > ## 2026-10-01 - FINAL POLICY CLOSURE: ORIGINAL ARCHITECTURE AUDIT: CLOSED
 >
 > Grant's seven final policy decisions are implemented (migrations 0640-0646), reviewed adversarially (eight defects

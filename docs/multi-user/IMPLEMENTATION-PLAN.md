@@ -1,227 +1,184 @@
 # Implementation plan
 
-> Design only. Baseline `41de1965`. Each phase below is independently verifiable and ends in a state where production
-> is **consistent and safe to leave**. The one hard rule across all of them: **no second real office exists in
-> production before Phase 12 is verified** (MIGRATION-PLAN §0.2). Phases 0–11 can only ever have Grant's office, a
-> test office and, from Phase 10, the Sample office — and the Sample office cannot act outside (Phase 10 comes after
-> containment).
+> Design only. Baseline `41de1965`. **Rewritten after the two adversarial reviews (`REVIEWS.md`):** the original twelve
+> phases are merged into seven, RLS-policy and `voice_sessions` work is removed, and the order changed — the two
+> weaknesses that exist *today* (E13 Drive, E14 operator actions) and the voice hotfixes now come **first**, before
+> anything is built that a second office would use.
 >
-> The sizing is from counted repository evidence (below), not from optimism. Where a number is not yet known, the plan
-> says which phase measures it and does not guess.
+> Each phase is independently verifiable and ends in a state where production is consistent and safe to leave. The one
+> hard rule across all of them: **no second real office exists in production before Phase 6 is verified**
+> (MIGRATION-PLAN §0.2). Before then production holds Grant's office, the `system` office, test offices (which cannot act
+> outside) and — from Phase 5 — the Sample office (which cannot either).
 
 ## Counted evidence behind the sizing
 
 | Quantity | Value | Source |
 |---|---:|---|
-| carriers needing `office_id` | 50 (41 new columns + 9 replacing text `owner`) | `TABLE-REVIEW-399.md` |
-| tables to put RLS on | 46 (+ 56 office policies, replacing 116 `true` policies) | catalogue |
+| carriers needing `office_id` | **44** (40 new columns + 4 replacing a text `owner`) | `TABLE-REVIEW-399.md` |
+| tables to put RLS on | 46 (uniform policy; no office policies in V1) | catalogue |
 | gateway functions | 152 (92 id-taking, 60 listing), all `SECURITY DEFINER` | gateway map × `pg_proc` |
-| `app` functions | 588 (518 definer); **the converted set is not yet derived** | P0 produces it |
+| **inline gateway/edge paths outside that map** | `drive`, `googleAccess`, `contact_photo`, `document_upload`, `machine_project_ok`, `mcp`, `voice`, `voice-token` | Review A |
+| `app` functions | 588 (518 definer); **the converted set is derived in Phase 0** | |
+| **functions that insert jobs** | **12** (not 5) + 3 scripts that insert directly | query + Review A |
 | views | 14 (none `security_invoker`) | `pg_class` |
-| `execute(` sites in `src/` | 502 in 95 files; 72 files name `public.` tables | grep |
-| hard-coded `'grant'` sites | at least 9 (`pager.ts:86`, `vault-export.ts:61`, `progress.ts:101,329`, `preference-store.ts:45,146`, `telegram-webhook:501`, `voice:54`, config key `telegram.direct_to_grant`) | agent inventory, re-verified for `voice:54` |
-| edge functions touched | 8 of 9 (`worker`, `hq-api`, `slack-events`, `telegram-webhook`, `voice`, `voice-token`, `signin`, `mcp`) | `supabase/functions` |
-| job-creating SQL functions | 5 | grep of `src`+`supabase` |
+| `execute(` sites in `src/` | 502 in 95 files (not individually converted; `JobContext` + FKs + suite) | grep |
+| hard-coded `'grant'` / global-Grant sites | ≥ 9 (`pager.ts:86`, `vault-export.ts:61`, `progress.ts:101,329`, `preference-store.ts:45,146`, `telegram-webhook:501`, `voice:54`, `telegram.direct_to_grant`) | inventory |
+| system-wide `OPERATOR_ONLY` actions | 9 | `hq-api` action map |
+| fixed-name Vault secrets read without an office | Google (2), Notion, Vikunja, NotebookLM, Slack fixed names, GitHub read | integration inventory |
 | unique indexes to re-scope | 14 | `pg_indexes` |
-| attacks / sabotages / positive tests | 30 + 29b / 19 / 10 | `ACCEPTANCE-PLAN.md` |
+| verify suites that `set local role ai_team_app` | 11 | grep |
+| attack classes / mutation families | ≈12 / ≈8 (coverage matrix of 38 attacks) | `ACCEPTANCE-PLAN.md` |
 
 ## Phase map
 
 ```
-P0 spike ──┬─ P1 hotfix (E1,E2)  [independent; can ship first]
-           └─ P2 offices ── P3 columns+backfill+constraints ──┬─ P4 RLS (#399)
-                                                              ├─ P5 job creation + authority ── P6 retrieval
-                                                              │                              └─ P7 gateway+views
-                                                              └─ P8 channels + voice sessions
-              P9 isolation suite  (begins at P2, completes after P8)
-              P10 containment + Sample provisioning + acceptance      (needs P5–P9)
-              P11 per-office credentials                               (needs P7)
-              P12 contract + legacy retirement                         (needs P10 green)
+P0 spike ──► P1 first fixes ──► P2 offices + backfill + constraints ──► P3 function conversion ──► P4 channels + voice
+                                                                              │                          │
+                                                          (isolation suite is built inside every phase) ▼
+                                                                        P5 containment + Sample + acceptance
+                                                                        P6 credentials + contract + retirement
 ```
 
 ---
 
 ## P0 — Spike and preconditions (no production change)
 
-- **Objective.** Retire the assumptions the design rests on *before* anything is built, on the isolated replica.
-- **Code.** Extend `scripts/isolated/` with two auth users and a gateway emulator that injects `p_office`; a throwaway
-  scratch directory, not committed to the gate.
-- **Proves, each as a pass/fail with evidence:**
-  1. composite `MATCH SIMPLE` FK on `jobs` accepts the 7,243-style null-project job and rejects a cross-office one;
-  2. PostgREST resolves `p_office`-first overloads next to the old ones by argument names (no ambiguity error);
-  3. the append-only trigger suspension inside one transaction works and re-enables (`tgenabled='O'`);
-  4. `EXPLAIN` of `search_documents` with `(office_id, …)` indexes is not slower than today on production-sized data;
-  5. **E6**: read `src/mcp` and `supabase/functions/mcp` and `signin` for caller-supplied project/office handling
-     (the one thing the research could not read);
-  6. whether `track_functions` can be enabled, else the `events`-wrapper alternative;
-  7. **derive the converted-function set**: a transitive call-graph query from the gateway map, the adapters and the
-     worker's `app.*` calls over `pg_proc`/`pg_depend` bodies; the output is the baseline `check:office-scoped` holds;
-  8. whether the worker's model seam (`src/providers/router.ts`) can host a recording provider for canary tests;
-  9. the count of suites that depend on Grant's real data (decides D1's cost).
+- **Objective.** Retire the assumptions the design rests on, on the isolated replica, before building.
+- **Proves, each pass/fail with evidence:**
+  1. composite `MATCH SIMPLE` FKs accept a null-project job and reject a cross-office one; **a caller naming another
+     office's project fails with `23503`** (not silently re-homed — Review A, F4);
+  2. PostgREST resolves `p_office`-first overloads next to old ones by argument names;
+  3. a transaction can suspend the six `*_reject_update` triggers for the backfill and `tgenabled='O'` afterwards;
+  4. `EXPLAIN` of `search_documents` with `(office_id, …)` indexes on production-sized data;
+  5. **derive the converted set** — transitive call graph from the gateway map, the **inline gateway paths**,
+     `supabase/functions/*`, the adapters and the worker; this list is the baseline `check:office-scoped` holds;
+  6. whether `track_functions` can be enabled (else the `events` wrapper);
+  7. whether `src/providers/router.ts` can host a recording provider for the canary test;
+  8. **count the suites that depend on Grant's real data** (decides how many must use the machine key with an explicit
+     office, versus create their fixtures in the test office);
+  9. read the values of `calendar.*`, `notion.*`, `slack.subject_user_id` once (ids/emails?);
+  10. confirm the product's task writer accepts a past `due_on` (for the Sample's "Late"), and whether a stuck job can
+      be produced without waiting (for "Stuck");
+  11. which of the 17 duties are system vs person, and whether `office.chores` touches a person's data.
 - **Migrations.** none. **Rollback.** delete the scratch. **Risk.** low.
-- **Acceptance.** a written spike report; every assumption marked proven / disproven; the converted-set list exists.
-  If (1) or (2) is disproven the design is revised *here*, at the cost of a document.
-- **Safe to stop.** trivially.
+- **Acceptance.** a written spike report; every assumption proven or disproven. If (1) or (2) fails the design is revised
+  *here*, at the cost of a document.
 
-## P1 — Hotfix track: close E1 and E2 (independent of `offices`)
+## P1 — First fixes: close what is reachable today (no `offices` needed)
 
-- **Objective.** The two weaknesses that exist today and get worse the moment a second person is invited.
-- **Code.** `voice-token`: require a valid session JWT (reuse `voice`'s `allowed()`); drop the `*` CORS default;
-  build `instructions` from state the caller is entitled to. `voice`: replace `VOICE_SUBJECT` with the verified
-  member's own `owner_key`. Both use the *existing* `office_member` lookup — no schema change.
-- **Tests.** attack 29 (no token → 401), attack 17 (a second member's note is not attributed to Grant), a regression
-  that `voice-token` with a valid session still mints.
-- **Migrations.** none. **Deploy.** `npm run deploy:voice` (probes itself). **Rollback.** redeploy the previous version.
+These four exist in production **with one office** and each gets worse the moment a second session exists. They are
+independent of the ownership model, small, and should ship first — and **E1/E2 can ship before P0 finishes**.
+
+| # | Change | Closes | Tests |
+|---|---|---|---|
+| 1 | `voice-token` requires a valid session; drop the `*` CORS default; build the brief from state the caller may see | **E1** (HIGH, today) | attack 29 |
+| 2 | `voice` uses the verified member's own `owner_key`, not env `VOICE_SUBJECT` | **E2** | attack 17 |
+| 3 | **`OPERATOR_ONLY` action set** in `hq-api` (the nine system-wide actions) refused to every session unless the office has `uses_system_integrations`; always allowed to the machine key | **E14** (latent critical) | attack 32 |
+| 4 | **`app.system_secret(office, name)`** fronts every fixed-name Vault read (`googleToken`, the `drive` section, Notion, Vikunja, NotebookLM, Slack fixed names, GitHub read); refuses unless the caller may use the deployment's integrations. **Before `offices` exists the guard is keyed on today's principal kind** (a `person` session and the machine key may; a `harness` test member may not); in P2 it switches to `offices.uses_system_integrations` with no change to its callers. | **E13** (latent critical) | attack 31 |
+| 5 | drop `office_members.owner_key default 'grant'`; reserved words/staff slugs refused as a subject | E18 | unit |
+
+- **Deploy.** `deploy:voice`, `deploy:hq`, `deploy:worker` (the worker reads the same fixed-name secrets); each probes itself.
+- **Rollback.** redeploy the previous version; the migration is a default drop.
 - **Risk.** low–medium: the standalone voice page and any phone shortcut that called `voice-token` unauthenticated will
-  stop working — find them first (P0) and give them a session.
-- **Acceptance.** E1 attack returns 401 against the deployed function with a real-origin probe.
-- **Dependencies.** none. **This phase should not wait for the rest.** Safe to stop after it.
+  need a session; any script that used the machine key for a now-`OPERATOR_ONLY` action must be found first (P0 #8).
+- **Acceptance.** E1 returns 401 against the deployed function with a real-origin probe; a `harness`-kind session gets
+  403 on every `OPERATOR_ONLY` action; `GET ?section=drive` as a non-primary session makes **no Google request**.
+- **Safe to stop.** after each item.
 
-## P2 — Offices and Grant's binding (M1)
+## P2 — Offices, backfill, constraints, RLS (M1–M4, M6)
 
-- **Code.** `provision_office` operator script (`npm run office:provision`); `check:office-integrity` skeleton with its
-  positive control.
-- **Migrations.** M1. **Tests.** unique binding; Grant and `verify-operator` bound; second binding rejected.
-- **Rollback.** drop `offices`. **Risk.** low (nothing reads it). **Acceptance.** `offices` has the 2 expected rows.
-- **Safe to stop.** yes — the table is unread.
+- **Objective.** Every row owned, structurally; #399 closed.
+- **Migrations.** M1 (`offices` incl. `system`, immutability triggers, bind Grant and the test principal), M2 (44 nullable
+  columns), M3 (per table group, one transaction: characterise → backfill → composite keys/FKs → `NOT NULL`), M4
+  (per-office uniqueness), M6 (RLS on for the 46).
+- **Code.** `provision_office` operator script; the `check:office-catalogue` check with its control. The Grant-only
+  `legacy_office()` bridge.
+- **Tests.** characterisation assertions inside each migration (abort on unknown); per-table count snapshots before/after;
+  a backfill rehearsal on a replica populated from the *measured shapes* of production (no data leaves production) plus a
+  read-only characterisation run against production; `check:anon-exposure` green; the eleven `ai_team_app` suites unchanged.
+- **Rollback.** per MIGRATION-PLAN §6; all reversible. **Risk.** **HIGH** — the one place a mistake is permanent in an
+  append-only ledger. Mitigations: abort-on-unknown, rehearsal, the trigger-suspension assertion, one transaction per group.
+- **Acceptance.** zero null `office_id` on `NOT NULL` carriers; unbound channel rows exactly the expected set;
+  **`npm run gate` green, `check:leaks` unchanged**; the old worker (still deployed) runs through every step.
 
-## P3 — Columns, backfill, constraints (M2–M6)
+## P3 — Function conversion (M5.1–M5.6) — the centre of gravity
 
-- **Objective.** Every row owned, structurally.
-- **Migrations.** M2, M3a/b/c, M4, M5, M6 (each separately applied and verified, in that order).
-- **Code.** none in services except where the `dedupe_key` index change ships with P5.
-- **Tests.** characterisation assertions inside each migration; per-table count snapshots before/after;
-  `check:office-integrity` over every FK edge; **a backfill rehearsal on a replica loaded with a copy of production
-  row *shapes*** (no data leaves production: the replica is built from migrations and populated by a generator that
-  mirrors the measured distributions, plus a read-only characterisation run against production itself).
-- **Rollback.** per MIGRATION-PLAN §6; all reversible.
-- **Risk.** **HIGH — the one place a mistake is permanent in an append-only ledger.** Mitigations: aborts on unknown,
-  rehearsal, the trigger-suspension assertion, `office_id` immutable only after the backfill is verified.
-- **Acceptance.** zero null `office_id` on `NOT NULL` carriers; unbound channel rows are exactly the expected set;
-  **`npm run gate` green and `check:leaks` unchanged**; old worker (still deployed) keeps running through every step.
-- **Safe to stop.** after any migration.
+- **Objective.** Ownership survives the lifecycle; the model's context and every press are office-scoped.
+- **Waves (each shippable alone):** 5.1 the **12 job inserters** + `enqueue_child` project validation + `unnamed_project(p_office)`
+  + the dedupe/idempotency re-scopes · 5.2 approvals and presses (refuse before revealing) · 5.3 retrieval and context ·
+  5.4 **MCP** (token → one office; `mcp_job_status(p_office, p_job)`) · 5.5 gateway reads, **inline paths**, views, storage
+  ownership-before-write · 5.6 gateway writes + `OPERATOR_ONLY` completion.
+- **Code.** `JobContext` with a branded `OfficeId` constructible only from a database row; `dequeue_job` returns/filters on
+  office state; the page stops reading `hq.token`; **`hq.api_token` rotated** after Grant's devices are on sessions;
+  `check:office-scoped` and the narrow `check:office-scope` in the gate; a recording provider for the canary test.
+- **Tests.** the generated id-taking attack suite; the FK matrix; attacks 4–7, 9, 11, 12, 14, 19–21, 24–28, 30, 33, 34, 36–38;
+  P1–P10; the existing suites that touch jobs, approvals and retrieval (`approver-identity`, `exactly-once`, `fan-in-waits`,
+  `recovery-matrix`, `approval-race.sh`, `verify:unified`, `tier1:fast` before and after).
+- **Deploy.** per wave: migrate → worker → gateway/adapters → verify. **UX-QA Level 2** at wave 5.5 (every screen's data
+  path changes). `deploy:hq` for the page needs the operator (no `VERCEL_TOKEN` in the build session, #399.1).
+- **Overloads** only for functions the worker/gateway call in a loop (5.1, 5.2, `dequeue_job`); the rest in lockstep.
+- **Rollback.** drop the new overloads / restore saved bodies. **Risk.** **HIGH** in breadth, medium in depth. Every
+  converted function gets a mutation that turns its attack red before it merges.
+- **Acceptance.** every function in the derived set is scoped or reasoned-system; `GET`/`POST` for a foreign id and a
+  nonexistent id are byte-identical.
 
-## P4 — RLS for #399 (M7)
+## P4 — Channels and voice (M5.7)
 
-- **Migrations.** M7. **Code.** `app.act_as`, `app.current_office`; `check:anon-exposure` extended.
-- **Tests.** `set role ai_team_app` with no `act_as` reads zero rows from every `SC` table; with `act_as(A)` reads A's;
-  attacks 1, 2, 3, 8, 9, 19 on the RLS path; `check:anon-exposure` green.
-- **Rollback.** restore saved policies. **Risk.** low (service paths bypass RLS) — and that is the reason to do it
-  early: it carries the least blast radius of anything here and closes #399.
-- **Acceptance.** all 46 tables RLS-on; 56 `SC` have the office policy; 73 `SO` have none; 0 tables reachable by a public key.
+- **Code.** `subject_identities.office_id`; `telegram_chat_for(p_office, …)` with no `or subject is null`; **only private
+  chats deliverable**; the hard-coded `'grant'` sites replaced by the requester on the job/output; one shared Slack app,
+  workspace → office, sender-office equality in `enqueue_inbound`; the Slack lifecycle workspace check (E4); realtime voice:
+  office from the JWT on every turn, brief from `voice_state(p_office)`.
+- **Tests.** attacks 15–18 with the edge emulator (`scripts/isolated/edge-emulator.ts` refuses every URL that is not the
+  replica); `check:leaks` and `check:chatter` unchanged.
+- **Rollback.** per function. **Risk.** medium. **Acceptance.** an unknown sender is dropped and audited; Grant's own
+  Slack/Telegram/voice behave exactly as before.
 
-## P5 — Job creation and authority (M9.1, M9.2) — the centre of gravity
+## P5 — Containment, Sample, acceptance (M7)
 
-- **Code.** `JobContext` with a branded `OfficeId` (`src/jobs/context.ts`) constructed only from a database row;
-  `dequeue_job` returns and filters on office state; the five job-creating functions stamp `office_id` and
-  `enqueue_child` validates `p_project`; `hq_answer_blocker`, delivery press, undo, resume, standing grant/revoke and
-  autonomy take `p_office`; `check:office-scope` ratchet baseline for `src/`.
-- **Migrations.** M9.1, M9.2 (+ the three `dedupe_key` indexes from M6). **Deploy.** worker, then gateway.
-- **Tests.** attacks 4, 5, 6, 7, 11, 12, 14, 20, 21, 25, 26, 27, 28 on the function path; P5/P6; the existing suites
-  that touch jobs and approvals (`verify:addressing`, `approver-identity`, `exactly-once`, `fan-in-waits`,
-  `recovery-matrix`, `approval-race.sh`) green against the new functions.
-- **Rollback.** drop the new overloads; redeploy the previous worker (old overloads still serve it).
-- **Risk.** **HIGH** — this is where "ownership survives the lifecycle" is proven or not; a wrong `where` is silent
-  (N1). Every converted function gets an attack before it is merged.
-- **Acceptance.** every child/retry/resume/recovery keeps its office; an answer from the wrong office is refused.
+- **Code.** `may_act_outside` + `offices.kind`; `claim_delivery` destination-office check; `kind → principal` mapping
+  (`sample`/`test` → `harness`); `provision_office` for `sample`; `npm run sample:provision|reset|verify` where **reset is
+  retire-and-re-provision**; the recording-provider canary flow.
+- **Tests.** attacks 22, 23, 35; reset controls (counts of every other office unchanged; refused for non-sample); the
+  Sample → Claire → Specialist → Result chain; Grant's office gains **zero rows** across the run.
+- **Rollback.** retire the office; restore `may_act_outside`. **Risk.** medium (no ledger exception remains).
+- **Acceptance.** `SAMPLE-ACCOUNT-DESIGN.md` §4 chain green; the isolation suite green; every mutation family red.
 
-## P6 — Retrieval and model context (M9.3)
+## P6 — Credentials, contract, retirement (M8, M9)
 
-- **Code.** `search_documents`, `sibling_projects`, `projects_named_in`, `mail_for_project`, `project_knowledge`,
-  `lessons_for`, `conversation_before`, `voice_state`/`voice_lookup`, and their TypeScript callers (`retrieve`,
-  `retrieveAcrossOffice`, `guidanceFor`) take `JobContext`. A recording provider in the router for canary tests.
-- **Tests.** attacks 9, 19, 30, P4, P7, P8; **canary test with its positive control**; the existing retrieval suites
-  (`verify:unified`, the held-out routing corpora) green.
-- **Rollback.** drop new overloads. **Risk.** medium–high: retrieval is the model-context boundary; a regression is
-  quiet (a worse answer, not an error). Run the intelligence corpus (`tier1:fast`) before and after.
-- **Acceptance.** zero foreign canary in any recorded request body; settled project-first policy behaviour unchanged.
-
-## P7 — Gateway, views, remaining functions (M9.4, M9.5)
-
-- **Code.** session → `offices` by auth uid with fail-closed `403 no_office`; **delete and overwrite** client-supplied
-  office fields; cache stores `{office_id, kind}`; machine key requires `x-office-id`; the 60 listing functions and 14
-  views converted; `check:office-scoped` in the gate; the page stops reading `hq.token`.
-- **Migrations.** M9.4, M9.5. **Deploy.** `deploy:hq` (page + hq-api); note #399.1: `VERCEL_TOKEN` is absent in the
-  build session, so the page deploy needs the operator.
-- **Tests.** attacks 1–3, 8, 24, 28, 29, 29b on the gateway path; the full existing UI gate (`verify:hq`, `verify:ui`,
-  `verify:wired`) since nearly every screen's data path changes — **this is a UX-QA Level 2 trigger** (auth/connection
-  flows and the data layer of every screen change).
-- **Rollback.** redeploy the previous gateway/page; old overloads still serve it.
-- **Risk.** **HIGH** in breadth (152 functions), medium in depth (mechanical). **Acceptance.** every gateway function
-  is on the derived list as scoped or reasoned-system.
-
-## P8 — Channels and sessions (M9.6, voice)
-
-- **Code.** `subject_identities.office_id`; `telegram_chat_for(p_office, …)` with no `or subject is null`; the nine
-  hard-coded `'grant'` sites replaced by the requester on the job/output; per-office `telegram.direct_to_grant` /
-  `only_chief_speaks` via `office_settings`; Slack "workspace office = sender office"; `voice_sessions` and
-  `voice_state(p_office)`; the Slack lifecycle-event workspace check (E4).
-- **Tests.** attacks 15, 16, 17, 18 with a Slack/Telegram **edge emulator** (`scripts/isolated/edge-emulator.ts`
-  already refuses every URL that is not the replica); `check:leaks` and `check:chatter` unchanged.
-- **Rollback.** per function. **Risk.** medium. **Acceptance.** an unknown Slack/Telegram sender is dropped and
-  audited; Grant's own Slack/Telegram/voice behave exactly as before (acceptance-plan P9).
-
-## P9 — The isolation suite (starts at P2, completes after P8)
-
-- **Code.** `scripts/verify/user-isolation.ts` (L1 replica, L2 live); `--prove-it` automating the break/red/restore/green
-  loop; the 19 sabotages as scripted edits that **print proof they landed**; `check:uniqueness-scoped`.
-- **Built incrementally:** each of P3–P8 adds its attacks and sabotages in the same commit as the code it protects, so
-  no converted function ever exists without an attack that can fail it.
-- **Acceptance.** 31 attacks defeated, 10 positives pass, 19/19 sabotages red, `--prove-it` green.
-
-## P10 — Containment, Sample, acceptance (M10)
-
-- **Code.** `may_act_outside` + `offices.kind`; `provision_office` for `sample`; `npm run sample:provision|reset|verify`;
-  `app.seed_age`, `app.purge_sample_office` and the narrow ledger exceptions; recording-provider canary flow.
-- **Migrations.** M10. **Tests.** attacks 22, 23; reset controls; the Sample → Claire → Specialist → Result chain.
-- **Rollback.** `purge_sample_office`; restore `may_act_outside`. **Risk.** medium: the ledger exception (N4) is the
-  one deliberate hole in evidence tables; its control test must be red when pointed at a `person` office.
-- **Acceptance.** `SAMPLE-ACCOUNT-DESIGN.md` §4 chain green; Grant's office has zero new rows across the run.
-
-## P11 — Per-office credentials (M8, M9.7)
-
-- **Code.** `office_credentials`, `office_secret`; move Google/Notion/Vikunja/NotebookLM/Slack/GitHub-read secrets
-  behind refs for Grant (**operator-confirmed**, D4); stop reading fixed names for per-office integrations.
-- **Why late.** Neither Grant nor the Sample needs it to be correct today; a *second real human* does. It is the gate
-  before inviting one. **Risk.** medium (it touches live credentials). **Rollback.** fixed names retained until M11.
-- **Acceptance.** attack 13 defeated; a test office connects a fake provider without touching Grant's slot.
-
-## P12 — Contract and retirement (M11)
-
-- **Preconditions** are mechanical (MIGRATION-PLAN M11). **Code.** remove the legacy-token path, `VOICE_SUBJECT`,
-  `telegram.direct_to_grant`, `office_members`. **Risk.** the only irreversible step; snapshot first.
-- **Acceptance.** the suite and the gate green with the old overloads gone; seven days of no old-overload calls.
-- **Safe to stop.** this is the end.
+- **Before any second real human:** `office_credentials`, `office_settings`, per-office versions of the operator actions;
+  Grant's own secrets moved behind refs (**operator-confirmed**).
+- **Contract (M8):** drop the short list of old overloads, `unnamed_project()`, the `legacy_office()` bridge,
+  `office_members`, the nine text `owner` columns; remove `VOICE_SUBJECT`, `telegram.direct_to_grant`. Preconditions are
+  mechanical (MIGRATION-PLAN M8); snapshot first. **The only irreversible step.**
+- **Acceptance.** suite and gate green with the old overloads gone; seven days of no old-overload calls (for the short list).
 
 ---
 
 ## Estimate (by phase and risk, not hours)
 
-Sizes are relative effort in *focused implementation sessions* of the kind this repository already runs, with the
-uncertainty stated. They are dominated by the function-conversion phases because those are where the unmeasured set is.
+Relative effort in *focused implementation sessions* of the kind this repository already runs, with the uncertainty stated.
+The reviews removed work (RLS policies, `voice_sessions`, purge, three tables, one phase) and **added** work (system office,
+secondary FKs, `OPERATOR_ONLY`, the credential guard, MCP, inline paths, storage ordering, 12 not 5 job inserters). Net:
+the complexity review's 35–45% cut did **not** survive the security review; the honest figure moved from 30–40 to
+**≈ 24–34**.
 
 | Phase | Size | Risk | Dominant uncertainty |
 |---|:-:|:-:|---|
-| P0 spike | S (1) | low | whether the overload and `MATCH SIMPLE` assumptions hold |
-| P1 hotfix | S (1) | low–med | callers of `voice-token` that rely on no auth |
-| P2 offices | S (1) | low | — |
-| P3 backfill + constraints | **L (3–4)** | **high** | the "else abort" residue: unknown until the characterisation runs against each table's real rows |
-| P4 RLS | M (2) | low | 56 policies are mechanical; the `exists` helpers' performance |
-| P5 jobs + authority | **XL (4–6)** | **high** | size of the derived function set; raw SQL in handlers |
-| P6 retrieval | **L (3)** | med–high | quiet regressions in answer quality |
-| P7 gateway + views | **XL (4–6)** | **high** (breadth) | 152 functions + 14 views + a UX-QA Level 2 |
-| P8 channels + voice | L (3) | med | Slack/Telegram edge cases in the emulator |
-| P9 suite | L (3, spread across the above) | med | making 19 sabotages each demonstrably red |
-| P10 Sample | M (2) | med | the ledger exception; aging |
-| P11 credentials | M (2) | med | live-credential moves |
-| P12 contract | S (1) | high but gated | 7-day evidence |
-| **Total** | **≈ 30–40 sessions** | | the range is honest: it is a *count of work packages with a stated range*, and P0 narrows it. |
+| P0 spike | S (1) | low | whether the overload and composite-FK assumptions hold |
+| P1 first fixes | S–M (2) | low–med | unauthenticated callers of `voice-token`; scripts using the machine key for operator actions |
+| P2 offices + backfill | **L (4)** | **high** | the "else abort" residue — unknown until each table's characterisation runs |
+| P3 function conversion | **XL (8–11)** | **high** | size of the derived set; inline paths; raw SQL; a UX-QA Level 2 |
+| P4 channels + voice | M–L (3) | med | Slack/Telegram edge cases in the emulator |
+| P5 Sample + acceptance | M (3) | med | aging "Stuck" without time passing |
+| P6 credentials + contract | M (3–4) | med–high (gated) | live-credential moves; the 7-day evidence |
+| Suite (inside every phase) | counted above | | making each mutation family demonstrably red |
+| **Total** | **≈ 24–34 sessions** | | P0 narrows it |
 
-**What would make the estimate wrong:** the converted-function set is far larger than the 152 gateway functions imply
-(it is *derived* in P0 precisely because it is the largest unknown); the characterisation finds unclassifiable
-historical rows in a ledger (P3 stalls on a human decision, not on work); a UX-QA Level 2 finds regressions in screens
-whose data path changed (P7).
+**What would make the estimate wrong:** the derived function set is much larger than the gateway's 152 (P0 measures it);
+the characterisation finds unclassifiable historical rows (P2 stalls on a human decision, not on work); the UX-QA Level 2
+at wave 5.5 finds regressions; many suites depend on Grant's real data (P0 #8).
 
-**What to do if time forces a cut.** Stop after **P4 + P5 + P6**: that closes #399, makes ownership structural, and
-scopes the model's context, with no second human yet — a strictly safer system than today, and nothing later is blocked.
-Do **not** invite a second real person before P8, P9, P11 and P12.
+**If time forces a cut.** Ship **P1** alone first — it closes E1, E13 and E14 with no schema change and is a strictly safer
+production. Then **P2 + P3 wave 5.1–5.3** (ownership structural, approvals and the model's context scoped). Do **not** invite a
+second real person before P4, the full isolation suite, P5 and P6 — and do not provision the Sample before P3's job-creation
+wave and the credential guard are in production.

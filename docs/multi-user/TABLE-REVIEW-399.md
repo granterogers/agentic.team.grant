@@ -6,20 +6,21 @@
 ## How to read it
 
 - **Class.** ACCOUNT = carries `office_id` itself; PROJECT / JOB = ownership derives through `project_id` / `job_id` and gets no new column; INTEGRATION = a credential or channel binding (service-only); SYSTEM = product state owned by no human; HARNESS = declared test state; LEDGER = append-only evidence that derives its owner.
-- **Target RLS.** `SC` = RLS on, one policy for the server role `ai_team_app`: `office_id = app.current_office()` (or the derived equivalent); **no policy and no grant for `anon` or `authenticated` — ever.** `SO` = RLS on, **no policy for any non-bypass role** (service-only).
-- **SELECT | INSERT | UPDATE | DELETE** for an `SC` table: *own office* means the row's office equals the caller's; *checked* means `with check` plus the composite foreign key; *office immutable* means a trigger refuses any change to `office_id`. `SO` tables have no rule for a user because no user path reaches them: a user reads them only through a projection that filters by office.
+- **V1 RLS (decided after the adversarial reviews).** Every one of the 129 tables has RLS **on**. The 46 that lacked it get the same policy shape as the other 83 — `to ai_team_app using (true)` — so the eleven verify suites that `set local role ai_team_app` keep working, and **no policy and no grant for `anon` or `authenticated`, ever.** This closes #399 without pretending RLS is the boundary: it is a tripwire against a future mis-grant.
+- **Future office policy (deferred hardening).** `SC` = the policy a login role would need if one is ever introduced: `office_id = <the caller's office>` (or the derived equivalent). `SO` = no user-reachable path; stays service-only. V1 builds neither `app.act_as` nor `app.current_office()` (a custom setting is spoofable by any session that can run SQL, and nothing connects as a non-bypass role).
+- **SELECT | INSERT | UPDATE | DELETE** for an `SC` table: *own office* means the row's office equals the caller's (**deferred; V1 relies on the function and structural layers**); *checked* means `with check` plus the composite foreign key; *office immutable* means a trigger refuses any change to `office_id`. `SO` tables have no rule for a user because no user path reaches them: a user reads them only through a projection that filters by office.
 - **Service access.** The worker and gateway connect as `postgres` / `service_role`, which bypass RLS. RLS is therefore a backstop for them, not their boundary. Their boundary is the composite foreign key, the immutable `office_id`, and the required `p_office` argument (ARCHITECTURE section 7).
 - **Harness.** Test traffic keeps its existing flags (`is_fixture`, `synthetic`, `harness_job`); new test offices are `offices.kind <> person`. Harness registries are `SO`.
 
-**Totals.** 129 tables: ACCOUNT 40, SYSTEM 23, PROJECT 22, INTEGRATION 17, JOB 15, HARNESS 9, LEDGER 3. 50 carry `office_id`; the other 79 derive it. Target: 56 office-scoped, 73 service-only. **All 46 tables with RLS off today get RLS on; none is made reachable by a public key.**
+**Totals.** 129 tables: ACCOUNT 34, PROJECT 27, SYSTEM 23, INTEGRATION 17, JOB 16, HARNESS 9, LEDGER 3. 44 carry `office_id` (4 of them replace an existing text `owner`, so 40 are new columns; 5 more text-`owner` tables drop the column and derive through their project); the other 85 derive it. Future policy shape: 56 office-scoped, 73 service-only. **All 46 tables with RLS off today get RLS on; none is made reachable by a public key.**
 
 ## The answer to #399 in one paragraph
 
-Enabling RLS on the 46 tables is necessary and not sufficient, and a user-scoped policy for `authenticated` on any of them would be a mistake: the browser never speaks to PostgREST, no public function is executable by `anon` or `authenticated` (0 of 280), and 0642 plus `check:anon-exposure` hold that line. So the decision is per table. 31 of the 46 are service-only and become RLS-on with no policy (a no-op for access, a tripwire for a future grant). 15 of the 46 hold a person's private state, so they carry or derive an office and get the office policy. The tables that matter most are not among the 46: `jobs`, `projects`, `documents`, `outputs` and `inbound_commands` already have RLS on and a policy of `true`. That policy is the real gap, and it is closed by `office_id`, not by turning RLS on.
+Enabling RLS on the 46 tables is cheap and worth doing as a tripwire, but it is not isolation, and a user-scoped policy for `authenticated` on any of them would be a mistake: the browser never speaks to PostgREST, no public function is executable by `anon` or `authenticated` (0 of 281), and 0642 plus `check:anon-exposure` hold that line. So the decision is per table. 31 of the 46 are service-only: no user path reaches them, they get RLS plus the uniform `ai_team_app` policy and nothing else. 15 of the 46 hold a person's private state: their ownership is classified here (carry or derive an office) and the office policy is recorded as deferred hardening. The tables that matter most are not among the 46: `jobs`, `projects`, `documents`, `outputs` and `inbound_commands` already have RLS on and a policy of `true`. That policy is the real gap, and what closes it is `office_id` with composite foreign keys and a required `p_office` — not another `ENABLE ROW LEVEL SECURITY`.
 
 ## The 129 tables
 
-| Table | Rows | Purpose | Class | Carries office_id | Target RLS | Ownership path | RLS now | Public-role grants now | SELECT / INSERT / UPDATE / DELETE | Write mode | Risk | Migration note |
+| Table | Rows | Purpose | Class | Carries office_id | Future office policy | Ownership path | RLS now | Public-role grants now | SELECT / INSERT / UPDATE / DELETE | Write mode | Risk | Migration note |
 |---|---:|---|---|:-:|:-:|---|---|:-:|---|---|:-:|---|
 | `appearance_settings` | 1 | How the studio looks, per person (#124, ADR-0021). One jsonb rather than a column each: th | ACCOUNT | Y | SC | office_id (replaces text owner) | OFF | none | own office / own office (checked) / own office, office immutable / own office | mutable | L | text owner defaults to grant; PK (owner) becomes (office_id) |
 | `artifacts` | 12 | What NotebookLM produced for a project, and the link to open it. Grant: "see if you can pu | PROJECT | N | SC | project_id -> projects.office_id | ON/1 | yes | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | M |  |
@@ -43,19 +44,19 @@ Enabling RLS on the 46 tables is necessary and not sufficient, and a user-scoped
 | `contact_label_links` | 0 |  | PROJECT | N | SC | contact_id -> contacts.project_id | ON/0 | yes | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L | 0 rows |
 | `contact_labels` | 5 |  | ACCOUNT | Y | SC | office_id (replaces text owner) | ON/0 | yes | own office / own office (checked) / own office, office immutable / own office | mutable | L |  |
 | `contacts` | 0 | People, companies, collaborators and suppliers attached to a dashboard project (#24, canon | PROJECT | N | SC | project_id | OFF | none | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | M | 0 rows; PII; #172 strong tier |
-| `dashboard_layouts` | 2 |  | ACCOUNT | Y | SC | office_id (replaces text owner); project_id optional | ON/0 | yes | own office / own office (checked) / own office, office immutable / own office | mutable | L |  |
+| `dashboard_layouts` | 2 |  | PROJECT | N | SC | project_id (NOT NULL) | ON/0 | yes | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L | text owner dropped; derives through the project |
 | `decisions` | 324 | What the office CONCLUDED, and what that ruled out (#129). Distinct from documents (materi | PROJECT | N | SC | project_id; from_job | OFF | none | via parent chain / via parent chain (checked) / never / never | append-only | M |  |
 | `deliveries` | 4,027 | One row per outbound message on any channel, claimed before the send and completed after i | ACCOUNT | Y | SC | office_id; composite FK (job_id,office_id) | ON/1 | yes | own office / own office (checked) / state column only / never | insert + state | H | dedupe_key unique is global: becomes (office_id,dedupe_key) |
 | `document_collections` | 0 |  | PROJECT | N | SC | collection_id -> project | OFF | none | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L |  |
-| `document_orders` | 0 | The order one person put one project's documents in. A list of ids: anything absent is new | ACCOUNT | Y | SC | office_id (replaces text owner); project_id | OFF | none | own office / own office (checked) / own office, office immutable / own office | mutable | L |  |
+| `document_orders` | 0 | The order one person put one project's documents in. A list of ids: anything absent is new | PROJECT | N | SC | project_id (NOT NULL) | OFF | none | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L | text owner dropped; derives through the project |
 | `documents` | 118 | Every document the system holds, whatever fed it in (ADR-0013). Postgres is the store; a c | ACCOUNT | Y | SC | office_id; composite FK (project_id,office_id) | ON/3 | yes | own office / own office (checked) / own office, office immutable / own office | mutable (state machine) | H | retrieval-critical: carries office_id so search cannot cross; 4 global unique indexes must be re-scoped |
 | `drive_watch` | 1 | Where each attached Drive folder's change feed has got to. Separate from project_attachmen | INTEGRATION | N | SO | attachment_id -> project -> office | OFF | none | none / none / none / none | mutable | M |  |
-| `duty_said` | 5 | The last thing each scheduled duty actually said, so it can say it again when it CHANGES r | ACCOUNT | Y | SO | office_id (project nullable) | OFF | none | none / none / none / none | mutable | L | per-duty memory for say_once; must not dedupe across offices |
+| `duty_said` | 5 | The last thing each scheduled duty actually said, so it can say it again when it CHANGES r | PROJECT | N | SO | project_id (NOT NULL) | OFF | none | none / none / none / none | mutable | L | derives through the project |
 | `eval_cases` | 20 |  | HARNESS | N | SO | none | ON/0 | yes | none / none / none / none | operator | L | RLS on, zero policies |
 | `eval_runs` | 15 |  | HARNESS | N | SO | none | ON/0 | yes | none / none / none / none | append | L |  |
 | `eval_scores` | 171 |  | HARNESS | N | SO | none | ON/0 | yes | none / none / none / none | append | L |  |
 | `event_triggers` | 0 | WHEN x happens FROM s IF c THEN make job j FOR project p, subject to dedupe, debounce, coo | ACCOUNT | Y | SC | office_id; project nullable | OFF | none | own office / own office (checked) / own office, office immutable / own office | mutable | M | 0 rows |
-| `events` | 9,958 | Append-only event ledger (§6). Never updated, never deleted — enforced by REVOKE, a row tr | ACCOUNT | Y | SC | office_id; project nullable | ON/2 | yes | own office / own office (checked) / never / never | append-only | M | feeds Recent activity; a reader without an office filter is the leak |
+| `events` | 9,958 | Append-only event ledger (§6). Never updated, never deleted — enforced by REVOKE, a row tr | ACCOUNT | Y | SC | office_id; system events belong to the deployment SYSTEM office | ON/2 | yes | own office / own office (checked) / never / never | append-only | M | feeds Recent activity; a reader without an office filter is the leak |
 | `failure_signatures` | 0 | #132. A repeated failure is one row with a count rather than eleven rows. There is deliber | JOB | N | SO | last_job_id -> job | ON/1 | yes | none / none / none / none | upsert | M | 0 rows; repeated-failure reader must filter by office |
 | `feedback` | 7 | What Grant thought of something. `origin_channel` matters: a reaction is a weak signal and | ACCOUNT | Y | SC | office_id | ON/2 | yes | own office / own office (checked) / never / never | append | L | 7 rows; no reader (check:consumed baseline) |
 | `google_services` | 4 | One row per Google service that can be connected with a single button. Scopes live here ra | SYSTEM | N | SO | none (catalogue of connectable services) | ON/1 | yes | none / none / none / none | operator | L |  |
@@ -98,8 +99,8 @@ Enabling RLS on the 46 tables is necessary and not sufficient, and a user-scoped
 | `office_members` | 2 | The people whose authenticated session the office will answer. Not a copy of auth.users: t | INTEGRATION | N | SO | email -> owner_key text | OFF | none | none / none / none / none | mutable | H | RETIRED by offices; email-keyed, mutable identity |
 | `operator_senders` | 5 | The dedupe-key namespaces (the part before the first colon) of senders that legitimately d | HARNESS | N | SO | none | OFF | none | none / none / none / none | operator | M | dedupe-key namespaces of legitimate senders |
 | `output_shapes` | 7 | #130. What an output of a given shape must carry. Rows rather than TypeScript types, becau | SYSTEM | N | SO | none | ON/1 | yes | none / none / none / none | operator | L |  |
-| `outputs` | 13,957 | §10. The metadata block is NOT NULL because an output that cannot say how confident it is, | ACCOUNT | Y | SC | office_id; composite FK (job_id,office_id) | ON/3 | yes | own office / own office (checked) / state column only / never | insert (immutable) | H | answers enter later prompts via conversation_before: retrieval-critical |
-| `plane_layouts` | 1 | Where Grant dragged each card on a project's map, and how far he zoomed (#25, 0380). Keyed | ACCOUNT | Y | SC | office_id (replaces text owner); project_id | OFF | none | own office / own office (checked) / own office, office immutable / own office | mutable | L |  |
+| `outputs` | 13,957 | §10. The metadata block is NOT NULL because an output that cannot say how confident it is, | JOB | N | SC | job_id (NOT NULL) -> jobs.office_id | ON/3 | yes | via parent chain / via parent chain (checked) / state column only / never | insert (immutable) | H | derives: job_id is NOT NULL, so one guaranteed path; read by conversation_before through the job |
+| `plane_layouts` | 1 | Where Grant dragged each card on a project's map, and how far he zoomed (#25, 0380). Keyed | PROJECT | N | SC | project_id (NOT NULL) | OFF | none | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L | text owner dropped; derives through the project |
 | `preference_instructions` | 24 | What Grant said, and what it was taken to mean. Kept so that "why was I not told about thi | ACCOUNT | Y | SC | office_id; command_id | ON/2 | yes | own office / own office (checked) / never / never | append | M | what he said and what it was taken to mean |
 | `preference_proposals` | 0 | Inert. A proposal changes nothing; accepting one writes a preference_instructions row, and | PROJECT | N | SC | project_id; instruction | ON/2 | yes | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L | 0 rows |
 | `project_aliases` | 2,497 | Every way Grant refers to a project. Many aliases, one project — enforced globally, becaus | PROJECT | N | SC | project_id | ON/1 | yes | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | H | uniqueness of a phrase is GLOBAL today: must become per office |
@@ -107,7 +108,7 @@ Enabling RLS on the 46 tables is necessary and not sufficient, and a user-scoped
 | `project_briefs` | 1 | Briefs are append-only history, not a current-value column on projects: "what did we think | PROJECT | N | SC | project_id | ON/2 | yes | via parent chain / via parent chain (checked) / never / never | append-only | M |  |
 | `project_connector_choices` | 115 | What Grant has decided about a connector a project does not have: `declined` (leave it alo | PROJECT | N | SC | project_id | ON/1 | yes | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L |  |
 | `project_references` | 1 | #35. Something a dashboard project POINTS AT that we cannot log into — a website, an API,  | PROJECT | N | SC | project_id | ON/0 | yes | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L | RLS on, zero policies |
-| `project_seen` | 3 | When Grant last opened each dashboard project, per person (#122, 0381). In the office rath | ACCOUNT | Y | SC | office_id (replaces text owner); project_id | OFF | none | own office / own office (checked) / own office, office immutable / own office | mutable | L |  |
+| `project_seen` | 3 | When Grant last opened each dashboard project, per person (#122, 0381). In the office rath | PROJECT | N | SC | project_id (NOT NULL) | OFF | none | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L | text owner dropped; derives through the project |
 | `project_staff` | 1 | #36. A DECISION about one staff member on one project — off it, back on it, or given a loc | PROJECT | N | SC | project_id | ON/0 | yes | via parent chain / via parent chain (checked) / via parent chain, office immutable / via parent chain | mutable | L | RLS on, zero policies |
 | `project_switches` | 278 | Append-only log of project context changes. The current context is the latest row; the his | PROJECT | N | SC | project_id (scope key must include office) | ON/2 | yes | via parent chain / via parent chain (checked) / never / never | append-only | M | current_project(scope,chat) must take the office |
 | `projects` | 1,794 | Authoritative project registry. Postgres owns this, never Notebook (§7) — a Notebook outag | ACCOUNT | Y | SC | office_id | ON/3 | yes | own office / own office (checked) / own office, office immutable / own office | mutable | H | slug unique globally; notebook_ref unique globally |
@@ -170,9 +171,9 @@ These are the tables #399 is about. The list is the live catalogue, not the issu
 | `contacts` | 0 | PROJECT | SC | 0 rows; PII; #172 strong tier |
 | `decisions` | 324 | PROJECT | SC | project_id; from_job |
 | `document_collections` | 0 | PROJECT | SC | collection_id -> project |
-| `document_orders` | 0 | ACCOUNT | SC | office_id (replaces text owner); project_id |
+| `document_orders` | 0 | PROJECT | SC | text owner dropped; derives through the project |
 | `drive_watch` | 1 | INTEGRATION | SO | attachment_id -> project -> office |
-| `duty_said` | 5 | ACCOUNT | SO | per-duty memory for say_once; must not dedupe across offices |
+| `duty_said` | 5 | PROJECT | SO | derives through the project |
 | `event_triggers` | 0 | ACCOUNT | SC | 0 rows |
 | `icon_defaults` | 61 | SYSTEM | SO | product default; per-office edit DEFERRED |
 | `job_branches` | 185 | JOB | SO | job_id |
@@ -191,8 +192,8 @@ These are the tables #399 is about. The list is the live catalogue, not the issu
 | `notebook_spend` | 8 | PROJECT | SO | project_id; job_id |
 | `office_members` | 2 | INTEGRATION | SO | RETIRED by offices; email-keyed, mutable identity |
 | `operator_senders` | 5 | HARNESS | SO | dedupe-key namespaces of legitimate senders |
-| `plane_layouts` | 1 | ACCOUNT | SC | office_id (replaces text owner); project_id |
-| `project_seen` | 3 | ACCOUNT | SC | office_id (replaces text owner); project_id |
+| `plane_layouts` | 1 | PROJECT | SC | text owner dropped; derives through the project |
+| `project_seen` | 3 | PROJECT | SC | text owner dropped; derives through the project |
 | `relations` | 1 | PROJECT | SC | derived edges are views; stored edges only |
 | `signals` | 363 | ACCOUNT | SC | office_id; project nullable |
 | `standing_authorizations` | 1 | ACCOUNT | SC | project NULL means office-global; two partial unique indexes gain office_id |
@@ -214,7 +215,7 @@ They deny everything to every non-bypass role today. The target keeps them denie
 | `connector_capabilities` | SO | SYSTEM |
 | `contact_label_links` | SC | PROJECT |
 | `contact_labels` | SC | ACCOUNT |
-| `dashboard_layouts` | SC | ACCOUNT |
+| `dashboard_layouts` | SC | PROJECT |
 | `eval_cases` | SO | HARNESS |
 | `eval_runs` | SO | HARNESS |
 | `eval_scores` | SO | HARNESS |

@@ -1,6 +1,6 @@
 # 0060 - one auth account, one private office, many projects
 
-Status: **proposed** (multi-user research, 1 October 2026). Becomes accepted when the implementation session is
+Status: **proposed** (multi-user research, 1 October 2026; amended after two adversarial reviews, `docs/multi-user/REVIEWS.md`). Becomes accepted when the implementation session is
 authorised. Baseline `41de1965`. Full design: `docs/multi-user/ARCHITECTURE.md`.
 
 ## Context
@@ -18,20 +18,26 @@ No prior multi-user implementation exists in the repository (`LEGACY-BRANCH-REVI
 ## Decision
 
 1. **The ownership primitive is a row in `public.offices`**, with its own `office_id uuid` and a `unique(auth_user_id)`
-   reference to `auth.users`. One auth account owns at most one office. `kind` is `person | sample | test`; `state` is
-   `active | disabled`.
+   reference to `auth.users`. One auth account owns at most one office. `kind` is `person | sample | test | system`
+   (`system` is the single per-deployment office for work no human owns; no session resolves to it); `state` is
+   `active | disabled`; `kind` and `auth_user_id` are immutable. `uses_system_integrations` marks the one office allowed to
+   use the deployment's own credentials.
 2. **A person is identified by their auth user id, never their email.** Email is a login credential. An unknown,
    disabled, missing or duplicated binding fails closed.
 3. **`office_id` is written, `NOT NULL` and immutable on the carriers** — roots, press targets, retrieval-critical
-   tables and bindings (50 of 129 tables). Everything else derives ownership through a foreign key. A carried column
+   tables and bindings (44 of 129 tables; a table may derive only if it has a NOT NULL single FK path to a carrier — measured, six do). Everything else derives ownership through a foreign key. A carried column
    beside a parent key is made unable to disagree by **composite foreign keys** `(parent_id, office_id)`.
-4. **Every function reached by a person, a channel or a worker takes a required `p_office` with no default**, supplied by
-   trusted code from a verified session or a durable row, never from a request, and verifies every id it receives
-   against it. A job-derived function derives the office from the job. A miss and a foreign row are indistinguishable.
-5. **RLS is turned on for all 46 tables and given an office policy on the 56 private ones; it is a backstop, not the
-   boundary.** The gateway and worker bypass RLS by role. `anon` and `authenticated` get no policy and no grant, ever.
+4. **Every function a person, a channel or an MCP client can reach takes a required `(p_office, id)` with no default**,
+   the office supplied by trusted code from a verified session or a claimed job — never from a request, and **never
+   derived from a row the caller named** — verifying every id against it. Only functions unreachable with an arbitrary
+   id may derive from a job. A miss and a foreign row return the same status and body.
+5. **RLS is turned on for all 46 tables with the same `ai_team_app` policy the other 83 have; it is a tripwire, not the
+   boundary.** The gateway and worker bypass RLS by role; no office policies or `act_as` in V1 (nothing connects as a
+   non-bypass role; a custom setting is spoofable). `anon` and `authenticated` get no policy and no grant, ever.
 6. **Test containment is derived from `offices.kind`**, joined at the one question both external boundaries ask
-   (`app.may_act_outside`), never copied onto rows.
+   (`app.may_act_outside`) plus a destination-office check in `claim_delivery`, never copied onto rows. `sample`/`test`
+   offices map to the **`harness`** principal kind, so system-wide actions (`OPERATOR_ONLY`) are unreachable to them.
+   **Fixed-name credential reads are guarded first** (`system_secret`), because they are reachable today.
 7. **The shared staff roster, the capability catalogue and the autonomy matrix with its level-3 floor stay global.**
    Everything they *learn, hold or are granted* is office-owned.
 8. **Nothing about organisations, memberships, invitations, roles or tenant switching is built.**
@@ -86,6 +92,6 @@ Scored on the brief's criteria (✓ good, ~ acceptable, ✗ poor).
 ## Open decisions (recommended defaults, not questions)
 
 D1 harness traffic stays in Grant's office with its flags; new suites use test offices · D2 the test principal and the
-quarantine share one test office · D3 system `events` with no derivable office carry a null `office_id` constrained to
-`actor = 'system'`, never Grant · D4 moving Grant's fixed-name Vault secrets behind refs is a separate,
+quarantine share one test office · D3 *(resolved by review)* system events and system duties belong to the `system`
+office, never null and never Grant · D4 moving Grant's fixed-name Vault secrets behind refs is a separate,
 operator-confirmed step · D5 Telegram/Slack linking is operator-provisioned in V1.

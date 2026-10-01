@@ -1,5 +1,9 @@
 # The Sample User — the acceptance environment for multi-user V1
 
+> **Amended after the adversarial reviews (`REVIEWS.md`):** reset is *retire and re-provision* (no purge function, no ledger
+> exception); the Sample is a **`harness`-kind principal** (so the system-wide actions are unreachable to it); and its
+> "disconnected" integrations are enforced by the fixed-name credential guard, not by a display row.
+>
 > Design only. Nothing here has been created in production. No auth user, office, project or row exists for the
 > Sample User. Baseline `41de1965`.
 
@@ -84,36 +88,32 @@ control: a recorder that cannot see the canary proves nothing).
 
 ## 5. Seeding, aging and reset
 
-**Provision** (`npm run sample:provision`, idempotent): create the auth user (admin API) → `provision_office(kind =>
+**Provision** (`npm run sample:provision`, idempotent per generation): create the auth user (admin API) → `provision_office(kind =>
 'sample')` → a sequence of gateway calls *as Jordan's session* that create the projects, tasks, documents and
 conversation → enqueue the three real jobs (delegation, research, plan-needing-approval) and wait for them.
 Because it uses the product's writers, every row has the same provenance a real one would; there is no second code path
 to rot.
 
-**Aging.** "Late" and "Stuck" need time to have passed. Writing `updated_at` directly is reverted by
-`projects_touch_updated_at` and its siblings (CLAUDE.md records this trap), so aging is one sanctioned function,
-`app.seed_age(p_office, …)`, which (a) refuses unless `offices.kind = 'sample'`, (b) sets the few timestamps the
-surfaces compute from inside a transaction that suspends only those touch triggers, and (c) is the only code allowed
-to. Its control test points it at Grant's office and a `person` office and must be refused.
+**Aging.** "Late" is a task created with a past `due_on` through the product writer (confirm in P0 that the writer
+accepts a past date). "Stuck" needs a job parked past the waiting threshold; writing `updated_at` directly is reverted by
+`projects_touch_updated_at` and its siblings (CLAUDE.md records this trap). **Only if P0 shows the product cannot produce
+a stuck job without time passing** does a sample-only `app.seed_age(p_office, …)` exist; it would refuse unless
+`offices.kind = 'sample'`, with a control pointing it at Grant's office. Otherwise there is no aging code at all.
 
-**Reset** (`npm run sample:reset`, idempotent): `app.purge_sample_office(p_office)` then provision again.
+**Reset** (`npm run sample:reset`, idempotent) is **retire and re-provision** (Review B, S6): set the old office
+`state = 'disabled'`, then provision a new `sample` office with a fresh auth user (a new `+N` alias of the same
+operator-controlled address) and the same deterministic content.
 
-Jobs and ledgers are append-only ("a job cannot be deleted"), so a naive reset leaves the debris pile CLAUDE.md
-describes (thirty-two debris projects from one afternoon). The design that avoids it:
-
-- The purge is **one** `SECURITY DEFINER` function callable only by the service role. It deletes in dependency order
-  *by `office_id`*. Because every dependent row is in the same office (composite FKs), the deletion set is complete
-  without enumerating tables by name, and **cannot include a row of another office** — there is no foreign key that
-  could lead there.
-- The append-only triggers get one narrow exception: they allow `DELETE` when a transaction-local setting names an
-  office and that office's `kind = 'sample'`. The setting is set only inside `purge_sample_office`.
-- It refuses unless `kind = 'sample'`, refuses if the office has any `deliveries.state = 'sent'` (a sample must never
-  have sent anything — if it did, that is an incident, not a reset), and writes an `events` row to a system ledger
-  **outside** the office before deleting.
-- Controls (must be red): (1) call it on Grant's office → refused; (2) call it on a `person` office → refused;
-  (3) snapshot per-table row counts for every non-sample office before and after a purge → identical; (4) sabotage the
-  `kind` check → control (1) goes red.
-- It deletes the **data**; the `offices` row and `auth.users` row stay so the account is stable across resets.
+- A disabled office is already refused by the gateway and every adapter and skipped by `dequeue_job`; its rows stay,
+  quarantined by their own `office_id`. The database is small and the debris is inert.
+- **Reset is incapable of deleting Grant's data because it deletes nothing.** That replaces `purge_sample_office`, the
+  narrow exception to the append-only triggers, the "never sent" pre-check and the pre-delete event — the one deliberate
+  hole in the evidence tables the first design had (Review A F11 also showed it could not have worked: three ledgers
+  have no `office_id`).
+- Controls: (1) reset leaves every non-sample office's per-table row counts identical; (2) `sample:reset` pointed at
+  Grant's or any `person` office is refused (it only accepts `kind = 'sample'`); (3) the retired office cannot sign in,
+  be dequeued, or deliver.
+- Determinism: the content is a function of a version string, so two generations are comparable.
 
 ## 6. Containment — structural, not a flag
 
@@ -123,8 +123,13 @@ Copying a flag onto each of those is the pattern that failed seven times in this
 
 - `office_id` is on every job and immutable, so a child, retry, resume or recovery is still in the sample office.
 - `app.may_act_outside(p_job_id)` is the one question the delivery guard and the worker's external-write gate both
-  ask. It becomes `app.job_origin(p_job_id) in ('trusted','internal') and (select o.kind = 'person' from offices o join
-  jobs j using (office_id) where j.job_id = p_job_id)`. One edit, both boundaries.
+  ask. It becomes (sketch) `app.job_origin(p_job_id) in ('trusted','internal') and exists (select 1 from public.offices o join
+  public.jobs j on j.office_id = o.office_id where j.job_id = p_job_id and o.kind = 'person')`, spliced from the live 0603
+  definition. One edit, both boundaries; `claim_delivery` additionally requires the destination's office to equal the
+  delivery's.
+- The Sample's **principal kind is `harness`** (`offices.kind` `sample`/`test` → `harness`): it can press Approve on its own
+  questions (decisions carrying `by` are allowed and checked by `authority_refusal`) and **cannot** reach any `OPERATOR_ONLY` action
+  (`set_setting`, `disconnect`, `staff_hire`, …), which Review A showed a `person`-kind session could (F2).
 - A sample job therefore can never message Grant, his Slack, his Telegram, his contacts or any ordinary external human,
   **even if** a handler is wrong or a model is persuaded: the effect doors refuse on the office.
 - Sample has **no** `subject_identities`, `telegram_chats` or `slack_workspaces` rows. There is nowhere for a
@@ -143,9 +148,10 @@ audio to `voice/note` with Jordan's JWT → words returned → the page sends th
 `origin_channel='voice'`, `office_id = sample`. Assertions: transcription is attributed to the sample office's subject,
 not `VOICE_SUBJECT`; the turn lands in the sample thread; a second user's session id cannot post a turn into it.
 
-**Realtime voice** — Jordan's session mints a `voice_sessions` row and a client secret. A scripted check asserts:
-the instructions contain Jordan's `voice_state(p_office)` and **no** Grant text; a turn with a session id from another
-office is refused; an expired id is refused. The audio conversation itself is a manual acceptance step (it needs a
+**Realtime voice** — Jordan's JWT mints a client secret from `voice-token` (which now requires one). A scripted check asserts:
+the instructions contain Jordan's `voice_state(p_office)` and **no** Grant text; a turn that presents another office's
+session id with Jordan's JWT lands in **Jordan's** office and conversation (the office comes from the JWT, never the
+session id), and `voice-token` without a JWT is refused (E1). The audio conversation itself is a manual acceptance step (it needs a
 microphone and spends the deployment's OpenAI key); the design does not pretend a scripted test covers it. If the
 operator does not want the key spent, the truthful state is "realtime voice: minting verified, conversation not
 exercised", written into the acceptance report.
@@ -155,7 +161,7 @@ exercised", written into the acceptance report.
 | Dishonesty | Control |
 |---|---|
 | a surface fed by direct `INSERT` that no product path could produce | provisioning goes through the gateway as Jordan; a check lists any sample row whose provenance columns are null |
-| an integration shown connected without a credential | `connection_health` for sample is asserted `not_connected` for all six; a test tries to read Google data and expects the truthful refusal |
+| an integration shown connected without a credential — **or the reverse: credentials silently resolving globally** | `connection_health` for sample is `not_connected` for all six **and** the fixed-name secret guard (`system_secret`) refuses the Sample: a test calls `GET ?section=drive` as Jordan and expects the truthful refusal with **no Google request made** (Review A F1: this path really did browse Grant's Drive for any session) |
 | Sample classification lost on a retry | the suite kills a sample job mid-run, lets `recover_stalled_jobs` requeue it, and asserts `office_id` and `kind` unchanged and still containment-refused |
 | Sample reaching Grant through a duty | sample's `responsibilities` are seeded; a duty fires; its `deliveries` are asserted dashboard-only |
-| reset deletes something it should not | controls in §5 |
+| reset deletes something it should not | reset deletes nothing; controls in §5 |

@@ -3,6 +3,11 @@
 > **Status: research and design. Nothing here is applied.** Baseline `origin/main` = `41de1965`, migrations through
 > 0646, researched 1 October 2026. Decision record: ADR-0060. Companion documents are listed at the end.
 >
+> **Amended after two adversarial reviews (`REVIEWS.md`).** Where this document and the reviews' log differ, this
+> document is current. The changes that mattered: a `system` office; credentials guarded *first*; `OPERATOR_ONLY` actions
+> and a `kind → principal` mapping; explicit (never parent-derived) office on inserts; no `act_as`/office RLS policies
+> in V1; no `voice_sessions`; Sample reset = retire and re-provision; 44 (not 50) carriers.
+>
 > **Rule for reading this document:** where it says *today*, it was read from the code or queried read-only from
 > production on 1 October. Where it says *proposed*, it is a design to be challenged, not a fact.
 
@@ -15,13 +20,14 @@
    behalf) creates or addresses by id. Everything else derives ownership through a foreign key.
 4. **Composite foreign keys** `(parent_id, office_id)` make a cross-office relationship impossible to store, for every
    writer including the service role. This is the main protection.
-5. Every function a user, a channel or a worker reaches takes a **required `p_office`** (no default) supplied by
-   trusted code from a verified session or a durable row — never from a request body — and checks every id it
-   receives against it. Functions that receive a `job_id` or a `command_id` derive the office from that row.
-6. **RLS is a backstop, not the boundary.** The gateway and the worker connect as `service_role`/`postgres`, which
-   bypass RLS. RLS still gets turned on everywhere, closed to every public key, and given an office policy for the
-   server role on the private tables, so a mis-granted role fails closed and the isolation suite can drive real
-   policies.
+5. Every function a user, a channel or an MCP client can reach takes a **required `(p_office, id)`** (no default),
+   with the office supplied by trusted code from a verified session or a durable claimed job — never from a request
+   body — and checks every id against it. Only functions **no external caller can reach with an arbitrary id** may
+   derive the office from a `job_id`/`command_id`.
+6. **RLS is a tripwire, not the boundary.** The gateway and the worker connect as `service_role`/`postgres`, which
+   bypass it. RLS is turned on for all 129 tables with the same `ai_team_app` policy the other 83 already have, and
+   no policy or grant for a public role, ever. Office policies are deferred hardening, because nothing connects as a
+   non-bypass role.
 7. Retrieval takes `p_office` as a required argument. The office filter is inside the SQL that fetches the rows, so
    another office's text never reaches the prompt.
 8. Slack, Telegram and both voice features resolve **channel identity → office** through one table
@@ -66,14 +72,19 @@ Full comparison and the rejected options are in ADR-0060. The choice:
 ```sql
 create table public.offices (
   office_id    uuid primary key default gen_random_uuid(),
-  auth_user_id uuid not null unique references auth.users(id) on delete restrict,
-  kind         text not null default 'person' check (kind in ('person','sample','test')),
+  auth_user_id uuid unique references auth.users(id) on delete restrict,   -- null only for the system office
+  kind         text not null default 'person' check (kind in ('person','sample','test','system')),
   name         text not null,
   state        text not null default 'active' check (state in ('active','disabled')),
+  uses_system_integrations boolean not null default false,   -- true ONLY for the primary person office
+  timezone     text not null default 'UTC',
   created_at   timestamptz not null default app.now_utc(),
   disabled_at  timestamptz,
-  constraint offices_disabled_has_time check ((state = 'disabled') = (disabled_at is not null))
+  constraint offices_disabled_has_time check ((state = 'disabled') = (disabled_at is not null)),
+  constraint offices_system_has_no_login check ((kind = 'system') = (auth_user_id is null))
 );
+-- kind and auth_user_id are immutable (trigger): a mis-set kind would turn Sample containment on or off for Grant.
+-- exactly one 'system' office exists (unique partial index): where system jobs, system events and duties-with-no-owner live.
 ```
 
 - **One auth account ↔ one office** is the `unique` on `auth_user_id`. A second binding attempt is a unique
@@ -82,8 +93,10 @@ create table public.offices (
   is ever recreated (a deleted user, a provider change), the repair is one `update` of `offices.auth_user_id`, not a
   re-key of every table. Keying every table on `auth.users.id` would tie the data's integrity to the identity
   provider's lifecycle.
-- **`kind` is the classifier for test traffic.** `person` is a human. `sample` is the acceptance office. `test` is an
-  ephemeral office a suite creates. A job's containment is a join to its office, not a flag copied onto the job
+- **`kind` is the classifier.** `person` is a human. `sample` is the acceptance office. `test` is an ephemeral office
+  a suite creates. `system` is the one per-deployment office for work no human owns; **no session can resolve to it**
+  and no `p_office` function can read it, so there is no 'job without an office' anywhere. `uses_system_integrations`
+  marks the one office allowed to use the deployment's own Google/Notion/Slack/Vikunja credentials (§12). A job's containment is a join to its office, not a flag copied onto the job
   (0303/0304 is the record of what a copied flag costs).
 - Product-visible vocabulary is "your office". The words *tenant*, *workspace*, *account* and *organization* do not
   appear in any user-facing string; `office_id` is the column name everywhere.
@@ -99,9 +112,13 @@ foreign key and a second copy would be a second thing that can disagree.
 3. It is **retrieved into a prompt** (`documents`, `outputs`, `lessons`, `skills`, `mail_messages`, `jobs`'
    conversation) — so the filter must be one indexed predicate on the table that is read.
 4. It is a **credential or channel binding** (`slack_workspaces`, `subject_identities`, `telegram_chats`, …).
+5. It has **no single NOT NULL path** to a carrier (a nullable `project_id`/`job_id`, or two parents).
 
-Result (`TABLE-REVIEW-399.md`): of 129 tables, **50 carry `office_id`** (9 of them *replace* an existing text `owner`
-column, so 41 are new columns) and 79 derive it. Every derived table has a foreign-key path to a carrier; that path is
+Result (`TABLE-REVIEW-399.md`): of 129 tables, **44 carry `office_id`** (4 of them *replace* an existing text `owner`
+column, so 40 are new columns; five more text-`owner` tables drop the column and derive through their project) and 85
+derive it. **A table may derive only if it has a NOT NULL foreign-key path to a carrier** — measured, not assumed: six
+do. `documents.project_id` and `undoable_actions.job_id` are nullable in the schema even though no row is null today, so
+they carry the column. Every derived table has a foreign-key path to a carrier; that path is
 listed per table.
 
 ### How the redundancy cannot disagree
@@ -159,9 +176,11 @@ Supabase session (JWT)
 | **Unknown auth identity** | No `offices` row → 403. The gateway never creates one. |
 | **Account row missing** for an identity that signed in before | Same: 403 `no_office`, plus an audit event naming the auth id. |
 | **Duplicate binding attempted** | `unique(auth_user_id)` rejects it. The attempt is an `events` row, not a silent success. |
-| **Grant's existing account** | One-time, deterministic binding in migration (§ Grant migration in `MIGRATION-PLAN.md`): his auth id `9d32c8c2…` ↔ a new `offices` row `kind='person'`. Every historical row is stamped only after the characterisation queries pass. |
+| **Grant's existing account** | One-time, deterministic binding in migration (§ Grant migration in `MIGRATION-PLAN.md`): his auth id ↔ a new `offices` row `kind='person'`. Every historical row is stamped only after the characterisation queries pass. |
 | **Sample User** | A real auth user (an address under a domain the operator controls and that cannot receive customer mail) bound to an `offices` row `kind='sample'`. Same code path as Grant. |
-| **The machine key** | Names **no** person and **no default office.** For calls that need an office it must say which (`x-office-id`); a call that needs one and lacks it is refused. It cannot answer approvals (already true, 0614). |
+| **Principal kind** | `offices.kind` maps to the gateway's principal kind: `person → person`; `sample`, `test → harness`. A *harness* principal may already run only decisions that carry `by` and are checked by `authority_refusal` ("a test principal decides only test traffic") — exactly what the Sample needs — and cannot reach any `OPERATOR_ONLY` action. |
+| **`OPERATOR_ONLY` actions** | `set_setting`, `routing_set`, `bot_assign`, `staff_hire/update/retire`, `set_slack_credentials`, `disconnect`, `forget_google` (system-wide, or they delete the deployment's fixed-name credentials). Refused to every session unless the office has `uses_system_integrations`; always allowed to the machine key. Before a **second real person** exists they either get per-office versions or stay operator-only. Today `person` may do everything (`hq-api:1645`), so this is built first. |
+| **The machine key** | Names **no** person and **no default office.** For calls that need an office it must say which (`x-office-id`, audited); a call that needs one and lacks it is refused. It cannot answer approvals (already true, 0614). **`hq.api_token` is rotated before enforcement**, after Grant's devices are on signed-in sessions: browsers have held it since ADR-0043, and with offices it would otherwise be a universal cross-office key. |
 | **`verify-operator` (test principal)** | Bound to its own `kind='test'` office. Suites that need to act in a particular office use the machine key with an explicit office. |
 
 `office_members` is retired once every consumer has moved (it is email-keyed, mutable, and its `owner_key` default
@@ -193,6 +212,20 @@ Each attack from the brief, and the mechanism that makes it structurally fail:
 | A's integration used by B | `slack_app_credentials`, `office_credentials`, `mcp_providers` carry `office_id`; the function that resolves a secret takes `p_office` and refuses a ref the office does not own (§12) |
 | A's standing authorization used by B | `standing_authorizations(project_id, office_id) → projects`; `autonomy_for(p_office, p_project)` reads only the caller's office |
 
+**Secondary edges are in the matrix too** (Review A, F4/F8). A composite key is only as good as the list of edges it
+covers. Every foreign key between two tables with different owners-of-record gets one, or is derived through the
+carrier: `jobs.origin_command_id`, `inbound_commands.job_id`, `documents.produced_by_job`,
+`documents.mirrors_document_id`, `tasks.job_id`, `tasks.parent_task_id`, `branch_groups`, `job_branches`,
+`consultations`. `relations(from_kind, from_id, to_kind, to_id)` has **no foreign key** on its ids; it carries
+`office_id` and both endpoints are office-checked on write *and* on read, and its error text no longer says which id
+does not exist (that was an existence oracle). The catalogue check enumerates every FK edge and fails on any whose two
+ends resolve to different offices or to no office.
+
+**The source of an office is never a row the caller named.** Deriving a `documents` row's office from the `project_id`
+the caller supplied would make the composite key a tautology: a caller naming another office's project would silently
+write into it. The office comes from the verified session, the channel identity, or a *claimed job* (a child takes its
+parent's); the named project is then **checked against it** and a mismatch is `23503`.
+
 **Uniqueness that has to stop being global.** These are unique across the whole deployment today and would turn two
 offices' colliding names into either a hard error or an existence oracle (B probing whether A holds a name):
 
@@ -214,84 +247,72 @@ duplicate within one office reports itself; across offices there is nothing to r
 
 ---
 
-## 5. RLS — what it is for here
+## 5. RLS — what it is for here (decided after review)
 
 The brief's central invariant: **A cannot read, mutate, authorize, retrieve or infer B's private state, even knowing
-B's identifiers.** The honest analysis of where RLS can and cannot deliver that:
+B's identifiers.** Where RLS can and cannot deliver that:
 
 | Path | Role | Does RLS bound it? | What does |
 |---|---|---|---|
-| Browser → gateway | gateway uses `service_role` | **No** (bypasses) | gateway resolves office from the verified session; every function takes `p_office`; composite FKs |
-| Worker → database | `postgres` (direct) / Management API | **No** | `JobContext.officeId` from the durable job row; required `p_office`; composite FKs |
-| Slack/Telegram/voice edge functions | `service_role` | **No** | channel identity → office (§13–15), then as above |
-| Anyone with the **anon key** | `anon` | **Yes** — and it is already closed | 0642 + `check:anon-exposure` |
-| A future role or mis-grant | `authenticated`, `ai_team_app` | **Yes** | the policies below |
+| Browser → gateway | `service_role` | **No** (bypasses) | office from the verified session; `(p_office, id)` functions; composite FKs |
+| Worker → database | `postgres` / Management API | **No** | `JobContext.officeId` from the durable job row; composite FKs |
+| Slack / Telegram / voice / MCP edge functions | `service_role` | **No** | channel identity → office, then as above |
+| Anyone with the anon key | `anon` | **Yes — already closed** | 0642 + `check:anon-exposure` |
 
-So the layers, strongest first:
+Layers, strongest first: (1) **structural** — composite FKs and immutable `office_id`, true for every writer including
+the service role; (2) **functional** — required `(p_office, id)` with no default; (3) **RLS** — a tripwire.
 
-1. **Structural** (§2, §4): holds for every writer including the service role. This is the real boundary.
-2. **Functional** (§6): `p_office` is required and every id is verified against it. Mechanised by
-   `check:office-scoped` (§6).
-3. **RLS**: defence in depth and a test instrument.
+**V1 RLS decision (what #399 gets).** Every one of the 129 tables has RLS on. The 46 that lack it get
+`to ai_team_app using (true)` — the same shape as the other 83 — so the eleven verify suites that `set local role
+ai_team_app` keep working. **No policy and no grant for `anon` or `authenticated`, ever.**
 
-### The RLS decision, per class (full list in `TABLE-REVIEW-399.md`)
-
-- **Office-scoped (`SC`, 56 tables):** RLS on; one policy `to ai_team_app` using the office predicate
-  (`office_id = app.current_office()`, or `exists` through the parent for derived tables). No policy and no grant for
-  `anon` / `authenticated`.
-- **Service-only (`SO`, 73 tables):** RLS on; **no policy for any non-bypass role.** No user reads these directly —
-  they are system catalogues, harness registries, credential tables and job-internal ledgers, read through
-  projections that filter by office.
-- **Never** a policy for `authenticated`. The browser does not use PostgREST, and the fact that no table is reachable
-  by a public key is a property worth keeping simple. If a direct-from-browser path is ever built it is a new
-  design, not a quiet grant.
-- `app.current_office()` reads a transaction-local setting that only `service_role`-callable
-  `app.act_as(office)` can set, and **returns null when unset** — so a policy that consults it fails closed.
-
-**Why the isolation suite uses RLS at all, if the boundary is elsewhere:** the suite connects as `ai_team_app` with
-`app.act_as(A)` and attacks table by table. That is the only way to prove the policies deny, and a policy that is
-never exercised is a comment. The service-role paths are proven by the function-level and structural attacks
-(`ACCEPTANCE-PLAN.md`).
-
----
+**What was considered and not built:** office policies (`office_id = app.current_office()`), a transaction-local
+setting set by `app.act_as`, and an RLS layer in the isolation suite. They were dropped because (a) nothing connects as
+a non-bypass role, so they would protect no live path; (b) any session that can run SQL can `set_config` a custom
+setting, so a policy keyed on it is spoofable by exactly the roles it is meant to bound; (c) they cost ~56 policies and
+a phase. `TABLE-REVIEW-399.md` records the *future policy shape* per table (`SC`/`SO`) so that if a login role is ever
+introduced the design exists — and the carried `office_id` is what such a policy would key on.
 
 ## 6. Gateway and functions
 
 ### Gateway
-Today: `by`/`personBy` are injected into the RPC call and any client-supplied value is deleted first
-(`hq-api:1676-1688`). Proposed: the same mechanism for the office.
+Today `by`/`personBy` are injected and any client-supplied value is deleted first (`hq-api:1676-1688`). Proposed: the
+same for the office, **and the same discipline for every path that does not go through the generic injection** — the
+gateway has hand-built paths that read the Vault, write storage, or call RPCs directly (`drive`, `googleAccess`,
+`contact_photo`, `document_upload`, `machine_project_ok`, `voice`, `mcp`), which Review A showed are outside the "152
+functions" and outside any signature check.
 
-- The client never supplies `p_office`. The gateway **deletes** any `p_office` / `office_id` / `owner_key` /
-  `x-office-id` field from the request and writes the one it resolved (§3).
-- Where an action takes an id the gateway does not look it up; the function does (below).
-- The machine key must name an office header; the header is honoured **only** for `kind = 'service'`.
-- The gateway's `seen` cache stores `{office_id, kind}` keyed by token.
+- The client never supplies `p_office`; the gateway deletes any `p_office` / `office_id` / `owner_key` / `x-office-id`
+  from the request and writes the one it resolved.
+- **Ownership is checked before any side effect.** `contact_photo` today PUTs to storage at a client-chosen
+  `<projectId>/…` path with `x-upsert` and calls the database afterwards; the order reverses, and storage paths are
+  `<office_id>/…`.
+- A miss and a foreign id return the **same body and the same status** (Review A, F14): the function refuses before a
+  foreign key can, so a `23503` never surfaces as a different HTTP status.
+- `OPERATOR_ONLY` actions and the `kind → principal` mapping are in §3.
 
-### Functions — three families
+### Functions — two families, not three
 | Family | Receives | Rule |
 |---|---|---|
-| **Job/command-derived** | a `job_id` or `command_id` | derive the office from that row; if a `p_office` is also supplied it must equal it, else refuse |
-| **Id-taking** | a `project_id`, `document_id`, `blocker_id`, … | `p_office` required (**no default**); look the row up as `where id = $1 and office_id = p_office`; a miss and a foreign row return the **same** `not_found` (no existence oracle) |
-| **Listing / whole-office** | nothing | `p_office` required; every `from` is filtered by it |
+| **Caller-reachable** (gateway, MCP, channels) | any id, or nothing | `p_office` first, **required, no default**; `where id = $1 and office_id = p_office`; listing functions filter every `from` by it |
+| **Internal-only** (callable only by the worker/SQL with a claimed job) | a `job_id` or `command_id` the caller already holds | may derive the office from that row — **only** if no external caller can reach it with an arbitrary id (Review A, F3: `mcp_job_status(uuid)` reads any job's output, so "derive from the job" is a leak whenever the caller chooses the job) |
 
-Of the 152 gateway functions, 92 are id-taking and 60 are listing. Beneath them sits `app` (588 functions, 518
-`SECURITY DEFINER`) of which the private-data readers form the set to convert; **the exact set is derived, not
-estimated**: Phase 3 of the plan generates it with a transitive call-graph query from the gateway, adapter and
-worker entry points, and `check:office-scoped` then holds it.
+The size of the converted set is **derived, not estimated**: a transitive call-graph query from the gateway map, the
+inline gateway paths, `supabase/functions/*`, the adapters and the worker's `app.*` calls. Of the gateway's 152
+functions, 92 are id-taking and 60 are whole-office listings; `mcp_*` (including `mcp_job_status`, `mcp_search`,
+`mcp_enqueue`) and the **12 job-inserting functions** are in the set (see MIGRATION-PLAN M9.1).
 
-`check:office-scoped` (proposed, in the gate): for every public/app function on the derived reachable set, it fails
-unless the function either (a) has a required `p_office` parameter with no default, (b) takes a `job_id` /
-`command_id` and derives, or (c) is on a named `SYSTEM` allow-list with a reason. Its positive control: an unscoped
-fixture function must be reported (CLAUDE.md: a check that has only ever reported zero is blind). The lesson this
-encodes is *"a parameter with a default is a parameter no caller passes"* — hence **no default**, so tsc and
-PostgREST name every missed call site instead of silently accepting it.
+`check:office-scoped` (in the gate): for every function in the derived set it fails unless it has a required `p_office`
+with no default, or is internal-only with a stated reason, or is on a reasoned system list. A second, small check
+(`check:office-catalogue`) asserts the structural facts in one place: every carrier has `NOT NULL office_id` and an
+immutability trigger; every FK edge in §4 exists; no unique index on a carrier omits `office_id`. Each has a positive
+control (a planted unscoped function; a dropped constraint in a rolled-back transaction). A narrow
+`check:office-scope` ratchet covers **inline paths in the edge functions**; it is deliberately not applied to the 502
+`execute(` sites in `src/`, where `JobContext`, composite FKs and the suite are the protection.
 
 ### Views
-The 14 `public` views run as their owner. Each is either (a) rewritten as a function with `p_office`, or (b) given an
-`office_id` output column and consumed only by functions that filter on it. `needs_me` has eight consumers
-(CLAUDE.md); all eight are in the conversion list. No view is left readable that exposes another office's rows.
-
----
+The 14 views run as their owner. Each is rewritten as a function with `p_office` or given an `office_id` column and
+consumed only by functions that filter on it. `needs_me` has eight consumers (CLAUDE.md); all eight convert.
 
 ## 7. Service role, workers, and "elevated access ≠ user authority"
 
@@ -315,14 +336,13 @@ export interface JobContext { readonly jobId: string; readonly officeId: OfficeI
 | **Child / grandchild** (`enqueue_child`, `enqueue_child_once`) | `office_id` copied from the parent; **`p_project` is validated against it** (today `coalesce(p_project, parent.project_id)` accepts any project — a present weakness, see THREAT-MODEL E3). The composite FK makes a wrong one fail regardless. |
 | **Retry / recover** | same row; `office_id` immutable. `recover_stalled_jobs` is global by design and touches only state. |
 | **Pause / resume / defer** | same row. `resume_job(p_job, p_why)` gains the caller's office check where a person triggers it. |
-| **Scheduled duty** (`dispatch_due_responsibilities`) | `responsibilities.office_id` → the job it creates. A duty belongs to an office; a *system* job (e.g. backup) is `kind='system'` with a nullable-by-design office and **cannot read office tables** (it uses no `p_office` function). |
+| **Scheduled duty** (`dispatch_due_responsibilities`) | `responsibilities.office_id` → the job it creates. A duty belongs to an office; a *system* job (backup, health, recovery) belongs to the **`system` office** — `office_id` is `NOT NULL` for every job — and cannot read any office's tables because no `p_office` function accepts that office. There are **12** job-creating SQL functions, not five; all stamp the office (MIGRATION-PLAN M9.1), and the scripts that insert jobs directly (`replay.ts`, `office/ask.ts`, `verify/context.ts`) pass one. |
 | **Failure / cancel** | state transitions only; the apology owed (`app.owed_a_word`) goes to the originating office's channel. |
 
-**Why not a Postgres session variable for the worker?** The Management API executor is stateless (each call is its own
-transaction, and a multi-statement call returns the *first* statement's result — CLAUDE.md), and a pooled direct
-connection shared between jobs would make "current user" process-global state, which the brief forbids. An explicit
-argument is stateless, greppable and type-checked. The `act_as` GUC exists only for the RLS test instrument and for
-single-statement gateway calls.
+**Why an argument and not a Postgres session variable?** The Management API executor is stateless (each call is its
+own transaction and a multi-statement call returns the *first* statement's result — CLAUDE.md), a pooled direct
+connection shared between jobs would make 'current user' process-global state, and any session can `set_config` a
+custom setting. An explicit argument is stateless, greppable, type-checked, and not spoofable by the thing it bounds.
 
 **The residual risk is raw SQL in handlers** (502 `execute(` calls; ~244 raw references to owned tables). Mitigation,
 in order of strength: (1) composite FKs make cross-office *writes* fail; (2) `check:office-scope` is a ratchet over
@@ -384,6 +404,10 @@ Rules that follow:
 
 - **Provenance is preserved.** Hits already carry `scope` (`this_project`, `other_project`, `account`) and
   `whereFrom`. Multi-user adds an absolute floor under that: the candidate set is the office's.
+- **`app.unnamed_project()` is a global singleton** (`select project_id from projects where slug='unnamed'`, 0334) and
+  `inbound_commands.project_id` is `NOT NULL` defaulting to it. It becomes `unnamed_project(p_office)`: one reserved
+  project per office, created by `provision_office`. Without that, a second office's commands would fail the composite
+  key (or, with per-office slugs, the function would return an arbitrary office's row).
 - **Identical names do not collide.** Alias lookup (`app.resolve_project_by_name`) and the alias uniqueness trigger
   become per-office, so "Venue" in two offices resolves to two projects, each only for its own office.
 - **Never** `retrieve globally → post-filter`. The isolation suite includes a test that fails if any retrieval
@@ -447,9 +471,14 @@ office's. B connecting a provider writes a **new** row under B's office; there i
 B cannot see, use, overwrite or inherit A's credential, and a standing authorization (A's `office_id`) is never
 consulted for B.
 
-**Deliberately deferred:** per-office credentials are not needed for the Sample acceptance (it runs disconnected,
-§SAMPLE) and a *second real person* connecting Google/Notion/Slack is the point at which this table must exist.
-The plan sequences it after the isolation suite is green and before any second real human is invited.
+**The guard that cannot wait (Review A, F1 — verified).** Today `GET ?section=drive` reads the deployment's Google
+refresh token by its fixed Vault name and browses Drive for *any* signed-in session or the machine key; the worker reads
+the same token. `connection_health` showing Sample as "not connected" is a **display row**, not a control. So one
+resolver (`app.system_secret(p_office, name)`) fronts **every** fixed-name secret read — Google, Notion, Vikunja,
+NotebookLM, the Slack fixed names, the GitHub read token — and refuses unless the office has
+`uses_system_integrations`. Per-office *credential rows* (`office_credentials`) remain deferred to before a second
+real human connects a provider; the guard ships in Phase 1, before any second office exists, and has its own attack and
+sabotage.
 
 ---
 
@@ -474,6 +503,8 @@ event → verify signature (unchanged)
 - Bot/harness restrictions (`sender_admitted`, forwarded-content rules, `operator_senders`) are unchanged.
 - Lifecycle events (`tokens_revoked`, `app_uninstalled`) are today applied by signature alone to the envelope's team
   (THREAT-MODEL E4); they gain the same workspace check.
+- **One shared Slack app in V1.** A single `SLACK_SIGNING_SECRET` cannot verify "one app per office"; the app is shared,
+  a *workspace* maps to one office, and a second real human installs the same app in their workspace.
 - **Onboarding a second user** is operator-driven in V1: install the app to their workspace → a
   `slack_workspaces` row with their `office_id` → a `subject_identities` row for their Slack user. A self-serve
   "connect Slack" flow is a later phase and must call the same two writes under their session.
@@ -493,6 +524,11 @@ until bound and a null chat is **never** deliverable; `telegram_chat_for(p_offic
 `telegram.direct_to_grant` and `telegram.only_chief_speaks` become per-office settings (§15). Bots stay shared
 infrastructure.
 
+**Only private chats are deliverable** for any office except the primary's existing office group, which the operator
+binds explicitly (Review A, F13): a group registers with a null subject, so bind-on-first-sight would let the first
+admitted sender claim it, and a group's audience is not an office — another office's member could read replies and press
+inline-approval callbacks.
+
 **Connecting Telegram is optional and operator-provisioned in V1.** ADR-0043/0581 removed the pairing ceremony
 because it was an *office-token* interaction; an identity link is a different thing but it is also not needed to
 reach acceptance. The Sample User does not use Telegram. The self-serve link (a one-time code minted under the
@@ -510,8 +546,11 @@ row carries the `office_id` it was minted for, so the redeeming chat can only bi
   `telegram.only_chief_speaks`, `telegram.pager_floor`, `slack.subject_user_id`, `calendar.*`, `gmail.enabled`,
   `google.granted_scopes`, `notebook.*`, `notion.*`, `conversation.max_turns`, `conversation.window_minutes`,
   `ui.needs_me_cap`, `routing.unnamed_when_unresolved`, `approval.refusal_days`.
-- `office_settings` is read through one function with a **system default**: absence means the system value, so
-  adding the table changes nothing until a key is set.
+- **Deferred to before a second real human** (Review B, T2). V1 adds only `offices.timezone` and a name. The Sample
+  does not use Telegram or Slack, and the tuning knobs (`conversation.*`, `ui.*`, `approval.*`) are not private data. When
+  `office_settings` is built it is read through one function with a **system default** (absence = the system value), so
+  adding it changes nothing until a key is set. Before then, the values of `calendar.*`, `notion.*` and
+  `slack.subject_user_id` must be read once (they were not, in this research) to confirm none holds an id or address.
 
 ## 16. Files and attachments — data, not authority
 
@@ -538,11 +577,12 @@ slug in the session instructions, and binds no server-side session. The session 
 and global. This is a present weakness (THREAT-MODEL E1), independent of multi-user, and it is the single most
 important thing to fix *before* a second office exists.
 
-Proposed: require the session JWT → resolve the office; mint a **server-side** `voice_sessions(session_id uuid pk,
-office_id, project_id, expires_at)` row and return its id with the secret; `voice_state(p_office)` and
-`voice_lookup(p_office, slug)` replace the global readers; every `/voice` turn requires a session id that exists, is
-unexpired and belongs to the **same** office as the JWT; the persona addresses the office's owner by name, not
-"Grant". A reused or guessed session id from another office is refused.
+Proposed (simplified after review): `voice-token` requires the session JWT, resolves the office, and builds the session
+`instructions` from `voice_state(p_office)` and `voice_lookup(p_office, slug)`; the persona names the office's owner.
+**No `voice_sessions` table.** Every `/voice` turn already requires a signed-in person, so the office is taken from the
+JWT on each turn and the conversation key is `(office, session)`; the dedupe key is unique per office. A foreign or
+guessed session id presented with my JWT lands in *my* office and conversation — the attack that mattered (using
+someone else's session) is closed without a table.
 
 The two features share nothing but the transcription provider (system-level).
 

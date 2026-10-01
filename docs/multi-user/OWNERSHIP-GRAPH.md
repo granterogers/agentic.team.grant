@@ -39,7 +39,7 @@ offices ────────────────────────
    │   plane_layouts, project_seen, document_orders, contact_labels   (REPLACE the text `owner`)
    └── bindings (service-only): subject_identities, telegram_chats, slack_workspaces,
        slack_app_credentials, slack_channel_map, knowledge_connectors, mcp_clients,
-       mcp_providers, office_credentials (new), voice_sessions (new), office_settings (new)
+       mcp_providers  (and, deferred to before a second real human: office_credentials, office_settings)
 
 NOT owned by any office (system): staff (8 personas), staff_prompts, tool_permissions, autonomy_policy,
    providers, provider_models, provider_health, model_prices, job_kind_needs, output_shapes, connector_capabilities,
@@ -74,6 +74,8 @@ what `jobs.office_id` records. When a project *is* present the composite FK forc
 
 ## 3. The resource inventory the brief asks for
 
+> Carriers: **44** after the reviews (the 6 tables with a NOT NULL single FK path derive instead; see REVIEWS.md S1).
+
 Class legend: **ACCT** carries `office_id` · **PROJ** derives via `project_id` · **JOB** derives via `job_id` ·
 **BIND** credential / channel binding (service-only) · **SYS** system · **TEST** harness · **LEDGER** append-only
 evidence.
@@ -107,11 +109,11 @@ evidence.
 | Slack mappings | BIND/ACCT | `slack_workspaces`, `slack_app_credentials`, `slack_channel_map`, `subject_identities` | |
 | Telegram mappings | BIND | `telegram_chats`, `subject_identities`; `telegram_bots` is SYS | |
 | Voice sessions (note) | — | stateless transcription; identity at the turn | |
-| Realtime voice sessions | BIND | `voice_sessions` (new) | |
+| Realtime voice sessions | — | no table: the office comes from the JWT on every turn; the session id is a grouping key `(office, session)` | |
 | NotebookLM | BIND/PROJ | `notebook_*` probes/budgets by office; `artifacts` by project | |
 | Drive | BIND/PROJ | `project_attachments` + `drive_watch` | |
-| Scheduled work | ACCT | `responsibilities.office_id` → created jobs | 17 duties, all with no project |
-| System duties | SYS | backup, health, `dispatch_due_responsibilities`, `recover_stalled_jobs` | touch no office table through `p_office` functions |
+| Scheduled work | ACCT / SYS | `responsibilities.office_id` → created jobs; system duties → the `system` office | 17 duties, all with no project; ~6 are system |
+| System duties | SYS | `office.backup`, `office.prune_*`, `office.capacity_report`, `office.slack_rotate`, recovery | owned by the `system` office; read no office table |
 | Caches | — | gateway `seen` and voice `seenSessions` (token-keyed, 60 s); mail/calendar/sync tables are *stores*, owned | none keyed by project name |
 | Claire / specialist state | ACCT | no state on `staff`; state is `lessons`, `skills`, `project_staff`, `staff_tools`, `routing_decisions` (job) | |
 | Audit / provenance | LEDGER | `events`, `job_state_transitions`, `job_impediments`, `routing_decisions`, `undoable_actions` | append-only; carried or derived |
@@ -157,9 +159,11 @@ and 7,901 have no project; `blockers` 462 / 993 have no job (but every blocker h
 neither). Their owner is derived from the blocker, the correlation or the destination, with the same
 provable-or-quarantine rule.
 
-**Text owners.** `appearance_settings`, `workspace_layouts` and `project_seen` hold the single value `grant`. 17 of 17
-`responsibilities` and the sole `standing_authorizations` row have `project_id` null: they are Grant's office-level
-duties and his one global standing grant.
+**Text owners.** `appearance_settings`, `workspace_layouts` and `project_seen` hold the single value `grant`. The 17
+`responsibilities` all have `project_id` null; **about six are system duties** (trace/shot pruning, nightly backup, capacity
+report, Slack rotation, credential chores) that belong to the `system` office and the rest are Grant's — classified by
+job kind in the migration, not assumed. The sole `standing_authorizations` row (project null) is Grant's one office-global
+grant.
 
 **Harness on real projects.** 59 fixture-flagged projects carry non-fixture jobs (the #45 convention: a suite testing a
 fixture filter uses a real subject). These cannot be moved to a test office without breaking the composite FK, so they
@@ -170,9 +174,12 @@ them. No row anywhere identifies a third human.
 
 ## 6. What this graph rules out
 
-- A table with two routes to two offices. Not constructible: every route ends at a carrier and carriers are immutable.
-- A job without an office. `office_id` is `NOT NULL`; there is no "system" office, and system jobs carry no `p_office`
-  and read no office table.
+- A table with two routes to two offices — **except the polymorphic edges** (`relations`, and the job references in
+  `branch_groups`/`consultations`), which have no foreign key on their ids; they are office-checked in the function on
+  write and read (Review A, F8). Everywhere else every route ends at a carrier and carriers are immutable.
+- A job without an office. `office_id` is `NOT NULL` on every job. System work (backup, trace pruning, Slack rotation,
+  recovery) belongs to the single **`system` office**, which no session resolves to and which no `p_office` function
+  can read.
 - An office-global row that is deployment-global by accident (`project_id is null`). Every null-project row is
   `office_id`-keyed, and the two indexes that used to be global gain the column.
 - A second copy of the classification flag. Test containment is `offices.kind`, joined; it is not copied onto jobs

@@ -2,6 +2,11 @@
 
 > Design only. Nothing here exists yet. Baseline `41de1965`.
 >
+> **Amended after the adversarial reviews (`REVIEWS.md`).** The RLS attack layer, `act_as` and the purge sabotage are gone;
+> eight attacks are added (31–38); the id-taking attacks are *generated* from the derived function list and the
+> sabotages run as mutation families; and the suite now also attacks the **inline gateway paths**, which are outside
+> any function map.
+>
 > **The principle this plan is built on** (CLAUDE.md, repeated eleven times in different words): *a check that has only
 > ever passed is indistinguishable from a check that cannot fail.* So every attack below has (a) a positive control
 > that proves the attacker can do the same thing to **their own** data, and (b) a named sabotage that must turn it red.
@@ -23,21 +28,23 @@ keywords, the same alias, the same Slack channel name and Telegram display name,
 unique canary strings (`CANARY-A-<run>`, `CANARY-B-<run>`). `S` is the Sample office. `G` is Grant's real office,
 touched only by L2 reads and refused writes.
 
-**Three attack paths per target**, because the three have different protections:
-1. *Gateway path* — HTTP to the gateway with A's session, B's ids in the body.
-2. *Function path* — direct SQL as `service_role` calling the converted function with A's `p_office` and B's ids (this
-   is what a bug in a service-role caller looks like).
-3. *RLS path* — SQL as `ai_team_app` after `app.act_as(A)`, selecting/updating B's rows (proves the policies, which
-   nothing else exercises).
+**Two attack paths per target** (the RLS path was dropped: nothing connects as a non-bypass role):
+1. *Function path* — direct SQL as `service_role` calling the converted function with A's `p_office` and B's ids. This
+   is what a bug in a service-role caller looks like, and it is where the protection actually is. **Generated** from the
+   derived function list for every id-taking function.
+2. *Gateway path* — HTTP with A's session, B's ids in the body — **once per class of input** (body, query string,
+   header, the machine key with `x-office-id`), to prove the gateway deletes and overwrites client office fields, plus
+   one test for each **inline path** (`drive`, `googleAccess`, `contact_photo`, `document_upload`,
+   `machine_project_ok`, `mcp`).
 
 **Containment of the suite itself.** It declares its origins before knocking (`test_origins`, 0605), uses test offices
 (so effects are refused structurally), and asserts `check:leaks` is unchanged. It never writes a real destination.
 
 ## 2. The thirty attacks
 
-`✓` = defeated at that layer. **Sabotage** names the experiment in §4 that must turn it red.
+`✓` = defeated at that layer. The RLS column is kept only as a record of where an office policy *would* bite if one is ever built; V1 does not exercise it. **Sabotage** names the experiment in §4 that must turn it red.
 
-| # | Attack | Expected | Gateway | Function | RLS | Structural | Sabotage |
+| # | Attack | Expected | Gateway | Function | RLS *(deferred; not exercised in V1)* | Structural | Sabotage |
 |--:|---|---|:-:|:-:|:-:|:-:|---|
 | 1 | A reads B's project (by id, by slug, by name) | `not_found`, identical to a nonexistent id | ✓ | ✓ | ✓ | | S3, S1 |
 | 2 | A updates B's project (rename, archive, icon) | refused; B unchanged | ✓ | ✓ | ✓ | | S3, S1 |
@@ -70,6 +77,14 @@ touched only by L2 reads and refused writes.
 | 29 | Unauthenticated caller reaches private data (no token; expired; a webhook with a bad signature; **the `voice-token` endpoint with no JWT** — E1) | 401/403; nothing in the body | ✓ | | | | S17 |
 | 29b | A **disabled** office keeps working | gateway refuses within the cache TTL; `dequeue_job` skips its jobs | ✓ | ✓ | | | S18 |
 | 30 | Retrieval places B's content in A's **model context** | the recorded provider request bodies for A's run contain no `CANARY-B-<run>` (control: B's run contains it) | | ✓ | | | S6 |
+| 31 | **Fixed-name credential reached by a non-primary office** (`GET ?section=drive`, the worker's Drive read, the Notion/Vikunja/NotebookLM/Slack fixed names) — Review A F1 | refused by `system_secret`; no Google call is made; truthful "not connected" | ✓ | ✓ | | | S20 |
+| 32 | **System-wide action by a Sample/test/non-primary session** (`set_setting`, `routing_set`, `bot_assign`, `staff_hire/update/retire`, `set_slack_credentials`, `disconnect`, `forget_google`) — F2 | `403 operator_only`; `system_config`, staff rows, credentials unchanged | ✓ | | | | S21 |
+| 33 | **MCP cross-office**: a token for A calls `mcp_job_status(B's job)`, `mcp_search` with no project, `mcp_projects`, `read_document` — F3 | A's results only; B's job/doc is `not_found`; absent project = A's projects | | ✓ | | | S22 |
+| 34 | **Storage written before ownership** (`contact_photo`, `document_upload` with B's project/contact ids) — F12 | refused **before** any storage write; B's object bytes unchanged | ✓ | | | | S24 |
+| 35 | **Delivery to another office's destination** (a delivery whose `target_ref` is B's chat) — F10 | `claim_delivery` refuses; nothing sent | | ✓ | | | S25 |
+| 36 | **`relations` / polymorphic edge** to a foreign id; error text probes existence — F8 | refused; the message is identical for foreign and nonexistent | | ✓ | | ✓ | S26 |
+| 37 | **Foreign id vs nonexistent id** return the **same status and same body** (not 200-vs-502) — F14 | byte-identical responses | ✓ | ✓ | | | S27 |
+| 38 | **`unnamed_project` per office**; a second office's null-project command and retrieval | lands in *its* Unnamed project; never another office's | | ✓ | | ✓ | S28 |
 
 Each attack is repeated with **colliding names** (so a name-based lookup that picks "the first match" returns the wrong
 office's row) and with **an id copied from B's response into A's request** (so "A knows B's identifiers").
@@ -100,7 +115,7 @@ twice.
 
 | ID | Sabotage (in the L1 replica, never committed) | Must turn red |
 |---|---|---|
-| S1 | drop the office policy on `projects`, `documents`, `jobs`, `tasks`, `blockers` (one at a time) | RLS-path attacks 1, 2, 3, 8, 9 |
+| S1 | *(removed: RLS office policies are not built in V1)* | — |
 | S2 | drop `tasks_project_same_office` (and each other composite FK in turn) | attack 10 and the matching row of the FK matrix |
 | S3 | make a converted function ignore `p_office` (`where id = $1` only) — for a read, an update and a delete function | attacks 1–4, 8, 12, 14 |
 | S4 | gateway stops deleting a client-supplied `p_office`; and: a function gains a default `p_office := <any office>` | attacks 20, 28 |
@@ -108,19 +123,33 @@ twice.
 | S6 | remove the office predicate from `search_documents`; remove it from `sibling_projects`; remove it from `lessons_for` (each) | attacks 9, 19, 30, P7 inverse |
 | S7 | `hq_answer_blocker` / `press_delivery` / `undo` look up by id only | attacks 5, 6, 7 |
 | S8 | key the gateway `seen` cache by a constant; and: cache alias resolution by phrase only | attack 24 |
-| S9 | make `voice_sessions` lookup ignore `office_id`; and: accept a client-chosen session id | attack 18 |
+| S9 | take the office from the *session id* instead of the JWT on a voice turn | attack 18 |
 | S10 | make `may_act_outside` ignore `offices.kind` | attacks 22, 23 |
 | S11 | drop the `office_id` immutability trigger | attacks 23, 25, 26 |
 | S12 | restore `or subject is null` in `telegram_chat_for` | attack 16 |
 | S13 | remove "workspace office = sender office" in the Slack path | attack 15 |
 | S14 | `office_secret` resolves by `(service, slot)` without the office | attack 13 |
-| S15 | `purge_sample_office` stops checking `kind` | the reset control (§SAMPLE 5) |
+| S15 | *(removed: there is no purge; reset retires an office)* | — |
 | S16 | put `VOICE_SUBJECT='grant'` back | attack 17 |
 | S17 | remove the JWT requirement from `voice-token` | attack 29 (E1) |
 | S18 | gateway stops checking `offices.state` | attack 29b |
+| S20 | route a fixed-name secret read around `system_secret` (the `drive` section, then the worker's Drive read) | attack 31 |
+| S21 | remove an action from `OPERATOR_ONLY`; and: map `kind='sample'` to `person` instead of `harness` | attack 32 |
+| S22 | `mcp_job_status` back to `(p_job_id)` only; `mcp_search` null project back to every project | attack 33 |
+| S23 | derive a row's office from the **project the caller named** (the F4 tautology) instead of failing the FK | attacks 10, 11 |
+| S24 | write storage before the ownership check | attack 34 |
+| S25 | drop the destination-office check in `claim_delivery` | attack 35 |
+| S26 | `relations_of` joins the other end with no office filter | attack 36 |
+| S27 | let an FK violation surface as 502 instead of the friendly response | attack 37 |
+| S28 | `unnamed_project(p_office)` back to the global slug lookup | attack 38 |
 | S19 | **harness-of-the-harness:** make a retrieval function return everything, and a policy `using (true)` — and confirm the *positive* controls stay green while the *negative* ones go red | proves the suite distinguishes "refuses everything" from "isolates correctly" |
 
-**Acceptance of the suite itself:** all 19 sabotages produce a red; each sabotaged run prints its proof-of-landing
+**Mutation families, not 28 hand-written cases.** S3/S6/S7/S14/S22/S26/S28 are one mutation — *drop the office predicate from
+function X* — run automatically over the derived function list; S2/S5/S11/S23 are one — *drop or weaken a structural
+constraint* — run over the FK matrix. What is hand-written is the small set of structural and channel cases. Roughly
+**12 attack classes and 8 mutation families**, each with a positive control.
+
+**Acceptance of the suite itself:** every mutation family produces a red; each sabotaged run prints its proof-of-landing
 line; the run with no sabotage is green; `--prove-it` (as `check:backend-ref` has) automates the loop *break → watch
 red → restore → watch green*. Any sabotage that leaves its row green means the corresponding test is inadequate and the
 suite is not accepted.
@@ -146,12 +175,11 @@ conversation is a manual step recorded as such.
 | Check | Asserts | Positive control |
 |---|---|---|
 | `check:office-scoped` | every function on the derived reachable set has a required `p_office` or derives from a job/command, or is on a reasoned system list | an unscoped fixture function is reported |
-| `check:office-scope` | raw SQL in `src/` naming an owned table carries `office_id` or a `JobContext`-derived key; baseline only shrinks | a deliberately unscoped statement is reported |
-| `check:office-integrity` | no row's `office_id` disagrees with its parent's across **every** foreign key edge; no `NOT NULL` carrier has a null | a planted mismatch (in a rolled-back transaction) is found |
+| `check:office-scope` | **inline paths in the edge functions** (`hq-api`, `mcp`, `voice`, `voice-token`, `slack-events`, `telegram-webhook`) that read the Vault, write storage or call an RPC directly must carry the resolved office; baseline only shrinks. Not applied to the 502 `execute(` sites in `src/` | a deliberately unscoped inline path is reported |
+| `check:office-catalogue` | every carrier has `NOT NULL office_id` and an immutability trigger; every FK edge in ARCHITECTURE §4 exists; **no unique index on a carrier omits `office_id`** (merges the old integrity and uniqueness checks; a mismatch row is unstorable after the constraints, so only the *constraints* are checked) | drop a constraint in a rolled-back transaction → found |
 | `check:anon-exposure` (existing) | extended: no table or function reachable by `anon`/`authenticated` | already has controls |
-| `check:uniqueness-scoped` | none of the indexes in ARCHITECTURE §4 is global | a global index is reported |
 
 ## 8. Exit criterion for "isolation works"
 
-All 30 attacks + 29b defeated on all applicable layers; P1–P10 pass; 19/19 sabotages red; `--prove-it` green; L2 clean;
+All 38 attacks (incl. 29b) defeated; P1–P10 pass; every mutation family red; `--prove-it` green; L2 clean;
 Sample acceptance clean; `check:leaks` and `npm run gate` unchanged from baseline.
