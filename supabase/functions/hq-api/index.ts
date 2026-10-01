@@ -109,7 +109,10 @@ const kickWorker = (): void => {
   Short-lived by construction - Google's token lasts an hour and nothing caches
   it beyond one request, so a browse and a pick each mint their own.
 */
-const googleToken = async (operator: string): Promise<{ token: string } | { error: string }> => {
+const googleToken = async (
+  operator: string,
+  office: string,
+): Promise<{ token: string } | { error: string }> => {
   const ask = async (fn: string, body: unknown): Promise<unknown> => {
     const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
       method: 'POST',
@@ -129,7 +132,14 @@ const googleToken = async (operator: string): Promise<{ token: string } | { erro
     deployment owns. A refusal arrives as an error OBJECT, never as a string, so only a string counts.
   */
   const held = async (p_name: string): Promise<string> => {
-    const v = await ask('deployment_credential', { p_name, p_operator: operator })
+    // The office is the verified session's, never a caller-named one (P3): the resolver serves this office's own
+    // credential to its operator and nothing of any other office's.
+    const v = await ask('deployment_credential', {
+      p_office: office,
+      p_name,
+      p_operator: operator,
+      p_job: null,
+    })
     return typeof v === 'string' ? v : ''
   }
   const secret = await held('google.client_secret')
@@ -2574,7 +2584,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
         403,
       )
     }
-    const access = await googleToken(String(principal))
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const access = await googleToken(String(principal), office)
     if ('error' in access) return json({ error: access.error }, 502)
     const folder = (url.searchParams.get('folder') ?? '').replace(/['\\]/g, '')
     const q = (url.searchParams.get('q') ?? '').replace(/['\\]/g, '').slice(0, 120)

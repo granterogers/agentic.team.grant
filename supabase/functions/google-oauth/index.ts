@@ -215,9 +215,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
     // The secret is read HERE, with the service key, and never leaves this
     // function. There is deliberately no RPC that returns it.
+    // The office is the operator's own, resolved in the database from the operator the consumed state was minted
+    // for (P3). The callback is reachable by anybody with the URL, so nothing in the request names an office.
+    const office = await rpc('office_of_operator', { p_operator: operator }).catch(() => null)
+    if (typeof office !== 'string' || office === '') {
+      return plainly(
+        'This connection is not for an office on this deployment, so nothing was changed.',
+        400,
+      )
+    }
     const held = await rpc('deployment_credential', {
+      p_office: office,
       p_name: 'google.client_secret',
       p_operator: operator,
+      p_job: null,
     }).catch(() => null)
     const secretRows = typeof held === 'string' ? held : null
     if (secretRows === null || secretRows === '') {
@@ -259,6 +270,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     await rpc('hq_store_google_refresh', {
+      p_office: office,
       p_refresh_token: tokens.refresh_token,
       p_scopes: tokens.scope ?? '',
     })
