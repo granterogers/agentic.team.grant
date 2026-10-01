@@ -54,7 +54,9 @@ beforeAll(async () => {
     },
   })
   vi.stubGlobal('fetch', fake)
-  await import('../../supabase/functions/hq-api/index.ts')
+  // A computed path: the gateway is Deno code and is not part of the TypeScript program.
+  const gateway = '../../supabase/functions/hq-api/index.ts'
+  await import(/* @vite-ignore */ gateway)
 })
 afterEach(() => {
   rpc.length = 0
