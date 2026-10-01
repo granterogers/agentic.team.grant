@@ -16,7 +16,7 @@ import { ManagementApiExecutor, type SqlExecutor } from '../src/db/executor.ts'
 
 const ROOTS = ['src', 'supabase', 'scripts', 'tests']
 const OK_FIRST =
-  /^(p_office\s*(=>|:=)|null::uuid|uuid\b.*|app\.test_office\s*\(|app\.sole_person_office\s*\(|app\.job_office\s*\(|app\.require_office\s*\(|.*\boffice\b.*|.*\bOFFICE\b.*|[A-Za-z_.]*\.office\b|\$\{[^}]*(office|Office|OFFICE)[^}]*\}|'?\$\{)/
+  /^(office_id\b|app\.operator_office\s*\(|o\.office_id|p_office\s*(=>|:=)|null::uuid|uuid\b.*|app\.test_office\s*\(|app\.sole_person_office\s*\(|app\.job_office\s*\(|app\.require_office\s*\(|.*\boffice\b.*|.*\bOFFICE\b.*|[A-Za-z_.]*\.office\b|\$\{[^}]*(office|Office|OFFICE)[^}]*\}|'?\$\{)/
 
 export type Call = { file: string; line: number; fn: string; first: string }
 
@@ -86,8 +86,8 @@ export const calls = (names: readonly string[]): Call[] => {
   return out
 }
 
-export const offenders = (list: Call[]): Call[] =>
-  list.filter((c) => (c.first === '' ? false : !OK_FIRST.test(c.first)))
+export const offenders = (list: Call[], zeroArgBad: ReadonlySet<string> = new Set()): Call[] =>
+  list.filter((c) => (c.first === '' ? zeroArgBad.has(c.fn) : !OK_FIRST.test(c.first)))
 
 /**
  * Rewrite a suite's call so it names an office. For harness code only (scripts/, tests/): a suite that does not care
@@ -131,15 +131,31 @@ if (process.argv[1]?.endsWith('check-office-callers.ts')) {
       process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
       process.env.SUPABASE_ACCESS_TOKEN ?? '',
     )
-  const names = (
+  const found = (
+    await db.execute(
+      `select p.proname,
+              bool_or(p.pronargs = 0) over (partition by p.proname) as has_zero_arg
+         from pg_proc p
+        where p.pronamespace in ('app'::regnamespace,'public'::regnamespace)
+          and pg_get_function_arguments(p.oid) like 'p_office uuid%'`,
+    )
+  ).rows as { proname: string; has_zero_arg: boolean }[]
+  const names = [...new Set(found.map((r) => r.proname))]
+  // A call with NO arguments to a name that has no zero-argument form cannot be passing an office (the old
+  // `app.hq_studio()` shape): it compiles and fails on first use.
+  const needsOffice = new Set(
     (
       await db.execute(
-        `select distinct p.proname from pg_proc p where p.pronamespace in ('app'::regnamespace,'public'::regnamespace) and pg_get_function_arguments(p.oid) like 'p_office uuid%'`,
+        `select distinct p.proname from pg_proc p
+          where p.pronamespace in ('app'::regnamespace,'public'::regnamespace)
+            and not exists (select 1 from pg_proc q where q.pronamespace in ('app'::regnamespace,'public'::regnamespace)
+                             and q.proname = p.proname and q.pronargs = 0)
+            and pg_get_function_arguments(p.oid) like 'p_office uuid%'`,
       )
-    ).rows as { proname: string }[]
-  ).map((r) => r.proname)
+    ).rows.map((r) => String((r as { proname: string }).proname)),
+  )
   let all = calls(names)
-  let bad = offenders(all)
+  let bad = offenders(all, needsOffice)
   // The database calls itself too, and tsc and grep cannot see inside a plpgsql body. A function that still calls a
   // converted function without an office is a defect that only shows on first use (a plpgsql body is parsed, not run).
   const bodies = (
@@ -158,7 +174,7 @@ if (process.argv[1]?.endsWith('check-office-callers.ts')) {
         if (m[1] === callerName) continue
         const first = firstArgument(f.body, (m.index ?? 0) + m[0].length)
         if (
-          first !== '' &&
+          (first !== '' || needsOffice.has(m[1] as string)) &&
           !OK_FIRST.test(first) &&
           !/^v_office|^c\.office_id|^new\.office_id|^b\.office_id|^p_office|^t\.office_id|^r\.office_id|^d\.office_id|^v_parent\.office_id/.test(
             first,
@@ -171,7 +187,7 @@ if (process.argv[1]?.endsWith('check-office-callers.ts')) {
   if (process.argv.includes('--fix-suites')) {
     console.log(`rewrote ${String(fixSuites(bad))} suite call site(s) to work in the test office`)
     all = calls(names)
-    bad = offenders(all)
+    bad = offenders(all, needsOffice)
   }
   console.log(
     `${String(names.length)} office-explicit functions, ${String(all.length)} call sites, ${String(bad.length)} without an office, ${String(dbBad.length)} database calls without one`,

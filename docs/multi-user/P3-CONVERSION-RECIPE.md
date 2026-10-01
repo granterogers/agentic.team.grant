@@ -143,3 +143,22 @@ claim a gate you did not run.
 * PostgREST exposes only `public`; every gateway-reachable function needs a public wrapper.
 * The Management API returns the FIRST statement's result, `PgExecutor` the LAST.
 * No backticks inside comments inside template literals in TypeScript.
+
+## 6. Learned in the first wave (read before you start)
+
+* `check-office-callers.ts` now flags a ZERO-argument call to a name that has no zero-argument form (the old
+  `app.hq_studio()` shape) and scans the bodies of database functions too. A first argument written `${...}`, or
+  anything mentioning `office`, is still ACCEPTED unseen: grep your function names yourself and read each hit.
+* Where a worker handler holds a job, pass `app.job_office(<job id>)`. Never an id taken from a request, a model answer or
+  a payload field.
+* The unscoped views `public.needs_me`, `today`, `undo_offers`, `delivery_health` were left alone. The office-scoped
+  replacements are `app.needs_me_in(p_office)`, `today_in`, `undo_offers_in`, `delivery_health_in` (migration 0750). Use them.
+* `app.office_sees_the_deployment(p_office)` is how a function decides whether a deployment-level reading (database size,
+  backups, the build log) may be shown: operators and the system/test offices only.
+* A CONSTRAINT or a UNIQUE index that is global (a provider's file id, a workspace primary key) is a P2 follow-up: guard your
+  `ON CONFLICT DO UPDATE` with the office and report the global key, do not widen the migration to rebuild it.
+* Public wrappers left behind for a converted app function are a defect (`public.task_pulled(text,text,jsonb)` called a
+  function that no longer existed). After converting, run `psql ... -c "select n.nspname||'.'||p.proname from pg_proc p ..."`
+  for every name in your list and confirm each remaining overload either takes `p_office` first or is a deliberate GLOBAL.
+* The attack harness's own cases are not idempotent on a used clone: rebuild (`p3-attack.sh <name>`) before a full run.
+* Several suites share template loops over many functions; merge conflicts there are likely and are the lead's to resolve.
