@@ -103,7 +103,7 @@ export async function syncOnce(
   db: SqlExecutor,
   provider: TaskProvider,
   gate: SyncGate,
-  opts: { readonly limit?: number } = {},
+  opts: { readonly office: string; readonly limit?: number },
 ): Promise<SyncReport> {
   const name = provider.name
   let pushed = 0
@@ -203,7 +203,7 @@ export async function syncOnce(
       const said = asJson(
         (
           await db.execute(`
-            select app.task_pulled(${lit(name)}, ${lit(r.externalId)},
+            select app.task_pulled(${lit(opts.office)}::uuid, ${lit(name)}, ${lit(r.externalId)},
               ${lit(JSON.stringify(fields))}::jsonb) as v`)
         ).rows[0]?.v,
       )

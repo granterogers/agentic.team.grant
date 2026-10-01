@@ -58,7 +58,7 @@ const turn = async (n: number, text: string): Promise<{ job: string; body: strin
 const decoy = String(
   (
     await one(`
-      select (app.my_task_add(p_title => ${lit(`Chase the printers ${run}`)})->>'id') as v`)
+      select (app.my_task_add(p_office => app.test_office(), p_title => ${lit(`Chase the printers ${run}`)})->>'id') as v`)
   ).v ?? '',
 )
 /*

@@ -750,7 +750,7 @@ check(
 */
 const onList = await one(`
   select count(*)::int as n
-    from jsonb_array_elements(app.my_tasks('all', 200, null, 'smart', true)) x
+    from jsonb_array_elements(app.my_tasks(app.test_office(), 'all', 200, null, 'smart', true)) x
    where x ->> 'title' = ${lit(`Authorize Google Drive ${run}`)}
      and x ->> 'for_job' is not null`)
 check(
@@ -765,7 +765,7 @@ check(
   raised it is a verification job and he is owed no question by it.
 */
 const notOnHisList = await one(`
-  select count(*)::int as n from jsonb_array_elements(app.my_tasks('all', 200)) x
+  select count(*)::int as n from jsonb_array_elements(app.my_tasks(app.test_office(), 'all', 200)) x
    where x ->> 'title' = ${lit(`Authorize Google Drive ${run}`)}`)
 check(
   'and it does NOT reach his list, because the job that raised it is a harness job',

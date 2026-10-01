@@ -138,11 +138,11 @@ const arc = await one(`
 
     -- Three tasks, the way the handler writes them: named arguments, and the
     -- JOB carried so the reversal has something exact to key on.
-    perform app.task_add(p_project => v_project, p_title => ${lit(`Draft the note ${run}`)},
+    perform app.task_add(p_office => app.test_office(), p_project => v_project, p_title => ${lit(`Draft the note ${run}`)},
                          p_job => v_job);
-    perform app.task_add(p_project => v_project, p_title => ${lit(`Pick the price points ${run}`)},
+    perform app.task_add(p_office => app.test_office(), p_project => v_project, p_title => ${lit(`Pick the price points ${run}`)},
                          p_job => v_job);
-    perform app.task_add(p_project => v_project, p_title => ${lit(`Book the venue ${run}`)},
+    perform app.task_add(p_office => app.test_office(), p_project => v_project, p_title => ${lit(`Book the venue ${run}`)},
                          p_job => v_job);
     insert into _r values ('made',
       (select count(*)::text from public.tasks where job_id = v_job));
@@ -217,16 +217,16 @@ const offered = await one(`
     values (extensions.gen_random_uuid(), v_project, ${lit(`z-${run}`)},
             'office.extract_tasks', ${lit(`teamhq:verify-extract-${run}`)})
     returning job_id into v_job;
-    perform app.task_add(p_project => v_project, p_title => ${lit(`Only task ${run}`)},
+    perform app.task_add(p_office => app.test_office(), p_project => v_project, p_title => ${lit(`Only task ${run}`)},
                          p_job => v_job);
 
-    v_id := app.undo_offer('tasks_extracted', 'the 1 task pulled out of The brief',
+    v_id := app.undo_offer(app.test_office(), 'tasks_extracted', 'the 1 task pulled out of The brief',
       jsonb_build_object('action', 'tasks_from_job',
                          'args', jsonb_build_object('p_job', v_job::text)), 120);
     insert into _r values ('offer', coalesce(v_id::text, ''));
 
     begin
-      v_out := app.hq_undo(v_id::text);
+      v_out := app.hq_undo(app.test_office(), v_id::text);
       insert into _r values ('undone', v_out::text), ('raised', '');
     exception when others then
       insert into _r values ('undone', ''), ('raised', sqlstate || ' ' || sqlerrm);

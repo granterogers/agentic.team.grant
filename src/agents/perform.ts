@@ -466,7 +466,8 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         harness traffic from his own list without reading the title.
       */
       const { rows } = await db.execute(`
-        select app.my_task_add(p_title => ${lit(title)},
+        select app.my_task_add(p_office => app.job_office(${lit(jobId)}::uuid),
+                               p_title => ${lit(title)},
                                p_detail => ${lit(detail)},
                                p_job => ${lit(jobId)}::uuid) as t`)
       const raw = (rows[0] as { t?: unknown })?.t

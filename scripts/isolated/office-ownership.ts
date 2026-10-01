@@ -6,7 +6,7 @@ import { isolated } from './guard.ts'
 import { suite } from './office-ownership-lib.ts'
 
 const target = process.argv[2] ?? 'p2_attack'
-if (!/^p2_attack/.test(target)) {
+if (!/^p[23]_attack/.test(target)) {
   console.error(`REFUSED: ${target} is not a throwaway clone. Run scripts/isolated/p2-attack.sh`)
   process.exit(2)
 }

@@ -1147,7 +1147,7 @@ async function hisTaskByName(
   name: string,
 ): Promise<{ id: string; title: string } | null> {
   const r = await db.execute(`
-    select app.my_tasks('all', 200, null, 'smart', app.harness_job(${lit(jobId)}::uuid)) as t`)
+    select app.my_tasks(app.job_office(${lit(jobId)}::uuid), 'all', 200, null, 'smart', app.harness_job(${lit(jobId)}::uuid)) as t`)
   const raw = (r.rows[0] as { t?: unknown })?.t
   const all = ((typeof raw === 'string' ? JSON.parse(raw) : raw) ?? []) as {
     id?: string
@@ -1211,6 +1211,7 @@ async function addTask(
   const said = await db
     .execute(`
       select app.task_add(
+        p_office => app.job_office(${lit(job.jobId)}::uuid),
         p_project => ${job.projectId === null ? 'null' : `${lit(String(job.projectId))}::uuid`},
         p_title => ${lit(titled)},
         p_due_on => ${when === null ? 'null' : `${lit(when.on)}::date`},
@@ -4342,6 +4343,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.my_task_add(
+                  p_office => app.job_office(${lit(job.jobId)}::uuid),
                   p_title => ${lit(forGrant.title.slice(0, 200))},
                   p_due_on => ${forGrant.due === null ? 'null' : `${lit(forGrant.due)}::date`},
                   /*
@@ -4670,6 +4672,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 }
                 const set = await deps.db.execute(`
                   select app.my_task_set(
+                    app.job_office(${lit(job.jobId)}::uuid),
                     ${lit(subject.id)},
                     ${change.title === null ? 'p_title => null' : `p_title => ${lit(change.title.slice(0, 200))}`},
                     p_due_on => ${change.due === null ? 'null' : `${lit(change.due)}::date`},
@@ -4744,7 +4747,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   }
                 }
                 const set = await deps.db.execute(
-                  `select app.hq_task_state(${lit(target.id)}, ${lit(settles.state)}, null,
+                  `select app.hq_task_state(app.job_office(${lit(job.jobId)}::uuid), ${lit(target.id)}, ${lit(settles.state)}, null,
                      app.command_principal(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
                 )
                 const out = (set.rows[0] as { r?: unknown })?.r
@@ -4814,6 +4817,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 }
                 const made = await deps.db.execute(`
                   select app.my_task_add(
+                    p_office => app.job_office(${lit(job.jobId)}::uuid),
                     p_title => ${lit(subOf.title.slice(0, 200))},
                     p_parent => ${lit(parent.id)},
                     p_job => ${lit(job.jobId)}::uuid) as r`)
@@ -5792,11 +5796,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ? ''
         : await deps.db
             .execute(`
-              select app.my_tasks('overdue', 15, null, 'smart', h.harness) as overdue,
-                     app.my_tasks('today', 15, null, 'smart', h.harness) as today,
-                     app.my_tasks('upcoming', 10, null, 'smart', h.harness) as upcoming,
-                     app.my_tasks('unscheduled', 15, null, 'smart', h.harness) as unscheduled,
-                     app.my_tasks_counts() as counts
+              select app.my_tasks(h.office, 'overdue', 15, null, 'smart', h.harness) as overdue,
+                     app.my_tasks(h.office, 'today', 15, null, 'smart', h.harness) as today,
+                     app.my_tasks(h.office, 'upcoming', 10, null, 'smart', h.harness) as upcoming,
+                     app.my_tasks(h.office, 'unscheduled', 15, null, 'smart', h.harness) as unscheduled,
+                     app.my_tasks_counts(h.office) as counts
                 /*
                   A harness turn sees its own world (ledger R8), the rule the
                   project spine above already follows: without it every test
@@ -5804,7 +5808,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   the same session had just made. False for every message a
                   person sends, so byte-identical for Grant.
                 */
-                from (select app.harness_job(${lit(job.jobId)}::uuid) as harness) h`)
+                from (select app.harness_job(${lit(job.jobId)}::uuid) as harness,
+                             app.job_office(${lit(job.jobId)}::uuid) as office) h`)
             .then((r) => {
               /*
                 The executor hands a jsonb column back as an OBJECT, and

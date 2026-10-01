@@ -437,7 +437,7 @@ const kid = String(
     String(
       (
         await one(
-          `select (app.task_add(p_project => ${lit(project)}::uuid, p_title => ${lit(title)}, p_added_by => 'grant')) ->> 'id' as id`,
+          `select (app.task_add(p_office => app.test_office(), p_project => ${lit(project)}::uuid, p_title => ${lit(title)}, p_added_by => 'grant')) ->> 'id' as id`,
         )
       ).id,
     )

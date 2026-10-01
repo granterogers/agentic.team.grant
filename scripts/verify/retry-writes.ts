@@ -51,12 +51,12 @@ begin
     returning command_id into c3;
   j3 := (app.enqueue_inbound(c3) ->> 'job_id')::uuid;
   select project_id into p from public.projects where is_fixture and status <> 'archived' limit 1;
-  a := app.my_task_add(p_title => 'verify retry-writes subject', p_job => j1);
-  b := app.my_task_add(p_title => 'Verify Retry-Writes subject ', p_job => j1);
-  c := app.my_task_add(p_title => 'verify retry-writes subject', p_job => j2);
-  f := app.my_task_add(p_title => 'verify retry-writes subject', p_job => j3);
-  d := app.task_add(p_project => p, p_title => 'verify retry-writes project', p_job => j1);
-  e := app.task_add(p_project => p, p_title => 'verify retry-writes project', p_job => j1);
+  a := app.my_task_add(p_office => app.test_office(), p_title => 'verify retry-writes subject', p_job => j1);
+  b := app.my_task_add(p_office => app.test_office(), p_title => 'Verify Retry-Writes subject ', p_job => j1);
+  c := app.my_task_add(p_office => app.test_office(), p_title => 'verify retry-writes subject', p_job => j2);
+  f := app.my_task_add(p_office => app.test_office(), p_title => 'verify retry-writes subject', p_job => j3);
+  d := app.task_add(p_office => app.test_office(), p_project => p, p_title => 'verify retry-writes project', p_job => j1);
+  e := app.task_add(p_office => app.test_office(), p_project => p, p_title => 'verify retry-writes project', p_job => j1);
   raise exception 'RESULT %', jsonb_build_object(
     'personal_same_job', (a->>'id') = (b->>'id'),
     'personal_other_job_distinct', (a->>'id') <> (c->>'id'),

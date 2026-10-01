@@ -167,6 +167,8 @@ const SECTIONS: Readonly<
     string,
     {
       fn: string
+      /** The function takes `p_office` first; the gateway writes the verified one (P3). */
+      office?: true
       args?: Record<string, unknown>
       /** A uuid, read from `?id=`. */
       arg?: string
@@ -481,6 +483,7 @@ const SECTIONS: Readonly<
   */
   my_tasks: {
     fn: 'my_tasks',
+    office: true,
     oneOf: {
       param: 'id',
       arg: 'p_bucket',
@@ -497,7 +500,7 @@ const SECTIONS: Readonly<
       { arg: 'p_sort', param: 'sort', values: ['smart', 'priority', 'title', 'created'] },
     ],
   },
-  my_task_counts: { fn: 'my_tasks_counts' },
+  my_task_counts: { fn: 'my_tasks_counts', office: true },
   /*
     How far a job got, and why it stopped (#263).
 
@@ -865,7 +868,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     which project" and "this belongs to none" the same request, and only one of
     those should file a task where Grant is not looking.
   */
-  task_add: { fn: 'hq_task_add', required: ['p_project', 'p_title'] },
+  task_add: { fn: 'hq_task_add', office: true, required: ['p_project', 'p_title'] },
   // Contacts (#24, #99). A name and a project; everything else — role, org,
   // email, phone, Instagram, website, kind, note — is optional, because a form
   // that demands nine fields before it will take "Ben, referrer" is a form
@@ -946,7 +949,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   withdraw_refusal: { fn: 'hq_withdraw_refusal', required: ['p_blocker_id'], by: 'p_by' },
   // `p_reason` is optional here and required by the RPC when the state is
   // `blocked` — the schema's own check constraint, said in a sentence.
-  task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'], by: 'p_by' },
+  task_state: { fn: 'hq_task_state', office: true, required: ['p_task_id', 'p_state'], by: 'p_by' },
   /*
     The arrangement of a project's dashboard (#81, migration 0250).
 
@@ -1099,7 +1102,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     functions writing one column is how a constraint gets violated by the one
     that forgot.
   */
-  task_update: { fn: 'hq_task_update', required: ['p_task_id'] },
+  task_update: { fn: 'hq_task_update', office: true, required: ['p_task_id'] },
   // One setter over three kinds of routing change, allow-listed inside the
   // function for the same reason `set_setting` is: the page is not the only
   // possible caller.
@@ -1120,7 +1123,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     is listed so that undoing a detach goes through the same door as everything
     else rather than through a private one.
   */
-  undo: { fn: 'hq_undo', required: ['p_action_id'] },
+  undo: { fn: 'hq_undo', office: true, required: ['p_action_id'] },
   reattach: { fn: 'hq_reattach', required: ['p_attachment_id'] },
   /*
     Governance (#54, migration 0302).
@@ -1284,8 +1287,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     `task_state`, which already exists and already does both for either kind of
     task — ADR-0041's "one set of writers".
   */
-  my_task_add: { fn: 'my_task_add', required: ['p_title'] },
-  my_task_set: { fn: 'my_task_set', required: ['p_task_id'] },
+  my_task_add: { fn: 'my_task_add', office: true, required: ['p_title'] },
+  my_task_set: { fn: 'my_task_set', office: true, required: ['p_task_id'] },
   /*
     And the two 0513/0514 added, because a task you cannot remove and a
     relationship you cannot make are both features that exist only in the
@@ -1293,8 +1296,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     boundary is enforced in the function rather than by this list being
     careful.
   */
-  my_task_delete: { fn: 'my_task_delete', required: ['p_task_id'] },
-  my_task_reparent: { fn: 'my_task_reparent', required: ['p_task_id'] },
+  my_task_delete: { fn: 'my_task_delete', office: true, required: ['p_task_id'] },
+  my_task_reparent: { fn: 'my_task_reparent', office: true, required: ['p_task_id'] },
   /*
     Connecting a task provider, and letting it go (#259, Phase 2).
 
@@ -1379,8 +1382,36 @@ const tokenMatches = async (presented: string | null): Promise<boolean> => {
   are cached: a refusal must stay cheap to change.
 */
 const SESSION_TTL_MS = 60_000
+
+/*
+  THE OFFICE THE MACHINE KEY ACTS IN: the test office, and no other. The key names no person (ADR-0054) and no real
+  office (P3), so anything it does through an office-explicit function lands in the office harness traffic belongs to.
+  Resolved from the database, cached for a minute; a database that cannot answer yields no office and the call is refused.
+*/
+let machineOfficeHeld: { until: number; office: string } | null = null
+const machineOffice = async (): Promise<string | null> => {
+  if (machineOfficeHeld !== null && machineOfficeHeld.until > Date.now())
+    return machineOfficeHeld.office
+  const asked = await askUpstream(`${DB_URL}/rest/v1/rpc/resolve_machine_office`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  })
+  if ('unreachable' in asked || !asked.response.ok) return null
+  const r = (await asked.response.json().catch(() => ({}))) as { ok?: boolean; office_id?: string }
+  if (r.ok !== true || typeof r.office_id !== 'string' || r.office_id === '') return null
+  machineOfficeHeld = { until: Date.now() + SESSION_TTL_MS, office: r.office_id }
+  return r.office_id
+}
 /** A verified session, and the owner key of the person it belongs to. */
-const seen = new Map<string, { until: number; owner: string; kind: PrincipalKind; office: string }>()
+const seen = new Map<
+  string,
+  { until: number; owner: string; kind: PrincipalKind; office: string }
+>()
 
 const looksLikeSession = (presented: string): boolean =>
   presented.split('.').length === 3 && presented.length > 60
@@ -1543,7 +1574,10 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
   })
   if ('unreachable' in asked || !asked.response.ok)
     return { verdict: 'unknown', principal: null, kind: null }
-  const resolved = (await asked.response.json().catch(() => ({}))) as { ok?: boolean; office_id?: string }
+  const resolved = (await asked.response.json().catch(() => ({}))) as {
+    ok?: boolean
+    office_id?: string
+  }
   if (resolved.ok !== true || typeof resolved.office_id !== 'string' || resolved.office_id === '')
     return { verdict: 'no_office', principal: null, kind: null }
   const office = resolved.office_id
@@ -1774,7 +1808,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  const { verdict, principal, kind, office } = await allowed(presented)
+  const { verdict, principal, kind, office: sessionOffice } = await allowed(presented)
   if (verdict === 'no_office') return json({ error: 'no_office' }, 403)
   if (verdict === 'no') {
     return json({ error: 'unauthorized' }, 401)
@@ -1792,6 +1826,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
       503,
     )
   }
+
+  /*
+    THE OFFICE THIS REQUEST ACTS IN, once, from the verified credential (P3). A signed-in member's is the one their login
+    resolved to; the machine key's is the test office. Nothing in the body, the query or a header can change it.
+  */
+  const office = kind === 'service' ? await machineOffice() : (sessionOffice ?? null)
 
   // --- configuration -------------------------------------------------------
   //
@@ -1888,7 +1928,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     // The client never supplies an office. Whatever arrived under these names is discarded here; the resolved office is
     // written only into a function that declares it (P3 wave 2 onward).
     for (const k of ['p_office', 'office_id', 'owner_key']) delete args[k]
-    if (action.office === true && office) args.p_office = office
+    if (action.office === true) {
+      if (!office) return json({ error: 'no_office' }, 403)
+      args.p_office = office
+    }
     if (action.personBy !== undefined) {
       delete args[action.personBy]
       if (kind === 'person' && principal !== null && principal !== '') {
@@ -2686,6 +2729,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     if (Object.keys(filters).length > 0) args = { ...args, p_filters: filters }
+  }
+
+  if (section.office === true) {
+    if (!office) return json({ error: 'no_office' }, 403)
+    args = { ...args, p_office: office }
   }
 
   const response = await fetch(`${DB_URL}/rest/v1/rpc/${section.fn}`, {

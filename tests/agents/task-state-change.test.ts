@@ -74,7 +74,7 @@ describe('the handler acts through the writer and counts only what changed', () 
     // With the principal the door recorded (0611): a to-do that stands for a
     // question is only an answer from somebody the office can name.
     expect(src).toMatch(
-      /app\.hq_task_state\(\$\{lit\(target\.id\)\}, \$\{lit\(settles\.state\)\}, null,\s*app\.command_principal\(/,
+      /app\.hq_task_state\(app\.job_office\(\$\{lit\(job\.jobId\)\}::uuid\),\s*\$\{lit\(target\.id\)\}, \$\{lit\(settles\.state\)\}, null,\s*app\.command_principal\(/,
     )
   })
   it('claims a change only when the writer returned that state', () => {
@@ -96,7 +96,7 @@ describe('a NAMED task is found on his whole list; a pronoun never leaves the ch
   })
   it('reads his list with the harness flag of THIS turn', () => {
     expect(src).toMatch(
-      /app\.my_tasks\('all', 200, null, 'smart', app\.harness_job\(\$\{lit\(jobId\)\}::uuid\)\)/,
+      /app\.my_tasks\(app\.job_office\(\$\{lit\(jobId\)\}::uuid\), 'all', 200, null, 'smart', app\.harness_job\(\$\{lit\(jobId\)\}::uuid\)\)/,
     )
   })
 })

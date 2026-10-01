@@ -117,7 +117,7 @@ const pid = String(proj.project_id)
 const made = asJson(
   (
     await one(`
-  select public.task_add(
+  select public.task_add(p_office => app.test_office(), 
     p_project := '${pid}'::uuid,
     p_title := 'Conduct first five interviews',
     p_detail := 'From the corpus',
@@ -183,14 +183,14 @@ await db.execute(`select public.hq_task_state('${tid}', 'todo', null)`)
 
 await answersWithError(
   'an assignee who does not exist is named, not silently dropped',
-  `select public.task_add(p_project := '${pid}'::uuid, p_title := 'Nobody can do this',
+  `select public.task_add(p_office => app.test_office(), p_project := '${pid}'::uuid, p_title := 'Nobody can do this',
      p_assignee := 'nobody-at-all', p_added_by := 'verify:tasks') as v`,
   'nobody here is called',
 )
 
 await answersWithError(
   'an empty title is refused',
-  `select public.task_add(p_project := '${pid}'::uuid, p_title := '   ',
+  `select public.task_add(p_office => app.test_office(), p_project := '${pid}'::uuid, p_title := '   ',
      p_added_by := 'verify:tasks') as v`,
   'a task needs a title',
 )
@@ -202,9 +202,9 @@ await refuses(
 
 // --- fixtures are excluded from what the office reports ---------------------
 await db.execute(`
-  select public.task_add(p_project := '${pid}'::uuid, p_title := 'Later, unassigned',
+  select public.task_add(p_office => app.test_office(), p_project := '${pid}'::uuid, p_title := 'Later, unassigned',
     p_added_by := 'verify:tasks');
-  select public.task_add(p_project := '${pid}'::uuid, p_title := 'Stuck one',
+  select public.task_add(p_office => app.test_office(), p_project := '${pid}'::uuid, p_title := 'Stuck one',
     p_assignee := 'operations-director', p_added_by := 'verify:tasks');
 `)
 
@@ -263,9 +263,9 @@ const rid = String(rp.project_id)
 
 try {
   await db.execute(`
-    select public.task_add(p_project := '${rid}'::uuid, p_title := 'Conduct first five interviews',
+    select public.task_add(p_office => app.test_office(), p_project := '${rid}'::uuid, p_title := 'Conduct first five interviews',
       p_detail := 'From the corpus', p_assignee := 'chief-of-staff', p_added_by := 'grant');
-    select public.task_add(p_project := '${rid}'::uuid, p_title := 'Stuck one',
+    select public.task_add(p_office => app.test_office(), p_project := '${rid}'::uuid, p_title := 'Stuck one',
       p_assignee := 'operations-director', p_added_by := 'grant');
   `)
   const stuck = await one(`

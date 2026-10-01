@@ -46,7 +46,7 @@ describe('the four duties ask through the one gate, and nothing opens it with a 
   it('the sync duty builds its own gate and never uses the open one reserved for the engine suite', () => {
     const t = strip(read('src/handlers/tasks-sync.ts'))
     expect(t).not.toContain('permitEverything')
-    expect(t).toMatch(/await syncOnce\(\s*db,[\s\S]*?\bgate,\s*\)/)
+    expect(t).toMatch(/await syncOnce\(\s*db,[\s\S]*?\bgate,\s*\{ office \},?\s*\)/)
     expect(t).toMatch(/tool: 'task\.board\.delete'/)
     expect(t).toMatch(/tool: 'task\.board\.write'/)
   })

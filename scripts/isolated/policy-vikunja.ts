@@ -61,7 +61,13 @@ const tick = async () => await handler.handle(await w.dutyJob('tasks.sync'), db)
 const BOARD = 'https://tasks.example.test'
 const TOK = `tk_${'a'.repeat(32)}`
 const addTask = async (title: string): Promise<string> => {
-  const r = json((await one(`select app.my_task_add(p_title => ${lit(title)}) as r`)).r)
+  const r = json(
+    (
+      await one(
+        `select app.my_task_add(p_office => app.test_office(), p_title => ${lit(title)}) as r`,
+      )
+    ).r,
+  )
   return String(r.id ?? r.task_id)
 }
 
@@ -144,7 +150,7 @@ check(
   `${String(remote.count('create', 'Pay the printer'))} create(s)`,
 )
 await one(
-  `select app.my_task_set(p_task_id => ${lit(t1)}, p_title => ${lit(`Pay the printer, urgently ${w.run}`)}) as r`,
+  `select app.my_task_set(p_office => app.test_office(), p_task_id => ${lit(t1)}, p_title => ${lit(`Pay the printer, urgently ${w.run}`)}) as r`,
 )
 await tick()
 check(

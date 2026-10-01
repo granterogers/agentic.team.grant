@@ -830,7 +830,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     'public.hq_grant_standing(text, text, uuid, timestamptz, text)',
     'public.hq_revoke_standing(uuid, text, text)',
     'public.hq_withdraw_refusal(uuid, text)',
-    'public.hq_task_state(text, text, text, text)',
+    'public.hq_task_state(uuid, text, text, text, text)',
     'public.sender_admitted(text, text, text)',
   ]) {
     const r = await one(

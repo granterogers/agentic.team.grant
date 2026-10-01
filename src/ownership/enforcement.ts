@@ -100,8 +100,16 @@ export const ENFORCEMENT_SQL = `
         from (select edge from public.office_edge_exceptions) e),
     'officeParams', (select coalesce(jsonb_agg(p.proname || '(' || a.arg || ')'), '[]'::jsonb)
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        cross join lateral unnest(coalesce(p.proargnames, '{}'::text[])) as a(arg)
-       where n.nspname = 'public' and a.arg ~* '(^|_)(office|offices)(_id|_key|_ref|_uuid)?$' and a.arg !~* 'rate'),
+        cross join lateral unnest(coalesce(p.proargnames, '{}'::text[])) with ordinality as a(arg, ord)
+       where n.nspname = 'public' and a.arg ~* '(^|_)(office|offices)(_id|_key|_ref|_uuid)?$' and a.arg !~* 'rate'
+         -- P3: the ONE shape of door that takes an office. The gateway writes it from a verified login; the function
+         -- is reachable by the service role alone. Anything else - a different name, a later position, a default, a
+         -- grant to a browser role - is a caller choosing its office.
+         and not (a.ord = 1 and a.arg = 'p_office' and p.proargtypes[0] = 'uuid'::regtype
+                  and p.pronargdefaults < p.pronargs
+                  and not has_function_privilege('anon', p.oid, 'execute')
+                  and not has_function_privilege('authenticated', p.oid, 'execute')
+                  and has_function_privilege('service_role', p.oid, 'execute'))),
     'bridgeUse', (select coalesce(jsonb_agg(jsonb_build_object('table', table_name, 'rule', rule, 'n', n)), '[]'::jsonb)
         from public.office_bridge_use),
     'transitional', jsonb_build_object(
@@ -240,11 +248,13 @@ export const enforcementProblems = (manifest: Manifest, cat: EnforcementCatalogu
     )
       problems.push(`${p.table}: no per-office key including (${p.legacy.join(',')})`)
   }
-  // The machine key must never be "a universal token plus an office to act as". The gateway reaches only public functions,
-  // so none of them may take an office (or anything named like one) from the caller.
+  // The machine key must never be "a universal token plus an office to act as". The gateway reaches only public functions.
+  // P3: a public function may take `p_office` only as its FIRST argument, with no default, executable by the service role
+  // alone - the one door the gateway fills from a verified login (or, for the machine key, the test office). Any other
+  // office-like argument is a caller choosing its office.
   for (const f of cat.officeParams)
     problems.push(
-      `public.${f}: a callable function takes an office from its caller - the machine key could act as any office`,
+      `public.${f}: a callable function takes an office in a shape the gateway does not fill (only a first, undefaulted p_office reachable by the service role alone is allowed)`,
     )
 
   // The transitional rule. Until the MCP gateway resolves its office from the client credential itself, a second real

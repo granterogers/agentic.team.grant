@@ -156,10 +156,15 @@ export function tasksSyncHandler(db: SqlExecutor, deps: TasksSyncDeps = {}): Han
         token,
         projectId: Number(settings.project_id ?? 0),
       }
+      // The duty runs for one office: the claimed job's. The pull writes into that office and no other.
+      const office = String(
+        (await db.execute(`select app.job_office('${job.jobId}'::uuid) as o`)).rows[0]?.o ?? '',
+      )
       const report = await syncOnce(
         db,
         deps.provider === undefined ? new VikunjaProvider(config) : deps.provider(config),
         gate,
+        { office },
       )
       const moved =
         report.pushed +

@@ -315,7 +315,9 @@ try {
     refusal that says why.
   */
   const nowhere = (
-    await one(`select public.hq_task_add('', 'Homeless module', null, null, null, true) as r`)
+    await one(
+      `select public.hq_task_add(app.test_office(), '', 'Homeless module', null, null, null, true) as r`,
+    )
   ).r as { error?: string }
   check(
     'a module with no project is refused, not filed nowhere',

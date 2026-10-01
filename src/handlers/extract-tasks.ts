@@ -315,6 +315,7 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
           await db
             .execute(`
               select app.task_add(
+                p_office  => app.job_office(${lit(job.jobId)}::uuid),
                 p_project => ${lit(job.projectId)}::uuid,
                 p_title   => ${lit(task.title)},
                 p_detail  => ${task.detail === null ? 'null' : lit(task.detail)},
@@ -349,7 +350,7 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
       if (made.length > 0) {
         await db
           .execute(`
-            select app.undo_offer('tasks_extracted',
+            select app.undo_offer(app.job_office(${lit(job.jobId)}::uuid), 'tasks_extracted',
               ${lit(`the ${String(made.length)} task(s) pulled out of ${from}`)},
               jsonb_build_object('action', 'tasks_from_job',
                 'args', jsonb_build_object('p_job', ${lit(job.jobId)})),
