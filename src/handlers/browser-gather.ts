@@ -136,7 +136,13 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
         exceeded is a cap nobody counted against. Refusing early costs a
         sentence; refusing late costs the money the whole assessment was about.
       */
-      const budget = jsonOf((await db.execute('select app.browser_budget() as r')).rows[0]?.r) as {
+      const budget = jsonOf(
+        (
+          await db.execute(
+            `select app.browser_budget(app.job_office(${lit(job.jobId)}::uuid)) as r`,
+          )
+        ).rows[0]?.r,
+      ) as {
         left_minutes?: number
         exhausted?: boolean
       }
@@ -153,7 +159,10 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
                  app.resolve_secret(s.credential_ref) as jar,
                  (s.revoked_at is not null) as gone
             from public.browser_sessions s
-           where s.project_id = ${lit(projectId)}::uuid and s.site = ${lit(host)}`)
+           where s.project_id = ${lit(projectId)}::uuid and s.site = ${lit(host)}
+             and exists (select 1 from public.projects sp
+                          where sp.project_id = s.project_id
+                            and sp.office_id = app.job_office(${lit(job.jobId)}::uuid))`)
       ).rows[0] as SessionRow | undefined
 
       if (session !== undefined && session.gone) {

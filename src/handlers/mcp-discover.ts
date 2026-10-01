@@ -62,7 +62,9 @@ export function mcpDiscoverHandler(deps: McpDiscoverDeps): Handler {
         await db.execute(`
           select p.provider_id::text as id, p.endpoint, p.enabled, p.revoked_at is not null as gone,
                  app.resolve_secret(p.credential_ref) as bearer
-            from public.mcp_providers p where p.name = ${lit(name)}`)
+            from public.mcp_providers p
+           where p.office_id = app.job_office(${lit(job.jobId)}::uuid)
+             and p.name = ${lit(name)}`)
       ).rows[0] as
         | { id: string; endpoint: string; enabled: boolean; gone: boolean; bearer: string | null }
         | undefined
