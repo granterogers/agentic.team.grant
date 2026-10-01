@@ -659,5 +659,8 @@
   "0645_a_procedure_he_taught_is_offered_before_it_is_kept.sql": "a62ba13165f811f17fee80c28719afabfc2f451973bdae5c4b3cbca9a600d725",
   "0646_the_dial_says_what_proactive_means.sql": "5a049b43264ee34463a3f174131acbfa4808b6123a7622e0d988df1b2db04027",
   "0647_who_may_operate_the_deployment.sql": "577feed9762b14b79aa1a9905dfcf194a3a57f2b98efe505dcb5ce7b68c91407",
-  "0648_one_resolver_for_deployment_credentials.sql": "3bb7a01c1c588e13c4462e95ee0bf558faa9b690330130da0d4f36cedcd878c5"
+  "0648_one_resolver_for_deployment_credentials.sql": "3bb7a01c1c588e13c4462e95ee0bf558faa9b690330130da0d4f36cedcd878c5",
+  "0649_retire_the_raw_vault_readers.sql": "a17be1a4670e1b79ee65f1a3c7e6cf452217e469011a8c0b279837a23e9ae87b",
+  "0650_authorize_the_target_before_writing_the_object.sql": "9006285a8c8be76052777dfa8de7ce42acf12ccd92b3c6652a90d770b3629b70",
+  "0651_a_legacy_github_token_name_has_a_class.sql": "6c0a83e036e790bdef2be3df2ae210260a6834b2dadff766bf8534fe7a286e6f"
 }
