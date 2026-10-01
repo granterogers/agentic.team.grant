@@ -363,6 +363,14 @@ paid for repeatedly:
 
 ---
 
+## File editing
+
+Modify files with the Edit and Write tools only. Never use `sed`, `awk`,
+`perl -i`, or shell redirects (`>`, `>>`, `tee`, heredoc-to-file) to change a
+file in the repository. This applies to every agent and worker, including
+subagents. Reading with the dedicated Read, Grep and Glob tools is preferred
+over `cat`, `grep` and `head`.
+
 ## Hard constraints
 
 | Constraint | Detail |
