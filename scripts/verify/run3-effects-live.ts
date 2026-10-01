@@ -77,7 +77,7 @@ const gateway = async (auth: string | null, action: string, args: Record<string,
   )
   check('migrations 0616, 0617 and 0618 are applied', Number(m.n) === 3, `${String(m.n)} of 3`)
   const f = await one(
-    `select to_regprocedure('app.approval_verdict(uuid,uuid)') is not null as v, to_regprocedure('app.approval_for_delivery(uuid)') is not null as d, exists (select 1 from public.system_config where key = 'approval.fingerprints_from') as c`,
+    `select to_regprocedure('app.approval_verdict(uuid,uuid)') is not null as v, to_regprocedure('app.approval_for_delivery(uuid,uuid)') is not null as d, exists (select 1 from public.system_config where key = 'approval.fingerprints_from') as c`,
   )
   check(
     'the verdict, the delivery binding and the legacy cutoff exist',
@@ -169,7 +169,7 @@ const fixtureJob = async (kind: string, config: Record<string, unknown>) => {
   const c = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(rootJob)}::uuid, p_kind => ${lit(kind)}, p_payload => ${lit(JSON.stringify(config))}::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(rootJob)}::uuid), p_parent => ${lit(rootJob)}::uuid, p_kind => ${lit(kind)}, p_payload => ${lit(JSON.stringify(config))}::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -227,7 +227,7 @@ const verdict = async (job: string) =>
     String(wrong.state),
   )
   const stale = await one(
-    `select app.approval_for_delivery('00000000-0000-0000-0000-000000000000'::uuid)::text as b`,
+    `select app.approval_for_delivery(app.test_office(), '00000000-0000-0000-0000-000000000000'::uuid)::text as b`,
   )
   check(
     'a button whose delivery is unknown is bound to no question (a stale press answers nothing)',

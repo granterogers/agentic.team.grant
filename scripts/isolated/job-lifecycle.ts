@@ -180,7 +180,7 @@ const situation = async (id: string) =>
 
 // ---- D2 and D5: an answer is not an attempt, and is never lost to a race ------------------------------------------
 const blockerFor = async (id: string, state = 'open') => {
-  const proj = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const proj = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   return String(
     (
       await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, state ${state === 'open' ? '' : ', resolved_at, answered_by, answered_option'})
@@ -291,7 +291,7 @@ const fp = 'a'.repeat(64)
     String(
       (
         await one(
-          `select app.enqueue_child(${lit(p)}::uuid, 'office.instruction', ${lit(payload)}::jsonb)::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(p)}::uuid), ${lit(p)}::uuid, 'office.instruction', ${lit(payload)}::jsonb)::text as c`,
         )
       ).c,
     )
@@ -663,7 +663,7 @@ const fp = 'a'.repeat(64)
     String(
       (
         await one(
-          `select app.enqueue_child(${lit(parent)}::uuid, 'office.instruction', ${lit(payload)}::jsonb, '0 seconds'::interval, true, ${project === null ? 'null' : lit(project)}::uuid)::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'office.instruction', ${lit(payload)}::jsonb, '0 seconds'::interval, true, ${project === null ? 'null' : lit(project)}::uuid)::text as c`,
         )
       ).c,
     )

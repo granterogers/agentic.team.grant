@@ -133,7 +133,7 @@ export async function policyWorld(defaultDb: string): Promise<World> {
       const made = String(
         (
           await one(
-            `select app.enqueue_child(${lit(parent)}::uuid, ${lit(kind)}, '{}'::jsonb)::text as c`,
+            `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, ${lit(kind)}, '{}'::jsonb)::text as c`,
           )
         ).c,
       )

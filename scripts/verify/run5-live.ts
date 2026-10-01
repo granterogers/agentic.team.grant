@@ -142,7 +142,7 @@ try {
     const id = String(
       (
         await one(
-          `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb, interval '0', true, null${caller})::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb, interval '0', true, null${caller})::text as c`,
         )
       ).c,
     ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -152,7 +152,7 @@ try {
     )
     return id
   }
-  const project = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const project = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   const ask = async (job: string, what: string) =>
     String(
       (
@@ -167,7 +167,7 @@ try {
     const d = String(
       (
         await one(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
-          values ('telegram', ${lit(`run5-live-${crypto.randomUUID()}`)}, coalesce(app.command_account(${lit(turnCommand)}::uuid), 'run5-live'), ${lit(chat)}, 'blocker', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(String(ref0))})
+          values ('telegram', ${lit(`run5-live-${crypto.randomUUID()}`)}, coalesce(app.command_account((select ic.office_id from public.inbound_commands ic where ic.command_id = ${lit(turnCommand)}::uuid), ${lit(turnCommand)}::uuid), 'run5-live'), ${lit(chat)}, 'blocker', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(String(ref0))})
           returning delivery_id::text as id`)
       ).id,
     )
@@ -201,8 +201,16 @@ try {
   const da = await show(String(first.command), ja, qa)
   const db2 = await show(String(first.command), jb, qb)
   {
-    const forA = (await one(`select app.approval_for_delivery(${lit(da.id)}::uuid)::text as b`)).b
-    const forB = (await one(`select app.approval_for_delivery(${lit(db2.id)}::uuid)::text as b`)).b
+    const forA = (
+      await one(
+        `select app.approval_for_delivery((select dl.office_id from public.deliveries dl where dl.delivery_id = ${lit(da.id)}::uuid), ${lit(da.id)}::uuid)::text as b`,
+      )
+    ).b
+    const forB = (
+      await one(
+        `select app.approval_for_delivery((select dl.office_id from public.deliveries dl where dl.delivery_id = ${lit(db2.id)}::uuid), ${lit(db2.id)}::uuid)::text as b`,
+      )
+    ).b
     check(
       'each message answers the question it asked (a press on A resolves A, never the newer B)',
       forA === qa && forB === qb && da.bound === true && db2.bound === true,

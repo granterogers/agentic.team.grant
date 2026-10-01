@@ -553,7 +553,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
           : ''
       const { rows } = await db
         .execute(`
-          select app.enqueue_child(${lit(jobId)}::uuid, 'office.extract_tasks',
+          select app.enqueue_child(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, 'office.extract_tasks',
             jsonb_build_object('from', ${lit(only)}), interval '0', false${callerArgs(held)})::text as id`)
         .catch(() => ({ rows: [] as Record<string, unknown>[] }))
       const id = String((rows[0] as { id?: string } | undefined)?.id ?? '')

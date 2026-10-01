@@ -35,7 +35,7 @@ const turn = async (text: string, context?: Record<string, unknown>) => {
   return { command: String(cmd.id), job: String((v as { job_id: string }).job_id) }
 }
 const ask = async (job: string, sentTo: string | null) => {
-  const proj = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const proj = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   const b = String(
     (
       await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)

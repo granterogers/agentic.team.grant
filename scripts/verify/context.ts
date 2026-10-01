@@ -105,10 +105,10 @@ const scenario = async (name: string, body: string): Promise<Record<string, stri
       */
       select project_id into v_p from public.projects
        where status = 'active' and not is_fixture
-         and project_id <> app.unnamed_project() order by updated_at desc limit 1;
+         and slug <> 'unnamed' order by updated_at desc limit 1;
       select project_id into v_q from public.projects
        where status = 'active' and not is_fixture
-         and project_id <> app.unnamed_project() and project_id <> v_p
+         and slug <> 'unnamed' and project_id <> v_p
        order by updated_at desc limit 1;
       if v_p is null or v_q is null then
         insert into answers values ('skipped', 'fewer than two real, named, active projects');

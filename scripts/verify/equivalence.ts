@@ -113,7 +113,9 @@ const jobIds: string[] = []
 try {
   console.log('\none dashboard project, four surfaces, the same sentence')
 
-  projectId = String((await one(`select app.unnamed_project()::text as v`)).v ?? '')
+  projectId = String(
+    (await one(`select app.unnamed_project(app.test_office())::text as v`)).v ?? '',
+  )
   check(
     'the reserved Unnamed project is where they land',
     projectId === '' ? 'MISSING' : projectId.slice(0, 8),

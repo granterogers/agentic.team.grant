@@ -345,7 +345,7 @@ try {
     const id = String(
       (
         await one(
-          `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb, interval '0', true, null${caller})::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb, interval '0', true, null${caller})::text as c`,
         )
       ).c,
     ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -355,7 +355,7 @@ try {
     )
     return id
   }
-  const project = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const project = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   const root = await turn(`final-audit-live ${origins.token}: start something`)
   const rootJob = String(root.job)
 
@@ -598,7 +598,7 @@ try {
       const d = String(
         (
           await one(
-            `insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref) values ('telegram', ${lit(`final-audit-live-${crypto.randomUUID()}`)}, coalesce(app.command_account(${lit(String(root.command))}::uuid), 'final-audit-live'), ${lit(chat)}, 'blocker', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(String(n))}) returning delivery_id::text as id`,
+            `insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref) values ('telegram', ${lit(`final-audit-live-${crypto.randomUUID()}`)}, coalesce(app.command_account((select ic.office_id from public.inbound_commands ic where ic.command_id = ${lit(String(root.command))}::uuid), ${lit(String(root.command))}::uuid), 'final-audit-live'), ${lit(chat)}, 'blocker', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(String(n))}) returning delivery_id::text as id`,
           )
         ).id,
       )
@@ -610,7 +610,11 @@ try {
     const da = await show(ja, qa)
     const db2 = await show(jb, qb)
     const named = async (d: string) =>
-      (await one(`select app.approval_for_delivery(${lit(d)}::uuid)::text as b`)).b
+      (
+        await one(
+          `select app.approval_for_delivery((select dl.office_id from public.deliveries dl where dl.delivery_id = ${lit(d)}::uuid), ${lit(d)}::uuid)::text as b`,
+        )
+      ).b
     check(
       'exact binding: each message answers the question it asked, not the newer one',
       (await named(da.d)) === qa && (await named(db2.d)) === qb,
@@ -718,7 +722,7 @@ try {
         String(
           (
             await one(
-              `select app.step_begin(${lit(job)}::uuid, 'final-audit-send', 0, 'external', 1, 'final-audit@1')::text as r`,
+              `select app.step_begin(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid, 'final-audit-send', 0, 'external', 1, 'final-audit@1')::text as r`,
             )
           ).r,
         ),
@@ -797,7 +801,7 @@ try {
     // An agent's retrieval is never "every project" (invariant 17): read-only, real documents.
     const doc = await one(
       `select d.title, d.project_id::text as p from public.documents d join public.projects p on p.project_id = d.project_id
-        where p.project_id <> app.unnamed_project() and not p.is_fixture and d.title ~ '[A-Za-z]{7,}' and d.content is not null
+        where p.slug <> 'unnamed' and not p.is_fixture and d.title ~ '[A-Za-z]{7,}' and d.content is not null
         order by d.fetched_at desc nulls last limit 1`,
     )
     if (doc?.title === undefined) {

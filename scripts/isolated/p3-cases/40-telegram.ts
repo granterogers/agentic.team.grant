@@ -230,7 +230,7 @@ export async function cases(c: Ctx): Promise<void> {
   const lostText = `would be lost ${run}`
   try {
     await c.db.execute(`alter table public.inbound_commands disable trigger a0_project_default;
-      alter table public.inbound_commands alter column project_id set default app.unnamed_project()`)
+      alter table public.inbound_commands alter column project_id set default app.unnamed_project('${c.G}'::uuid)`)
     const rl = await door.post(message(ua, ua, 'private', lostText))
     const stored = (
       await q(`select 1 from public.inbound_commands where instruction = ${lit(lostText)}`)

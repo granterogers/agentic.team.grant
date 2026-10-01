@@ -276,7 +276,7 @@ export class ProviderRouter {
     const detail = JSON.stringify({ chose: model, because: why }).replace(/'/g, "''")
     await this.db
       .execute(
-        `select app.job_trace_add('${jobId.replace(/'/g, "''")}'::uuid, 'decision',
+        `select app.job_trace_add(app.job_office('${jobId.replace(/'/g, "''")}'::uuid), '${jobId.replace(/'/g, "''")}'::uuid, 'decision',
            '${detail}'::jsonb, null, null, null, null)`,
       )
       .catch((error: unknown) => {

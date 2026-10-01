@@ -113,8 +113,8 @@ export async function remember(
     /*
       THE UNNAMED PROJECT IS NOT A PROJECT (#310).
 
-      `inbound_commands.project_id` is NOT NULL and defaults to
-      `app.unnamed_project()`, so the handler never hands this a null — it
+      `inbound_commands.project_id` is NOT NULL and is filled with the office's
+      own catch-all project, so the handler never hands this a null — it
       hands it the id of a real row whose slug is `unnamed`. The first
       version tested `projectId === null` and therefore stored every rule
       from a follow-up turn at PROJECT scope on a project called "unnamed".

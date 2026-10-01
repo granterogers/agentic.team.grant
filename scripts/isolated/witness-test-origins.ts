@@ -137,7 +137,7 @@ const testChild =
   String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(testJob)}::uuid, p_kind => 'office.synthesise', p_payload => '{}'::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(testJob)}::uuid), p_parent => ${lit(testJob)}::uuid, p_kind => 'office.synthesise', p_payload => '{}'::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] ?? ''

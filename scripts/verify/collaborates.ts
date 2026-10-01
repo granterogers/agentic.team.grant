@@ -492,7 +492,7 @@ const refused = await db
     declare v_id uuid := ${lit(parent)}::uuid;
     begin
       for i in 1..${String(Number(cap.m ?? 3) + 1)} loop
-        v_id := app.enqueue_child(v_id, 'office.instruction', '{}'::jsonb, interval '0', false);
+        v_id := app.enqueue_child(app.job_office(v_id), v_id, 'office.instruction', '{}'::jsonb, interval '0', false);
       end loop;
     end $$;
     rollback;`)

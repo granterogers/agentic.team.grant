@@ -19,7 +19,7 @@ const check = (what: string, ok: boolean, detail: string) => {
   results.push({ ok })
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what} - ${detail}`)
 }
-const project = String((await one(`select app.unnamed_project()::text as p`)).p)
+const project = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
 const may = async (job: string, tool = 'drive.ingest') =>
   JSON.parse(
     String(
@@ -42,8 +42,11 @@ const rootJob = async (requestedBy: string, kind = 'verify.ask') =>
 // ---- B11 -------------------------------------------------------------------------------------------------------------------
 const turn = await realParent(db) // his own words through a production door
 const kid = String(
-  (await one(`select app.enqueue_child(${lit(turn)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`))
-    .c,
+  (
+    await one(
+      `select app.enqueue_child(app.job_office(${lit(turn)}::uuid), ${lit(turn)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+    )
+  ).c,
 ).match(/[0-9a-f-]{36}/)?.[0] as string
 {
   const own = await may(kid)
@@ -93,8 +96,11 @@ const kid = String(
 {
   const a = await rootJob(`teamhq:verify-cycle-${run}`)
   const b = String(
-    (await one(`select app.enqueue_child(${lit(a)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`))
-      .c,
+    (
+      await one(
+        `select app.enqueue_child(app.job_office(${lit(a)}::uuid), ${lit(a)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+      )
+    ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
   const said = await db
     .execute(
@@ -231,7 +237,7 @@ const kid = String(
     const id = String(
       (
         await one(
-          `select app.enqueue_child(${lit(root)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(root)}::uuid), ${lit(root)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
         )
       ).c,
     ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -342,7 +348,7 @@ const kid = String(
   const kid = String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
       )
     ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -368,7 +374,7 @@ const kid = String(
   const over = String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', '{"x":1}'::jsonb, interval '0', true, ${lit(other)}::uuid)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', '{"x":1}'::jsonb, interval '0', true, ${lit(other)}::uuid)::text as c`,
       )
     ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -522,7 +528,7 @@ const kid = String(
     return String(
       (
         await one(
-          `select app.enqueue_child(${lit(root)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(root)}::uuid), ${lit(root)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
         )
       ).c,
     ).match(/[0-9a-f-]{36}/)?.[0] as string

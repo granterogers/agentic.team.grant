@@ -198,7 +198,7 @@ export async function cases(c: Ctx): Promise<void> {
   const t6 = `slack would be lost ${run}`
   try {
     await c.db.execute(`alter table public.inbound_commands disable trigger a0_project_default;
-      alter table public.inbound_commands alter column project_id set default app.unnamed_project()`)
+      alter table public.inbound_commands alter column project_id set default app.unnamed_project('${c.G}'::uuid)`)
     const r6 = await post(ua, chA, t6)
     c.check(
       r6.status === 503 && (await stored(t6)).length === 0,

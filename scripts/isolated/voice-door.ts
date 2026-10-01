@@ -94,7 +94,7 @@ export async function startDoor(db: PgExecutor): Promise<Handler> {
       }
       const table = path.slice('/rest/v1/'.length)
       /* Only the columns the body names, as PostgREST does, so every other
-         column keeps its DEFAULT (project_id's is app.unnamed_project()). */
+         column keeps its DEFAULT (project_id's is the office's own catch-all project). */
       const cols = Object.keys(body)
         .filter((k) => /^[a-z_]+$/.test(k))
         .join(', ')

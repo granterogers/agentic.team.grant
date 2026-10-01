@@ -77,7 +77,7 @@ await register(GRANT_CHAT, 'grant')
 
 const handler = vaultExportHandler(db)
 const job = async (): Promise<Job> => {
-  const p = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const p = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   const r =
     await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
     values ('office.vault_export', 'duty:vault-export', ${lit(p)}::uuid, 'vd-' || gen_random_uuid(), gen_random_uuid())

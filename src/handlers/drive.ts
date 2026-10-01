@@ -187,7 +187,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         for (const file of changed) {
           await db.execute(`
             select app.enqueue_child(
-              ${lit(job.jobId)}::uuid, 'drive.read_file',
+              app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'drive.read_file',
               jsonb_build_object(
                 'project_id', ${lit(f.project_id)},
                 'folder_id', ${lit(f.folder_id)},
@@ -296,7 +296,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           for (const file of arrived) {
             await db.execute(`
               select app.enqueue_child(
-                ${lit(job.jobId)}::uuid, 'drive.read_file',
+                app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'drive.read_file',
                 jsonb_build_object(
                   'project_id', ${lit(f.project_id)},
                   'folder_id', ${lit(f.folder_id)},

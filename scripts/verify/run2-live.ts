@@ -250,7 +250,7 @@ const question = async (fp: string | null, kind: 'plan' | 'duty' = 'plan') => {
   const c = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(rootJob)}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(rootJob)}::uuid), p_parent => ${lit(rootJob)}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -521,7 +521,7 @@ await answer(qn.id, 'No, leave it')
   const c = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(rootJob)}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(rootJob)}::uuid), p_parent => ${lit(rootJob)}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] as string

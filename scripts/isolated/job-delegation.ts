@@ -28,13 +28,13 @@ const child = async (parent: string, kind = 'office.instruction', payload = '{}'
   String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, ${lit(kind)}, ${lit(payload)}::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, ${lit(kind)}, ${lit(payload)}::jsonb)::text as c`,
       )
     ).c,
   )
 const fp = 'c'.repeat(64)
 const blocker = async (job: string) => {
-  const proj = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const proj = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   return String(
     (
       await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)

@@ -198,7 +198,7 @@ check(
 const child = String(
   (
     await one(
-      `select app.enqueue_child(${lit(grantLike)}::uuid, 'artifact.report', '{}'::jsonb)::text as v`,
+      `select app.enqueue_child(app.job_office(${lit(grantLike)}::uuid), ${lit(grantLike)}::uuid, 'artifact.report', '{}'::jsonb)::text as v`,
     )
   ).v ?? '',
 )

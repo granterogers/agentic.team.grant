@@ -20,7 +20,7 @@ const check = (what: string, ok: boolean, detail: string) => {
 }
 const DOOR = "set local application_name = 'PostgREST 14.5';"
 await registerBot(db)
-const project = String((await one(`select app.unnamed_project()::text as p`)).p)
+const project = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
 
 const turn = async (context: Record<string, unknown>) => {
   const key = realTelegramKey()
@@ -37,7 +37,7 @@ const child = async (parent: string) =>
   String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
       )
     ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -87,7 +87,7 @@ check('no job is unprompted (unchanged)', v.verdict === 'ask', v.verdict)
 const legacy = String(
   (
     await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-    values ('verify.ask', 'teamhq:verify-fwd', app.unnamed_project(), 'fwd-' || gen_random_uuid(), gen_random_uuid()) returning job_id::text as id`)
+    values ('verify.ask', 'teamhq:verify-fwd', app.unnamed_project(app.test_office()), 'fwd-' || gen_random_uuid(), gen_random_uuid()) returning job_id::text as id`)
   ).id,
 )
 await db

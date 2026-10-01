@@ -51,7 +51,7 @@ const fanIn = async () => {
   const parent = await realParent(db)
   const branch = String(
     (
-      await one(`select app.enqueue_child(p_parent => ${lit(parent)}::uuid, p_kind => 'verify.branch',
+      await one(`select app.enqueue_child(p_office => app.job_office(${lit(parent)}::uuid), p_parent => ${lit(parent)}::uuid, p_kind => 'verify.branch',
           p_payload => '{}'::jsonb, p_announce => false)::text as v`)
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0]
@@ -136,7 +136,7 @@ const failing = await realParent(db)
 const failer = String(
   (
     await one(
-      `select app.enqueue_child(p_parent => ${lit(failing)}::uuid, p_kind => 'verify.fails', p_payload => '{}'::jsonb, p_announce => false)::text as v`,
+      `select app.enqueue_child(p_office => app.job_office(${lit(failing)}::uuid), p_parent => ${lit(failing)}::uuid, p_kind => 'verify.fails', p_payload => '{}'::jsonb, p_announce => false)::text as v`,
     )
   ).v,
 ).match(/[0-9a-f-]{36}/)?.[0]
@@ -176,7 +176,7 @@ check(
   const probe = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(pj)}::uuid, p_kind => 'verify.provider', p_payload => '{}'::jsonb, p_announce => false)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(pj)}::uuid), p_parent => ${lit(pj)}::uuid, p_kind => 'verify.provider', p_payload => '{}'::jsonb, p_announce => false)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0]

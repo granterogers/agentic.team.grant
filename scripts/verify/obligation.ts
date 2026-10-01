@@ -63,7 +63,7 @@ const scenario = async (name: string, body: string): Promise<Record<string, stri
     begin
       select project_id into v_p from public.projects
        where status = 'active' and not is_fixture
-         and project_id <> app.unnamed_project() order by updated_at desc limit 1;
+         and slug <> 'unnamed' order by updated_at desc limit 1;
       if v_p is null then
         insert into answers values ('skipped', 'no real, named, active project');
         return;

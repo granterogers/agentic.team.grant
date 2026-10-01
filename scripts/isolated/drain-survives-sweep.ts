@@ -18,7 +18,7 @@ const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<str
 
 const broken = await one(`
   with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-             values ('office.instruction', 'teamhq:verify-drain-broken', app.unnamed_project(),
+             values ('office.instruction', 'teamhq:verify-drain-broken', app.unnamed_project(app.test_office()),
                      'verify-drain-broken-' || gen_random_uuid(), gen_random_uuid()) returning job_id)
   select job_id::text as id from j`)
 await db.execute(`
@@ -34,7 +34,7 @@ await db.execute('rollback').catch(() => undefined)
 
 const healthy = await one(`
   with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-             values ('verify.drain', 'teamhq:verify-drain-healthy', app.unnamed_project(),
+             values ('verify.drain', 'teamhq:verify-drain-healthy', app.unnamed_project(app.test_office()),
                      'verify-drain-healthy-' || gen_random_uuid(), gen_random_uuid()) returning job_id)
   select job_id::text as id from j`)
 

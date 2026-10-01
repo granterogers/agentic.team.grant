@@ -84,7 +84,7 @@ const results = await Promise.all(
   Array.from({ length: CONCURRENCY }, (_, i) =>
     db
       .execute(
-        `select app.request_undo(${lit(contested)}::uuid, 'verify:undo', ${lit(`racer-${String(i)}`)})::text as s`,
+        `select app.request_undo((select ua.office_id from public.undoable_actions ua where ua.action_id = ${lit(contested)}::uuid), ${lit(contested)}::uuid, 'verify:undo', ${lit(`racer-${String(i)}`)})::text as s`,
       )
       .then((r) => String(r.rows[0]?.s))
       .catch((e: unknown) => `ERROR:${(e as Error).message.slice(0, 60)}`),
@@ -118,7 +118,7 @@ record(
 
 // A later request, long after the race, must still not error.
 const late = await one(
-  `select app.request_undo(${lit(contested)}::uuid, 'verify:undo', 'late-retry')::text as s`,
+  `select app.request_undo((select ua.office_id from public.undoable_actions ua where ua.action_id = ${lit(contested)}::uuid), ${lit(contested)}::uuid, 'verify:undo', 'late-retry')::text as s`,
 )
 record(
   'a retry arriving minutes later is told the truth, not given an error',
@@ -136,7 +136,7 @@ await db.execute(`
   where action_id = ${lit(expiredAction)}::uuid
 `)
 const expiredResult = await one(
-  `select app.request_undo(${lit(expiredAction)}::uuid, 'verify:undo')::text as s`,
+  `select app.request_undo((select ua.office_id from public.undoable_actions ua where ua.action_id = ${lit(expiredAction)}::uuid), ${lit(expiredAction)}::uuid, 'verify:undo')::text as s`,
 )
 record(
   'an undo requested after its window reports expired, and does not reverse',
@@ -146,7 +146,7 @@ record(
 
 const impossible = await mkAction({ status: 'not_undoable', kind: 'gmail.send' })
 const impossibleResult = await one(
-  `select app.request_undo(${lit(impossible)}::uuid, 'verify:undo')::text as s`,
+  `select app.request_undo((select ua.office_id from public.undoable_actions ua where ua.action_id = ${lit(impossible)}::uuid), ${lit(impossible)}::uuid, 'verify:undo')::text as s`,
 )
 record(
   'an action that cannot be reversed says so, rather than pretending',
@@ -155,7 +155,7 @@ record(
 )
 
 const missing = await mustRefuse(
-  `select app.request_undo('00000000-0000-4000-8000-000000000000'::uuid, 'verify:undo')`,
+  `select app.request_undo(app.test_office(), '00000000-0000-4000-8000-000000000000'::uuid, 'verify:undo')`,
 )
 record(
   'an undo for an action that does not exist is an error, not a silent success',

@@ -34,11 +34,12 @@ const child = async (parent: string) =>
   String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
       )
     ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
-const project = async () => String((await one(`select app.unnamed_project()::text as p`)).p)
+const project = async () =>
+  String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
 const ask = async (job: string, what: string, ageMinutes = 0) =>
   String(
     (
@@ -85,9 +86,11 @@ const deliver = async (
   return { id, ref: String(msg), bound }
 }
 const forDelivery = async (d: string) =>
-  ((await one(`select app.approval_for_delivery(${lit(d)}::uuid)::text as b`)).b ?? null) as
-    | string
-    | null
+  ((
+    await one(
+      `select app.approval_for_delivery((select dl.office_id from public.deliveries dl where dl.delivery_id = ${lit(d)}::uuid), ${lit(d)}::uuid)::text as b`,
+    )
+  ).b ?? null) as string | null
 const answer = async (b: string, by = 'grant') =>
   JSON.parse(
     String(
@@ -661,7 +664,7 @@ const root = await realParent(db)
   const nullJobBlocker = String(
     (
       await one(`insert into public.blockers (project_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
-    values (app.unnamed_project(), ${lit(`F9 ${run}`)}, 'isolated', 'nothing', array['Yes','No'], 'chief-of-staff', false, 'No') returning blocker_id::text as id`).catch(
+    values (app.unnamed_project(app.test_office()), ${lit(`F9 ${run}`)}, 'isolated', 'nothing', array['Yes','No'], 'chief-of-staff', false, 'No') returning blocker_id::text as id`).catch(
         () => ({ id: '' }),
       )
     ).id,

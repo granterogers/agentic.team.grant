@@ -90,7 +90,7 @@ const make = async (titles: string[]): Promise<string> => {
   const BY = `telegram:grant${String(seq)}`
   const r = await one(`
     with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, pinned_config, announce)
-               values ('office.pursue', '${BY}', app.unnamed_project(), 'r45-' || gen_random_uuid(), gen_random_uuid(),
+               values ('office.pursue', '${BY}', app.unnamed_project(app.test_office()), 'r45-' || gen_random_uuid(), gen_random_uuid(),
                        jsonb_build_object('plan', '${JSON.stringify(plan(titles)).replace(/'/g, "''")}'::jsonb, 'request', 'isolated proof'), true)
                returning job_id)
     select job_id::text as id from j`)

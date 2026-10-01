@@ -475,7 +475,7 @@ export const askOnce = async (
                       no project.
 
                       inbound_commands.project_id is NOT NULL with a default
-                      of app.unnamed_project() - the Unnamed bucket a message
+                      of the office's own catch-all project - the Unnamed bucket a message
                       that names nothing lands in. Passing null defeats the
                       default and the insert is refused, which is the
                       explicit-null-over-a-default trap.
@@ -487,7 +487,7 @@ export const askOnce = async (
                       exposure lives in - died on a 23502 before the office
                       saw a word of it.
                     */
-                    ${projectId === null ? 'app.unnamed_project()' : `${lit(projectId)}::uuid`})
+                    ${projectId === null ? 'app.unnamed_project(app.operator_office())' : `${lit(projectId)}::uuid`})
             on conflict (dedupe_key) do nothing;
             create temp table _j as
               select coalesce(

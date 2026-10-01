@@ -378,7 +378,7 @@ try {
     )
   } else {
     const first = await one(
-      `select app.request_undo(${lit(String(offer.id))}::uuid, 'grant', 'scenario-a')::text as s`,
+      `select app.request_undo((select office_id from public.undoable_actions where action_id = ${lit(String(offer.id))}::uuid), ${lit(String(offer.id))}::uuid, 'grant', 'scenario-a')::text as s`,
     )
     record(
       'Grant can undo what came back',
@@ -386,7 +386,7 @@ try {
       String(first?.s) !== 'null',
     )
     const second = await one(
-      `select app.request_undo(${lit(String(offer.id))}::uuid, 'grant', 'scenario-a')::text as s`,
+      `select app.request_undo((select office_id from public.undoable_actions where action_id = ${lit(String(offer.id))}::uuid), ${lit(String(offer.id))}::uuid, 'grant', 'scenario-a')::text as s`,
     )
     record(
       'and asking twice does it once — §22 asks for idempotence',

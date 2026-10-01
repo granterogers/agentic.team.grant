@@ -199,6 +199,7 @@ for (const [what, shape] of SHAPES) {
     create temp table _r as
       select coalesce((
         select 'wrote step ' || app.job_trace_add(
+          (select office_id from public.jobs where not is_fixture order by created_at desc limit 1),
           (select job_id from public.jobs where not is_fixture order by created_at desc limit 1),
           'tool', jsonb_build_object('note', '${shape.replace(/'/g, "''")}'))::text
       ), 'wrote nothing') as v;
@@ -225,6 +226,7 @@ for (const [what, shape] of SHAPES) {
     begin;
     create temp table _a as
       select app.job_trace_add(
+        (select office_id from public.jobs where not is_fixture order by created_at desc limit 1),
         (select job_id from public.jobs where not is_fixture order by created_at desc limit 1),
         'tool', jsonb_build_object('note', '${clean.replace(/'/g, "''")}')) as v;
     select (select v from _a)::text as v;

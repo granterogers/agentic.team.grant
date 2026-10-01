@@ -343,7 +343,7 @@ export const planAndPursue = async (
   const handed = await db
     .execute(`
       select ${deliberate === null ? 'app.enqueue_child_once' : 'app.enqueue_child'}(
-        ${lit(job.jobId)}::uuid, 'office.pursue',
+        app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.pursue',
         ${
           deliberate === null
             ? `${lit(request.slice(0, 2000))},
@@ -1322,7 +1322,7 @@ async function act(
     // this wrong: a gate whose request can be muted is not a gate.
     await db.execute(`
       select app.enqueue_child(
-        ${lit(job.jobId)}::uuid, 'notebook.generate',
+        app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'notebook.generate',
         jsonb_build_object('kind', ${lit(kind)}, 'instructions', ${lit(instructions)}),
         interval '0', true${callerArgs(job)}
       )
@@ -1753,7 +1753,7 @@ async function enqueueSource(
   // was quietly filed under another.
   await db.execute(`
     select app.enqueue_child(
-      ${lit(job.jobId)}::uuid, 'notebook.add_source',
+      app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'notebook.add_source',
       jsonb_build_object('url', ${lit(link.url)}, 'kind', ${lit(link.kind)}),
       interval '0', false, ${lit(projectId)}::uuid${callerArgs(job)}
     )
@@ -2780,7 +2780,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 const started = await deps.db
                   .execute(`
                     select app.enqueue_child_once(
-                      ${lit(job.jobId)}::uuid, 'office.instruction',
+                      app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.instruction',
                       ${lit(`${String(pick.slug ?? '')}: ${String(pick.about ?? '').slice(0, 2_000)}`)},
                       jsonb_build_object(
                         'instruction', ${lit(String(pick.about ?? '').slice(0, 4_000))},
@@ -2875,7 +2875,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         const spawned = await deps.db
           .execute(`
             select app.enqueue_child_once(
-              ${lit(job.jobId)}::uuid, 'office.instruction',
+              app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.instruction',
               ${lit(`${other}: ${instruction.slice(0, 2_000)}`)},
               jsonb_build_object(
                 'instruction', ${lit(instruction.slice(0, 4_000))},
@@ -3253,6 +3253,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         if (wire !== null) {
           await deps.db.execute(`
             select app.enqueue_child(
+              app.job_office(${lit(job.jobId)}::uuid),
               ${lit(job.jobId)}::uuid,
               'office.notion_adopt',
               '{}'::jsonb,
@@ -3265,6 +3266,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         if (fill) {
           await deps.db.execute(`
             select app.enqueue_child(
+              app.job_office(${lit(job.jobId)}::uuid),
               ${lit(job.jobId)}::uuid,
               'office.notion_import',
               '{}'::jsonb,
@@ -4081,7 +4083,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.enqueue_child(
-                  ${lit(job.jobId)}::uuid, 'notebook.list_artifacts',
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'notebook.list_artifacts',
                   jsonb_build_object(
                     'kinds', ${lit(JSON.stringify(listing.kinds))}::jsonb,
                     'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
@@ -4261,7 +4263,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.enqueue_child(
-                  ${lit(job.jobId)}::uuid, 'browser.gather',
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'browser.gather',
                   jsonb_build_object(
                     'url', ${lit(wantsPage.url.slice(0, 2_000))},
                     'because', ${lit(wantsPage.because.slice(0, 500))},
@@ -4297,7 +4299,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.enqueue_child(
-                  ${lit(job.jobId)}::uuid, 'artifact.report',
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'artifact.report',
                   jsonb_build_object(
                     'brief', ${lit(wantsFile.brief.slice(0, 2_000))},
                     'by', ${lit(who.slug)},
@@ -4332,7 +4334,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.enqueue_child(
-                  ${lit(job.jobId)}::uuid, 'office.extract_tasks',
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.extract_tasks',
                   jsonb_build_object(
                     'from', ${lit(pullOut.from ?? '')},
                     'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
@@ -4815,7 +4817,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 }
                 const set = await deps.db.execute(
                   `select app.hq_task_state(app.job_office(${lit(job.jobId)}::uuid), ${lit(target.id)}, ${lit(settles.state)}, null,
-                     app.command_principal(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
+                     app.command_principal(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
                 )
                 const out = (set.rows[0] as { r?: unknown })?.r
                 const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
@@ -4996,7 +4998,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 */
                 const res = await deps.db.execute(
                   `select app.hq_answer_blocker(${lit(q.id)}::uuid, ${lit(option)},
-                     app.command_principal(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
+                     app.command_principal(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
                 )
                 const out = (res.rows[0] as { r?: unknown })?.r
                 const got = (typeof out === 'string' ? JSON.parse(out) : out) as {

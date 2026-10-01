@@ -986,7 +986,7 @@ async function deliveries(c: Ctx, e: Env): Promise<void> {
     "and A's delivery binds to A's own question (the positive control)",
     c.json(bound),
   )
-  const legacy = await one(`select app.approval_for_delivery('${dBind}') as b`)
+  const legacy = await one(`select app.approval_for_delivery('${A}', '${dBind}') as b`)
   c.check(legacy.b === askA, 'approval_for_delivery answers the question the message named', '')
   void q
   void sameAnswer
@@ -1421,7 +1421,7 @@ async function jobBound(c: Ctx, e: Env): Promise<void> {
     '',
   )
   const plan = await wq(
-    `select app.job_plan_set('${jobA}', 'notion.write', array['notion'], '[{"verb":"create","what":"a page","where":"notion","writes":1}]'::jsonb, 'a probe plan', 1)`,
+    `select app.job_plan_set('${A}', '${jobA}', 'notion.write', array['notion'], '[{"verb":"create","what":"a page","where":"notion","writes":1}]'::jsonb, 'a probe plan', 1)`,
   )
   const planBack = await wq(`select app.job_plan('${jobA}')`)
   c.check(
@@ -1433,11 +1433,15 @@ async function jobBound(c: Ctx, e: Env): Promise<void> {
   )
   const understood = await wq(`select app.understood('${jobA}', 'You want the probe to run.')`)
   c.check(c.json(understood).includes('"ok":true'), 'understood restates the held job', '')
-  const trace = await wq(`select app.job_trace_add('${jobA}', 'note', '{}'::jsonb, 1, 1, 0.1, 1)`)
-  const step = (await wq(`select app.step_begin('${jobA}', 'probe-step', 1, 'none', 1, 'v1')`)) as {
+  const trace = await wq(
+    `select app.job_trace_add('${A}', '${jobA}', 'note', '{}'::jsonb, 1, 1, 0.1, 1)`,
+  )
+  const step = (await wq(
+    `select app.step_begin('${A}', '${jobA}', 'probe-step', 1, 'none', 1, 'v1')`,
+  )) as {
     do?: boolean
   }
-  const done = await wq(`select app.step_done('${jobA}', 'probe-step', '{}'::jsonb)`)
+  const done = await wq(`select app.step_done('${A}', '${jobA}', 'probe-step', '{}'::jsonb)`)
   c.check(
     trace === 1 &&
       step.do === true &&

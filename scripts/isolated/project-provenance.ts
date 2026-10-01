@@ -37,7 +37,7 @@ const project = async (name: string): Promise<string> =>
   )
 const A = await project(`Provenance A ${run}`)
 const B = await project(`Provenance B ${run}`)
-const UNNAMED = String((await one(`select app.unnamed_project()::text as id`)).id)
+const UNNAMED = String((await one(`select app.unnamed_project(app.test_office())::text as id`)).id)
 
 const door = await startDoor(db)
 /* A page visit: one session, as chat.js mints it. */
@@ -219,7 +219,7 @@ const name = (id: unknown) =>
   )
   /* Two statements: a row a function inserts is invisible to the rest of its own statement. */
   const kid = await one(
-    `select app.enqueue_child(${lit(String(a.job))}::uuid, 'office.instruction', '{}'::jsonb, interval '0', false)::text as id`,
+    `select app.enqueue_child(app.job_office(${lit(String(a.job))}::uuid), ${lit(String(a.job))}::uuid, 'office.instruction', '{}'::jsonb, interval '0', false)::text as id`,
   )
   const child = await one(
     `select project_id::text as p from public.jobs where job_id = ${lit(String(kid.id))}::uuid`,
