@@ -30,6 +30,14 @@ import { type NotionBlock, type RenderedBlock, renderBlocks, titleOf } from './c
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const nul = (v: string | null): string => (v === null ? 'null' : lit(v))
 
+/**
+ * The office a project belongs to, as a subquery. Every statement below works on ONE project's documents, and the
+ * project row the caller read is the document's owner (documents carry the office of the project they hang from,
+ * enforced by a composite key), so a document is read, written and linked inside that office and no other.
+ */
+const officeOf = (projectId: string): string =>
+  `(select p.office_id from public.projects p where p.project_id = ${lit(projectId)}::uuid)`
+
 export const CONNECTOR = 'notion'
 
 /** How deep to follow toggles, columns and nested lists. */
@@ -148,7 +156,8 @@ export async function upsertDocument(
 
   const existing = await db.execute(`
     select content_fingerprint from public.documents
-     where connector = ${lit(CONNECTOR)}
+     where office_id = ${officeOf(projectId)}
+       and connector = ${lit(CONNECTOR)}
        and external_parent_ref = ${lit(object.object)}
        and external_ref = ${lit(object.id)}
   `)
@@ -171,21 +180,23 @@ export async function upsertDocument(
     (37,697 characters became 37,476), so the match is on the ORIGINAL we
     already hold for this project with the closest content, not on equality.
   */
-  await db.execute(`
+  const written = await db.execute(`
     insert into public.documents
       (project_id, connector, external_parent_ref, external_ref, title, doc_type,
        content, content_fingerprint, content_chars, fetched_at, remote_updated_at,
-       mirrors_document_id)
+       mirrors_document_id, office_id)
     values (${lit(projectId)}::uuid, ${lit(CONNECTOR)}, ${lit(object.object)}, ${lit(object.id)},
             ${nul(object.title === '' ? null : object.title)}, ${lit(object.object)},
             ${lit(content)}, ${lit(fingerprint)}, ${String(content.length)},
             app.now_utc(), ${nul(object.lastEdited)}::timestamptz,
             (select d.document_id from public.documents d
               where d.project_id = ${lit(projectId)}::uuid
+                and d.office_id = ${officeOf(projectId)}
                 and d.connector <> ${lit(CONNECTOR)}
                 and d.mirrors_document_id is null
                 and app.normalise_name(d.title) = app.normalise_name(${nul(object.title === '' ? null : object.title)})
-              limit 1))
+              limit 1),
+            ${officeOf(projectId)})
     -- The index is partial (0051), so the conflict target repeats its predicate.
     on conflict (connector, external_parent_ref, external_ref)
       where external_ref is not null
@@ -202,7 +213,14 @@ export async function upsertDocument(
           -- new material on the next sync.
           mirrors_document_id = coalesce(public.documents.mirrors_document_id,
                                          excluded.mirrors_document_id)
+      -- The key is still global (connector, parent, ref): a page another office holds is never overwritten or moved.
+      where public.documents.office_id = excluded.office_id
+    returning document_id
   `)
+  // The conflict guard wrote nothing: this page id is already filed by another office. Said plainly, and in words that
+  // name no office, so the pass lists the page as skipped instead of reporting a write that did not happen.
+  if (written.rows.length === 0)
+    throw new Error('could not be filed: the page id is already in use')
   return known ? 'changed' : 'added'
 }
 
@@ -251,19 +269,23 @@ export async function registerAuthored(
   producedBy: string,
 ): Promise<void> {
   const fingerprint = await fingerprintContent(body)
-  await db.execute(`
+  const filed = await db.execute(`
     insert into public.documents
       (project_id, connector, external_parent_ref, external_ref, title, doc_type,
-       content, content_fingerprint, content_chars, fetched_at, origin, produced_by)
+       content, content_fingerprint, content_chars, fetched_at, origin, produced_by, office_id)
     values (${lit(projectId)}::uuid, ${lit(CONNECTOR)}, 'page', ${lit(page.id)},
             ${nul(page.title === '' ? null : page.title)}, 'page',
             ${lit(body)}, ${lit(fingerprint)}, ${String(body.length)},
-            app.now_utc(), 'made', ${lit(producedBy)})
+            app.now_utc(), 'made', ${lit(producedBy)}, ${officeOf(projectId)})
     on conflict (connector, external_parent_ref, external_ref)
       where external_ref is not null
       do update set origin = 'made',
                     produced_by = coalesce(public.documents.produced_by, excluded.produced_by)
+      where public.documents.office_id = excluded.office_id
+    returning document_id
   `)
+  if (filed.rows.length === 0)
+    throw new Error('could not be recorded: the page id is already in use')
 }
 
 /**

@@ -50,6 +50,13 @@ import { DEFAULT_WORLD } from './world.ts'
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 /**
+ * The simulated world lives in the TEST office, named out loud on every statement (multi-user P3). Harness traffic
+ * is the test office's by definition; relying on the compatibility bridge would put these projects in whichever
+ * person office happened to be the only one, which is the leak this world exists to avoid. SQL expression.
+ */
+const TEST_OFFICE = 'app.test_office()'
+
+/**
  * The slug prefix, which is what makes every one of these a fixture.
  *
  * `projects.is_fixture` is GENERATED from the slug — `fixture-%`,
@@ -85,7 +92,8 @@ export const provisionWorld = async (db: SqlExecutor): Promise<WorldReport> => {
     const status = archived ? 'archived' : 'active'
 
     const { rows } = await db.execute(`
-      select count(*)::int as n from public.projects where slug = ${lit(slug)}
+      select count(*)::int as n from public.projects
+       where office_id = ${TEST_OFFICE} and slug = ${lit(slug)}
     `)
     const exists = Number((rows[0] as { n: number }).n) > 0
     if (exists) already.push(slug)
@@ -105,8 +113,8 @@ export const provisionWorld = async (db: SqlExecutor): Promise<WorldReport> => {
       is exactly what makes it correctly unresolvable.
     */
     await db.execute(`
-      insert into public.projects (slug, name, status)
-      values (${lit(slug)}, ${lit(project.name)}, ${lit(status)})
+      insert into public.projects (slug, name, status, office_id)
+      values (${lit(slug)}, ${lit(project.name)}, ${lit(status)}, ${TEST_OFFICE})
       on conflict (office_id, slug) do update set name = excluded.name, status = excluded.status;
       ${
         archived
@@ -115,7 +123,8 @@ export const provisionWorld = async (db: SqlExecutor): Promise<WorldReport> => {
                (project_id, connector, external_ref, display_name, role, enabled)
              select p.project_id, 'upload', ${lit(`${slug}-source`)},
                     ${lit(`${project.name} uploads`)}, 'source', true
-               from public.projects p where p.slug = ${lit(slug)}
+               from public.projects p
+              where p.office_id = ${TEST_OFFICE} and p.slug = ${lit(slug)}
              on conflict do nothing;`
       }
     `)
@@ -132,8 +141,9 @@ export const provisionWorld = async (db: SqlExecutor): Promise<WorldReport> => {
     */
     for (const nickname of project.nicknames ?? []) {
       await db.execute(`
-        select app.add_project_alias(p.project_id, ${lit(nickname)}, 'grant', 1.0)
-          from public.projects p where p.slug = ${lit(slug)}
+        select app.add_project_alias(${TEST_OFFICE}, p.project_id, ${lit(nickname)}, 'grant', 1.0)
+          from public.projects p
+         where p.office_id = ${TEST_OFFICE} and p.slug = ${lit(slug)}
       `)
     }
   }
@@ -143,15 +153,16 @@ export const provisionWorld = async (db: SqlExecutor): Promise<WorldReport> => {
 
   return {
     projects: await count(
-      `select count(*)::int n from public.projects where slug like ${lit(`${WORLD_PREFIX}%`)}`,
+      `select count(*)::int n from public.projects
+        where office_id = ${TEST_OFFICE} and slug like ${lit(`${WORLD_PREFIX}%`)}`,
     ),
     aliases: await count(`
       select count(*)::int n from public.project_aliases a
-        join public.projects p on p.project_id = a.project_id
+        join public.projects p on p.project_id = a.project_id and p.office_id = ${TEST_OFFICE}
        where p.slug like ${lit(`${WORLD_PREFIX}%`)}`),
     documents: await count(`
       select count(*)::int n from public.documents d
-        join public.projects p on p.project_id = d.project_id
+        join public.projects p on p.project_id = d.project_id and p.office_id = ${TEST_OFFICE}
        where p.slug like ${lit(`${WORLD_PREFIX}%`)}`),
     created,
     already,
@@ -172,12 +183,18 @@ export const assertContained = async (db: SqlExecutor): Promise<readonly string[
   const { rows } = await db.execute(`
     select
       (select count(*)::int from public.projects
-        where slug like ${lit(`${WORLD_PREFIX}%`)} and not is_fixture) as not_fixture,
+        where office_id = ${TEST_OFFICE}
+          and slug like ${lit(`${WORLD_PREFIX}%`)} and not is_fixture) as not_fixture,
+      -- Two checks that look across EVERY office on purpose, because they exist to find a leak: a world project
+      -- that lives anywhere but the test office, and a real-looking project named for the simulated world.
+      (select count(*)::int from public.projects
+        where office_id <> ${TEST_OFFICE}
+          and slug like ${lit(`${WORLD_PREFIX}%`)}) as outside_test_office,
       (select count(*)::int from public.projects
         where name like 'simgrant %' and slug not like ${lit(`${WORLD_PREFIX}%`)}) as stray_real,
-      (select jsonb_array_length(public.resolve_project_by_name('the funding one'))) as wrapper_sees,
+      (select count(*)::int from app.resolve_project_by_name(${TEST_OFFICE}, 'the funding one', false)) as wrapper_sees,
       (select count(*)::int from public.slack_channel_map m
-         join public.projects p on p.project_id = m.project_id
+         join public.projects p on p.project_id = m.project_id and p.office_id = ${TEST_OFFICE}
         where p.slug like ${lit(`${WORLD_PREFIX}%`)}) as slack_channels
   `)
   const r = rows[0] as Record<string, number>
@@ -186,13 +203,17 @@ export const assertContained = async (db: SqlExecutor): Promise<readonly string[
     problems.push(
       `${String(r.not_fixture)} world project(s) are NOT fixtures - they would reach Grant's switcher and earn a Slack channel`,
     )
+  if (Number(r.outside_test_office) > 0)
+    problems.push(
+      `${String(r.outside_test_office)} world project(s) live OUTSIDE the test office - harness work belongs to the test office and nowhere else`,
+    )
   if (Number(r.stray_real) > 0)
     problems.push(
       `${String(r.stray_real)} project(s) named "simgrant ..." exist OUTSIDE the fixture prefix - a real project was created for the simulated world`,
     )
   if (Number(r.wrapper_sees) > 0)
     problems.push(
-      `the PUBLIC wrapper resolved a world nickname (${String(r.wrapper_sees)} candidate(s)) - anything with a browser can see the simulated world`,
+      `the ordinary resolver (fixtures excluded, as for anything with a browser) resolved a world nickname (${String(r.wrapper_sees)} candidate(s)) - the simulated world is visible to people`,
     )
   if (Number(r.slack_channels) > 0)
     problems.push(`${String(r.slack_channels)} world project(s) have a Slack channel mapped`)
@@ -232,8 +253,10 @@ export const sweepHarnessWork = async (
         (
           await db.execute(`
       select count(*)::int as n from public.tasks t
-       where t.job_id in (select job_id from public.jobs
-                           where requested_by like ${lit(runTokenLike)})`)
+       where t.office_id = ${TEST_OFFICE}
+         and t.job_id in (select job_id from public.jobs
+                           where office_id = ${TEST_OFFICE}
+                             and requested_by like ${lit(runTokenLike)})`)
         ).rows[0] as { n: number }
       ).n,
     )
@@ -242,8 +265,10 @@ export const sweepHarnessWork = async (
 
   const { rows } = await db.execute(`
     select job_id::text as id from public.jobs
-     where requested_by like ${lit(runTokenLike)}
-       and job_id in (select job_id from public.tasks where job_id is not null)
+     where office_id = ${TEST_OFFICE}
+       and requested_by like ${lit(runTokenLike)}
+       and job_id in (select job_id from public.tasks
+                       where office_id = ${TEST_OFFICE} and job_id is not null)
   `)
 
   for (const row of rows as { id: string }[]) {
@@ -267,7 +292,10 @@ export const sweepHarnessWork = async (
     is.
   */
   await db
-    .execute('delete from public.suggestions g where app.harness_suggestion(g.offer_args)')
+    .execute(
+      `delete from public.suggestions g
+        where g.office_id = ${TEST_OFFICE} and app.harness_suggestion(g.offer_args)`,
+    )
     .catch(() => undefined)
 
   return { tasksBefore, tasksAfter: await count(), jobs: rows.length }

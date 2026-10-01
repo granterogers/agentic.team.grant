@@ -29,6 +29,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { stripBoilerplate } from '../knowledge/boilerplate.ts'
 import type { Capability, NotebookAdapter, SourceText } from '../notebook/adapter.ts'
 import { NotebookUnavailableError } from '../notebook/adapter.ts'
+import type { OfficeId } from '../office/context.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const nul = (v: string | null | undefined): string =>
@@ -95,6 +96,8 @@ export const slugify = (title: string): string => {
 export const claimRun = async (
   db: SqlExecutor,
   workerId: string,
+  /** The office this cycle runs for. The run is recorded under it and settled only by it. */
+  office: OfficeId,
   leaseMinutes = 15,
 ): Promise<string> => {
   // Recover first. A previous crash holds the unique index until its lease is
@@ -103,8 +106,9 @@ export const claimRun = async (
   await db.execute('select app.recover_stalled_syncs()')
 
   const { rows } = await db.execute(`
-    insert into public.sync_runs (leased_by, leased_until)
-    values (${lit(workerId)}, app.now_utc() + make_interval(mins => ${String(leaseMinutes)}))
+    insert into public.sync_runs (leased_by, leased_until, office_id)
+    values (${lit(workerId)}, app.now_utc() + make_interval(mins => ${String(leaseMinutes)}),
+            ${lit(office)}::uuid)
     on conflict do nothing
     returning run_id::text as run_id
   `)
@@ -149,11 +153,12 @@ export const displayName = (notebook: RemoteNotebook): string => {
  */
 export const ensureProject = async (
   db: SqlExecutor,
+  office: OfficeId,
   notebook: RemoteNotebook,
 ): Promise<{ projectId: string; created: boolean }> => {
   const existing = await db.execute(`
     select project_id::text as project_id from public.projects
-    where notebook_ref = ${lit(notebook.id)}
+    where office_id = ${lit(office)}::uuid and notebook_ref = ${lit(notebook.id)}
   `)
   const found = existing.rows[0]?.project_id
   if (typeof found === 'string') return { projectId: found, created: false }
@@ -183,8 +188,8 @@ export const ensureProject = async (
     // CTE keeps them one transaction without the caller having to remember.
     const inserted = await db.execute(`
       with created as (
-        insert into public.projects (slug, name, notebook_ref, status)
-        values (${lit(slug)}, ${lit(name)}, ${lit(notebook.id)}, 'active')
+        insert into public.projects (slug, name, notebook_ref, status, office_id)
+        values (${lit(slug)}, ${lit(name)}, ${lit(notebook.id)}, 'active', ${lit(office)}::uuid)
         on conflict do nothing
         returning project_id
       ),
@@ -206,7 +211,7 @@ export const ensureProject = async (
     // back and agree with them).
     const raced = await db.execute(`
       select project_id::text as project_id from public.projects
-      where notebook_ref = ${lit(notebook.id)}
+      where office_id = ${lit(office)}::uuid and notebook_ref = ${lit(notebook.id)}
     `)
     const other = raced.rows[0]?.project_id
     if (typeof other === 'string') return { projectId: other, created: false }
@@ -232,6 +237,7 @@ export const fingerprintContent = async (content: string): Promise<string> => {
  */
 export const upsertSource = async (
   db: SqlExecutor,
+  office: OfficeId,
   projectId: string,
   source: SourceText,
 ): Promise<'added' | 'changed' | 'unchanged'> => {
@@ -249,7 +255,8 @@ export const upsertSource = async (
 
   const existing = await db.execute(`
     select content_fingerprint from public.documents
-    where connector = 'notebooklm'
+    where office_id = ${lit(office)}::uuid
+      and connector = 'notebooklm'
       and external_parent_ref = ${lit(source.remoteNotebookId)}
       and external_ref = ${lit(source.remoteSourceId)}
   `)
@@ -262,15 +269,15 @@ export const upsertSource = async (
     return 'unchanged'
   }
 
-  await db.execute(`
+  const written = await db.execute(`
     insert into public.documents
       (project_id, connector, external_parent_ref, external_ref, title, content,
-       content_fingerprint, content_chars, fetched_at, remote_updated_at)
+       content_fingerprint, content_chars, fetched_at, remote_updated_at, office_id)
     values
       (${lit(projectId)}::uuid, 'notebooklm', ${lit(source.remoteNotebookId)},
        ${lit(source.remoteSourceId)}, ${nul(source.title)}, ${lit(content)},
        ${lit(fingerprint)}, ${String(content.length)}, app.now_utc(),
-       ${nul(source.remoteUpdatedAt)}::timestamptz)
+       ${nul(source.remoteUpdatedAt)}::timestamptz, ${lit(office)}::uuid)
     -- The index this infers against is PARTIAL (0051: an upload has no external
     -- reference, so uniqueness is not asserted over a null). A conflict target
     -- without the same predicate matches no index and the insert fails — which
@@ -285,7 +292,13 @@ export const upsertSource = async (
           fetched_at = excluded.fetched_at,
           remote_updated_at = excluded.remote_updated_at,
           project_id = excluded.project_id
+      -- The key is still global (connector, parent, ref): a source another office holds is never overwritten or moved.
+      where public.documents.office_id = excluded.office_id
+    returning document_id
   `)
+  // Nothing written means another office already holds this source id. That is not this office's to overwrite and not
+  // its to learn about: the cycle carries on and counts it as unchanged.
+  if (written.rows.length === 0) return 'unchanged'
   return known ? 'changed' : 'added'
 }
 
@@ -338,6 +351,8 @@ export interface Reconciled {
 
 export const reconcileVanished = async (
   db: SqlExecutor,
+  /** The office whose cache is reconciled: a source of any other office under the same notebook is never touched. */
+  office: OfficeId,
   remoteNotebookId: string,
   seenSourceIds: readonly string[],
 ): Promise<Reconciled> => {
@@ -346,7 +361,7 @@ export const reconcileVanished = async (
       ? `'{}'::text[]`
       : `array[${seenSourceIds.map((s) => lit(s)).join(', ')}]::text[]`
   const { rows } = await db.execute(`
-    select app.reconcile_vanished('notebooklm', ${lit(remoteNotebookId)}, ${list}) as r
+    select app.reconcile_vanished(${lit(office)}::uuid, 'notebooklm', ${lit(remoteNotebookId)}, ${list}) as r
   `)
   const raw = rows[0]?.r
   const r = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {})) as Record<string, unknown>
@@ -361,6 +376,7 @@ export const reconcileVanished = async (
 /** Derive and store budgets from a capability probe (§11, Phase 4). */
 export const deriveBudget = async (
   db: SqlExecutor,
+  office: OfficeId,
   capability: Capability,
 ): Promise<{ stored: boolean; detail: string }> => {
   if (
@@ -374,7 +390,9 @@ export const deriveBudget = async (
   }
 
   const probe = await db.execute(`
-    select probe_id::text as probe_id from public.notebook_capability
+    select probe_id::text as probe_id from public.notebook_capability_probes
+     where office_id = ${lit(office)}::uuid
+     order by probed_at desc limit 1
   `)
   const probeId = probe.rows[0]?.probe_id
   if (typeof probeId !== 'string') {
@@ -394,10 +412,11 @@ export const deriveBudget = async (
     insert into public.notebook_budgets
       (probe_id, detected_tier, notebook_limit, source_limit,
        daily_chat_budget, chat_reserve)
-    values
-      (${lit(probeId)}::uuid, ${String(capability.detectedTier)},
+    select pr.probe_id, ${String(capability.detectedTier)},
        ${String(capability.notebookLimit)}, ${String(capability.sourceLimit)},
-       ${String(dailyChatBudget)}, ${String(chatReserve)})
+       ${String(dailyChatBudget)}, ${String(chatReserve)}
+      from public.notebook_capability_probes pr
+     where pr.probe_id = ${lit(probeId)}::uuid and pr.office_id = ${lit(office)}::uuid
   `)
   return {
     stored: true,
@@ -413,6 +432,11 @@ export interface SyncDeps {
   /** Injected so discovery is testable without a live account. */
   readonly listNotebooks: () => Promise<readonly RemoteNotebook[]>
   readonly workerId: string
+  /**
+   * The office this cycle discovers for: the claimed job's. Notebooks become projects of THIS office, sources are
+   * cached into it, the run is recorded under it, and its budget is derived from its own probe.
+   */
+  readonly officeId: OfficeId
 }
 
 /**
@@ -424,13 +448,18 @@ export interface SyncDeps {
  * `failed` with the reason, which is a degraded cycle rather than a dead one.
  */
 export const runSync = async (deps: SyncDeps): Promise<SyncOutcome> => {
-  const { db, adapter, listNotebooks, workerId } = deps
+  const { db, adapter, listNotebooks, workerId, officeId: office } = deps
 
   const leaseRow = await db.execute(
     `select value::text as v from public.system_config where key = 'notebook.sync_lease_minutes'`,
   )
   const leaseMinutes = Number(leaseRow.rows[0]?.v ?? '15')
-  const runId = await claimRun(db, workerId, Number.isFinite(leaseMinutes) ? leaseMinutes : 15)
+  const runId = await claimRun(
+    db,
+    workerId,
+    office,
+    Number.isFinite(leaseMinutes) ? leaseMinutes : 15,
+  )
 
   const counters: Counters = {
     notebooksSeen: 0,
@@ -457,7 +486,7 @@ export const runSync = async (deps: SyncDeps): Promise<SyncOutcome> => {
           sources_changed = ${String(counters.sourcesChanged)},
           sources_removed = ${String(counters.sourcesRemoved)},
           detail = ${lit(detail.slice(0, 1000))}
-      where run_id = ${lit(runId)}::uuid
+      where run_id = ${lit(runId)}::uuid and office_id = ${lit(office)}::uuid
     `)
     return { runId, state, ...counters, detail }
   }
@@ -466,32 +495,35 @@ export const runSync = async (deps: SyncDeps): Promise<SyncOutcome> => {
     // Budgets first: a cycle that spends before knowing its allowance is the
     // hard-coded-quota failure wearing a different hat.
     const capability = await adapter.probe()
-    const budget = await deriveBudget(db, capability)
+    const budget = await deriveBudget(db, office, capability)
 
     const excluded = new Set(
-      (await db.execute('select remote_notebook_id from public.notebook_exclusions')).rows.map(
-        (r) => String(r.remote_notebook_id),
-      ),
+      (
+        await db.execute(
+          `select remote_notebook_id from public.notebook_exclusions where office_id = ${lit(office)}::uuid`,
+        )
+      ).rows.map((r) => String(r.remote_notebook_id)),
     )
 
     const notebooks = (await listNotebooks()).filter((n) => !excluded.has(n.id))
     counters.notebooksSeen = notebooks.length
 
     for (const notebook of notebooks) {
-      const { projectId, created } = await ensureProject(db, notebook)
+      const { projectId, created } = await ensureProject(db, office, notebook)
       if (created) counters.projectsCreated += 1
 
       const sources = await adapter.listSources(notebook.id)
       counters.sourcesSeen += sources.length
 
       for (const source of sources) {
-        const result = await upsertSource(db, projectId, source)
+        const result = await upsertSource(db, office, projectId, source)
         if (result === 'added') counters.sourcesAdded += 1
         if (result === 'changed') counters.sourcesChanged += 1
       }
 
       const reconciled = await reconcileVanished(
         db,
+        office,
         notebook.id,
         sources.map((s) => s.remoteSourceId),
       )

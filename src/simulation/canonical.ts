@@ -314,20 +314,24 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
                 */
                 insert into public.inbound_commands
                   (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at,
-                   synthetic)
+                   synthetic, office_id)
+                /* Harness traffic is the TEST office's, said out loud: never the bridge's guess. */
                 values ('teamhq', ${lit(ref)},
                         ${lit(`verify-shadow-${options.runToken}`)},
-                        ${lit(utterance.text)}, ${lit(key)}, app.now_utc(), true)
+                        ${lit(utterance.text)}, ${lit(key)}, app.now_utc(), true,
+                        app.test_office())
                 on conflict (dedupe_key) do nothing;
                 create temp table _j as
                   select coalesce(
                     (select j.job_id from public.jobs j
-                       where j.idempotency_key = (
+                       where j.office_id = app.test_office()
+                         and j.idempotency_key = (
                          select 'inbound-' || c.command_id::text from public.inbound_commands c
-                          where c.dedupe_key = ${lit(key)})),
+                          where c.office_id = app.test_office()
+                            and c.dedupe_key = ${lit(key)})),
                     (app.enqueue_inbound(
                        (select command_id from public.inbound_commands
-                         where dedupe_key = ${lit(key)})
+                         where office_id = app.test_office() and dedupe_key = ${lit(key)})
                      ) ->> 'job_id')::uuid) as id;
                 update public.jobs set announce = false where job_id = (select id from _j);
                 select (select id from _j)::text as id;
@@ -361,6 +365,7 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
               */
               update public.jobs set announce = false
                where announce
+                 and office_id = app.job_office(${lit(jobId)}::uuid)
                  and (job_id = ${lit(jobId)}::uuid
                       or parent_job_id = ${lit(jobId)}::uuid
                       or correlation_id = (select correlation_id from public.jobs
@@ -412,9 +417,10 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
                                or (k.state = 'paused'
                                    and coalesce(k.state_reason,'') like 'awaiting_approval%'))
                         from public.jobs k
-                       where k.job_id = j.job_id
-                          or k.parent_job_id = j.job_id
-                          or k.correlation_id = j.correlation_id) as family_settled
+                       where k.office_id = j.office_id
+                         and (k.job_id = j.job_id
+                              or k.parent_job_id = j.job_id
+                              or k.correlation_id = j.correlation_id)) as family_settled
                 from public.jobs j
                where j.job_id = ${lit(jobId)}::uuid`),
         )

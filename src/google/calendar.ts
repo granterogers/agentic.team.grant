@@ -23,6 +23,8 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { soleOffice } from '../db/office.ts'
+import type { OfficeId } from '../office/context.ts'
 import { count } from '../text/plain.ts'
 import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
 
@@ -64,10 +66,19 @@ interface GoogleEvent {
  */
 export async function refreshCalendar(
   db: SqlExecutor,
-  options: { readonly days?: number; readonly fetchImpl?: typeof fetch } = {},
+  options: {
+    readonly days?: number
+    readonly fetchImpl?: typeof fetch
+    /**
+     * The office this refresh caches the diary for: the claimed job's. Absent, the deployment's only person office
+     * (a single-office deployment's legacy callers); with two real offices that is `no_office`, never a guess.
+     */
+    readonly officeId?: OfficeId
+  } = {},
 ): Promise<CalendarOutcome> {
   const fetchImpl = options.fetchImpl ?? fetch
   const days = options.days ?? 14
+  const office = options.officeId ?? (await soleOffice(db))
 
   const enabled = (
     await db.execute(`
@@ -88,7 +99,7 @@ export async function refreshCalendar(
   }
 
   const access = await googleAccess(db, fetchImpl)
-  await recordGoogleHealth(db, access)
+  await recordGoogleHealth(db, access, office)
   if (!access.ok) return { ok: false, note: access.reason, seen: 0, stored: 0, removed: 0 }
 
   const granted = access as GoogleAccess
@@ -170,14 +181,14 @@ export async function refreshCalendar(
     await db.execute(`
       insert into public.calendar_events
         (event_id, calendar_id, summary, excerpt, location, starts_at, ends_at,
-         all_day, attendees, status, html_link, remote_updated_at, fetched_at)
+         all_day, attendees, status, html_link, remote_updated_at, fetched_at, office_id)
       values (${lit(event.id)}, ${lit(calendarId)}, ${nul(event.summary)},
               ${nul(String(event.description ?? '').slice(0, EXCERPT_CHARS) || null)},
               ${nul(event.location)},
               ${lit(startRaw)}::timestamptz, ${lit(endRaw)}::timestamptz,
               ${String(allDay)}, ${String((event.attendees ?? []).length)},
               ${lit(String(event.status ?? 'confirmed'))}, ${nul(event.htmlLink)},
-              ${nul(event.updated)}::timestamptz, app.now_utc())
+              ${nul(event.updated)}::timestamptz, app.now_utc(), ${lit(office)}::uuid)
       on conflict (calendar_id, event_id) do update
         set summary = excluded.summary, excerpt = excluded.excerpt,
             location = excluded.location, starts_at = excluded.starts_at,
@@ -186,6 +197,8 @@ export async function refreshCalendar(
             html_link = excluded.html_link,
             remote_updated_at = excluded.remote_updated_at,
             fetched_at = excluded.fetched_at
+        -- The key is still global (calendar_id, event_id): an event another office holds is never overwritten.
+        where public.calendar_events.office_id = excluded.office_id
     `)
     stored += 1
   }
@@ -198,7 +211,8 @@ export async function refreshCalendar(
   const removed = (
     await db.execute(`
       delete from public.calendar_events
-       where calendar_id = ${lit(calendarId)}
+       where office_id = ${lit(office)}::uuid
+         and calendar_id = ${lit(calendarId)}
          and starts_at >= ${lit(from)}::timestamptz
          and starts_at <= ${lit(to)}::timestamptz
          ${seenIds.length === 0 ? '' : `and event_id <> all(array[${seenIds.map(lit).join(',')}]::text[])`}

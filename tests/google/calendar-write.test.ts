@@ -23,6 +23,10 @@ function fakeDb(opts: {
     calls,
     execute: async (sql: string): Promise<{ rows: Row[] }> => {
       calls.push(sql.replace(/\s+/g, ' ').trim().slice(0, 80))
+      // The office the health row is recorded under: a single-office deployment's only person office.
+      if (sql.includes('sole_person_office')) {
+        return { rows: [{ o: '22222222-2222-4222-8222-222222222222' }] }
+      }
       if (sql.includes('calendar.sync_tasks')) {
         return { rows: [{ on: opts.on ?? true, target: opts.target ?? 'primary' }] }
       }

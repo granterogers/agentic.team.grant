@@ -126,10 +126,12 @@ export const readEffects = async (
     with family as (
       select j.job_id, j.state, j.state_reason, j.correlation_id
         from public.jobs j
-       where j.job_id = ${lit(jobId)}::uuid
+       -- The turn's family, inside the turn's own office: a correlation id is never trusted to stay in one.
+       where j.office_id = app.job_office(${lit(jobId)}::uuid)
+         and (j.job_id = ${lit(jobId)}::uuid
           or j.parent_job_id = ${lit(jobId)}::uuid
           or j.correlation_id = (select correlation_id from public.jobs
-                                  where job_id = ${lit(jobId)}::uuid)
+                                  where job_id = ${lit(jobId)}::uuid))
     )
     select
       (select count(*)::int from family) as jobs,
@@ -154,7 +156,8 @@ export const readEffects = async (
       (select count(*)::int from public.lessons l
         where l.from_job in (select job_id from family)) as lessons_learned,
       (select count(*)::int from public.suggestions g
-        where g.kind = 'standing_rule'
+        where g.office_id = app.job_office(${lit(jobId)}::uuid)
+          and g.kind = 'standing_rule'
           and g.raised_at >= ${lit(since)}::timestamptz) as offers_made,
       (select count(*)::int from public.consultations c
         where c.job_id in (select job_id from family)) as consultations,
