@@ -63,7 +63,9 @@ type Edge = {
   other_title: string | null
 }
 const edges = async (kind: string, id: string): Promise<Edge[]> =>
-  (await all(`select * from public.relations_of(${lit(kind)}, ${lit(id)}::uuid)`)) as Edge[]
+  (await all(
+    `select * from public.relations_of(app.test_office(), ${lit(kind)}, ${lit(id)}::uuid)`,
+  )) as Edge[]
 
 console.log(`\nverify:graph — ${run}\n`)
 
@@ -80,7 +82,7 @@ try {
   */
   const live = await all(`
     with d as (select document_id from public.documents limit 400),
-         e as (select (public.relations_of('document', d.document_id)).* from d)
+         e as (select (public.relations_of(app.test_office(), 'document', d.document_id)).* from d)
     select verb, count(*)::int as n from e group by verb order by n desc
   `)
   check(
@@ -268,31 +270,43 @@ try {
     section routed to — which is the same trap as no wrapper (CLAUDE.md).
   */
   const renamed = (
-    await one(`select public.rename_document(${lit(original)}::uuid, 'Renamed by the suite') as r`)
+    await one(
+      `select public.rename_document(app.test_office(), ${lit(original)}::uuid, 'Renamed by the suite') as r`,
+    )
   ).r as { ok?: boolean; was?: string; now?: string }
   check(
     'renaming answers with the old name as well as the new one',
     JSON.stringify(renamed),
     renamed.ok === true && renamed.was === 'Original' && renamed.now === 'Renamed by the suite',
   )
-  const blank = (await one(`select public.rename_document(${lit(original)}::uuid, '   ') as r`))
-    .r as { ok?: boolean; error?: string }
+  const blank = (
+    await one(
+      `select public.rename_document(app.test_office(), ${lit(original)}::uuid, '   ') as r`,
+    )
+  ).r as { ok?: boolean; error?: string }
   check(
     'and a blank name is refused, with a reason',
     JSON.stringify(blank),
     blank.ok === false && String(blank.error ?? '').includes('needs a name'),
   )
 
-  await one(`select public.tag_document(${lit(original)}::uuid, '  Pricing  ') as r`)
-  const twice = (await one(`select public.tag_document(${lit(original)}::uuid, 'pricing') as r`))
-    .r as { ok?: boolean; tags?: string[] }
+  await one(
+    `select public.tag_document(app.test_office(), ${lit(original)}::uuid, '  Pricing  ') as r`,
+  )
+  const twice = (
+    await one(
+      `select public.tag_document(app.test_office(), ${lit(original)}::uuid, 'pricing') as r`,
+    )
+  ).r as { ok?: boolean; tags?: string[] }
   check(
     'a tag is folded and de-duplicated, so pressing it twice is one tag',
     JSON.stringify(twice.tags),
     Array.isArray(twice.tags) && twice.tags.filter((t) => t === 'pricing').length === 1,
   )
   const off = (
-    await one(`select public.tag_document(${lit(original)}::uuid, 'pricing', false) as r`)
+    await one(
+      `select public.tag_document(app.test_office(), ${lit(original)}::uuid, 'pricing', false) as r`,
+    )
   ).r as { tags?: string[] }
   check(
     'and it can be taken off again',
@@ -302,7 +316,7 @@ try {
 
   const out = (
     await one(
-      `select public.take_out_of_collection(${lit(original)}::uuid, ${lit(`Reference ${run}`)}) as r`,
+      `select public.take_out_of_collection(app.test_office(), ${lit(original)}::uuid, ${lit(`Reference ${run}`)}) as r`,
     )
   ).r as { ok?: boolean }
   const afterOut = await edges('document', original)
@@ -322,7 +336,7 @@ try {
   )
   const again = (
     await one(
-      `select public.take_out_of_collection(${lit(original)}::uuid, ${lit(`Reference ${run}`)}) as r`,
+      `select public.take_out_of_collection(app.test_office(), ${lit(original)}::uuid, ${lit(`Reference ${run}`)}) as r`,
     )
   ).r as { ok?: boolean; already?: boolean }
   check(

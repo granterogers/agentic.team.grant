@@ -251,7 +251,7 @@ const reaches = async (what: string, job: string | null) => {
   const sent = jsonOf(
     (
       await one(
-        `${DOOR} select app.send_to_agent('document', ${lit(String(doc.id))}::uuid, 'review') as v`,
+        `${DOOR} select app.send_to_agent(app.test_office(), 'document', ${lit(String(doc.id))}::uuid, 'review') as v`,
       )
     ).v,
   )

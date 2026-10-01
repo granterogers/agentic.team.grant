@@ -114,6 +114,7 @@ export async function storeArtifact(
 
   const { rows } = await db.execute(`
     select app.record_file_document(
+      p_office => app.job_office(${lit(artifact.jobId)}::uuid),
       p_project_id => ${lit(artifact.projectId)}::uuid,
       p_title => ${lit(artifact.title)},
       p_storage_path => ${lit(path)},

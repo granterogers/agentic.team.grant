@@ -403,8 +403,9 @@ try {
   // =========================================================================
   console.log('\na project you can take with you')
 
-  const pkg = ((await one(`select public.project_export(${lit(projectId)}::uuid) as p`)).p ??
-    {}) as Record<string, unknown>
+  const pkg = ((
+    await one(`select public.project_export(app.test_office(), ${lit(projectId)}::uuid) as p`)
+  ).p ?? {}) as Record<string, unknown>
   check(
     'the package names its own format, so a reader knows what it has',
     `${String(pkg.format)} v${String(pkg.format_version)}`,

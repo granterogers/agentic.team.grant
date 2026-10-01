@@ -104,8 +104,12 @@ await refuses(
 )
 
 // --- collections, and the same asset in two of them --------------------------
-await db.execute(`select public.put_in_collection('${mineId}'::uuid, 'Research')`)
-await db.execute(`select public.put_in_collection('${mineId}'::uuid, 'For the 16 Sep interviews')`)
+await db.execute(
+  `select public.put_in_collection(app.test_office(), '${mineId}'::uuid, 'Research')`,
+)
+await db.execute(
+  `select public.put_in_collection(app.test_office(), '${mineId}'::uuid, 'For the 16 Sep interviews')`,
+)
 const cols = await one(`
   select count(*)::int as n from public.document_collections where document_id = '${mineId}'::uuid
 `)
@@ -116,7 +120,9 @@ const copies = await one(`
 `)
 ok('and there is still only one of it', Number(copies.n) === 1)
 
-await db.execute(`select public.put_in_collection('${mineId}'::uuid, 'Research')`)
+await db.execute(
+  `select public.put_in_collection(app.test_office(), '${mineId}'::uuid, 'Research')`,
+)
 const again = await one(`
   select count(*)::int as n from public.document_collections where document_id = '${mineId}'::uuid
 `)
@@ -129,16 +135,16 @@ const task = await one(`
 const tid = String(task.id)
 
 await db.execute(`
-  select public.link('${pid}'::uuid, 'document', '${madeId}'::uuid,
+  select public.link(app.test_office(), '${pid}'::uuid, 'document', '${madeId}'::uuid,
                      'derived_from', 'document', '${mineId}'::uuid, 'verify:assets')
 `)
 await db.execute(`
-  select public.link('${pid}'::uuid, 'document', '${madeId}'::uuid,
+  select public.link(app.test_office(), '${pid}'::uuid, 'document', '${madeId}'::uuid,
                      'attached_to', 'task', '${tid}'::uuid, 'verify:assets')
 `)
 
 const { rows: out } = await db.execute(
-  `select * from public.relations_of('document', '${madeId}'::uuid)`,
+  `select * from public.relations_of(app.test_office(), 'document', '${madeId}'::uuid)`,
 )
 /*
   The two edges BY NAME, not a count of two.
@@ -167,7 +173,7 @@ ok(
   graph is thirteen foreign keys wearing a costume.
 */
 const { rows: back } = await db.execute(
-  `select * from public.relations_of('document', '${mineId}'::uuid)`,
+  `select * from public.relations_of(app.test_office(), 'document', '${mineId}'::uuid)`,
 )
 const inbound = (back as { direction: string; other_title: string }[]).filter(
   (r) => r.direction === 'in',
@@ -184,13 +190,13 @@ ok(
 )
 
 const { rows: fromTask } = await db.execute(
-  `select * from public.relations_of('task', '${tid}'::uuid)`,
+  `select * from public.relations_of(app.test_office(), 'task', '${tid}'::uuid)`,
 )
 ok('a task can see the documents attached to it', (fromTask as unknown[]).length === 1)
 
 await refuses(
   'linking to something that does not exist is refused',
-  `select public.link('${pid}'::uuid, 'document', '${madeId}'::uuid, 'about',
+  `select public.link(app.test_office(), '${pid}'::uuid, 'document', '${madeId}'::uuid, 'about',
                       'task', '00000000-0000-0000-0000-000000000000'::uuid)`,
 )
 await refuses(
@@ -200,7 +206,7 @@ await refuses(
 )
 
 const twice = await one(`
-  select public.link('${pid}'::uuid, 'document', '${madeId}'::uuid,
+  select public.link(app.test_office(), '${pid}'::uuid, 'document', '${madeId}'::uuid,
                      'derived_from', 'document', '${mineId}'::uuid, 'verify:assets') as id
 `)
 ok('the same edge asserted twice stays one row', typeof twice.id === 'string')
@@ -210,7 +216,9 @@ const edges = await one(`
 ok('…confirmed by counting', Number(edges.n) === 2, `got ${String(edges.n)}`)
 
 // --- the Made workspace ------------------------------------------------------
-const { rows: waiting } = await db.execute(`select * from public.awaiting_review('${pid}'::uuid)`)
+const { rows: waiting } = await db.execute(
+  `select * from public.awaiting_review(app.test_office(), '${pid}'::uuid)`,
+)
 ok('awaiting_review finds the artifact', (waiting as unknown[]).length === 1)
 const w = (waiting as { derived_from: string[] }[])[0]
 ok(
@@ -220,7 +228,7 @@ ok(
 )
 
 await db.execute(`
-  select public.approve_document('${madeId}'::uuid, 'Planning',
+  select public.approve_document(app.test_office(), '${madeId}'::uuid, 'Planning',
                                  array['outline','client-facing'], '${tid}'::uuid)
 `)
 const approved = await one(`
@@ -239,7 +247,9 @@ const inPlanning = await one(`
 `)
 ok('approving files it in the collection chosen at import', Number(inPlanning.n) === 1)
 
-const { rows: nowEmpty } = await db.execute(`select * from public.awaiting_review('${pid}'::uuid)`)
+const { rows: nowEmpty } = await db.execute(
+  `select * from public.awaiting_review(app.test_office(), '${pid}'::uuid)`,
+)
 ok('and it leaves the in-tray', (nowEmpty as unknown[]).length === 0)
 
 // --- tags --------------------------------------------------------------------
