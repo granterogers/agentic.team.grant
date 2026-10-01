@@ -1,3 +1,9 @@
+> **RESOLVED 1 October 2026 - superseded by `docs/policy/FINAL-POLICY-IMPLEMENTATION.md` and ADR-0059.** Grant decided
+> each of the four duties (below the line is the options paper as it stood; it is kept as the record of what was
+> offered). Vikunja create/update automatic and delete asks; a project Grant created explicitly provisions its Slack
+> channel without a question; a Notion database he connected carries standing authority for that database only; Slack
+> token rotation asks every time.
+
 # #389 - the decision Grant has to make, reduced to its smallest form
 
 Not decided by anyone. Nothing here was chosen on his behalf; the text records the options and which is technically

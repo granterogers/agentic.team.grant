@@ -3,7 +3,9 @@
 Source: `docs/testing/original-architecture-audit-bbe9956.md` (145 rows). Start: `main` = `797cf92b`, migrations through 0632.
 Final verified candidate (code and tests): `467fff81`. Migrations added in this closure: **0633-0639**, each with a tested rollback in `docs/final-audit/`.
 
-## Verdict: TECHNICALLY CLOSED - POLICY DECISIONS OUTSTANDING
+## Verdict: ORIGINAL ARCHITECTURE AUDIT: CLOSED
+
+Technical findings were closed at `4053433f`; the policy decisions that remained outstanding were resolved on 1 October 2026 (`docs/policy/FINAL-POLICY-IMPLEMENTATION.md`, ADR-0059).
 
 CURRENT ARCHITECTURE BLOCKERS: **0**. Every one of the 145 rows is in exactly one class below. What remains is Grant's to decide,
 not engineering's: #389 (which system duties may write unprompted) and decisions (a) learning confirmation, (b) cross-project
