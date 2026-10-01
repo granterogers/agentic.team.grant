@@ -252,5 +252,61 @@ export async function cases(c: Ctx): Promise<void> {
     'the voice path did not use the compatibility bridge',
     `${String(bridgeBefore)} -> ${String(bridgeAfter)}`,
   )
+  // ---- voice_answer takes the office (0840): the command must be the office's own ----
+  const spoken = async (office: string, who: string): Promise<string> => {
+    const key = `verify:voice_answer:${who}-${run}`
+    await c.db.execute(
+      `insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, synthetic, office_id)
+       values ('voice', ${lit(`voice-${who}-${run}:1`)}, ${lit(`verify-p3-${who}`)}, 'what projects have we got', ${lit(key)}, now(), true, '${office}')`,
+    )
+    return String(
+      (await q(`select command_id from public.inbound_commands where dedupe_key = ${lit(key)}`))[0]
+        ?.command_id,
+    )
+  }
+  const cmdOfA = await spoken(A, 'a')
+  const cmdOfB = await spoken(B, 'b')
+  const answerAs = async (office: string | null, command: string): Promise<string> => {
+    try {
+      const r = await q(
+        `select public.voice_answer(${office === null ? 'null' : lit(office)}::uuid, ${lit(command)}::uuid) as a`,
+      )
+      return c.json(r[0]?.a)
+    } catch (e) {
+      return `ERR ${String((e as Error).message).slice(0, 80)}`
+    }
+  }
+  const missing = c.nobody()
+  const ownAnswer = await answerAs(A, cmdOfA)
+  c.check(
+    ownAnswer.includes('active') && ownAnswer.includes(nameA),
+    "the positive control: A's own spoken question is answered, from A's projects",
+    ownAnswer.slice(0, 100),
+  )
+  const foreign = await answerAs(A, cmdOfB)
+  const absent = await answerAs(A, missing)
+  c.check(
+    foreign === absent && !foreign.includes(tokB),
+    "B's command and a command that does not exist give A the same answer, and carry nothing of B's",
+    `${foreign.slice(0, 60)} | ${absent.slice(0, 60)}`,
+  )
+  c.check(
+    (await answerAs(null, cmdOfA)).includes('no_office') &&
+      (await answerAs(c.nobody(), cmdOfA)).includes('no_office'),
+    'a null office and an office that does not exist are refused as no_office',
+    '',
+  )
+  const roles = (
+    await q(
+      `select has_function_privilege('anon', 'public.voice_answer(uuid,uuid)', 'execute') as anon,
+              has_function_privilege('authenticated', 'public.voice_answer(uuid,uuid)', 'execute') as auth,
+              (select count(*)::int from pg_proc where proname = 'voice_answer') as overloads`,
+    )
+  )[0]
+  c.check(
+    roles?.anon === false && roles?.auth === false && roles?.overloads === 2,
+    'a browser role cannot execute it, and the one-argument form is gone (one per schema)',
+    c.json(roles),
+  )
   globalThis.fetch = wrapped
 }

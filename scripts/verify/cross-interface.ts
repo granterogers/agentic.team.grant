@@ -219,7 +219,7 @@ const answerable = await store({
   received_at: AT.toISOString(),
 })
 const answered = await one(
-  `select app.voice_answer(${lit(String(answerable?.command_id))}::uuid) as a`,
+  `select app.voice_answer((select office_id from public.inbound_commands where command_id = ${lit(String(answerable?.command_id))}::uuid), ${lit(String(answerable?.command_id))}::uuid) as a`,
 )
 const spoken = (answered?.a as { speak?: string } | null)?.speak
 record(
@@ -229,7 +229,7 @@ record(
 )
 
 const delegated = await one(
-  `select app.voice_answer(${lit(String(voiceRow?.command_id))}::uuid) as a`,
+  `select app.voice_answer((select office_id from public.inbound_commands where command_id = ${lit(String(voiceRow?.command_id))}::uuid), ${lit(String(voiceRow?.command_id))}::uuid) as a`,
 )
 record(
   'CONTROL: an instruction is NOT answered — it returns null so it goes to the team',

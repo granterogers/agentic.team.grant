@@ -488,7 +488,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   // 2. Ask the canonical layer whether this is answerable. The decision is
   //    there, not here.
-  const answer = (await rpc('voice_answer', { p_command_id: commandId })) as {
+  const answer = (await rpc('voice_answer', { p_office: office, p_command_id: commandId })) as {
     speak?: string
     kind?: string
   } | null
