@@ -22,6 +22,7 @@
  * there; if nothing is shared, the answer is a sentence about sharing it.
  */
 
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
@@ -66,8 +67,7 @@ export function notionAdoptHandler(deps: NotionAdoptDeps): Handler {
       const setup = (
         await db.execute(`
           select
-            (select decrypted_secret from vault.decrypted_secrets
-              where name = 'notion.integration_token') as token,
+            ${credentialSql('notion.integration_token')} as token,
             (select name from public.projects
               where project_id = ${lit(job.projectId)}::uuid) as project_name
         `)

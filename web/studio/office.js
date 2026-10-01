@@ -187,7 +187,7 @@ export async function act(action, args = {}) {
     still holds only the old key gets this, and the credential is NOT cleared: it is genuine, it still
     reads, and the way forward is to sign in, not to be signed out.
   */
-  if (r.status === 403 && body.error === 'person_required') {
+  if (r.status === 403 && (body.error === 'person_required' || body.error === 'operator_required')) {
     throw new Error(
       body.message ?? 'This needs you signed in. The office key cannot decide or speak as a person.',
     )

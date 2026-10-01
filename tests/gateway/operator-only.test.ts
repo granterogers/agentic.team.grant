@@ -104,7 +104,7 @@ describe('the gateway enforces it', () => {
   })
 
   it('also guards the Drive browse, a GET section with no kind rule of its own', () => {
-    const drive = slice("if (name === 'drive') {", 'const access = await googleToken()')
+    const drive = slice("if (name === 'drive') {", 'const access = await googleToken(')
     expect(drive).toMatch(
       /kind === 'person'\s+&&\s+principal !== null[^)]*await isOperator\(principal\)/,
     )

@@ -200,7 +200,9 @@ describe('containment: the worker asks before the handler', () => {
       'const contained = await containmentRefusal(db, job, handler.reach)',
     )
     const onStart = worker.indexOf('await onStart(job)')
-    const handle = worker.indexOf('output = await handler.handle(job, db)')
+    const handle = worker.indexOf(
+      'output = await withJobScope(job.jobId, () => handler.handle(job, db))',
+    )
     expect(gate).toBeGreaterThan(0)
     expect(gate).toBeLessThan(onStart)
     expect(gate).toBeLessThan(handle)

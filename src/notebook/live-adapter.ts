@@ -20,8 +20,10 @@
  * retrying an ambiguous write is enforced by a database trigger. An adapter
  * that could write directly would be a way around that trigger, so it cannot.
  */
+
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { readCredential } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import {
   type Capability,
@@ -52,10 +54,7 @@ export class LiveNotebookAdapter implements NotebookAdapter {
    * installing the unavailable adapter — not an exception.
    */
   static async fromVault(db: SqlExecutor): Promise<LiveNotebookAdapter | null> {
-    const { rows } = await db.execute(
-      `select decrypted_secret as s from vault.decrypted_secrets where name = 'notebook.storage_state'`,
-    )
-    const state = rows[0]?.s === undefined ? '' : String(rows[0].s)
+    const state = (await readCredential(db, 'notebook.storage_state')) ?? ''
     return state === '' ? null : new LiveNotebookAdapter(state)
   }
 

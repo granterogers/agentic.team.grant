@@ -109,7 +109,7 @@ const kickWorker = (): void => {
   Short-lived by construction - Google's token lasts an hour and nothing caches
   it beyond one request, so a browse and a pick each mint their own.
 */
-const googleToken = async (): Promise<{ token: string } | { error: string }> => {
+const googleToken = async (operator: string): Promise<{ token: string } | { error: string }> => {
   const ask = async (fn: string, body: unknown): Promise<unknown> => {
     const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
       method: 'POST',
@@ -124,8 +124,16 @@ const googleToken = async (): Promise<{ token: string } | { error: string }> => 
   }
   const config = (await ask('hq_google', {})) as { client_id?: string } | null
   const id = String(config?.client_id ?? '')
-  const secret = String((await ask('vault_secret', { p_name: 'google.client_secret' })) ?? '')
-  const refresh = String((await ask('vault_secret', { p_name: 'google.refresh_token' })) ?? '')
+  /*
+    ONE resolver (0648): the database serves a Google credential only to a named operator or to work the
+    deployment owns. A refusal arrives as an error OBJECT, never as a string, so only a string counts.
+  */
+  const held = async (p_name: string): Promise<string> => {
+    const v = await ask('deployment_credential', { p_name, p_operator: operator })
+    return typeof v === 'string' ? v : ''
+  }
+  const secret = await held('google.client_secret')
+  const refresh = await held('google.refresh_token')
   if (id === '' || secret === '' || refresh === '') {
     return { error: 'Google is not connected yet. Connect it in Settings and try again.' }
   }
@@ -898,6 +906,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     canonical writer and picking the same file twice is one document, because
     the index says so.
   */
+  /*
+    CONNECTING GOOGLE starts here, not at a bare link (0648). The page asks for a one-time state - minted only
+    for a verified operator - and carries it through Google's consent screen to the callback, which refuses a
+    code that arrives without one. Without it the callback would store whatever account's code it was handed.
+  */
+  google_connect_start: { fn: 'hq_google_connect_start', required: [], by: 'p_by' },
   drive_link: {
     fn: 'hq_document_link',
     required: ['p_project_id', 'p_external_ref', 'p_title'],
@@ -1569,6 +1583,7 @@ const OPERATOR_ONLY: ReadonlySet<string> = new Set([
   'decline_tool',
   'revoke_tool',
   'drive_link',
+  'google_connect_start',
 ])
 
 const operators = new Map<string, number>()
@@ -2340,7 +2355,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         403,
       )
     }
-    const access = await googleToken()
+    const access = await googleToken(String(principal))
     if ('error' in access) return json({ error: access.error }, 502)
     const folder = (url.searchParams.get('folder') ?? '').replace(/['\\]/g, '')
     const q = (url.searchParams.get('q') ?? '').replace(/['\\]/g, '').slice(0, 120)

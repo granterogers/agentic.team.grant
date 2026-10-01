@@ -23,6 +23,7 @@
  * `hq_set_vikunja` is what starts it. A handler that raised here would fill
  * the impediment ledger with a decision Grant made on purpose.
  */
+import { readCredential } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import type { TaskProvider } from '../tasks/provider.ts'
@@ -100,16 +101,7 @@ export function tasksSyncHandler(db: SqlExecutor, deps: TasksSyncDeps = {}): Han
         `vikunja_settings`, whose answer can end up on a page. One value, read
         once, used once, and not returned in anything this function produces.
       */
-      const token = String(
-        (
-          (
-            await db.execute(
-              `select decrypted_secret as v from vault.decrypted_secrets
-              where name = 'vikunja.api_token'`,
-            )
-          ).rows[0] as { v?: string } | undefined
-        )?.v ?? '',
-      )
+      const token = (await readCredential(db, 'vikunja.api_token')) ?? ''
       if (token === '') {
         return { ...base, announce: false, body: 'No task provider is connected.' }
       }

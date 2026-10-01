@@ -34,6 +34,7 @@ import { type Domain, howComposed } from '../agents/provenance.ts'
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import { withoutStrayQuotes } from '../agents/stray-quotes.ts'
+import { withJobScope } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
@@ -91,9 +92,10 @@ async function trace(
  * must never be a way for production to break.
  */
 async function recordPlan(db: SqlExecutor, job: Job, handler: Handler): Promise<void> {
-  if (handler.plan === undefined) return
+  const planOf = handler.plan
+  if (planOf === undefined) return
   try {
-    const plan = await handler.plan(job, db)
+    const plan = await withJobScope(job.jobId, () => planOf.call(handler, job, db))
     const steps = JSON.stringify(plan.steps)
     const reaches =
       plan.reaches.length === 0
@@ -1101,7 +1103,7 @@ const runJobHeld = async (
   */
   await recordPlan(db, job, handler)
   try {
-    output = await handler.handle(job, db)
+    output = await withJobScope(job.jobId, () => handler.handle(job, db))
     output = { ...output, body: withoutStrayQuotes(output.body) }
   } catch (error) {
     /*

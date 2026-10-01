@@ -38,6 +38,7 @@
  */
 
 import { howComposed } from '../agents/provenance.ts'
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
@@ -137,8 +138,7 @@ async function prepare(db: SqlExecutor, job: Job): Promise<Prepared> {
   const setup = (
     await db.execute(`
           select
-            (select decrypted_secret from vault.decrypted_secrets
-              where name = 'notion.integration_token') as token,
+            ${credentialSql('notion.integration_token')} as token,
             (select name from public.projects
               where project_id = ${lit(job.projectId)}::uuid) as project_name,
             (select jsonb_object_agg(a.artifact_kind, a.external_ref)

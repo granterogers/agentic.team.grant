@@ -38,6 +38,7 @@
  * forbids a second engine and the smallest thing that satisfies it is a loop.
  */
 
+import { readCredential } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { assertHeld, type Claimed } from './fence.ts'
 
@@ -391,10 +392,7 @@ export async function credential(
   name: string,
   whatFor: string,
 ): Promise<{ value: string } | Paused> {
-  const { rows } = await db.execute(
-    `select decrypted_secret as v from vault.decrypted_secrets where name = ${lit(name)}`,
-  )
-  const value = String((rows[0] as { v?: string } | undefined)?.v ?? '').trim()
+  const value = ((await readCredential(db, name)) ?? '').trim()
   if (value !== '') return { value }
   return {
     detail: `${whatFor} needs ${name}, and the vault does not have it`,

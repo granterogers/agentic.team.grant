@@ -20,7 +20,7 @@
  * left to post.
  *
  * So 0354 PARKS it instead — the same secret under a name nothing else reads.
- * `app.vault_secret` gates every read against an allow-list and `googleAccess`
+ * `app.deployment_credential` gates every read by class and by who is asking, and `googleAccess`
  * asks for `google.refresh_token`, which is gone by the time this handler is
  * dequeued. The office cannot use the credential; this handler can destroy it.
  *
@@ -48,6 +48,7 @@
  * thing this exists to prevent, wearing a different name.
  */
 
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { redactSecrets } from '../text/secrets.ts'
@@ -157,7 +158,7 @@ export function googleRevokeHandler(db: SqlExecutor, fetchImpl: typeof fetch = f
     handle: async (job: Job): Promise<HandlerOutput> => {
       const parked = (
         await db.execute(
-          `select coalesce(app.vault_secret('google.revoking_refresh_token'), '') as token`,
+          `select coalesce(${credentialSql('google.revoking_refresh_token')}, '') as token`,
         )
       ).rows[0] as { token: string }
 

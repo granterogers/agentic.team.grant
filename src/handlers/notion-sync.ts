@@ -51,6 +51,7 @@
  */
 
 import { howComposed } from '../agents/provenance.ts'
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
@@ -83,8 +84,7 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
               where connector = 'notion'), false) as enabled,
             (select disabled_reason from public.knowledge_connectors
               where connector = 'notion') as disabled_reason,
-            (select decrypted_secret from vault.decrypted_secrets
-              where name = 'notion.integration_token') as token
+            ${credentialSql('notion.integration_token')} as token
         `)
       ).rows[0] as {
         enabled?: boolean

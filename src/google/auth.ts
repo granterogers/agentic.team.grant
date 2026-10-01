@@ -28,6 +28,7 @@
  * work to do.
  */
 
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -62,8 +63,8 @@ export async function googleAccess(
       select
         coalesce((select value #>> '{}' from public.system_config
                    where key = 'google.client_id'), '') as client_id,
-        coalesce(app.vault_secret('google.client_secret'), '') as client_secret,
-        coalesce(app.vault_secret('google.refresh_token'), '') as refresh_token
+        coalesce(${credentialSql('google.client_secret')}, '') as client_secret,
+        coalesce(${credentialSql('google.refresh_token')}, '') as refresh_token
     `)
   ).rows[0] as { client_id: string; client_secret: string; refresh_token: string }
 

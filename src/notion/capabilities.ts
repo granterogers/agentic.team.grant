@@ -32,6 +32,7 @@
  * than the secret behind it.
  */
 
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { NotionApiError, NotionClient } from './api.ts'
 
@@ -271,8 +272,7 @@ const OPERATIONS: readonly {
 export async function notionCapabilities(db: SqlExecutor): Promise<NotionCapabilities> {
   const { rows } = await db.execute(`
     select
-      (select decrypted_secret from vault.decrypted_secrets
-        where name = 'notion.integration_token') as token,
+      ${credentialSql('notion.integration_token')} as token,
       coalesce((select enabled from public.knowledge_connectors
         where connector = 'notion'), false) as connector_enabled,
       coalesce((select enabled from public.tool_permissions

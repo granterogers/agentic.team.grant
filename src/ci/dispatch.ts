@@ -108,7 +108,7 @@ export async function dispatchWorkflow(
     (
       await db.execute(
         `select decrypted_secret as t from vault.decrypted_secrets
-          where name = ${lit(DISPATCH_SECRET)}`,
+          where name = 'github.dispatch_token'`, // infra: CI dispatch, the deployment's own
       )
     ).rows[0] as { t?: string } | undefined
   )?.t

@@ -1228,6 +1228,37 @@ document.addEventListener('keydown', (e) => {
     render()
   }
 })
+/*
+  CONNECTING GOOGLE starts with the office, not with a link (0648).
+
+  The consent screen is only reachable with a one-time state the office mints for a verified operator; the
+  callback refuses a code that arrives without one, so nobody can finish a connection they did not start
+  from here. Delegated on the document because the buttons live in panes that redraw themselves. The tab is
+  opened before the request so the browser treats it as the press it is, then pointed at Google.
+*/
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('[data-google-connect]')
+  if (!b) return
+  e.preventDefault()
+  const tab = window.open('', '_blank')
+  if (tab) tab.opener = null
+  void attempt(
+    b,
+    'Opening Google…',
+    async () => {
+      try {
+        const made = await act('google_connect_start', {})
+        const url = `${GOOGLE_START}?state=${encodeURIComponent(String(made?.state ?? ''))}`
+        if (tab) tab.location.href = url
+        else window.location.href = url
+      } catch (err) {
+        if (tab) tab.close()
+        throw err
+      }
+    },
+    'Google is open in a new tab.',
+  )
+})
 document.addEventListener('click', (e) => {
   if (!state.sendFor) return
   if (e.target.closest?.('.sendwrap')) return
@@ -5381,7 +5412,7 @@ function setupTab() {
         ${
           google.ready
             ? `<button class="btn small quiet" data-forget-google>Disconnect Google</button>`
-            : `<a class="btn primary" href="${esc(GOOGLE_START)}" target="_blank" rel="noopener">Connect Google</a>`
+            : `<button class="btn primary" data-google-connect>Connect Google</button>`
         }
       </div>
       <!--
@@ -6335,8 +6366,8 @@ function connectionsTab() {
           const route = config.routeFor(c.key)
           if (!config.isConnected(c.state)) {
             if (route.how === 'oauth') {
-              return `<a class="btn small primary" href="${esc(GOOGLE_START)}"
-                        target="_blank" rel="noopener">${esc(route.label)}</a>`
+              return `<button class="btn small primary" data-google-connect
+                        >${esc(route.label)}</button>`
             }
             if (route.how === 'tab') {
               return `<button class="btn small primary" data-goto-setting="${esc(route.to)}"
@@ -6464,8 +6495,7 @@ function connectionsTab() {
             <span class="t-meta">${esc(on ? config.STATE_LABEL[c.state] : (route.why ?? route.label))}</span>`
           if (on) return `<div class="pick done">${body}</div>`
           if (route.how === 'oauth') {
-            return `<a class="pick" href="${esc(GOOGLE_START)}" target="_blank"
-                      rel="noopener">${body}</a>`
+            return `<button class="pick" data-google-connect>${body}</button>`
           }
           if (route.how === 'tab') {
             return `<button class="pick" data-goto-setting="${esc(route.to)}">${body}</button>`

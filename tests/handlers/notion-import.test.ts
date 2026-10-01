@@ -136,7 +136,7 @@ describe('#131 — the plan is the thing executed', () => {
             rows: [{ d: { verdict: 'proceed', asked_for: true, because: 'You asked for this.' } }],
           }
         }
-        if (sql.includes('decrypted_secrets')) {
+        if (sql.includes('decrypted_secrets') || sql.includes('deployment_credential')) {
           return {
             rows: [
               {

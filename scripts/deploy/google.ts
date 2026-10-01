@@ -27,7 +27,8 @@ form.append(
     entrypoint_path: 'index.ts',
     // No JWT: Google sends the browser here with a code, and a browser
     // following a redirect carries no bearer token. The authorisation is the
-    // one-time code plus the client secret, which never leaves the vault.
+    // one-time STATE the office minted for a signed-in operator (0648), which
+    // the callback consumes before it exchanges anything.
     verify_jwt: false,
   }),
 )

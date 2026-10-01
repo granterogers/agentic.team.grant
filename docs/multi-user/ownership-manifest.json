@@ -384,6 +384,10 @@
       "class": "OFFICE_CARRIER",
       "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
     },
+    "google_oauth_states": {
+      "class": "SYSTEM",
+      "why": "One-time states for connecting the DEPLOYMENT'S Google account, minted for an operator and consumed by the OAuth callback (0648). Moves with the per-office Google decision in the ownership phase."
+    },
     "google_services": {
       "class": "GLOBAL",
       "why": "Catalogue of connectable Google services and their scopes; no credentials."

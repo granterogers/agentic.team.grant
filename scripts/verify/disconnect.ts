@@ -293,23 +293,24 @@ check(
 )
 /*
   CONTROL, and the reason it is here: every assertion above passes just as well
-  if `app.vault_secret` had been widened carelessly. The parked name must be
-  readable by the handler and the ORIGINAL name must still be refused to
-  anything outside the allow-list — so the check that the parking is not a
+  if the credential gate had been widened carelessly. The parked name must be
+  readable by the handler and every other name must still be refused to
+  anything outside the classes — so the check that the parking is not a
   loophole is the one that asks what the gate now permits.
 */
 const gate = await one(`
-  select (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-           where n.nspname = 'app' and p.proname = 'vault_secret'
-             and pg_get_functiondef(p.oid) like '%google.revoking_refresh_token%') as knows_parked,
+  select app.credential_class('google.revoking_refresh_token') as parked_class,
+         app.credential_class('google.refresh_token') as ours_class,
          (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-           where n.nspname = 'app' and p.proname = 'vault_secret'
+           where n.nspname = 'app' and p.proname = 'deployment_credential'
              and pg_get_functiondef(p.oid) like '%42501%') as still_refuses
 `)
 check(
-  'the parked name is readable, and the gate still refuses everything else',
-  `knows_parked=${String(gate.knows_parked)}, refuses=${String(gate.still_refuses)}`,
-  gate.knows_parked === 1 && gate.still_refuses === 1,
+  'the parked name is a human-integration credential, and the resolver still refuses everything else',
+  `parked=${String(gate.parked_class)}, ours=${String(gate.ours_class)}, refuses=${String(gate.still_refuses)}`,
+  gate.parked_class === 'human_integration' &&
+    gate.ours_class === 'human_integration' &&
+    gate.still_refuses === 1,
 )
 /*
   The parked copy is destroyed whether the revoke worked or not.
