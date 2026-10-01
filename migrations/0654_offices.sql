@@ -150,6 +150,26 @@ create policy office_backfill_report_app_all on public.office_backfill_report fo
 revoke all on table public.office_backfill_report from anon, authenticated, service_role;
 revoke all on function app.office_backfill_report_is_append_only() from public, anon, authenticated, service_role;
 
+-- ---- what a backfill had to change, so it can be changed back ---------------------------------------------------------
+-- The waves only write office_id, with one exception: a suite's command whose scope pointed at the wrong project is
+-- re-pointed (0658). Every such change writes the old value here first.
+create table public.office_repair_log (
+  repair_id   bigint generated always as identity primary key,
+  wave        text not null,
+  table_name  text not null,
+  row_id      text not null,
+  column_name text not null,
+  old_value   text,
+  new_value   text,
+  why         text not null,
+  recorded_at timestamptz not null default app.now_utc()
+);
+create trigger office_repair_log_append_only before update or delete on public.office_repair_log
+  for each row execute function app.office_backfill_report_is_append_only();
+alter table public.office_repair_log enable row level security;
+create policy office_repair_log_app_all on public.office_repair_log for all to ai_team_app using (true) with check (true);
+revoke all on table public.office_repair_log from anon, authenticated, service_role;
+
 -- ---- edges the history cannot satisfy ---------------------------------------------------------------------------
 -- A composite ownership key refuses a cross-office edge. A handful of EXISTING rows in append-only ledgers hold one
 -- (a suite's session ran inside the real catch-all project and wrote a lesson replacing a fixture's lesson) and a

@@ -94,6 +94,12 @@ begin
   values ('fixture-p2-default-scope', 'Fixture: where a suite''s command points when it chose no project', 'archived', v_test)
   on conflict (slug) do nothing;
   select project_id into v_quarantine from public.projects where slug = 'fixture-p2-default-scope';
+  insert into public.office_repair_log (wave, table_name, row_id, column_name, old_value, new_value, why)
+  select '0658', 'inbound_commands', c.command_id::text, 'project_id', c.project_id::text, coalesce(j.project_id, v_quarantine)::text,
+         'a suite command scoped to a default project while its job lives in another office'
+    from public.inbound_commands c, public.jobs j, public.projects pj
+   where c.job_id = j.job_id and pj.project_id = c.project_id and c.project_id is distinct from j.project_id
+     and pj.office_id <> j.office_id and app.harness_job(j.job_id);
   update public.inbound_commands c set project_id = coalesce(j.project_id, v_quarantine)
     from public.jobs j, public.projects pj
    where c.job_id = j.job_id and pj.project_id = c.project_id and c.project_id is distinct from j.project_id
@@ -373,6 +379,10 @@ begin
   if current_setting('p2.dry_run', true) = '0658' then raise exception E'P2REPORT\n%', v_report; end if;
   raise notice E'0658 backfill:\n%', v_report;
 end $m$;
+
+-- Deferred constraint triggers queued by the backfill above (an active project must have an attachment) must fire now:
+-- Postgres refuses ALTER TABLE on a table with trigger events still pending.
+set constraints all immediate;
 
 -- ---- constrain ---------------------------------------------------------------------------------------------------
 -- The parents of the new edges need a (key, office) pair to point at.

@@ -161,6 +161,10 @@ begin
   raise notice E'0659 backfill:\n%', v_report;
 end $m$;
 
+-- Deferred constraint triggers queued by the backfill above (an active project must have an attachment) must fire now:
+-- Postgres refuses ALTER TABLE on a table with trigger events still pending.
+set constraints all immediate;
+
 -- ---- constrain ---------------------------------------------------------------------------------------------------
 alter table public.preference_instructions add constraint preference_instructions_id_office_key unique (instruction_id, office_id);
 alter table public.preference_instructions add constraint preference_instructions_command_id_same_office

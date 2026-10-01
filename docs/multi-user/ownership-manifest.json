@@ -762,6 +762,10 @@
       "class": "SYSTEM",
       "why": "Names the few existing append-only rows whose edge crosses offices and cannot be corrected; the matching key stays NOT VALID and a check keeps the list from growing."
     },
+    "office_repair_log": {
+      "class": "SYSTEM",
+      "why": "Old values of the few rows a P2 backfill wave had to re-point, written before the change so it can be reversed. Append-only deployment evidence."
+    },
     "office_members": {
       "class": "SYSTEM",
       "why": "Legacy email-keyed sign-in allow-list; to be retired when offices exist. Not an ownership key."

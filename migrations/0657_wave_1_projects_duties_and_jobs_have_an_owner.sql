@@ -244,6 +244,10 @@ begin
 end
 $m$;
 
+-- Deferred constraint triggers queued by the backfill above (an active project must have an attachment) must fire now:
+-- Postgres refuses ALTER TABLE on a table with trigger events still pending.
+set constraints all immediate;
+
 -- ---- constrain: composite keys, same-office edges, write-once, the bridge, NOT NULL ----------------------------------
 alter table public.projects add constraint projects_id_office_key unique (project_id, office_id);
 alter table public.jobs add constraint jobs_id_office_key unique (job_id, office_id);
