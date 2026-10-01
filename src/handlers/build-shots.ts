@@ -59,6 +59,7 @@ export function buildShotsHandler(deps: BuildShotsDeps): Handler {
         model: null,
       }
       const quiet = async (): Promise<void> => {
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await db.execute(
           `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
         )

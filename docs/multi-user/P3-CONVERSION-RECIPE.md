@@ -197,3 +197,13 @@ Things that bit:
   Compute the message before the statement instead of nesting a template inside it.
 * A suite that drives a REAL function against a clone with a second office holding the colliding row is the only check
   that sees these: every case in `p3-cases/96-raw-sql-engine.ts` has a B row the old statement would have touched.
+## 8. Inline SQL in handlers, agents, channels and adapters
+
+* A statement inside a claimed job is confined with `office_id = app.job_office(<job id>)`; a press or workspace uses its own
+  office (`c.office_id`, or `workspaceOffice(teamId)`). Derived tables with no `office_id` are reached through a carrier
+  (a project of the office, or the workspace `team_id`).
+* A statement keyed by the claimed row, or a deployment scan, keeps its SQL and carries a `raw-sql[2|3]: <reason>` comment
+  right above it; the baseline entry gets the same reason.
+* Never nest one template literal inside another: the ratchet's regex truncates the statement. Precompute the fragment.
+* Replace the literal `'grant'` with `app.office_actor(office)`.
+* Proof: `scripts/isolated/p3-cases/95-raw-sql-handlers.ts` and `tests/handlers/raw-sql-names-the-claimed-office.test.ts`.

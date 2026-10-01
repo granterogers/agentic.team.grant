@@ -32,6 +32,7 @@ export function calendarHandler(db: SqlExecutor): Handler {
       // is a message in #the_team every hour saying the diary is the same.
       const worthSaying = !outcome.ok || outcome.removed > 0
       if (!worthSaying) {
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await db.execute(
           `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
         )

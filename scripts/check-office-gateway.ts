@@ -10,8 +10,8 @@
  *   P3_DB=p3_attack npx tsx scripts/check-office-gateway.ts [--fix]   # against a clone; --fix marks the entries
  */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { PgExecutor } from '../src/db/pg-executor.ts'
 import { ManagementApiExecutor, type SqlExecutor } from '../src/db/executor.ts'
+import { PgExecutor } from '../src/db/pg-executor.ts'
 
 const FILE = 'supabase/functions/hq-api/index.ts'
 const ENTRY = /^ {2}([a-z_0-9]+): \{(\s*(?:\n\s*)?)fn: '([a-z_0-9]+)'([^\n]*)/gm

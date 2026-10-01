@@ -149,8 +149,10 @@ export async function planTasksForCalendar(
   const access = await googleAccess(db, fetchImpl)
   // The office is the caller's (the claimed job's, or the one a script names), resolved in SQL - never an ambient default.
   const officeId = (
-    (await db.execute(`select ${officeOf(office)}::text as id`)).rows[0] as { id: string }
-  ).id as OfficeId
+    'officeId' in office
+      ? office.officeId
+      : ((await db.execute(`select ${officeOf(office)}::text as id`)).rows[0] as { id: string }).id
+  ) as OfficeId
   await recordGoogleHealth(db, access, officeId)
   if (!access.ok) {
     return { ok: false, note: access.reason, plan: nothingToDo('calendar.write', access.reason) }

@@ -34,7 +34,7 @@ const gate = (script: string, extra: NodeJS.ProcessEnv = {}): { ok: boolean; fir
   } catch (e) {
     const out = String((e as { stdout?: string }).stdout ?? '')
     const line =
-      out.split('\n').find((l) => /^  \S/.test(l)) ??
+      out.split('\n').find((l) => /^ {2}\S/.test(l)) ??
       out.split('\n').find((l) => l.startsWith('FAIL')) ??
       ''
     return { ok: false, first: line.trim().slice(0, 130) }

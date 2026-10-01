@@ -11,8 +11,8 @@
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { PgExecutor } from '../src/db/pg-executor.ts'
 import { ManagementApiExecutor, type SqlExecutor } from '../src/db/executor.ts'
+import { PgExecutor } from '../src/db/pg-executor.ts'
 
 const ROOTS = ['src', 'supabase', 'scripts', 'tests']
 const OK_FIRST =

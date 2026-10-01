@@ -19,7 +19,7 @@ import {
   enforcementProblems,
   readEnforcement,
 } from '../src/ownership/enforcement.ts'
-import { type Manifest } from '../src/ownership/manifest.ts'
+import type { Manifest } from '../src/ownership/manifest.ts'
 import { loadManifest } from './check-ownership.ts'
 
 const fromReplica = (): EnforcementCatalogue => {

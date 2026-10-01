@@ -170,26 +170,33 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
    */
   'db.read': {
     effect: 'none',
-    run: async ({ db, projectId }): Promise<Observation> => {
+    run: async ({ db, jobId, projectId }): Promise<Observation> => {
       if (projectId === null) {
         return nothing('db.read', 'no project is in scope for this request')
       }
+      // Every read below is confined to the CLAIMED job's office, so a project id from anywhere else reads as empty.
+      const office = `app.job_office(${lit(jobId)}::uuid)`
       const { rows } = await db.execute(`
         select
           (select count(*) from public.documents
-            where project_id = ${lit(projectId)}::uuid and state <> 'archived')::int as docs,
+            where office_id = ${office}
+              and project_id = ${lit(projectId)}::uuid and state <> 'archived')::int as docs,
           (select count(*) from public.tasks
-            where project_id = ${lit(projectId)}::uuid and state <> 'done')::int as open_tasks,
+            where office_id = ${office}
+              and project_id = ${lit(projectId)}::uuid and state <> 'done')::int as open_tasks,
           (select coalesce(string_agg(t, '; '), '') from (
              select left(title, 70) as t from public.documents
-              where project_id = ${lit(projectId)}::uuid and state <> 'archived'
+              where office_id = ${office}
+                and project_id = ${lit(projectId)}::uuid and state <> 'archived'
               order by created_at desc limit 8) d)::text as doc_titles,
           (select coalesce(string_agg(t, '; '), '') from (
              select left(title, 70) as t from public.tasks
-              where project_id = ${lit(projectId)}::uuid and state <> 'done'
+              where office_id = ${office}
+                and project_id = ${lit(projectId)}::uuid and state <> 'done'
               order by created_at desc limit 8) k)::text as task_titles,
           (select coalesce(max(updated_at)::text, '') from public.documents
-            where project_id = ${lit(projectId)}::uuid) as newest`)
+            where office_id = ${office}
+              and project_id = ${lit(projectId)}::uuid) as newest`)
       const r = (rows[0] ?? {}) as Record<string, unknown>
       const docs = Number(r.docs ?? 0)
       const open = Number(r.open_tasks ?? 0)
@@ -537,7 +544,8 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
                 (
                   await db.execute(
                     `select coalesce(title, '') as t from public.documents
-                      where document_id = ${lit(String(scopedTo[0]))}::uuid`,
+                      where office_id = app.job_office(${lit(jobId)}::uuid)
+                        and document_id = ${lit(String(scopedTo[0]))}::uuid`,
                   )
                 ).rows[0] as { t?: string } | undefined
               )?.t ?? '',

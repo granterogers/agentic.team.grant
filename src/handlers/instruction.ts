@@ -380,7 +380,9 @@ export const planAndPursue = async (
     handed?.created === false && typeof handed.job_id === 'string'
       ? await db
           .execute(
-            `select parent_job_id::text as p from public.jobs where job_id = ${lit(handed.job_id)}::uuid`,
+            `select parent_job_id::text as p from public.jobs
+              where job_id = ${lit(handed.job_id)}::uuid
+                and office_id = app.job_office(${lit(job.jobId)}::uuid)`,
           )
           .then((r) => String((r.rows[0] as { p?: string } | undefined)?.p ?? '') === job.jobId)
           .catch(() => false)
@@ -1287,10 +1289,11 @@ async function act(
   // a notebook — ADR-0014's whole point is that "where does this project's
   // output go" has one answer.
   const { rows } = await db.execute(`
-    select display_name from public.project_attachments
-     where project_id = ${lit(String(job.projectId))}::uuid
-       and connector = 'notebooklm' and enabled
-     order by case when role = 'home' then 0 else 1 end
+    select a.display_name from public.project_attachments a
+      join public.projects p on p.project_id = a.project_id and p.office_id = app.job_office(${lit(job.jobId)}::uuid)
+     where a.project_id = ${lit(String(job.projectId))}::uuid
+       and a.connector = 'notebooklm' and a.enabled
+     order by case when a.role = 'home' then 0 else 1 end
      limit 1
   `)
   const notebook = (rows[0] as { display_name?: string } | undefined)?.display_name
@@ -1351,6 +1354,7 @@ async function act(
   //
   // The text is still produced and still stored, because it is this job's
   // output and §10 wants an output; it is only not delivered.
+  // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
   await db.execute(`update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`)
   return (
     (started.length === 1
@@ -1376,7 +1380,8 @@ async function act(
 async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<string> {
   const commandId = String(payload.command_id ?? '')
   const { rows: existing } = await db.execute(
-    `select transcript from public.inbound_commands where command_id = ${lit(commandId)}::uuid`,
+    `select transcript from public.inbound_commands
+      where command_id = ${lit(commandId)}::uuid and office_id = app.job_office(${lit(job.jobId)}::uuid)`,
   )
   const already = (existing[0] as { transcript?: string | null } | undefined)?.transcript
   if (already !== undefined && already !== null && already.trim() !== '') return already.trim()
@@ -1389,6 +1394,7 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
       -- wrong token here does not fetch the wrong audio — it fetches nothing.
       ${BOT_FOR_INBOUND}
      where c.command_id = ${lit(commandId)}::uuid
+       and c.office_id = app.job_office(${lit(job.jobId)}::uuid)
        and t.enabled and t.token_ref is not null
      limit 1
   `)
@@ -1405,7 +1411,7 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
   // switched Actions off, 'api' is the live one — and it is also the faster
   // one, because it runs where the webhook already kicks rather than waiting
   // for a runner to boot and download a model.
-  const vocabulary = await spokenVocabulary(db)
+  const vocabulary = await spokenVocabulary(db, job)
   const transcriber = await readTranscriber(db)
 
   if (transcriber.mode === 'none') {
@@ -1489,9 +1495,11 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
     update public.inbound_commands
        set transcript = ${lit(heard.text)}, instruction = ${lit(heard.text)}
      where command_id = ${lit(commandId)}::uuid
+       and office_id = app.job_office(${lit(job.jobId)}::uuid)
   `)
   // Onto the job too, so `pinned_config` still explains the job's behaviour
   // afterwards — §6's whole reason for pinning.
+  // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
   await db.execute(`
     update public.jobs
        set pinned_config = pinned_config || jsonb_build_object(
@@ -1516,7 +1524,7 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
  * naming a project makes their name transcribable without a code change. The
  * fixed nouns are the ones no table holds.
  */
-async function spokenVocabulary(db: SqlExecutor): Promise<string[]> {
+async function spokenVocabulary(db: SqlExecutor, job: Job): Promise<string[]> {
   // Ordered most-specific first: the hint has a token budget and the caller
   // truncates, so the words most likely to be mangled must come before the
   // ones a general model already knows.
@@ -1525,7 +1533,8 @@ async function spokenVocabulary(db: SqlExecutor): Promise<string[]> {
     const { rows } = await db.execute(`
       select name from public.staff where active
       union
-      select name from public.projects where status = 'active'
+      select name from public.projects
+       where office_id = app.job_office(${lit(job.jobId)}::uuid) and status = 'active'
     `)
     return [...fixed, ...rows.map((r) => String(r.name)).filter((n) => n !== '')]
   } catch {
@@ -1604,11 +1613,13 @@ interface Candidate {
  */
 async function whichProject(
   db: SqlExecutor,
+  job: Job,
   named: string | null,
 ): Promise<{ project: Candidate | null; ask: string | null }> {
   const { rows } = await db.execute(`
     select project_id::text as project_id, slug, name
-      from public.projects where status = 'active' order by updated_at desc
+      from public.projects
+     where office_id = app.job_office(${lit(job.jobId)}::uuid) and status = 'active' order by updated_at desc
   `)
   const active = rows as unknown as Candidate[]
 
@@ -1656,7 +1667,7 @@ async function handleLinks(
 ): Promise<string | null> {
   if (request.intent === 'discuss') return null
 
-  const { project, ask } = await whichProject(db, request.namedProject)
+  const { project, ask } = await whichProject(db, job, request.namedProject)
   if (project === null) return ask
 
   const said: string[] = []
@@ -1692,9 +1703,10 @@ async function handleLinks(
     // natively, transcribing a video and rendering a PDF, where we would hand
     // Notion the HTML of a consent banner.
     const { rows } = await db.execute(`
-      select display_name from public.project_attachments
-       where project_id = ${lit(project.project_id)}::uuid
-         and connector = 'notebooklm' and enabled
+      select a.display_name from public.project_attachments a
+        join public.projects p on p.project_id = a.project_id and p.office_id = app.job_office(${lit(job.jobId)}::uuid)
+       where a.project_id = ${lit(project.project_id)}::uuid
+         and a.connector = 'notebooklm' and a.enabled
        limit 1
     `)
     if (rows.length === 0) {
@@ -1780,7 +1792,8 @@ async function pairWithNearby(
            coalesce(c.transcript, c.instruction) as said
       from public.inbound_commands c
       join public.inbound_commands self on self.command_id = ${lit(commandId)}::uuid
-     where c.command_id <> self.command_id
+     where c.office_id = app.job_office(${lit(job.jobId)}::uuid) and self.office_id = app.job_office(${lit(job.jobId)}::uuid)
+       and c.command_id <> self.command_id
        and c.origin_channel = self.origin_channel
        and split_part(c.origin_ref, ':', 1) = split_part(self.origin_ref, ':', 1)
        and coalesce(c.addressed_to, '') = coalesce(self.addressed_to, '')
@@ -1824,8 +1837,10 @@ async function pairWithNearby(
              instruction = case
                when command_id = ${lit(commandId)}::uuid then ${lit(joined)}
                else instruction end
-       where command_id in (${lit(commandId)}::uuid, ${lit(other.command_id)}::uuid)
+       where office_id = app.job_office(${lit(job.jobId)}::uuid)
+         and command_id in (${lit(commandId)}::uuid, ${lit(other.command_id)}::uuid)
     `)
+    // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
     await db.execute(`
       update public.jobs
          set pinned_config = pinned_config
@@ -2148,6 +2163,8 @@ async function resolveProjects(db: SqlExecutor, plan: Plan, jobId: string): Prom
     const { rows } = await db.execute(`
       select a.external_ref
         from public.project_attachments a
+        join public.projects p
+          on p.project_id = a.project_id and p.office_id = app.job_office(${lit(jobId)}::uuid)
        where a.project_id = ${lit(projectId)}::uuid
          and a.connector = 'notebooklm' and a.enabled
        limit 1
@@ -2223,6 +2240,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
   return {
     kind: 'office.instruction',
     handle: async (job: Job): Promise<HandlerOutput> => {
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const { rows } = await deps.db.execute(
         `select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
       )
@@ -2367,6 +2385,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           Staff everywhere else in this system, which is exactly who asks a
           clarifying question.
         */
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await deps.db
           .execute(`
             update public.jobs set recipient_agent = 'chief-of-staff'
@@ -2397,6 +2416,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       if (closes) {
         const last = await previousTurn()
         if (early === 'close') {
+          // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
           await deps.db
             .execute(`
               update public.jobs set recipient_agent = 'chief-of-staff'
@@ -2513,6 +2533,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         This is the whole of the cheap half of the fix: the decision already
         existed, it just never reached the row anyone would look at.
       */
+      // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
       await deps.db
         .execute(`
           update public.jobs set recipient_agent = ${lit(who.slug)}
@@ -3089,6 +3110,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             `)
             .catch(() => undefined)
         }
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await deps.db.execute(`
           update public.jobs
              set pinned_config = pinned_config
@@ -3848,6 +3870,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         One query, on a path that fires only when he is actually teaching
         something.
       */
+      // raw-sql[2]: keyed by the claimed job; it reads who requested the job the worker holds.
       const learnedBy = await deps.db
         .execute(`
           select coalesce(
@@ -4377,7 +4400,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   p_project => ${
                     job.projectId === null
                       ? 'null'
-                      : `(select slug from public.projects where project_id = ${lit(job.projectId)}::uuid)`
+                      : `(select slug from public.projects
+                          where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                            and project_id = ${lit(job.projectId)}::uuid)`
                   },
                   /*
                     WHICH JOB MADE IT.
@@ -4528,12 +4553,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .execute(`
                 select coalesce(
                   (select left(o.body, 500) from public.outputs o
-                     join public.inbound_commands c on c.job_id = o.job_id
+                     join public.inbound_commands c
+                       on c.job_id = o.job_id and c.office_id = app.job_office(${lit(job.jobId)}::uuid)
                     where c.origin_channel = 'teamhq'
                       and c.command_id <> ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid
                       and split_part(c.origin_ref, ':', 1) = (
                         select split_part(origin_ref, ':', 1) from public.inbound_commands
-                         where command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)
+                         where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                           and command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)
                     order by c.received_at desc limit 1), '') as said`)
               .then((r) => String((r.rows[0] as { said?: string } | undefined)?.said ?? ''))
               /*
@@ -4920,6 +4947,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 */
                 if (q !== undefined && spoken === 'unclear') {
                   // Bind this turn to the question it is asking about again.
+                  // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
                   await deps.db.execute(`
                     update public.jobs
                        set pinned_config = coalesce(pinned_config, '{}'::jsonb)
@@ -5310,16 +5338,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const counted = await deps.db
         .execute(`
-          select (select count(*) from public.tasks t where t.job_id = ${lit(job.jobId)}::uuid)
+          select (select count(*) from public.tasks t
+                   where t.office_id = app.job_office(${lit(job.jobId)}::uuid) and t.job_id = ${lit(job.jobId)}::uuid)
                + (select count(*) from public.documents d
-                   where d.produced_by_job = ${lit(job.jobId)}::uuid) as n,
+                   where d.office_id = app.job_office(${lit(job.jobId)}::uuid) and d.produced_by_job = ${lit(job.jobId)}::uuid) as n,
                  (select count(*) from public.jobs c
-                   where c.parent_job_id = ${lit(job.jobId)}::uuid) as kids,
+                   where c.office_id = app.job_office(${lit(job.jobId)}::uuid) and c.parent_job_id = ${lit(job.jobId)}::uuid) as kids,
                  (select count(*) from public.blockers b
-                   where b.state = 'open'
+                   where b.office_id = app.job_office(${lit(job.jobId)}::uuid) and b.state = 'open'
                      and (b.job_id = ${lit(job.jobId)}::uuid
                           or b.job_id in (select c.job_id from public.jobs c
-                                           where c.parent_job_id = ${lit(job.jobId)}::uuid))) as asking`)
+                                           where c.office_id = app.job_office(${lit(job.jobId)}::uuid)
+                                             and c.parent_job_id = ${lit(job.jobId)}::uuid))) as asking`)
         .then((r) => r.rows[0] as { n?: number; kids?: number; asking?: number } | undefined)
         .catch(() => undefined)
       const landedRows = counted === undefined ? acted : Number(counted.n ?? 0)
@@ -5712,6 +5742,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 .execute(`
                   select o.body as body, coalesce(s.name, o.staff_id::text) as who
                     from public.outputs o
+                    join public.jobs oj on oj.job_id = o.job_id and oj.office_id = app.job_office(${lit(job.jobId)}::uuid)
                     left join public.staff s on s.staff_id = o.staff_id
                    where o.output_id = ${lit(payload.from_output)}::uuid
                 `)
@@ -5776,7 +5807,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         .execute(`
           select slug, name, reserved_reason is not null as reserved
             from public.projects
-           where status = 'active'
+           where office_id = app.job_office(${lit(job.jobId)}::uuid)
+             and status = 'active'
              /*
                The same question the resolver asks, asked of the same fact.
                No backticks in here: this comment sits inside a template
@@ -6347,6 +6379,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // convention. Writing the row by hand was the mistake; the duplicate
       // scan is not optional here just because the roster was already decided.
       const scan = await scanForDuplicates(deps.db, instruction, {
+        office: `app.job_office(${lit(job.jobId)}::uuid)`,
         ...(job.projectId === null ? {} : { projectId: job.projectId }),
       })
       const decided = route(instruction, scan)

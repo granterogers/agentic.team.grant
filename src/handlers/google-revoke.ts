@@ -179,6 +179,7 @@ export function googleRevokeHandler(db: SqlExecutor, fetchImpl: typeof fetch = f
         interruption is for.
       */
       if (outcome.revoked) {
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await db.execute(
           `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
         )

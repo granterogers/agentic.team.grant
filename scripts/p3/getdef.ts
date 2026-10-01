@@ -16,8 +16,7 @@ for (const n of names) {
          from pg_proc p where p.pronamespace = '${schema}'::regnamespace and p.proname = '${name}'`,
     )
   ).rows as { d: string; a: string }[]
-  rows.forEach((r, i) =>
-    writeFileSync(`${out}/${schema}.${name}${rows.length > 1 ? `.${String(i)}` : ''}.sql`, r.d),
-  )
+  for (const [i, r] of rows.entries())
+    writeFileSync(`${out}/${schema}.${name}${rows.length > 1 ? `.${String(i)}` : ''}.sql`, r.d)
   console.log(n, rows.length)
 }

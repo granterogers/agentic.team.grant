@@ -77,7 +77,6 @@ export async function remember(
   projectId: string | null = null,
 ): Promise<Remembered> {
   const scoped = staffSlug === null || staffSlug === '' ? null : staffSlug
-
   if (teaching.kind === 'lesson') {
     /*
       A PREFERENCE HAS A LIFE, and until #310 it only had a birth.
@@ -186,6 +185,7 @@ export async function remember(
                                      null, 200, mine.harness) f
                 join public.lessons l on l.lesson_id = f.lesson_id
                where l.is_fixture = mine.harness
+                 and l.office_id = ${officeOf(office)}
                  and l.scope = ${scope}
                  and l.project_id is not distinct from ${uuid(onAProject)}
                  and l.staff_slug is not distinct from ${scoped === null ? 'null' : lit(scoped)}`)
@@ -272,6 +272,7 @@ export async function remember(
                                      null, 200, mine.harness) f
                 join public.lessons l on l.lesson_id = f.lesson_id
                where l.is_fixture = mine.harness
+                 and l.office_id = ${officeOf(office)}
                  and l.scope in ('global', 'staff')`)
             .then((r) => r.rows as { id: string; scope: string; body: string }[])
             .catch(() => [])

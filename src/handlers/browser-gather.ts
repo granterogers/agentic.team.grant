@@ -109,6 +109,7 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
       const say = (body: string, announce = true): HandlerOutput =>
         ({ ...base, announce, body }) satisfies HandlerOutput
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload and project of the job the worker holds.
       const pinned =
         ((
           await db.execute(

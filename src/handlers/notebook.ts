@@ -68,12 +68,14 @@ const notebookUrl = (id: string): string => `https://notebooklm.google.com/noteb
 /** The notebook a project's artifacts belong in, or null with a reason. */
 async function notebookFor(
   db: SqlExecutor,
+  job: Job,
   projectId: string,
 ): Promise<{ id: string; name: string } | null> {
   const { rows } = await db.execute(`
     select external_ref, display_name
       from public.project_attachments
      where project_id = ${lit(projectId)}::uuid
+       and project_id in (select op.project_id from public.projects op where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
        and connector = 'notebooklm'
        and enabled
        -- The home for artifacts, or failing that any notebook source: a
@@ -89,6 +91,7 @@ async function notebookFor(
 }
 
 const payloadOf = async (db: SqlExecutor, job: Job): Promise<Record<string, unknown>> => {
+  // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
   const { rows } = await db.execute(
     `select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
   )
@@ -134,6 +137,7 @@ const TICK_GAP = '2 minutes'
  * they have in common; a job with no parent is its own.
  */
 const claimJobFor = async (db: SqlExecutor, job: Job): Promise<string> => {
+  // raw-sql[2]: keyed by the claimed job; it reads the parent pointer of the job the worker holds.
   const { rows } = await db.execute(
     `select coalesce(parent_job_id, job_id)::text as j from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
   )
@@ -239,6 +243,7 @@ function pick(
 
 /** This job's output is real and not worth a message (0074). */
 const quiet = async (db: SqlExecutor, job: Job): Promise<void> => {
+  // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
   await db.execute(`update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`)
 }
 
@@ -252,19 +257,23 @@ async function again(
   kind: string,
   why: string,
 ): Promise<HandlerOutput> {
+  const progress = `${why} (tick ${String(tick)})`
   await db.execute(`
-    update public.artifacts set detail = ${lit(`${why} (tick ${String(tick)})`)}
+    update public.artifacts set detail = ${lit(progress)}
      where artifact_id = ${lit(rowId)}::uuid
+       and project_id in (select op.project_id from public.projects op where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
   `)
 
   if (tick >= MAX_TICKS) {
     // Abandoning the WATCH, not the artifact: Google may still finish it, and
     // the row keeps the notebook and the reason so it can be picked up by hand.
+    const gaveUp = `gave up watching after ${String(tick)} checks — ${why}`
     await db.execute(`
       update public.artifacts
          set state = 'abandoned',
-             detail = ${lit(`gave up watching after ${String(tick)} checks — ${why}`)}
+             detail = ${lit(gaveUp)}
        where artifact_id = ${lit(rowId)}::uuid
+         and project_id in (select op.project_id from public.projects op where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
     `)
     return deterministic(
       `The ${LABEL[kind] ?? kind} still is not ready after ${String(tick)} checks (${why}). ` +
@@ -279,6 +288,7 @@ async function again(
   // of delegation. It was right to refuse: polling is not delegating. Every
   // tick belongs at the same depth as the first, under the generation that
   // started the work.
+  // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
   await db.execute(`
     select app.enqueue_child(
       coalesce(
@@ -306,7 +316,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
       throw new Error('no NotebookLM credential in the vault; the connector is not configured')
     }
     if (job.projectId === null) throw new Error('this job has no project')
-    const notebook = await notebookFor(db, job.projectId)
+    const notebook = await notebookFor(db, job, job.projectId)
     if (notebook === null) {
       throw new Error(
         'this project has no NotebookLM notebook attached. Attach one before asking for ' +
@@ -348,6 +358,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           const forecast = await allowance(db, kind)
           // The notebook the generation would land in is part of what he is approving: recorded on the
           // request before the question, so it is in the fingerprint and a later change is a mismatch.
+          // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
           await db.execute(`
             update public.jobs
                set pinned_config = coalesce(pinned_config, '{}'::jsonb)
@@ -369,6 +380,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           // existed — after which it produced the worst possible outcome:
           // nothing generated, and nobody told why. A gate whose request can be
           // muted by a caller is not a gate.
+          // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
           await db.execute(
             `update public.jobs set announce = true where job_id = ${lit(job.jobId)}::uuid`,
           )
@@ -415,6 +427,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         const meter = await allowance(db, kind)
         if (!meter.allowed) {
           const when = deferUntil(meter)
+          // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
           await db.execute(`
             select app.enqueue_child(
               coalesce(
@@ -492,6 +505,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             // ceiling is at most that — and 0078 lowers ours to match, once.
             const learned = await refused(db, kind, error.detail)
             const when = deferUntil(await allowance(db, kind))
+            // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
             await db.execute(`
               select app.enqueue_child(
                 coalesce(
@@ -525,18 +539,21 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         // The task id IS the artifact id — measured, not assumed (see
         // `KIND_MATCHES`). Recording it here is what makes the collector exact
         // instead of a guess about which artifact is newest.
+        const startedDetail = `task ${String(started.taskId ?? 'unknown')}, ${started.state}`
         const { rows: made } = await db.execute(`
           insert into public.artifacts
             (project_id, notebook_ref, kind, state, detail, requested_by_job,
              external_ref, preexisting)
-          values (
-            ${lit(String(job.projectId))}::uuid, ${lit(notebook.id)}, ${lit(kind)},
+          select
+            op.project_id, ${lit(notebook.id)}, ${lit(kind)},
             'generating',
-            ${lit(`task ${String(started.taskId ?? 'unknown')}, ${started.state}`)},
+            ${lit(startedDetail)},
             ${lit(job.jobId)}::uuid,
             ${started.taskId === null ? 'null' : lit(started.taskId)},
             ${lit(JSON.stringify(before.map((a) => a.artifactId)))}::jsonb
-          )
+            from public.projects op
+           where op.office_id = app.job_office(${lit(job.jobId)}::uuid)
+             and op.project_id = ${lit(String(job.projectId))}::uuid
           returning artifact_id
         `)
         const artifactId = String((made[0] as { artifact_id: string }).artifact_id)
@@ -567,6 +584,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         // did not just press a button on. That includes an MCP client's
         // generation — 0083 gates those too, which is the whole reason the gate
         // is in the handler rather than in the office.
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await db.execute(
           `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
         )
@@ -602,7 +620,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
       plan: async (job: Job): Promise<Plan> => {
         const payload = await payloadOf(db, job)
         const url = String(payload.url ?? '')
-        const notebook = job.projectId === null ? null : await notebookFor(db, job.projectId)
+        const notebook = job.projectId === null ? null : await notebookFor(db, job, job.projectId)
         if (notebook === null) {
           return nothingToDo('notebook.write', 'this project has no notebook attached')
         }
@@ -635,6 +653,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         const meter = await allowance(db, 'add_url')
         if (!meter.allowed) {
           const when = deferUntil(meter)
+          // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
           await db.execute(`
             select app.enqueue_child(
               coalesce(
@@ -718,13 +737,14 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
       plan: async (job: Job): Promise<Plan> => {
         const payload = await payloadOf(db, job)
         const documentId = String(payload.document_id ?? '')
-        const notebook = job.projectId === null ? null : await notebookFor(db, job.projectId)
+        const notebook = job.projectId === null ? null : await notebookFor(db, job, job.projectId)
         if (notebook === null) {
           return nothingToDo('notebook.write', 'this project has no notebook attached')
         }
         const { rows } = await db.execute(`
           select title from public.documents
-           where document_id = ${lit(documentId)}::uuid
+           where office_id = app.job_office(${lit(job.jobId)}::uuid)
+             and document_id = ${lit(documentId)}::uuid
              and project_id = ${lit(String(job.projectId))}::uuid
         `)
         const title = (rows[0] as { title?: string } | undefined)?.title
@@ -750,7 +770,8 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         const documentId = String(payload.document_id ?? '')
         const { rows } = await db.execute(`
           select title, content from public.documents
-           where document_id = ${lit(documentId)}::uuid
+           where office_id = app.job_office(${lit(job.jobId)}::uuid)
+             and document_id = ${lit(documentId)}::uuid
              and project_id = ${lit(String(job.projectId))}::uuid
         `)
         const doc = rows[0] as { title?: string; content?: string } | undefined
@@ -855,6 +876,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             from public.artifacts
            where artifact_id = ${lit(rowId)}::uuid
              and project_id = ${lit(String(job.projectId))}::uuid
+             and project_id in (select op.project_id from public.projects op where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
         `)
         const row = rows[0] as
           | { kind: string; state: string; external_ref: string | null; preexisting: unknown }
@@ -871,7 +893,8 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         // whatever a sibling collector has already claimed in this notebook.
         const { rows: taken } = await db.execute(`
           select external_ref from public.artifacts
-           where notebook_ref = ${lit(notebook.id)} and external_ref is not null
+           where project_id in (select op.project_id from public.projects op where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
+             and notebook_ref = ${lit(notebook.id)} and external_ref is not null
              and artifact_id <> ${lit(rowId)}::uuid
         `)
         const known = new Set([
@@ -890,9 +913,11 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           const { rows: claimed } = await db.execute(`
             update public.artifacts set external_ref = ${lit(mine.artifactId)}
              where artifact_id = ${lit(rowId)}::uuid
+               and project_id in (select op.project_id from public.projects op where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
                and not exists (
                  select 1 from public.artifacts other
-                  where other.notebook_ref = ${lit(notebook.id)}
+                  where other.project_id in (select op.project_id from public.projects op where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
+                    and other.notebook_ref = ${lit(notebook.id)}
                     and other.external_ref = ${lit(mine.artifactId)}
                )
             returning artifact_id
@@ -902,10 +927,12 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
 
         if (mine !== null && (mine.done || mine.failed)) {
           if (mine.failed) {
+            const reported = `the notebook reported ${mine.status}`
             await db.execute(`
               update public.artifacts
-                 set state = 'failed', detail = ${lit(`the notebook reported ${mine.status}`)}
+                 set state = 'failed', detail = ${lit(reported)}
                where artifact_id = ${lit(rowId)}::uuid
+                 and project_id in (select op.project_id from public.projects op where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
             `)
             return deterministic(
               `The ${LABEL[row.kind] ?? row.kind} failed in the notebook "${notebook.name}" — ` +
@@ -932,6 +959,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
                set state = 'ready', url = ${lit(url)}, title = ${lit(title)},
                    detail = null, ready_at = app.now_utc()
              where artifact_id = ${lit(rowId)}::uuid
+               and project_id in (select op.project_id from public.projects op where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
           `)
           /*
             And now fetch the actual file, which is the step Grant asked for.
@@ -1024,6 +1052,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
                   `${String(tick)} checks; the notebook cannot answer about them yet`,
               )
             }
+            // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
             await db.execute(`
               select app.enqueue_child(
                 coalesce(
@@ -1036,6 +1065,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
                 interval '90 seconds', true${callerArgs(job)}
               )
             `)
+            // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
             await db.execute(
               `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
             )

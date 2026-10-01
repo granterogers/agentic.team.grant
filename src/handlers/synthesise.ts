@@ -151,6 +151,7 @@ export function synthesiseHandler(deps: SynthesiseDeps): Handler {
       }
       const say = (body: string): HandlerOutput => ({ ...base, body }) satisfies HandlerOutput
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const payload = (
         (
           await db.execute(

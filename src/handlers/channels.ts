@@ -69,6 +69,7 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
         model: null,
       }
       const quiet = async (): Promise<void> => {
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await db.execute(
           `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
         )
@@ -98,7 +99,8 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
         await db.execute(`
           select p.project_id::text as id, p.name, p.status, p.is_fixture
             from public.projects p
-           where p.project_id = ${lit(String(job.projectId ?? ''))}::uuid`)
+           where p.office_id = app.job_office(${lit(job.jobId)}::uuid)
+             and p.project_id = ${lit(String(job.projectId ?? ''))}::uuid`)
       ).rows[0] as { id?: string; name?: string; status?: string; is_fixture?: boolean } | undefined
 
       if (row?.id === undefined) {
@@ -223,7 +225,8 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
               (
                 await db.execute(`
                   select count(*)::int as n from public.blockers
-                   where project_id = ${lit(String(row.id))}::uuid and state = 'open'
+                   where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                     and project_id = ${lit(String(row.id))}::uuid and state = 'open'
                      and requested_action like '%Slack channel%'`)
               ).rows[0] as { n?: number }
             )?.n ?? 0,

@@ -112,7 +112,8 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
           (
             await db.execute(
               `select count(*)::int as n from public.proposals
-                where state = 'open' and not app.harness_label(needed)`,
+                where office_id = app.job_office('${job.jobId}'::uuid)
+                  and state = 'open' and not app.harness_label(needed)`,
             )
           ).rows[0] as { n?: number }
         )?.n ?? 0,

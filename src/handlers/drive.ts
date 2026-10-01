@@ -153,6 +153,9 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
                where connector = 'drive'
                  and external_ref is not null
                  and project_id = ${lit(f.project_id)}::uuid
+                 -- the watched folder's own project's office, whichever office the sweep found it in
+                 and office_id = (select p.office_id from public.projects p
+                                   where p.project_id = ${lit(f.project_id)}::uuid)
             `)
           ).rows.map((r) => String((r as { external_ref?: string }).external_ref ?? '')),
         )

@@ -157,7 +157,7 @@ describe('every call in src/ to a converted function names an office first', () 
     })
   const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
   const OK =
-    /^(app\.job_office\(|\$\{officeOf\(|\$\{office\}|p_office\b|app\.office|app\.sole_person_office|app\.test_office|o\.office_id|\(select office_id)/
+    /^(app\.job_office\(|\$\{officeOf\(|\$\{office\}|p_office\b|app\.office|app\.sole_person_office|app\.test_office|\$\{TEST_OFFICE\}|o\.office_id|\(select office_id)/
 
   it('src/ makes the calls it makes with the office stated', () => {
     const calls: { file: string; name: string; first: string }[] = []

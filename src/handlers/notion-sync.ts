@@ -124,7 +124,8 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
           select distinct p.project_id::text as id, p.name
             from public.projects p
             join public.project_attachments a using (project_id)
-           where p.status = 'active' and a.connector = 'notion' and a.enabled
+           where p.office_id = app.job_office('${job.jobId}'::uuid)
+             and p.status = 'active' and a.connector = 'notion' and a.enabled
            order by p.name
         `)
       ).rows as { id: string; name: string }[]

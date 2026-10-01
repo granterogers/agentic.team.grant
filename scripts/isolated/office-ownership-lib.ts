@@ -14,7 +14,7 @@
  * Supabase service role and a non-superuser worker stand-in - because a tripwire that stops only ordinary roles is
  * not the property being claimed. Every refusal is asserted by the message it carried, never by "something threw".
  */
-import { isolated } from './guard.ts'
+import type { isolated } from './guard.ts'
 
 export type Result = { ok: boolean; what: string; detail: string }
 export type Db = Awaited<ReturnType<typeof isolated>>

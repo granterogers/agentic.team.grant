@@ -119,7 +119,8 @@ export function choresHandler(db: SqlExecutor): Handler {
           (
             await db.execute(
               `select count(*)::int as n from public.tasks
-                where chore_key like 'credential:%' and state <> 'done'`,
+                where office_id = app.job_office('${job.jobId}'::uuid)
+                  and chore_key like 'credential:%' and state <> 'done'`,
             )
           ).rows[0] as { n?: number }
         )?.n ?? 0,

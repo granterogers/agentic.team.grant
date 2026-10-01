@@ -10,8 +10,9 @@
  * Each cluster of converted functions adds a file to `p3-cases/` that exports `cases(ctx)`. They are all run, in
  * file order, by `p3-app-attack.ts`, against a clone made by `scripts/isolated/p3-attack.sh`.
  */
-import { prepare } from './office-ownership-lib.ts'
+
 import type { isolated } from './guard.ts'
+import { prepare } from './office-ownership-lib.ts'
 
 export type Db = Awaited<ReturnType<typeof isolated>>
 export type Result = { ok: boolean; what: string; detail: string }

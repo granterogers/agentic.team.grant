@@ -393,7 +393,7 @@ record(
 // is precisely the gap the router closes.
 const firstText = 'I need you to research the competitor pricing for the enterprise tier'
 const firstJob = await mkJob(`fixture-dup-a-${run}`)
-const firstScan = await scanForDuplicates(db, firstText, { projectId })
+const firstScan = await scanForDuplicates(db, firstText, { office: 'app.test_office()', projectId })
 const firstDecision = route(firstText, firstScan)
 await recordDecision(db, firstJob, firstDecision)
 record(
@@ -405,7 +405,10 @@ record(
 
 const secondText = 'what did we ever find out about enterprise pricing from the competitor'
 const secondJob0 = await mkJob(`fixture-dup-b-${run}`)
-const secondScan = await scanForDuplicates(db, secondText, { projectId })
+const secondScan = await scanForDuplicates(db, secondText, {
+  office: 'app.test_office()',
+  projectId,
+})
 const found = secondScan.candidates.find((c) => c.jobId === firstJob)
 record(
   'required query',
@@ -493,7 +496,7 @@ record(
 // ===========================================================================
 
 const vagueText = 'Maybe we should look into the competitor pricing'
-const vagueScan = await scanForDuplicates(db, vagueText, { projectId })
+const vagueScan = await scanForDuplicates(db, vagueText, { office: 'app.test_office()', projectId })
 const vague = route(vagueText, vagueScan)
 record(
   'ambiguity',
@@ -518,7 +521,10 @@ record(
 )
 
 const clearText = 'I need you to research the competitor onboarding flow'
-const clear = route(clearText, await scanForDuplicates(db, clearText, { projectId }))
+const clear = route(
+  clearText,
+  await scanForDuplicates(db, clearText, { office: 'app.test_office()', projectId }),
+)
 record(
   'ambiguity',
   'a CONFIDENT request still gets a bounded roster, not a team',

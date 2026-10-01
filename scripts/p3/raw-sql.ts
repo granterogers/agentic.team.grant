@@ -73,13 +73,25 @@ for (const [f, n] of [...byFile].sort((a, b) => b[1] - a[1]).slice(0, 25))
 const BASELINE = 'docs/multi-user/raw-sql-baseline.json'
 if (process.argv.includes('--write-baseline')) {
   const keys = [...new Set(sites.filter((x) => !x.scoped).map((x) => x.key))].sort()
-  let previous: Record<string, string> = {}
-  try {
-    previous =
-      (JSON.parse(readFileSync(BASELINE, 'utf8')) as { reasons?: Record<string, string> })
-        .reasons ?? {}
-  } catch {
-    previous = {}
+  const previous: Record<string, string> = {}
+  // The reasons written by a baseline that conflicted in a merge are carried across with --reasons-from <file>
+  // (repeatable), so resolving the conflict loses no reason. The current baseline wins where both name a key.
+  const sources = [
+    ...process.argv.flatMap((a, i) =>
+      a === '--reasons-from' ? [process.argv[i + 1] as string] : [],
+    ),
+    BASELINE,
+  ]
+  for (const source of sources) {
+    try {
+      const reasons =
+        (JSON.parse(readFileSync(source, 'utf8')) as { reasons?: Record<string, string> })
+          .reasons ?? {}
+      for (const [k, v] of Object.entries(reasons))
+        if (v !== '' || previous[k] === undefined) previous[k] = v
+    } catch {
+      // an unreadable source (the conflicted file itself) contributes nothing
+    }
   }
   const reasons = Object.fromEntries(keys.map((k) => [k, previous[k] ?? '']))
   writeFileSync(

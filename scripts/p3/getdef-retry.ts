@@ -17,9 +17,8 @@ for (const n of names) {
           `select pg_get_functiondef(p.oid) as d from pg_proc p where p.pronamespace = '${schema}'::regnamespace and p.proname = '${name}'`,
         )
       ).rows as { d: string }[]
-      rows.forEach((r, j) =>
-        writeFileSync(`${out}/${schema}.${name}${rows.length > 1 ? `.${String(j)}` : ''}.sql`, r.d),
-      )
+      for (const [j, r] of rows.entries())
+        writeFileSync(`${out}/${schema}.${name}${rows.length > 1 ? `.${String(j)}` : ''}.sql`, r.d)
       console.log(n, rows.length)
       break
     } catch {

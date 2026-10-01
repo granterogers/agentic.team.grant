@@ -3,8 +3,8 @@
  * message it is, and a channel that belongs to another office's project is refused like a stranger's.
  */
 import { computeSignature } from '../../../src/slack/signature.ts'
-import { type Ctx, lit } from '../p3-app-lib.ts'
 import { startEdge } from '../edge-emulator.ts'
+import { type Ctx, lit } from '../p3-app-lib.ts'
 
 export async function cases(c: Ctx): Promise<void> {
   const { A, B } = c

@@ -16,13 +16,13 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto'
-import { bundleForm } from './lib/bundle.ts'
 import { DeliveryService } from '../../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { escapeHtml } from '../../src/telegram/message.ts'
 import { pagerBot } from '../../src/telegram/roster.ts'
 import { TelegramTransport } from '../../src/telegram/transport.ts'
+import { bundleForm } from './lib/bundle.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 if (supabaseToken === undefined || supabaseToken === '') {

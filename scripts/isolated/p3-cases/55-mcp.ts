@@ -2,8 +2,9 @@
  * MCP (migration 0686), through the REAL mcp edge function against the clone: the token establishes the office; a client is
  * one office's for life; consent is by a signed-in person (their office) or the machine key (the test office).
  */
-import { type Ctx, lit } from '../p3-app-lib.ts'
+
 import { startEdge } from '../edge-emulator.ts'
+import { type Ctx, lit } from '../p3-app-lib.ts'
 
 const b64url = (b: ArrayBuffer): string =>
   btoa(String.fromCharCode(...new Uint8Array(b)))

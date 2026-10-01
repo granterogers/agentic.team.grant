@@ -206,6 +206,12 @@ describe('the voice functions are wired to the verifier', () => {
     const realFetch = globalThis.fetch
     globalThis.fetch = (async (u: string | URL | Request) => {
       urls.push(String(u))
+      // The machine key speaks for the TEST office, which the database resolves (P3 wave 9).
+      if (String(u).includes('resolve_machine_office'))
+        return new Response(
+          JSON.stringify({ ok: true, office_id: '33333333-3333-4333-8333-333333333333' }),
+          { status: 200 },
+        )
       return new Response(
         JSON.stringify({ value: 'eph', expires_at: 1, session: { model: 'm' } }),
         {
