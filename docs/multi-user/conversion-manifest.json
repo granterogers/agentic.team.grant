@@ -1330,20 +1330,20 @@
    ]
   },
   "app.hq_task_add": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
   },
   "app.hq_task_state": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
    ]
   },
   "app.hq_task_update": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
@@ -1355,7 +1355,7 @@
    ]
   },
   "app.hq_undo": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
@@ -1447,6 +1447,12 @@
   "app.job_may_use_deployment_integration": {
    "class": "OFFICE_TRUSTED_DERIVED",
    "doors": []
+  },
+  "app.job_office": {
+   "class": "LEGACY_UNSCOPED",
+   "doors": [
+    "worker-src"
+   ]
   },
   "app.job_origin": {
    "class": "LEGACY_UNSCOPED",
@@ -1731,14 +1737,14 @@
    ]
   },
   "app.my_task_add": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
    ]
   },
   "app.my_task_delete": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
@@ -1754,27 +1760,27 @@
    ]
   },
   "app.my_task_reparent": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
   },
   "app.my_task_set": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
    ]
   },
   "app.my_tasks": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
    ]
   },
   "app.my_tasks_counts": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
@@ -1862,12 +1868,20 @@
     "gateway"
    ]
   },
+  "app.office_actor": {
+   "class": "OFFICE_EXPLICIT",
+   "doors": []
+  },
   "app.office_backfill_report_is_append_only": {
    "class": "GLOBAL",
    "doors": []
   },
   "app.office_bridge_trigger": {
    "class": "OFFICE_TRUSTED_DERIVED",
+   "doors": []
+  },
+  "app.office_for_auth": {
+   "class": "SYSTEM",
    "doors": []
   },
   "app.office_health": {
@@ -2208,6 +2222,10 @@
    "doors": [
     "gateway"
    ]
+  },
+  "app.project_in_office": {
+   "class": "OFFICE_EXPLICIT",
+   "doors": []
   },
   "app.project_instruction_for": {
    "class": "LEGACY_UNSCOPED",
@@ -2604,6 +2622,10 @@
     "worker-src"
    ]
   },
+  "app.require_office": {
+   "class": "OFFICE_EXPLICIT",
+   "doors": []
+  },
   "app.reserve_tts_characters": {
    "class": "SYSTEM",
    "doors": [
@@ -2989,7 +3011,7 @@
    ]
   },
   "app.task_add": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "worker-src"
    ]
@@ -3009,7 +3031,7 @@
    "doors": []
   },
   "app.task_parent_ok": {
-   "class": "OFFICE_TRUSTED_DERIVED",
+   "class": "OFFICE_EXPLICIT",
    "doors": []
   },
   "app.task_provider_forget": {
@@ -3017,7 +3039,7 @@
    "doors": []
   },
   "app.task_pulled": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "worker-src"
    ]
@@ -3167,7 +3189,7 @@
    "doors": []
   },
   "app.undo_offer": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "worker-src"
    ]
@@ -4125,20 +4147,20 @@
    ]
   },
   "public.hq_task_add": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
   },
   "public.hq_task_state": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
    ]
   },
   "public.hq_task_update": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
@@ -4150,7 +4172,7 @@
    ]
   },
   "public.hq_undo": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
@@ -4368,40 +4390,40 @@
    ]
   },
   "public.my_task_add": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
    ]
   },
   "public.my_task_delete": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
   },
   "public.my_task_reparent": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway"
    ]
   },
   "public.my_task_set": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
    ]
   },
   "public.my_tasks": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
    ]
   },
   "public.my_tasks_counts": {
-   "class": "LEGACY_UNSCOPED",
+   "class": "OFFICE_EXPLICIT",
    "doors": [
     "gateway",
     "worker-src"
@@ -4627,6 +4649,18 @@
    "class": "OFFICE_TRUSTED_DERIVED",
    "doors": []
   },
+  "public.resolve_machine_office": {
+   "class": "GLOBAL",
+   "doors": [
+    "gateway-inline"
+   ]
+  },
+  "public.resolve_office": {
+   "class": "GLOBAL",
+   "doors": [
+    "gateway-inline"
+   ]
+  },
   "public.resolve_project_by_name": {
    "class": "LEGACY_UNSCOPED",
    "doors": [
@@ -4802,12 +4836,6 @@
    "class": "LEGACY_UNSCOPED",
    "doors": [
     "gateway"
-   ]
-  },
-  "public.task_add": {
-   "class": "LEGACY_UNSCOPED",
-   "doors": [
-    "worker-src"
    ]
   },
   "public.task_pulled": {
