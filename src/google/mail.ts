@@ -39,6 +39,8 @@
  * liability that grows every hour whether or not anyone reads it.
  */
 import type { SqlExecutor } from '../db/executor.ts'
+import { soleOffice } from '../db/office.ts'
+import type { OfficeId } from '../office/context.ts'
 import { count } from '../text/plain.ts'
 import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
 import { heldBody, type Part } from './body.ts'
@@ -95,9 +97,15 @@ export async function refreshMail(
     readonly hours?: number
     readonly max?: number
     readonly fetchImpl?: typeof fetch
+    /**
+     * The office this refresh caches mail for: the claimed job's. Absent, the deployment's only person office (a
+     * single-office deployment's legacy callers); with two real offices that is `no_office`, never a guess.
+     */
+    readonly officeId?: OfficeId
   } = {},
 ): Promise<MailOutcome> {
   const fetchImpl = options.fetchImpl ?? fetch
+  const office = options.officeId ?? (await soleOffice(db))
   const hours = options.hours ?? 48
   const max = Math.max(1, Math.min(100, options.max ?? 50))
 
@@ -114,7 +122,7 @@ export async function refreshMail(
   }
 
   const access = await googleAccess(db, fetchImpl)
-  await recordGoogleHealth(db, access)
+  await recordGoogleHealth(db, access, office)
   if (!access.ok) return { ok: false, note: access.reason, seen: 0, stored: 0, removed: 0 }
 
   const granted = access as GoogleAccess
@@ -201,7 +209,7 @@ export async function refreshMail(
       insert into public.mail_messages
         (message_id, thread_id, subject, from_name, from_address, to_count,
          sent_at, excerpt, labels, has_attachments, unread, last_seen_at, vanished_at,
-         body, body_at, body_withheld)
+         body, body_at, body_withheld, office_id)
       values (
         ${lit(m.id)}, ${lit(String(m.threadId ?? m.id))},
         ${nullable(header(m, 'Subject').slice(0, 400))},
@@ -215,7 +223,8 @@ export async function refreshMail(
         app.now_utc(), null,
         ${held.body === null ? 'null' : lit(held.body)},
         ${held.body === null ? 'null' : 'app.now_utc()'},
-        ${held.withheld === null ? 'null' : lit(held.withheld)}
+        ${held.withheld === null ? 'null' : lit(held.withheld)},
+        ${lit(office)}::uuid
       )
       on conflict (message_id) do update
         set subject = excluded.subject,
@@ -236,6 +245,8 @@ export async function refreshMail(
             body = excluded.body,
             body_at = excluded.body_at,
             body_withheld = excluded.body_withheld
+        -- The key is still global (message_id): a message another office holds is never overwritten.
+        where public.mail_messages.office_id = excluded.office_id
     `)
     seenIds.push(m.id)
     stored += 1
@@ -252,7 +263,8 @@ export async function refreshMail(
     const gone = await db.execute(`
       update public.mail_messages
          set vanished_at = app.now_utc()
-       where vanished_at is null
+       where office_id = ${lit(office)}::uuid
+         and vanished_at is null
          and sent_at > app.now_utc() - make_interval(hours => ${String(hours)})
          and message_id not in (${kept})
       returning message_id

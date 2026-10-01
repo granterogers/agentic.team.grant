@@ -30,6 +30,7 @@
 
 import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import type { OfficeId } from '../office/context.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -128,20 +129,29 @@ export async function googleAccess(
   }
 }
 
-/** Record what happened, so the Connections panel is not guessing. */
+/**
+ * Record what happened, so the Connections panel is not guessing.
+ *
+ * Written under the office the refresh ran for. The table's key is still (service, credential) for the whole
+ * deployment, so a row another office already holds is not overwritten: the `do update` only touches a row of the
+ * SAME office, and a second office's health is a follow-up to that key (reported, not widened here).
+ */
 export async function recordGoogleHealth(
   db: SqlExecutor,
   access: GoogleAccess | GoogleUnavailable,
+  office: OfficeId,
 ): Promise<void> {
   await db.execute(`
     insert into public.connection_health
-      (service, credential, state, detail, owner, action, checked_at)
+      (service, credential, state, detail, owner, action, checked_at, office_id)
     values ('google_calendar', 'oauth_client',
             ${access.ok ? "'ok'" : "'dead'"},
             ${lit(access.ok ? `connected; scopes: ${access.scopes.join(' ')}` : access.reason).slice(0, 400)},
-            'grant', 'Settings → Google on the web front end', app.now_utc())
+            app.office_actor(${lit(office)}::uuid),
+            'Settings → Google on the web front end', app.now_utc(), ${lit(office)}::uuid)
     on conflict (service, credential) do update
       set state = excluded.state, detail = excluded.detail,
           action = excluded.action, checked_at = app.now_utc()
+      where public.connection_health.office_id = excluded.office_id
   `)
 }

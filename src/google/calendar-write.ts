@@ -29,6 +29,8 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { soleOffice } from '../db/office.ts'
+import type { OfficeId } from '../office/context.ts'
 import { nothingToDo, type Plan } from '../tools/plan.ts'
 import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
 
@@ -112,7 +114,7 @@ function eventFor(row: PlanRow): Record<string, unknown> {
  */
 export async function planTasksForCalendar(
   db: SqlExecutor,
-  options: { readonly fetchImpl?: typeof fetch } = {},
+  options: { readonly fetchImpl?: typeof fetch; readonly officeId?: OfficeId } = {},
 ): Promise<{
   readonly ok: boolean
   readonly note: string
@@ -144,7 +146,7 @@ export async function planTasksForCalendar(
   }
 
   const access = await googleAccess(db, fetchImpl)
-  await recordGoogleHealth(db, access)
+  await recordGoogleHealth(db, access, options.officeId ?? (await soleOffice(db)))
   if (!access.ok) {
     return { ok: false, note: access.reason, plan: nothingToDo('calendar.write', access.reason) }
   }
@@ -208,7 +210,11 @@ export async function planTasksForCalendar(
 /** Put dated, open tasks in the diary, and take away the ones that are done. */
 export async function syncTasksToCalendar(
   db: SqlExecutor,
-  options: { readonly fetchImpl?: typeof fetch; readonly dryRun?: boolean } = {},
+  options: {
+    readonly fetchImpl?: typeof fetch
+    readonly dryRun?: boolean
+    readonly officeId?: OfficeId
+  } = {},
 ): Promise<SyncOutcome> {
   const fetchImpl = options.fetchImpl ?? fetch
   const nothing = { created: 0, updated: 0, removed: 0 }

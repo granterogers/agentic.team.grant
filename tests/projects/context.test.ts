@@ -8,7 +8,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { SqlExecutor, SqlResult } from '../../src/db/executor.ts'
+import { trustedOffice } from '../../src/office/context.ts'
 import { clarificationFor, matchProject, parseSwitch } from '../../src/projects/context.ts'
+
+const OFFICE = trustedOffice('11111111-1111-4111-8111-111111111111')
 
 const projects = [
   { project_id: '1', slug: 'pricing-research', name: 'Pricing Research' },
@@ -60,21 +63,21 @@ describe('recognising a switch', () => {
 
 describe('matching a name to a project', () => {
   it('matches an exact name', async () => {
-    const r = await matchProject(db(), 'Pricing Research')
+    const r = await matchProject(db(), OFFICE, 'Pricing Research')
     expect(r.kind).toBe('matched')
     expect(r.kind === 'matched' && r.project.slug).toBe('pricing-research')
   })
 
   it('matches a slug, and a spoken name that slugifies to one', async () => {
     for (const n of ['onboarding', 'Pricing Page Rebuild']) {
-      expect((await matchProject(db(), n)).kind).toBe('matched')
+      expect((await matchProject(db(), OFFICE, n)).kind).toBe('matched')
     }
   })
 
   it('REFUSES to choose between two plausible projects', async () => {
     // The whole point. Edit distance or recency would answer confidently here,
     // and would be wrong half the time with no signal that it was.
-    const r = await matchProject(db(), 'pricing')
+    const r = await matchProject(db(), OFFICE, 'pricing')
     expect(r.kind).toBe('ambiguous')
     expect(r.kind === 'ambiguous' && r.candidates).toHaveLength(2)
   })
@@ -87,33 +90,33 @@ describe('matching a name to a project', () => {
       ...projects,
       { project_id: '4', slug: 'onboarding-redesign', name: 'Onboarding Redesign' },
     ]
-    const r = await matchProject(db(withExtra), 'Onboarding')
+    const r = await matchProject(db(withExtra), OFFICE, 'Onboarding')
     expect(r.kind).toBe('matched')
     expect(r.kind === 'matched' && r.project.slug).toBe('onboarding')
   })
 
   it('reports not_found rather than picking the nearest', async () => {
-    const r = await matchProject(db(), 'invoicing')
+    const r = await matchProject(db(), OFFICE, 'invoicing')
     expect(r.kind).toBe('not_found')
   })
 
   it('treats an empty name as not_found, never as "everything"', async () => {
-    expect((await matchProject(db(), '   ')).kind).toBe('not_found')
+    expect((await matchProject(db(), OFFICE, '   ')).kind).toBe('not_found')
   })
 })
 
 describe('what the user is told', () => {
   it('names the candidates when ambiguous', async () => {
-    const msg = clarificationFor(await matchProject(db(), 'pricing'))
+    const msg = clarificationFor(await matchProject(db(), OFFICE, 'pricing'))
     expect(msg).toContain('Pricing Research')
     expect(msg).toContain('Pricing Page Rebuild')
   })
 
   it('says so plainly when nothing matched', async () => {
-    expect(clarificationFor(await matchProject(db(), 'invoicing'))).toContain('invoicing')
+    expect(clarificationFor(await matchProject(db(), OFFICE, 'invoicing'))).toContain('invoicing')
   })
 
   it('says nothing when there is nothing to ask', async () => {
-    expect(clarificationFor(await matchProject(db(), 'Onboarding'))).toBe('')
+    expect(clarificationFor(await matchProject(db(), OFFICE, 'Onboarding'))).toBe('')
   })
 })

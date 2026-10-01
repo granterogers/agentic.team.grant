@@ -162,3 +162,38 @@ claim a gate you did not run.
   for every name in your list and confirm each remaining overload either takes `p_office` first or is a deliberate GLOBAL.
 * The attack harness's own cases are not idempotent on a used clone: rebuild (`p3-attack.sh <name>`) before a full run.
 * Several suites share template loops over many functions; merge conflicts there are likely and are the lead's to resolve.
+
+## 7. Inline SQL (the TypeScript engine), learned in the first pass over src/jobs, google, notebook, notion, projects, simulation
+
+The functions are one half; the engine also runs SQL written as strings (`scripts/p3/raw-sql.ts` lists it, `check:office-raw-sql`
+ratchets it). Three categories, and a statement gets exactly one:
+
+1. **Scope it.** `office_id = ${lit(office)}::uuid` (an `OfficeId` from `src/office/context.ts`) or
+   `office_id = app.job_office(${lit(jobId)}::uuid)` where only the claimed job is at hand. Get the office with
+   `src/db/office.ts`: `officeOfJob` (a handler), `operatorOffice` (a script: `OFFICE_ID` or the sole person office),
+   `soleOffice` (fails closed to `no_office` the moment there are two people). Library code never reads the environment.
+2. **Keyed by the claimed row.** `where job_id = <the worker's own job>` and nothing else: leave it, say so in a one-line
+   comment, and give the baseline entry that reason. A second table joined by a payload- or model-supplied id is NOT this.
+3. **Deployment scan.** A sweep over every office is allowed only when each row keeps its own office and nothing is
+   carried between offices; say how in the baseline reason.
+
+Things that bit:
+
+* **A key that is still global makes an upsert a cross-office write.** `on conflict (calendar_id, event_id)`,
+  `(message_id)`, `(service, credential)`, `documents (connector, external_parent_ref, external_ref)` and
+  `suggestions_one_open` are all global. Add `where <table>.office_id = excluded.office_id` to the `do update`, and decide
+  what "nothing written" means (`returning` tells you): a neutral refusal that names no office, or a quiet skip. The
+  composite foreign key is a backstop, not the design: without the guard the second office sees a raw 23503.
+* **A window sweep by a global key deletes the other office's rows.** `delete ... where calendar_id = X and starts_at
+  between ...` and `update mail_messages set vanished_at ... where message_id not in (...)` need the office too.
+* **A correlation id, a notebook ref and a remote parent id are not office boundaries.** `app.reconcile_vanished` matched a
+  SHARED remote notebook by its id alone, so one office's sync archived another office's documents (0830 adds the
+  office-explicit form; the four-argument original stays for `app.drive_reconcile`, `public.reconcile_vanished` and
+  `verify:knowledge`, which belong to other clusters).
+* **The scanner has two blind spots.** A nested template literal (`${cond ? `...` : ''}`) splits one statement into
+  fragments, and a fragment with no verb is invisible (`src/knowledge/retrieval.ts`, `worker.ts` `append_event`); and the
+  prose word "office" in a comment or message counts as scoped (`simulation/canonical.ts`, `channels/callbacks.ts:505`,
+  `channels/progress.ts:310`, `slack/narrate.ts:217` and `:484`, `handlers/instruction.ts:5763` were scoped by prose only).
+  Compute the message before the statement instead of nesting a template inside it.
+* A suite that drives a REAL function against a clone with a second office holding the colliding row is the only check
+  that sees these: every case in `p3-cases/96-raw-sql-engine.ts` has a B row the old statement would have touched.

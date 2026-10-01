@@ -49,6 +49,7 @@
 
 import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOfJob } from '../db/office.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { type NotebookAdapter, UnavailableNotebookAdapter } from '../notebook/adapter.ts'
 import { notebookEnabled } from '../notebook/sync-queue.ts'
@@ -120,6 +121,8 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
           adapter: live?.adapter ?? new UnavailableNotebookAdapter(),
           listNotebooks: live?.listNotebooks ?? (async () => []),
           workerId,
+          // The cycle runs for the claimed job's office: its projects, sources, run record and budget.
+          officeId: await officeOfJob(db, job.jobId),
         })
       } catch (error) {
         if (error instanceof SyncAlreadyRunningError) {

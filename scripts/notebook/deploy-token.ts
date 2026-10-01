@@ -44,6 +44,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { operatorOffice } from '../../src/db/office.ts'
 import { recordProbe } from '../../src/notebook/sync-queue.ts'
 
 const run = promisify(execFile)
@@ -267,19 +268,23 @@ await rm(tokenPath, { force: true })
 await rm(storagePath, { force: true })
 
 const ok = status === 'ok' && tokenFetch === true && jarStored
-await recordProbe(db, {
-  state: ok ? 'available_unofficial' : 'auth_required',
-  capabilities: ok ? ['auth_check'] : [],
-  adapter: 'notebooklm-py',
-  adapterVersion: null,
-  detectedTier: null,
-  notebookLimit: null,
-  sourceLimit: null,
-  detail: ok
-    ? `notebooklm auth check --test reported status=ok, token_fetch=true for ${email || account}`
-    : `auth check did not pass: status=${status || 'unknown'}, token_fetch=${String(tokenFetch)}`,
-  latencyMs: null,
-})
+await recordProbe(
+  db,
+  {
+    state: ok ? 'available_unofficial' : 'auth_required',
+    capabilities: ok ? ['auth_check'] : [],
+    adapter: 'notebooklm-py',
+    adapterVersion: null,
+    detectedTier: null,
+    notebookLimit: null,
+    sourceLimit: null,
+    detail: ok
+      ? `notebooklm auth check --test reported status=ok, token_fetch=true for ${email || account}`
+      : `auth check did not pass: status=${status || 'unknown'}, token_fetch=${String(tokenFetch)}`,
+    latencyMs: null,
+  },
+  await operatorOffice(db, process.env.OFFICE_ID),
+)
 
 if (!ok) {
   console.error('\n⛔ the credential is vaulted but did not verify. Nothing has been enabled.')

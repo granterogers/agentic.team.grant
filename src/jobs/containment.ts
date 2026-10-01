@@ -136,6 +136,7 @@ export const containmentRefusal = async (
   const { reach, service } = reachOf(job.kind, declared)
   if (reach !== 'external') return null
   const to = String(service)
+  // P3: an existence test on the claimed job id; returns a boolean about that one row.
   const known = `exists (select 1 from public.jobs where job_id = ${lit(job.jobId)}::uuid) as known`
   let origin: string | null = null
   try {

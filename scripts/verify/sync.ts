@@ -24,6 +24,7 @@ import {
   NotebookUnavailableError,
   type SourceText,
 } from '../../src/notebook/adapter.ts'
+import { trustedOffice } from '../../src/office/context.ts'
 import { type RemoteNotebook, runSync, SyncAlreadyRunningError } from '../../src/projects/sync.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -48,6 +49,16 @@ const add = (n: string, what: string, outcome: string, passed: boolean): void =>
   rows.push({ n, what, outcome, passed })
   console.log(`${passed ? 'ok  ' : 'FAIL'} ${n} ${what} — ${outcome}`)
 }
+
+// The suite runs the discovery for the office that owns the latest capability probe, which is the office whose budget
+// the cycle derives (the probe is per office now). That is the office the bridge used to pick for these rows.
+const officeId = trustedOffice(
+  (
+    await db.execute(
+      'select office_id::text as o from public.notebook_capability_probes order by probed_at desc limit 1',
+    )
+  ).rows[0]?.o,
+)
 
 const stamp = Date.now()
 const NB = `verify-nb-${String(stamp)}`
@@ -165,6 +176,7 @@ await db.execute('select app.recover_stalled_syncs()')
     adapter: new FakeAdapter([source(1), source(2)]),
     listNotebooks: notebooks(ONE_NOTEBOOK),
     workerId: 'verify-1',
+    officeId,
   })
   const project = await db.execute(`
     select project_id::text as project_id, slug, name, status
@@ -192,6 +204,7 @@ await db.execute('select app.recover_stalled_syncs()')
     adapter: new FakeAdapter(fifty),
     listNotebooks: notebooks(ONE_NOTEBOOK),
     workerId: 'verify-2a',
+    officeId,
   })
   // The same fifty again. This is the case Gate 2 made load-bearing: Notebook
   // itself does NOT de-duplicate, so if our side does not either, a retried
@@ -201,6 +214,7 @@ await db.execute('select app.recover_stalled_syncs()')
     adapter: new FakeAdapter(fifty),
     listNotebooks: notebooks(ONE_NOTEBOOK),
     workerId: 'verify-2b',
+    officeId,
   })
   const stored = await db.execute(`
     select count(*)::int as n from public.documents where external_parent_ref = '${NB}'
@@ -226,6 +240,7 @@ await db.execute('select app.recover_stalled_syncs()')
     adapter: new FakeAdapter(fifty),
     listNotebooks: notebooks(ONE_NOTEBOOK),
     workerId: 'verify-3',
+    officeId,
   })
   add(
     '3',
@@ -246,6 +261,7 @@ await db.execute('select app.recover_stalled_syncs()')
     adapter: new FakeAdapter(fewer),
     listNotebooks: notebooks(ONE_NOTEBOOK),
     workerId: 'verify-4',
+    officeId,
   })
   const stored = await db.execute(`
     select count(*)::int as n from public.documents where external_parent_ref = '${NB}'
@@ -270,6 +286,7 @@ await db.execute('select app.recover_stalled_syncs()')
     adapter: new FakeAdapter([], { unavailable: true }),
     listNotebooks: notebooks(ONE_NOTEBOOK),
     workerId: 'verify-5',
+    officeId,
   })
   // Operational work, during the outage.
   const job = await db.execute(`
@@ -308,6 +325,7 @@ await db.execute('select app.recover_stalled_syncs()')
     adapter: new FakeAdapter([], { authRequired: true, unavailable: true }),
     listNotebooks: notebooks(ONE_NOTEBOOK),
     workerId: 'verify-6',
+    officeId,
   })
   add(
     '6',
@@ -324,6 +342,7 @@ await db.execute('select app.recover_stalled_syncs()')
     adapter: new FakeAdapter([], { throwOnList: true }),
     listNotebooks: notebooks(ONE_NOTEBOOK),
     workerId: 'verify-6b',
+    officeId,
   })
   add(
     '6b',
@@ -389,6 +408,7 @@ await db.execute('select app.recover_stalled_syncs()')
       adapter: new FakeAdapter([source(1)]),
       listNotebooks: notebooks(ONE_NOTEBOOK),
       workerId: 'verify-8-blocked',
+      officeId,
     })
   } catch (error) {
     blocked = error instanceof SyncAlreadyRunningError
@@ -436,12 +456,14 @@ await db.execute('select app.recover_stalled_syncs()')
       adapter: new FakeAdapter([source(1)]),
       listNotebooks: notebooks(ONE_NOTEBOOK),
       workerId: 'verify-9a',
+      officeId,
     }),
     runSync({
       db,
       adapter: new FakeAdapter([source(1)]),
       listNotebooks: notebooks(ONE_NOTEBOOK),
       workerId: 'verify-9b',
+      officeId,
     }),
   ])
   const rejected = both.filter(
@@ -472,6 +494,7 @@ await db.execute('select app.recover_stalled_syncs()')
     adapter: new FakeAdapter([source(1)]),
     listNotebooks: notebooks([...ONE_NOTEBOOK, { id: other, title: 'Not a project' }]),
     workerId: 'verify-10',
+    officeId,
   })
   const created = await db.execute(`
     select count(*)::int as n from public.projects where notebook_ref = '${other}'

@@ -27,6 +27,7 @@
  */
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { operatorOffice } from '../../src/db/office.ts'
 import { recordProbe } from '../../src/notebook/sync-queue.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -228,17 +229,21 @@ console.log(
 // Not `available_unofficial` yet: a stored credential is not a working one, and
 // this build has been bitten three times by reading "present" as "working".
 // `npm run notebook:probe` makes a real call and is what promotes the state.
-await recordProbe(db, {
-  state: 'auth_required',
-  capabilities: [],
-  adapter: 'notebooklm-py',
-  adapterVersion: null,
-  detectedTier: null,
-  notebookLimit: null,
-  sourceLimit: null,
-  detail: 'a credential has been vaulted but no call has been made with it yet',
-  latencyMs: null,
-})
+await recordProbe(
+  db,
+  {
+    state: 'auth_required',
+    capabilities: [],
+    adapter: 'notebooklm-py',
+    adapterVersion: null,
+    detectedTier: null,
+    notebookLimit: null,
+    sourceLimit: null,
+    detail: 'a credential has been vaulted but no call has been made with it yet',
+    latencyMs: null,
+  },
+  await operatorOffice(db, process.env.OFFICE_ID),
+)
 
 console.log('\nNext: `npm run notebook:probe` makes a real call and promotes the state.')
 console.log('Until it does, the adapter stays auth_required - a stored credential is')

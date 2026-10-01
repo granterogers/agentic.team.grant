@@ -457,6 +457,7 @@ const moveTo = async (
 ): Promise<void> => {
   const finished = ['complete', 'cancelled', 'failed'].includes(state)
   const fence = fenceClause(claim)
+  // P3: keyed by the claimed job id (and fenced by its claim); reaches no other row.
   const { rows } = await db.execute(`
     update public.jobs
     set state = ${lit(state)}::public.job_state
@@ -484,6 +485,7 @@ const moveJob = (db: SqlExecutor, job: Job, state: string, reason?: string): Pro
 const mayRetry = async (db: SqlExecutor, job: Job): Promise<boolean> => {
   if (job.attempt >= 4) return false
   try {
+    // P3: keyed by the claimed job id; reads that job's own attempt ceiling.
     const { rows } = await db.execute(
       `select attempt < max_attempts as room from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
     )
@@ -636,6 +638,7 @@ const recordOnLedger = async (
     // fixture event per probe would leave it just as unreadable — the daily
     // capacity report learned the same lesson about `requested_by` and reports
     // 20 finished jobs instead of 101.
+    // P3: the ledger entry is selected FROM the claimed job's own row (job_id = the worker's job); no other row is read.
     await db.execute(`
       select public.append_event(
         ${lit(job.correlationId)}::uuid,
@@ -682,6 +685,7 @@ const readClaimGen = async (
   let last: unknown
   for (let i = 0; i < 4; i++) {
     try {
+      // P3: keyed by the claimed job id, worker and attempt: the claim fence itself.
       const g = await db.execute(
         `select claim_gen from public.jobs
           where job_id = ${lit(jobId)}::uuid and leased_by = ${lit(workerId)} and attempt = ${String(attempt)}`,
@@ -845,6 +849,7 @@ export const askedOnPause = async (
   notify?: Notifier,
 ): Promise<string | null> => {
   if (output.announce !== true || notify === undefined) return null
+  // P3: blockers of the claimed job only (job_id is the worker's own claimed job).
   const open = await db
     .execute(
       `select blocker_id::text as id from public.blockers
@@ -873,6 +878,7 @@ export const askedOnPause = async (
       untouched and the sweep still recovers it. Best-effort: a failed stamp
       costs at most one extra try, never the question.
     */
+    // P3: stamps the blocker just read for the claimed job; keyed by that blocker id.
     await db
       .execute(
         `update public.blockers set asked_at = app.now_utc(), ask_attempts = ask_attempts + 1
@@ -895,6 +901,7 @@ export const askedOnPause = async (
  * Null when the job is not paused on an open question.
  */
 export const pausedQuestion = async (db: SqlExecutor, jobId: string): Promise<string | null> => {
+  // P3: the blocker of one job id the caller already holds; joins jobs on that same job id.
   const { rows } = await db
     .execute(
       `select b.requested_action as asked, b.why_needed as why, b.approval_options as options
@@ -945,6 +952,7 @@ export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): 
     paused jobs, so a question answered anywhere stops here. Younger than two
     days, so a deploy does not spring an old question on him.
   */
+  // P3: DEPLOYMENT SCAN. Sweeps paused jobs of every office; each row is joined only to its own job's blockers, outputs and deliveries, and the notifier is handed that job, so no data is carried between offices.
   const { rows } = await db.execute(`
     select j.job_id::text as job_id, j.kind, j.correlation_id::text as correlation_id,
            j.project_id::text as project_id,
@@ -982,6 +990,7 @@ export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): 
     output_id: string | null
   }[]) {
     if (r.output_id === null) continue
+    // P3: DEPLOYMENT SCAN row: the output id came from the same row's own job in the scan above.
     const stored = await db.execute(
       `select body, confidence::text as confidence, evidence::text as evidence,
               deterministic, model, sources, contradictions
@@ -1250,6 +1259,7 @@ const runJobHeld = async (
     — a job with no command id, an unreadable extent — and an undefined value
     never accuses anybody: the check fires only on an explicit `false`.
   */
+  // P3: keyed by the claimed job id; the command id is read off that job's own pinned config.
   const hadHistory = await db
     .execute(`
       select (app.conversation_extent(
@@ -1366,6 +1376,8 @@ const runJobHeld = async (
         pause stands, and a refused sentence with nobody to ask is simply not
         kept. The refusal is already counted above.
       */
+
+      // P3: keyed by the claimed job id.
       (
         (
           await db.execute(
@@ -1383,6 +1395,7 @@ const runJobHeld = async (
       const learnable = await mayRetry(db, job)
       if (learnable) {
         try {
+          // P3: keyed by the claimed job id.
           await db.execute(`
             update public.jobs
                set pinned_config = coalesce(pinned_config, '{}'::jsonb)
@@ -1481,6 +1494,7 @@ const runJobHeld = async (
   // An output from a worker that no longer holds the job must not become the newest one a delivery reads (D6).
   await assertHeld(db, job)
   try {
+    // P3: an output of the CLAIMED job: job_id is the worker's own job and the held-check is in the same statement; the office is that job's (outputs are derived from jobs).
     inserted = await db.execute(`
     insert into public.outputs
       (job_id, staff_id, body, confidence, evidence, sources, contradictions,
@@ -1569,6 +1583,7 @@ const runJobHeld = async (
     output and its successor's met. The dead attempt's row is marked `superseded` (0621), with the reason in words: neither pending nor
     rejected, which block the commit, and not deterministic, which would be a claim nobody made.
   */
+  // P3: outputs of the claimed job id only.
   await db
     .execute(
       `update public.outputs
@@ -1637,6 +1652,7 @@ const runJobHeld = async (
         .catch(() => undefined)
       announce = say !== false
     }
+    // P3: keyed by the claimed job id.
     await db.execute(
       `update public.jobs set announce = ${announce ? 'true' : 'false'}
         where job_id = ${lit(job.jobId)}::uuid`,
@@ -1657,6 +1673,7 @@ const runJobHeld = async (
     any other, and the job stays where its handler put it.
   */
   const stateNow = String(
+    // P3: keyed by the claimed job id.
     (
       (
         await db.execute(
@@ -1668,6 +1685,7 @@ const runJobHeld = async (
   if (stateNow === 'paused') {
     if (!gate.exempt) {
       const verdict = await review(output, job)
+      // P3: keyed by the output this run just inserted for the claimed job.
       await db.execute(`
         update public.outputs
         set reviewer_status = ${lit(verdict.status)}::public.reviewer_status,
@@ -1701,6 +1719,7 @@ const runJobHeld = async (
 
   if (!gate.exempt) {
     const verdict = await review(output, job)
+    // P3: keyed by the output this run just inserted for the claimed job.
     await db.execute(`
       update public.outputs
       set reviewer_status = ${lit(verdict.status)}::public.reviewer_status,
@@ -1890,6 +1909,7 @@ export const deliverPending = async (
       continue
     }
 
+    // P3: DEPLOYMENT SCAN row: the output id came from the notifying-job sweep above, one job at a time.
     const stored = await db.execute(
       // `sources` is read rather than assumed empty. It used to be
       // reconstructed as `[]`, which was harmless while nothing consulted it
