@@ -32,7 +32,20 @@
  */
 import { isolated } from './guard.ts'
 
-const db = await isolated(process.argv[2] ?? 'fk_spike')
+/*
+  THIS PROOF ALTERS THE TABLES IT RUNS ON (it adds office_id columns and composite keys). It was once pointed at the
+  shared replica `post` by passing that name, which left nine tables changed and every other isolated suite running
+  against a schema production does not have; the replica had to be rebuilt. It now refuses any database that is not
+  a clone made for it.
+*/
+const target = process.argv[2] ?? 'fk_spike'
+if (!/^fk_spike/.test(target)) {
+  console.error(
+    `REFUSED: ${target} is not a throwaway clone. Run: create database fk_spike template post`,
+  )
+  process.exit(2)
+}
+const db = await isolated(target)
 let failed = 0
 const check = (ok: boolean, what: string, detail: string) => {
   if (!ok) failed += 1

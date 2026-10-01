@@ -95,3 +95,16 @@ D1 harness traffic stays in Grant's office with its flags; new suites use test o
 quarantine share one test office · D3 *(resolved by review)* system events and system duties belong to the `system`
 office, never null and never Grant · D4 moving Grant's fixed-name Vault secrets behind refs is a separate,
 operator-confirmed step · D5 Telegram/Slack linking is operator-provisioned in V1.
+
+
+## Addendum - evidence from P0 and P1 (1 October 2026)
+
+Nothing in the decision changed. What the measurements added:
+
+* The ownership manifest is **machine-checked**: 131 tables, 52 carriers, 45 derived (each through a `NOT NULL` foreign key),
+  14 GLOBAL, 20 SYSTEM. The composite-key spike passed 39/39 under `BYPASSRLS` roles.
+* **Operator authority is a separate fact from office ownership** (`deployment_operators`, 0647) and the future
+  `offices.uses_system_integrations` is where the credential resolver (`app.deployment_credential`, 0648) will plug in.
+* Two things the draft assumed safe were not: a Google OAuth callback with no state, and a member row that defaulted to
+  Grant. Both are closed; neither depended on offices existing.
+* Details and sabotage evidence: `docs/multi-user/P1-CLOSURE.md`.

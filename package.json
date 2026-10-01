@@ -17,6 +17,7 @@
     "check:templates": "tsx scripts/check-templates.ts",
     "verify:arrangement": "tsx scripts/verify/arrangement.ts",
     "verify:wired": "tsx scripts/verify/wired.ts",
+    "verify:google-connect": "tsx scripts/verify/google-connect.ts",
     "check:secrets": "python3 scripts/secret-scan.py",
     "check:gateway-wrappers": "tsx scripts/check-gateway-wrappers.ts",
     "trust:proxy-ca": "tsx scripts/trust-proxy-ca.ts",

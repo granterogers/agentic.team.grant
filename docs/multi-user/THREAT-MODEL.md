@@ -1,5 +1,11 @@
 # Threat model — multi-user (and the weaknesses found while building it)
 
+> **Status after P0 + P1 (1 October 2026).** E1, E2, E13, E14, E16 and E18 are **fixed, deployed and verified**; E15 (MCP) is
+> documented with its remaining gap and a decision for Grant; E17 is the ownership phase. New findings (the `google-oauth`
+> callback overwrite, the name-only `vault_secret` wrapper, a test member reaching real storage and five operator actions,
+> the machine key's two ambient-Grant reaches, 22 unused write-scoped MCP tokens) are in `P1-CLOSURE.md`. Statements below
+> about what is "not fixed" describe the research baseline.
+
 > Research only. Baseline `41de1965`. **Part A is separate on purpose:** it lists weaknesses that exist in production
 > today, independent of multi-user, discovered while researching. They were **not fixed** (change freeze) and are not
 > folded into the design. Part B is the threat model of the proposed design.

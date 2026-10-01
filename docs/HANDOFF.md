@@ -1,3 +1,15 @@
+> ## 2026-10-01 - MULTI-USER P0 + P1 SECURITY CLOSURE (branch `claude/multi-user-p0-p1`; P2 NOT started)
+>
+> Migrations **0647-0652** applied; `voice` v595, `voice-token` v625, `hq-api` v830, `google-oauth` v591, `worker` v899 and
+> the studio page deployed, each probed live. Fixed: the unauthenticated voice mint and the ambient voice subject; 22
+> deployment-wide actions and the Drive browse now need a deployment **operator** (`deployment_operators`, 0647); one
+> resolver for fixed-name credentials (`app.deployment_credential`, 0648; raw readers retired, 0649); the Google connect
+> flow needs a one-time state (it used to store any account's code); storage is written only after the database target is
+> authorized (0650); no member is Grant by default (0652). New gate entries: `check:ownership`, `check:system-secrets`,
+> `check:machine-key`. **Not done, and why:** the machine key is not rotated (device evidence needed), 22 unused
+> write-scoped MCP tokens are not revoked (yours to confirm), MCP consent is still the machine key. Canonical:
+> `docs/multi-user/P1-CLOSURE.md`. Next: review the P2 gate verdict there before the ownership migration begins.
+
 > ## 2026-10-01 - MULTI-USER RESEARCH COMPLETE (design only; nothing applied)
 >
 > The research the policy closure named as next has been done on `claude/multi-user-research`, against `41de1965`

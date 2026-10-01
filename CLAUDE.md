@@ -419,6 +419,9 @@ npm run verify:upload    # a dropped file, through the DEPLOYED gateway (#126)
 npm run slack:add-scope -- channels:join   # a Slack scope by manifest, not by browser
 GO=lately npm run probe -- '.main'         # measure a rail destination, not a project tab
 npm run check:icons      # every project-mark default names a mark the page can draw (#221)
+npm run check:ownership        # every table has an ownership class; a derived table proves its owner (multi-user P0)
+npm run check:system-secrets   # human-integration credentials are read through ONE resolver (multi-user P1.2)
+npm run check:machine-key      # the office key reaches no person-defaulting function that is not pinned (P1.5)
 npm run check:callers    # no NEW capability ships with nothing that calls it (#72)
 npm run check:consumed   # no table the product writes is one nothing can ever read (#72)
 npm run space            # now walks the home board's panels too, and reports spare room (#267)
@@ -4175,6 +4178,27 @@ Each of these cost real time. They are here so they cost it once.
 - **Forty-three public tables had row security off and default grants to the anon key**, and the anon key read
   `standing_authorizations`. #384 covered functions only. 0642 revokes tables and default privileges;
   `check:anon-exposure` asserts both. Whether those tables also want row policies is a multi-user question.
+
+- **A DEFAULT IS AN IDENTITY.** `office_members.owner_key` defaulted to `'grant'`, so a member added by the obvious
+  one-line insert spoke as Grant, decided his approvals and - once an operator list keyed on that name existed - WAS the
+  operator. No code had to be wrong for that to be true. 47 functions still carry a `default 'grant'` person; a new reach
+  from the machine key to one fails `check:machine-key` until it is pinned with a reason (0652, multi-user P1).
+- **A source-reading test that asserts a NAME stayed green when the gate was removed.** `voice-token` was gated by
+  `resolveSpeaker(bearerOf(request)` and the first test looked for that text and for the 401 line; replacing the condition
+  with `false` left it green. What discriminated was loading the real handler under a stubbed `Deno` and counting the
+  fetches a stranger caused (zero). `tests/auth/speaker.test.ts`.
+- **A negative that refuses for the wrong reason.** The first `google-oauth` callback negatives passed because the
+  function refused with "No client id yet" before it looked at a state. Each now asserts the SENTENCE it was refused with,
+  and the suite configures the client id so the state is the only thing left to refuse.
+- **A proof that alters the tables it runs on must refuse a shared database.** `ownership-composite-fk.ts` takes a
+  database argument; pointed at the shared replica it left nine tables changed and the replica had to be rebuilt. It now
+  refuses anything not named `fk_spike*`.
+- **Retire the old door AFTER its consumers move, in a separate migration.** 0648 added the resolver; 0649 removed
+  `public.vault_secret`, applied only after hq-api, google-oauth and the worker were redeployed to stop calling it.
+- **A credential scope that must reach handlers built once around a database handle cannot ride on the handle.** Most
+  handlers ignore the `db` that `handle()` is given, so the job a credential read is for travels in an
+  `AsyncLocalStorage` (`src/credentials/deployment.ts`). No scope means the worker acting for the deployment; that
+  argument exists only in `app`, which PostgREST does not expose.
 
 ---
 

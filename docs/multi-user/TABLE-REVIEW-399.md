@@ -1,5 +1,10 @@
 # Table-by-table review of the 129 `public` tables (issue #399)
 
+> **Superseded in two numbers, 1 October 2026 (P0).** The machine-checked manifest (`ownership-manifest.json`,
+> `npm run check:ownership`) classifies **131** tables as **52 OFFICE_CARRIER, 45 OFFICE_DERIVED, 14 GLOBAL, 20 SYSTEM**.
+> The "44 carry / 85 derive" split below derived some tables through a foreign key that is *nullable in the schema*; a
+> derivation is now proved by `attnotnull`, never by what the rows happen to hold. Reconciliation: `P1-CLOSURE.md` §3.
+
 > Generated from the live catalogue on 1 October 2026 (read-only) and the classification in this file. Counts are exact `count(*)`.
 > Baseline `41de1965`, migrations through 0646. Nothing here has been applied.
 

@@ -1,5 +1,9 @@
 # Implementation plan
 
+> **P0 and P1 are done** (`P1-CLOSURE.md`). One change to the plan as written: the P1 guard for fixed-name credentials is
+> keyed on *operator or job origin* (`app.deployment_credential`), not on today's principal kind alone, and the worker
+> carries the job in an `AsyncLocalStorage` scope; the Google connect flow gained a one-time state. P2 has **not** begun.
+
 > Design only. Baseline `41de1965`. **Rewritten after the two adversarial reviews (`REVIEWS.md`):** the original twelve
 > phases are merged into seven, RLS-policy and `voice_sessions` work is removed, and the order changed — the two
 > weaknesses that exist *today* (E13 Drive, E14 operator actions) and the voice hotfixes now come **first**, before
