@@ -289,7 +289,7 @@ const SABOTAGES: readonly Sabotage[] = [
     file: 'src/handlers/instruction.ts',
     anchor:
       // biome-ignore lint/suspicious/noTemplateCurlyInString: the anchor quotes a real source line verbatim; a template literal here would interpolate it
-      "                `select app.my_task_referent(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as t`,",
+      "                `select app.my_task_referent(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as t`,",
     replacement: "                'select app.my_task_recent() as t',",
     check: 'tests/handlers/a-rename-needs-a-referent.test.ts',
   },

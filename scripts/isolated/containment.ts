@@ -47,13 +47,14 @@ const claim = async (
   target = '1386648496',
 ): Promise<string> => {
   const r = await one(`
-    select outcome from app.claim_delivery(${lit(channel)}, ${lit(`${run}:${jobId}:${channel}`)}, 'acct', ${lit(target)},
+    select outcome from app.claim_delivery(app.job_office(${lit(jobId)}::uuid),
+      ${lit(channel)}, ${lit(`${run}:${jobId}:${channel}`)}, 'acct', ${lit(target)},
       'result', null, null, null, ${lit(jobId)}::uuid, interval '1 minute')`)
   return String(r.outcome)
 }
 const markSent = (jobId: string, channel = 'telegram') =>
   db.execute(
-    `select app.record_delivery_sent((select delivery_id from public.deliveries where dedupe_key = ${lit(`${run}:${jobId}:${channel}`)}), 'm-${run}', null)`,
+    `select app.record_delivery_sent(app.job_office(${lit(jobId)}::uuid), (select delivery_id from public.deliveries where dedupe_key = ${lit(`${run}:${jobId}:${channel}`)}), 'm-${run}', null)`,
   )
 
 const synthetic: [string, () => Promise<string>][] = [

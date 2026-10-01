@@ -1151,7 +1151,7 @@ const runJobHeld = async (
     try {
       const said = (
         await db.execute(
-          `select app.failure_seen(${lit(job.kind)}, ${lit((error as Error).message.slice(0, 500))},
+          `select app.failure_seen(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.kind)}, ${lit((error as Error).message.slice(0, 500))},
              ${job.projectId === null ? 'null' : lit(job.projectId)},
              ${lit(job.jobId)}::uuid) as r`,
         )
@@ -1253,6 +1253,7 @@ const runJobHeld = async (
   const hadHistory = await db
     .execute(`
       select (app.conversation_extent(
+                app.job_office(${lit(job.jobId)}::uuid),
                 (select (pinned_config ->> 'command_id')::uuid from public.jobs
                   where job_id = ${lit(job.jobId)}::uuid)
               ) ->> 'turns_total')::int > 1 as had`)
@@ -1608,30 +1609,32 @@ const runJobHeld = async (
       /*
         AND IT FAILS OPEN, which also makes the deploy order not matter.
 
-        `app.say_once` gained a third parameter in 0589. A migration is not a
-        deploy -- this repository has paid for assuming they land together --
-        so a worker carrying this line can reach a database that has only the
-        two-argument form.
+        `app.say_once` gained a third parameter in 0589 and, in 0782, its
+        office. A migration is not a deploy -- this repository has paid for
+        assuming they land together -- so a worker carrying this line can reach
+        a database that has only the older forms (the release procedure pauses
+        the worker for the migration so the two land together).
 
-        Which arity is called therefore follows what is being asked, not what
-        is newest: a handler with no topic asks the TWO-argument form, which
-        0584 already shipped and which is what every deployed worker calls
-        today. Sending everything through the three-argument form would mean
-        that on a database without 0589 EVERY call throws -- and the catch
-        below would turn 0584's dedupe off altogether rather than leaving it
-        alone. A safe failure mode is not the same as no regression.
+        The office is the CLAIMED job's (`app.job_office`), never a value taken
+        from the output or the request.
 
-        The catch then covers the remaining case -- a topic-carrying handler
-        on a database without 0589 -- by SPEAKING, the same direction the
-        `!== false` below chooses for an empty row. A dedupe rule that fails
-        closed silences a real failure report, which is the expensive
-        direction.
+        Which arity is called follows what is being asked, not what is newest:
+        a handler with no topic leaves the topic out. Sending everything
+        through the topic form would mean that on a database without 0589
+        EVERY call throws -- and the catch below would turn 0584's dedupe off
+        altogether rather than leaving it alone. A safe failure mode is not the
+        same as no regression.
+
+        The catch then covers a database that has not been migrated by
+        SPEAKING, the same direction the `!== false` below chooses for an empty
+        row. A dedupe rule that fails closed silences a real failure report,
+        which is the expensive direction.
       */
       const say = await db
         .execute(
           output.topic === undefined
-            ? `select app.say_once(${lit(job.jobId)}::uuid, ${lit(output.body)}) as say`
-            : `select app.say_once(${lit(job.jobId)}::uuid, ${lit(output.body)}, ${lit(output.topic)}) as say`,
+            ? `select app.say_once(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, ${lit(output.body)}) as say`
+            : `select app.say_once(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, ${lit(output.body)}, ${lit(output.topic)}) as say`,
         )
         .then((r) => (r.rows[0] as { say?: boolean } | undefined)?.say)
         .catch(() => undefined)

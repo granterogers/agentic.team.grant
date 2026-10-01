@@ -174,13 +174,17 @@ try {
     const bound =
       blocker === null
         ? null
-        : (await one(`select app.bind_delivery(${lit(d)}::uuid, ${lit(blocker)}::uuid) as b`)).b
+        : (
+            await one(
+              `select app.bind_delivery((select office.office_id from public.deliveries office where office.delivery_id = ${lit(d)}::uuid), ${lit(d)}::uuid, ${lit(blocker)}::uuid) as b`,
+            )
+          ).b
     return { id: d, ref: String(ref0), bound }
   }
   const candidates = async (command: string) =>
     (
       await db.execute(
-        `select id, bindable from app.open_questions_for_reply(${lit(command)}::uuid)`,
+        `select id, bindable from app.open_questions_for_reply((select office.office_id from public.inbound_commands office where office.command_id = ${lit(command)}::uuid), ${lit(command)}::uuid)`,
       )
     ).rows.map((r) => ({
       id: String((r as { id: string }).id),
@@ -205,7 +209,9 @@ try {
       `${String(forA === qa)}/${String(forB === qb)}`,
     )
     const foreign = (
-      await one(`select app.bind_delivery(${lit(da.id)}::uuid, ${lit(qb)}::uuid) as b`)
+      await one(
+        `select app.bind_delivery((select office.office_id from public.deliveries office where office.delivery_id = ${lit(da.id)}::uuid), ${lit(da.id)}::uuid, ${lit(qb)}::uuid) as b`,
+      )
     ).b
     const rename = await refused(() =>
       db.execute(

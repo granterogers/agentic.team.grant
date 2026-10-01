@@ -293,7 +293,7 @@ await db.execute(`
     ${String(plannedWrites(sample))})
 `)
 await db.execute(`
-  select app.request_approval(${lit(JOB)}::uuid, 'write the course modules into Notion',
+  select app.request_approval(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'write the course modules into Notion',
     'you asked for the curriculum to live where the team can edit it',
     'office.execute_plan')
 `)

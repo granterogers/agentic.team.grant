@@ -76,6 +76,7 @@ const decide = async (a: {
   json(
     (
       await one(`select app.authorize_effect(
+        p_office => ${a.project === undefined || a.project === null ? 'app.operator_office()' : `(select x.office_id from public.projects x where x.project_id = ${lit(a.project)}::uuid)`},
         p_project => ${a.project === undefined || a.project === null ? 'null' : `${lit(a.project)}::uuid`},
         p_tool => ${lit(a.tool)},
         p_staff => ${a.staff === undefined ? 'null' : lit(a.staff)},

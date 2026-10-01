@@ -104,7 +104,7 @@ try {
 
   const made = (
     await one(`
-    select public.record_consultation(${lit(jobId)}::uuid, 'research-director',
+    select app.record_consultation(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, 'research-director',
       'chief-of-staff', 'it is a research question') as r
   `)
   ).r as { ok?: boolean; error?: string; consulted?: string }
@@ -137,7 +137,7 @@ try {
 
   const self = (
     await one(`
-    select public.record_consultation(${lit(jobId)}::uuid, 'chief-of-staff',
+    select app.record_consultation(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, 'chief-of-staff',
       'chief-of-staff', 'talking to myself') as r
   `)
   ).r as { error?: string }
@@ -149,7 +149,7 @@ try {
 
   const nobody = (
     await one(`
-    select public.record_consultation(${lit(jobId)}::uuid, 'nobody-here') as r
+    select app.record_consultation(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, 'nobody-here', 'chief-of-staff') as r
   `)
   ).r as { error?: string }
   check(

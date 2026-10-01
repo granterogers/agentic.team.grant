@@ -340,9 +340,9 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
      returning command_id into v_c2;
 
      v_ans := v_ans || jsonb_build_object(
-       'colleagues', coalesce((app.conversation_before(v_c2) -> 0 -> 'colleagues') #>> '{0}', 'NONE'),
-       'stillGoing', coalesce((app.conversation_before(v_c2) -> 0 ->> 'stillGoing'), 'NONE'),
-       'waitingOnYou', coalesce((app.conversation_before(v_c2) -> 0 ->> 'waitingOnYou'), 'NONE'));`,
+       'colleagues', coalesce((app.conversation_before((select office.office_id from public.inbound_commands office where office.command_id = v_c2), v_c2) -> 0 -> 'colleagues') #>> '{0}', 'NONE'),
+       'stillGoing', coalesce((app.conversation_before((select office.office_id from public.inbound_commands office where office.command_id = v_c2), v_c2) -> 0 ->> 'stillGoing'), 'NONE'),
+       'waitingOnYou', coalesce((app.conversation_before((select office.office_id from public.inbound_commands office where office.command_id = v_c2), v_c2) -> 0 ->> 'waitingOnYou'), 'NONE'));`,
   )
   if (r.skipped === undefined) {
     ok(
@@ -390,17 +390,17 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
      returning command_id into v_c2;
 
      v_ans := v_ans || jsonb_build_object('none',
-       coalesce(app.my_task_referent(v_c2)::text, 'NULL'));
+       coalesce(app.my_task_referent((select office.office_id from public.inbound_commands office where office.command_id = v_c2), v_c2)::text, 'NULL'));
 
      insert into public.tasks (title, added_by, assigned_to_human, job_id)
      values ('The one this conversation made', 'the office', true, v_k);
      v_ans := v_ans || jsonb_build_object('one',
-       coalesce(app.my_task_referent(v_c2) ->> 'title', 'NULL'));
+       coalesce(app.my_task_referent((select office.office_id from public.inbound_commands office where office.command_id = v_c2), v_c2) ->> 'title', 'NULL'));
 
      insert into public.tasks (title, added_by, assigned_to_human, job_id)
      values ('A second from the same conversation', 'the office', true, v_k);
      v_ans := v_ans || jsonb_build_object('several',
-       coalesce((app.my_task_referent(v_c2) ->> 'ambiguous'), 'NULL'));
+       coalesce((app.my_task_referent((select office.office_id from public.inbound_commands office where office.command_id = v_c2), v_c2) ->> 'ambiguous'), 'NULL'));
 
      -- A DIFFERENT conversation, with those two tasks sitting there, minutes old.
      insert into public.inbound_commands
@@ -409,7 +409,7 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
              'teamhq:ref:${run}_three')
      returning command_id into v_c2;
      v_ans := v_ans || jsonb_build_object('elsewhere',
-       coalesce(app.my_task_referent(v_c2)::text, 'NULL'));
+       coalesce(app.my_task_referent((select office.office_id from public.inbound_commands office where office.command_id = v_c2), v_c2)::text, 'NULL'));
 
      /*
        0554. A task he typed HIMSELF carries no job, so it belongs to no
@@ -427,12 +427,12 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
              'telegram:ref:${run}_four', app.now_utc() - interval '2 minutes')
      returning command_id into v_c2;
      v_ans := v_ans || jsonb_build_object('older',
-       coalesce(app.my_task_referent(v_c2)::text, 'NULL'));
+       coalesce(app.my_task_referent((select office.office_id from public.inbound_commands office where office.command_id = v_c2), v_c2)::text, 'NULL'));
 
      insert into public.tasks (title, added_by, assigned_to_human, created_at)
      values ('Typed during this chat', 'grant', true, app.now_utc() - interval '1 minute');
      v_ans := v_ans || jsonb_build_object('during',
-       coalesce(app.my_task_referent(v_c2) ->> 'title', 'NULL'));`,
+       coalesce(app.my_task_referent((select office.office_id from public.inbound_commands office where office.command_id = v_c2), v_c2) ->> 'title', 'NULL'));`,
   )
   if (r.skipped === undefined) {
     ok('a conversation that made nothing offers no referent', r.none === 'NULL', r.none)
@@ -505,15 +505,15 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
      update public.inbound_commands set job_id = v_j2 where command_id = v_c3;
 
      v_ans := v_ans || jsonb_build_object('sees',
-       jsonb_array_length(app.conversation_work(v_c) -> 'in_flight'));
+       jsonb_array_length(app.conversation_work((select office.office_id from public.inbound_commands office where office.command_id = v_c), v_c) -> 'in_flight'));
      v_ans := v_ans || jsonb_build_object('stopped',
-       (app.stop_conversation_work(v_c, 'you asked me to stop') ->> 'stopped'));
+       (app.stop_conversation_work((select office.office_id from public.inbound_commands office where office.command_id = v_c), v_c, 'you asked me to stop') ->> 'stopped'));
      v_ans := v_ans || jsonb_build_object('child',
        (select state::text from public.jobs where job_id = v_c2));
      v_ans := v_ans || jsonb_build_object('elsewhere',
        (select state::text from public.jobs where job_id = v_j2));
      v_ans := v_ans || jsonb_build_object('again',
-       (app.stop_conversation_work(v_c) ->> 'stopped'));`,
+       (app.stop_conversation_work((select office.office_id from public.inbound_commands office where office.command_id = v_c), v_c) ->> 'stopped'));`,
   )
   if (r.skipped === undefined) {
     ok('it sees the one thing this conversation has in flight', r.sees === '1', String(r.sees))

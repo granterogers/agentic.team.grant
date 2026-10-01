@@ -53,7 +53,9 @@ const forNext = async (command: string) =>
   // only what the reply may BIND to: a question named but not bindable is one the office asks about (0623)
   (
     await db.execute(
-      `select id from app.open_questions_for_reply(${lit(command)}::uuid) where bindable`,
+      `select id from app.open_questions_for_reply(
+         (select office.office_id from public.inbound_commands office where office.command_id = ${lit(command)}::uuid),
+         ${lit(command)}::uuid) where bindable`,
     )
   ).rows.map((r) => String((r as { id: string }).id))
 

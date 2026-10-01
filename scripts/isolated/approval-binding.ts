@@ -180,7 +180,13 @@ const approvedGeneration = async (config: Record<string, unknown>) => {
   return { j0, q, child: await asJob(cid) }
 }
 const verdict = async (job: string) =>
-  json((await one(`select app.approval_verdict(${lit(job)}::uuid) as v`)).v)
+  json(
+    (
+      await one(
+        `select app.approval_verdict(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid) as v`,
+      )
+    ).v,
+  )
 
 // ---- 1. generation: an honest approval starts exactly one --------------------------------------------
 {
@@ -547,7 +553,7 @@ const steps = (name: string) => [
 const approvedPlan = async (planSteps: unknown[]) => {
   const j0 = await jobRow(project, 'office.instruction', { plan_steps: planSteps })
   await db.execute(
-    `select app.request_approval(${lit(j0.jobId)}::uuid, 'Carry out 2 steps', 'proof', 'office.execute_plan')`,
+    `select app.request_approval(app.job_office(${lit(j0.jobId)}::uuid), ${lit(j0.jobId)}::uuid, 'Carry out 2 steps', 'proof', 'office.execute_plan')`,
   )
   const q = await blockerOf(j0.jobId)
   await answer(String(q.id), 'Go ahead')

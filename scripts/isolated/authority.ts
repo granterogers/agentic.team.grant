@@ -643,7 +643,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const body = String(
     (
       await one(
-        `select pg_get_functiondef('app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text, text)'::regprocedure) as d`,
+        `select pg_get_functiondef('app.authorize_effect(uuid, uuid, text, uuid, text, text, text, uuid, text, text)'::regprocedure) as d`,
       )
     ).d,
   )
@@ -1165,7 +1165,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `alter table public.blockers drop column action_fingerprint, drop column decline_option`,
   )
   await db.execute(
-    `drop function app.authorize_effect(uuid, text, uuid, text, text, text, uuid, text, text)`,
+    `drop function app.authorize_effect(uuid, uuid, text, uuid, text, text, text, uuid, text, text)`,
   )
   const boundary = await mayAct(db as never, {
     projectId: p,

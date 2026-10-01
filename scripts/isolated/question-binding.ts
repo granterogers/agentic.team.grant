@@ -21,6 +21,11 @@ const check = (what: string, ok: boolean, detail: string) => {
   results.push({ ok })
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what} - ${detail}`)
 }
+// The office a held row belongs to - what the worker would pass (app.job_office of its claimed job) for these rows.
+const officeOfDelivery = (id: string) =>
+  `(select d.office_id from public.deliveries d where d.delivery_id = ${lit(id)}::uuid)`
+const officeOfCommand = (id: string) =>
+  `(select c.office_id from public.inbound_commands c where c.command_id = ${lit(id)}::uuid)`
 const DOOR = "set local application_name = 'PostgREST 14.5';"
 await registerBot(db)
 const BOT2 = '8123456789'
@@ -72,7 +77,11 @@ const deliver = async (
   const bound =
     opts.blocker === undefined || opts.blocker === null
       ? null
-      : (await one(`select app.bind_delivery(${lit(id)}::uuid, ${lit(opts.blocker)}::uuid) as b`)).b
+      : (
+          await one(
+            `select app.bind_delivery(${officeOfDelivery(id)}, ${lit(id)}::uuid, ${lit(opts.blocker)}::uuid) as b`,
+          )
+        ).b
   return { id, ref: String(msg), bound }
 }
 const forDelivery = async (d: string) =>
@@ -107,7 +116,9 @@ const turn = async (text: string, context?: Record<string, unknown>, account = B
 }
 const forNext = async (command: string) =>
   (
-    await db.execute(`select id, bindable from app.open_questions_for_reply(${lit(command)}::uuid)`)
+    await db.execute(
+      `select id, bindable from app.open_questions_for_reply(${officeOfCommand(command)}, ${lit(command)}::uuid)`,
+    )
   ).rows.map((r) => ({
     id: String((r as { id: string }).id),
     bindable: (r as { bindable: boolean }).bindable,
@@ -175,10 +186,14 @@ const root = await realParent(db)
   const qA0 = await ask(jA, 'own A first', 5)
   const dA = await deliver(jA, { blocker: null })
   const foreign = (
-    await one(`select app.bind_delivery(${lit(dA.id)}::uuid, ${lit(qB)}::uuid) as b`)
+    await one(
+      `select app.bind_delivery(${officeOfDelivery(dA.id)}, ${lit(dA.id)}::uuid, ${lit(qB)}::uuid) as b`,
+    )
   ).b
   const fabricated = (
-    await one(`select app.bind_delivery(${lit(dA.id)}::uuid, gen_random_uuid()) as b`)
+    await one(
+      `select app.bind_delivery(${officeOfDelivery(dA.id)}, ${lit(dA.id)}::uuid, gen_random_uuid()) as b`,
+    )
   ).b
   check(
     "a delivery cannot name another job's question, nor one that does not exist: it binds nothing",
@@ -186,7 +201,9 @@ const root = await realParent(db)
     `${String(foreign)}/${String(fabricated)}/${String(await forDelivery(dA.id))}`,
   )
   const qA = qA0
-  const named = await one(`select app.bind_delivery(${lit(dA.id)}::uuid, ${lit(qA)}::uuid) as b`)
+  const named = await one(
+    `select app.bind_delivery(${officeOfDelivery(dA.id)}, ${lit(dA.id)}::uuid, ${lit(qA)}::uuid) as b`,
+  )
   const rename = await db
     .execute(
       `update public.deliveries set blocker_id = ${lit(qB)}::uuid where delivery_id = ${lit(dA.id)}::uuid`,
@@ -225,7 +242,9 @@ const root = await realParent(db)
           values ('telegram', ${lit(`qb-${crypto.randomUUID()}`)}, ${lit(acct)}, ${lit(CHAT)}, 'result', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(same)}) returning delivery_id::text as id`)
       ).id,
     )
-    await one(`select app.bind_delivery(${lit(d)}::uuid, ${lit(q)}::uuid) as b`)
+    await one(
+      `select app.bind_delivery(${officeOfDelivery(d)}, ${lit(d)}::uuid, ${lit(q)}::uuid) as b`,
+    )
   }
   const press = async (account: string) => {
     const key = `telegram:callback:${account}:${crypto.randomUUID().slice(0, 8)}`
@@ -487,7 +506,7 @@ const root = await realParent(db)
   )
   const rows2 = (
     await db.execute(
-      `select bindable from app.open_questions_for_reply(${lit(dyes.command)}::uuid)`,
+      `select bindable from app.open_questions_for_reply(${officeOfCommand(dyes.command)}, ${lit(dyes.command)}::uuid)`,
     )
   ).rows as { bindable: boolean }[]
   check(
@@ -623,8 +642,11 @@ const root = await realParent(db)
   const j = await child(root)
   const early = await deliver(j, { blocker: null, ago: 5 })
   const late = await ask(j, 'F6 raised after the message')
-  const r = (await one(`select app.bind_delivery(${lit(early.id)}::uuid, ${lit(late)}::uuid) as b`))
-    .b
+  const r = (
+    await one(
+      `select app.bind_delivery(${officeOfDelivery(early.id)}, ${lit(early.id)}::uuid, ${lit(late)}::uuid) as b`,
+    )
+  ).b
   check(
     'a message made before a question existed cannot name it',
     r === false && (await forDelivery(early.id)) === null,
@@ -646,7 +668,9 @@ const root = await realParent(db)
   )
   if (nullJobBlocker !== '') {
     const o = (
-      await one(`select app.bind_delivery(${lit(orphan)}::uuid, ${lit(nullJobBlocker)}::uuid) as b`)
+      await one(
+        `select app.bind_delivery(${officeOfDelivery(orphan)}, ${lit(orphan)}::uuid, ${lit(nullJobBlocker)}::uuid) as b`,
+      )
     ).b
     check('a delivery with no job names no question, even a job-less one', o === false, String(o))
   }

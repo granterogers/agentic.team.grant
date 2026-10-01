@@ -169,7 +169,7 @@ export function synthesiseHandler(deps: SynthesiseDeps): Handler {
         return (typeof raw === 'string' ? JSON.parse(raw) : raw) as T
       }
       const ready = await readRow<Readiness>(
-        `select app.fan_in_ready(${lit(group)}::uuid) as r`,
+        `select app.fan_in_ready(app.job_office(${lit(job.jobId)}::uuid), ${lit(group)}::uuid) as r`,
         'r',
       )
 
@@ -204,7 +204,7 @@ export function synthesiseHandler(deps: SynthesiseDeps): Handler {
       }
 
       const outputs = await readRow<BranchOutput[]>(
-        `select app.branch_outputs(${lit(group)}::uuid) as r`,
+        `select app.branch_outputs(app.job_office(${lit(job.jobId)}::uuid), ${lit(group)}::uuid) as r`,
         'r',
       )
       if (outputs.length === 0) {

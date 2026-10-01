@@ -529,7 +529,7 @@ const kid = String(
   }
   const ask = async (job: string) => {
     const r = await one(
-      `select app.request_generation_approval(${lit(job)}::uuid, 'notebook.generate', 'a deck for the audit proof', 'free')::text as r`,
+      `select app.request_generation_approval(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid, 'notebook.generate', 'a deck for the audit proof', 'free')::text as r`,
     )
     return { blocker: String(r.r).match(/[0-9a-f-]{36}/)?.[0] ?? '' } as {
       blocker?: string

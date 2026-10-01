@@ -424,7 +424,7 @@ try {
     const yes1 = await turn('yes')
     const got1 = (
       await db.execute(
-        `select id from app.open_questions_for_reply(${lit(String(yes1.command))}::uuid) where bindable`,
+        `select id from app.open_questions_for_reply((select office.office_id from public.inbound_commands office where office.command_id = ${lit(String(yes1.command))}::uuid), ${lit(String(yes1.command))}::uuid) where bindable`,
       )
     ).rows.map((r) => String((r as { id: string }).id))
     check(
@@ -436,7 +436,7 @@ try {
     const yes2 = await turn('yes')
     const got2 = (
       await db.execute(
-        `select id from app.open_questions_for_reply(${lit(String(yes2.command))}::uuid) where bindable`,
+        `select id from app.open_questions_for_reply((select office.office_id from public.inbound_commands office where office.command_id = ${lit(String(yes2.command))}::uuid), ${lit(String(yes2.command))}::uuid) where bindable`,
       )
     ).rows
     check(
@@ -448,7 +448,7 @@ try {
     const fwd = await turn('yes', { forward_origin: { type: 'user', date: 1_700_000_000 } })
     const got3 = (
       await db.execute(
-        `select id from app.open_questions_for_reply(${lit(String(fwd.command))}::uuid) where bindable`,
+        `select id from app.open_questions_for_reply((select office.office_id from public.inbound_commands office where office.command_id = ${lit(String(fwd.command))}::uuid), ${lit(String(fwd.command))}::uuid) where bindable`,
       )
     ).rows
     check(

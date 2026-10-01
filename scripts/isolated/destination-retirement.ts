@@ -49,8 +49,9 @@ for (const t of [A, B])
     values ('telegram', ${lit(t)}, 'isolated retirement proof, run ${run}')`)
 
 const claim = async (job: string | null, key: string, target: string) => {
-  const c =
-    await one(`select outcome from app.claim_delivery('telegram', ${lit(key)}, 'acct', ${lit(target)}, 'result',
+  const c = await one(`select outcome from app.claim_delivery(
+       ${job === null ? 'app.operator_office()' : `app.job_office(${lit(job)}::uuid)`},
+       'telegram', ${lit(key)}, 'acct', ${lit(target)}, 'result',
        null, null, null, ${job === null ? 'null' : `${lit(job)}::uuid`})`)
   // Read in its own statement: the claim's write is invisible to the statement that made it.
   const why = await one(

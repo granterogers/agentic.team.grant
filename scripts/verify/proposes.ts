@@ -99,6 +99,10 @@ const makeJob = async (n: number): Promise<string> =>
     ).id,
   )
 
+// The office this suite's jobs live in: its project's (a job takes its project's office).
+const office = () =>
+  `(select p.office_id from public.projects p where p.project_id = ${lit(projectId)}::uuid)`
+
 console.log(`\nverify:proposes — ${run}\n`)
 
 projectId = String(
@@ -119,7 +123,7 @@ try {
 
   const said = (
     await one(`
-    select public.understood(${lit(j0)}::uuid,
+    select app.understood(${lit(j0)}::uuid,
       'You want the last quarter of interviews summarised into one page.') as r
   `)
   ).r as { ok?: boolean; understood_as?: string }
@@ -132,7 +136,7 @@ try {
   */
   const again = (
     await one(`
-    select public.understood(${lit(j0)}::uuid, 'Actually you wanted something else entirely.') as r
+    select app.understood(${lit(j0)}::uuid, 'Actually you wanted something else entirely.') as r
   `)
   ).r as { ok?: boolean; already?: string }
   check(
@@ -141,9 +145,8 @@ try {
     again.ok === false && String(again.already).includes('interviews'),
   )
 
-  const tooShort = (
-    await one(`select public.understood(${lit(await makeJob(1))}::uuid, 'ok') as r`)
-  ).r as { error?: string }
+  const tooShort = (await one(`select app.understood(${lit(await makeJob(1))}::uuid, 'ok') as r`))
+    .r as { error?: string }
   check(
     'a restatement that says nothing is refused',
     tooShort.error ?? '(accepted)',
@@ -244,7 +247,7 @@ try {
     proposal the office would nag, and a check that only ever runs at four
     could not tell a working threshold from none at all.
   */
-  const belowBar = (await one(`select app.raise_proposals(30, 99, true) as r`)).r as {
+  const belowBar = (await one(`select app.raise_proposals(${office()}, 30, 99, true) as r`)).r as {
     raised?: number
   }
   const noneYet = Number(
@@ -256,7 +259,7 @@ try {
     noneYet === 0,
   )
 
-  await db.execute('select app.raise_proposals(30, 3, true)')
+  await db.execute(`select app.raise_proposals(${office()}, 30, 3, true)`)
   const rows = (
     await db.execute(`
       select proposal_id::text as id, title, remedy, argument, times_seen, state
@@ -276,7 +279,7 @@ try {
   )
 
   // Running it again is not a second proposal.
-  await db.execute('select app.raise_proposals(30, 3, true)')
+  await db.execute(`select app.raise_proposals(${office()}, 30, 3, true)`)
   const stillOne = Number(
     (await one(`select count(*)::int as n from public.proposals where needed = ${lit(NEED)}`)).n,
   )
@@ -315,7 +318,9 @@ try {
     could have made the office tell Grant about a gap it invented. This is the
     regression for that.
   */
-  const batch = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
+  const batch = (await one(`select app.proposals_to_send(${office()}, 500) as r`)).r as {
+    id: string
+  }[]
   check(
     'a harness proposal never reaches the batch Claire sends',
     `${String(batch.length)} waiting, ours ${batch.some((b) => b.id === rows[0]?.id) ? 'AMONG THEM' : 'absent'}`,
@@ -340,14 +345,18 @@ try {
     returning proposal_id::text as id
   `)
   ).id as string
-  const withReal = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
+  const withReal = (await one(`select app.proposals_to_send(${office()}, 500) as r`)).r as {
+    id: string
+  }[]
   check(
     'CONTROL: a proposal with real provenance IS offered',
     withReal.some((b) => b.id === realOne) ? 'offered' : 'NOT OFFERED — the reader is inert',
     withReal.some((b) => b.id === realOne),
   )
-  await db.execute(`select app.proposals_sent(array[${lit(realOne)}]::uuid[])`)
-  const after = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
+  await db.execute(`select app.proposals_sent(${office()}, array[${lit(realOne)}]::uuid[])`)
+  const after = (await one(`select app.proposals_to_send(${office()}, 500) as r`)).r as {
+    id: string
+  }[]
   check(
     'and once sent it is not sent again',
     `${String(after.length)} waiting`,
@@ -387,7 +396,7 @@ try {
         ${lit(`asked again to ${NEED}, still no tool`)}, 'a probe instruction')
     `)
   }
-  const swept = (await one('select app.raise_proposals(30, 3, true) as r')).r as {
+  const swept = (await one(`select app.raise_proposals(${office()}, 30, 3, true) as r`)).r as {
     left_declined?: number
   }
   const state = (await one(`
@@ -403,7 +412,9 @@ try {
     `times_seen still ${String(state.times_seen)}`,
     state.times_seen === 4,
   )
-  const silent = (await one('select app.proposals_to_send(20) as r')).r as { id: string }[]
+  const silent = (await one(`select app.proposals_to_send(${office()}, 20) as r`)).r as {
+    id: string
+  }[]
   check(
     'and it is never queued to send again',
     `${String(silent.length)} waiting, none of them ours`,

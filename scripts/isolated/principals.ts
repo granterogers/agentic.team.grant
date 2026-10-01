@@ -101,7 +101,7 @@ const questionOn = async (job: string) =>
   String(
     (
       await one(
-        `select app.request_generation_approval(${lit(job)}::uuid, 'notebook.generate', ${lit(`a deck ${run}`)}, 'proof') as id`,
+        `select app.request_generation_approval(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid, 'notebook.generate', ${lit(`a deck ${run}`)}, 'proof') as id`,
       )
     ).id,
   )

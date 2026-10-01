@@ -298,7 +298,7 @@ const refused = async (fn: () => Promise<unknown>) => {
   const fb = await claim(fid, 'fan-b')
   const staleFan = await refused(() =>
     one(
-      `select app.fan_in_over(${lit(fid)}::uuid, 'objective', '[]'::jsonb, 'office.synthesise', null${callerArgs({ ...fa, leasedBy: fb.leasedBy ?? '' } as Job)})::text`,
+      `select app.fan_in_over(app.job_office(${lit(fid)}::uuid), ${lit(fid)}::uuid, 'objective', '[]'::jsonb, 'office.synthesise', null${callerArgs({ ...fa, leasedBy: fb.leasedBy ?? '' } as Job)})::text`,
     ),
   )
   const groups = Number(

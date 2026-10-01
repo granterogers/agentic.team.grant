@@ -121,9 +121,9 @@ section = 'the branches are real jobs'
     begin;
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'fan', app.fan_in_over(${PARENT},
+    insert into r select 'fan', app.fan_in_over(app.job_office(${PARENT}), ${PARENT},
       'Is the new tier commercially viable?', ${BRANCHES}, 'office.synthesise', null);
-    insert into r select 'again', app.fan_in_over(${PARENT},
+    insert into r select 'again', app.fan_in_over(app.job_office(${PARENT}), ${PARENT},
       'Is the new tier commercially viable?', ${BRANCHES}, 'office.synthesise', null);
 
     select (select v from r where k = 'fan') as fan,
@@ -170,17 +170,17 @@ section = 'the ceilings'
     create temp table r (k text, v jsonb) on commit drop;
 
     -- A fan-in over NOTHING has nothing to wait for (0563).
-    insert into r select 'none', app.fan_in_over(${PARENT}, 'x', '[]'::jsonb,
+    insert into r select 'none', app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'x', '[]'::jsonb,
       'office.synthesise', null);
 
     -- Somebody else's child cannot be claimed as a branch.
-    insert into r select 'stolen', app.fan_in_over(${PARENT}, 'x', jsonb_build_array(
+    insert into r select 'stolen', app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'x', jsonb_build_array(
       jsonb_build_object('job_id', ${PARENT}, 'agent', 'research-director', 'purpose', 'p'),
       jsonb_build_object('job_id', ${CHILD('finance-director')}, 'agent', 'finance-director',
                          'purpose', 'p')), 'office.synthesise', null);
 
     -- And nobody who is not on the roster.
-    insert into r select 'ghost', app.fan_in_over(${PARENT}, 'x', jsonb_build_array(
+    insert into r select 'ghost', app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'x', jsonb_build_array(
       jsonb_build_object('job_id', ${CHILD('research-director')}, 'agent', 'nobody-at-all',
                          'purpose', 'p'),
       jsonb_build_object('job_id', ${CHILD('finance-director')}, 'agent', 'finance-director',
@@ -191,7 +191,7 @@ section = 'the ceilings'
     -- saying the group is already registered, which is how the two controls
     -- above silently stopped being controls the moment 0563 landed.
     -- No backticks in this comment: it lives inside a template literal.
-    insert into r select 'one', app.fan_in_over(${PARENT}, 'x', jsonb_build_array(
+    insert into r select 'one', app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'x', jsonb_build_array(
       jsonb_build_object('job_id', ${CHILD('research-director')}, 'agent', 'research-director',
                          'purpose', 'p')), 'office.synthesise', null);
 
@@ -255,24 +255,24 @@ section = 'the answer waits'
     begin;
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'fan', app.fan_in_over(${PARENT}, 'Is it viable?', ${BRANCHES},
+    insert into r select 'fan', app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'Is it viable?', ${BRANCHES},
       'office.synthesise', null);
 
     -- Nothing has finished.
-    insert into r select 'cold', app.fan_in_ready(
+    insert into r select 'cold', app.fan_in_ready(app.job_office(${PARENT}),
       (select group_id from public.branch_groups where parent_job_id = ${PARENT}));
 
     -- The two REQUIRED branches answer; the optional one is still going.
     update public.jobs set state = 'running' where job_id in
       (${CHILD('research-director')}, ${CHILD('finance-director')});
     ${FINISH(`(${CHILD('research-director')}, ${CHILD('finance-director')})`)}
-    insert into r select 'required_in', app.fan_in_ready(
+    insert into r select 'required_in', app.fan_in_ready(app.job_office(${PARENT}),
       (select group_id from public.branch_groups where parent_job_id = ${PARENT}));
 
     -- And then it answers too.
     update public.jobs set state = 'running' where job_id = ${CHILD('growth-director')};
     ${FINISH(`(${CHILD('growth-director')})`)}
-    insert into r select 'all_in', app.fan_in_ready(
+    insert into r select 'all_in', app.fan_in_ready(app.job_office(${PARENT}),
       (select group_id from public.branch_groups where parent_job_id = ${PARENT}));
 
     select (select v from r where k = 'cold') as cold,
@@ -305,14 +305,14 @@ section = 'the answer waits'
     begin;
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'fan', app.fan_in_over(${PARENT}, 'Is it viable?', ${BRANCHES},
+    insert into r select 'fan', app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'Is it viable?', ${BRANCHES},
       'office.synthesise', app.now_utc() - interval '1 minute');
     -- Both required branches are in; the optional one has not started and the
     -- deadline has passed.
     update public.jobs set state = 'running' where job_id in
       (${CHILD('research-director')}, ${CHILD('finance-director')});
     ${FINISH(`(${CHILD('research-director')}, ${CHILD('finance-director')})`)}
-    insert into r select 'late', app.fan_in_ready(
+    insert into r select 'late', app.fan_in_ready(app.job_office(${PARENT}),
       (select group_id from public.branch_groups where parent_job_id = ${PARENT}));
     select (select v from r where k = 'late') as late;
     rollback;`)
@@ -330,7 +330,7 @@ section = 'the answer waits'
     begin;
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'fan', app.fan_in_over(${PARENT}, 'Is it viable?', ${BRANCHES},
+    insert into r select 'fan', app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'Is it viable?', ${BRANCHES},
       'office.synthesise', null);
     -- One optional branch fails, the two required ones answer.
     update public.jobs set state = 'running' where job_id = ${CHILD('growth-director')};
@@ -338,7 +338,7 @@ section = 'the answer waits'
     update public.jobs set state = 'running' where job_id in
       (${CHILD('research-director')}, ${CHILD('finance-director')});
     ${FINISH(`(${CHILD('research-director')}, ${CHILD('finance-director')})`)}
-    insert into r select 'after', app.fan_in_ready(
+    insert into r select 'after', app.fan_in_ready(app.job_office(${PARENT}),
       (select group_id from public.branch_groups where parent_job_id = ${PARENT}));
     select (select v from r where k = 'after') as after;
     rollback;`)
@@ -367,7 +367,7 @@ section = 'the answer can only be built from branches that really ran'
     begin;
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'fan', app.fan_in_over(${PARENT}, 'Is it viable?', ${BRANCHES},
+    insert into r select 'fan', app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'Is it viable?', ${BRANCHES},
       'office.synthesise', null);
 
     -- Two branches answer for real. The third finishes with NOTHING, which is
@@ -390,7 +390,7 @@ section = 'the answer can only be built from branches that really ran'
             'medium', 'inferred', '[]'::jsonb, true);
     ${FINISH(`(${CHILD('research-director')}, ${CHILD('finance-director')}, ${CHILD('growth-director')})`)}
 
-    insert into r select 'outputs', app.branch_outputs(
+    insert into r select 'outputs', app.branch_outputs(app.job_office(${PARENT}),
       (select group_id from public.branch_groups where parent_job_id = ${PARENT}));
     select (select v from r where k = 'outputs') as outputs;
     rollback;`)
@@ -415,10 +415,10 @@ section = 'the answer can only be built from branches that really ran'
   const nothing = await one(`
     begin;
     ${SETUP}
-    select app.fan_in_over(${PARENT}, 'Is it viable?', ${BRANCHES}, 'office.synthesise', null);
+    select app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'Is it viable?', ${BRANCHES}, 'office.synthesise', null);
     update public.jobs set state = 'running' where parent_job_id = ${PARENT};
     ${FINISH(`(select job_id from public.jobs where parent_job_id = ${PARENT} and kind = 'office.instruction')`)}
-    select jsonb_array_length(app.branch_outputs(
+    select jsonb_array_length(app.branch_outputs(app.job_office(${PARENT}),
       (select group_id from public.branch_groups where parent_job_id = ${PARENT}))) as n;
     rollback;`)
   ok(
@@ -437,7 +437,7 @@ section = 'cancelling the question'
   const got = await one(`
     begin;
     ${SETUP}
-    select app.fan_in_over(${PARENT}, 'Is it viable?', ${BRANCHES}, 'office.synthesise', null);
+    select app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'Is it viable?', ${BRANCHES}, 'office.synthesise', null);
 
     -- One branch has already finished. It must survive the cancellation: it did
     -- the work and its output is evidence whatever happened to the question.
@@ -500,7 +500,7 @@ section = 'permissions never combine'
     insert into public.staff_tools (staff_slug, tool)
     values ('finance-director', ${lit(TOOL)});
     create temp table u (k text primary key, v jsonb) on commit drop;
-    insert into u values ('fan', app.fan_in_over(${PARENT},
+    insert into u values ('fan', app.fan_in_over(app.job_office(${PARENT}), ${PARENT},
       'Is this worth doing?', ${BRANCHES}, 'office.synthesise', null));
     select (select v from u where k = 'fan') as fan,
            app.staff_may_use('finance-director', ${lit(TOOL)}) as branch_may,
@@ -559,7 +559,7 @@ section = 'concurrency and restraint'
   const got = await one(`
     begin;
     ${SETUP}
-    select app.fan_in_over(${PARENT},
+    select app.fan_in_over(app.job_office(${PARENT}), ${PARENT},
       'Is this worth doing?', ${BRANCHES}, 'office.synthesise', null);
     /*
       The BRANCHES, not every child. The synthesis job is a child of the same
@@ -611,7 +611,7 @@ section = 'concurrency and restraint'
     begin;
     ${SETUP}
     create temp table alone_r (k text, v jsonb) on commit drop;
-    insert into alone_r select 'v', app.fan_in_over(${PARENT}, 'A single-domain question',
+    insert into alone_r select 'v', app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'A single-domain question',
       jsonb_build_array(jsonb_build_object('job_id', ${CHILD('research-director')},
                          'agent', 'research-director',
                          'purpose', 'the only thing being asked', 'required', true)),
@@ -664,7 +664,7 @@ section = 'the ceiling'
            (select project_id from public.projects where slug = ${lit(`fixture-parallel-${run}`)}),
            'queued', 'research-director', false
       from generate_series(1, ${String(capN + 1)}) g;
-    select app.fan_in_over(${PARENT}, 'A question asked too many ways', (
+    select app.fan_in_over(app.job_office(${PARENT}), ${PARENT}, 'A question asked too many ways', (
         select jsonb_agg(jsonb_build_object(
           'job_id', j.job_id, 'agent', 'research-director',
           'purpose', 'one of too many', 'required', false))

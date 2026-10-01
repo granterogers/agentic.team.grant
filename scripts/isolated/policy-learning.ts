@@ -33,16 +33,18 @@ const offers = (like: string) =>
   rows(
     `select suggestion_id::text as id, kind, offer_kind, state from public.suggestions where body like ${lit(`%${like}%`)}`,
   )
-const gated = async (tool: string, audience: string | null = null) =>
-  json(
+const gated = async (tool: string, audience: string | null = null) => {
+  const dutyJob = (await w.dutyJob('office.chores')).jobId
+  return json(
     (
       await one(
-        `select app.authorize_effect(p_project => null, p_tool => ${lit(tool)}, p_asked_job => null,
+        `select app.authorize_effect(p_office => app.job_office(${lit(dutyJob)}::uuid), p_project => null, p_tool => ${lit(tool)}, p_asked_job => null,
            p_audience => ${audience === null ? 'null' : lit(audience)},
-           p_job => ${lit((await w.dutyJob('office.chores')).jobId)}::uuid) as d`,
+           p_job => ${lit(dutyJob)}::uuid) as d`,
       )
     ).d,
   ).verdict
+}
 
 // ---- 1. ordinary preferences are learned on their own --------------------------------------------------------------
 const short = await teach(`From now on keep every answer short ${w.run}.`)

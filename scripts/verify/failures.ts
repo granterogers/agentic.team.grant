@@ -71,7 +71,7 @@ await db.execute(
 const seen = async (message: string, subject?: string): Promise<Record<string, unknown>> =>
   ((
     await one(
-      `select app.failure_seen(${lit(KIND)}, ${lit(message)}, ${subject === undefined ? 'null' : lit(subject)}) as r`,
+      `select app.failure_seen(app.test_office(), ${lit(KIND)}, ${lit(message)}, ${subject === undefined ? 'null' : lit(subject)}) as r`,
     )
   ).r ?? {}) as Record<string, unknown>
 
@@ -271,7 +271,7 @@ check(
   first failure is a pager that gets muted -- and a check that only ever looks
   at the recurring case cannot tell a working threshold from an absent one.
 */
-await db.execute(`select app.failure_seen(${lit(ONCE)}, 'Request timed out')`)
+await db.execute(`select app.failure_seen(app.test_office(), ${lit(ONCE)}, 'Request timed out')`)
 const onceNoticed = (
   await db.execute(`
     select subject_ref from app.notice(40) where kind = 'failure_repeats'
