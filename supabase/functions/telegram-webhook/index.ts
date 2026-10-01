@@ -377,10 +377,21 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
   }
 
-  if (!response.ok && response.status !== 409) {
-    // A 5xx here means Telegram should retry, so say so. A 409 is the
-    // idempotency index doing its job and is success.
-    return new Response('storage failed', { status: 503 })
+  if (!response.ok) {
+    /*
+      A 409 is NOT automatically "the idempotency index doing its job". PostgREST answers 409 for a unique violation
+      (23505) AND for a foreign-key violation (23503), and the insert already says `ignore-duplicates`, so a real
+      duplicate arrives as an empty 201 and never reaches here. A 409 that is a foreign-key violation is a message the
+      database REFUSED - the update was acknowledged with 200 and the instruction vanished (P3: it was how a message
+      from an office whose Unnamed project did not exist was lost without a word). Only a unique violation is success.
+    */
+    const refused = (await response
+      .clone()
+      .json()
+      .catch(() => ({}))) as { code?: string }
+    if (!(response.status === 409 && refused.code === '23505')) {
+      return new Response('storage failed', { status: 503 })
+    }
   }
 
   // An instruction becomes work. Storing it was the whole of the inbound path
