@@ -493,7 +493,7 @@ try {
     that it did, rather than losing the message.
   */
   const kept = await one(`
-    select app.say_in_project(app.unnamed_project(),
+    select app.say_in_project(app.test_office(), app.unnamed_project(),
       ${lit(`transport proof ${run}`)}, 'nobody-by-that-name') as v`)
   /*
     `addressee_dropped` is the SLUG that was dropped, not a boolean. The first

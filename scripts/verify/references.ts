@@ -93,7 +93,7 @@ try {
 
   const added = (
     await one(`
-      select public.add_project_reference(${lit(slug)}, ${lit(`${HOST}/pricing`)},
+      select public.add_project_reference(app.test_office(), ${lit(slug)}, ${lit(`${HOST}/pricing`)},
         null, null, 'What the competition charges') as r
     `)
   ).r as { ok?: boolean; reference?: string; kind?: string; title?: string }
@@ -121,7 +121,9 @@ try {
     can fix itself.
   */
   const bare = (
-    await one(`select public.add_project_reference(${lit(slug)}, ${lit(`${HOST}/docs`)}) as r`)
+    await one(
+      `select public.add_project_reference(app.test_office(), ${lit(slug)}, ${lit(`${HOST}/docs`)}) as r`,
+    )
   ).r as { ok?: boolean; reference?: string }
   if (typeof bare.reference === 'string') made.push(bare.reference)
   const stored = await one(
@@ -144,8 +146,11 @@ try {
   ]
   const got: string[] = []
   for (const [url, want] of kinds) {
-    const r = (await one(`select public.add_project_reference(${lit(slug)}, ${lit(url)}) as r`))
-      .r as { reference?: string; kind?: string }
+    const r = (
+      await one(
+        `select public.add_project_reference(app.test_office(), ${lit(slug)}, ${lit(url)}) as r`,
+      )
+    ).r as { reference?: string; kind?: string }
     if (typeof r.reference === 'string') made.push(r.reference)
     got.push(`${String(r.kind)}${r.kind === want ? '' : ` (wanted ${want})`}`)
   }
@@ -160,7 +165,7 @@ try {
 
   const again = (
     await one(`
-      select public.add_project_reference(${lit(slug)}, ${lit(`HTTPS://WWW.${HOST}/pricing/`)}) as r
+      select public.add_project_reference(app.test_office(), ${lit(slug)}, ${lit(`HTTPS://WWW.${HOST}/pricing/`)}) as r
     `)
   ).r as { ok?: boolean; already?: boolean; error?: string }
   /*
@@ -276,7 +281,9 @@ try {
   console.log('\nand it can be taken away again')
 
   const gone = (
-    await one(`select public.remove_project_reference(${lit(made[1] ?? '')}::uuid) as r`)
+    await one(
+      `select public.remove_project_reference(app.test_office(), ${lit(made[1] ?? '')}::uuid) as r`,
+    )
   ).r as { ok?: boolean; removed?: string }
   check('removing one answers with what it removed', JSON.stringify(gone), gone.ok === true)
   const still = await sources()
@@ -286,7 +293,9 @@ try {
     !still.some((s) => s.url === `https://${HOST}/docs`),
   )
   const twice = (
-    await one(`select public.remove_project_reference(${lit(made[1] ?? '')}::uuid) as r`)
+    await one(
+      `select public.remove_project_reference(app.test_office(), ${lit(made[1] ?? '')}::uuid) as r`,
+    )
   ).r as { ok?: boolean; error?: string }
   check(
     'removing it again is refused rather than silently succeeding',

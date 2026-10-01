@@ -164,6 +164,7 @@ export function planHandler(db: SqlExecutor): Handler {
               // notebook of his we have never seen gets a project around it.
               const { rows } = await db.execute(`
                 select app.hq_create_project(
+                  app.job_office(${lit(job.jobId)}::uuid),
                   ${lit(step.name)}, 'notebooklm', ${lit(step.notebookRef)}, ${lit(step.name)}
                 ) as r
               `)
@@ -206,6 +207,7 @@ export function planHandler(db: SqlExecutor): Handler {
               effectRef = notebook.id
               const { rows } = await db.execute(`
                 select app.hq_create_project(
+                  app.job_office(${lit(job.jobId)}::uuid),
                   ${lit(step.name)}, 'notebooklm', ${lit(notebook.id)}, ${lit(step.name)}
                 ) as r
               `)
@@ -235,6 +237,7 @@ export function planHandler(db: SqlExecutor): Handler {
               case 'attach': {
                 const { rows } = await db.execute(`
                   select app.hq_attach(
+                    app.job_office(${lit(job.jobId)}::uuid),
                     (select slug from public.projects where project_id = ${lit(acc.projectId)}::uuid),
                     ${lit(step.link.kind === 'notion' ? 'notion' : 'notebooklm')},
                     ${lit(step.link.ref)},

@@ -30,7 +30,7 @@ const jsonOf = (v: unknown) =>
 const project = String(
   jsonOf(
     (
-      await one(`select app.hq_create_project(${lit(`Tasks ${run}`)}, 'upload', ${lit(`tasks-${run}`)},
+      await one(`select app.hq_create_project(app.test_office(), ${lit(`Tasks ${run}`)}, 'upload', ${lit(`tasks-${run}`)},
         ${lit(`Tasks ${run}`)}, true) as v`)
     ).v,
   ).project_id,

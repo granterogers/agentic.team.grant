@@ -31,7 +31,7 @@ const project = async (name: string): Promise<string> =>
   String(
     (
       await one(
-        `select app.hq_create_project(${lit(name)}, 'notion', ${lit(`prov-${name}`)}, ${lit(name)}, true) ->> 'project_id' as id`,
+        `select app.hq_create_project(app.test_office(), ${lit(name)}, 'notion', ${lit(`prov-${name}`)}, ${lit(name)}, true) ->> 'project_id' as id`,
       )
     ).id,
   )

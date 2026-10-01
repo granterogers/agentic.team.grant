@@ -46,7 +46,7 @@ const makeProject = async (label: string, fixture: boolean): Promise<string> => 
     json(
       (
         await one(
-          `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`p1storage-${label}-${run}`)}, ${lit(name)}, true) as v`,
+          `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`p1storage-${label}-${run}`)}, ${lit(name)}, true) as v`,
         )
       ).v,
     ).project_id,

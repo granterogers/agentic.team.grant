@@ -60,7 +60,7 @@ const mk = async (label: string, by: 'person' | 'sql'): Promise<string> => {
     if (r.status !== 200) throw new Error(`create failed ${JSON.stringify(r.body)}`)
   } else {
     await one(
-      `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`r-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
+      `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`r-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
     )
   }
   return String(

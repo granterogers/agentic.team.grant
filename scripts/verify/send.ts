@@ -89,7 +89,7 @@ let otherId = ''
 
 try {
   await one(`
-    select app.hq_create_project(${lit(`Fixture send ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Fixture send ${run}`)}, 'upload',
                                  ${lit(SLUG)}, ${lit(`Fixture send ${run}`)}, true) as r
   `)
   projectId = String(

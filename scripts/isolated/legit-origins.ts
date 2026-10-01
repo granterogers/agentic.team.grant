@@ -57,7 +57,7 @@ await db.execute(`insert into public.telegram_bots (bot_id, username, staff_slug
 const project = String(
   jsonOf(
     (
-      await one(`select app.hq_create_project(${lit(`Legit ${run}`)}, 'upload', ${lit(`legit-${run}`)},
+      await one(`select app.hq_create_project(app.test_office(), ${lit(`Legit ${run}`)}, 'upload', ${lit(`legit-${run}`)},
     ${lit(`Legit ${run}`)}, true) as v`)
     ).v,
   ).project_id as string,
@@ -222,7 +222,7 @@ const reaches = async (what: string, job: string | null) => {
   const said = jsonOf(
     (
       await one(
-        `${DOOR} select app.say_in_project(${lit(project)}::uuid, ${lit(`Legit chat ${run}`)}) as v`,
+        `${DOOR} select app.say_in_project(app.test_office(), ${lit(project)}::uuid, ${lit(`Legit chat ${run}`)}) as v`,
       )
     ).v,
   )

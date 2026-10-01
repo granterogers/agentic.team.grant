@@ -137,7 +137,7 @@ const kid = String(
 {
   const name = `fixture audit ${run}`
   const created = await one(
-    `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`audit-${run}`)}, ${lit(name)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`audit-${run}`)}, ${lit(name)}, true)::text as r`,
   ).catch(() => null)
   const slug = `fixture-audit-${run}`
   const p = await one(
@@ -356,7 +356,7 @@ const kid = String(
   )
   const nm = `fixture audit inherit ${run}`
   await one(
-    `select app.hq_create_project(${lit(nm)}, 'upload', ${lit(`inh-${run}`)}, ${lit(nm)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(nm)}, 'upload', ${lit(`inh-${run}`)}, ${lit(nm)}, true)::text as r`,
   )
   const other = String(
     (
@@ -413,7 +413,7 @@ const kid = String(
 {
   const name = `Audit real ${run}`
   await one(
-    `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`real-${run}`)}, ${lit(name)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`real-${run}`)}, ${lit(name)}, true)::text as r`,
   )
   const real = String(
     (
@@ -424,7 +424,7 @@ const kid = String(
   )
   const fxName = `fixture task ${run}`
   await one(
-    `select app.hq_create_project(${lit(fxName)}, 'upload', ${lit(`fxt-${run}`)}, ${lit(fxName)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(fxName)}, 'upload', ${lit(`fxt-${run}`)}, ${lit(fxName)}, true)::text as r`,
   )
   const fx = String(
     (

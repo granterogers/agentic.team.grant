@@ -109,7 +109,7 @@ try {
     left six real projects in Grant's switcher.
   */
   await one(`
-    select app.hq_create_project(${lit(`Fixture graph ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Fixture graph ${run}`)}, 'upload',
                                  ${lit(SLUG)}, ${lit(`Fixture graph ${run}`)}, true) as r
   `)
   projectId = String(

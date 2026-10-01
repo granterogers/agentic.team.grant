@@ -391,7 +391,7 @@ console.log('\nasking two people, which is the middle of the specification')
     await db.execute(`
     begin;
     create temp table _say as
-      select app.say_in_project(
+      select app.say_in_project(app.test_office(), 
         (select project_id from public.projects where status = 'active' order by created_at limit 1),
         ${lit(`verify:addressing ${run} — who should look at this?`)},
         null,

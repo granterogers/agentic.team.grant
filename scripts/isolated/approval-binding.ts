@@ -86,7 +86,7 @@ const projectWithNotebook = async (label: string): Promise<string> => {
   const made = json(
     (
       await one(
-        `select app.hq_create_project(${lit(name)}, 'notebooklm', ${lit(`nb-fixture-${label}-${run}`)}, ${lit(name)}, true) as v`,
+        `select app.hq_create_project(app.test_office(), ${lit(name)}, 'notebooklm', ${lit(`nb-fixture-${label}-${run}`)}, ${lit(name)}, true) as v`,
       )
     ).v,
   )

@@ -44,7 +44,7 @@ const REAL_SLACK = 'C0C2DAPDN02'
 const project = String(
   jsonOf(
     (
-      await one(`select app.hq_create_project(${lit(`Witness origin ${run}`)}, 'upload', ${lit(`witorig-${run}`)},
+      await one(`select app.hq_create_project(app.test_office(), ${lit(`Witness origin ${run}`)}, 'upload', ${lit(`witorig-${run}`)},
     ${lit(`Witness origin ${run}`)}, true) as v`)
     ).v,
   ).project_id,

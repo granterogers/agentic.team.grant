@@ -90,7 +90,7 @@ const HQ_SECTIONS: Readonly<Record<string, string>> = {
   activity: 'app.hq_activity(50)',
   series: 'app.hq_series(30)',
   connections: 'app.hq_connections()',
-  projects: 'app.hq_projects()',
+  projects: 'app.hq_projects(app.test_office())',
   artifacts: 'app.hq_artifacts(app.test_office())',
   settings: 'app.hq_settings()',
   team: 'app.hq_team()',
