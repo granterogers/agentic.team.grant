@@ -811,6 +811,12 @@ export async function speaker(
    * convene somebody and the handler would have to know which.
    */
   alsoAddressed: readonly string[] = [],
+  /**
+   * The claimed job, so the project's roster is read in the job's office. Without it nobody can say whose project
+   * this is and the roster is simply not restricted (the catch below), which is what a test that only wants the
+   * literal path gets.
+   */
+  jobId: string | null = null,
 ): Promise<Speaker> {
   const byName = addressedTo === null || addressedTo === '' ? null : addressedTo
   if (byName !== null) {
@@ -1065,10 +1071,12 @@ export async function speaker(
     the query hiccupped.
   */
   const onProject =
-    projectId === null
+    projectId === null || jobId === null
       ? undefined
       : await db
-          .execute(`select unnest(app.staff_on_project(${lit(projectId)}::uuid)) as slug`)
+          .execute(
+            `select unnest(app.staff_on_project(app.job_office(${lit(jobId)}::uuid), ${lit(projectId)}::uuid)) as slug`,
+          )
           .then((r) => (r.rows as { slug: string }[]).map((x) => String(x.slug)))
           .then((xs) => (xs.length === 0 ? undefined : xs))
           .catch(() => undefined)
@@ -1660,6 +1668,7 @@ async function handleLinks(
   for (const link of places) {
     const { rows } = await db.execute(`
       select app.hq_attach(
+        app.job_office(${lit(job.jobId)}::uuid),
         ${lit(project.slug)},
         ${lit(link.kind === 'notebooklm' ? 'notebooklm' : 'notion')},
         ${lit(link.ref)},
@@ -2488,6 +2497,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         deps.router,
         job.projectId ?? null,
         payload.addressed_also ?? [],
+        job.jobId,
       )
 
       /*
