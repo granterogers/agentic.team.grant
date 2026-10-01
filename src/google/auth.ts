@@ -28,7 +28,7 @@
  * work to do.
  */
 
-import { credentialSql } from '../credentials/deployment.ts'
+import { credentialSql, currentJob } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -128,20 +128,32 @@ export async function googleAccess(
   }
 }
 
-/** Record what happened, so the Connections panel is not guessing. */
+/**
+ * Record what happened, so the Connections panel is not guessing.
+ *
+ * The row is the office's own (migration 0800): inside a job it is the claimed job's office, with no job it is the
+ * deployment's Google office. The key is still (service, credential), so the update is guarded by the office and a
+ * reading by one office can never overwrite the row another office owns.
+ */
 export async function recordGoogleHealth(
   db: SqlExecutor,
   access: GoogleAccess | GoogleUnavailable,
 ): Promise<void> {
+  const job = currentJob()
+  const office =
+    job === null
+      ? 'coalesce(app.google_home_office(), app.deployment_reader_office())'
+      : `app.job_office(${lit(job)}::uuid)`
   await db.execute(`
     insert into public.connection_health
-      (service, credential, state, detail, owner, action, checked_at)
-    values ('google_calendar', 'oauth_client',
+      (office_id, service, credential, state, detail, owner, action, checked_at)
+    values (${office}, 'google_calendar', 'oauth_client',
             ${access.ok ? "'ok'" : "'dead'"},
             ${lit(access.ok ? `connected; scopes: ${access.scopes.join(' ')}` : access.reason).slice(0, 400)},
             'grant', 'Settings → Google on the web front end', app.now_utc())
     on conflict (service, credential) do update
       set state = excluded.state, detail = excluded.detail,
           action = excluded.action, checked_at = app.now_utc()
+      where public.connection_health.office_id = excluded.office_id
   `)
 }

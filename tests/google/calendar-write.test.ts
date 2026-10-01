@@ -11,6 +11,9 @@ import { syncTasksToCalendar } from '../../src/google/calendar-write.ts'
 
 type Row = Record<string, unknown>
 
+/** The office the sync is for. The fake database never reads it; the real one scopes every link write to it. */
+const OFFICE = '00000000-0000-4000-8000-0000000000a1'
+
 /** A database stand-in that answers the three queries the writer makes. */
 function fakeDb(opts: {
   on?: boolean
@@ -82,6 +85,7 @@ describe('syncTasksToCalendar', () => {
   it('does nothing at all while the switch is off', async () => {
     const seen: { url: string; method: string }[] = []
     const out = await syncTasksToCalendar(fakeDb({ on: false }), {
+      office: OFFICE,
       fetchImpl: fakeGoogle({ seen }),
     })
     expect(out.ok).toBe(true)
@@ -94,6 +98,7 @@ describe('syncTasksToCalendar', () => {
     const out = await syncTasksToCalendar(
       fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
       {
+        office: OFFICE,
         fetchImpl: fakeGoogle({ scopes: 'https://www.googleapis.com/auth/calendar.readonly' }),
       },
     )
@@ -126,7 +131,7 @@ describe('syncTasksToCalendar', () => {
 
     const out = await syncTasksToCalendar(
       fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
-      { fetchImpl },
+      { office: OFFICE, fetchImpl },
     )
     expect(out.created).toBe(1)
     const sent = JSON.parse(bodies[0] ?? '{}') as {
@@ -156,6 +161,7 @@ describe('syncTasksToCalendar', () => {
         },
       }),
       {
+        office: OFFICE,
         fetchImpl: fakeGoogle({
           seen,
           onGet: () =>
@@ -181,6 +187,7 @@ describe('syncTasksToCalendar', () => {
         },
       }),
       {
+        office: OFFICE,
         fetchImpl: fakeGoogle({
           seen,
           // Somebody else's meeting, sitting on an id our link table believes
@@ -209,6 +216,7 @@ describe('syncTasksToCalendar', () => {
         },
       }),
       {
+        office: OFFICE,
         fetchImpl: fakeGoogle({
           onGet: () =>
             new Response(JSON.stringify({ extendedProperties: { private: { hqTaskId: TASK } } }), {
@@ -235,7 +243,7 @@ describe('syncTasksToCalendar', () => {
           remove: [{ task_id: TASK, calendar_id: 'primary', event_id: 'ev1' }],
         },
       }),
-      { fetchImpl: fakeGoogle({ onGet: () => new Response('', { status: 404 }) }) },
+      { office: OFFICE, fetchImpl: fakeGoogle({ onGet: () => new Response('', { status: 404 }) }) },
     )
     expect(out.removed).toBe(1)
     expect(calls.some((c) => c.includes('calendar_link_clear'))).toBe(true)
@@ -245,7 +253,7 @@ describe('syncTasksToCalendar', () => {
     const seen: { url: string; method: string }[] = []
     const out = await syncTasksToCalendar(
       fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
-      { fetchImpl: fakeGoogle({ seen }), dryRun: true },
+      { office: OFFICE, fetchImpl: fakeGoogle({ seen }), dryRun: true },
     )
     expect(out.note).toContain('dry run')
     expect(out.created).toBe(1)
@@ -258,6 +266,7 @@ describe('a create after a crash between Google and the link (invariant 27)', ()
     const seen: { url: string; method: string }[] = []
     const db = fakeDb({ plan: { create: [ROW], update: [], remove: [] } })
     const out = await syncTasksToCalendar(db, {
+      office: OFFICE,
       fetchImpl: fakeGoogle({
         seen,
         onGet: () => new Response(JSON.stringify({ items: [{ id: 'orphan-1' }] }), { status: 200 }),
@@ -274,6 +283,7 @@ describe('a create after a crash between Google and the link (invariant 27)', ()
     const out = await syncTasksToCalendar(
       fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
       {
+        office: OFFICE,
         fetchImpl: fakeGoogle({
           seen,
           onGet: () => new Response(JSON.stringify({ items: [] }), { status: 200 }),
@@ -289,6 +299,7 @@ describe('a create after a crash between Google and the link (invariant 27)', ()
     const out = await syncTasksToCalendar(
       fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
       {
+        office: OFFICE,
         fetchImpl: fakeGoogle({ seen, onGet: () => new Response('', { status: 503 }) }),
       },
     )

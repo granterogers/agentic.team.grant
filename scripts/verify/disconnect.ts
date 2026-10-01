@@ -319,6 +319,8 @@ check(
   prevent, wearing a different name — so both outcomes are driven, not just
   the happy one.
 */
+// The sign-out is the deployment's own Google office's (migration 0800): the office the single health row belongs to.
+const HOME_OFFICE = 'app.google_home_office()'
 for (const [what, ok] of [
   ['a confirmed revoke', true],
   ['a FAILED revoke', false],
@@ -333,7 +335,7 @@ for (const [what, ok] of [
       end if;
     end
     $do$;
-    create temp table _fin as select app.google_revoke_finish(${ok ? 'true' : 'false'},
+    create temp table _fin as select app.google_revoke_finish(${HOME_OFFICE},${ok ? 'true' : 'false'},
       'verify:disconnect') as v;
     select (select v::text from _fin) as said,
            (select count(*)::int from vault.secrets

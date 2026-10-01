@@ -198,7 +198,7 @@ import {
   transcribeTelegramVoice,
   VoiceNoteError,
 } from '../voice/inbound.ts'
-import { allowance, describe } from './meter.ts'
+import { allowance, describe, officeOfJob } from './meter.ts'
 
 /**
  * The host, for saying out loud. Never the whole url.
@@ -1326,7 +1326,7 @@ async function act(
   // What this will cost, said at the moment of asking rather than after.
   // Grant asked to be told the remaining usage "every time I make a request",
   // and the request is the only moment at which knowing changes his mind.
-  const meter = await allowance(db, kinds[0] ?? 'ask')
+  const meter = await allowance(db, officeOfJob(job.jobId), kinds[0] ?? 'ask')
   const cost = `\n\n${describe(meter)}`
 
   // Written the way a person writes a one-line acknowledgement, not the way a

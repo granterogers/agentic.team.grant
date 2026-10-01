@@ -166,7 +166,8 @@ export function googleRevokeHandler(db: SqlExecutor, fetchImpl: typeof fetch = f
 
       // Both paths. The parked copy is deleted here whatever happened.
       await db.execute(
-        `select app.google_revoke_finish(${outcome.revoked ? 'true' : 'false'},
+        `select app.google_revoke_finish(app.job_office(${lit(job.jobId)}::uuid),
+           ${outcome.revoked ? 'true' : 'false'},
            ${lit(outcome.detail)})`,
       )
 

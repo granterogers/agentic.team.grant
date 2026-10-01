@@ -338,6 +338,7 @@ export interface Reconciled {
 
 export const reconcileVanished = async (
   db: SqlExecutor,
+  office: string,
   remoteNotebookId: string,
   seenSourceIds: readonly string[],
 ): Promise<Reconciled> => {
@@ -346,7 +347,7 @@ export const reconcileVanished = async (
       ? `'{}'::text[]`
       : `array[${seenSourceIds.map((s) => lit(s)).join(', ')}]::text[]`
   const { rows } = await db.execute(`
-    select app.reconcile_vanished('notebooklm', ${lit(remoteNotebookId)}, ${list}) as r
+    select app.reconcile_vanished(${lit(office)}::uuid, 'notebooklm', ${lit(remoteNotebookId)}, ${list}) as r
   `)
   const raw = rows[0]?.r
   const r = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {})) as Record<string, unknown>
@@ -490,8 +491,20 @@ export const runSync = async (deps: SyncDeps): Promise<SyncOutcome> => {
         if (result === 'changed') counters.sourcesChanged += 1
       }
 
+      /*
+        The office is the project's own, read off the row this very cycle just ensured - never off the remote
+        notebook. A reconcile marks and archives documents, so it runs inside the one office that holds them.
+      */
+      const projectOffice = String(
+        (
+          await db.execute(
+            `select office_id from public.projects where project_id = ${lit(projectId)}::uuid`,
+          )
+        ).rows[0]?.office_id,
+      )
       const reconciled = await reconcileVanished(
         db,
+        projectOffice,
         notebook.id,
         sources.map((s) => s.remoteSourceId),
       )

@@ -118,7 +118,7 @@ export async function syncOnce(
     const work = asJson(
       (
         await db.execute(
-          `select app.tasks_to_push(${lit(name)}, ${String(opts.limit ?? 200)}) as v`,
+          `select app.tasks_to_push(${lit(opts.office)}::uuid, ${lit(name)}, ${String(opts.limit ?? 200)}) as v`,
         )
       ).rows[0]?.v,
     )
@@ -135,7 +135,9 @@ export async function syncOnce(
         continue
       }
       await provider.remove(ext)
-      await db.execute(`select app.task_delete_pushed(${lit(d.id)}::uuid, ${lit(name)})`)
+      await db.execute(
+        `select app.task_delete_pushed(${lit(opts.office)}::uuid, ${lit(d.id)}::uuid, ${lit(name)})`,
+      )
       deleted += 1
     }
 
@@ -162,7 +164,7 @@ export async function syncOnce(
         const got = await provider.upsert(task)
         await db.execute(`
           select app.task_pushed(
-            ${lit(t.id)}::uuid, ${lit(name)}, ${lit(got.externalId)},
+            ${lit(opts.office)}::uuid, ${lit(t.id)}::uuid, ${lit(name)}, ${lit(got.externalId)},
             ${String(t.revision)}, ${lit(got.externalProjectId)}, ${lit(got.externalRevision)})`)
         pushed += 1
       } catch (error) {
@@ -176,7 +178,7 @@ export async function syncOnce(
         */
         await db
           .execute(`
-            select app.task_push_failed(${lit(t.id)}::uuid, ${lit(name)},
+            select app.task_push_failed(${lit(opts.office)}::uuid, ${lit(t.id)}::uuid, ${lit(name)},
               ${lit(String((error as Error).message).slice(0, 400))})`)
           .catch(() => undefined)
         failed += 1

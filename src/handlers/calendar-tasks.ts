@@ -27,6 +27,10 @@ import { detail, summarise } from '../tools/plan.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/** The office of the CLAIMED job: the diary sync is for one office, and the calendar links it writes are its own. */
+const officeOf = async (db: SqlExecutor, job: Job): Promise<string> =>
+  String((await db.execute(`select app.job_office(${lit(job.jobId)}::uuid) as o`)).rows[0]?.o)
+
 export function calendarTasksHandler(db: SqlExecutor): Handler {
   return {
     kind: 'google.write_calendar_tasks',
@@ -37,7 +41,8 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
       no second description of the work here, which is the only reason this
       can be trusted to match what happens next.
     */
-    plan: async (): Promise<Plan> => (await planTasksForCalendar(db)).plan,
+    plan: async (job: Job): Promise<Plan> =>
+      (await planTasksForCalendar(db, { office: await officeOf(db, job) })).plan,
     handle: async (job: Job): Promise<HandlerOutput> => {
       /*
         The policy, before the diary (#15).
@@ -53,7 +58,8 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
         a category — and this is the same plan the sync carries out, not a
         second description of it.
       */
-      const planned = (await planTasksForCalendar(db)).plan
+      const office = await officeOf(db, job)
+      const planned = (await planTasksForCalendar(db, { office })).plan
       const gate = await governOutward(db, {
         jobId: job.jobId,
         tool: planned.tool,
@@ -79,7 +85,7 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
         } satisfies HandlerOutput
       }
 
-      const outcome = await syncTasksToCalendar(db)
+      const outcome = await syncTasksToCalendar(db, { office })
 
       const moved = outcome.created + outcome.updated + outcome.removed
       if (outcome.ok && moved === 0) {

@@ -360,9 +360,9 @@ section = 'a page is a source'
     begin;
     ${SCRATCH}
     ${MAKE(PROJECT)}
-    ${KEEP('first', `app.record_browser_page(${ID(PROJECT)}, 'https://supplier.example.com/prices', 'Prices', 'Widget A costs forty pounds.', null)`)}
-    ${KEEP('again', `app.record_browser_page(${ID(PROJECT)}, 'https://supplier.example.com/prices', 'Prices, updated', 'Widget A costs forty five pounds.', null)`)}
-    ${KEEP('empty', `app.record_browser_page(${ID(PROJECT)}, 'https://supplier.example.com/empty', 'Nothing', '   ', null)`)}
+    ${KEEP('first', `app.record_browser_page(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'https://supplier.example.com/prices', 'Prices', 'Widget A costs forty pounds.', null)`)}
+    ${KEEP('again', `app.record_browser_page(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'https://supplier.example.com/prices', 'Prices, updated', 'Widget A costs forty five pounds.', null)`)}
+    ${KEEP('empty', `app.record_browser_page(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'https://supplier.example.com/empty', 'Nothing', '   ', null)`)}
     select ${GET('first')} as first, ${GET('again')} as again, ${GET('empty')} as empty,
            (select origin from public.documents
              where document_id = (${GET('first')} ->> 'document_id')::uuid) as origin,

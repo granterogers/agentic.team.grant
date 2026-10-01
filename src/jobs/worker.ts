@@ -553,7 +553,19 @@ export const recoverStalled = async (db: SqlExecutor): Promise<readonly Recovere
     misconfigured trigger cannot fail an import. Deciding happens here, a
     moment later, where a failure costs the decision and not the document.
   */
-  await db.execute('select app.fire_pending_signals(20)').catch(() => undefined)
+  /*
+    A scan that serves every office (0804): it loops the active offices and each fires only its own signals against
+    its own triggers. One office's failure leaves the others' scan alone.
+  */
+  const signalOffices = await db
+    .execute("select office_id from public.offices where state = 'active' and kind <> 'system'")
+    .then((r) => r.rows as { office_id: string }[])
+    .catch(() => [] as { office_id: string }[])
+  for (const o of signalOffices) {
+    await db
+      .execute(`select app.fire_pending_signals('${String(o.office_id)}'::uuid, 20)`)
+      .catch(() => undefined)
+  }
 
   /*
     And CI reservations nothing ever reported against (#17).

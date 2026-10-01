@@ -135,7 +135,15 @@ export function capacityHandler(
       // TypeScript is right that the two do not overlap. The shape is asserted by
       // the SQL above, which names every column.
       const day = (await db.execute(DAY)).rows[0] as unknown as Day
-      const meter = (await db.execute('select app.notebook_allowance() as a')).rows[0] as {
+      /*
+        This report is a DEPLOYMENT duty (the system office owns it), and the NotebookLM account it reports on is the
+        deployment owner's: so a system-office job reports the operator's allowance, and a job of any other office
+        reports that office's own. The ledger is per office (migration 0802), so there is no "everybody's" figure.
+      */
+      const reportOffice = `(select case when o.kind = 'system' then coalesce(app.operator_office(), o.office_id) else o.office_id end
+                from public.offices o where o.office_id = app.job_office('${job.jobId}'::uuid))`
+      const meter = (await db.execute(`select app.notebook_allowance(${reportOffice}) as a`))
+        .rows[0] as {
         a?: {
           window_spent?: number
           window_ceiling?: number

@@ -261,9 +261,9 @@ export async function cases(c: Ctx): Promise<void> {
     'each discovery job is filed under the office that registered the provider',
     `${String(jobs.length)} job(s)`,
   )
-  const insp = async (provider: string, names: string[]) =>
+  const insp = async (office: string, provider: string, names: string[]) =>
     c.db.execute(
-      `select app.record_mcp_tools('${provider}', ${lit(
+      `select app.record_mcp_tools('${office}', '${provider}', ${lit(
         JSON.stringify(
           names.map((n) => ({
             name: n,
@@ -272,13 +272,13 @@ export async function cases(c: Ctx): Promise<void> {
         ),
       )}::jsonb)`,
     )
-  await insp(reg.A?.provider ?? '', [
+  await insp(A, reg.A?.provider ?? '', [
     `search_${tag.A}`,
     'shared_tool',
     'delete_contact',
     'frobnicate',
   ])
-  await insp(reg.B?.provider ?? '', [`search_${tag.B}`, 'shared_tool'])
+  await insp(B, reg.B?.provider ?? '', [`search_${tag.B}`, 'shared_tool'])
   const dtool = async (provider: string, name: string) =>
     String(
       (

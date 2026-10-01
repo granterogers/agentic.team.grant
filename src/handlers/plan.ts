@@ -85,7 +85,7 @@ const recordChannelAuthority = async (
 ): Promise<void> => {
   await db
     .execute(
-      `select app.record_channel_authority(${lit(projectId)}::uuid, null, ${lit(jobId)}::uuid)`,
+      `select app.record_channel_authority(app.job_office(${lit(jobId)}::uuid), ${lit(projectId)}::uuid, null, ${lit(jobId)}::uuid)`,
     )
     .catch(() => undefined)
 }

@@ -73,7 +73,12 @@ export function remindersHandler(db: SqlExecutor): Handler {
   return {
     kind: 'tasks.remind',
     handle: async (job: Job): Promise<HandlerOutput> => {
-      const raw = (await db.execute('select app.reminders_due() as r')).rows[0] as
+      /*
+        One office's reminders: the CLAIMED job's. The duty is a responsibility of one office, and every office has
+        its own, so nobody's reminder is sent from, or marked by, somebody else's tick.
+      */
+      const office = `app.job_office('${job.jobId.replace(/'/g, "''")}'::uuid)`
+      const raw = (await db.execute(`select app.reminders_due(${office}) as r`)).rows[0] as
         | { r?: unknown }
         | undefined
       /*
@@ -94,7 +99,7 @@ export function remindersHandler(db: SqlExecutor): Handler {
       */
       if (due.length > 0) {
         const ids = due.map((d) => `'${d.id.replace(/'/g, "''")}'::uuid`).join(',')
-        await db.execute(`select app.reminders_sent(array[${ids}])`)
+        await db.execute(`select app.reminders_sent(${office}, array[${ids}])`)
       }
 
       return {

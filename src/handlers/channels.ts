@@ -145,7 +145,9 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
         // A database without the authority function (a rolled-back migration) means nobody can be said to have
         // authorised it, so it ASKS rather than failing the sweep.
         const authority = (await db
-          .execute(`select app.channel_authority(${lit(row.id)}::uuid) as a`)
+          .execute(
+            `select app.channel_authority(app.job_office(${lit(job.jobId)}::uuid), ${lit(row.id)}::uuid) as a`,
+          )
           .then((r) => r.rows[0])
           .catch(() => undefined)) as { a?: unknown } | undefined
         const a = (typeof authority?.a === 'string' ? JSON.parse(authority.a) : authority?.a) as
@@ -191,7 +193,7 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
           result.outcome === 'existing')
       ) {
         await db.execute(
-          `select app.consume_channel_authority(${lit(row.id)}::uuid, ${lit(job.jobId)}::uuid)`,
+          `select app.consume_channel_authority(app.job_office(${lit(job.jobId)}::uuid), ${lit(row.id)}::uuid, ${lit(job.jobId)}::uuid)`,
         )
       }
 

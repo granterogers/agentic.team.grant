@@ -38,12 +38,20 @@ export const currentJob = (): string | null => {
   return job !== undefined && UUID.test(job) ? job : null
 }
 
-/** A SQL expression that evaluates to the credential, for splicing into an existing query. */
+/**
+ * A SQL expression that evaluates to the credential, for splicing into an existing query.
+ *
+ * The credential is read ON BEHALF OF an office (migration 0800). Inside a job that is the CLAIMED job's office, so a
+ * Google token is the one that office holds and a deployment-level secret is refused to an office that does not see
+ * the deployment. With no job the worker is acting for the deployment itself, as the system office, which reads the
+ * deployment's own Google. Never an id taken from a request, a payload or a model answer.
+ */
 export const credentialSql = (name: string): string => {
   const job = currentJob()
+  const DEPLOYMENT_OFFICE = 'app.deployment_reader_office()'
   return job === null
-    ? `app.deployment_credential(${lit(name)}, null, null, true)`
-    : `app.deployment_credential(${lit(name)}, null, ${lit(job)}::uuid, false)`
+    ? `app.deployment_credential(${DEPLOYMENT_OFFICE}, ${lit(name)}, null, null, true)`
+    : `app.deployment_credential(app.job_office(${lit(job)}::uuid), ${lit(name)}, null, ${lit(job)}::uuid, false)`
 }
 
 /** One credential, or null when the vault holds none. A refusal throws: it is not an absence. */

@@ -225,22 +225,32 @@ check(
   (await channelsFor(D)) === 0 && (await questionsFor(D)) === 1,
   `${String(await questionsFor(D))} question(s)`,
 )
+// The authority is recorded inside the office that holds the project (migration 0804).
+const dOffice = `(select office_id from public.projects where project_id = ${lit(D)}::uuid)`
 const dutyTry = json(
   (
     await one(
-      `select app.record_channel_authority(${lit(D)}::uuid, null, ${lit((await w.dutyJob('office.provision_channels', D)).jobId)}::uuid) as r`,
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, null, ${lit((await w.dutyJob('office.provision_channels', D)).jobId)}::uuid) as r`,
     )
   ).r,
 )
 const machineTry = json(
-  (await one(`select app.record_channel_authority(${lit(D)}::uuid, 'verify-operator', null) as r`))
-    .r,
+  (
+    await one(
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, 'verify-operator', null) as r`,
+    )
+  ).r,
 )
 const strangerTry = json(
-  (await one(`select app.record_channel_authority(${lit(D)}::uuid, 'mallory', null) as r`)).r,
+  (
+    await one(
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, 'mallory', null) as r`,
+    )
+  ).r,
 )
 const nobodyTry = json(
-  (await one(`select app.record_channel_authority(${lit(D)}::uuid, null, null) as r`)).r,
+  (await one(`select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, null, null) as r`))
+    .r,
 )
 check(
   'a duty job, a test member, a stranger and nobody each produce no authority',
@@ -252,7 +262,7 @@ const personTurn = await w.personTurn()
 const planTry = json(
   (
     await one(
-      `select app.record_channel_authority(${lit(D)}::uuid, null, ${lit(personTurn)}::uuid) as r`,
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, null, ${lit(personTurn)}::uuid) as r`,
     )
   ).r,
 )
@@ -274,7 +284,7 @@ const forwardedNow =
 const forwardedTry = json(
   (
     await one(
-      `select app.record_channel_authority(${lit(D)}::uuid, null, ${lit(forwardedTurn)}::uuid) as r`,
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, null, ${lit(forwardedTurn)}::uuid) as r`,
     )
   ).r,
 )

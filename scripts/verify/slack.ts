@@ -1380,12 +1380,23 @@ record(
 // left first could never rename, and the rename check would fail for a reason
 // that has nothing to do with renaming.
 
+// The channel bookkeeping is the office of the channel's own project (0804), read off the mapping.
+const channelOffice = String(
+  (
+    await one<{ office_id: string }>(
+      `select p.office_id from public.slack_channel_map m
+         join public.projects p on p.project_id = m.project_id
+        where m.channel_id = ${lit(CHANNEL)}`,
+    )
+  )?.office_id,
+)
+
 const NEW_NAME = `${created.channelName}-renamed`
 let renameNoticed = false
 let renameError = ''
 try {
   await slack.call('conversations.rename', { channel: CHANNEL, name: NEW_NAME })
-  renameNoticed = await office.recordRename(CHANNEL, NEW_NAME)
+  renameNoticed = await office.recordRename(channelOffice, CHANNEL, NEW_NAME)
 } catch (error) {
   renameError = (error as Error).message.slice(0, 80)
 }
@@ -1462,7 +1473,7 @@ record(
   `${stillReaches.outcome} error=${String(stillReaches.errorCode)}`,
   stillReaches.outcome === 'sent',
 )
-await office.recordRemoval(CHANNEL)
+await office.recordRemoval(channelOffice, CHANNEL)
 const removalRecorded = await one<{ bot_present: boolean; active: boolean }>(
   `select bot_present, active from public.slack_channel_map where channel_id = ${lit(CHANNEL)}`,
 )
@@ -1478,7 +1489,7 @@ record(
 // `conversations.invite` refuses an inviter who is not in the channel. What is
 // tested here is therefore not recovery — it is that the system reports which
 // human action is required instead of retrying something that cannot work.
-const rejoin = await office.rejoin(CHANNEL)
+const rejoin = await office.rejoin(channelOffice, CHANNEL)
 record(
   'a bot removed from a channel gets itself back in — the scope Grant installed on 2026-09-05',
   `rejoin=${rejoin}`,
