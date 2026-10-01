@@ -84,6 +84,11 @@ export async function cases(c: Ctx): Promise<void> {
   const r3 = await post(ua, chB, t3, TEAM_B)
   c.check(r3.status === 200 && String(r3.body.ignored ?? '').length > 0 && (await stored(t3)).length === 0, 'a member of one office posting in another office\'s project channel is acknowledged and stored nowhere', JSON.stringify(r3.body).slice(0, 80))
 
+  // ...nor in a channel of B's workspace that maps to no project at all: the installation is B's, whatever the channel.
+  const t3b = `slack A into B's unmapped room ${run}`
+  const r3b = await post(ua, `C0Z${run.toUpperCase()}ZZ`, t3b, TEAM_B)
+  c.check(r3b.status === 200 && String(r3b.body.ignored ?? '').length > 0 && (await stored(t3b)).length === 0, 'and not in an unmapped channel of another office\'s workspace either', JSON.stringify(r3b.body).slice(0, 80))
+
   // ---- a stranger is nobody ------------------------------------------------------------------------------------------------------------
   const t4 = `slack stranger ${run}`
   const r4 = await post(stranger, chA, t4)
