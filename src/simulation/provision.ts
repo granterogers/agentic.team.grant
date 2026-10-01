@@ -284,7 +284,11 @@ export const sweepHarnessWork = async (
   for (const row of rows as { id: string }[]) {
     // One at a time and never fatal: a job whose tasks a person has since
     // touched is one the undo will decline, and declining is correct.
-    await db.execute(`select app.undo_tasks_from_job(${lit(row.id)}::uuid)`).catch(() => undefined)
+    await db
+      .execute(
+        `select app.undo_tasks_from_job(app.job_office(${lit(row.id)}::uuid), ${lit(row.id)}::uuid)`,
+      )
+      .catch(() => undefined)
   }
 
   /*

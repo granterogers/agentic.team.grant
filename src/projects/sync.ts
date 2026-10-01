@@ -521,6 +521,8 @@ export const runSync = async (deps: SyncDeps): Promise<SyncOutcome> => {
         if (result === 'changed') counters.sourcesChanged += 1
       }
 
+      // A reconcile marks and archives documents, so it runs inside the one office that holds them: the cycle's own,
+      // which is also the office ensureProject found or created the project in - never one named by the remote notebook.
       const reconciled = await reconcileVanished(
         db,
         office,

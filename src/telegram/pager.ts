@@ -253,7 +253,8 @@ export class TelegramPager {
         // Scoped to this bot (0097). A chat id is the same number across every
         // bot Grant has opened, so an unscoped mark would silence the whole
         // team because one director was blocked.
-        `select app.mark_telegram_undeliverable(${lit(chatId)}, ${lit(result.errorCode)}, ${lit(this.options.botId)}) as marked`,
+        // And to the office of the job that was being paged for (0804): a chat belongs to one office.
+        `select app.mark_telegram_undeliverable(app.job_office(${lit(input.job.jobId)}::uuid), ${lit(chatId)}, ${lit(result.errorCode)}, ${lit(this.options.botId)}) as marked`,
       )
     }
 

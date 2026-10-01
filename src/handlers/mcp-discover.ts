@@ -109,7 +109,7 @@ export function mcpDiscoverHandler(deps: McpDiscoverDeps): Handler {
 
       const recorded = (
         await db.execute(
-          `select app.record_mcp_tools(${lit(row.id)}::uuid, ${json(found.tools)}::jsonb) as r`,
+          `select app.record_mcp_tools(app.job_office(${lit(job.jobId)}::uuid), ${lit(row.id)}::uuid, ${json(found.tools)}::jsonb) as r`,
         )
       ).rows[0] as { r?: unknown } | undefined
       const result = (typeof recorded?.r === 'string' ? JSON.parse(recorded.r) : recorded?.r) as {

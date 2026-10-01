@@ -350,7 +350,7 @@ section = 'what the office notices by itself'
     insert into r select 'old', ${SIGNAL('doc-stale')};
     update public.signals set received_at = app.now_utc() - interval '3 hours'
      where external_ref = 'doc-stale';
-    insert into r select 'swept', app.fire_pending_signals(20);
+    insert into r select 'swept', app.fire_pending_signals(app.test_office(), 20);
     select (select count(*) from public.trigger_firings f
              join public.signals s using (signal_id) where s.external_ref = 'doc-fresh') as fresh,
            (select count(*) from public.trigger_firings f

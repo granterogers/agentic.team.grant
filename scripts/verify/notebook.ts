@@ -372,6 +372,8 @@ ok(
 console.log('\nadopting what the notebook made (#260)')
 
 {
+  // An artifact is adopted inside the office that holds the project (migration 0802).
+  const ARTIFACT_OFFICE = `(select office_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)})`
   const got = await one(`
     begin;
     insert into public.projects (name, slug, status)
@@ -380,19 +382,23 @@ console.log('\nadopting what the notebook made (#260)')
     -- One Grant made, finished, with a link. One finished with NO link, which
     -- is the case NotebookLM produces for types it exposes no URL for.
     select app.record_notebook_artifact(
+      ${ARTIFACT_OFFICE},
       (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
       ${lit(`nb-${run}`)}, 'a1', 'audio', 'An overview he made himself',
       'https://notebooklm.google.com/notebook/x', 'ready', null);
     select app.record_notebook_artifact(
+      ${ARTIFACT_OFFICE},
       (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
       ${lit(`nb-${run}`)}, 'a2', 'mindmap', 'A mind map', null, 'ready', null);
     select app.record_notebook_artifact(
+      ${ARTIFACT_OFFICE},
       (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
       ${lit(`nb-${run}`)}, 'a3', 'slides', 'A deck', null, 'generating', null);
 
     -- The listing later reports the finished one as pending, which a notebook
     -- does. It must not un-finish it: the CHECK would then strip the URL.
     select app.record_notebook_artifact(
+      ${ARTIFACT_OFFICE},
       (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
       ${lit(`nb-${run}`)}, 'a1', 'audio', 'An overview he made himself', null, 'generating', null);
 

@@ -159,11 +159,11 @@ export class SlackOffice {
    * which one beats returning false, which reads as "transient, try later" and
    * would have a caller retrying something that cannot work.
    */
-  async rejoin(channelId: string): Promise<RejoinOutcome> {
+  async rejoin(office: string, channelId: string): Promise<RejoinOutcome> {
     try {
       await this.slack.call('conversations.join', { channel: channelId })
       await this.db.execute(
-        `select app.record_slack_membership(${lit(channelId)}, true) as changed`,
+        `select app.record_slack_membership(${lit(office)}::uuid, ${lit(channelId)}, true) as changed`,
       )
       return 'rejoined'
     } catch (error) {
@@ -174,15 +174,22 @@ export class SlackOffice {
     }
   }
 
-  /** Note that Slack told us the bot is no longer in a channel. */
-  async recordRemoval(channelId: string): Promise<void> {
-    await this.db.execute(`select app.record_slack_membership(${lit(channelId)}, false) as changed`)
+  /**
+   * Note that Slack told us the bot is no longer in a channel.
+   *
+   * `office` is the office the channel belongs to (0804): the office of the workspace Slack's event came from. A
+   * channel of another office is a channel that is not there.
+   */
+  async recordRemoval(office: string, channelId: string): Promise<void> {
+    await this.db.execute(
+      `select app.record_slack_membership(${lit(office)}::uuid, ${lit(channelId)}, false) as changed`,
+    )
   }
 
   /** Note a rename. The id is the identity; this only corrects the label. */
-  async recordRename(channelId: string, newName: string): Promise<boolean> {
+  async recordRename(office: string, channelId: string, newName: string): Promise<boolean> {
     const { rows } = await this.db.execute(
-      `select app.record_slack_channel_rename(${lit(channelId)}, ${lit(newName)}) as changed`,
+      `select app.record_slack_channel_rename(${lit(office)}::uuid, ${lit(channelId)}, ${lit(newName)}) as changed`,
     )
     return (rows[0] as { changed?: boolean } | undefined)?.changed === true
   }

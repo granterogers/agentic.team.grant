@@ -50,7 +50,10 @@ check(
         .join(', ')}`,
 )
 for (const [fn, call] of [
-  ['deployment_credential', `select public.deployment_credential('google.client_secret', 'grant')`],
+  [
+    'deployment_credential',
+    `select public.deployment_credential(null::uuid, 'google.client_secret', 'grant')`,
+  ],
   ['hq_google_connect_start', `select public.hq_google_connect_start('grant')`],
   ['google_oauth_state_consume', `select public.google_oauth_state_consume('x')`],
   ['vault_inventory', `select * from public.vault_inventory()`],

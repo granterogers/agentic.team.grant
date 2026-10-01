@@ -208,8 +208,8 @@ try {
 
   const recorded = (
     await one(`
-      select public.record_drive_document(
-        ${lit(projectId)}::uuid, ${lit(FOLDER)}, ${lit(FILE_ID)}, ${lit(TITLE)},
+      select app.record_drive_document(
+        app.test_office(), ${lit(projectId)}::uuid, ${lit(FOLDER)}, ${lit(FILE_ID)}, ${lit(TITLE)},
         null, 'chief-of-staff') as r
     `)
   ).r as { ok?: boolean; document?: string; outcome?: string }
@@ -229,8 +229,8 @@ try {
   */
   const twice = (
     await one(`
-      select public.record_drive_document(
-        ${lit(projectId)}::uuid, ${lit(FOLDER)}, ${lit(FILE_ID)}, ${lit(TITLE)},
+      select app.record_drive_document(
+        app.test_office(), ${lit(projectId)}::uuid, ${lit(FOLDER)}, ${lit(FILE_ID)}, ${lit(TITLE)},
         null, 'chief-of-staff') as r
     `)
   ).r as { document?: string; outcome?: string }
@@ -250,8 +250,8 @@ try {
 
   const attached = (
     await one(`
-      select public.attach_file_to_document(
-        ${lit(documentId)}::uuid, ${lit(storedPath)}, 'application/pdf',
+      select app.attach_file_to_document(
+        app.test_office(), ${lit(documentId)}::uuid, ${lit(storedPath)}, 'application/pdf',
         ${String(bytes.byteLength)}::bigint) as r
     `)
   ).r as { ok?: boolean; bytes?: number }
@@ -279,8 +279,8 @@ try {
 
   const short = (
     await one(`
-      select public.attach_file_to_document(
-        ${lit(documentId)}::uuid, 'some/other/path.pdf', 'application/pdf', 0::bigint) as r
+      select app.attach_file_to_document(
+        app.test_office(), ${lit(documentId)}::uuid, 'some/other/path.pdf', 'application/pdf', 0::bigint) as r
     `)
   ).r as { ok?: boolean; error?: string }
   check(

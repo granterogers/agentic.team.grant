@@ -850,6 +850,8 @@ console.log('\nwhat happens when a source vanishes from its listing (ADR-0040)')
     after the rollback finds neither the rows nor the table.
   */
   const parent = `nb-vanish-${run}`
+  // The reconciler runs inside the office that holds the documents (migration 0801): the project's own.
+  const OFFICE_OF = `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
   const asJsonHere = (v: unknown): Record<string, unknown> =>
     (typeof v === 'string' ? JSON.parse(v) : (v ?? {})) as Record<string, unknown>
   const drive = await all(`
@@ -863,10 +865,10 @@ console.log('\nwhat happens when a source vanishes from its listing (ADR-0040)')
              encode(sha256(('body ' || r.ref)::bytea), 'hex'), 6, app.now_utc()
         from (values ('a'), ('b'), ('c'), ('d')) r(ref);
       insert into vanish values
-        ('first',  app.reconcile_vanished('notebooklm', ${lit(parent)}, array['a','b','c'])),
-        ('second', app.reconcile_vanished('notebooklm', ${lit(parent)}, array['a','b','c'])),
-        ('back',   app.reconcile_vanished('notebooklm', ${lit(parent)}, array['a','b','c','d'])),
-        ('wipe',   app.reconcile_vanished('notebooklm', ${lit(parent)}, array[]::text[])),
+        ('first',  app.reconcile_vanished(${OFFICE_OF}, 'notebooklm', ${lit(parent)}, array['a','b','c'])),
+        ('second', app.reconcile_vanished(${OFFICE_OF}, 'notebooklm', ${lit(parent)}, array['a','b','c'])),
+        ('back',   app.reconcile_vanished(${OFFICE_OF}, 'notebooklm', ${lit(parent)}, array['a','b','c','d'])),
+        ('wipe',   app.reconcile_vanished(${OFFICE_OF}, 'notebooklm', ${lit(parent)}, array[]::text[])),
         ('states', (select jsonb_object_agg(external_ref, state) from public.documents
                      where external_parent_ref = ${lit(parent)}));
       select k, v from vanish;

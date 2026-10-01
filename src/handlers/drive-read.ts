@@ -117,7 +117,7 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       const recorded = (
         await deps.db.execute(`
           select app.record_drive_document(
-            ${lit(projectId)}::uuid, ${lit(folderId)}, ${lit(fileId)}, ${lit(title)},
+            app.job_office(${lit(job.jobId)}::uuid), ${lit(projectId)}::uuid, ${lit(folderId)}, ${lit(fileId)}, ${lit(title)},
             ${got.text === null ? 'null' : lit(got.text)}, 'chief-of-staff') as r
         `)
       ).rows[0] as { r?: { ok?: boolean; document?: string; outcome?: string; error?: string } }
@@ -160,7 +160,7 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       const attached = (
         await deps.db.execute(`
           select app.attach_file_to_document(
-            ${lit(doc.document)}::uuid, ${lit(path)}, ${lit(got.mime)},
+            app.job_office(${lit(job.jobId)}::uuid), ${lit(doc.document)}::uuid, ${lit(path)}, ${lit(got.mime)},
             ${String(bytes.byteLength)}::bigint) as r
         `)
       ).rows[0] as { r?: { ok?: boolean; error?: string; already_there?: boolean } }

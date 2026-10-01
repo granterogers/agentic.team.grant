@@ -132,9 +132,10 @@ export async function googleAccess(
 /**
  * Record what happened, so the Connections panel is not guessing.
  *
- * Written under the office the refresh ran for. The table's key is still (service, credential) for the whole
- * deployment, so a row another office already holds is not overwritten: the `do update` only touches a row of the
- * SAME office, and a second office's health is a follow-up to that key (reported, not widened here).
+ * Written under the office the refresh ran for (the caller names it: the claimed job's, or a script's). The table's
+ * key is still (service, credential) for the whole deployment, so a row another office already holds is not
+ * overwritten: the `do update` only touches a row of the SAME office, and a second office's health is a follow-up to
+ * that key (reported, not widened here).
  */
 export async function recordGoogleHealth(
   db: SqlExecutor,

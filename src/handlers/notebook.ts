@@ -52,7 +52,7 @@ import {
 } from '../notebook/actions.ts'
 import { nothingToDo, type Plan } from '../tools/plan.ts'
 import { checkApproval, mayStart, mayWrite, refusedApproval } from './approval-gate.ts'
-import { allowance, deferUntil, describe, record, refused } from './meter.ts'
+import { allowance, deferUntil, describe, officeOfJob, record, refused } from './meter.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -355,7 +355,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         // not taken back, and still about exactly this request.
         const approval = await checkApproval(db, job.jobId)
         if (approval.state === 'none') {
-          const forecast = await allowance(db, kind)
+          const forecast = await allowance(db, officeOfJob(job.jobId), kind)
           // The notebook the generation would land in is part of what he is approving: recorded on the
           // request before the question, so it is in the fingerprint and a later change is a mismatch.
           // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
@@ -425,7 +425,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         // compute-based since 2 September and cannot be queried, so this is our
         // own ledger — and the honest thing to do when it says no is to
         // schedule the work rather than refuse it.
-        const meter = await allowance(db, kind)
+        const meter = await allowance(db, officeOfJob(job.jobId), kind)
         if (!meter.allowed) {
           const when = deferUntil(meter)
           // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
@@ -504,8 +504,8 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           if (error instanceof NotebookActionError && error.quota) {
             // The measurement. Refused having spent what we spent, so the real
             // ceiling is at most that — and 0078 lowers ours to match, once.
-            const learned = await refused(db, kind, error.detail)
-            const when = deferUntil(await allowance(db, kind))
+            const learned = await refused(db, officeOfJob(job.jobId), kind, error.detail)
+            const when = deferUntil(await allowance(db, officeOfJob(job.jobId), kind))
             // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
             await db.execute(`
               select app.enqueue_child(
@@ -531,7 +531,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           }
           throw error
         }
-        await record(db, kind, {
+        await record(db, officeOfJob(job.jobId), kind, {
           notebook: notebook.id,
           projectId: job.projectId,
           jobId: job.jobId,
@@ -651,7 +651,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           return await refusedApproval(db, job, `add ${url} to the notebook`, mayAdd.why)
         }
 
-        const meter = await allowance(db, 'add_url')
+        const meter = await allowance(db, officeOfJob(job.jobId), 'add_url')
         if (!meter.allowed) {
           const when = deferUntil(meter)
           // raw-sql[2]: keyed by the claimed job; the subselects read the parent pointer and payload of the job the worker holds.
@@ -708,14 +708,14 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             await failedCleanly(db, addOn, addName, error.detail)
           }
           if (error instanceof NotebookActionError && error.quota) {
-            await refused(db, 'add_url', error.detail)
+            await refused(db, officeOfJob(job.jobId), 'add_url', error.detail)
             throw new Error(
               `Google refused the source: the notebook's usage limit is spent. ${error.detail}`,
             )
           }
           throw error
         }
-        await record(db, 'add_url', {
+        await record(db, officeOfJob(job.jobId), 'add_url', {
           notebook: notebook.id,
           projectId: job.projectId,
           jobId: job.jobId,
@@ -831,7 +831,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         await finishStep(db, pushOn, pushName, { source: sourceId ?? '' })
         // Cheap, but not free: Google processes a source on the way in, and a
         // meter that counts only the expensive things drifts (0078).
-        await record(db, 'add_text', {
+        await record(db, officeOfJob(job.jobId), 'add_text', {
           notebook: notebook.id,
           projectId: job.projectId,
           jobId: job.jobId,
@@ -1078,7 +1078,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           }
         }
         const answer = await actions.ask(notebook.id, question)
-        await record(db, 'ask', {
+        await record(db, officeOfJob(job.jobId), 'ask', {
           notebook: notebook.id,
           projectId: job.projectId,
           jobId: job.jobId,
@@ -1157,7 +1157,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           await db
             .execute(`
               select app.record_notebook_artifact(
-                ${lit(projectId)}::uuid, ${lit(notebook.id)}, ${lit(a.artifactId)},
+                app.job_office(${lit(job.jobId)}::uuid), ${lit(projectId)}::uuid, ${lit(notebook.id)}, ${lit(a.artifactId)},
                 ${lit(officeKind(a.kind))}, ${lit(a.title ?? '')},
                 ${url === null ? 'null' : lit(url)}, ${lit(state)}, null)
             `)

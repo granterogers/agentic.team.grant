@@ -119,10 +119,16 @@ const proj = await one(`
   returning project_id
 `)
 const pid = String(proj.project_id)
+// Every call below is made in the office that holds this project (migration 0801), whichever office the bare insert
+// above landed it in.
+const OFFICE = String(
+  (await one(`select office_id from public.projects where project_id = ${lit(pid)}::uuid`))
+    .office_id,
+)
 
 {
   const bad = await one(`
-    select public.attach_drive_folder(${lit(pid)}::uuid, 'not a link at all') as r
+    select app.attach_drive_folder(${lit(OFFICE)}::uuid, ${lit(pid)}::uuid, 'not a link at all') as r
   `)
   ok(
     'a link that is not one is refused, with the shape of a real one',
@@ -132,7 +138,7 @@ const pid = String(proj.project_id)
 }
 
 const attached = await one(`
-  select public.attach_drive_folder(${lit(pid)}::uuid,
+  select app.attach_drive_folder(${lit(OFFICE)}::uuid, ${lit(pid)}::uuid,
     ${lit(`https://drive.google.com/drive/folders/${FOLDER}?usp=drive_link`)},
     'Course material') as r
 `)
@@ -161,7 +167,7 @@ ok(
 
 {
   const again = await one(`
-    select public.attach_drive_folder(${lit(pid)}::uuid,
+    select app.attach_drive_folder(${lit(OFFICE)}::uuid, ${lit(pid)}::uuid,
       ${lit(`https://drive.google.com/drive/folders/${FOLDER}`)}) as r
   `)
   ok(
@@ -178,7 +184,7 @@ ok(
     returning project_id
   `)
   const clash = await one(`
-    select public.attach_drive_folder(${lit(String(other.project_id))}::uuid,
+    select app.attach_drive_folder(${lit(OFFICE)}::uuid, ${lit(String(other.project_id))}::uuid,
       ${lit(`https://drive.google.com/drive/folders/${FOLDER}`)}) as r
   `)
   // Two projects watching one folder would both ask about every arrival, which
@@ -211,7 +217,7 @@ ok(
   // The project is `paused`, so it must not be polled — a paused project is
   // one Grant has stepped away from.
   const due = await all(
-    `select folder_id from app.drive_folders_to_check(0) where folder_id = ${lit(FOLDER)}`,
+    `select folder_id from app.drive_folders_to_check(${lit(OFFICE)}::uuid, 0) where folder_id = ${lit(FOLDER)}`,
   )
   ok('a paused project is not watched', due.length === 0)
 
@@ -219,13 +225,13 @@ ok(
     `update public.projects set status = 'active' where project_id = ${lit(pid)}::uuid`,
   )
   const nowDue = await all(
-    `select folder_id, primed from app.drive_folders_to_check(0) where folder_id = ${lit(FOLDER)}`,
+    `select folder_id, primed from app.drive_folders_to_check(${lit(OFFICE)}::uuid, 0) where folder_id = ${lit(FOLDER)}`,
   )
   ok('an active one is', nowDue.length === 1)
 
   // The rule that has had to be written down three times today.
   const anyFixture = await all(`
-    select 1 from app.drive_folders_to_check(0) f
+    select 1 from app.drive_folders_to_check(${lit(OFFICE)}::uuid, 0) f
      join public.projects p on p.project_id = f.project_id where p.is_fixture
   `)
   ok('and no fixture project is ever watched', anyFixture.length === 0)
@@ -233,7 +239,7 @@ ok(
 
 {
   await db.execute(`
-    select app.drive_watch_checked(${lit(String(rec.attachment_id))}::uuid,
+    select app.drive_watch_checked(${lit(OFFICE)}::uuid, ${lit(String(rec.attachment_id))}::uuid,
       ${lit(`token-${run}`)}, false, null)
   `)
   const w = await one(
@@ -244,7 +250,7 @@ ok(
   ok('and stores the cursor', String(w.page_token) === `token-${run}`)
 
   const notDue = await all(
-    `select 1 from app.drive_folders_to_check(10) where folder_id = ${lit(FOLDER)}`,
+    `select 1 from app.drive_folders_to_check(${lit(OFFICE)}::uuid, 10) where folder_id = ${lit(FOLDER)}`,
   )
   ok('and it is not looked at again straight away', notDue.length === 0)
 }
@@ -252,12 +258,12 @@ ok(
 {
   for (let i = 0; i < 5; i++) {
     await db.execute(`
-      select app.drive_watch_checked(${lit(String(rec.attachment_id))}::uuid, null, false,
+      select app.drive_watch_checked(${lit(OFFICE)}::uuid, ${lit(String(rec.attachment_id))}::uuid, null, false,
         'drive 403: insufficient permissions')
     `)
   }
   const stopped = await all(
-    `select 1 from app.drive_folders_to_check(0) where folder_id = ${lit(FOLDER)}`,
+    `select 1 from app.drive_folders_to_check(${lit(OFFICE)}::uuid, 0) where folder_id = ${lit(FOLDER)}`,
   )
   // A folder that cannot be read must stop being polled and say why, rather
   // than burning a request every ten minutes for ever.
@@ -269,7 +275,7 @@ ok(
   ok('and says why', String(w.last_error ?? '').includes('403'))
 
   await db.execute(`
-    select app.drive_watch_checked(${lit(String(rec.attachment_id))}::uuid,
+    select app.drive_watch_checked(${lit(OFFICE)}::uuid, ${lit(String(rec.attachment_id))}::uuid,
       ${lit(`token-${run}`)}, false, null)
   `)
   const w2 = await one(
@@ -309,7 +315,7 @@ ok(
   ok('detaching a folder takes its cursor with it', gone.length === 0)
 
   const back = await one(`
-    select public.attach_drive_folder(${lit(pid)}::uuid,
+    select app.attach_drive_folder(${lit(OFFICE)}::uuid, ${lit(pid)}::uuid,
       ${lit(`https://drive.google.com/drive/folders/${FOLDER}`)}) as r
   `)
   const fresh = await one(`
@@ -443,6 +449,8 @@ await db.execute(`delete from public.projects where slug like ${lit(`driveproof%
 */
 {
   const g = `drive-gone-${run}`
+  // The office that holds this subject: the listing, the poll and the reconciler all run inside it (migration 0801).
+  const GONE_OFFICE = `(select office_id from public.projects where slug = ${lit(g)})`
   const rows = ((
     await db.execute(`
     begin;
@@ -488,11 +496,13 @@ await db.execute(`delete from public.projects where slug like ${lit(`driveproof%
       -- listed it. The EXISTS in drive_folders_to_check is what this proves.
       insert into gone_res
       select 'due', jsonb_agg(jsonb_build_object('folder', folder_id, 'due', reconcile_due))
-        from app.drive_folders_to_check(0) where folder_id = ${lit(`folder-${run}`)};
+        from app.drive_folders_to_check(${GONE_OFFICE}, 0)
+         where folder_id = ${lit(`folder-${run}`)};
 
       -- Pass one: two of the three are still there. Marked, never hidden.
       insert into gone_res
       select 'pass1', jsonb_build_array(app.drive_reconcile(
+        ${GONE_OFFICE},
         (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
         ${lit(`folder-${run}`)},
         array[${lit(`f-stays-${run}`)}, ${lit(`f-stays2-${run}`)}, ${lit(`f-stays3-${run}`)}, ${lit(`f-stays4-${run}`)}]::text[]));
@@ -504,6 +514,7 @@ await db.execute(`delete from public.projects where slug like ${lit(`driveproof%
       -- Pass two: still absent. Strike two archives it.
       insert into gone_res
       select 'pass2', jsonb_build_array(app.drive_reconcile(
+        ${GONE_OFFICE},
         (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
         ${lit(`folder-${run}`)},
         array[${lit(`f-stays-${run}`)}, ${lit(`f-stays2-${run}`)}, ${lit(`f-stays3-${run}`)}, ${lit(`f-stays4-${run}`)}]::text[]));
@@ -516,6 +527,7 @@ await db.execute(`delete from public.projects where slug like ${lit(`driveproof%
       -- converging, which 0465 learned by driving it.
       insert into gone_res
       select 'pass3', jsonb_build_array(app.drive_reconcile(
+        ${GONE_OFFICE},
         (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
         ${lit(`folder-${run}`)},
         array[${lit(`f-stays-${run}`)}, ${lit(`f-stays2-${run}`)}, ${lit(`f-stays3-${run}`)}, ${lit(`f-stays4-${run}`)}, ${lit(`f-back-${run}`)}]::text[]));
@@ -527,6 +539,7 @@ await db.execute(`delete from public.projects where slug like ${lit(`driveproof%
       -- A listing that FAILED is not an empty folder.
       insert into gone_res
       select 'failed', jsonb_build_array(app.drive_reconcile(
+        ${GONE_OFFICE},
         (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
         ${lit(`folder-${run}`)}, array[]::text[], 'drive 503: unavailable'));
       insert into gone_res
@@ -536,6 +549,7 @@ await db.execute(`delete from public.projects where slug like ${lit(`driveproof%
       -- The blast-radius guard, on an honest but empty listing.
       insert into gone_res
       select 'wipe', jsonb_build_array(app.drive_reconcile(
+        ${GONE_OFFICE},
         (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
         ${lit(`folder-${run}`)}, array[]::text[]));
       insert into gone_res
@@ -548,7 +562,8 @@ await db.execute(`delete from public.projects where slug like ${lit(`driveproof%
       -- And no longer due, now that it has been listed today.
       insert into gone_res
       select 'due2', jsonb_agg(jsonb_build_object('due', reconcile_due))
-        from app.drive_folders_to_check(0) where folder_id = ${lit(`folder-${run}`)};
+        from app.drive_folders_to_check(${GONE_OFFICE}, 0)
+         where folder_id = ${lit(`folder-${run}`)};
 
       select k, v from gone_res;
     rollback;

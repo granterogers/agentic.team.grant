@@ -156,7 +156,7 @@ const arc = await one(`
      where job_id = v_job and title = ${lit(`Book the venue ${run}`)};
     update public.tasks set state = 'doing' where task_id = v_one;
 
-    v_undo := app.undo_tasks_from_job(v_job);
+    v_undo := app.undo_tasks_from_job(app.test_office(), v_job);
     insert into _r values ('undo', v_undo::text);
     insert into _r values ('left',
       (select count(*)::text from public.tasks where job_id = v_job));
@@ -164,7 +164,7 @@ const arc = await one(`
       (select count(*)::text from public.tasks where task_id = v_one));
 
     -- And undoing again takes nothing, rather than reporting a second success.
-    insert into _r values ('again', app.undo_tasks_from_job(v_job)::text);
+    insert into _r values ('again', app.undo_tasks_from_job(app.test_office(), v_job)::text);
   end $$;
   select (select v from _r where k = 'made')         as made,
          (select v from _r where k = 'undo')         as undo,

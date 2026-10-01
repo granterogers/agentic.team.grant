@@ -56,6 +56,11 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
     kind: 'drive.watch',
     handle: async (job: Job): Promise<HandlerOutput> => {
       /*
+        The office this poll is for: the CLAIMED job's. The duty is a responsibility of one office (they are created
+        per office), so it lists, checks and reconciles that office's folders only.
+      */
+      const office = `app.job_office(${lit(job.jobId)}::uuid)`
+      /*
         `looked` is not in scope yet where `quiet` is defined, so the count is
         passed in. Declaring the shape without it would mean a `looked_at` that
         is always zero -- a structured field that is worse than no field, since
@@ -81,7 +86,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         model: null,
       })
 
-      const folders = (await db.execute('select * from app.drive_folders_to_check(10)'))
+      const folders = (await db.execute(`select * from app.drive_folders_to_check(${office}, 10)`))
         .rows as unknown as Watched[]
       if (folders.length === 0) return quiet('No Drive folders are attached to a live project.')
 
@@ -92,7 +97,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         // and stops after five.
         for (const f of folders) {
           await db.execute(
-            `select app.drive_watch_checked(${lit(f.attachment_id)}::uuid, null, false, ${lit(access.reason)})`,
+            `select app.drive_watch_checked(${office}, ${lit(f.attachment_id)}::uuid, null, false, ${lit(access.reason)})`,
           )
         }
         return quiet(`Cannot reach Drive: ${access.reason}`)
@@ -122,7 +127,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         if (!f.primed || f.page_token === null) {
           const token = await startToken(access, fetchImpl)
           await db.execute(`
-            select app.drive_watch_checked(${lit(f.attachment_id)}::uuid,
+            select app.drive_watch_checked(${office}, ${lit(f.attachment_id)}::uuid,
               ${token === null ? 'null' : lit(token)}, false,
               ${token === null ? lit('could not take a start token') : 'null'})
           `)
@@ -132,7 +137,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         const changes = await changesIn(access, f.folder_id, f.page_token, fetchImpl)
         if (changes.error !== null) {
           await db.execute(`
-            select app.drive_watch_checked(${lit(f.attachment_id)}::uuid, null, false,
+            select app.drive_watch_checked(${office}, ${lit(f.attachment_id)}::uuid, null, false,
               ${lit(changes.error)})
           `)
           continue
@@ -216,7 +221,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         if (f.reconcile_due) {
           const listed = await listFolder(access, f.folder_id, fetchImpl)
           await db.execute(`
-            select app.drive_reconcile(${lit(f.attachment_id)}::uuid, ${lit(f.folder_id)},
+            select app.drive_reconcile(${office}, ${lit(f.attachment_id)}::uuid, ${lit(f.folder_id)},
               array[${listed.ids.map((i) => lit(i)).join(', ')}]::text[],
               ${listed.error === null ? 'null' : lit(listed.error)})
           `)
@@ -224,7 +229,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
 
         if (arrived.length === 0) {
           await db.execute(`
-            select app.drive_watch_checked(${lit(f.attachment_id)}::uuid,
+            select app.drive_watch_checked(${office}, ${lit(f.attachment_id)}::uuid,
               ${lit(changes.nextToken ?? f.page_token)}, false, null)
           `)
           continue
@@ -304,7 +309,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           }
           took += arrived.length
           await db.execute(`
-            select app.drive_watch_checked(${lit(f.attachment_id)}::uuid,
+            select app.drive_watch_checked(${office}, ${lit(f.attachment_id)}::uuid,
               ${lit(changes.nextToken ?? f.page_token)}, false, null)
           `)
           continue
@@ -324,7 +329,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           })
           refused += 1
           await db.execute(`
-            select app.drive_watch_checked(${lit(f.attachment_id)}::uuid,
+            select app.drive_watch_checked(${office}, ${lit(f.attachment_id)}::uuid,
               ${lit(changes.nextToken ?? f.page_token)}, false, null)
           `)
           continue
@@ -400,7 +405,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         asked += 1
 
         await db.execute(`
-          select app.drive_watch_checked(${lit(f.attachment_id)}::uuid,
+          select app.drive_watch_checked(${office}, ${lit(f.attachment_id)}::uuid,
             ${lit(changes.nextToken ?? f.page_token)}, true, null)
         `)
       }

@@ -42,12 +42,24 @@ const NAMES = [
 const created: string[] = []
 const config: [string, string | null][] = []
 
-/** Ask the PostgREST door exactly as an edge function does (the public wrapper, service role). */
-const door = async (name: string, operator: string | null, job: string | null) => {
+/** The deployment's own (operator's) office: the office an operator, or the deployment's own duty, reads as. */
+let operatorOffice = ''
+
+/**
+ * Ask the PostgREST door exactly as an edge function does (the public wrapper, service role). Since 0800 the door
+ * says WHICH OFFICE the read is on behalf of; by default that is the operator's, which is what the gateway passes
+ * for a verified operator.
+ */
+const door = async (
+  name: string,
+  operator: string | null,
+  job: string | null,
+  office: string = operatorOffice,
+) => {
   try {
     const r = await one(
       `set local application_name = 'PostgREST 14.5';
-       select public.deployment_credential(${lit(name)}, ${operator === null ? 'null' : lit(operator)},
+       select public.deployment_credential(${lit(office)}::uuid, ${lit(name)}, ${operator === null ? 'null' : lit(operator)},
          ${job === null ? 'null' : `${lit(job)}::uuid`}) as v`,
     )
     return { ok: true as const, value: r.v === null ? null : String(r.v) }
@@ -83,6 +95,7 @@ try {
      values (${lit(`${SECOND}@example.com`)}, 'p1 credentials proof', ${lit(SECOND)}, 'person') on conflict do nothing`,
   )
   await registerBot(db)
+  operatorOffice = String((await one(`select app.operator_office() as o`)).o)
 
   // ---- 1. the database resolver ---------------------------------------------------------------------------
   const refused = (r: { ok: boolean; error?: string }) =>
@@ -135,15 +148,16 @@ try {
       unknown.error === unclassified.error,
     'identical refusal',
   )
+  const SYSTEM_OFFICE = 'app.deployment_reader_office()'
   const sys = await one(
-    `select app.deployment_credential('google.refresh_token', null, null, true) as v`,
+    `select app.deployment_credential(${SYSTEM_OFFICE}, 'google.refresh_token', null, null, true) as v`,
   )
   check(
     'the worker acting for the deployment (system) is served - and that argument is not on the PostgREST door',
     String(sys.v) === (await stored('google.refresh_token')) &&
       !(
         await one(
-          `select pg_get_function_arguments('public.deployment_credential(text,text,uuid)'::regprocedure) as a`,
+          `select pg_get_function_arguments('public.deployment_credential(uuid,text,text,uuid)'::regprocedure) as a`,
         )
       ).a
         ?.toString()
@@ -151,9 +165,9 @@ try {
     'system only via app',
   )
   const svc =
-    await one(`select has_function_privilege('service_role', 'app.deployment_credential(text,text,uuid,boolean)', 'execute') as s,
-                                has_function_privilege('anon', 'public.deployment_credential(text,text,uuid)', 'execute') as a,
-                                has_function_privilege('authenticated', 'public.deployment_credential(text,text,uuid)', 'execute') as u`)
+    await one(`select has_function_privilege('service_role', 'app.deployment_credential(uuid,text,text,uuid,boolean)', 'execute') as s,
+                                has_function_privilege('anon', 'public.deployment_credential(uuid,text,text,uuid)', 'execute') as a,
+                                has_function_privilege('authenticated', 'public.deployment_credential(uuid,text,text,uuid)', 'execute') as u`)
   check(
     'service_role cannot execute the system form; anon and authenticated cannot reach the wrapper',
     svc.s === false && svc.a === false && svc.u === false,
@@ -182,11 +196,12 @@ try {
     (await one(`select job_kind from public.responsibilities where slug = ${lit(dutySlug)}`))
       .job_kind,
   )
-  const insertJob = async (kind: string, requestedBy: string, extra = '') =>
+  // A duty is the deployment's own work, so it runs in the deployment's own office (0800 binds a job to ITS office).
+  const insertJob = async (kind: string, requestedBy: string, office: string = operatorOffice) =>
     String(
       (
-        await one(`insert into public.jobs (kind, requested_by, idempotency_key, correlation_id ${extra === '' ? '' : ''})
-      values (${lit(kind)}, ${lit(requestedBy)}, 'p1c-' || gen_random_uuid(), gen_random_uuid()) returning job_id::text as id`)
+        await one(`insert into public.jobs (kind, requested_by, idempotency_key, correlation_id, office_id)
+      values (${lit(kind)}, ${lit(requestedBy)}, 'p1c-' || gen_random_uuid(), gen_random_uuid(), ${lit(office)}::uuid) returning job_id::text as id`)
       ).id,
     )
   const dutyJob = await insertJob(dutyKind, `duty:${dutySlug}`)
@@ -215,7 +230,15 @@ try {
       (await origin(harnessJob)) === 'harness',
     `${await origin(dutyJob)}/${await origin(grantsTurn)}/${await origin(secondsTurn)}/${await origin(harnessJob)}`,
   )
-  const asJob = (j: string) => door('google.refresh_token', null, j)
+  // A job reads as ITS OWN office. A job that does not exist has none, so it asks as the operator's.
+  const asJob = async (j: string) => {
+    const o = (
+      await db.execute(
+        `select office_id::text as o from public.jobs where job_id = ${lit(j)}::uuid`,
+      )
+    ).rows[0] as { o?: string } | undefined
+    return door('google.refresh_token', null, j, o?.o ?? operatorOffice)
+  }
   check(
     "POSITIVE CONTROL: a duty (the deployment's own work) is served",
     (await asJob(dutyJob)).ok,

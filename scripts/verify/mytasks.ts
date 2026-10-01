@@ -1181,7 +1181,7 @@ console.log('\nreminders (#259, migration 0512)')
 
   // Read it the way the handler does, through the same function.
   const readDue = async (): Promise<{ id: string }[]> => {
-    const raw = (await one(`select app.reminders_due() as r`)).r
+    const raw = (await one(`select app.reminders_due(app.test_office()) as r`)).r
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : (raw ?? [])
     return (Array.isArray(parsed) ? parsed : []) as { id: string }[]
   }
@@ -1538,7 +1538,7 @@ console.log('\nthe seam a provider plugs into (#259, migration 0513)')
     )
 
   const offered = async (): Promise<{ upserts: { id: string }[]; deletes: { id: string }[] }> => {
-    const raw = (await one(`select app.tasks_to_push(${lit(PROVIDER)}) as r`)).r
+    const raw = (await one(`select app.tasks_to_push(app.test_office(), ${lit(PROVIDER)}) as r`)).r
     const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
       upserts?: { id: string }[]
       deletes?: { id: string }[]
@@ -1553,7 +1553,7 @@ console.log('\nthe seam a provider plugs into (#259, migration 0513)')
   )
 
   await db.execute(
-    `select app.task_pushed(${lit(id)}::uuid, ${lit(PROVIDER)}, 'ext-1', ${String(await revOf())})`,
+    `select app.task_pushed(app.test_office(), ${lit(id)}::uuid, ${lit(PROVIDER)}, 'ext-1', ${String(await revOf())})`,
   )
   check(
     'once projected it is not offered again — the watermark holds',
@@ -1589,7 +1589,7 @@ console.log('\nthe seam a provider plugs into (#259, migration 0513)')
   )
 
   await db.execute(
-    `select app.task_push_failed(${lit(id)}::uuid, ${lit(PROVIDER)}, 'the provider was unreachable')`,
+    `select app.task_push_failed(app.test_office(), ${lit(id)}::uuid, ${lit(PROVIDER)}, 'the provider was unreachable')`,
   )
   const health = await one(`
     select sync_state, sync_error from public.task_links
@@ -1614,7 +1614,9 @@ console.log('\nthe seam a provider plugs into (#259, migration 0513)')
     `${String((await offered()).deletes.length)} deletion(s) owed`,
     (await offered()).deletes.some((d) => d.id === id),
   )
-  await db.execute(`select app.task_delete_pushed(${lit(id)}::uuid, ${lit(PROVIDER)})`)
+  await db.execute(
+    `select app.task_delete_pushed(app.test_office(), ${lit(id)}::uuid, ${lit(PROVIDER)})`,
+  )
   check(
     'and once the provider has applied it, nothing is owed',
     `${String((await offered()).deletes.length)} still owed`,
@@ -1628,7 +1630,7 @@ console.log('\nthe seam a provider plugs into (#259, migration 0513)')
   */
   const keeper = (await press('my_task_add', { p_title: `Kept ${run}` })) as { id?: string }
   await db.execute(`
-    select app.task_pushed(${lit(String(keeper.id))}::uuid, ${lit(PROVIDER)}, 'ext-keep', 1)`)
+    select app.task_pushed(app.test_office(), ${lit(String(keeper.id))}::uuid, ${lit(PROVIDER)}, 'ext-keep', 1)`)
   const forgot = (await one(`select app.task_provider_forget(${lit(PROVIDER)}) as r`)).r as
     | string
     | { links_removed?: number }

@@ -140,11 +140,14 @@ check(
   credential is needed or wanted for that: the contract is the boundary, and
   what sits on the far side of it is Google's problem rather than this index's.
 */
+// The document is recorded inside the office that holds the project (migration 0801).
+const PROJECT_OFFICE = `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
 await db.execute(`
   insert into public.project_attachments (project_id, connector, external_ref, display_name, role)
   values (${lit(projectId)}::uuid, 'drive', ${lit(`folder-${run}`)},
           'A linked Drive folder', 'source');
   select app.record_drive_document(
+    ${PROJECT_OFFICE},
     ${lit(projectId)}::uuid, ${lit(`folder-${run}`)}, ${lit(`file-${run}`)},
     ${lit(`The ${TOKEN} pricing sheet`)},
     ${lit(`Pricing for the ${TOKEN} work is banded. The standard band is the one most clients take.`)},
