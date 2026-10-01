@@ -107,7 +107,7 @@ if (wrong.length > 0) {
 const briefs = await Promise.all(
   [...new Set(held.map((l) => (l.who === '' ? 'chief-of-staff' : l.who)))].map(async (slug) => ({
     slug,
-    guidance: await guidanceFor(db, slug),
+    guidance: await guidanceFor(db, 'app.operator_office()', slug),
   })),
 )
 let misfiled = 0

@@ -31,7 +31,7 @@ const authors: [string, string][] = [
   ['growth-director', `Prefers bullet summaries ${run} E`],
 ]
 for (const [by, body] of authors) await learn(by, body)
-const g = await guidanceFor(db, 'growth-director', null, null, { lessons: 50 })
+const g = await guidanceFor(db, 'app.test_office()', 'growth-director', null, null, { lessons: 50 })
 const stated = (mark: string) => g.lessons.find((l) => l.body.includes(`${run} ${mark}`))?.stated
 const present = (mark: string) => g.lessons.some((l) => l.body.includes(`${run} ${mark}`))
 check(

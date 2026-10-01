@@ -230,7 +230,11 @@ export const NO_DISTINCTIVE_TERMS = '(no distinctive terms)'
 export const scanForDuplicates = async (
   db: SqlExecutor,
   instruction: string,
-  options: { projectId?: string | undefined } = {},
+  options: {
+    /** SQL for the office the scan is confined to: the CLAIMED job's (app.job_office of it). */
+    office: string
+    projectId?: string | undefined
+  },
 ): Promise<DuplicateScan> => {
   const derived = searchTerms(instruction)
   const terms = derived.length > 0 ? derived : [NO_DISTINCTIVE_TERMS]
@@ -268,7 +272,8 @@ export const scanForDuplicates = async (
            s.terms::text as shared_terms, cardinality(s.terms) as matched
     from shared s
     join public.jobs j on j.job_id = s.job_id
-    where j.state not in ('complete', 'cancelled', 'failed')
+    where j.office_id = ${options.office}
+      and j.state not in ('complete', 'cancelled', 'failed')
       ${scopeClause}
     order by matched desc, j.created_at desc
     limit 10
@@ -829,6 +834,7 @@ export const recordDecision = async (
   const arr = (xs: readonly string[]): string =>
     xs.length === 0 ? `'{}'::text[]` : `array[${xs.map(lit).join(', ')}]::text[]`
 
+  // raw-sql[2]: keyed by the claimed job; routing_decisions has no office column, its office is its job's (composite key).
   const { rows } = await db.execute(`
     insert into public.routing_decisions
       (job_id, intent_class, confident, intent_reason,

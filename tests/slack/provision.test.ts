@@ -72,11 +72,18 @@ describe('channel names', () => {
   })
 })
 
+/** The project exists in this workspace's office; a project of any other office reads as no row at all. */
+const ownProject = {
+  match: /select name, channel_prefix, is_fixture from public\.projects/,
+  rows: [{ name: 'Proj A', channel_prefix: null, is_fixture: false }],
+}
+
 describe('provisioning', () => {
   it('asks Postgres first and creates nothing when the mapping already exists', async () => {
     const db = new FakeDb([
+      ownProject,
       {
-        match: /from public\.slack_channel_map\s+where project_id/,
+        match: /from public\.slack_channel_map\s+where team_id/,
         rows: [{ channel_id: 'C1', channel_name: 'proj-a' }],
       },
     ])
@@ -87,7 +94,7 @@ describe('provisioning', () => {
   })
 
   it('creates and maps when there is nothing yet', async () => {
-    const db = new FakeDb([])
+    const db = new FakeDb([ownProject])
     const slack = slackReturning([{ ok: true, channel: { id: 'C0BUNEW00001', name: 'proj-a' } }])
     const result = await new ChannelProvisioner(db, slack, 'T1').ensureChannel(PROJECT, 'a')
     expect(result.outcome).toBe('created')
@@ -144,8 +151,9 @@ describe('provisioning', () => {
 
   it('adopts a taken name ONLY when Postgres says that channel is already this project’s', async () => {
     const db = new FakeDb([
+      ownProject,
       {
-        match: /where channel_name =/,
+        match: /channel_name = '/,
         rows: [{ channel_id: 'C0BUOLD00001', project_id: PROJECT }],
       },
     ])
@@ -157,7 +165,8 @@ describe('provisioning', () => {
 
   it('refuses to adopt a channel belonging to another project', async () => {
     const db = new FakeDb([
-      { match: /where channel_name =/, rows: [{ channel_id: 'C0BUOLD00001', project_id: OTHER }] },
+      ownProject,
+      { match: /channel_name = '/, rows: [{ channel_id: 'C0BUOLD00001', project_id: OTHER }] },
     ])
     const slack = slackReturning([{ ok: false, error: 'name_taken' }])
     const result = await new ChannelProvisioner(db, slack, 'T1').ensureChannel(PROJECT, 'a')
@@ -166,14 +175,14 @@ describe('provisioning', () => {
   })
 
   it('refuses to adopt a channel nobody has mapped — it is a stranger’s room', async () => {
-    const db = new FakeDb([])
+    const db = new FakeDb([ownProject])
     const slack = slackReturning([{ ok: false, error: 'name_taken' }])
     const result = await new ChannelProvisioner(db, slack, 'T1').ensureChannel(PROJECT, 'a')
     expect(result.outcome).toBe('name_conflict')
   })
 
   it('reports any other Slack failure without inventing a channel', async () => {
-    const db = new FakeDb([])
+    const db = new FakeDb([ownProject])
     const slack = slackReturning([{ ok: false, error: 'restricted_action' }])
     const result = await new ChannelProvisioner(db, slack, 'T1').ensureChannel(PROJECT, 'a')
     expect(result).toMatchObject({
@@ -182,7 +191,51 @@ describe('provisioning', () => {
       errorCode: 'restricted_action',
     })
   })
+
+  describe('inside one office (multi-user P3)', () => {
+    it('a project the workspace office does not hold creates nothing in Slack', async () => {
+      // The projects read is confined to the workspace's office, so another office's project reads as no row,
+      // exactly as a missing one does. The Slack client must never be asked to create a room for it.
+      const { slack, calls } = recordingSlackCalls()
+      const db = new FakeDb([])
+      const result = await new ChannelProvisioner(db, slack, 'T1').ensureChannel(OTHER, 'x')
+      expect(result).toMatchObject({ outcome: 'failed', channelId: null })
+      expect(calls).not.toContain('conversations.create')
+      expect(db.statements.some((s) => s.includes('insert into public.slack_channel_map'))).toBe(
+        false,
+      )
+    })
+
+    it('every statement on a project or a mapping is confined to the workspace', async () => {
+      const db = new FakeDb([ownProject])
+      const slack = slackReturning([{ ok: true, channel: { id: 'C0BUNEW00003', name: 'proj-a' } }])
+      await new ChannelProvisioner(db, slack, 'T1').ensureChannel(PROJECT, 'a')
+      const touching = db.statements.filter(
+        (s) => s.includes('public.projects') || s.includes('public.slack_channel_map'),
+      )
+      expect(touching.length).toBeGreaterThan(0)
+      for (const s of touching) {
+        // the workspace's office decides which project is visible; the mapping is pinned to the workspace
+        expect(s, 'names the workspace or its office').toMatch(/T1|slack_workspaces/)
+      }
+      const projectReads = touching.filter((s) => /from public\.projects/.test(s))
+      for (const s of projectReads) expect(s).toMatch(/office_id/)
+    })
+  })
 })
+
+/** Records which Slack methods were asked for. */
+const recordingSlackCalls = (): { slack: SlackClient; calls: string[] } => {
+  const calls: string[] = []
+  const fetchImpl = (async (url: string) => {
+    calls.push(String(url).split('/').pop() ?? '')
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as unknown as typeof fetch
+  return { slack: new SlackClient('xoxb-test', { fetchImpl, sleep: async () => {} }), calls }
+}
 
 describe('per-project, per-discipline channel names (0070)', () => {
   it('puts the project first, so a sidebar groups by project', () => {

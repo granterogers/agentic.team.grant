@@ -71,15 +71,20 @@ interface Day {
 */
 const NOT_A_TEST = 'not is_fixture'
 
-/** One number per question, all over the same window, in one round trip. */
-const DAY = `
+const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+
+/**
+ * One number per question, all over the same window, in one round trip. Every count is the OFFICE's own: `office` is
+ * SQL for the claimed job's office (app.job_office of it), never an id taken from elsewhere.
+ */
+const DAY = (office: string): string => `
   select
     (select count(*)::int from public.jobs
-      where state = 'complete' and finished_at > app.now_utc() - interval '24 hours'
+      where office_id = ${office} and state = 'complete' and finished_at > app.now_utc() - interval '24 hours'
         and ${NOT_A_TEST})
       as jobs_done,
     (select count(*)::int from public.jobs
-      where state = 'failed' and finished_at > app.now_utc() - interval '24 hours'
+      where office_id = ${office} and state = 'failed' and finished_at > app.now_utc() - interval '24 hours'
         and ${NOT_A_TEST})
       as jobs_failed,
     -- inference_usage, not inference_calls. The first version guessed the name
@@ -87,11 +92,11 @@ const DAY = `
     -- schema is the authority and it is one query away. (No backticks in this
     -- comment: it is inside a template literal, and they ended the string.)
     (select count(*)::int from public.inference_usage
-      where occurred_at > app.now_utc() - interval '24 hours') as model_calls,
+      where office_id = ${office} and occurred_at > app.now_utc() - interval '24 hours') as model_calls,
     (select coalesce(sum(cost_usd), 0)::numeric from public.inference_usage
-      where occurred_at > app.now_utc() - interval '24 hours') as spend,
+      where office_id = ${office} and occurred_at > app.now_utc() - interval '24 hours') as spend,
     (select count(*)::int from public.deliveries
-      where state = 'sent' and updated_at > app.now_utc() - interval '24 hours')
+      where office_id = ${office} and state = 'sent' and updated_at > app.now_utc() - interval '24 hours')
       as delivered,
     -- Failed only. 'suppressed' is a decision, not a failure, and 'claimed' is
     -- a delivery still in flight — counting either as undelivered would make
@@ -103,15 +108,16 @@ const DAY = `
     -- fixture job is not a delivery that went missing.
     (select count(*)::int from public.deliveries d
       left join public.jobs j on j.job_id = d.job_id
-      where d.state = 'failed'
+      where d.office_id = ${office} and d.state = 'failed'
         and coalesce(j.is_fixture, false) = false
         and d.updated_at > app.now_utc() - interval '24 hours') as undelivered,
-    (select count(*)::int from public.blockers where state = 'open') as blockers,
     (select count(*)::int from public.blockers
-      where state = 'open' and real_deadline is not null and real_deadline < app.now_utc())
+      where office_id = ${office} and state = 'open') as blockers,
+    (select count(*)::int from public.blockers
+      where office_id = ${office} and state = 'open' and real_deadline is not null and real_deadline < app.now_utc())
       as blockers_overdue,
     (select count(*)::int from public.inbound_commands
-      where received_at > app.now_utc() - interval '24 hours') as instructions
+      where office_id = ${office} and received_at > app.now_utc() - interval '24 hours') as instructions
 `
 
 export function capacityHandler(
@@ -134,7 +140,8 @@ export function capacityHandler(
       // `as unknown as`, because a row comes back as Record<string, unknown> and
       // TypeScript is right that the two do not overlap. The shape is asserted by
       // the SQL above, which names every column.
-      const day = (await db.execute(DAY)).rows[0] as unknown as Day
+      const day = (await db.execute(DAY(`app.job_office(${lit(job.jobId)}::uuid)`)))
+        .rows[0] as unknown as Day
       const meter = (await db.execute('select app.notebook_allowance() as a')).rows[0] as {
         a?: {
           window_spent?: number

@@ -71,6 +71,7 @@ export function collectHandler(deps: CollectDeps): Handler {
         model: null,
       })
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const { rows } = await deps.db.execute(
         `select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
       )

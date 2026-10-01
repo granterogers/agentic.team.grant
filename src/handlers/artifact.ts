@@ -234,6 +234,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         )
       }
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const payload = (
         (
           await db.execute(

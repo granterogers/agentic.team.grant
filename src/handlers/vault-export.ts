@@ -17,8 +17,8 @@
  * credentials that would survive losing the Supabase project, so the argument
  * runs both ways and he is the one who should settle it.
  *
- * The handler is built, tested and wired. `update public.responsibilities set
- * enabled = true where slug = 'vault-export'` is the whole of switching it on.
+ * The handler is built, tested and wired. Setting the enabled flag of the vault-export duty to true, in the
+ * duties table, is the whole of switching it on.
  *
  * ## What it never does
  *
@@ -83,7 +83,9 @@ export function vaultExportHandler(db: SqlExecutor): Handler {
       const own = (
         await db.execute(
           `select actor from public.subject_identities
-            where subject = 'grant' and origin_channel = 'telegram' and kind = 'person'`,
+            where office_id = app.job_office('${job.jobId}'::uuid)
+              and subject = app.office_actor(app.job_office('${job.jobId}'::uuid))
+              and origin_channel = 'telegram' and kind = 'person'`,
         )
       ).rows.map((r) => String((r as { actor: string }).actor))
       if (!own.includes(String(chatId))) {

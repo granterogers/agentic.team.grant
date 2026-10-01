@@ -43,6 +43,7 @@ export function mcpDiscoverHandler(deps: McpDiscoverDeps): Handler {
       const say = (body: string, announce = true): HandlerOutput =>
         ({ ...base, announce, body }) satisfies HandlerOutput
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const payload = (
         (
           await db.execute(
@@ -89,7 +90,8 @@ export function mcpDiscoverHandler(deps: McpDiscoverDeps): Handler {
              set last_probe_at = app.now_utc(), last_probe_ok = false,
                  last_probe_detail = ${lit(String(found.error ?? 'it did not answer').slice(0, 400))},
                  updated_at = app.now_utc()
-           where provider_id = ${lit(row.id)}::uuid`)
+           where provider_id = ${lit(row.id)}::uuid
+             and office_id = app.job_office(${lit(job.jobId)}::uuid)`)
         return say(
           `I could not get an answer out of ${name}: ${String(found.error ?? 'no reason given')}. ` +
             'Nothing has changed about what the office can do.',
@@ -102,7 +104,8 @@ export function mcpDiscoverHandler(deps: McpDiscoverDeps): Handler {
                server_version = ${found.serverVersion === null ? 'null' : lit(found.serverVersion)},
                protocol_version = ${found.protocolVersion === null ? 'null' : lit(found.protocolVersion)},
                updated_at = app.now_utc()
-         where provider_id = ${lit(row.id)}::uuid`)
+         where provider_id = ${lit(row.id)}::uuid
+           and office_id = app.job_office(${lit(job.jobId)}::uuid)`)
 
       const recorded = (
         await db.execute(
@@ -120,9 +123,11 @@ export function mcpDiscoverHandler(deps: McpDiscoverDeps): Handler {
 
       const reach = (
         await db.execute(`
-          select reach, count(*)::int as n from public.mcp_discovered_tools
-           where provider_id = ${lit(row.id)}::uuid and vanished_at is null
-           group by reach order by reach`)
+          select t.reach, count(*)::int as n from public.mcp_discovered_tools t
+            join public.mcp_providers mp
+              on mp.provider_id = t.provider_id and mp.office_id = app.job_office(${lit(job.jobId)}::uuid)
+           where t.provider_id = ${lit(row.id)}::uuid and t.vanished_at is null
+           group by t.reach order by t.reach`)
       ).rows as { reach: string; n: number }[]
       const shape =
         reach.length === 0 ? 'nothing' : reach.map((r) => `${String(r.n)} ${r.reach}`).join(', ')

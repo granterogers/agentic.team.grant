@@ -19,6 +19,8 @@ const COMMAND = 'aaaaaaaa-0000-0000-0000-000000000001'
 const CORRELATION = 'bbbbbbbb-0000-0000-0000-000000000002'
 const OUTPUT = 'cccccccc-0000-0000-0000-000000000003'
 const OFFER = 'dddddddd-0000-0000-0000-000000000004'
+/** The office of the press itself: every statement about the press is confined to it. */
+const OFFICE = 'ffffffff-0000-0000-0000-00000000000f'
 
 interface Options {
   readonly action: string
@@ -42,6 +44,7 @@ class Scripted implements SqlExecutor {
         rows: [
           {
             command_id: COMMAND,
+            office_id: OFFICE,
             callback_action: this.options.action,
             origin_channel: 'slack',
             origin_ref: 'C1:1.2',
@@ -57,7 +60,7 @@ class Scripted implements SqlExecutor {
     if (sql.includes('update public.inbound_commands')) {
       return { rows: this.options.claimSucceeds === false ? [] : [{ id: COMMAND }] }
     }
-    if (sql.includes('from public.undo_offers')) {
+    if (sql.includes('app.undo_offers_in')) {
       return { rows: this.options.offers ?? [] }
     }
     if (sql.includes('app.request_undo')) return { rows: [{ status: 'undone' }] }
@@ -194,5 +197,60 @@ describe('claiming', () => {
     await processCallbacks(db)
     const claim = db.statements.find((s) => s.includes('update public.inbound_commands'))
     expect(claim).toContain('processed_at is null')
+  })
+})
+
+describe('a press is handled inside its own office (multi-user P3)', () => {
+  /*
+    The pending query scans every office's presses, and each press carries the office of its own command row. The
+    property: every statement that reads or writes a table about THAT press names the press's office, so a press can
+    never read or move another office's deliveries, feedback, notifications or undo offers. Asserted on the
+    statements the processor actually issues, per owned table, not on the wording of any one of them.
+  */
+  const touched = ['public.feedback', 'public.notification_events', 'public.inbound_commands']
+
+  it('the claim, the feedback and the notification update all name the press office', async () => {
+    const db = new Scripted({ action: 'useful' })
+    await processCallbacks(db)
+    for (const table of touched) {
+      const writes = db.statements.filter(
+        (s) => s.includes(table) && /\b(insert|update)\b/i.test(s) && !s.includes('select app.'),
+      )
+      expect(writes.length, `a statement writes ${table}`).toBeGreaterThan(0)
+      for (const w of writes) expect(w, `${table} write is confined`).toContain(OFFICE)
+    }
+  })
+
+  it('the undo offer is read for the press office only', async () => {
+    const db = new Scripted({
+      action: 'undo',
+      offers: [{ id: OFFER, description: 'A Slack post that can be retracted.' }],
+    })
+    await processCallbacks(db)
+    const offers = db.statements.find((s) => s.includes('app.undo_offers_in'))
+    expect(offers).toContain(OFFICE)
+  })
+
+  it('the pending query joins deliveries and jobs inside the press office', async () => {
+    const { PENDING } = await import('../../src/channels/callbacks.ts')
+    const sql = PENDING(5)
+    // the delivery and the job a press is resolved to must be the press's own office's
+    expect(sql).toMatch(/deliveries d\s+on d\.office_id = press\.office_id/)
+    expect(sql).toMatch(/jobs j on j\.job_id = d\.job_id and j\.office_id = press\.office_id/)
+  })
+
+  it('a mute stores the preference for the press office, not for a default person', async () => {
+    const db = new Scripted({ action: 'mute_24h', presser: 'person-b' })
+    await processCallbacks(db)
+    const writes = db.statements.filter(
+      (s) => s.includes('public.notification_preferences') || s.includes('preference_instructions'),
+    )
+    expect(writes.length).toBeGreaterThan(0)
+    for (const w of writes) {
+      expect(w).toContain(OFFICE)
+      // the person is the one the office recorded on the press, and never a literal default
+      expect(w).toContain("'person-b'")
+      expect(w).not.toMatch(/'grant'/)
+    }
   })
 })

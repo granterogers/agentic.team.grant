@@ -182,6 +182,7 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
       if (job.projectId === null || job.projectId === undefined) {
         return await say('I do not know which project that is about. Say which one.')
       }
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const payload = (
         (
           await db.execute(
@@ -213,7 +214,9 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
               select (extensions.similarity(lower(name), ${lit(namedRaw.toLowerCase())}) > 0.5
                       or lower(name) like ${lit(`%${namedRaw.toLowerCase()}%`)}
                       or ${lit(namedRaw.toLowerCase())} like '%' || lower(name) || '%') as whole
-                from public.projects where project_id = ${lit(job.projectId)}::uuid`)
+                from public.projects
+               where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                 and project_id = ${lit(job.projectId)}::uuid`)
           .then((r) => (r.rows[0] as { whole?: boolean } | undefined)?.whole === true)
           .catch(() => false))
           ? ''
@@ -230,12 +233,14 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
           named === ''
             ? `select title, coalesce(content, '') as content
                  from public.documents
-                where project_id = ${lit(job.projectId)}::uuid
+                where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                  and project_id = ${lit(job.projectId)}::uuid
                   and coalesce(content, '') <> ''
                 order by content_chars desc limit 4`
             : `select title, coalesce(content, '') as content
                  from public.documents
-                where project_id = ${lit(job.projectId)}::uuid
+                where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                  and project_id = ${lit(job.projectId)}::uuid
                   and coalesce(content, '') <> ''
                   and (title ilike ${lit(`%${named}%`)}
                        or extensions.similarity(lower(title), ${lit(named.toLowerCase())}) > 0.3)

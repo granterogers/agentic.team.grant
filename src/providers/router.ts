@@ -218,6 +218,7 @@ export class ProviderRouter {
   private async loadAllowList(
     jobId?: string,
   ): Promise<{ provider: ProviderRow; models: AllowedModel[]; why: Map<string, string> }> {
+    // raw-sql[2]: keyed by the claimed job; it reads one column (the kind) of the job the caller holds.
     const forJob =
       jobId === undefined || jobId === ''
         ? `'(unattributed)'`

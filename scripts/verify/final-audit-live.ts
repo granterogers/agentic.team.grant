@@ -817,7 +817,9 @@ try {
     // "stated" means a person (B10): every rule the prompt presents as his order was given by an admitted person.
     {
       const { guidanceFor } = await import('../../src/agents/guidance.ts')
-      const g = await guidanceFor(db, 'chief-of-staff', null, null, { lessons: 50 })
+      const g = await guidanceFor(db, 'app.test_office()', 'chief-of-staff', null, null, {
+        lessons: 50,
+      })
       const stated = g.lessons.filter((l) => l.stated)
       let bad = 0
       for (const l of stated) {

@@ -83,11 +83,14 @@ async function speakerFor(db: SqlExecutor, job: Job): Promise<Speaker | null> {
   const { rows } = await db.execute(`
     with recursive lineage as (
       select job_id, parent_job_id, pinned_config, 0 as depth
-        from public.jobs where job_id = ${lit(job.jobId)}::uuid
+        from public.jobs
+       where job_id = ${lit(job.jobId)}::uuid
+         and office_id = app.job_office(${lit(job.jobId)}::uuid)
       union all
       select j.job_id, j.parent_job_id, j.pinned_config, l.depth + 1
         from public.jobs j join lineage l on j.job_id = l.parent_job_id
        where l.depth < 8
+         and j.office_id = app.job_office(${lit(job.jobId)}::uuid)
     )
     select s.name, s.slug,
            t.bot_id, app.resolve_secret(t.token_ref) as token,
@@ -98,7 +101,10 @@ async function speakerFor(db: SqlExecutor, job: Job): Promise<Speaker | null> {
       join public.routing_decisions r on r.job_id = l.job_id
       join public.staff s on s.slug = r.roster[1]
       join public.telegram_bots t on t.staff_slug = s.slug
-      join public.telegram_chats ch on ch.bot_id = t.bot_id and ch.subject = 'grant'
+      join public.telegram_chats ch
+        on ch.bot_id = t.bot_id
+       and ch.office_id = app.job_office(${lit(job.jobId)}::uuid)
+       and ch.subject = app.office_actor(app.job_office(${lit(job.jobId)}::uuid))
      where t.enabled and t.token_ref is not null and ch.deliverable
      order by l.depth asc, r.decided_at desc
      limit 1
@@ -218,6 +224,7 @@ const AGAIN_EVERY_MINUTES = 10
 
 interface Waiting {
   job_id: string
+  office_id: string
   correlation_id: string
   state: string
   waiting_on: string | null
@@ -309,6 +316,7 @@ export async function sayStillWorking(
   const { rows } = await db
     .execute(`
     select j.job_id::text as job_id,
+           j.office_id::text as office_id,
            j.correlation_id::text as correlation_id,
            j.state::text as state,
            j.waiting_on,
@@ -317,16 +325,19 @@ export async function sayStillWorking(
            j.pinned_config ->> 'instruction' as instruction,
            t.bot_id, app.resolve_secret(t.token_ref) as token, ch.chat_id,
            (select count(*) from public.jobs c
-             where c.parent_job_id = j.job_id
+             where c.parent_job_id = j.job_id and c.office_id = j.office_id
                and c.state in ('complete', 'failed', 'cancelled'))::int as children_done,
            (select count(*) from public.jobs c
-             where c.parent_job_id = j.job_id)::int as children_total
+             where c.parent_job_id = j.job_id and c.office_id = j.office_id)::int as children_total
       from public.jobs j
       -- Only the chief speaks to him. #70 retired the staff bots and
       -- telegram.only_chief_speaks has been true throughout; a progress note
       -- from seven bots is the repetition he asked us to stop.
       join public.telegram_bots t on t.staff_slug = 'chief-of-staff' and t.enabled
-      join public.telegram_chats ch on ch.bot_id = t.bot_id and ch.subject = 'grant'
+      -- The chat is the JOB'S OWN office's, and the person is that office's own person (no literal).
+      join public.telegram_chats ch
+        on ch.bot_id = t.bot_id and ch.office_id = j.office_id
+       and ch.subject = app.office_actor(j.office_id)
      where j.state in ('running', 'retrying', 'paused')
        and j.kind = 'office.instruction'
        -- His request, not a duty. A scheduled sweep running long is not
@@ -364,7 +375,8 @@ export async function sayStillWorking(
     const fresh = await db
       .execute(`
         select state::text as s from public.jobs
-         where job_id = '${w.job_id.replace(/'/g, "''")}'::uuid`)
+         where job_id = '${w.job_id.replace(/'/g, "''")}'::uuid
+           and office_id = '${w.office_id.replace(/'/g, "''")}'::uuid`)
       .then((r) => String((r.rows[0] as { s?: string } | undefined)?.s ?? ''))
       .catch(() => '')
     if (!['running', 'retrying', 'paused'].includes(fresh)) {

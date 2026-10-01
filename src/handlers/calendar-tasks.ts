@@ -83,6 +83,7 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
 
       const moved = outcome.created + outcome.updated + outcome.removed
       if (outcome.ok && moved === 0) {
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await db.execute(
           `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
         )

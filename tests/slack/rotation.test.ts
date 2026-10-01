@@ -158,7 +158,11 @@ describe('rotateAndPersist — §18: an invalid refresh token must not lock us o
     // A crash between "sent" and "stored the reply" would leave nothing on
     // either side, which is why the copy is first and not merely somewhere.
     const db = recordingDb()
-    await rotateAndPersist({ execute: db.execute, fetchImpl: issues() }, 'A0APP', 'xoxe-1-current')
+    await rotateAndPersist(
+      { office: 'app.test_office()', execute: db.execute, fetchImpl: issues() },
+      'A0APP',
+      'xoxe-1-current',
+    )
     const firstWrite = db.statements[0] ?? ''
     expect(firstWrite).toContain('store_secret')
     expect(firstWrite).toContain('slack.config_refresh_token')
@@ -171,7 +175,11 @@ describe('rotateAndPersist — §18: an invalid refresh token must not lock us o
     // and a human at api.slack.com.
     const db = recordingDb()
     const outcome = await rotateAndPersist(
-      { execute: db.execute, fetchImpl: refuses('invalid_refresh_token') },
+      {
+        office: 'app.test_office()',
+        execute: db.execute,
+        fetchImpl: refuses('invalid_refresh_token'),
+      },
       'A0APP',
       'xoxe-1-current',
     )
@@ -185,7 +193,11 @@ describe('rotateAndPersist — §18: an invalid refresh token must not lock us o
   it('records the failure so a second attempt is not blind', async () => {
     const db = recordingDb()
     await rotateAndPersist(
-      { execute: db.execute, fetchImpl: refuses('invalid_refresh_token') },
+      {
+        office: 'app.test_office()',
+        execute: db.execute,
+        fetchImpl: refuses('invalid_refresh_token'),
+      },
       'A0APP',
       'xoxe-1-current',
     )
@@ -199,12 +211,16 @@ describe('rotateAndPersist — §18: an invalid refresh token must not lock us o
   it('says when a human is needed, and when one is not', async () => {
     const db = recordingDb()
     const dead = await rotateAndPersist(
-      { execute: db.execute, fetchImpl: refuses('invalid_refresh_token') },
+      {
+        office: 'app.test_office()',
+        execute: db.execute,
+        fetchImpl: refuses('invalid_refresh_token'),
+      },
       'A0APP',
       'x',
     )
     const transient = await rotateAndPersist(
-      { execute: db.execute, fetchImpl: refuses('ratelimited') },
+      { office: 'app.test_office()', execute: db.execute, fetchImpl: refuses('ratelimited') },
       'A0APP',
       'x',
     )
@@ -217,7 +233,11 @@ describe('rotateAndPersist — §18: an invalid refresh token must not lock us o
   it('never puts a token in the failure it records', async () => {
     const db = recordingDb()
     await rotateAndPersist(
-      { execute: db.execute, fetchImpl: refuses('invalid_refresh_token') },
+      {
+        office: 'app.test_office()',
+        execute: db.execute,
+        fetchImpl: refuses('invalid_refresh_token'),
+      },
       'A0APP',
       // Token-shaped on purpose: the check is that a real one would not reach
       // the recorded failure, and a fixture that did not look like a token
@@ -236,7 +256,7 @@ describe('rotateAndPersist — §18: an invalid refresh token must not lock us o
     // the old one for.
     const db = recordingDb()
     const outcome = await rotateAndPersist(
-      { execute: db.execute, fetchImpl: issues() },
+      { office: 'app.test_office()', execute: db.execute, fetchImpl: issues() },
       'A0APP',
       'xoxe-1-current',
     )
@@ -251,7 +271,11 @@ describe('rotateAndPersist — §18: an invalid refresh token must not lock us o
     // The access token alone would leave the consumed refresh token in the vault: the next rotation fails and only a
     // person can repair it. So no statement may name one of the new tokens without the other.
     const db = recordingDb()
-    await rotateAndPersist({ execute: db.execute, fetchImpl: issues() }, 'A0APP', 'xoxe-1-current')
+    await rotateAndPersist(
+      { office: 'app.test_office()', execute: db.execute, fetchImpl: issues() },
+      'A0APP',
+      'xoxe-1-current',
+    )
     const withAccess = db.statements.filter((s) => s.includes('xoxe-new'))
     const withRefresh = db.statements.filter((s) => s.includes('xoxe-1-new'))
     expect(withAccess).toHaveLength(1)
@@ -262,7 +286,11 @@ describe('rotateAndPersist — §18: an invalid refresh token must not lock us o
     // Without this, "did not touch the access token" would pass against a
     // function that never writes one at all.
     const db = recordingDb()
-    await rotateAndPersist({ execute: db.execute, fetchImpl: issues() }, 'A0APP', 'x')
+    await rotateAndPersist(
+      { office: 'app.test_office()', execute: db.execute, fetchImpl: issues() },
+      'A0APP',
+      'x',
+    )
     expect(
       db.statements.some((s) => s.includes('store_secret') && s.includes('slack.config_token')),
     ).toBe(true)

@@ -74,6 +74,12 @@ export async function remember(
   projectId: string | null = null,
 ): Promise<Remembered> {
   const scoped = staffSlug === null || staffSlug === '' ? null : staffSlug
+  // The office whose rules these are is the CLAIMED job's. A call with no job is a suite (a worker always holds one):
+  // it gets the office its own author belongs to, by the same rule the bridge applies.
+  const office =
+    jobId === null
+      ? `(case when app.harness_author(${lit(by)}) then app.test_office() else app.sole_person_office() end)`
+      : `app.job_office(${lit(jobId)}::uuid)`
 
   if (teaching.kind === 'lesson') {
     /*
@@ -183,6 +189,7 @@ export async function remember(
                                      null, 200, mine.harness) f
                 join public.lessons l on l.lesson_id = f.lesson_id
                where l.is_fixture = mine.harness
+                 and l.office_id = ${office}
                  and l.scope = ${scope}
                  and l.project_id is not distinct from ${uuid(onAProject)}
                  and l.staff_slug is not distinct from ${scoped === null ? 'null' : lit(scoped)}`)
@@ -269,6 +276,7 @@ export async function remember(
                                      null, 200, mine.harness) f
                 join public.lessons l on l.lesson_id = f.lesson_id
                where l.is_fixture = mine.harness
+                 and l.office_id = ${office}
                  and l.scope in ('global', 'staff')`)
             .then((r) => r.rows as { id: string; scope: string; body: string }[])
             .catch(() => [])

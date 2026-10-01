@@ -82,7 +82,8 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
                  (select decrypted_secret from vault.decrypted_secrets
                    where name = 'slack.config_refresh_token') as refresh
             from public.slack_app_credentials c
-           where c.enabled and c.revoked_at is null
+           where c.office_id = app.job_office('${job.jobId}'::uuid)
+             and c.enabled and c.revoked_at is null
            limit 1
         `)
       ).rows[0] as
@@ -183,7 +184,10 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
       }
 
       const outcome = await rotateAndPersist(
-        { execute: (sql) => db.execute(sql) },
+        {
+          office: `app.job_office('${job.jobId}'::uuid)`,
+          execute: (sql) => db.execute(sql),
+        },
         appId,
         refreshToken,
       )

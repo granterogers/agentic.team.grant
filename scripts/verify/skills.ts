@@ -480,7 +480,13 @@ await refuses(
     query written for this test, because a query written for this test proves
     only that the row exists.
   */
-  const g = await guidanceFor(db, 'operations-director', 'chat.instruction', null)
+  const g = await guidanceFor(
+    db,
+    'app.test_office()',
+    'operations-director',
+    'chat.instruction',
+    null,
+  )
   const found = g.skills.find((sk) => sk.name.includes('Writing') || sk.procedure.includes(run))
   ok('the next job that person takes is shown it', found !== undefined)
   ok('with the procedure intact', String(found?.procedure ?? '').includes('lead with what changed'))
@@ -494,7 +500,13 @@ await refuses(
   )
 
   // Someone else is not governed by it: it was addressed to one person.
-  const other = await guidanceFor(db, 'finance-director', 'chat.instruction', null)
+  const other = await guidanceFor(
+    db,
+    'app.test_office()',
+    'finance-director',
+    'chat.instruction',
+    null,
+  )
   ok(
     'while a colleague it was not addressed to is not governed by it',
     !other.skills.some((sk) => sk.procedure.includes(run)),

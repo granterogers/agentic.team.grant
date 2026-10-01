@@ -123,7 +123,8 @@ export class TelegramPager {
     // reason to stay quiet than severity is.
     const inbound = await this.db.execute(`
       select 1 from public.inbound_commands
-       where job_id = ${lit(input.job.jobId)}::uuid and origin_channel = 'telegram'
+       where office_id = app.job_office(${lit(input.job.jobId)}::uuid)
+         and job_id = ${lit(input.job.jobId)}::uuid and origin_channel = 'telegram'
        limit 1
     `)
     if (inbound.rows.length > 0) {
@@ -183,7 +184,9 @@ export class TelegramPager {
         : ((
             (
               await this.db.execute(
-                `select name from public.projects where project_id = ${lit(input.job.projectId)}::uuid`,
+                `select name from public.projects
+                  where office_id = app.job_office(${lit(input.job.jobId)}::uuid)
+                    and project_id = ${lit(input.job.projectId)}::uuid`,
               )
             ).rows[0] as { name?: string } | undefined
           )?.name ?? null)
@@ -266,8 +269,8 @@ export class TelegramPager {
   ): Promise<void> {
     await this.db.execute(`
       insert into public.notification_events
-        (channel, severity, project_id, subject_kind, subject_ref, outcome)
-      values ('telegram', ${lit(input.severity)}::public.notify_severity,
+        (office_id, channel, severity, project_id, subject_kind, subject_ref, outcome)
+      values (app.job_office(${lit(input.job.jobId)}::uuid), 'telegram', ${lit(input.severity)}::public.notify_severity,
               ${input.job.projectId === null ? 'null' : `${lit(input.job.projectId)}::uuid`},
               'output', ${lit(input.outputId)}::uuid, ${lit(outcome)})
     `)

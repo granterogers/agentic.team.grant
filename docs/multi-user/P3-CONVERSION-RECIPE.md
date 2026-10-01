@@ -162,3 +162,14 @@ claim a gate you did not run.
   for every name in your list and confirm each remaining overload either takes `p_office` first or is a deliberate GLOBAL.
 * The attack harness's own cases are not idempotent on a used clone: rebuild (`p3-attack.sh <name>`) before a full run.
 * Several suites share template loops over many functions; merge conflicts there are likely and are the lead's to resolve.
+
+## 7. Inline SQL in handlers, agents, channels and adapters
+
+* A statement inside a claimed job is confined with `office_id = app.job_office(<job id>)`; a press or workspace uses its own
+  office (`c.office_id`, or `workspaceOffice(teamId)`). Derived tables with no `office_id` are reached through a carrier
+  (a project of the office, or the workspace `team_id`).
+* A statement keyed by the claimed row, or a deployment scan, keeps its SQL and carries a `raw-sql[2|3]: <reason>` comment
+  right above it; the baseline entry gets the same reason.
+* Never nest one template literal inside another: the ratchet's regex truncates the statement. Precompute the fragment.
+* Replace the literal `'grant'` with `app.office_actor(office)`.
+* Proof: `scripts/isolated/p3-cases/95-raw-sql-handlers.ts` and `tests/handlers/raw-sql-names-the-claimed-office.test.ts`.

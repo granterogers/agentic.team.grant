@@ -215,6 +215,7 @@ export const howComposed = async (
   db: { execute: (sql: string) => Promise<{ readonly rows: readonly Record<string, unknown>[] }> },
   jobId: string,
 ): Promise<'deterministic_retrieval' | 'inference'> =>
+  // raw-sql[2]: keyed by the claimed job; it counts the usage recorded under the correlation id read from the job row the worker holds.
   await db
     .execute(`
       select count(*)::int as n from public.inference_usage u

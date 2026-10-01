@@ -91,7 +91,7 @@ const projectId = String(project.id)
 console.log(`project: ${String(project.name)} (${String(project.slug)})`)
 
 // --- §5: route it. A roster is decided, not assumed. ------------------------
-const scan = await scanForDuplicates(db, question, { projectId })
+const scan = await scanForDuplicates(db, question, { office: 'app.operator_office()', projectId })
 const decision = route(question, scan)
 console.log(
   `routed: intent=${decision.intent} confident=${String(decision.confident)} ` +

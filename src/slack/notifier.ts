@@ -121,8 +121,9 @@ export async function resolveTarget(
     select s.channel_id, s.thread_ts, c.origin_ref
     from public.inbound_commands c
     join public.inbound_commands_slack s on s.command_id = c.command_id
-    join public.jobs j on j.job_id = c.job_id
-    where j.correlation_id = ${lit(job.correlationId)}::uuid
+    join public.jobs j on j.job_id = c.job_id and j.office_id = app.job_office(${lit(job.jobId)}::uuid)
+    where c.office_id = app.job_office(${lit(job.jobId)}::uuid)
+      and j.correlation_id = ${lit(job.correlationId)}::uuid
       and s.channel_id is not null
     order by c.received_at desc
     limit 1
@@ -194,13 +195,16 @@ export async function resolveTarget(
    * itself in.
    */
   const generalChannel = async (): Promise<Target | null> => {
+    const inWorkspace = teamId === null ? 'true' : `m.team_id = ${lit(teamId)}`
     const home = await db.execute(`
       select m.channel_id from public.jobs j
         join public.slack_channel_map m
-          on ${teamId === null ? 'true' : `m.team_id = ${lit(teamId)}`}
+          on ${inWorkspace}
+         and m.team_id in (select w.team_id from public.slack_workspaces w where w.office_id = j.office_id)
          and m.active and m.bot_present
          and m.purpose = 'general'
        where j.job_id = ${lit(job.jobId)}::uuid
+         and j.office_id = app.job_office(${lit(job.jobId)}::uuid)
          and (j.requested_by like 'duty:%' or j.requested_by like 'voice:%')
        order by m.created_at
        limit 1
@@ -226,7 +230,10 @@ export async function resolveTarget(
   // reporting success.
   const project = await db.execute(`
     select channel_id, discipline from public.slack_channel_map
-    where project_id = ${lit(job.projectId)}::uuid and active and bot_present
+    where project_id = ${lit(job.projectId)}::uuid
+      and project_id in (select pp.project_id from public.projects pp where pp.office_id = app.job_office(${lit(job.jobId)}::uuid))
+      and team_id in (select w.team_id from public.slack_workspaces w where w.office_id = app.job_office(${lit(job.jobId)}::uuid))
+      and active and bot_present
       and purpose = 'project'
     order by case
                when discipline is not distinct from ${staffSlug === null ? 'null' : lit(staffSlug)} then 0
@@ -271,8 +278,6 @@ export function slackChannel(
   ) => Promise<NotifyOutcome>
 } {
   const severity = options.severity ?? 'routine'
-  const subject = options.subject ?? 'grant'
-
   return {
     name: 'slack',
     notify: async (job, output, outputId, context): Promise<NotifyOutcome> => {
@@ -285,15 +290,20 @@ export function slackChannel(
         return { delivered: false, note: 'no slack destination for this job; nothing delivered' }
       }
 
+      // The person is the one the caller named, or else the CLAIMED job's own office's person - never a literal.
+      const subject =
+        options.subject === undefined
+          ? `app.office_actor(app.job_office(${lit(job.jobId)}::uuid))`
+          : lit(options.subject)
       const allowed = await db.execute(`
-        select app.notification_allowed(${lit(subject)}, 'slack', ${lit(severity)}::public.notify_severity,
+        select app.notification_allowed(${subject}, 'slack', ${lit(severity)}::public.notify_severity,
           ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`}) as allowed
       `)
       if ((allowed.rows[0] as { allowed?: boolean } | undefined)?.allowed !== true) {
         await db.execute(`
           insert into public.notification_events
-            (channel, severity, project_id, subject_kind, subject_ref, outcome)
-          values ('slack', ${lit(severity)}::public.notify_severity,
+            (office_id, channel, severity, project_id, subject_kind, subject_ref, outcome)
+          values (app.job_office(${lit(job.jobId)}::uuid), 'slack', ${lit(severity)}::public.notify_severity,
                   ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`},
                   'output', ${lit(outputId)}::uuid, 'suppressed')
         `)
@@ -360,8 +370,8 @@ export function slackChannel(
       if (result.outcome === 'sent' || result.outcome === 'already_sent') {
         await db.execute(`
           insert into public.notification_events
-            (channel, severity, project_id, subject_kind, subject_ref, outcome)
-          values ('slack', ${lit(severity)}::public.notify_severity,
+            (office_id, channel, severity, project_id, subject_kind, subject_ref, outcome)
+          values (app.job_office(${lit(job.jobId)}::uuid), 'slack', ${lit(severity)}::public.notify_severity,
                   ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`},
                   'output', ${lit(outputId)}::uuid, 'delivered')
         `)

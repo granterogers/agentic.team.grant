@@ -62,6 +62,7 @@ export function sourceHandler(deps: {
   return {
     kind: 'knowledge.read_source',
     handle: async (job: Job): Promise<HandlerOutput> => {
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const { rows } = await deps.db.execute(
         `select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
       )
@@ -74,8 +75,10 @@ export function sourceHandler(deps: {
         select d.title, left(d.content, ${String(DOCUMENT_CHARS)}) as content,
                d.connector, d.external_ref, p.name as project_name
           from public.documents d
-          left join public.projects p using (project_id)
-         where d.document_id = ${lit(documentId)}::uuid
+          left join public.projects p
+            on p.project_id = d.project_id and p.office_id = app.job_office(${lit(job.jobId)}::uuid)
+         where d.office_id = app.job_office(${lit(job.jobId)}::uuid)
+           and d.document_id = ${lit(documentId)}::uuid
       `)
       const doc = found.rows[0] as Doc | undefined
       if (doc === undefined) {

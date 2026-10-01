@@ -223,6 +223,8 @@ export const buildPass = async (
   // three of them is three times the latency of one for no reason — and the
   // measurement that prompted this said setup was six seconds of a
   // twenty-second empty pass.
+  // raw-sql[3]: deployment composition root; it reads the Slack app's installation id and deployment secrets to build
+  // clients, before any job is claimed. Nothing read here reaches a prompt or moves between offices.
   const setup = (
     await db.execute(`
       select
@@ -251,6 +253,7 @@ export const buildPass = async (
   const cannotThink = orKey === '' && vaultKey === ''
 
   let slackTeamId = ''
+  // raw-sql[3]: deployment composition root; it reads the Slack app's installation to build the client, before any job is claimed.
   const botToken = String(
     (
       await db.execute(
@@ -261,6 +264,7 @@ export const buildPass = async (
   )
   if (botToken !== '') {
     const slack = new SlackClient(botToken)
+    // raw-sql[3]: deployment composition root; the workspace id of the installation read just above.
     const teamId = String(
       (
         await db.execute(
@@ -334,7 +338,7 @@ export const buildPass = async (
       if (existing !== undefined) return existing
       const made = new TelegramPager(db, new TelegramClient(bot.token), {
         botId: bot.botId,
-        subject: 'grant',
+        // No subject named: the pager asks for the CLAIMED job's own office's person, not for a literal 'grant'.
       })
       pagers.set(bot.botId, made)
       return made

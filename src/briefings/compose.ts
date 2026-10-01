@@ -183,15 +183,16 @@ export const generateBriefing = async (
   db: SqlExecutor,
   kind: BriefingKind,
   forDate: string,
-  scopeRef = 'grant',
+  scopeRef: string | null,
   office: string,
 ): Promise<Briefing | null> => {
   const inputs = await gatherInputs(db, office)
   const body = compose(kind, forDate, inputs)
 
   const { rows } = await db.execute(`
-    insert into public.briefings (kind, for_date, scope_ref, body, inputs)
-    values (${lit(kind)}::public.briefing_kind, ${lit(forDate)}::date, ${lit(scopeRef)},
+    insert into public.briefings (office_id, kind, for_date, scope_ref, body, inputs)
+    values (${lit(office)}::uuid, ${lit(kind)}::public.briefing_kind, ${lit(forDate)}::date,
+            ${scopeRef === null ? `app.office_actor(${lit(office)}::uuid)` : lit(scopeRef)},
             ${lit(body)}, ${lit(JSON.stringify(inputs))}::jsonb)
     on conflict (kind, scope_ref, for_date) do nothing
     returning briefing_id::text as id

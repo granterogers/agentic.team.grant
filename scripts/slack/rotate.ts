@@ -98,7 +98,7 @@ if (!process.argv.includes('--approved-by-grant')) {
 // tested — §18's *invalid refresh token* case, and the one path here that can
 // lock us out of Slack. This script is the caller and the reporting.
 const outcome = await rotateAndPersist(
-  { execute: (sql: string) => db.execute(sql) },
+  { office: 'app.operator_office()', execute: (sql: string) => db.execute(sql) },
   APP_ID,
   refreshToken,
 )
