@@ -690,8 +690,8 @@ export async function cases(c: Ctx): Promise<void> {
         }
       }
     },
-  } as unknown as Parameters<typeof syncNotion>[1]
-  const synced = await syncNotion(c.db, stub, pa)
+  } as unknown as Parameters<typeof syncNotion>[2]
+  const synced = await syncNotion(c.db, { officeId: OA }, stub, pa)
   c.check(
     synced.added === 1 &&
       synced.skipped.length === 1 &&

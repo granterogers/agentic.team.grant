@@ -286,8 +286,8 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
           {
             name: 'gather',
             run: async () => {
-              const found = await retrieve(db, brief, projectId, 8)
-              const post = await correspondence(db, projectId, brief, 4)
+              const found = await retrieve(db, { jobId: job.jobId }, brief, projectId, 8)
+              const post = await correspondence(db, { jobId: job.jobId }, projectId, brief, 4)
               return {
                 outcome: {
                   /*
@@ -332,8 +332,8 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               call — and on a resume it is the only way the text is available
               at all.
             */
-              const hits = await retrieve(db, brief, projectId, 8)
-              const post = await correspondence(db, projectId, brief, 4)
+              const hits = await retrieve(db, { jobId: job.jobId }, brief, projectId, 8)
+              const post = await correspondence(db, { jobId: job.jobId }, projectId, brief, 4)
               /*
               WHAT THE OFFICE COULD NOT LOOK AT, not merely what it found.
 
@@ -350,7 +350,9 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               const cover =
                 ((
                   await db
-                    .execute(`select app.mail_coverage(${lit(projectId)}::uuid) as c`)
+                    .execute(
+                      `select app.mail_coverage(app.job_office(${lit(job.jobId)}::uuid), ${lit(projectId)}::uuid) as c`,
+                    )
                     .catch(() => ({ rows: [] as Record<string, unknown>[] }))
                 ).rows[0]?.c as MailCoverage | undefined) ?? null
               const completion = await router.complete({

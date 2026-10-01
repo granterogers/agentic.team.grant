@@ -31,6 +31,9 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import { count } from '../text/plain.ts'
+import { officeOf, type RetrievalOffice } from './office.ts'
+
+export { officeOf, type RetrievalOffice }
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -112,15 +115,17 @@ export function citationRef(source: {
  */
 export async function retrieve(
   db: SqlExecutor,
+  office: RetrievalOffice,
   query: string,
   projectId: string | null = null,
   limit: number = DEFAULT_LIMIT,
 ): Promise<readonly Hit[]> {
-  return await searchProject(db, query, projectId, limit)
+  return await searchProject(db, office, query, projectId, limit)
 }
 
 async function searchProject(
   db: SqlExecutor,
+  office: RetrievalOffice,
   query: string,
   projectId: string | null,
   limit: number,
@@ -135,8 +140,8 @@ async function searchProject(
       -- coaching and mentoring" requires "material" and "say" to appear, and it
       -- matched nothing against a corpus whose one document is about exactly
       -- that. 0060 has the measurement.
-      from app.search_documents(${lit(query)}, ${projectId === null ? 'app.unnamed_project()' : `${lit(projectId)}::uuid`}, ${String(limit)}, ${lit(match)}) s
-      join public.documents d on d.document_id = s.document_id
+      from app.search_documents(${officeOf(office)}, ${lit(query)}, ${projectId === null ? `app.unnamed_project(${officeOf(office)})` : `${lit(projectId)}::uuid`}, ${String(limit)}, ${lit(match)}) s
+      join public.documents d on d.document_id = s.document_id and d.office_id = ${officeOf(office)}
   `)
   return (
     rows as {
@@ -184,11 +189,12 @@ interface Sibling {
  */
 export async function retrieveAcrossOffice(
   db: SqlExecutor,
+  office: RetrievalOffice,
   query: string,
   projectId: string | null = null,
   limit: number = DEFAULT_LIMIT,
 ): Promise<readonly Hit[]> {
-  const own = (await searchProject(db, query, projectId, limit)).map(
+  const own = (await searchProject(db, office, query, projectId, limit)).map(
     (h): Hit => ({ ...h, scope: 'this_project' }),
   )
   const read = (r: { rows: readonly Record<string, unknown>[] }): Sibling[] =>
@@ -199,7 +205,7 @@ export async function retrieveAcrossOffice(
   try {
     const named = read(
       await db.execute(
-        `select project_id::text as project_id, name, account_level from app.projects_named_in(${lit(query)}, ${asking})`,
+        `select project_id::text as project_id, name, account_level from app.projects_named_in(${officeOf(office)}, ${lit(query)}, ${asking})`,
       ),
     )
     targets = named
@@ -210,7 +216,7 @@ export async function retrieveAcrossOffice(
     if (fallback) {
       targets = read(
         await db.execute(
-          `select project_id::text as project_id, name, account_level from app.sibling_projects(${asking})
+          `select project_id::text as project_id, name, account_level from app.sibling_projects(${officeOf(office)}, ${asking})
           order by account_level desc, name limit ${String(SIBLING_SEARCH_CAP)}`,
         ),
       )
@@ -223,7 +229,14 @@ export async function retrieveAcrossOffice(
 
   const found: Hit[] = []
   for (const t of targets) {
-    for (const h of await searchProject(db, query, t.project_id, 3, fallback ? 'all' : 'any')) {
+    for (const h of await searchProject(
+      db,
+      office,
+      query,
+      t.project_id,
+      3,
+      fallback ? 'all' : 'any',
+    )) {
       found.push({
         ...h,
         scope: t.account_level ? 'account' : 'other_project',
@@ -389,10 +402,16 @@ export interface Coverage {
  * that cannot say what it covers must not be allowed to imply it covers
  * everything, which is the same direction `mayAct` leans for the same reason.
  */
-export async function coverageOf(db: SqlExecutor, projectId: string | null): Promise<Coverage> {
+export async function coverageOf(
+  db: SqlExecutor,
+  office: RetrievalOffice,
+  projectId: string | null,
+): Promise<Coverage> {
   if (projectId === null) return { blank: [], complete: true, documents: 0 }
   try {
-    const { rows } = await db.execute(`select app.project_knowledge(${lit(projectId)}::uuid) as k`)
+    const { rows } = await db.execute(
+      `select app.project_knowledge(${officeOf(office)}, ${lit(projectId)}::uuid) as k`,
+    )
     const raw = rows[0]?.k
     const k = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
       blank?: unknown
@@ -518,6 +537,7 @@ export interface MailHit {
  */
 export async function correspondence(
   db: SqlExecutor,
+  office: RetrievalOffice,
   projectId: string | null,
   query = '',
   limit = 6,
@@ -538,8 +558,8 @@ export async function correspondence(
       quietly widen the other.
     */
     const { rows } = await db.execute(
-      `select app.mail_for_project(${lit(projectId)}::uuid, 100) as belongs,
-              app.mail_search(${lit(query)}, ${lit(projectId)}::uuid, ${String(limit)}) as matches`,
+      `select app.mail_for_project(${officeOf(office)}, ${lit(projectId)}::uuid, 100) as belongs,
+              app.mail_search(${officeOf(office)}, ${lit(query)}, ${lit(projectId)}::uuid, ${String(limit)}) as matches`,
     )
     const asList = (raw: unknown): Record<string, unknown>[] => {
       const v = typeof raw === 'string' ? JSON.parse(raw) : raw
@@ -619,6 +639,7 @@ export interface Waiting {
  */
 export async function awaiting(
   db: SqlExecutor,
+  office: RetrievalOffice,
   projectId: string | null,
   days = 7,
   limit = 3,
@@ -626,7 +647,7 @@ export async function awaiting(
   if (projectId === null) return []
   try {
     const { rows } = await db.execute(
-      `select app.mail_awaiting(${lit(projectId)}::uuid, ${String(days)}, ${String(limit)}) as w`,
+      `select app.mail_awaiting(${officeOf(office)}, ${lit(projectId)}::uuid, ${String(days)}, ${String(limit)}) as w`,
     )
     const raw = rows[0]?.w
     const list = typeof raw === 'string' ? JSON.parse(raw) : raw

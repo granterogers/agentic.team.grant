@@ -45,6 +45,7 @@ import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import type { Job } from '../../src/jobs/worker.ts'
 import { dequeue, runJob } from '../../src/jobs/worker.ts'
 import { buildPass } from '../../src/office/pass.ts'
+import { personOffice } from '../test-office.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -89,7 +90,7 @@ console.log('a capability denied must be a capability absent (#320) —\n')
   for a reason it could not name: the whole defect was that canonical
   capability state did not mention the handler.
 */
-const cap = await capabilityNow(db, 'chief-of-staff')
+const cap = await capabilityNow(db, await personOffice(db), 'chief-of-staff')
 const makesDocuments = cap.can.find((a) => a.tool === 'document.create') ?? null
 check(
   'the office knows it can produce a document',

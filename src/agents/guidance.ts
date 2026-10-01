@@ -35,6 +35,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
 
 export interface Lesson {
   readonly body: string
@@ -83,6 +84,8 @@ const uuid = (v: string | null): string => (v === null || v === '' ? 'null' : `$
  */
 export async function guidanceFor(
   db: SqlExecutor,
+  /** Whose memory: the office of the CLAIMED job, never the deployment's. */
+  office: RetrievalOffice,
   staffSlug: string,
   jobKind: string | null = null,
   projectId: string | null = null,
@@ -98,14 +101,14 @@ export async function guidanceFor(
                   'stated', exists (select 1 from public.subject_identities si
                                      where si.kind = 'person' and si.subject = l.learned_by))),
                 '[]'::jsonb)
-           from app.lessons_for(${uuid(projectId)}, ${lit(staffSlug)},
+           from app.lessons_for(${officeOf(office)}, ${uuid(projectId)}, ${lit(staffSlug)},
                                 ${jobKind === null ? 'null' : lit(jobKind)},
                                 ${String(nLessons)}) l) as lessons,
         (select coalesce(jsonb_agg(jsonb_build_object(
                   'skill_id', s.skill_id, 'name', s.name, 'when_to_use', s.when_to_use,
                   'procedure', s.procedure, 'missing', s.missing)),
                 '[]'::jsonb)
-           from app.skills_for(${lit(staffSlug)},
+           from app.skills_for(${officeOf(office)}, ${lit(staffSlug)},
                                ${jobKind === null ? 'null' : lit(jobKind)},
                                ${uuid(projectId)}, ${String(nSkills)}) s) as skills
     `)

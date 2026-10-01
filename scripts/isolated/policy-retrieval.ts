@@ -12,6 +12,7 @@ import {
   sourceRefs,
   whereFrom,
 } from '../../src/knowledge/retrieval.ts'
+import { officeOfProject } from '../test-office.ts'
 import { lit, policyWorld } from './policy-lib.ts'
 
 const w = await policyWorld('prt')
@@ -38,6 +39,8 @@ const doc = (project: string, title: string, text: string, connector = 'upload')
                encode(extensions.digest(${lit(title + text)}, 'sha256'), 'hex'), app.now_utc(), 'grant') returning document_id::text as id`)
 
 const A = await real('Alpha')
+// Whose rows these are: the office the person's own projects were created in, named, never defaulted.
+const office = await officeOfProject(db, A.id)
 const B = await real('Bravo')
 const C = await real('Charlie')
 const WORD = `quillfeather${w.run}`
@@ -50,13 +53,15 @@ const docB = String(
 )
 const docC = String((await doc(C.id, 'Charlie plan', `${WORD} the venue plan. ${WORD}`)).id)
 // account-level material: the catch-all every unscoped turn is given.
-const unnamed = String((await one(`select app.unnamed_project()::text as id`)).id)
+const unnamed = String(
+  (await one(`select app.unnamed_project(${lit(office.officeId)}::uuid)::text as id`)).id,
+)
 const docAcct = String(
   (await doc(unnamed, 'Account note', `${WORD} account-wide house style. ${WORD}`)).id,
 )
 
 // ---- 1. project-first: a project that has its own answer is not padded ----------------------------------------------
-const own = await retrieveAcrossOffice(db, OTHER, A.id)
+const own = await retrieveAcrossOffice(db, office, OTHER, A.id)
 check(
   'a question the asking project can answer is answered from it alone, labelled as its own',
   own.length >= 1 &&
@@ -71,7 +76,7 @@ check(
 )
 
 // ---- 2. it widens when the question names another project -------------------------------------------------------------
-const named = await retrieveAcrossOffice(db, `what are the ${WORD} for ${B.name}`, A.id)
+const named = await retrieveAcrossOffice(db, office, `what are the ${WORD} for ${B.name}`, A.id)
 const fromB = named.find((h) => h.documentId === docB)
 check(
   'a question that NAMES another project reaches it',
@@ -96,7 +101,7 @@ check(
 )
 
 // ---- 3. it widens when the project has nothing at all -----------------------------------------------------------------
-const empty = await retrieveAcrossOffice(db, WORD, A.id)
+const empty = await retrieveAcrossOffice(db, office, WORD, A.id)
 check(
   "with nothing in the asking project, the same office's other projects are searched, each hit saying which",
   empty.length >= 2 &&
@@ -133,7 +138,7 @@ const docF = String(
 await one(
   `update public.projects set status = 'archived' where project_id = ${lit(C.id)}::uuid returning 1 as x`,
 )
-const after = await retrieveAcrossOffice(db, WORD, A.id)
+const after = await retrieveAcrossOffice(db, office, WORD, A.id)
 check(
   'a fixture project and an archived project are not part of the office a search may reach',
   !after.some((h) => h.documentId === docF || h.documentId === docC),
@@ -142,21 +147,25 @@ check(
 await one(
   `update public.projects set status = 'active' where project_id = ${lit(C.id)}::uuid returning 1 as x`,
 )
-const sibs = await rows(`select slug from app.sibling_projects(${lit(A.id)}::uuid)`)
+const sibs = await rows(
+  `select slug from app.sibling_projects(${lit(office.officeId)}::uuid, ${lit(A.id)}::uuid)`,
+)
 check(
   'the office is asked from ONE function, and it never includes the asking project itself',
   sibs.length >= 2 && !sibs.some((s) => String(s.slug).includes('alpha')),
   `${String(sibs.length)} sibling(s)`,
 )
-const fromFixture = await rows(`select slug from app.sibling_projects(${lit(fixture)}::uuid)`)
-const fixtureHits = await retrieveAcrossOffice(db, WORD, fixture)
+const fromFixture = await rows(
+  `select slug from app.sibling_projects(${lit(office.officeId)}::uuid, ${lit(fixture)}::uuid)`,
+)
+const fixtureHits = await retrieveAcrossOffice(db, office, WORD, fixture)
 check(
   "a test project has no siblings: a harness turn cannot read a real project's documents",
   fromFixture.length === 0 && fixtureHits.every((h) => h.scope === 'this_project'),
   `${String(fromFixture.length)} sibling(s)`,
 )
 // A search from no project at all is the catch-all's, not everybody's (invariant 17 still holds).
-const noProject = await retrieveAcrossOffice(db, OTHER, null)
+const noProject = await retrieveAcrossOffice(db, office, OTHER, null)
 check(
   "a question with no project is the catch-all's: another project's note is not returned just because it was never scoped",
   !noProject.some((h) => h.documentId === docA && h.scope === 'this_project'),
@@ -174,7 +183,7 @@ const mail = String(
   ).id,
 )
 const fenced = contextBlock(
-  await retrieveAcrossOffice(db, `what does ${B.name} say about ${WORD}`, A.id),
+  await retrieveAcrossOffice(db, office, `what does ${B.name} say about ${WORD}`, A.id),
 )
 check(
   'outside material from another project is still fenced as data',
@@ -188,8 +197,18 @@ const bait = await doc(
   'Bravo meeting note',
   `The weekly meeting is held in the main hall. ${WORD}z notes follow.`,
 )
-const weak = await retrieveAcrossOffice(db, 'what is the weather like for the meeting today', null)
-const weakA = await retrieveAcrossOffice(db, 'what is the weather like for the meeting today', A.id)
+const weak = await retrieveAcrossOffice(
+  db,
+  office,
+  'what is the weather like for the meeting today',
+  null,
+)
+const weakA = await retrieveAcrossOffice(
+  db,
+  office,
+  'what is the weather like for the meeting today',
+  A.id,
+)
 check(
   'a question sharing only the word "meeting" with a sibling project pulls nothing from it (nobody named, nothing of its own)',
   !weak.some((h) => h.scope !== 'this_project') &&

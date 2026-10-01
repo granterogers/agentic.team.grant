@@ -460,7 +460,7 @@ try {
   const counted = Number(
     (
       await one(`
-        select count(*)::int as n from app.impediments_tally(30, 1, false)
+        select count(*)::int as n from app.impediments_tally(app.test_office(), 30, 1, false)
          where needed like ${lit(`%${run}%`)}
       `)
     ).n,

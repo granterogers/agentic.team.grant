@@ -139,9 +139,11 @@ check(
   copy.slice(0, 140),
 )
 // A proactive internal result is in front of him afterwards; the noticing pass runs without asking anybody anything.
-const noticed = await one(`select app.raise_suggestions() as r`).catch((e: Error) => ({
-  r: `error ${e.message}`,
-}))
+const noticed = await one(`select app.raise_suggestions(app.sole_person_office()) as r`).catch(
+  (e: Error) => ({
+    r: `error ${e.message}`,
+  }),
+)
 check(
   'proactive noticing runs and asks nobody (it offers; it does not act)',
   !String(noticed.r).startsWith('error'),

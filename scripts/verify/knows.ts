@@ -40,6 +40,7 @@ import {
   contradictsReality,
 } from '../../src/agents/capability.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { personOffice } from '../test-office.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -123,7 +124,8 @@ for (const fine of [
 // ===========================================================================
 console.log('\ndenying a service that is actually reachable')
 
-const cap: Capability = await capabilityNow(db, 'chief-of-staff')
+const person = await personOffice(db)
+const cap: Capability = await capabilityNow(db, person, 'chief-of-staff')
 const reachable = cap.reach.filter((r) => r.reachable)
 check(
   'CONTROL: something is actually reachable, so the checks below are not vacuous',
@@ -176,7 +178,7 @@ const roster = (
 
 let thin = 0
 for (const slug of roster) {
-  const theirs = capabilityBrief(await capabilityNow(db, slug))
+  const theirs = capabilityBrief(await capabilityNow(db, person, slug))
   if (!/button/i.test(theirs)) thin += 1
 }
 check(
@@ -275,7 +277,7 @@ check(
   Disabled and not deleted for the same reason one level up: a listed gap can
   become a proposal (#49), a deleted one cannot.
 */
-const emma = await capabilityNow(db, 'research-director')
+const emma = await capabilityNow(db, person, 'research-director')
 check(
   'no agent is told it CAN search the web',
   emma.can.some((c) => c.tool === 'web.search') ? 'IT IS IN THE CAN LIST' : 'not in can',

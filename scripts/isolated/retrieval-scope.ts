@@ -9,6 +9,7 @@
  * proving the narrowing did not take the search box with it.
  */
 import { retrieve } from '../../src/knowledge/retrieval.ts'
+import { testOffice } from '../test-office.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'rscope')
@@ -44,26 +45,27 @@ const addDoc = (project: string, ref: string) =>
     returning document_id::text as id`)
 const docA = String((await addDoc(A, `a-${run}`)).id)
 
-const inA = await retrieve(db, WORD, A)
+const office = await testOffice(db)
+const inA = await retrieve(db, office, WORD, A)
 check(
   'control: a document in project A is found when A is asked for',
   inA.some((h) => h.documentId === docA),
   `${inA.length} hit(s)`,
 )
-const inB = await retrieve(db, WORD, B)
+const inB = await retrieve(db, office, WORD, B)
 check(
   'a question in project B does not see project A',
   !inB.some((h) => h.documentId === docA),
   `${inB.length} hit(s)`,
 )
-const nobody = await retrieve(db, WORD, null)
+const nobody = await retrieve(db, office, WORD, null)
 check(
   'NO project named is not "every project": the document of A is not returned',
   !nobody.some((h) => h.documentId === docA),
   `${nobody.length} hit(s)`,
 )
 const box = await db.execute(
-  `select document_id::text as id from app.search_documents(${lit(WORD)}, null, 10)`,
+  `select document_id::text as id from app.search_documents(${lit(office.officeId)}::uuid, ${lit(WORD)}, null, 10)`,
 )
 check(
   "control: Grant's own search box (a null project on purpose) still finds it, so the narrowing is precise",

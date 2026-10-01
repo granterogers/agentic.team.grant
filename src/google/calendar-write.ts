@@ -29,7 +29,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
-import { soleOffice } from '../db/office.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
 import type { OfficeId } from '../office/context.ts'
 import { nothingToDo, type Plan } from '../tools/plan.ts'
 import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
@@ -114,7 +114,8 @@ function eventFor(row: PlanRow): Record<string, unknown> {
  */
 export async function planTasksForCalendar(
   db: SqlExecutor,
-  options: { readonly fetchImpl?: typeof fetch; readonly officeId?: OfficeId } = {},
+  office: RetrievalOffice,
+  options: { readonly fetchImpl?: typeof fetch } = {},
 ): Promise<{
   readonly ok: boolean
   readonly note: string
@@ -146,7 +147,11 @@ export async function planTasksForCalendar(
   }
 
   const access = await googleAccess(db, fetchImpl)
-  await recordGoogleHealth(db, access, options.officeId ?? (await soleOffice(db)))
+  // The office is the caller's (the claimed job's, or the one a script names), resolved in SQL - never an ambient default.
+  const officeId = (
+    (await db.execute(`select ${officeOf(office)}::text as id`)).rows[0] as { id: string }
+  ).id as OfficeId
+  await recordGoogleHealth(db, access, officeId)
   if (!access.ok) {
     return { ok: false, note: access.reason, plan: nothingToDo('calendar.write', access.reason) }
   }
@@ -165,7 +170,8 @@ export async function planTasksForCalendar(
     return { ok: false, note: why, plan: nothingToDo('calendar.write', why) }
   }
 
-  const answer = (await db.execute('select app.calendar_task_plan() as p')).rows[0] as {
+  const answer = (await db.execute(`select app.calendar_task_plan(${officeOf(office)}) as p`))
+    .rows[0] as {
     p: CalendarWork
   }
   const work = answer.p
@@ -210,16 +216,13 @@ export async function planTasksForCalendar(
 /** Put dated, open tasks in the diary, and take away the ones that are done. */
 export async function syncTasksToCalendar(
   db: SqlExecutor,
-  options: {
-    readonly fetchImpl?: typeof fetch
-    readonly dryRun?: boolean
-    readonly officeId?: OfficeId
-  } = {},
+  office: RetrievalOffice,
+  options: { readonly fetchImpl?: typeof fetch; readonly dryRun?: boolean } = {},
 ): Promise<SyncOutcome> {
   const fetchImpl = options.fetchImpl ?? fetch
   const nothing = { created: 0, updated: 0, removed: 0 }
 
-  const planned = await planTasksForCalendar(db, options)
+  const planned = await planTasksForCalendar(db, office, options)
   if (planned.work === undefined || planned.access === undefined) {
     return { ok: planned.ok, note: planned.note, ...nothing }
   }

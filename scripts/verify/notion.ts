@@ -26,6 +26,7 @@
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { NotionApiError, NotionClient } from '../../src/notion/api.ts'
 import { CONNECTOR, listShared, pageText, syncNotion } from '../../src/notion/sync.ts'
+import { officeOfProject } from '../test-office.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const run = Date.now().toString(36)
@@ -136,6 +137,8 @@ const project = await one(`
   select project_id::text as id from created
 `)
 const projectId = String(project?.id)
+// Whose documents: the office of the project this suite makes (every reader is asked of one office).
+const PO = `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
 
 const parent = shared.find((s) => s.object === 'page')
 const MARKER = `xyzzy${run}`
@@ -202,14 +205,14 @@ if (parent === undefined) {
     indexed,
   )
 
-  const first = await syncNotion(db, notion, projectId)
+  const first = await syncNotion(db, await officeOfProject(db, projectId), notion, projectId)
   record(
     'the sync stores what is shared',
     `shared=${String(first.shared)} added=${String(first.added)} changed=${String(first.changed)} skipped=${String(first.skipped.length)}`,
     first.added >= 1,
   )
 
-  const second = await syncNotion(db, notion, projectId)
+  const second = await syncNotion(db, await officeOfProject(db, projectId), notion, projectId)
   // Asserted on the ROWS, not on `added`.
   //
   // `added === 0` was the obvious assertion and it is sensitive to something
@@ -235,8 +238,9 @@ if (parent === undefined) {
     second.changed === 0 && second.unchanged >= 1 && Number(duplicated?.n) === 0,
   )
 
-  const hits = (await db.execute(`select * from app.search_documents(${lit(MARKER)}, null, 10)`))
-    .rows as { connector: string }[]
+  const hits = (
+    await db.execute(`select * from app.search_documents(${PO}, ${lit(MARKER)}, null, 10)`)
+  ).rows as { connector: string }[]
   record(
     'a Notion document is searchable through the same function as every other',
     `${String(hits.length)} hit(s), connector=${String(hits[0]?.connector)}`,
@@ -250,7 +254,7 @@ if (parent === undefined) {
      where connector = ${lit(CONNECTOR)}
   `)
   const whileOff = (
-    await db.execute(`select * from app.search_documents(${lit(MARKER)}, null, 10)`)
+    await db.execute(`select * from app.search_documents(${PO}, ${lit(MARKER)}, null, 10)`)
   ).rows
   record(
     'closing the Notion route does not lose what it already brought in (§17)',

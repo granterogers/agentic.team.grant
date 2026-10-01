@@ -191,9 +191,9 @@ check(
 // ===========================================================================
 console.log('\nand an agent is told about the gap')
 
-const could = (await one("select app.capability_index('research-director') -> 'could' as c")).c as
-  | Row[]
-  | null
+const could = (
+  await one("select app.capability_index(app.test_office(), 'research-director') -> 'could' as c")
+).c as Row[] | null
 check(
   'the capability index carries it, so it reaches the prompt',
   could === null ? 'the key is missing' : `${String(could.length)} entry(ies)`,
@@ -204,10 +204,8 @@ check(
   hundred-line function rather than restating it, for exactly the reason 0164
   is a cautionary tale — but a wrapper can still be wired up wrong.
 */
-const full = (await one("select app.capability_index('research-director') as i")).i as Record<
-  string,
-  unknown
->
+const full = (await one("select app.capability_index(app.test_office(), 'research-director') as i"))
+  .i as Record<string, unknown>
 check(
   'CONTROL: and nothing else in the index was lost',
   Object.keys(full).sort().join(', '),

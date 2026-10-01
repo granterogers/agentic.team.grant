@@ -35,6 +35,7 @@ import { remember } from '../../src/agents/remember.ts'
 import { readTeaching } from '../../src/agents/teaching.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { personOffice } from '../test-office.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -45,6 +46,8 @@ const db: SqlExecutor = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
+// The grants (staff_tools) live in the sole person's office, so that is the office this suite reads rules and skills in.
+const person = await personOffice(db)
 
 let pass = 0
 let fail = 0
@@ -121,7 +124,7 @@ ok('and it starts at version 1', Number(made.version) === 1)
 
 {
   const back = await all(`
-    select name, procedure, tools, missing from app.skills_for('operations-director', null, null, 40)
+    select name, procedure, tools, missing from app.skills_for(app.sole_person_office(),'operations-director', null, null, 40)
      where skill_id = ${lit(skillId)}::uuid
   `)
   ok('and it comes back for a job to read', back.length === 1)
@@ -249,7 +252,7 @@ await refuses(
   ok('a skill may name a tool nobody currently holds', wantId !== '')
 
   const seen = await one(`
-    select tools, missing from app.skills_for('operations-director', null, null, 40)
+    select tools, missing from app.skills_for(app.sole_person_office(),'operations-director', null, null, 40)
      where skill_id = ${lit(wantId)}::uuid
   `)
   ok(
@@ -264,7 +267,9 @@ await refuses(
     The skill above is as persuasive as the schema permits and says outright to
     use the tool. If naming it were enough, this would now be true.
   */
-  const may = await one(`select app.staff_may_use('operations-director', 'github.write') as m`)
+  const may = await one(
+    `select app.staff_may_use(app.sole_person_office(),'operations-director', 'github.write') as m`,
+  )
   ok('but the answer to may-I does not move', may.m === false)
 
   /*
@@ -277,7 +282,9 @@ await refuses(
     how every handler reads its own database and the office does not run
     without it.
   */
-  const held = await one(`select app.staff_may_use('operations-director', 'db.read') as m`)
+  const held = await one(
+    `select app.staff_may_use(app.sole_person_office(),'operations-director', 'db.read') as m`,
+  )
   ok('while a tool that IS held is still held', held.m === true)
 
   await db.execute(
@@ -466,7 +473,7 @@ await refuses(
   const kept =
     read === null
       ? { said: '', stored: null }
-      : await remember(db, read, 'grant', 'operations-director', null)
+      : await remember(db, person, read, 'grant', 'operations-director', null)
   ok('and it is stored', kept.stored === 'skill', kept.said.slice(0, 120))
   ok(
     'and he is told what was stored, so a misreading is visible immediately',
@@ -480,7 +487,7 @@ await refuses(
     query written for this test, because a query written for this test proves
     only that the row exists.
   */
-  const g = await guidanceFor(db, 'operations-director', 'chat.instruction', null)
+  const g = await guidanceFor(db, person, 'operations-director', 'chat.instruction', null)
   const found = g.skills.find((sk) => sk.name.includes('Writing') || sk.procedure.includes(run))
   ok('the next job that person takes is shown it', found !== undefined)
   ok('with the procedure intact', String(found?.procedure ?? '').includes('lead with what changed'))
@@ -494,7 +501,7 @@ await refuses(
   )
 
   // Someone else is not governed by it: it was addressed to one person.
-  const other = await guidanceFor(db, 'finance-director', 'chat.instruction', null)
+  const other = await guidanceFor(db, person, 'finance-director', 'chat.instruction', null)
   ok(
     'while a colleague it was not addressed to is not governed by it',
     !other.skills.some((sk) => sk.procedure.includes(run)),
@@ -520,7 +527,7 @@ await refuses(
   ok('a procedure of his with a URL in it still reads as a procedure', t?.kind === 'skill')
 
   const refused =
-    t === null ? { said: '', stored: null } : await remember(db, t, 'grant', null, null)
+    t === null ? { said: '', stored: null } : await remember(db, person, t, 'grant', null, null)
   ok('but it is not stored', refused.stored === null)
   ok(
     'and he is told which part is the problem and what to say instead',

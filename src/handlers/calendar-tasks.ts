@@ -37,7 +37,8 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
       no second description of the work here, which is the only reason this
       can be trusted to match what happens next.
     */
-    plan: async (): Promise<Plan> => (await planTasksForCalendar(db)).plan,
+    plan: async (job: Job): Promise<Plan> =>
+      (await planTasksForCalendar(db, { jobId: job.jobId })).plan,
     handle: async (job: Job): Promise<HandlerOutput> => {
       /*
         The policy, before the diary (#15).
@@ -53,7 +54,7 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
         a category — and this is the same plan the sync carries out, not a
         second description of it.
       */
-      const planned = (await planTasksForCalendar(db)).plan
+      const planned = (await planTasksForCalendar(db, { jobId: job.jobId })).plan
       const gate = await governOutward(db, {
         jobId: job.jobId,
         tool: planned.tool,
@@ -79,7 +80,7 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
         } satisfies HandlerOutput
       }
 
-      const outcome = await syncTasksToCalendar(db)
+      const outcome = await syncTasksToCalendar(db, { jobId: job.jobId })
 
       const moved = outcome.created + outcome.updated + outcome.removed
       if (outcome.ok && moved === 0) {

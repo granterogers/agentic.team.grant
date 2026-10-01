@@ -271,7 +271,7 @@ export function slackChannel(
   ) => Promise<NotifyOutcome>
 } {
   const severity = options.severity ?? 'routine'
-  const subject = options.subject ?? 'grant'
+  // Whose preferences: the explicit subject, else the person of the job's own office - never a literal name.
 
   return {
     name: 'slack',
@@ -286,7 +286,8 @@ export function slackChannel(
       }
 
       const allowed = await db.execute(`
-        select app.notification_allowed(${lit(subject)}, 'slack', ${lit(severity)}::public.notify_severity,
+        select app.notification_allowed(app.job_office(${lit(job.jobId)}::uuid),
+          ${options.subject === undefined ? `app.office_actor(app.job_office(${lit(job.jobId)}::uuid))` : lit(options.subject)}, 'slack', ${lit(severity)}::public.notify_severity,
           ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`}) as allowed
       `)
       if ((allowed.rows[0] as { allowed?: boolean } | undefined)?.allowed !== true) {

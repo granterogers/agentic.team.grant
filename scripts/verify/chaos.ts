@@ -387,8 +387,9 @@ const output = (): HandlerOutput =>
   // The property the 2026-09-04 ban actually tested, injected rather than
   // waited for: a route being closed does not lose what it brought in.
   const corpus = await one(`select count(*)::int as n from public.documents`)
-  const searchable = (await db.execute(`select * from app.search_documents('coaching', null, 5)`))
-    .rows
+  const searchable = (
+    await db.execute(`select * from app.search_documents(app.test_office(), 'coaching', null, 5)`)
+  ).rows
   record(
     'Notion down: the corpus is intact and still searchable — a route is not a store',
     `${String(corpus?.n)} document(s), ${String(searchable.length)} still findable`,

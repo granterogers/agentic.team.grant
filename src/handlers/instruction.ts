@@ -2038,6 +2038,7 @@ async function offerRule(
   try {
     const { rows } = await db.execute(`
       select app.propose_standing_rule(
+        app.job_office(${lit(job.jobId)}::uuid),
         ${lit(correction.rule)}, 'global', null, null,
         ${lit(job.jobId)}::uuid, ${lit(because)}::jsonb) as r`)
     row = (rows[0] as { r?: { offered?: boolean; rule?: string; error?: string } } | undefined)?.r
@@ -2133,6 +2134,7 @@ async function resolveProjects(db: SqlExecutor, plan: Plan, jobId: string): Prom
     const { rows } = await db.execute(`
       select r.project_id::text, r.slug, r.name, r.confidence::float8 as confidence
         from app.resolve_project_by_name(
+               app.job_office(${lit(jobId)}::uuid),
                ${lit(name)},
                app.harness_job(${lit(jobId)}::uuid)) r
        order by r.confidence desc
@@ -3903,6 +3905,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? null
           : await remember(
               deps.db,
+              { jobId: job.jobId },
               teaching,
               learnedBy,
               // Addressed to one person, or to the office. Getting this backwards
@@ -5548,7 +5551,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         instruction.split(/\s+/).length <= 8 && lastSaid !== ''
           ? `${lastSaid} ${instruction}`
           : instruction
-      const hits = !answering ? [] : await retrieveAcrossOffice(deps.db, searchFor, job.projectId)
+      const hits = !answering
+        ? []
+        : await retrieveAcrossOffice(deps.db, { jobId: job.jobId }, searchFor, job.projectId)
       const context = contextBlock(hits)
 
       /*
@@ -5567,7 +5572,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         no project, and empty is the common case today because nothing matches
         an inbox of travel and clinic mail.
       */
-      const mail = !answering ? [] : await correspondence(deps.db, job.projectId, instruction)
+      const mail = !answering
+        ? []
+        : await correspondence(deps.db, { jobId: job.jobId }, job.projectId, instruction)
       /*
         And WHY it is empty, when it is (#172, #257).
 
@@ -5583,7 +5590,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? null
           : (((
               await deps.db
-                .execute(`select app.mail_coverage(${lit(job.projectId)}::uuid) as c`)
+                .execute(
+                  `select app.mail_coverage(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.projectId)}::uuid) as c`,
+                )
                 .catch(() => ({ rows: [] as Record<string, unknown>[] }))
             ).rows[0]?.c as MailCoverage | undefined) ?? null)
       const mailContext = mailBlock(mail, mailCover)
@@ -5603,7 +5612,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         the model a list of things to try. The office brings what belongs to
         the project and the model reads it or does not.
       */
-      const quiet = !answering ? [] : await awaiting(deps.db, job.projectId)
+      const quiet = !answering ? [] : await awaiting(deps.db, { jobId: job.jobId }, job.projectId)
       const waitingContext = waitingBlock(quiet)
 
       /*
@@ -5620,7 +5629,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         a sentence saying "I searched all of it" on every turn is noise that
         teaches a model to skim the block it sits in.
       */
-      const coverage = !answering ? null : await coverageOf(deps.db, job.projectId)
+      const coverage = !answering
+        ? null
+        : await coverageOf(deps.db, { jobId: job.jobId }, job.projectId)
       const gapNote = coverage === null ? '' : coverageNote(coverage)
 
       /*
@@ -5639,7 +5650,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ? []
         : (((
             await deps.db
-              .execute(`select app.decisions_about(${lit(instruction.slice(0, 500))}, 4) as d`)
+              .execute(
+                `select app.decisions_about(app.job_office(${lit(job.jobId)}::uuid), ${lit(instruction.slice(0, 500))}, 4) as d`,
+              )
               .catch(() => ({ rows: [{ d: '[]' }] }))
           ).rows[0]?.d as Decided[] | string | undefined) ?? [])
 
@@ -5863,7 +5876,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         hits a boundary has something to propose (#49) instead of asserting a
         limitation it does not have (#64).
       */
-      const cap = !answering ? EMPTY_CAPABILITY : await capabilityNow(deps.db, who.slug)
+      const cap = !answering
+        ? EMPTY_CAPABILITY
+        : await capabilityNow(deps.db, { jobId: job.jobId }, who.slug)
       const reach = cap.reach
 
       /*
@@ -5879,7 +5894,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const guidance = !answering
         ? { lessons: [], skills: [] }
-        : await guidanceFor(deps.db, who.slug, job.kind, job.projectId)
+        : await guidanceFor(deps.db, { jobId: job.jobId }, who.slug, job.kind, job.projectId)
       // At retrieval, not at completion: a skill shown to a job and then
       // ignored still shaped the prompt, so it still answers for the outcome.
       await recordSkillUse(deps.db, guidance.skills, job.jobId)
@@ -5901,7 +5916,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? ''
           : await deps.db
               .execute(
-                `select app.project_instruction_for(${lit(job.projectId)}::uuid, ${lit(who.slug)}) as v`,
+                `select app.project_instruction_for(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.projectId)}::uuid, ${lit(who.slug)}) as v`,
               )
               .then((r) => String((r.rows[0] as { v?: string } | undefined)?.v ?? '').trim())
               .catch(() => '')

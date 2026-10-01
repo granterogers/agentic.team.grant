@@ -23,6 +23,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
 import type { NotionClient } from './api.ts'
 import { NotionApiError } from './api.ts'
 import { type NotionBlock, type RenderedBlock, renderBlocks, titleOf } from './content.ts'
@@ -35,7 +36,7 @@ const nul = (v: string | null): string => (v === null ? 'null' : lit(v))
  * project row the caller read is the document's owner (documents carry the office of the project they hang from,
  * enforced by a composite key), so a document is read, written and linked inside that office and no other.
  */
-const officeOf = (projectId: string): string =>
+const officeOfProject = (projectId: string): string =>
   `(select p.office_id from public.projects p where p.project_id = ${lit(projectId)}::uuid)`
 
 export const CONNECTOR = 'notion'
@@ -156,7 +157,7 @@ export async function upsertDocument(
 
   const existing = await db.execute(`
     select content_fingerprint from public.documents
-     where office_id = ${officeOf(projectId)}
+     where office_id = ${officeOfProject(projectId)}
        and connector = ${lit(CONNECTOR)}
        and external_parent_ref = ${lit(object.object)}
        and external_ref = ${lit(object.id)}
@@ -191,12 +192,12 @@ export async function upsertDocument(
             app.now_utc(), ${nul(object.lastEdited)}::timestamptz,
             (select d.document_id from public.documents d
               where d.project_id = ${lit(projectId)}::uuid
-                and d.office_id = ${officeOf(projectId)}
+                and d.office_id = ${officeOfProject(projectId)}
                 and d.connector <> ${lit(CONNECTOR)}
                 and d.mirrors_document_id is null
                 and app.normalise_name(d.title) = app.normalise_name(${nul(object.title === '' ? null : object.title)})
               limit 1),
-            ${officeOf(projectId)})
+            ${officeOfProject(projectId)})
     -- The index is partial (0051), so the conflict target repeats its predicate.
     on conflict (connector, external_parent_ref, external_ref)
       where external_ref is not null
@@ -237,10 +238,11 @@ export async function upsertDocument(
  */
 export async function containerRefs(
   db: SqlExecutor,
+  office: RetrievalOffice,
   projectId: string,
 ): Promise<ReadonlySet<string>> {
   const rows = await db.execute(`
-    select external_ref from app.container_refs(${lit(projectId)}::uuid, ${lit(CONNECTOR)})
+    select external_ref from app.container_refs(${officeOf(office)}, ${lit(projectId)}::uuid, ${lit(CONNECTOR)})
   `)
   return new Set(rows.rows.map((r) => String(r.external_ref)))
 }
@@ -276,7 +278,7 @@ export async function registerAuthored(
     values (${lit(projectId)}::uuid, ${lit(CONNECTOR)}, 'page', ${lit(page.id)},
             ${nul(page.title === '' ? null : page.title)}, 'page',
             ${lit(body)}, ${lit(fingerprint)}, ${String(body.length)},
-            app.now_utc(), 'made', ${lit(producedBy)}, ${officeOf(projectId)})
+            app.now_utc(), 'made', ${lit(producedBy)}, ${officeOfProject(projectId)})
     on conflict (connector, external_parent_ref, external_ref)
       where external_ref is not null
       do update set origin = 'made',
@@ -298,11 +300,12 @@ export async function registerAuthored(
  */
 export async function syncNotion(
   db: SqlExecutor,
+  office: RetrievalOffice,
   notion: NotionClient,
   projectId: string,
 ): Promise<SyncOutcome> {
   const shared = await listShared(notion)
-  const containers = await containerRefs(db, projectId)
+  const containers = await containerRefs(db, office, projectId)
   let added = 0
   let changed = 0
   let unchanged = 0

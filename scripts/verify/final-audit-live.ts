@@ -17,6 +17,7 @@
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { fingerprint } from '../../src/jobs/checkpoint.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
+import { officeOfProject, personOffice } from '../test-office.ts'
 import { harnessSession } from './lib/harness-session.ts'
 import { officeKey } from './lib/sign-in.ts'
 import { testOrigins } from './lib/test-origin.ts'
@@ -797,9 +798,12 @@ try {
     } else {
       const word = String(doc.title).match(/[A-Za-z]{7,}/)?.[0] ?? ''
       const { retrieve } = await import('../../src/knowledge/retrieval.ts')
-      const unnamed = String((await one(`select app.unnamed_project()::text as p`)).p)
-      const inOwn = await retrieve(db, word, String(doc.p), 50)
-      const inNull = await retrieve(db, word, null, 50)
+      const office = await officeOfProject(db, String(doc.p))
+      const unnamed = String(
+        (await one(`select app.unnamed_project('${office.officeId}'::uuid)::text as p`)).p,
+      )
+      const inOwn = await retrieve(db, office, word, String(doc.p), 50)
+      const inNull = await retrieve(db, office, word, null, 50)
       const leaked = []
       for (const h of inNull) {
         const pr = await one(
@@ -817,7 +821,9 @@ try {
     // "stated" means a person (B10): every rule the prompt presents as his order was given by an admitted person.
     {
       const { guidanceFor } = await import('../../src/agents/guidance.ts')
-      const g = await guidanceFor(db, 'chief-of-staff', null, null, { lessons: 50 })
+      const g = await guidanceFor(db, await personOffice(db), 'chief-of-staff', null, null, {
+        lessons: 50,
+      })
       const stated = g.lessons.filter((l) => l.stated)
       let bad = 0
       for (const l of stated) {

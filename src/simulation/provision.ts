@@ -193,6 +193,12 @@ export const assertContained = async (db: SqlExecutor): Promise<readonly string[
       (select count(*)::int from public.projects
         where name like 'simgrant %' and slug not like ${lit(`${WORLD_PREFIX}%`)}) as stray_real,
       (select count(*)::int from app.resolve_project_by_name(${TEST_OFFICE}, 'the funding one', false)) as wrapper_sees,
+      -- Any DOOR a browser role could resolve a name through. The public resolver was dropped with the office
+      -- conversion (it searched every office); this asserts none has come back, which is the property.
+      (select count(*)::int from pg_proc fn join pg_namespace ns on ns.oid = fn.pronamespace
+        where ns.nspname = 'public' and fn.proname = 'resolve_project_by_name'
+          and (has_function_privilege('anon', fn.oid, 'execute')
+               or has_function_privilege('authenticated', fn.oid, 'execute'))) as resolver_door_open,
       (select count(*)::int from public.slack_channel_map m
          join public.projects p on p.project_id = m.project_id and p.office_id = ${TEST_OFFICE}
         where p.slug like ${lit(`${WORLD_PREFIX}%`)}) as slack_channels
@@ -214,6 +220,10 @@ export const assertContained = async (db: SqlExecutor): Promise<readonly string[
   if (Number(r.wrapper_sees) > 0)
     problems.push(
       `the ordinary resolver (fixtures excluded, as for anything with a browser) resolved a world nickname (${String(r.wrapper_sees)} candidate(s)) - the simulated world is visible to people`,
+    )
+  if (Number(r.resolver_door_open) > 0)
+    problems.push(
+      'a public project-name resolver is executable by a browser role - it was dropped with the office conversion because it searched every office',
     )
   if (Number(r.slack_channels) > 0)
     problems.push(`${String(r.slack_channels)} world project(s) have a Slack channel mapped`)

@@ -156,7 +156,8 @@ export class TelegramPager {
     // The same rule Slack asks, asked for this channel. One implementation of
     // "should Grant be told", consulted twice.
     const { rows } = await this.db.execute(`
-      select app.notification_allowed(${subject === undefined ? `app.office_actor(app.job_office(${lit(input.job.jobId)}::uuid))` : lit(subject)}, 'telegram',
+      select app.notification_allowed(app.job_office(${lit(input.job.jobId)}::uuid),
+        ${subject === undefined ? `app.office_actor(app.job_office(${lit(input.job.jobId)}::uuid))` : lit(subject)}, 'telegram',
         ${lit(input.severity)}::public.notify_severity,
         ${input.job.projectId === null ? 'null' : `${lit(input.job.projectId)}::uuid`}) as allowed
     `)

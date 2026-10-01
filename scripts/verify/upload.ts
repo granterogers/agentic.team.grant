@@ -322,7 +322,7 @@ for (const [what, bytes] of [
 */
 const searchable = await one(`
   select count(*)::int as n
-    from app.search_documents(p_query => ${lit(`not a pdf at all ${run}`)},
+    from app.search_documents(p_office => app.test_office(), p_query => ${lit(`not a pdf at all ${run}`)},
                               p_project => ${lit(projectId)}::uuid, p_limit => 10)`)
 check(
   'and no search can retrieve the rubbish inside one',

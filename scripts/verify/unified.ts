@@ -91,6 +91,8 @@ const project = await one(`
           'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const projectId = String(project.id)
+// Whose documents: the office of the project this suite makes (every reader is asked of one office).
+const PO = `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
 
 /*
   The document arrives ONLY through the notebook, which is the premise.
@@ -150,7 +152,7 @@ await db.execute(`
 `)
 const bothConnectors = await one(`
   select count(distinct connector)::int as n
-    from app.search_documents(${lit(TOKEN)}, ${lit(projectId)}::uuid, 10, 'any')`)
+    from app.search_documents(${PO}, ${lit(TOKEN)},${lit(projectId)}::uuid, 10, 'any')`)
 check(
   'two different connectors feed ONE searchable project memory',
   `${String(bothConnectors.n)} connector(s) answer the same query`,
@@ -410,7 +412,7 @@ const other = await one(`
 const otherId = String(other.id)
 const leak = await one(`
   select count(*)::int as n
-    from app.search_documents(${lit(TOKEN)}, ${lit(otherId)}::uuid, 5, 'any')`)
+    from app.search_documents(${PO}, ${lit(TOKEN)},${lit(otherId)}::uuid, 5, 'any')`)
 check(
   'CONTROL: another project cannot see this document at all',
   `${String(leak.n)} hit(s) from the other project`,
@@ -418,7 +420,7 @@ check(
 )
 const visible = await one(`
   select count(*)::int as n
-    from app.search_documents(${lit(TOKEN)}, ${lit(projectId)}::uuid, 5, 'any')`)
+    from app.search_documents(${PO}, ${lit(TOKEN)},${lit(projectId)}::uuid, 5, 'any')`)
 check(
   'CONTROL: and its own project can, so the isolation is scope and not silence',
   `${String(visible.n)} hit(s) from its own project`,

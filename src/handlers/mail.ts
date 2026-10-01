@@ -76,7 +76,9 @@ export function mailHandler(db: SqlExecutor): Handler {
       */
       let pruned = 0
       try {
-        const { rows } = await db.execute(`select app.forget_mail_before(180) as r`)
+        const { rows } = await db.execute(
+          `select app.forget_mail_before(app.job_office(${lit(job.jobId)}::uuid), 180) as r`,
+        )
         const raw = rows[0]?.r
         const r = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { removed?: unknown }
         pruned = typeof r?.removed === 'number' ? r.removed : 0
@@ -95,7 +97,9 @@ export function mailHandler(db: SqlExecutor): Handler {
       */
       let forgotten = 0
       try {
-        const { rows } = await db.execute(`select app.forget_mail_bodies_before(90) as r`)
+        const { rows } = await db.execute(
+          `select app.forget_mail_bodies_before(app.job_office(${lit(job.jobId)}::uuid), 90) as r`,
+        )
         const raw = rows[0]?.r
         const r = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { forgotten?: unknown }
         forgotten = typeof r?.forgotten === 'number' ? r.forgotten : 0

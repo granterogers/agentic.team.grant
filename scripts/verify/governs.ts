@@ -533,7 +533,7 @@ try {
   */
   const witnesses = await one(`
     select count(*)::int as n
-      from app.impediments_tally(3650, 1, false) t
+      from app.impediments_tally(app.test_office(), 3650, 1, false) t
      where not exists (
        select 1 from public.job_impediments i
          left join public.jobs j on j.job_id = i.job_id

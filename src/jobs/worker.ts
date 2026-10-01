@@ -640,7 +640,8 @@ const recordOnLedger = async (
     // 20 finished jobs instead of 101.
     // P3: the ledger entry is selected FROM the claimed job's own row (job_id = the worker's job); no other row is read.
     await db.execute(`
-      select public.append_event(
+      select app.append_event(
+        app.job_office(${lit(job.jobId)}::uuid),
         ${lit(job.correlationId)}::uuid,
         -- 'agent': the office did this, not Grant and not a cron. The check
         -- constraint allows user, agent and system, and a research finding is

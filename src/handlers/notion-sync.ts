@@ -149,7 +149,7 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
       const result = { added: 0, changed: 0, shared: 0, skipped: [] as string[] }
       const filed: string[] = []
       for (const project of attached) {
-        const one = await syncNotion(db, client, project.id)
+        const one = await syncNotion(db, { jobId: job.jobId }, client, project.id)
         result.added += one.added
         result.changed += one.changed
         result.shared += one.shared
