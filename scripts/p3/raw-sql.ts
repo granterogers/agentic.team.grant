@@ -52,6 +52,7 @@ for (const file of files) {
       line,
       tables,
       scoped: /office_id|p_office|job_office|\boffice\b/i.test(body),
+      key: keyOf(file, body),
     })
   }
 }
