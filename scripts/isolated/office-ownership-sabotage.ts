@@ -69,7 +69,8 @@ const sabotages: Sabotage[] = [
     break: 'drop trigger a1_office_write_once on public.jobs',
     prove:
       "select count(*)::int as n from pg_trigger where tgname = 'a1_office_write_once' and tgrelid = 'public.jobs'::regclass",
-    restore: "select app.p2_guard_table('jobs', 'project_id', 'parent_job_id', 'requested_by')",
+    restore:
+      'create trigger a1_office_write_once before update of office_id on public.jobs for each row execute function app.office_id_is_write_once()',
     suiteRed: ["moving A's job to B"],
     gates: ['edges'],
   },
@@ -177,11 +178,21 @@ const sabotages: Sabotage[] = [
     gates: [],
   },
   {
+    name: 'remove the declared-test-chat rule (test chats would bind to the one person again)',
+    break: 'drop trigger a00_declared_test_origin on public.telegram_chats',
+    prove: "select count(*)::int as n from pg_trigger where tgname = 'a00_declared_test_origin'",
+    restore:
+      'create trigger a00_declared_test_origin before insert on public.telegram_chats for each row execute function app.telegram_chat_origin()',
+    suiteRed: ["a chat the harness declared a test origin is the TEST office's"],
+    gates: [],
+  },
+  {
     name: 'remove the compatibility bridge from jobs',
     break: 'drop trigger a0_office_bridge on public.jobs',
     prove:
       "select count(*)::int as n from pg_trigger where tgname = 'a0_office_bridge' and tgrelid = 'public.jobs'::regclass",
-    restore: "select app.p2_guard_table('jobs', 'project_id', 'parent_job_id', 'requested_by')",
+    restore:
+      "create trigger a0_office_bridge before insert on public.jobs for each row execute function app.office_bridge_trigger('project_id', 'parent_job_id', 'requested_by')",
     suiteRed: ['a harness-named writer with no office lands in the TEST office'],
     gates: ['edges'],
   },

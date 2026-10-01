@@ -1,7 +1,6 @@
 # 0060 - one auth account, one private office, many projects
 
-Status: **proposed** (multi-user research, 1 October 2026; amended after two adversarial reviews, `docs/multi-user/REVIEWS.md`). Becomes accepted when the implementation session is
-authorised. Baseline `41de1965`. Full design: `docs/multi-user/ARCHITECTURE.md`.
+Status: **accepted** and implemented through P2 (1 October 2026; see ADR-0061 for what implementing it decided and the two places this text is superseded: 52 carriers of 136, and no `uses_system_integrations` column). Amended after two adversarial reviews, `docs/multi-user/REVIEWS.md`. Baseline `41de1965`. Full design: `docs/multi-user/ARCHITECTURE.md`.
 
 ## Context
 

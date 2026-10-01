@@ -664,5 +664,18 @@
   "0650_authorize_the_target_before_writing_the_object.sql": "9006285a8c8be76052777dfa8de7ce42acf12ccd92b3c6652a90d770b3629b70",
   "0651_a_legacy_github_token_name_has_a_class.sql": "6c0a83e036e790bdef2be3df2ae210260a6834b2dadff766bf8534fe7a286e6f",
   "0652_no_member_is_grant_by_default.sql": "601d6e371c8664354ad2404efc89bf992fb79390c0d4e1518e124b3bd92e70ea",
-  "0653_clear_ten_harness_tasks_left_on_his_list.sql": "b46c867628a678c73ec465369ca99e4d7f6791e077683115610d08d568526637"
+  "0653_clear_ten_harness_tasks_left_on_his_list.sql": "b46c867628a678c73ec465369ca99e4d7f6791e077683115610d08d568526637",
+  "0654_offices.sql": "a07b3878e9dc88a8d07c30f6df66a1a4d4af9dce917f4f08123116519b6723a3",
+  "0655_every_carrier_gets_an_office_column.sql": "f7ee3cd3d227e8ec121414fe580df9bc86f1391e4b8edff30c25f7d65cfe3296",
+  "0656_the_compatibility_bridge.sql": "deb84e7bb08f36675d6e7529f0ebb8cde2b95b6209843e59ce785d65fcd2b800",
+  "0657_wave_1_projects_duties_and_jobs_have_an_owner.sql": "64f423bfcf1792ff96a64daca6974a150d3ee7871cba3c57fb4d7c9237bd4fa0",
+  "0658_wave_2_everything_that_hangs_off_a_project_or_a_job.sql": "e60282debb5e6fbbcdc615064a37eb9c10ac0b2215211c408ca0492d8cf6c320",
+  "0659_wave_3_account_level_carriers_have_an_owner.sql": "f1db3bec6da01eab7872d039e97bd1876695d39a5f42233bfa60ddcf2c0c4fc2",
+  "0660_derived_tables_cannot_cross_offices.sql": "c9c9f8a3c587d7593e678a434e0f420b3382bc7aafab31dcf5819a91322ab729",
+  "0661_relations_cannot_cross_offices.sql": "d345dec93379e7beb68e9321ff18bfbcbd7a82083be0d30b547a4de6895ffd3e",
+  "0662_private_names_are_unique_per_office.sql": "327437f72b299b5324c72838d05342b5dbe0f274baf95698fe0468de9fe55fe3",
+  "0663_every_public_table_has_row_security.sql": "f156c275b3635d46c20e90b7f41aec30e5c009330f5d2228ed29106013e87176",
+  "0664_the_guards_run_as_their_owner.sql": "859234117f2bdf2a92875ad9f96c2ae9f7e9788935e2ae494706451573a08cd1",
+  "0665_remove_what_nothing_calls_yet.sql": "3bad313ad5c2ab7c7673421d8f3e8c0e53a73449ecb39e3a19c436ee358158a7",
+  "0666_a_declared_test_chat_is_the_test_offices.sql": "51aa7defa12d26a51eadfc84ef4c3c2d507a7924fa16ad4cc6075ca49489eb98"
 }

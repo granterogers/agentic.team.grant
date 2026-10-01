@@ -2,7 +2,11 @@
 
 > **P0 and P1 are done** (`P1-CLOSURE.md`). One change to the plan as written: the P1 guard for fixed-name credentials is
 > keyed on *operator or job origin* (`app.deployment_credential`), not on today's principal kind alone, and the worker
-> carries the job in an `AsyncLocalStorage` scope; the Google connect flow gained a one-time state. P2 has **not** begun.
+> carries the job in an `AsyncLocalStorage` scope; the Google connect flow gained a one-time state.
+>
+> **P2 is done** (`P2-OWNERSHIP.md`, ADR-0061): offices, the evidence-based backfill, composite keys, derived guards, per-office
+> names, row security. Two changes to the plan as written: the carriers are 52 of 136 (the manifest is authoritative), and
+> there is no `uses_system_integrations` column. **P3 has not begun**; its order is in `P2-OWNERSHIP.md` section 13.
 
 > Design only. Baseline `41de1965`. **Rewritten after the two adversarial reviews (`REVIEWS.md`):** the original twelve
 > phases are merged into seven, RLS-policy and `voice_sessions` work is removed, and the order changed — the two

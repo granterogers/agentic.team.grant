@@ -521,6 +521,15 @@ export async function suite(db: Db): Promise<Result[]> {
       "a harness-named writer with no office lands in the TEST office, never in Grant's",
       harness === '' ? 'bound to the test office' : harness.slice(0, 120),
     )
+    const chat = await run(
+      'service_role',
+      `${single} insert into public.telegram_chats (chat_id, chat_type, bot_id, deliverable, undeliverable_reason, undeliverable_at) values ('9990001', 'private', '9990002', false, 'a declared test origin (#381)', now()); select 1 / (case when (select office_id from public.telegram_chats where chat_id = '9990001') = '${T}' then 1 else 0 end)`,
+    )
+    check(
+      chat === '',
+      "a chat the harness declared a test origin is the TEST office's, never bound to the one person",
+      chat === '' ? 'bound to the test office' : chat.slice(0, 140),
+    )
     const two = await run(
       'service_role',
       `insert into public.jobs (job_id, correlation_id, idempotency_key, kind, requested_by) values ('${id(152)}', '${id(152)}', 'atk-key-152', 'probe', 'telegram:5551234')`,
@@ -553,19 +562,20 @@ export async function suite(db: Db): Promise<Result[]> {
     )
     const viaAuth = (
       await db.execute(
-        `select count(*)::int as n from app.office_of_auth('${AUTH_A}') where office_id = '${SYS}'`,
+        `select count(*)::int as n from public.offices where auth_user_id is not null and kind = 'system'`,
       )
     ).rows[0] as { n: number }
     check(
       viaAuth.n === 0,
-      'a human session never resolves to the system office',
+      'no login is attached to a system office, so no human session can resolve to it',
       `matches=${String(viaAuth.n)}`,
     )
-    const ofA = (await db.execute(`select office_id from app.office_of_auth('${AUTH_A}')`))
-      .rows as { office_id: string }[]
+    const ofA = (
+      await db.execute(`select office_id from public.offices where auth_user_id = '${AUTH_A}'`)
+    ).rows as { office_id: string }[]
     check(
       ofA.length === 1 && ofA[0]?.office_id === A,
-      "Person A's login resolves to exactly Person A's office",
+      "Person A's login names exactly Person A's office",
       `rows=${String(ofA.length)}`,
     )
     const giveLogin = await run(

@@ -1,3 +1,17 @@
+> ## 2026-10-01 - MULTI-USER P2: THE OWNERSHIP FOUNDATION (branch `claude/multi-user-p2`; P3 NOT started)
+>
+> Migrations **0653-0666** applied (13 waves, each verified before the next). Every private row now has an office: a
+> `public.offices` row per person / sample / test / system, `office_id NOT NULL` and write-once on the 52 carriers, 56
+> composite `(parent, office)` keys, guard triggers on all 45 derived tables, an endpoint guard on `relations`, per-office
+> private names, and row security on the 46 tables that lacked it. Production holds **one person office (Grant), one test
+> office and one system office; no second real person was created.** The history was assigned by evidence in five tiers
+> (63,803 rows: 29,928 person / 24,248 test / 9,627 system / 0 unresolved); 8,484 unattributable rows are in the system
+> office, and 5,821 harness rows are in Grant's office because the database links them to his projects - flagged, not
+> hidden. New gate entry `check:office-edges`. Found live and fixed: the guards ran as the writer, so the Telegram webhook
+> answered 503 for 7 min 47 s (0664). **Not done, on purpose:** the 878 functions, the 47 ambient-Grant defaults, the
+> bridge removal, the machine-key rotation (device evidence), MCP consent. Canonical: `docs/multi-user/P2-OWNERSHIP.md`,
+> ADR-0061; P1 is closed in `docs/multi-user/P1-FINAL-CLOSURE.md`. Next: P3, in the order P2-OWNERSHIP.md section 13 gives.
+
 > ## 2026-10-01 - MULTI-USER P0 + P1 SECURITY CLOSURE (branch `claude/multi-user-p0-p1`; P2 NOT started)
 >
 > Migrations **0647-0652** applied; `voice` v595, `voice-token` v625, `hq-api` v830, `google-oauth` v591, `worker` v899 and

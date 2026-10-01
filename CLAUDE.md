@@ -401,7 +401,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **409 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **679 applied** (0666 is the latest).
 
 ## Asking the office about itself
 
@@ -4199,6 +4199,27 @@ Each of these cost real time. They are here so they cost it once.
   handlers ignore the `db` that `handle()` is given, so the job a credential read is for travels in an
   `AsyncLocalStorage` (`src/credentials/deployment.ts`). No scope means the worker acting for the deployment; that
   argument exists only in `app`, which PostgREST does not expose.
+
+- **A GUARD THAT CALLS A FUNCTION ITS WRITER CANNOT SEE FAILS FOR EXACTLY THE WRITERS IT EXISTS TO CONSTRAIN.** The P2
+  compatibility bridge called `app.bridge_office` as the invoker; `service_role` has no usage on schema `app`, so the
+  Telegram webhook (which writes `inbound_commands` through PostgREST AS service_role) answered 503 to every update for
+  7 min 47 s (0664). The attack suite had hidden it by granting its attackers usage on `app`. **Model the writer with the
+  privileges production gives it, assert with a positive control that it cannot reach what it cannot reach, and run a guard
+  as its owner.** Found by the first live suite that touched the webhook - not by 96 green checks.
+- **`ALTER TABLE` refuses a table with pending trigger events (`55006`).** An UPDATE that fires a deferred constraint trigger
+  (an active project must have an attachment) queues events for commit; an `ALTER TABLE` later in the same transaction fails.
+  `SET CONSTRAINTS ALL IMMEDIATE` fires them first. Found only by running the WHOLE chain against production in one transaction
+  that ends in a deliberate exception - a rehearsal that stops at the report never reaches the DDL after it.
+- **A rolled-back dry run is not free: `ALTER TABLE` takes `ACCESS EXCLUSIVE` while it lives.** Mine deadlocked a live suite
+  (`verify:history`, `40P01`) and, twice, the live worker, and a gate that ran alongside it went red on five entries that pass
+  alone. Never rehearse a schema change while the gate runs; classify a red by rerunning it on a clean worktree, not by guessing.
+- **`office_id = Grant` does not mean real.** A harness row linked by a database key to his project is in his office (5,821,
+  counted in `office_backfill_report`), because a composite key cannot say "a test row inside this project". Every reader that
+  excludes harness traffic still has to.
+- **A meter finds what a test cannot.** `office_bridge_use` showed one table relying on the bridge, and that table was binding
+  chats a suite had declared test origins to the person (0666). A compatibility shim without a counter is a leak with a name.
+- **Raising a question also files a to-do on his personal list**, so a suite that raises fixture blockers leaves to-dos behind
+  (ten, twice - the same ten the P1 closure cleared). Each suite now sweeps that class in its own teardown.
 
 ---
 

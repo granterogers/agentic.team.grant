@@ -45,6 +45,14 @@ export type EnforcementCatalogue = {
   readonly rls: readonly EnfRls[]
   readonly exceptions: readonly EnfException[]
   /** Transitional facts (P2): active person and sample offices, enabled MCP clients, and whether the MCP conversion is done. */
+  /** Public functions with a parameter that names an office: the machine key must never be handed an office to act as. */
+  readonly officeParams: readonly string[]
+  /** How often the compatibility bridge was relied on, by table and rule - measurable, and it must reach zero in P3. */
+  readonly bridgeUse: readonly {
+    readonly table: string
+    readonly rule: string
+    readonly n: number
+  }[]
   readonly transitional: {
     readonly realOffices: number
     readonly enabledMcpClients: number
@@ -90,6 +98,12 @@ export const ENFORCEMENT_SQL = `
         from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r','p') and c.relname <> 'isolated_replica_marker'),
     'exceptions', (select coalesce(jsonb_agg(jsonb_build_object('edge', e.edge)), '[]'::jsonb)
         from (select edge from public.office_edge_exceptions) e),
+    'officeParams', (select coalesce(jsonb_agg(p.proname || '(' || a.arg || ')'), '[]'::jsonb)
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        cross join lateral unnest(coalesce(p.proargnames, '{}'::text[])) as a(arg)
+       where n.nspname = 'public' and a.arg ~* '(^|_)(office|offices)(_id|_key|_ref|_uuid)?$' and a.arg !~* 'rate'),
+    'bridgeUse', (select coalesce(jsonb_agg(jsonb_build_object('table', table_name, 'rule', rule, 'n', n)), '[]'::jsonb)
+        from public.office_bridge_use),
     'transitional', jsonb_build_object(
         'realOffices', (select count(*) from public.offices where kind in ('person', 'sample') and state = 'active'),
         'enabledMcpClients', (select count(*) from public.mcp_clients where enabled),
@@ -110,6 +124,8 @@ export const readEnforcement = (value: unknown): EnforcementCatalogue => {
     uniques: ((d.uniques as EnfUnique[]) ?? []).map((u) => ({ ...u, columns: u.columns ?? [] })),
     rls: (d.rls as EnfRls[]) ?? [],
     exceptions: (d.exceptions as EnfException[]) ?? [],
+    officeParams: (d.officeParams as string[]) ?? [],
+    bridgeUse: (d.bridgeUse as EnforcementCatalogue['bridgeUse']) ?? [],
     transitional: (d.transitional as EnforcementCatalogue['transitional']) ?? {
       realOffices: 0,
       enabledMcpClients: 0,
@@ -224,6 +240,13 @@ export const enforcementProblems = (manifest: Manifest, cat: EnforcementCatalogu
     )
       problems.push(`${p.table}: no per-office key including (${p.legacy.join(',')})`)
   }
+  // The machine key must never be "a universal token plus an office to act as". The gateway reaches only public functions,
+  // so none of them may take an office (or anything named like one) from the caller.
+  for (const f of cat.officeParams)
+    problems.push(
+      `public.${f}: a callable function takes an office from its caller - the machine key could act as any office`,
+    )
+
   // The transitional rule. Until the MCP gateway resolves its office from the client credential itself, a second real
   // office must not exist while any client can call it: the gateway still speaks for the one person.
   const t = cat.transitional

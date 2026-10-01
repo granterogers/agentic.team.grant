@@ -67,6 +67,8 @@ const good: EnforcementCatalogue = {
   uniques: PER_OFFICE_NAMES.map((p) => ({ table: p.table, columns: ['office_id', ...p.legacy] })),
   rls: [{ table: 'projects', enabled: true }],
   exceptions: [],
+  officeParams: [],
+  bridgeUse: [],
   transitional: { realOffices: 1, enabledMcpClients: 2, mcpOfficeBound: false },
 }
 
@@ -169,6 +171,12 @@ describe('enforcementProblems', () => {
         transitional: { ...two.transitional, enabledMcpClients: 0 },
       }),
     ).toEqual([])
+  })
+
+  it('refuses a callable function that takes an office from its caller', () => {
+    expect(
+      enforcementProblems(manifest, { ...good, officeParams: ['hq_x(p_office)'] }).join('\n'),
+    ).toContain('takes an office')
   })
 
   it('refuses a table with row security off', () => {

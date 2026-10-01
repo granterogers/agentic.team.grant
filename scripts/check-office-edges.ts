@@ -5,7 +5,7 @@
  *   npm run check:office-edges -- --replica    # the isolated replica (ISOLATED_PG_DB names the database)
  *
  * The rules are `enforcementProblems` in `src/ownership/enforcement.ts`; this is the I/O around them and the proof
- * that they can fail. It injects NINE defects into the catalogue it just read - drop a composite key, disable the
+ * that they can fail. It injects TEN defects into the catalogue it just read - drop a composite key, disable the
  * write-once trigger, make office_id nullable, remove a derived table's guard, remove the relations guard, switch row
  * security off, put a global unique key back on projects.slug, leave a carrier's bridge out, and stand up a second real office while an MCP client is enabled - and prints, for each,
  * the problem the predicate raised. A control that raised nothing fails the whole check: a clean result from a
@@ -138,6 +138,11 @@ export const controls = (
     }),
   })
 
+  out.push({
+    name: 'a public function that takes an office from its caller',
+    raised: added({ ...cat, officeParams: [...cat.officeParams, 'hq_anything(p_office)'] }),
+  })
+
   const bridge = cat.triggers.find((t) => t.name === 'a0_office_bridge')
   if (bridge !== undefined)
     out.push({
@@ -172,13 +177,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     for (const p of problems.slice(0, 30)) console.log(`  ${p}`)
     process.exit(1)
   }
+  const used = cat.bridgeUse.reduce((n, b) => n + b.n, 0)
+  console.log(
+    `compatibility bridge: ${String(used)} write(s) relied on it (${cat.bridgeUse.map((b) => `${b.table}/${b.rule} ${String(b.n)}`).join(', ') || 'none yet'}); it is removed in P3 (see docs/multi-user/P2-OWNERSHIP.md)`,
+  )
   const ctl = controls(manifest, cat)
   const dead = ctl.filter((c) => c.raised.length === 0)
   for (const c of ctl)
     console.log(
       `control: ${c.name} -> ${c.raised.length === 0 ? 'NOT CAUGHT' : `caught: ${c.raised[0]}`}`,
     )
-  if (ctl.length < 9 || dead.length > 0) {
+  if (ctl.length < 10 || dead.length > 0) {
     console.log('FAIL a control did not fire, so a clean result would mean nothing')
     process.exit(1)
   }
