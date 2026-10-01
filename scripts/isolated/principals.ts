@@ -424,11 +424,18 @@ check(
 }
 {
   const d = json(
-    (await one(`select public.discard_document(${lit(ZERO)}::uuid, 'x', 'verify-operator') as r`))
-      .r,
+    (
+      await one(
+        `select public.discard_document(app.test_office(), ${lit(ZERO)}::uuid, 'x', 'verify-operator') as r`,
+      )
+    ).r,
   )
   const u = json(
-    (await one(`select public.discard_document(${lit(ZERO)}::uuid, 'x', null) as r`)).r,
+    (
+      await one(
+        `select public.discard_document(app.test_office(), ${lit(ZERO)}::uuid, 'x', null) as r`,
+      )
+    ).r,
   )
   check(
     'discarding a document: a test principal and nobody are both refused before the row is read',
@@ -480,7 +487,7 @@ check(
   const sent = json(
     (
       await one(
-        `select public.send_to_agent('document', ${lit(ZERO)}::uuid, 'summarise', null, null, null, 'verify-operator') as r`,
+        `select public.send_to_agent(app.test_office(), 'document', ${lit(ZERO)}::uuid, 'summarise', null, null, null, 'verify-operator') as r`,
       )
     ).r,
   )

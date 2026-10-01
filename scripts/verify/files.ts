@@ -292,7 +292,9 @@ try {
   // =========================================================================
   console.log('\nwhat the reader is handed')
 
-  const studio = (await one(`select app.studio_document(${lit(documentId)}::uuid) as d`)).d as {
+  const studio = (
+    await one(`select app.studio_document(app.test_office(), ${lit(documentId)}::uuid) as d`)
+  ).d as {
     path?: string
     mime_type?: string
     title?: string

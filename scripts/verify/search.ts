@@ -95,7 +95,9 @@ try {
   // =========================================================================
   console.log('the words inside, not only the title')
 
-  const hits = await all(`select * from public.studio_search(${lit(BURIED)}, null, 12)`)
+  const hits = await all(
+    `select * from public.studio_search(app.test_office(), ${lit(BURIED)}, null, 12)`,
+  )
   const mine = hits.find((h) => String(h.title) === TITLE)
   check(
     'a word that appears only in the body is found',
@@ -130,7 +132,9 @@ try {
     returning document_id::text as id
   `)
   alsoMade.push(String(inTitle.id))
-  const ranked = await all(`select * from public.studio_search(${lit(BURIED)}, null, 12)`)
+  const ranked = await all(
+    `select * from public.studio_search(app.test_office(), ${lit(BURIED)}, null, 12)`,
+  )
   check(
     'a title match outranks a passing mention, because the column is weighted',
     ranked
@@ -146,7 +150,7 @@ try {
     `websearch_to_tsquery` would do if the `@@` were dropped.
   */
   const nonsense = await all(
-    `select * from public.studio_search(${lit(`absolutelynothingmatches${run}`)}, null, 12)`,
+    `select * from public.studio_search(app.test_office(), ${lit(`absolutelynothingmatches${run}`)}, null, 12)`,
   )
   check(
     'CONTROL: a query that matches nothing returns nothing',
@@ -168,7 +172,7 @@ try {
   )
   if (elsewhere !== '') {
     const wrong = await all(
-      `select * from public.studio_search(${lit(BURIED)}, ${lit(elsewhere)}::uuid, 12)`,
+      `select * from public.studio_search(app.test_office(), ${lit(BURIED)}, ${lit(elsewhere)}::uuid, 12)`,
     )
     check(
       'a search scoped to another project does not find it',
@@ -176,7 +180,7 @@ try {
       !wrong.some((h) => String(h.title) === TITLE),
     )
     const right = await all(
-      `select * from public.studio_search(${lit(BURIED)}, ${lit(projectId)}::uuid, 12)`,
+      `select * from public.studio_search(app.test_office(), ${lit(BURIED)}, ${lit(projectId)}::uuid, 12)`,
     )
     check(
       'and scoped to its own project it does',
@@ -197,7 +201,7 @@ try {
     empty corpus.
   */
   const punctuated = await all(
-    `select * from public.studio_search(${lit('"and then" or')}, null, 3)`,
+    `select * from public.studio_search(app.test_office(), ${lit('"and then" or')}, null, 3)`,
   )
   check(
     'quotes and the word "or" are searched, not parsed as syntax and refused',
@@ -298,7 +302,7 @@ try {
   const found = async (filters: string): Promise<string[]> =>
     (
       await all(
-        `select * from public.studio_search(${lit(BURIED)}, null, 20, ${lit(filters)}::jsonb)`,
+        `select * from public.studio_search(app.test_office(), ${lit(BURIED)}, null, 20, ${lit(filters)}::jsonb)`,
       )
     ).map((h) => String(h.title))
 

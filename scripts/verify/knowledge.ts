@@ -657,7 +657,7 @@ console.log('\nwhat the index cannot speak for (#257)')
   const path = `${projectId}/drive/renamed-${run}.pdf`
   const keep = `${projectId}/drive/steady-${run}.pdf`
   const put = (title: string, storage: string) => `
-    app.record_file_document(${lit(projectId)}::uuid, ${lit(title)}, ${lit(storage)},
+    app.record_file_document(app.test_office(), ${lit(projectId)}::uuid, ${lit(title)}, ${lit(storage)},
       'application/pdf', 2048, null, ${lit(`ext-${run}`)}, null, 'grant', null, 'yours')`
 
   const upstream = await one(`
@@ -680,7 +680,7 @@ console.log('\nwhat the index cannot speak for (#257)')
     begin;
     create temp table rm (k text primary key, v jsonb) on commit drop;
     insert into rm values ('first', ${put(`Plan ${run}.pdf`, path)});
-    select app.rename_document(
+    select app.rename_document(app.test_office(), 
       (select document_id from public.documents where storage_path = ${lit(path)}),
       ${lit(`What I call it ${run}`)});
     insert into rm values ('again', ${put(`Plan ${run} FINAL.pdf`, path)});

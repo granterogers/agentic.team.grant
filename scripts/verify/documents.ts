@@ -64,7 +64,7 @@ console.log(`  subject: ${String(subject.title).slice(0, 48)}\n`)
 
 {
   const r = await rolled(
-    `select (app.rename_document('${String(subject.id)}'::uuid, 'A name the suite chose'))::text as r;`,
+    `select (app.rename_document(app.test_office(), '${String(subject.id)}'::uuid, 'A name the suite chose'))::text as r;`,
   )
   const said = JSON.parse(String(r.r ?? '{}')) as { ok?: boolean; was?: string; undo?: string }
   check(
@@ -81,7 +81,7 @@ console.log(`  subject: ${String(subject.title).slice(0, 48)}\n`)
 
 {
   const r = await rolled(
-    `select (app.rename_document('${String(subject.id)}'::uuid, '   '))::text as r;`,
+    `select (app.rename_document(app.test_office(), '${String(subject.id)}'::uuid, '   '))::text as r;`,
   )
   const said = JSON.parse(String(r.r ?? '{}')) as { ok?: boolean; error?: string }
   check('an empty name is refused', said.error ?? '(accepted!)', said.ok === false)
@@ -96,7 +96,7 @@ console.log(`  subject: ${String(subject.title).slice(0, 48)}\n`)
     console.log('  --   only one active project, so the move cannot be exercised')
   } else {
     const r = await rolled(
-      `select (app.hq_document_move('${String(subject.id)}'::uuid, '${String(other.id)}'::uuid))::text as r;`,
+      `select (app.hq_document_move(app.test_office(), '${String(subject.id)}'::uuid, '${String(other.id)}'::uuid))::text as r;`,
     )
     const said = JSON.parse(String(r.r ?? '{}')) as {
       moved?: boolean
@@ -134,7 +134,7 @@ console.log(`  subject: ${String(subject.title).slice(0, 48)}\n`)
       insert into public.document_collections (document_id, collection_id)
       select '${String(subject.id)}'::uuid, collection_id from public.collections
        where name = 'suite collection 0382';
-      select (app.hq_document_move('${String(subject.id)}'::uuid, '${String(other.id)}'::uuid))::text as r;`)
+      select (app.hq_document_move(app.test_office(), '${String(subject.id)}'::uuid, '${String(other.id)}'::uuid))::text as r;`)
     const said = JSON.parse(String(r.r ?? '{}')) as { error?: string; moved?: boolean }
     check(
       'a move that would orphan a collection membership is refused, by name',
@@ -153,7 +153,7 @@ console.log(`  subject: ${String(subject.title).slice(0, 48)}\n`)
     console.log('  --   the project has only one document, so superseding cannot be exercised')
   } else {
     const r = await rolled(`
-      select (app.hq_document_supersede('${String(subject.id)}'::uuid, '${String(second.id)}'::uuid))::text as r;`)
+      select (app.hq_document_supersede(app.test_office(), '${String(subject.id)}'::uuid, '${String(second.id)}'::uuid))::text as r;`)
     const said = JSON.parse(String(r.r ?? '{}')) as { superseded?: boolean; undo?: string }
     check(
       'superseding works and can be taken back',
@@ -162,7 +162,7 @@ console.log(`  subject: ${String(subject.title).slice(0, 48)}\n`)
     )
 
     const state = await rolled(`
-      select app.hq_document_supersede('${String(subject.id)}'::uuid, '${String(second.id)}'::uuid);
+      select app.hq_document_supersede(app.test_office(), '${String(subject.id)}'::uuid, '${String(second.id)}'::uuid);
       select d.state || ' / ' || coalesce(d.superseded_by::text, 'null') as r
         from public.documents d where d.document_id = '${String(subject.id)}'::uuid;`)
     /*
@@ -182,7 +182,7 @@ console.log(`  subject: ${String(subject.title).slice(0, 48)}\n`)
     )
 
     const mirrors = await rolled(`
-      select app.hq_document_supersede('${String(subject.id)}'::uuid, '${String(second.id)}'::uuid);
+      select app.hq_document_supersede(app.test_office(), '${String(subject.id)}'::uuid, '${String(second.id)}'::uuid);
       select coalesce(d.mirrors_document_id::text, 'untouched') as r
         from public.documents d where d.document_id = '${String(subject.id)}'::uuid;`)
     check(
@@ -195,7 +195,7 @@ console.log(`  subject: ${String(subject.title).slice(0, 48)}\n`)
 
 {
   const r = await rolled(`
-    select app.hq_document_pin('${String(subject.id)}'::uuid, true);
+    select app.hq_document_pin(app.test_office(), '${String(subject.id)}'::uuid, true);
     select (case when d.pinned then 'pinned' else 'NOT PINNED' end) as r
       from public.documents d where d.document_id = '${String(subject.id)}'::uuid;`)
   check('pinning is a flag on the row', String(r.r), String(r.r) === 'pinned')
@@ -203,7 +203,7 @@ console.log(`  subject: ${String(subject.title).slice(0, 48)}\n`)
 
 {
   const r = await rolled(
-    `select (app.hq_document_supersede('${String(subject.id)}'::uuid, '${String(subject.id)}'::uuid))::text as r;`,
+    `select (app.hq_document_supersede(app.test_office(), '${String(subject.id)}'::uuid, '${String(subject.id)}'::uuid))::text as r;`,
   )
   const said = JSON.parse(String(r.r ?? '{}')) as { error?: string }
   check('a document cannot supersede itself', said.error ?? '(ACCEPTED)', said.error !== undefined)

@@ -236,8 +236,11 @@ check(
   refusedEmpty.includes('missing: p_tag'),
 )
 const rpcRefusal = String(
-  (await one(`select app.tag_document(${lit(subject)}::uuid, '   ', true) ->> 'error' as v`)).v ??
-    '',
+  (
+    await one(
+      `select app.tag_document(app.test_office(), ${lit(subject)}::uuid, '   ', true) ->> 'error' as v`,
+    )
+  ).v ?? '',
 )
 check(
   'and the RPC refuses it too, for a caller that is not the page',

@@ -1137,7 +1137,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         }
 
         const { rows } = await db.execute(`
-          select app.artifacts_in(${lit(projectId)}::uuid,
+          select app.artifacts_in(app.job_office(${lit(job.jobId)}::uuid), ${lit(projectId)}::uuid,
             ${kinds.length === 0 ? 'null' : `array[${kinds.map((k) => lit(k)).join(', ')}]::text[]`})
             as a`)
         const raw = (rows[0] as { a?: unknown } | undefined)?.a
