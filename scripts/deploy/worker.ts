@@ -18,9 +18,8 @@
  * This is the same rule ADR-0010 set for the telegram adapter — the running
  * code IS the tested code — applied to a graph instead of a file.
  */
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { bundlePath, walk } from './lib/bundle.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -34,43 +33,7 @@ const db = new ManagementApiExecutor(ref, token)
 
 const ENTRY = 'supabase/functions/worker/index.ts'
 
-/**
- * Every relative import, transitively.
- *
- * Only relative specifiers are followed: a bare specifier is a Deno remote or
- * a built-in and is not ours to upload. Both `import` and `export ... from`
- * count — an `export type { X } from './y.ts'` is as much an edge as any other.
- */
-const walk = async (
-  file: string,
-  found = new Map<string, string>(),
-): Promise<Map<string, string>> => {
-  const abs = path.resolve(file)
-  if (found.has(abs)) return found
-  const source = await readFile(abs, 'utf8')
-  found.set(abs, source)
-  for (const match of source.matchAll(/\bfrom\s+'(\.[^']+)'/g)) {
-    const spec = match[1]
-    if (spec === undefined) continue
-    await walk(path.resolve(path.dirname(abs), spec), found)
-  }
-  return found
-}
-
 const files = await walk(ENTRY)
-
-/**
- * Where each file goes in the uploaded bundle.
- *
- * The entrypoint sits at the root and imports `../../src/...`, so the bundle
- * has to keep that shape: a file at `src/jobs/pass.ts` is uploaded as
- * `../../src/jobs/pass.ts` relative to the entrypoint. Supabase accepts the
- * paths verbatim, so preserving the repository's own layout is both the
- * simplest mapping and the one that needs no rewriting of import statements —
- * and rewriting imports is exactly how an uploaded copy stops being the tested
- * file.
- */
-const bundlePath = (abs: string): string => path.relative(process.cwd(), abs)
 
 const form = new FormData()
 form.append(

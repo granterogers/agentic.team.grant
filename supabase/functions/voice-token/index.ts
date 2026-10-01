@@ -32,6 +32,8 @@
  * that can rewrite the assistant's instructions is a page that can rewrite the
  * assistant, and the page is the untrusted half of this pair.
  */
+import { bearerOf, resolveSpeaker } from '../../../src/auth/speaker.ts'
+
 const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 const MODEL = Deno.env.get('VOICE_MODEL') ?? 'gpt-realtime-2.1-mini'
 // Claire is a woman and this is her voice. Configuration, not a constant, so
@@ -91,7 +93,7 @@ const corsFor = (request: Request): Record<string, string> => {
         (ALLOWED_ORIGINS[0] ?? 'null')
   return {
     'Access-Control-Allow-Origin': allowed,
-    'Access-Control-Allow-Headers': 'content-type',
+    'Access-Control-Allow-Headers': 'content-type, authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     // Without this a shared cache can hand one origin's response to another.
     Vary: 'Origin',
@@ -193,6 +195,24 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method !== 'POST') {
     return Response.json({ error: 'method not allowed' }, { status: 405, headers: cors })
   }
+
+  /*
+    WHO MAY MINT A CALL (#400, E1). This endpoint used to mint a realtime session for anybody who
+    could reach the URL, and a minted session is a metered OpenAI capability carrying a briefing
+    of the office's live state. Authenticate BEFORE anything is read or spent: no state lookup,
+    no OpenAI call and no 503 that tells a stranger whether voice is configured. The verifier is
+    the one the voice function uses, so the two cannot disagree about who a caller is.
+  */
+  const speaker = await resolveSpeaker(bearerOf(request), {
+    hqToken: Deno.env.get('HQ_API_TOKEN') ?? '',
+    supabaseUrl: DB_URL,
+    anonKey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    serviceKey: SERVICE_KEY,
+  })
+  if (speaker === null) {
+    return Response.json({ error: 'unauthorized' }, { status: 401, headers: cors })
+  }
+
   if (OPENAI_KEY === '') {
     return Response.json({ error: 'voice is not configured' }, { status: 503, headers: cors })
   }

@@ -98,7 +98,13 @@ $('go').onclick = async () => {
     const t0 = performance.now()
     // The permanent key never reaches this page (§12). This endpoint mints an
     // ephemeral credential that expires in about a minute.
-    const res = await fetch(MINT_URL, { method: 'POST' })
+    // The mint needs a signed-in session (#400). This page signs nobody in: it reuses the session the
+    // studio stored in this browser, and says plainly when there is none.
+    let held = ''
+    try { held = localStorage.getItem('hq.session') || localStorage.getItem('hq.token') || '' } catch (e) { /* private window */ }
+    if (held === '') throw new Error('sign in to the studio in this browser first, then reload this page')
+    const res = await fetch(MINT_URL, { method: 'POST', headers: { Authorization: 'Bearer ' + held } })
+    if (res.status === 401) throw new Error('the office does not recognise this session - sign in again')
     if (!res.ok) throw new Error('mint failed: ' + res.status)
     const { client_secret, model } = await res.json()
     $('mint').textContent = Math.round(performance.now()-t0) + ' ms'
