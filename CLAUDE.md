@@ -29,6 +29,14 @@ unrun against its own freeze, none recycled. Three found real systemic defects
 (#246, #247, #248, #249, #254, #255); the fourth found none and scored 17/18,
 its one failure an expectation the authoring session had written itself.
 
+### Policy phase: CLOSED, 1 October 2026
+
+**ORIGINAL ARCHITECTURE AUDIT: CLOSED.** Technical findings were closed at `4053433f`; Grant's seven final policy
+decisions (Vikunja, Slack channels, Notion, Slack rotation, learning, cross-project retrieval, proactive autonomy) were
+implemented in 0640-0646 and verified in production. `docs/policy/FINAL-POLICY-IMPLEMENTATION.md` is canonical and
+ADR-0059 records the decisions; `docs/architecture-run-5/DECISION-389.md` is the superseded options paper. The next
+phase is multi-user architecture research against this clean baseline; it has not begun.
+
 ### The standing rule that replaces the campaign
 
 **Do NOT write another synthetic final examination.** Four were justified
@@ -4147,6 +4155,26 @@ Each of these cost real time. They are here so they cost it once.
 - **A suite that is not in the gate went red and nobody knew.** `verify:approval` failed 6 of 30 against the current
   matrix for two independent reasons (a hand-built "Grant" job whose origin is unknown since 0603, and a level-1 fixture
   the matrix now lets through unasked). Nothing ran it. A hand-built fixture asserts the rule it was written under.
+
+- **A list of dangerous phrasings is the wrong shape for a boundary whose rule is "unknown is not benign".** The first
+  learning gate offered a rule only if four patterns recognised authority in it, so "handle refunds yourselves" and
+  "keep my accountant informed" were stored while "paste the image URLs into the reply" (his own rule) was offered
+  because "reply" is a verb. The gate is the inverse now: a teaching is stored on its own only when it is POSITIVELY
+  recognised as presentation or as addressed to him. An independent reviewer found it in one pass.
+- **A tool level decides what the most permissive dial does.** `slack.channel` at level 2 made an unprompted sweep create
+  a permanent channel at dial Act, and its announcement said "because you said yes". Level 3 is the only level a dial
+  can never turn into proceed.
+- **A yes minted by an act must be withdrawn by the opposite act, at the table, not the page.** Detaching a Notion
+  database left its standing yes live; a trigger on `project_attachments` now covers every route.
+- **A heuristic that picks a destination is not Grant choosing it.** `office.notion_adopt` chooses a database by its
+  title; minting a standing write yes there made any shared database called "Tasks" a target. Connect is his act.
+- **A budget on raising questions must not be a budget on honouring answers.** `MAX_DELETE_QUESTIONS_PER_ROUND` returned
+  false before looking for an approval already given.
+- **A rollback comment that says the code falls back is a claim.** Three said so and none was true; a database-only
+  rollback of 0644 broke every answering turn. The callers degrade now and the notes say to roll the worker back first.
+- **Forty-three public tables had row security off and default grants to the anon key**, and the anon key read
+  `standing_authorizations`. #384 covered functions only. 0642 revokes tables and default privileges;
+  `check:anon-exposure` asserts both. Whether those tables also want row policies is a multi-user question.
 
 ---
 

@@ -165,3 +165,42 @@ future user filter goes), and the channel for `#the_team` is not a project chann
 
 Sabotage of the review fixes (each landed, each went red): `slack.channel` back to level 2 (3 checks red), the withdraw
 trigger dropped (1 red), the authority lapse removed (1 red).
+
+## Results
+
+Candidate: this branch after the review fixes. **Production verified, 1 October 2026.**
+
+| Gate | Result |
+|---|---|
+| Vitest | 255 files, 3866 tests pass |
+| Isolated suites (`scripts/isolated/run-all.sh`) | every suite passes, including 8 new `policy-*` suites (24 + 23 + 16 + 19 + 23 + 15 + 27 and the review additions) and the version-skew and approval-race proofs |
+| `tsc`, `biome ci` | clean |
+| `check:migrations`, `secrets`, `templates`, `pressable`, `consumed`, `gateway-wrappers`, `capabilities`, `undo`, `voice-sessions`, `callers`, `leaks`, `anon-exposure` | all exit 0 (leaks: 0 new; 150 sent messages traced) |
+| Rollbacks 0646 down to 0640 | applied in reverse on a replica copy, clean; forward/back/forward compared function md5s earlier |
+| Sabotage | 17 boundary sabotages, plus 3 for the review fixes: each landed, each went red, each restored green |
+| Live | `verify:final-audit-live` 48/48 (dial-copy check updated to the 0646 wording), `verify:policy-live` 4/4, `run1-live` 15/15, `run2-live` 53/53, `run3-live` 26/26, `run3-effects-live` 12/12, `run4-live` 24/24, `run5-live` 20/20, `verify:approval` 30/30, `verify:upload` 17/17 |
+
+### Deployed function versions
+
+| Function | Before | After |
+|---|---|---|
+| worker | v885 | v891 (v887 first, redeployed with the telegram and kick steps) |
+| telegram-webhook | v634 | v639 |
+| hq-api | v817 | v822 |
+| slack-events | v613 | v617 (unchanged code; the platform counter moved) |
+
+Migrations 0640-0646 applied to production in order; 659 recorded. The Vercel page upload was skipped (`VERCEL_TOKEN` is not
+set in the build session): the dial copy is served from `app.autonomy_choices()` so it is live, but the two new Governance
+labels in `web/studio/app.js` (`teach_skill`, `standing_procedure`) reach the page on the next page deploy.
+
+### First live observation of the four duties
+
+* `office.slack_rotate` (a duty job, `requested_by duty:slack-rotation`) ran against the real stored pair, which expired
+  on 10 September: it raised ONE exact question (fingerprint, `No, leave it`, a yes that starts a child), called Slack
+  zero times, left `rotation_failures` at 87 untouched, and said "waiting for your yes". That question is open on his
+  dashboard; leaving it unanswered is the policy's stated cost.
+* `tasks.sync`: Vikunja is not configured in production, so the duty remains disabled; its behaviour is proven by the
+  isolated suite against the real handler and a recording board.
+* Slack channels and Notion import: no production project is unprovisioned or unattached at this moment; proven by the
+  isolated suites. The three Notion `home` attachments on `legacy-coaching-course` carry no standing yes (no backfill):
+  an import into them waits until he presses Connect on each database.

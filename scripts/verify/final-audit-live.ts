@@ -768,8 +768,10 @@ try {
 
     const choices = String((await one(`select app.autonomy_choices()::text as c`)).c)
     check(
-      'the dial says what it does not govern (0633): Slack, Notion and the task board are named as ungoverned',
-      /not governed|does not govern/i.test(choices) && !/changes nothing anywhere/i.test(choices),
+      'the dial describes the three tiers (0646): thinking proceeds, preparing follows the dial, and what is outward, destructive or a credential still asks',
+      /still (?:stop and ask|waits for you)/i.test(choices) &&
+        /notices|thinks/i.test(choices) &&
+        !/not governed|does not govern|changes nothing anywhere/i.test(choices),
       choices.slice(0, 80),
     )
 

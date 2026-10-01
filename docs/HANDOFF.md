@@ -1,3 +1,14 @@
+> ## 2026-10-01 - FINAL POLICY CLOSURE: ORIGINAL ARCHITECTURE AUDIT: CLOSED
+>
+> Grant's seven final policy decisions are implemented (migrations 0640-0646), reviewed adversarially (eight defects
+> fixed), and verified in production (worker v891, telegram-webhook v639, hq-api v822). #389's four duties now ask
+> through the one authorization: Vikunja create/update by the board connection and delete by an exact question; a
+> project he made provisions its own Slack channel and anything unprompted asks; a Notion database he connects carries
+> a yes for that database only; Slack rotation asks every time. One rotation question is open on his dashboard because
+> the stored pair expired on 10 September. A public-key exposure of 43 tables was found and closed (0642). Canonical:
+> `docs/policy/FINAL-POLICY-IMPLEMENTATION.md`, ADR-0059. The Vercel page was not redeployed (no `VERCEL_TOKEN` in the
+> build session). The next phase is multi-user architecture research; it has not begun.
+
 > ## 2026-09-30 - Architecture Run 5 (question binding, forwarded content, fenced children) - PRODUCTION
 > Migrations 0623-0626 applied; worker, telegram-webhook and slack-events deployed; run5-live 20/20 and Runs 1-4 live green;
 > `check:leaks` exit 0. A delivery now names the question it asked; a reply binds to that question or to nothing; forwarded words are
