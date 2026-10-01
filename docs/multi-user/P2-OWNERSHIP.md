@@ -189,6 +189,23 @@ redelivers a 503; Slack retries; `inbound_commands` holds no real (non-synthetic
 evidence a person's message was lost, and none can be ruled out from a table that, by definition, does not hold a message it
 failed to store.
 
+## 11a. The P2 final gate
+
+`scripts/e2e.ts --gate`, 74 entries, 4,900 s, clean committed tree, nothing else running: **66 / 74**. The eight reds:
+
+* **Seven are the baseline reds**, each failing exactly the checks recorded in `P1-FINAL-CLOSURE.md` (compared check by check:
+  `verify:mytasks` 4, `verify:wrappers` 1, `verify:attests` 2, `verify:backups` 2, `verify:recovers` 6, `verify:transport` 9 -
+  identical sets; `verify:review` is a browser-bundle suite whose failures vary with whether the bundle is built, and P2
+  changed no web or edge code). No P2 differential hides behind them.
+* **`verify:isolated`**: in the gate it failed because four `policy-*` proofs invented a duty slug (the bridge rightly refuses
+  an unknown duty) and one modelled "tables open before 0642" after 0663 had closed them. Both proofs were corrected
+  (`a41a4b27`) and a full rerun leaves only the two baseline groups (`version skew`, `0596 overlapping answers`). Its P2
+  attack, sabotage and planted-inconsistency runs: 96 / 96, all 13 controls behaved, every plant refused.
+* Everything that failed the first P1 gate through interference (`history`, `artifact-slack`, `handoff`, `escapes`,
+  `collaborates`, `routing-breadth`, `knowledge`, `proposes`, `another-go`) passed.
+* `check:leaks`, `check:office-edges`, `check:ownership`, `check:anon-exposure`, `check:machine-key`, `check:system-secrets`,
+  `check:callers`, `check:consumed`, `verify:security`, and all six live runs (`run1`..`run5`, `final-audit`): green.
+
 ## 12. Remaining risks
 
 1. **Harness rows sit in Grant's office** (5,821, section 4) and grow: new synthetic commands carry the default project, which
