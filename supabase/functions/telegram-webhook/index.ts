@@ -172,6 +172,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
     update.message?.chat ?? update.callback_query?.message?.chat ?? update.my_chat_member?.chat
   let subject: string | null = null
   let declaredTest = false
+  // The office the verified sender belongs to (P3). It comes from the office's own list of senders (or, for a declared
+  // test conversation, is the test office) - never from anything in the update.
+  let officeId: string | null = null
   if (sender !== null) {
     let admitted: Response
     try {
@@ -195,12 +198,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const who = (await admitted.json().catch(() => null)) as {
       subject?: string | null
       declared_test?: boolean
+      office_id?: string | null
     } | null
     if (who === null) return new Response('sender lookup failed', { status: 503 })
     subject = typeof who.subject === 'string' && who.subject !== '' ? who.subject : null
     declaredTest = who.declared_test === true
+    officeId = typeof who.office_id === 'string' && who.office_id !== '' ? who.office_id : null
   }
-  if (subject === null && !declaredTest) {
+  if ((subject === null && !declaredTest) || officeId === null) {
     return Response.json({ ok: true, ignored: 'unrecognised sender' })
   }
 
@@ -249,9 +254,26 @@ Deno.serve(async (request: Request): Promise<Response> => {
           // A group has a name and Grant will recognise it by that, not by a
           // negative fourteen-digit id.
           p_title: chat.title ?? null,
+          // Who spoke: it is how a GROUP is judged (only an operator's office has one).
+          p_sender: sender,
         }),
       })
       registration = response.ok ? 'ok' : `http_${String(response.status)}`
+      // 'ignored' is the office declining the chat (a group that is not an operator's, or a chat already bound to another
+      // office): nothing from it is stored, and the update is acknowledged so Telegram does not retry it.
+      if (
+        response.ok &&
+        (await response
+          .clone()
+          .json()
+          .catch(() => null)) === 'ignored'
+      ) {
+        return Response.json({
+          ok: true,
+          ignored: 'this chat is not one this office accepts',
+          registration: 'ignored',
+        })
+      }
     } catch {
       registration = 'unreachable'
     }
@@ -284,6 +306,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       Prefer: 'resolution=ignore-duplicates,return=representation',
     },
     body: JSON.stringify({
+      // Explicit, from the verified sender: the compatibility bridge is not asked to guess.
+      office_id: officeId,
       origin_channel: command.origin_channel,
       origin_ref: command.origin_ref,
       actor: command.actor,

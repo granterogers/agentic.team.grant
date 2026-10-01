@@ -58,7 +58,7 @@ export function vaultExportHandler(db: SqlExecutor): Handler {
 
       const chatId = (
         await db.execute(
-          `select app.telegram_chat_for('grant', '${pager.botId.replace(/'/g, "''")}') as c`,
+          `select app.operator_chat('${pager.botId.replace(/'/g, "''")}') as c`,
         )
       ).rows[0]?.c
       if (chatId === null || chatId === undefined) {

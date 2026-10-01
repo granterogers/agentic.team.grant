@@ -131,7 +131,7 @@ if (token !== null) {
   const chat =
     pager === null
       ? null
-      : (await db.execute(`select app.telegram_chat_for('grant', ${lit(pager.botId)}) as c`))
+      : (await db.execute(`select app.operator_chat(${lit(pager.botId)}) as c`))
           .rows[0]?.c
   if (pager === null || chat === null || chat === undefined) {
     console.error(

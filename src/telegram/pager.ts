@@ -81,9 +81,11 @@ export class TelegramPager {
   }
 
   /** The registered chat for this subject, or null if nobody has spoken yet. */
-  async chatFor(subject?: string): Promise<string | null> {
+  async chatFor(job: { readonly jobId: string }, subject?: string): Promise<string | null> {
+    // The office is the CLAIMED job's, and the subject defaults to that office's own person - not to a literal.
+    const office = `app.job_office(${lit(job.jobId)}::uuid)`
     const { rows } = await this.db.execute(
-      `select app.telegram_chat_for(${lit(subject ?? this.options.subject ?? 'grant')}, ${lit(this.options.botId)}) as chat_id`,
+      `select app.telegram_chat_for(${office}, ${subject === undefined && this.options.subject === undefined ? `app.office_actor(${office})` : lit(subject ?? this.options.subject ?? '')}, ${lit(this.options.botId)}) as chat_id`,
     )
     const chatId = (rows[0] as { chat_id?: string | null } | undefined)?.chat_id
     return chatId === undefined ? null : chatId
@@ -141,8 +143,8 @@ export class TelegramPager {
       }
     }
 
-    const subject = this.options.subject ?? 'grant'
-    const chatId = await this.chatFor(subject)
+    const subject = this.options.subject
+    const chatId = await this.chatFor(input.job, subject)
     if (chatId === null) {
       return {
         delivered: false,
@@ -154,7 +156,7 @@ export class TelegramPager {
     // The same rule Slack asks, asked for this channel. One implementation of
     // "should Grant be told", consulted twice.
     const { rows } = await this.db.execute(`
-      select app.notification_allowed(${lit(subject)}, 'telegram',
+      select app.notification_allowed(${subject === undefined ? `app.office_actor(app.job_office(${lit(input.job.jobId)}::uuid))` : lit(subject)}, 'telegram',
         ${lit(input.severity)}::public.notify_severity,
         ${input.job.projectId === null ? 'null' : `${lit(input.job.projectId)}::uuid`}) as allowed
     `)
