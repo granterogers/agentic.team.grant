@@ -247,6 +247,10 @@
         }
       ]
     },
+    "deployment_operators": {
+      "class": "SYSTEM",
+      "why": "Names which people operate the whole deployment (settings, credentials, roster, connectors). Operator authority is not office ownership, so no office owns this table (0647)."
+    },
     "document_collections": {
       "class": "OFFICE_DERIVED",
       "path": [

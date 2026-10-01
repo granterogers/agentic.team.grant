@@ -245,7 +245,7 @@ describe('the committed manifest', () => {
   it('classifies each table exactly once, in one of the four classes', () => {
     const classes = new Set(Object.values(manifest.tables).map((e) => e.class))
     expect([...classes].sort()).toEqual(['GLOBAL', 'OFFICE_CARRIER', 'OFFICE_DERIVED', 'SYSTEM'])
-    expect(Object.keys(manifest.tables).length).toBe(129)
+    expect(Object.keys(manifest.tables).length).toBe(130)
   })
 
   it('gives every GLOBAL and SYSTEM table a reason', () => {

@@ -1529,6 +1529,78 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
   the person, hiring, connecting, credentials, uploading material as theirs -
   needs a session.
 */
+/*
+  WHAT ONLY THE DEPLOYMENT'S OPERATOR MAY DO (multi-user P1.3, #400).
+
+  "A person may do everything" was the same thing as "the operator" while the deployment had one human. It
+  is not once it has two: a second signed-in person would reach the first one's settings, the Google and Slack
+  credential forms, connector registration, the roster and the routing table. These actions change what is
+  SHARED by every office, or hold a credential the whole deployment acts through, so they need a person who is
+  also named in `deployment_operators` (0647) - asked of the database by owner key, never inferred from a
+  name, a header, or a field of the request.
+
+  This is not a role system: one set, one question. Everything per-office stays with any person - their
+  projects, tasks, documents, contacts, autonomy dial, standing yeses and lessons - and the test that pins
+  this file (tests/gateway/operator-only.test.ts) refuses an action whose name or function looks like a
+  deployment-wide change but is in neither this set nor the reasoned exceptions beside it.
+
+  A harness member is never an operator (the database says so even if a row were planted), and the machine
+  key is not a person, so Sample and test offices cannot reach any of these by principal-kind confusion.
+*/
+const OPERATOR_ONLY: ReadonlySet<string> = new Set([
+  'set_setting',
+  'set_google_secret',
+  'set_google_credentials',
+  'set_slack_credentials',
+  'forget_google',
+  'disconnect',
+  'vikunja_connect',
+  'vikunja_forget',
+  'register_connector',
+  'revoke_connector',
+  'offer_connector_tool',
+  'routing_set',
+  'bot_assign',
+  'staff_hire',
+  'staff_update',
+  'staff_retire',
+  'staff_tool_set',
+  'approve_tool',
+  'decline_tool',
+  'revoke_tool',
+  'drive_link',
+])
+
+const operators = new Map<string, number>()
+const OPERATOR_TTL_MS = 60_000
+
+/*
+  Asked of the database by owner key. Fails CLOSED: a lookup that does not answer is a refusal, and only a
+  positive answer is remembered (for a minute) - a revoked operator must not stay one because a cache said so.
+*/
+const isOperator = async (owner: string): Promise<boolean> => {
+  const held = operators.get(owner)
+  if (held !== undefined && held > Date.now()) return true
+  const asked = await fetch(`${DB_URL}/rest/v1/rpc/deployment_operator`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_owner_key: owner }),
+  }).catch(() => null)
+  if (asked === null || !asked.ok) return false
+  const answer = await asked.json().catch(() => false)
+  if (answer !== true) {
+    operators.delete(owner)
+    return false
+  }
+  operators.set(owner, Date.now() + OPERATOR_TTL_MS)
+  if (operators.size > 64) for (const k of [...operators.keys()].slice(0, 32)) operators.delete(k)
+  return true
+}
+
 const MACHINE_FIXTURE_ONLY: ReadonlySet<string> = new Set([
   'create_project',
   'rename_project',
@@ -1696,6 +1768,21 @@ Deno.serve(async (request: Request): Promise<Response> => {
         },
         403,
       )
+    }
+    if (OPERATOR_ONLY.has(actionName)) {
+      const operator =
+        kind === 'person' && principal !== null && principal !== '' && (await isOperator(principal))
+      if (!operator) {
+        return json(
+          {
+            error: 'operator_required',
+            message:
+              'This changes something shared by the whole deployment, so only its operator can do it.',
+            action: actionName,
+          },
+          403,
+        )
+      }
     }
     const args = { ...((body.args ?? {}) as Record<string, unknown>) }
     /*
@@ -2230,6 +2317,29 @@ Deno.serve(async (request: Request): Promise<Response> => {
     would otherwise break the query it appears in.
   */
   if (name === 'drive') {
+    /*
+      THE DRIVE BEHIND THIS IS THE DEPLOYMENT'S, not the caller's (#400). The refresh token below is one
+      fixed credential, so browsing is the operator's act until an office holds a Google connection of its
+      own: any other member would be browsing the operator's files. A GET section has no per-kind rule of
+      its own, so this one names it.
+    */
+    if (
+      !(
+        kind === 'person' &&
+        principal !== null &&
+        principal !== '' &&
+        (await isOperator(principal))
+      )
+    ) {
+      return json(
+        {
+          error: 'operator_required',
+          message: "Drive here is the deployment operator's own, so only they can browse it.",
+          action: 'drive',
+        },
+        403,
+      )
+    }
     const access = await googleToken()
     if ('error' in access) return json({ error: access.error }, 502)
     const folder = (url.searchParams.get('folder') ?? '').replace(/['\\]/g, '')
