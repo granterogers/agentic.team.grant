@@ -177,6 +177,9 @@ describe('every worker call to a converted integration function names the claime
     expect(src).toMatch(/where public\.connection_health\.office_id = excluded\.office_id/)
     // the office is a required argument the caller names (the claimed job's, or a script's), never an ambient default
     expect(src).toMatch(/recordGoogleHealth\([\s\S]{0,120}office: OfficeId/)
-    expect(src).toMatch(/\$\{lit\(office\)\}::uuid\)\s+on conflict \(service, credential\)/)
+    // and the key a reading is stored under leads with the office (0862), so two offices never share one row
+    expect(src).toMatch(
+      /\$\{lit\(office\)\}::uuid\)\s+on conflict \(office_id, service, credential\)/,
+    )
   })
 })
