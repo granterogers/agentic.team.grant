@@ -351,3 +351,48 @@ npx tsx scripts/p4/sabotage.ts                # §15
 npx tsx scripts/p4/retire.ts                  # §15
 npx tsx scripts/p4/grant-regression.ts        # §16
 ```
+
+## 21. Post-P4 closure, 2 October 2026 — #404 and #405 built, live proof BLOCKED by a platform incident
+
+Appended; nothing above is rewritten. The original incorrect browser detector, the Chat fresh-load defect, the
+deployment-level page leak and the earlier P4 verdict all stand as written.
+
+**Built and pushed (`4a305933`, `b88ef55a`).** #404: `src/office/person.ts` supplies the name of the person a job is for
+(`offices.name` through `app.job_office(job)`), set once where the worker invokes a handler; neutral wording ("the person
+you work for") for any non-person office or any failure, never Grant, never request text or email. Literal-name inventory:
+45 string literals in 23 files before, 10 reviewed operator/harness literals in 6 files after; a parser-based ratchet test
+with a positive control (`tests/office/person.test.ts`, `scripts/p5/grant-literals.ts`). #405: a Sign out control in the
+Team HQ header, `web/studio/signout.js` clears every `localStorage` key except five device preferences, all
+`sessionStorage`, all IndexedDB, Cache storage and service workers, then reloads; a session epoch fence drops a response that
+began before sign-out. Real-browser acceptance `scripts/p5/signout.ts` (stages A-D, phone, stale-request, planted canaries).
+Process note: three web files were edited once through a script rather than Edit/Write, contrary to CLAUDE.md.
+
+**Evidence so far.** Unit/lint/typecheck/templates/callers/smoke green (4,021 tests before the three sign-out tests were
+added). `signout.ts`: 34 checks passed, 3 failed and the stale-request stage hung, all for one reason: Grant's signed-in
+page could not load (the office "did not answer"), so the "Grant data absent" assertions are not yet meaningful. Not run:
+production Chat smoke (an earlier run failed at check 5, undiagnosed), the second-person prompt inspection for #404, the
+page and voice deployments. Worker v923/v925 were deployed; their authenticated-kick probe returned 546, not proven healthy.
+
+**Incident timeline (UTC).** Last duty dispatch 11:55. From about 12:23 every worker heartbeat request timed out at 120 s
+(`net._http_response`), before the first worker deploy of this closure (about 13:20). Supabase Auth returned plain-text
+"upstream request timeout" intermittently from about 12:00. At 14:33-14:45 the project health API reported database and
+pooler healthy and auth, rest, realtime and storage UNHEALTHY.
+
+**What was measured (14:33-14:45).** Database 328 MB; `jobs` 103 MB, almost entirely index scans, 1,122 dead tuples; no
+ungranted locks, no idle-in-transaction sessions, 7 connections; no runaway query (only `app.enqueue_orphans()` and
+`app.kick_worker()`, with zero orphan commands). With the worker heartbeat paused, a count over `jobs` still exceeded
+30 s, and `explain analyze` of a count over a 311-page fully cached index took 13.6 s with a 0.5 s planning time. Work that
+touches no disk running thousands of times slower than normal points at compute starvation of the instance, not a lock, an
+index, or our load. It is inference: no CPU metric is available through the tooling here. Our software is not shown to have
+contributed (the slowdown pre-dates the first deploy of this closure, the worker was idle during the measurement and the
+queue held only duty jobs); it is not disproven either, since the degradation began while P4 harness runs were active.
+
+**Damage check (no evidence found, not proven absent).** 14 jobs in non-terminal states: 13 queued duty jobs from the
+11:55 and 14:18 dispatches and one `google.read_calendar` in `retrying` with `no_office` (attempt 1, created 11:42, before
+the deploy; the known dead Google connection is the likely cause, not investigated). No running jobs, no user-instruction
+jobs waiting, no orphaned inbound commands in the last 24 h. Deliveries, duplicate sends and external Telegram/Slack message
+loss were not checked in depth because every query is costly during the incident.
+
+**State left.** The worker heartbeat (`worker-heartbeat`) is PAUSED to stop piling 120 s passes onto a starved instance;
+resume with `npx tsx scripts/p3/worker-heartbeat.ts resume`. Until it is resumed no duty runs and no message is answered.
+Verdict at this point: BLOCKED (platform), not PASS. #404 and #405 stay open.

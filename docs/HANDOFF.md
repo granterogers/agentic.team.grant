@@ -2140,6 +2140,15 @@ Grant's and none blocks the £0 work.
 - **`dependency_wait` was not resumable**, so the first live fan-in sat paused
   for eighteen minutes with the answer never written.
 
+### 2 October 2026 — post-P4 closure is BLOCKED by a platform incident
+
+#404 (each person is addressed by their own name) and #405 (Sign out) are built and pushed (`4a305933`, `b88ef55a`) but
+NOT live-proven and the Issues stay open. From about 12:23 UTC the Supabase project was degraded (project health API:
+auth, rest, realtime, storage unhealthy; trivial cached queries thousands of times slower with our worker idle). Worker
+v925 is deployed but unproven; the voice function and the new page are not deployed. **The worker heartbeat is PAUSED**:
+`npx tsx scripts/p3/worker-heartbeat.ts resume` once `select count(*) from public.jobs` returns in under a second.
+Details and the exact resume sequence: `docs/multi-user/P4-SECOND-USER-ACCEPTANCE.md` §21.
+
 ### What a fresh session should read
 
 `CLAUDE.md`, then `docs/AUTONOMOUS-RUN.md`, whose progress table has a row per
