@@ -10,11 +10,13 @@
 import { globSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { literalsNamingGrant } from '../../scripts/p5/grant-literals.ts'
+import { capabilityBrief } from '../../src/agents/capability.ts'
 import { guidanceBrief } from '../../src/agents/guidance.ts'
 import { provenanceNote } from '../../src/agents/provenance.ts'
 import { metadataProblems } from '../../src/agents/quality.ts'
 import {
   currentPerson,
+  forThePerson,
   NOBODY,
   personFrom,
   personOfJob,
@@ -165,6 +167,36 @@ describe('the wording an office composes, under two people', () => {
     // a verb is not a name
     expect(namesGrant('Grant this? The agent gets the tool from its next job onwards.')).toBe(true)
     expect(namesGrant('we grant permission to the tool')).toBe(false)
+  })
+})
+
+describe('registry text written once, for whoever the office works for', () => {
+  const text = "you can draft something for Grant to approve; Grant's call, and we grant nothing"
+  it("is Grant's own words under Grant's office, the second person's under theirs, neutral otherwise", () => {
+    expect(withPerson(GRANT, () => forThePerson(text))).toBe(text)
+    expect(withPerson(SECOND, () => forThePerson(text))).toBe(
+      "you can draft something for Priya Raman to approve; Priya Raman's call, and we grant nothing",
+    )
+    expect(namesGrant(withPerson(personFrom('test', 'T'), () => forThePerson(text)))).toBe(false)
+    expect(namesGrant(forThePerson(text))).toBe(false)
+  })
+
+  it('reaches the capability brief, where the registry text actually enters a prompt', () => {
+    const cap = {
+      reach: [{ service: 'drive', reachable: true, detail: null }],
+      can: [
+        { tool: 'draft.create', verbs: ['draft something for Grant to approve'], inReply: true },
+      ],
+      mustAsk: [],
+      cannot: [{ tool: 'web.read', why: 'a web address Grant names' }],
+      declined: [],
+    } as unknown as Parameters<typeof capabilityBrief>[0]
+    const second = withPerson(SECOND, () => capabilityBrief(cap))
+    expect(namesGrant(second)).toBe(false)
+    expect(second).toContain('draft something for Priya Raman to approve')
+    expect(withPerson(GRANT, () => capabilityBrief(cap))).toContain(
+      'draft something for Grant to approve',
+    )
   })
 })
 

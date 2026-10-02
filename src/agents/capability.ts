@@ -43,7 +43,7 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
-import { currentPerson } from '../office/person.ts'
+import { currentPerson, forThePerson } from '../office/person.ts'
 
 export interface Reach {
   /** How a person would name it: "Notion", "Slack", "Google NotebookLM". */
@@ -251,16 +251,17 @@ export function capabilityBrief(cap: Capability): string {
     .map((a) => `${a.tool} — you can ${a.verbs.slice(0, 4).join(', ')}.`)
   const plain = now.filter((a) => a.verbs.length === 0).map((a) => a.tool)
 
-  return (
+  // The registry rows are written once for whoever the office works for; the brief says it for THIS job's person.
+  return forThePerson(
     'What this team can reach right now, as a matter of fact: ' +
-    (can.length === 0 ? 'nothing' : can.join(', ')) +
-    '. ' +
-    (cannotReach.length === 0
-      ? ''
-      : `Not reachable: ${cannotReach.map((r) => `${r.service} (${String(r.detail ?? 'unavailable')})`).join(', ')}. `) +
-    (verbs.length === 0 ? '' : `${verbs.join(' ')} `) +
-    (plain.length === 0 ? '' : `You also hold: ${plain.join(', ')}. `) +
-    /*
+      (can.length === 0 ? 'nothing' : can.join(', ')) +
+      '. ' +
+      (cannotReach.length === 0
+        ? ''
+        : `Not reachable: ${cannotReach.map((r) => `${r.service} (${String(r.detail ?? 'unavailable')})`).join(', ')}. `) +
+      (verbs.length === 0 ? '' : `${verbs.join(' ')} `) +
+      (plain.length === 0 ? '' : `You also hold: ${plain.join(', ')}. `) +
+      /*
       What the office does on a schedule, which is not what you can do now.
 
       Named rather than hidden, for ADR-0018's reason: an agent that does not
@@ -268,14 +269,14 @@ export function capabilityBrief(cap: Capability): string {
       actionable half is in the sentence — give a task a date and the sync
       picks it up — so this reads as a route rather than a refusal.
     */
-    (onTheClock.length === 0
-      ? ''
-      : `The office also does these, but on its own schedule and never inside a reply: ${onTheClock
-          .map((a) => a.tool)
-          .join(', ')}. You cannot perform one now, so do not say you have. ` +
-        'Say what would make it happen — a dated task reaches the diary on the ' +
-        'next sync — or ask for what you need. ') +
-    /*
+      (onTheClock.length === 0
+        ? ''
+        : `The office also does these, but on its own schedule and never inside a reply: ${onTheClock
+            .map((a) => a.tool)
+            .join(', ')}. You cannot perform one now, so do not say you have. ` +
+          'Say what would make it happen — a dated task reaches the diary on the ' +
+          'next sync — or ask for what you need. ') +
+      /*
       What this person may NOT do, which is as load-bearing as what they may.
 
       An agent that does not know a tool exists cannot ask for it, and ADR-0018
@@ -283,11 +284,11 @@ export function capabilityBrief(cap: Capability): string {
       apart. Before this the brief said neither, and an agent hitting a boundary
       had nothing to propose (#49).
     */
-    (cap.mustAsk.length === 0
-      ? ''
-      : `The office can ${cap.mustAsk.map((a) => a.tool).join(', ')} but you do not hold ` +
-        'those — ask for one rather than saying it is impossible. ') +
-    /*
+      (cap.mustAsk.length === 0
+        ? ''
+        : `The office can ${cap.mustAsk.map((a) => a.tool).join(', ')} but you do not hold ` +
+          'those — ask for one rather than saying it is impossible. ') +
+      /*
       Switched off for everyone — the NAMES, and a clause, never the essay.
 
       `tool_permissions.disabled_reason` is written for a person reading the
@@ -302,26 +303,26 @@ export function capabilityBrief(cap: Capability): string {
       Governance page, and is still returned by `capabilityNow` for anything
       that wants it.
     */
-    (cap.cannot.length === 0
-      ? ''
-      : `Switched off for everyone: ${cap.cannot
-          .map((a) => `${a.tool} (${firstClause(a.why)})`)
-          .join('; ')}. `) +
-    (cap.declined.length === 0
-      ? ''
-      : `Already asked for and refused, so do not ask again: ${cap.declined
-          .map((d) => `${d.tool}${d.why === null ? '' : ` (${d.why})`}`)
-          .join(', ')}. `) +
-    'Never claim you cannot reach one of the reachable services, and never say ' +
-    'you lack access or an integration for one. If our records hold nothing ' +
-    'about the thing being asked about, say THAT — "I have nothing on it here" ' +
-    'is true and useful; "I do not have access to Notion" is a different claim ' +
-    'and it is not yours to make. ' +
-    // The specific sentence Grant objected to, forbidden by name.
-    'And do not offer to produce something "ready for you to add" when you can ' +
-    'add it yourself — if a verb above covers it, use it. ' +
-    noCallChannel() +
-    channelTruths()
+      (cap.cannot.length === 0
+        ? ''
+        : `Switched off for everyone: ${cap.cannot
+            .map((a) => `${a.tool} (${firstClause(a.why)})`)
+            .join('; ')}. `) +
+      (cap.declined.length === 0
+        ? ''
+        : `Already asked for and refused, so do not ask again: ${cap.declined
+            .map((d) => `${d.tool}${d.why === null ? '' : ` (${d.why})`}`)
+            .join(', ')}. `) +
+      'Never claim you cannot reach one of the reachable services, and never say ' +
+      'you lack access or an integration for one. If our records hold nothing ' +
+      'about the thing being asked about, say THAT — "I have nothing on it here" ' +
+      'is true and useful; "I do not have access to Notion" is a different claim ' +
+      'and it is not yours to make. ' +
+      // The specific sentence Grant objected to, forbidden by name.
+      'And do not offer to produce something "ready for you to add" when you can ' +
+      'add it yourself — if a verb above covers it, use it. ' +
+      noCallChannel() +
+      channelTruths(),
   )
 }
 

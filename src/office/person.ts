@@ -76,6 +76,19 @@ const scope = new AsyncLocalStorage<Person>()
 /** The person the running job is for; the neutral person when no job is in scope. */
 export const currentPerson = (): Person => scope.getStore() ?? NOBODY
 
+/**
+ * Text that was written once, in a table Grant edits, for whoever the office works for: a tool's description or a
+ * disabled reason reads "draft something for Grant to approve". The registry cannot know which person a given job is for,
+ * so the one place such text enters a prompt says it in the words of the job's own person. Grant's office is unchanged
+ * (the name is Grant); any other office gets its own person, or the neutral phrase, never Grant.
+ */
+export const forThePerson = (text: string): string => {
+  const p = currentPerson()
+  return text.replace(/\bGrant(['’]s)?\b/g, (_whole, possessive: string | undefined) =>
+    possessive === undefined ? p.name : p.possessive,
+  )
+}
+
 /** Run `work` for `person`. */
 export const withPerson = <T>(person: Person, work: () => T): T => scope.run(person, work)
 
