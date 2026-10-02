@@ -428,15 +428,40 @@ record(
 // section returns JSON, but that the lights are HONEST: every row carries when
 // it was last probed, and a row nobody probed is not green.
 
+// The office key is a MACHINE and resolves to the TEST office (P3), so this reads the test office's lights, not a
+// person's. The suite seeds its own five in that office and removes them, and asserts the property that matters: the
+// machine context sees exactly those, and none of the person's private connection state.
+await db.execute(`
+  delete from public.connection_health where office_id = app.test_office() and credential like 'verify-hq-%'`)
+await db.execute(`
+  insert into public.connection_health (office_id, service, credential, state, detail, owner, action, checked_at)
+  select app.test_office(), 'verify-hq-svc-' || g, 'verify-hq-' || g, 'ok', 'fixture reading', 'verify', '', app.now_utc()
+    from generate_series(1, 5) g`)
 const connResponse = await get('?section=connections')
 const connData = (JSON.parse(connResponse.body) as { data?: { rows?: Record<string, unknown>[] } })
   .data
 const connRows = connData?.rows ?? []
+await db.execute(`
+  delete from public.connection_health where office_id = app.test_office() and credential like 'verify-hq-%'`)
+const personsRows = Number(
+  (
+    (
+      await db.execute(
+        `select count(*)::int as n from public.connection_health where office_id <> app.test_office()`,
+      )
+    ).rows[0] as { n: number }
+  ).n,
+)
 
 record(
   'the connections section returns a row per service',
   `http ${String(connResponse.status)}, ${String(connRows.length)} row(s)`,
   connResponse.status === 200 && connRows.length >= 5,
+)
+record(
+  "the machine key reads the TEST office's lights and none of a person's (a person holds rows, and none came back)",
+  `${String(personsRows)} private row(s) exist, ${String(connRows.filter((r) => !String(r.credential).startsWith('verify-hq-')).length)} came back that are not this suite's`,
+  personsRows > 0 && connRows.every((r) => String(r.credential).startsWith('verify-hq-')),
 )
 
 record(
@@ -544,7 +569,7 @@ record(
 const stillBlocked = String(
   (
     await db.execute(
-      `select app.staff_may_use(app.sole_person_office(),'growth-director', 'gmail.send')::text as v`,
+      `select app.staff_may_use(app.operator_office(),'growth-director', 'gmail.send')::text as v`,
     )
   ).rows[0]?.v ?? 'x',
 )
@@ -575,7 +600,7 @@ await asPerson('staff_tool_set', {
 const revoked = String(
   (
     await db.execute(
-      `select app.staff_may_use(app.sole_person_office(),'growth-director', 'notebook.read')::text as v`,
+      `select app.staff_may_use(app.operator_office(),'growth-director', 'notebook.read')::text as v`,
     )
   ).rows[0]?.v ?? 'x',
 )
@@ -587,7 +612,7 @@ await asPerson('staff_tool_set', {
 const restored = String(
   (
     await db.execute(
-      `select app.staff_may_use(app.sole_person_office(),'growth-director', 'notebook.read')::text as v`,
+      `select app.staff_may_use(app.operator_office(),'growth-director', 'notebook.read')::text as v`,
     )
   ).rows[0]?.v ?? 'x',
 )

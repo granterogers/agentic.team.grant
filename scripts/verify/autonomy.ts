@@ -401,7 +401,7 @@ await db.execute(`delete from public.responsibilities where slug = ${lit(dutySlu
 // 3. Needs Me stays small
 // ===========================================================================
 
-const startingPressure = await one(`select * from app.needs_me_pressure(app.sole_person_office())`)
+const startingPressure = await one(`select * from app.needs_me_pressure(app.operator_office())`)
 const cap = Number(startingPressure?.cap)
 
 /**
@@ -454,7 +454,7 @@ record(
 // silently truncated.
 for (let i = 4; i <= cap + 3; i++) await mkBlocker(i, false, true)
 
-const pressure = await one(`select * from app.needs_me_pressure(app.sole_person_office())`)
+const pressure = await one(`select * from app.needs_me_pressure(app.operator_office())`)
 record(
   'needs me',
   'when the list outgrows the cap, the overflow is reported rather than hidden',
@@ -635,7 +635,7 @@ record(
 
 const attention = await db.execute(`
   select slug, open_blockers, live_jobs, stalled_jobs, has_brief, brief_is_stale
-  from app.project_attention(app.sole_person_office())
+  from app.project_attention(app.operator_office())
 `)
 record(
   'monitoring',

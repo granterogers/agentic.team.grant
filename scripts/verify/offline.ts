@@ -53,7 +53,7 @@ const db = new ManagementApiExecutor(
 )
 // Real rows, so the good case is the real good case rather than a stub of one.
 const studio = (
-  (await db.execute('select app.hq_studio(app.sole_person_office()) as d')).rows[0] as {
+  (await db.execute('select app.hq_studio(app.operator_office()) as d')).rows[0] as {
     d: unknown
   }
 ).d

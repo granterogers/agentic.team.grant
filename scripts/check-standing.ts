@@ -110,7 +110,7 @@ if (wrong.length > 0) {
 */
 const person = {
   officeId: String(
-    ((await db.execute('select app.sole_person_office()::text as id')).rows[0] as { id: string })
+    ((await db.execute('select app.operator_office()::text as id')).rows[0] as { id: string })
       .id,
   ),
 }

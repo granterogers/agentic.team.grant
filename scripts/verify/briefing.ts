@@ -200,7 +200,7 @@ console.log('briefing —')
 // --- the facts are facts ----------------------------------------------------
 
 {
-  const f = (await one('select app.morning_briefing_facts(app.sole_person_office()) as f')).f as {
+  const f = (await one('select app.morning_briefing_facts(app.operator_office()) as f')).f as {
     for_date?: string
     waiting_on_you?: unknown[]
     overnight?: { finished?: number }
@@ -258,9 +258,7 @@ console.log('briefing —')
     public.blockers directly, so the two halves of one sentence were about
     different sets — four waiting on him and fifty more behind them.
   */
-  const pressure = await one(
-    'select open_items from app.needs_me_pressure(app.sole_person_office())',
-  )
+  const pressure = await one('select open_items from app.needs_me_pressure(app.operator_office())')
   ok(
     'and the overflow line counts the same population as the list',
     Number(pressure?.open_items) === needs.length,

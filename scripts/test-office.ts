@@ -14,11 +14,11 @@ export const testOffice = async (db: SqlExecutor): Promise<{ readonly officeId: 
 }
 
 /**
- * The sole person's office (Grant's, while there is one person). For a suite whose raw writes carry no project, job or
- * harness-shaped actor: the compatibility bridge files those under this office, so that is where the suite must read.
+ * The operator's office (Grant's). With a second person in the deployment there is no "sole person" any more, so an
+ * operator suite names the operator explicitly.
  */
 export const personOffice = async (db: SqlExecutor): Promise<{ readonly officeId: string }> => {
-  const { rows } = await db.execute('select app.sole_person_office()::text as id')
+  const { rows } = await db.execute('select app.operator_office()::text as id')
   return { officeId: String((rows[0] as { id: string }).id) }
 }
 

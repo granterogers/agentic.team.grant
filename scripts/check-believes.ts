@@ -75,7 +75,7 @@ const main = async (): Promise<void> => {
     .execute(
       `with reach as (
          select r ->> 'service' as service, (r ->> 'reachable')::boolean as reachable
-           from jsonb_array_elements(app.capability_index_core(app.sole_person_office(), null) -> 'reach') r
+           from jsonb_array_elements(app.capability_index_core(app.operator_office(), null) -> 'reach') r
        ),
        sent as (
          select d.channel, count(*) as n

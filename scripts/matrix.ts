@@ -96,7 +96,7 @@ const grants = new Set(
 const advertised = new Map<string, Set<string>>()
 for (const a of agents) {
   const rows = await all(
-    `select jsonb_array_elements(coalesce(app.capability_index(app.sole_person_office(), ${lit(a.slug)}) -> 'can', '[]'::jsonb)) ->> 'tool' as tool`,
+    `select jsonb_array_elements(coalesce(app.capability_index(app.operator_office(), ${lit(a.slug)}) -> 'can', '[]'::jsonb)) ->> 'tool' as tool`,
   )
   advertised.set(a.slug, new Set(rows.map((r) => String(r.tool))))
 }

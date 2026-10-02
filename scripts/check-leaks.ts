@@ -378,7 +378,7 @@ const piles = await db.execute(`
       No backticks in this comment: it lives inside a template literal.
     */
     (select count(*)
-       from app.lessons_for(app.sole_person_office(), null, 'chief-of-staff', 'office.instruction', 500) f
+       from app.lessons_for(app.operator_office(), null, 'chief-of-staff', 'office.instruction', 500) f
        join public.lessons l on l.lesson_id = f.lesson_id
       where l.from_job is not null and app.harness_job(l.from_job))
       as harness_lessons_in_a_real_prompt,
@@ -392,7 +392,7 @@ const piles = await db.execute(`
       nothing about the filter.
     */
     (select count(*)
-       from app.lessons_for(app.sole_person_office(), null, 'chief-of-staff', 'office.instruction', 500, true) f
+       from app.lessons_for(app.operator_office(), null, 'chief-of-staff', 'office.instruction', 500, true) f
        join public.lessons l on l.lesson_id = f.lesson_id
       where l.from_job is not null and app.harness_job(l.from_job))
       as harness_lessons_the_filter_removes,
@@ -528,7 +528,7 @@ const piles = await db.execute(`
       This check passed throughout, because it did not know the reader existed.
     */
     (select count(*)
-       from jsonb_array_elements(app.hq_studio_lately(app.sole_person_office(), 200) -> 'office') e,
+       from jsonb_array_elements(app.hq_studio_lately(app.operator_office(), 200) -> 'office') e,
             jsonb_to_record(e) as x(who text)
       where app.harness_label(x.who)) as harness_on_his_activity_panel,
     /*

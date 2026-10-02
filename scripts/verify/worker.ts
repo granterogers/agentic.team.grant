@@ -865,7 +865,7 @@ record(
   over an hour means the last one was not taken before the next arrived. An
   hour is the floor for a kind no duty creates.
 */
-const stuck = (await db.execute('select * from app.jobs_stuck_queued(app.sole_person_office())'))
+const stuck = (await db.execute('select * from app.jobs_stuck_queued(app.operator_office())'))
   .rows as {
   kind: string
   n: number
@@ -893,7 +893,7 @@ record(
   the office fell behind. Asserting the FIELD exists, not that it is zero --
   a green office and a broken health function look identical from the outside.
 */
-const health = (await db.execute('select app.office_health(app.sole_person_office()) as h'))
+const health = (await db.execute('select app.office_health(app.operator_office()) as h'))
   .rows[0] as {
   h: Record<string, unknown>
 }

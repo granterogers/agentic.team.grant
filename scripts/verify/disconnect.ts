@@ -395,7 +395,7 @@ check(
 // P3: these read the dashboard of the person whose pages are being captured, so they name that office first.
 const OFFICE_FIRST = new Set(['hq_studio', 'usage_overview', 'hq_studio_lately'])
 const callOf = (fn: string, args: string): string =>
-  `app.${fn}(${OFFICE_FIRST.has(fn) ? `app.sole_person_office()${args === '' ? '' : `, ${args}`}` : args})`
+  `app.${fn}(${OFFICE_FIRST.has(fn) ? `app.operator_office()${args === '' ? '' : `, ${args}`}` : args})`
 const sections: Record<string, unknown> = {}
 for (const [name, fn, args] of [
   ['studio', 'hq_studio', ''],

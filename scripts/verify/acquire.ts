@@ -123,7 +123,7 @@ try {
   const mine = (
     await db.execute(`
       select skill_id::text as id, name, tools, missing
-        from app.skills_for(app.sole_person_office(),'research-director', 'office.instruction', null, 20)
+        from app.skills_for(app.operator_office(),'research-director', 'office.instruction', null, 20)
     `)
   ).rows as { id: string; name: string; tools: string[]; missing: string[] }[]
   check(
@@ -139,7 +139,7 @@ try {
   */
   const notMine = (
     await db.execute(`
-      select skill_id::text as id from app.skills_for(app.sole_person_office(),'finance-director', 'office.instruction', null, 20)
+      select skill_id::text as id from app.skills_for(app.operator_office(),'finance-director', 'office.instruction', null, 20)
     `)
   ).rows as { id: string }[]
   check(
@@ -240,7 +240,7 @@ try {
     tool.
   */
   const mayUse = (await one(
-    `select app.staff_may_use(app.sole_person_office(),'growth-director', 'web.search') as ok`,
+    `select app.staff_may_use(app.operator_office(),'growth-director', 'web.search') as ok`,
   )) as {
     ok?: boolean
   }
@@ -253,7 +253,7 @@ try {
   if (grabby.skill_id !== undefined && grabby.skill_id !== '') {
     const shown = (
       await db.execute(`
-        select missing from app.skills_for(app.sole_person_office(),'growth-director', 'office.instruction', null, 20)
+        select missing from app.skills_for(app.operator_office(),'growth-director', 'office.instruction', null, 20)
          where skill_id = ${lit(String(grabby.skill_id))}::uuid
       `)
     ).rows[0] as { missing?: string[] } | undefined

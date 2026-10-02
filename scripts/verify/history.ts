@@ -909,7 +909,7 @@ try {
     worth checking is the one that makes NO job.
   */
   const digest = async (): Promise<string> =>
-    JSON.stringify((await one(`select app.hq_pulse(app.sole_person_office()) as v`)).v)
+    JSON.stringify((await one(`select app.hq_pulse(app.operator_office()) as v`)).v)
 
   const before = await digest()
   await db.execute(`

@@ -332,7 +332,7 @@ try {
   // one red check does not hide a second bug in the other half.
   console.log('\nand the page draws it')
 
-  const studio = (await one('select app.hq_studio(app.sole_person_office()) as d')).d as {
+  const studio = (await one('select app.hq_studio(app.operator_office()) as d')).d as {
     projects: { slug: string; layout: unknown; modules: unknown }[]
   }
   const subject = studio.projects[0]

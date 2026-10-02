@@ -46,11 +46,11 @@ const db: SqlExecutor = new ManagementApiExecutor(
   otherwise it is the sole person's (the office this search box has always been for).
 */
 let projectFilter = 'null'
-let officeSql = 'app.sole_person_office()'
+let officeSql = 'app.operator_office()'
 if (projectSlug !== '') {
   const { rows } = await db.execute(
     `select project_id::text as id, office_id::text as office from public.projects where slug = ${lit(projectSlug)}
-      order by (office_id = app.sole_person_office()) desc limit 1`,
+      order by (office_id = app.operator_office()) desc limit 1`,
   )
   const found = rows[0] as { id?: string; office?: string } | undefined
   if (found?.id === undefined || found.office === undefined) {

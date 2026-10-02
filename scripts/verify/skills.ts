@@ -124,7 +124,7 @@ ok('and it starts at version 1', Number(made.version) === 1)
 
 {
   const back = await all(`
-    select name, procedure, tools, missing from app.skills_for(app.sole_person_office(),'operations-director', null, null, 40)
+    select name, procedure, tools, missing from app.skills_for(app.operator_office(),'operations-director', null, null, 40)
      where skill_id = ${lit(skillId)}::uuid
   `)
   ok('and it comes back for a job to read', back.length === 1)
@@ -252,7 +252,7 @@ await refuses(
   ok('a skill may name a tool nobody currently holds', wantId !== '')
 
   const seen = await one(`
-    select tools, missing from app.skills_for(app.sole_person_office(),'operations-director', null, null, 40)
+    select tools, missing from app.skills_for(app.operator_office(),'operations-director', null, null, 40)
      where skill_id = ${lit(wantId)}::uuid
   `)
   ok(
@@ -268,7 +268,7 @@ await refuses(
     use the tool. If naming it were enough, this would now be true.
   */
   const may = await one(
-    `select app.staff_may_use(app.sole_person_office(),'operations-director', 'github.write') as m`,
+    `select app.staff_may_use(app.operator_office(),'operations-director', 'github.write') as m`,
   )
   ok('but the answer to may-I does not move', may.m === false)
 
@@ -283,7 +283,7 @@ await refuses(
     without it.
   */
   const held = await one(
-    `select app.staff_may_use(app.sole_person_office(),'operations-director', 'db.read') as m`,
+    `select app.staff_may_use(app.operator_office(),'operations-director', 'db.read') as m`,
   )
   ok('while a tool that IS held is still held', held.m === true)
 

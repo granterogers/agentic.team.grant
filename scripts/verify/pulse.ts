@@ -69,12 +69,12 @@ const strip = (p: Record<string, unknown>): string => {
   return JSON.stringify(rest)
 }
 
-const first = (await one('select app.hq_pulse(app.sole_person_office()) as p')).p as Record<
+const first = (await one('select app.hq_pulse(app.operator_office()) as p')).p as Record<
   string,
   unknown
 >
 await new Promise((r) => setTimeout(r, 1_200))
-const second = (await one('select app.hq_pulse(app.sole_person_office()) as p')).p as Record<
+const second = (await one('select app.hq_pulse(app.operator_office()) as p')).p as Record<
   string,
   unknown
 >
@@ -110,10 +110,10 @@ check(
 */
 const moved = await one(`
   begin;
-  create temp table _p as select app.hq_pulse(app.sole_person_office()) as before;
+  create temp table _p as select app.hq_pulse(app.operator_office()) as before;
   update public.projects set purpose = purpose where slug =
     (select slug from public.projects where not is_fixture and status = 'active' limit 1);
-  select (select before from _p)::text as before, app.hq_pulse(app.sole_person_office())::text as after;
+  select (select before from _p)::text as before, app.hq_pulse(app.operator_office())::text as after;
   rollback;
 `)
 const beforeDigest = strip(JSON.parse(String(moved.before)) as Record<string, unknown>)
@@ -136,7 +136,7 @@ check(
 // --- 3. the page acts on it -------------------------------------------------
 
 const studio = (
-  (await db.execute('select app.hq_studio(app.sole_person_office()) as d')).rows[0] as {
+  (await db.execute('select app.hq_studio(app.operator_office()) as d')).rows[0] as {
     d: unknown
   }
 ).d

@@ -131,7 +131,7 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
 
   // What it gets instead of reach: retrieval saying which part cannot be done.
   const seen = await one(`
-    select missing from app.skills_for(app.sole_person_office(), ${lit(WHO)},null, null, 40)
+    select missing from app.skills_for(app.operator_office(), ${lit(WHO)},null, null, 40)
      where skill_id = ${lit(id)}::uuid
   `)
   ok(

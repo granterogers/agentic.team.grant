@@ -503,9 +503,9 @@ section = 'permissions never combine'
     insert into u values ('fan', app.fan_in_over(app.job_office(${PARENT}), ${PARENT},
       'Is this worth doing?', ${BRANCHES}, 'office.synthesise', null));
     select (select v from u where k = 'fan') as fan,
-           app.staff_may_use(app.sole_person_office(),'finance-director', ${lit(TOOL)}) as branch_may,
-           app.staff_may_use(app.sole_person_office(),'chief-of-staff', ${lit(TOOL)}) as parent_may,
-           app.staff_may_use(app.sole_person_office(),'research-director', ${lit(TOOL)}) as sibling_may;
+           app.staff_may_use(app.operator_office(),'finance-director', ${lit(TOOL)}) as branch_may,
+           app.staff_may_use(app.operator_office(),'chief-of-staff', ${lit(TOOL)}) as parent_may,
+           app.staff_may_use(app.operator_office(),'research-director', ${lit(TOOL)}) as sibling_may;
     rollback;`)
 
   const truthy = (v: unknown): boolean => v === true || v === 'true' || asJson(v).allowed === true

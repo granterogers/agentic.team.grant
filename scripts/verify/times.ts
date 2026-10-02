@@ -61,7 +61,7 @@ const check = (what: string, said: string, ok: boolean): void => {
 }
 
 const studio = (
-  (await db.execute('select app.hq_studio(app.sole_person_office()) as d')).rows[0] as {
+  (await db.execute('select app.hq_studio(app.operator_office()) as d')).rows[0] as {
     d: { projects: { slug: string; layout: unknown; activity: unknown; contacts: unknown }[] }
   }
 ).d
