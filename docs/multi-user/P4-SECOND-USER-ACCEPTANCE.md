@@ -431,5 +431,35 @@ when the health API is green, and do not run harness suites while it is.
 **Found, not fixed (#407)**: `google.read_mail` / `google.read_calendar` fail with `no_office` since 06:57-07:39 UTC, before
 this closure, because they fall back to the sole-person office and there are now two.
 
-**Verdict**: BLOCKED, with real progress: #405 is proven live; #404 is not (no second-person prompt inspection); #404 and
+**Verdict at 17:35**: BLOCKED, with real progress: #405 is proven live; #404 is not (no second-person prompt inspection); #404 and
 #405 stay open until the platform allows the remaining runs.
+
+**Third attempt, 18:18-19:30 UTC.** Platform green at 18:18; the worker was resumed and drained the whole backlog in about
+5 minutes, including the second person's stuck job (it completed on attempt 2).
+
+* **Production Chat proof PASSED, 28/28** (`PAGE=https://ai-team-hq.vercel.app npx tsx scripts/p4/chat-reload.ts`, 236 s): fresh
+  load shows the persisted history; a real message sent through the real composer; the canonical `inbound_commands.job_id`
+  and the `public.outputs` row read from the database; after a full reload the bubble found by output id equals the canonical
+  answer after presentation-only normalisation; both negative controls red then green; no Grant data; zero page errors.
+* **#404 prompt inspection (`scripts/p5/person-prompt.ts`) FOUND A REAL LEAK.** One request with a task and a delegation was
+  run in-process as the second person with every request to the model recorded as sent: 6 requests, 3 named the second
+  person, and **2 contained "Grant"**, in the capability brief: `tool_permissions` descriptions say "draft something for Grant
+  to approve" and "a web address Grant names". Unit tests had passed because they never drove the registry text. Fixed at the
+  one consumer: `capabilityBrief` now passes the whole brief through `forThePerson` (`src/office/person.ts`), which says
+  Grant's registry wording in the words of the job's own person (Grant's office is unchanged; any other office gets its
+  name or the neutral phrase). Test: `tests/office/person.test.ts` (both persons, and the brief itself). Worker redeployed
+  as **v928** (authenticated kick 200).
+* **After the fix the live confirmation is INCONCLUSIVE.** Two further runs of the inspection did not complete in the time
+  allowed (the database was slow again). The one that did record a model request (1 request, an early classification step)
+  contained no "Grant" and did not contain the person's name either, so it shows neither a fix nor a failure. No answer in
+  any run said Grant. The prompts of the answering step after the fix have NOT been observed. Run again when the platform
+  is green: `ASK="What is on my task list right now?" npx tsx scripts/p5/person-prompt.ts` (heartbeat paused first).
+* **Third degradation, about 19:00, with the heartbeat PAUSED** and only my one script running. That weakens the hypothesis
+  above that worker plus harness load triggers it: the instance degraded (db/auth flapping, `select 1` 10-50 s) with the
+  worker idle. Both remain unproven; the cause is not identified. The heartbeat was RESUMED afterwards, because pausing
+  demonstrably did not prevent the flapping and an idle office has its own cost.
+* Debris: two fixture jobs from killed runs (`telegram:verify-p404-*`, second office) were cancelled; nothing else left.
+
+**Verdict, 19:30: BLOCKED.** Proven live: worker v928, page, voice, #405 (38/38), the production Chat proof (28/28). Not proven
+live: #404 after its fix. #405 is the only issue whose acceptance is complete; it is left open for one reason, the production
+run of the stale-request fence, which passed locally 6/6 and could not complete against production.

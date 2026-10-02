@@ -29,7 +29,9 @@ const run = Math.random().toString(36).slice(2, 8)
 const ACTOR = `verify-p404-${run}`
 const MINE = `telegram:${ACTOR}`
 const WORKER = `p404-${run}`
+// ASK=... runs a different request; the default has a task AND a delegation in it, which can take the free model minutes
 const ASK =
+  process.env.ASK ??
   'Please add a task to call the supplier on Friday, and ask the research director what she knows about our pricing.'
 
 // ---- record every request to the model provider, as sent
