@@ -32,6 +32,7 @@
   moved is dropped rather than drawn.
 */
 
+import * as notes from './bc/notestore.js'
 import * as session from './session.js'
 
 /** Device-level preferences that carry nothing about a person. */
@@ -109,6 +110,8 @@ export async function signOut({ reload = true } = {}) {
   session.bump()
   session.forget()
   wipeLocal()
+  // The page's own open IndexedDB connection would block the deletion below, so it is closed first.
+  await notes.release().catch(() => {})
   await Promise.all([wipeDatabases(), wipeCaches()])
   // A second pass: a request that landed between the first and now may have written back.
   wipeLocal()

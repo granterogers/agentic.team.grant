@@ -82,6 +82,30 @@ export async function ready() {
 }
 
 /** Whether there is a recording for this message, answerable while drawing. */
+/**
+ * Let go of everything held in this page: the open connection, the object URLs and the key set (#405).
+ * An IndexedDB deletion waits for every open connection to close, so signing out closes this one first; otherwise
+ * the recordings of the person who has just gone would outlive them until the page was reloaded.
+ */
+export async function release() {
+  for (const made of urls.values()) {
+    try {
+      URL.revokeObjectURL(made)
+    } catch {
+      /* already gone */
+    }
+  }
+  urls.clear()
+  keys.clear()
+  const open = opening
+  opening = null
+  try {
+    ;(await open)?.close()
+  } catch {
+    /* nothing was open */
+  }
+}
+
 export const has = (id) => keys.has(String(id))
 
 /** How many are kept, for a check to read rather than believe. */

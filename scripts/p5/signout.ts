@@ -24,6 +24,7 @@ import {
   SECOND_OFFICE,
   secondSession,
 } from '../p4/lib.ts'
+import { SECOND_EMAIL } from '../p4/provision-second-person.ts'
 
 const ROOT = 'web/studio'
 const PORT = 4793
@@ -60,11 +61,17 @@ const grantNames = (
     `select distinct name v from public.projects where office_id = app.operator_office() and not is_fixture and slug <> 'unnamed' and length(name) > 5`,
   )
 ).map((r) => String(r.v))
-const secondNames = (
+// names generic enough to be on both people's pages ("Personal") prove nothing; filtered below once the page's own text is known
+const secondNamesAll = (
   await rows(
     `select distinct name v from public.projects where office_id = '${SECOND_OFFICE}' and not is_fixture and length(name) > 5`,
   )
 ).map((r) => String(r.v))
+// "Personal" and "Unnamed" exist in every office; the second person's distinctive marks are their address and the canaries
+const secondNames = [
+  ...secondNamesAll.filter((n) => !['Personal', 'Unnamed'].includes(n)),
+  SECOND_EMAIL,
+]
 
 const errors: string[] = []
 const staticShown = new Set<string>()
@@ -196,7 +203,7 @@ const press = async (page: Page) => {
   await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded', timeout: 45000 })
   await page.waitForTimeout(4000)
   const t = (await page.evaluate("document.body.innerText || ''")) as string
-  for (const n of grantNames) if (t.includes(n)) staticShown.add(n)
+  for (const n of [...grantNames, ...secondNames]) if (t.includes(n)) staticShown.add(n)
   await ctx.close()
 }
 const realGrant = grantNames.filter((n) => !staticShown.has(n))
@@ -238,72 +245,77 @@ const grantShown = async (p: Page): Promise<string> => {
   await ctx.close()
 }
 
-// ============ A, B, C, D in ONE context
-const { ctx, page } = await open()
+// ONLY=S runs just the stale-request stage (the whole script is longer than the shell's ten-minute ceiling on a slow day)
+const ONLY_S = process.env.ONLY === 'S'
+if (!ONLY_S) {
+  // ============ A, B, C, D in ONE context
+  const { ctx, page } = await open()
 
-await signInAs(page, grant)
-const grantIn = await grantShown(page)
-await plant(page, 'A')
-await prefs(page)
-check(
-  'A: Grant is signed in and his names are on the page (so their absence later means something)',
-  realGrant.some((x) => grantIn.includes(x)),
-)
-await press(page)
-await signedOutClean(page, 'A', [...realGrant, 'CANARY-A'], 'A')
-
-await signInAs(page, second)
-await page.waitForTimeout(4000)
-const bIn = everything(await snap(page))
-check(
-  "B: the second person signs in, same browser; Grant's names are absent",
-  realGrant.every((x) => !bIn.includes(x)),
-  realGrant.filter((x) => bIn.includes(x)).join('|'),
-)
-check("B: no Grant canary in the second person's browser", !bIn.includes('CANARY-A'))
-await plant(page, 'B')
-await prefs(page)
-await press(page)
-await signedOutClean(
-  page,
-  'C',
-  [...secondNames.filter((x) => !grantNames.includes(x)), 'CANARY-B'],
-  'B',
-)
-
-await signInAs(page, grant)
-const dIn = await grantShown(page)
-check(
-  "D: Grant signs in again; the second person's names and canary are absent",
-  secondNames.filter((x) => !grantNames.includes(x)).every((x) => !dIn.includes(x)) &&
-    !dIn.includes('CANARY-B'),
-)
-check(
-  "D: Grant's own data is back (signing in again works)",
-  realGrant.some((x) => dIn.includes(x)),
-)
-await press(page)
-await signedOutClean(page, 'D-out', realGrant, 'D')
-await ctx.close()
-
-// ============ P: the phone
-{
-  const { ctx: pctx, page: phone } = await open(true)
-  await signInAs(phone, second)
-  const box = await phone.locator('[data-bc-signout]').first().boundingBox()
+  await signInAs(page, grant)
+  const grantIn = await grantShown(page)
+  await plant(page, 'A')
+  await prefs(page)
   check(
-    `P: Sign out is on screen on a phone and at least 44px tall (${Math.round(box?.height ?? 0)}px)`,
-    box !== null && box.height >= 44 && box.x >= 0 && box.x + box.width <= 390,
+    'A: Grant is signed in and his names are on the page (so their absence later means something)',
+    realGrant.some((x) => grantIn.includes(x)),
   )
-  await plant(phone, 'P')
-  await prefs(phone)
-  await press(phone)
-  await signedOutClean(phone, 'P', ['CANARY-P'], 'P')
-  await pctx.close()
+  await press(page)
+  await signedOutClean(page, 'A', [...realGrant, 'CANARY-A'], 'A')
+
+  await signInAs(page, second)
+  await page.waitForTimeout(4000)
+  const bIn = everything(await snap(page))
+  check(
+    "B: the second person signs in, same browser; Grant's names are absent",
+    realGrant.every((x) => !bIn.includes(x)),
+    realGrant.filter((x) => bIn.includes(x)).join('|'),
+  )
+  check("B: no Grant canary in the second person's browser", !bIn.includes('CANARY-A'))
+  await plant(page, 'B')
+  await prefs(page)
+  await press(page)
+  await signedOutClean(
+    page,
+    'C',
+    [...secondNames.filter((x) => !grantNames.includes(x)), 'CANARY-B'],
+    'B',
+  )
+
+  await signInAs(page, grant)
+  const dIn = await grantShown(page)
+  check(
+    "D: Grant signs in again; the second person's names and canary are absent",
+    secondNames.filter((x) => !grantNames.includes(x)).every((x) => !dIn.includes(x)) &&
+      !dIn.includes('CANARY-B'),
+    secondNames.filter((x) => dIn.includes(x)).join('|'),
+  )
+  check(
+    "D: Grant's own data is back (signing in again works)",
+    realGrant.some((x) => dIn.includes(x)),
+  )
+  await press(page)
+  await signedOutClean(page, 'D-out', realGrant, 'D')
+  await ctx.close()
+
+  // ============ P: the phone
+  {
+    const { ctx: pctx, page: phone } = await open(true)
+    await signInAs(phone, second)
+    const box = await phone.locator('[data-bc-signout]').first().boundingBox()
+    check(
+      `P: Sign out is on screen on a phone and at least 44px tall (${Math.round(box?.height ?? 0)}px)`,
+      box !== null && box.height >= 44 && box.x >= 0 && box.x + box.width <= 390,
+    )
+    await plant(phone, 'P')
+    await prefs(phone)
+    await press(phone)
+    await signedOutClean(phone, 'P', ['CANARY-P'], 'P')
+    await pctx.close()
+  }
 }
 
-// ============ S: the stale-request fence
-{
+// ============ S: the stale-request fence (ONLY=ABCDP leaves it for its own run)
+if (process.env.ONLY !== 'ABCDP') {
   const run = async (signOutFirst: boolean): Promise<boolean> => {
     const { ctx: sctx, page: sp } = await open()
     let release: () => void = () => {}
@@ -320,6 +332,7 @@ await ctx.close()
     await sp.goto(`${BASE}/`, { waitUntil: 'domcontentloaded', timeout: 45000 })
     await sp.waitForTimeout(3000)
     armed = true
+    console.log(`  S: run(signOutFirst=${signOutFirst}) page loaded, holding the studio request`)
     const pending = sp
       .evaluate(`(async () => {
         const m = await import('./data.js')
@@ -333,6 +346,7 @@ await ctx.close()
       )
     }
     release()
+    console.log('  S: released, waiting for the late response to settle')
     await pending
     await sp.waitForTimeout(2500)
     const inMemory = (await sp.evaluate(
@@ -340,7 +354,7 @@ await ctx.close()
     )) as string
     const text = `${inMemory}\n${everything(await snap(sp))}`
     await sctx.close()
-    return grantNames.some((x) => text.includes(x))
+    return realGrant.some((x) => text.includes(x))
   }
   const withoutFence = await run(false)
   const withSignOut = await run(true)
