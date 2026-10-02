@@ -137,7 +137,9 @@ const inRollback = async (body: string): Promise<Record<string, unknown>> => {
       declare c uuid; e jsonb; r jsonb; pr uuid; v jsonb;
       begin
         perform set_config('application_name', 'PostgREST 14.5', true);
-        pr := (app.hq_create_project(app.test_office(), ${lit(`History real ${run}`)}, 'upload',
+        -- A REAL turn is the person's: this block is rolled back, and runs in the operator's office so that the
+        -- origin the office reads is the one a real turn has.
+        pr := (app.hq_create_project(app.operator_office(), ${lit(`History real ${run}`)}, 'upload',
                  ${lit(`hreal-${run}`)}, ${lit(`History real ${run}`)}, true) ->> 'project_id')::uuid;
         ${body}
         raise exception 'ROLLED-BACK:%', r::text;
@@ -218,10 +220,12 @@ try {
     h.length === 2 && String(h[0]?.body) === `Mine one ${run}`,
   )
 
+  const testActor = String((await one(`select app.office_actor(app.test_office()) as v`)).v ?? '')
   check(
     'every message says who said it',
     h.map((m) => String(m.from)).join(','),
-    h.every((m) => m.from === 'grant') && h.every((m) => m.kind === 'said'),
+    // Said by the office's own person - in the test office, its operator - not by whoever was the only one.
+    h.every((m) => m.from === testActor) && h.every((m) => m.kind === 'said'),
   )
 
   check(
@@ -262,7 +266,11 @@ try {
   )
 
   const stillThere = Number(
-    (await one(`select count(*)::int as n from public.projects where slug = 'unnamed'`)).n,
+    (
+      await one(
+        `select count(*)::int as n from public.projects where slug = 'unnamed' and office_id = app.test_office()`,
+      )
+    ).n,
   )
   check('and it is still there afterwards', `${String(stillThere)} row(s)`, stillThere === 1)
 
@@ -428,7 +436,7 @@ try {
         begin
           perform set_config('application_name', 'PostgREST 14.5', true);
           -- A real project as well: the suite's own are fixtures, which is harness.
-          pr := (app.hq_create_project(app.test_office(), ${lit(`Conversation shape ${run}`)}, 'upload',
+          pr := (app.hq_create_project(app.operator_office(), ${lit(`Conversation shape ${run}`)}, 'upload',
                    ${lit(`shape-${run}`)}, ${lit(`Conversation shape ${run}`)}, true) ->> 'project_id')::uuid;
           insert into public.inbound_commands
             (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
@@ -440,7 +448,7 @@ try {
           insert into public.outputs (job_id, body, confidence, evidence, sources, deterministic)
           values ((e ->> 'job_id')::uuid, ${lit(`A real answer ${run}`)}, 'medium', 'inferred', '[]'::jsonb, true);
           r := jsonb_build_object('harness', app.harness_job((e ->> 'job_id')::uuid),
-                                  'history', app.conversation_history(app.test_office(), pr, 100));
+                                  'history', app.conversation_history(app.operator_office(), pr, 100));
           raise exception 'ROLLED-BACK:%', r::text;
         end $x$`)
     } catch (error) {
@@ -508,10 +516,16 @@ try {
     `slack_workspaces`, so an invented team is refused. Read rather than
     hardcoded, so this does not go red when the workspace changes.
   */
-  const team = String(
-    (await one(`select team_id as v from public.slack_workspaces order by team_id limit 1`)).v ??
-      '',
-  )
+  // The workspace lives in the TEST office, with the fixture projects: a channel can only be mapped to a project of
+  // the office that owns the workspace, so a person's live workspace cannot be borrowed by a harness project.
+  const team = `T0HIST${run
+    .slice(0, 6)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '0')}`
+  await db.execute(`
+    insert into public.slack_workspaces (office_id, team_id, team_name, bot_user_id, installed)
+    values (app.test_office(), ${lit(team)}, ${lit(`zz test history ${run}`)}, 'U0HISTBOT', true)
+  `)
   const myChannel = `C0HIST${run.slice(0, 4).toUpperCase()}`
   const theirChannel = `C0RIVL${run.slice(0, 4).toUpperCase()}`
   const mappings: readonly (readonly [string, string])[] = [
@@ -569,9 +583,9 @@ try {
       .replace(/[^A-Z0-9]/g, '0')}`
     const r = await inRollback(`
       insert into public.slack_channel_map (channel_id, team_id, project_id, channel_name, purpose, active)
-      values (${lit(realChan)}, ${lit(team)}, pr, ${lit(`zz rollback ${run}`)}, 'project', true);
+      values (${lit(realChan)}, (select w.team_id from public.slack_workspaces w where w.office_id = app.operator_office() order by w.team_id limit 1), pr, ${lit(`zz rollback ${run}`)}, 'project', true);
       insert into public.inbound_commands (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
-      values (app.test_office(), 'slack', ${lit(`${realChan}:1790000000.000900`)},
+      values (app.operator_office(), 'slack', ${lit(`${realChan}:1790000000.000900`)},
               -- A REAL turn is from a sender the office admits (0615): Grant's own Slack id. The fixture used to
               -- be a made-up user, which was a stranger by the rule the door now enforces (Run 4, Phase 0).
               (select actor from public.subject_identities where origin_channel = 'slack' and subject = 'grant' limit 1),
@@ -580,7 +594,7 @@ try {
       e := app.enqueue_inbound(c);
       r := jsonb_build_object('landed', (select project_id = pr from public.inbound_commands where command_id = c),
                               'origin', app.job_origin((e ->> 'job_id')::uuid),
-                              'history', app.conversation_history(app.test_office(), pr, 100));`)
+                              'history', app.conversation_history(app.operator_office(), pr, 100));`)
     const shown = ((r.history ?? []) as Msg[]).some((m) =>
       String(m.body).includes(`Asked in a real channel ${run}`),
     )
@@ -727,11 +741,11 @@ try {
     reconstructed - and the one addressed to nobody still arriving.
   */
   const studio = await inRollback(`
-    v := app.say_in_project(app.test_office(), pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
-    e := app.say_in_project(app.test_office(), pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
+    v := app.say_in_project(app.operator_office(), pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
+    e := app.say_in_project(app.operator_office(), pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
     r := jsonb_build_object('origin', app.job_origin((v ->> 'job')::uuid),
                             'nobody_ok', e ->> 'ok',
-                            'history', app.conversation_history(app.test_office(), pr, 100));`)
+                            'history', app.conversation_history(app.operator_office(), pr, 100));`)
   const studioHistory = (studio.history ?? []) as (Msg & { backfilled?: boolean })[]
   const realSaid = studioHistory.find((m) =>
     String(m.body).includes(`Said for real from the studio ${run}`),
@@ -1069,6 +1083,9 @@ try {
   */
   await db.execute(
     `delete from public.slack_channel_map where channel_name like ${lit(`zz test history ${run}%`)}`,
+  )
+  await db.execute(
+    `delete from public.slack_workspaces where team_name like ${lit(`zz test history ${run}%`)}`,
   )
 
   /*
