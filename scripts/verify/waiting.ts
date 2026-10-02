@@ -86,7 +86,7 @@ async function setUp(): Promise<void> {
       await one(`
         insert into public.projects (office_id, name, slug, status)
         -- A real-looking subject on purpose (#45): the old bridge put it in Grant's office, so the operator office.
-        values (app.operator_office(), 'Probe waiting ${run}', ${lit(slug)}, 'paused')
+        values (app.test_office(), 'Probe waiting ${run}', ${lit(slug)}, 'paused')
         returning project_id
       `)
     ).project_id,

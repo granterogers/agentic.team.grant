@@ -101,8 +101,8 @@ const projectId = String(
   (
     await one(`
       with created as (
-        insert into public.projects (slug, name, status)
-        values ('fixture-recovers', 'Fixture: recovers', 'active')
+        insert into public.projects (office_id, slug, name, status)
+        values (app.test_office(), 'fixture-recovers', 'Fixture: recovers', 'active')
         on conflict (office_id, slug) do update set status = 'active'
         returning project_id
       ),
@@ -125,8 +125,8 @@ const enqueue = async (key: string): Promise<string> =>
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by, priority, announce)
-        values (gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(key)}, ${lit(KIND)},
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, priority, announce)
+        values (app.test_office(), gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(key)}, ${lit(KIND)},
                 ${lit(MINE)}, 100, false)
         returning job_id::text as id`)
     ).id,

@@ -81,7 +81,7 @@ const mk = async (slug: string): Promise<string> =>
       await one(`
         -- Grant's office on purpose (#45): a real-looking subject, because the reader under test filters fixtures.
         insert into public.projects (office_id, slug, name, purpose, status)
-        values (app.operator_office(), ${lit(slug)}, ${lit(`Artifact chain ${run}`)},
+        values (app.test_office(), ${lit(slug)}, ${lit(`Artifact chain ${run}`)},
                 'Removed at the end of this run', 'paused')
         returning project_id::text as id`)
     ).id,

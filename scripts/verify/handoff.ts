@@ -66,8 +66,8 @@ async function setUp(): Promise<void> {
   const project = String(
     (
       await one(`
-        select project_id::text as id from public.projects
-         where status = 'active' and not is_fixture order by slug limit 1
+        -- The test office's own catch-all project: active and not a fixture, and nobody's real work.
+        select app.unnamed_project(app.test_office())::text as id
       `)
     ).id,
   )

@@ -88,7 +88,7 @@ console.log('unified project knowledge (#257) —\n')
 const project = await one(`
   -- Grant's office on purpose (#45): a real-looking subject, because the readers under test filter fixtures.
   insert into public.projects (office_id, slug, name, purpose, status)
-  values (app.operator_office(), ${lit(SLUG)}, ${lit(`Unified knowledge proof ${run}`)},
+  values (app.test_office(), ${lit(SLUG)}, ${lit(`Unified knowledge proof ${run}`)},
           'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const projectId = String(project.id)
