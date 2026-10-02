@@ -106,8 +106,8 @@ console.log('tasks —')
   That invariant catching this script is the invariant working.
 */
 const proj = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values ('verify-tasks-fixture', 'Task verification', 'Thrown away', 'paused')
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (app.test_office(), 'verify-tasks-fixture', 'Task verification', 'Thrown away', 'paused')
   on conflict (office_id, slug) do update set name = excluded.name
   returning project_id
 `)
@@ -255,8 +255,8 @@ ok('deleting the project cascades its tasks away', Number(left.n) === 0)
 */
 const readerSlug = `task-reader-${Math.random().toString(36).slice(2, 10)}`
 const rp = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values ('${readerSlug}', 'Task reader proof', 'Removed at the end of the run', 'paused')
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (app.test_office(), '${readerSlug}', 'Task reader proof', 'Removed at the end of the run', 'paused')
   returning project_id
 `)
 const rid = String(rp.project_id)

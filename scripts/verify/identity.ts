@@ -529,8 +529,8 @@ const alias = `the ${run} thing`
     // The switch points at the fixture; the sentence names a different
     // project's notebook by id. The id must win.
     await db.execute(`
-      insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
-      values ('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
+      insert into public.project_switches (office_id, scope_kind, scope_ref, project_id, switched_by, reason)
+      values (app.test_office(), 'telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
     `)
     const byRef = await one(`
       select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,
@@ -580,8 +580,8 @@ const alias = `the ${run} thing`
   // And a deliberate switch outranks a passing mention, so "let's look at X"
   // inside a project's own chat does not repoint the chat.
   await db.execute(`
-    insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
-    values ('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
+    insert into public.project_switches (office_id, scope_kind, scope_ref, project_id, switched_by, reason)
+    values (app.test_office(), 'telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
   `)
   const switched = await one(`
     select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,

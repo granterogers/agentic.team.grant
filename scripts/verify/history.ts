@@ -531,8 +531,8 @@ try {
     (
       await one(`
         insert into public.inbound_commands
-          (origin_channel, origin_ref, actor, instruction, dedupe_key)
-        values ('slack', ${lit(`${myChannel}:1700000000.000900`)}, 'U0HIST',
+          (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+        values (app.test_office(), 'slack', ${lit(`${myChannel}:1700000000.000900`)}, 'U0HIST',
                 ${lit(`Asked in the channel ${run}`)},
                 ${lit(`slack:message:${myChannel}:1700000000.000900`)})
         returning command_id as v
@@ -570,8 +570,8 @@ try {
     const r = await inRollback(`
       insert into public.slack_channel_map (channel_id, team_id, project_id, channel_name, purpose, active)
       values (${lit(realChan)}, ${lit(team)}, pr, ${lit(`zz rollback ${run}`)}, 'project', true);
-      insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key)
-      values ('slack', ${lit(`${realChan}:1790000000.000900`)},
+      insert into public.inbound_commands (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+      values (app.test_office(), 'slack', ${lit(`${realChan}:1790000000.000900`)},
               -- A REAL turn is from a sender the office admits (0615): Grant's own Slack id. The fixture used to
               -- be a made-up user, which was a stranger by the rule the door now enforces (Run 4, Phase 0).
               (select actor from public.subject_identities where origin_channel = 'slack' and subject = 'grant' limit 1),
@@ -607,8 +607,8 @@ try {
     (
       await one(`
         insert into public.inbound_commands
-          (origin_channel, origin_ref, actor, instruction, dedupe_key)
-        values ('slack', ${lit(`C0NOMAP${run.slice(0, 4).toUpperCase()}:1700000000.001000`)}, 'U0HIST',
+          (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+        values (app.test_office(), 'slack', ${lit(`C0NOMAP${run.slice(0, 4).toUpperCase()}:1700000000.001000`)}, 'U0HIST',
                 ${lit(`Asked nowhere in particular ${run}`)},
                 ${lit(`slack:message:C0NOMAP${run.slice(0, 4).toUpperCase()}:1700000000.001000`)})
         returning command_id as v
@@ -657,8 +657,8 @@ try {
       (
         await one(`
           insert into public.inbound_commands
-            (origin_channel, origin_ref, actor, instruction, dedupe_key)
-          values ('telegram', ${lit(`${PREFIX}-guess`)}, 'grant',
+            (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+          values (app.test_office(), 'telegram', ${lit(`${PREFIX}-guess`)}, 'grant',
                   ${lit(`Nothing in particular ${run}`)},
                   ${lit(`telegram:message:${PREFIX}-guess`)})
           returning command_id as v

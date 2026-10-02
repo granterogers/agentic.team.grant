@@ -465,8 +465,8 @@ let clientMade = false
 
 try {
   await db.execute(`
-    insert into public.mcp_clients (client_id, display_name, token_sha256, scopes, enabled)
-    values (${lit(`verify-connectors-${run}`)}, ${lit(CLIENT)}, ${lit(disposableHash)},
+    insert into public.mcp_clients (office_id, client_id, display_name, token_sha256, scopes, enabled)
+    values (app.test_office(), ${lit(`verify-connectors-${run}`)}, ${lit(CLIENT)}, ${lit(disposableHash)},
             array['read']::text[], true)`)
   // Declared before it knocks (#381); read-only, so it can make no work, but the door is real.
   await (await testOrigins(db, 'verify:connectors')).declare('mcp', `verify-connectors-${run}`)
@@ -609,8 +609,9 @@ section = 'one grant, and only that one'
     -- Granted the way a person grants anything: the existing approval path.
     update public.tool_permissions set enabled = true
      where tool = (select g.v ->> 'tool' from g where g.k = 'offered');
-    insert into public.staff_tools (staff_slug, tool)
-    select 'research-director', (select g.v ->> 'tool' from g where g.k = 'offered')
+    insert into public.staff_tools (office_id, staff_slug, tool)
+    -- The office staff_may_use is asked of just below (rolled back with the rest).
+    select app.sole_person_office(), 'research-director', (select g.v ->> 'tool' from g where g.k = 'offered')
     on conflict do nothing;
     select (select g.v ->> 'tool' from g where g.k = 'offered') as granted,
            app.staff_may_use(app.sole_person_office(),'research-director',
