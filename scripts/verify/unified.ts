@@ -409,8 +409,8 @@ check(
   assertion from two sides.
 */
 const other = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values (${lit(`${SLUG}-elsewhere`)}, ${lit(`Unified control ${run}`)},
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (${PO}, ${lit(`${SLUG}-elsewhere`)}, ${lit(`Unified control ${run}`)},
           'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const otherId = String(other.id)

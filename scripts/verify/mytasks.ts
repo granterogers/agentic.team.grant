@@ -332,8 +332,19 @@ check(
   task, and CLAUDE.md records what two doors writing one field costs when only
   one of them does the bookkeeping.
 */
+/*
+  A personal task is ticked by its person. The office key is a machine now and the gateway names it as a test member, which
+  may decide only test traffic, so this ticks as the person does - the function the action is routed to, in the suite's
+  office, with no principal. The door and the effect are proved separately.
+*/
+const personTick = async (id: string, state: string): Promise<Record<string, unknown>> => {
+  const r = (
+    await one(`select app.hq_task_state(app.test_office(), ${lit(id)}, ${lit(state)}) as r`)
+  ).r as string | Record<string, unknown>
+  return (typeof r === 'string' ? JSON.parse(r) : r) as Record<string, unknown>
+}
 const before = (await bucket('all')).length
-await press('task_state', { p_task_id: mineId, p_state: 'done' })
+await personTick(mineId, 'done')
 const after = await bucket('all')
 const next = after.find((t) => t.title === `Ring the venue ${run}` && t.state !== 'done')
 check(
@@ -355,9 +366,7 @@ check(
   has(await bucket('done'), mineId) && !has(await bucket('today'), mineId),
 )
 
-const reopened = (await press('task_state', { p_task_id: mineId, p_state: 'todo' })) as
-  | Record<string, unknown>
-  | undefined
+const reopened = (await personTick(mineId, 'todo')) as Record<string, unknown> | undefined
 check(
   'and a tick pressed by mistake can be put back',
   reopened === undefined ? 'no answer' : 'reopened',
@@ -1638,9 +1647,9 @@ console.log('\nthe seam a provider plugs into (#259, migration 0513)')
   const keeper = (await press('my_task_add', { p_title: `Kept ${run}` })) as { id?: string }
   await db.execute(`
     select app.task_pushed(app.test_office(), ${lit(String(keeper.id))}::uuid, ${lit(PROVIDER)}, 'ext-keep', 1)`)
-  const forgot = (await one(`select app.task_provider_forget(${lit(PROVIDER)}) as r`)).r as
-    | string
-    | { links_removed?: number }
+  const forgot = (
+    await one(`select app.task_provider_forget(app.test_office(), ${lit(PROVIDER)}) as r`)
+  ).r as string | { links_removed?: number }
   const said = (typeof forgot === 'string' ? JSON.parse(forgot) : forgot) as {
     links_removed?: number
   }
