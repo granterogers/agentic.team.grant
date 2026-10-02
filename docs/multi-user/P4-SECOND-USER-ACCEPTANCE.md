@@ -123,7 +123,7 @@ Creating a project enqueues `office.provision_channels`; for the second person i
 *"I could not give Personal a Slack channel: no_such_project"*, because the Slack workspace belongs to Grant's office and a
 project of another office reads as no project at all. `deliveries` for it: 0. (The sentence reads as a fault and is filed.)
 
-## 9. Browser — `scripts/p4/browser.ts` (49 checks; real Chromium; the deployed gateway)
+## 9. Browser — `scripts/p4/browser.ts` (45 checks, final run 45/45; real Chromium; the deployed gateway)
 
 Two real people, signed in by the same hand-off a magic link ends with (the session arrives in the URL fragment and the
 page's own `adopt()` takes it; **the mail hop is not exercised**).
@@ -138,23 +138,64 @@ page's own `adopt()` takes it; **the mail hop is not exercised**).
 4. Both at once, three parallel reloads in isolated contexts: never mixed.
 5. **One browser, two people, both directions, with and without clearing storage** (eight legs): the browser holds only the
    new person's session; nothing of the previous person survives anywhere; still clean after a reload.
-6. **Team Chat through the real composer** (`#bc-say` → Send): recorded in the second office; an answer produced (read
-   from the canonical row, not the page); the gateway's conversation section returns it to the second person and the same
-   project id asked as Grant returns nothing; nothing of Grant's on the page. **Not claimed**: that the Chat route *draws*
-   history on load. Measured, it does not request `?section=conversation` and says "Nothing has been said here yet" for
-   Grant too, on his own project with real conversation — a Team HQ chat-route defect, the same for both people (added to #406).
+6. **Team Chat: persisted answer → full reload → rendered answer** — now its own script, `scripts/p4/chat-reload.ts`
+   (§9a). It replaced an earlier chat leg in this file whose detector was wrong (§9a, "what went wrong first").
 7. A damaged access token beside a valid refresh token is refreshed as the *same* person; a session with no usable token is
    cleared and the page shows nothing.
 8. **Detector controls**: stale Grant state planted in localStorage, sessionStorage, IndexedDB and Cache storage before an
    account switch is **flagged** by the scan (4/4). The Cache control **failed first**: the scan read URL-encoded cache keys
    and was blind to a name in one — fixed in the detector, then red→green.
 
-Page errors: 0. **The isolation assertions never failed in any of seven runs.** The positive controls (*"the first / new
-person's own data is shown"*) failed intermittently in five of them (never the same one twice) when the gateway answered
-slowly; the wait was lengthened and one reload added (printed when used). The last run was cut off by the ten-minute shell
-ceiling after the chat leg (it now takes more than ten minutes because it waits on the model), so there is **no final
-all-green tally** to quote: the last complete run was 46/49 — two positive-control flakes and the page-draws-history
-assertion described above, which was replaced. Say so rather than round it up.
+Page errors: 0. **The isolation assertions never failed in any run.** The positive controls (*"the first / new person's own
+data is shown"*) failed intermittently in earlier runs (never the same one twice) when the gateway answered slowly; the wait
+was lengthened and one reload added (printed when used). With the chat leg moved out (§9a) the browser suite no longer waits
+on the model, finishes well inside the ten-minute ceiling, and its **final complete run is 45/45, exit 0, 0 page errors**.
+(An earlier figure of "49" counted the chat leg that was replaced; 49/49 was never reached and is not quoted.)
+
+### 9a. The persisted answer, found again after a fresh load — `scripts/p4/chat-reload.ts` (27/27, three consecutive clean passes)
+
+**What went wrong first, kept as history.** The earlier chat leg decided "Claire answered" from page text. The new project's
+empty chat draws an invented *"This is an example conversation"* whose first line reads *"Nothing is in hand at the moment…"*;
+a loose pattern matched that sample content and passed. It was discovered by reading the output (the "answer" was the
+sample), the leg was rewritten to read the answer from the database, and the rewrite then showed the real defect behind it:
+**the Team HQ Chat route never read the conversation when it opened** (`ctx.chatLoad` existed and nothing called it), so for
+every person a fresh load of `/p/<slug>/chat` said *"Nothing has been said here yet"* over a conversation the office held, and
+the thread appeared only after a message was sent. The acceptance could not pass until that was fixed.
+
+**The directly related change** (two lines of product code plus one attribute, nothing else): the Chat surface asks for the
+thread once per project per page load (`needChat` → `chat.load`, redraw when it lands), and each message bubble carries its
+id (`data-message-id`) so a test can find the exact bubble instead of searching text. Smoke, `check:templates`, lint and the
+unit suite are green with it.
+
+**The loop** (the whole flow, from the second person's real session in a clean browser context):
+
+1. type in the real composer (`#bc-say`) and press Send;
+2. the durable ids come from the canonical rows: `inbound_commands.job_id` for that exact instruction, in the second office
+   and the Personal project;
+3. completion is decided **only** by backend state: every job in the request's tree terminal and the root `complete`, inside an
+   explicit 8-minute deadline; a timeout is reported as TIMEOUT and exits non-zero (a run that never got a job did exactly
+   that and failed honestly);
+4. the answer is the persisted `public.outputs` row — the table `app.conversation_history` draws "answered" bubbles from — of
+   the last completed job in the tree; never events, logs, DOM or progress text;
+5. asserted: second office; a job in *this* request's tree; non-empty; its job is complete and it is the last output to land;
+   not the hand-off sentence; the product's own reader (the gateway's conversation section) returns it under that output id to
+   the second person, and the same project id asked as Grant returns nothing of it;
+6. the page is fully reloaded **and** opened in a brand-new context with empty storage (an optimistic local copy cannot satisfy
+   that);
+7. the bubble is found **by its output id** and its text must **equal** the canonical answer after presentation-only
+   normalisation (markdown markers, list numerals, typographic quotes/dashes, whitespace) — never a substring;
+8. negative controls, in the process and never committed: an impossible expected value → red; another earlier answer of the
+   same person → red; the right text under a wrong output id → red (not found); the real value → green;
+9. Grant's data absent (ids, names, address) from DOM, localStorage, sessionStorage, IndexedDB contents and Cache storage, in
+   both the reloaded page and the fresh context; the browser holds the second person's session; zero page errors.
+
+**Evidence.** Three consecutive clean passes, 27/27 each, exit 0 (the first pass 68 s from send to terminal state; the rest
+similar). **Product sabotage proof**: with the one-line `needChat` call removed, the same script went **red on all six
+persisted-render checks (21/27)** — the loop detects the real defect — and with the call restored it is green. The earlier,
+unsuccessful runs of this script were harness faults reported as such (a job id read before the command was linked to its job;
+a composer that took more than 40 s to appear): both fixed by waiting on the canonical state, neither turned into a pass.
+The canonical answer in the final pass: *"Your current task list is: three "Follow up" items, "Ask finance director for pricing
+info", "Ask research director for pricing info", and "p4 attack office-arg"."* — found, equal, in both contexts.
 
 ## 10. Voice — `scripts/p4/voice.ts` (14/14)
 
@@ -299,7 +340,8 @@ npx tsx scripts/p4/workflow.ts                # §4
 npx tsx scripts/p4/foreign.ts                 # §5
 npx tsx scripts/p4/chat.ts                    # §6   (spends the model)
 npx tsx scripts/p4/canaries.ts                # §7   (spends the model)
-npx tsx scripts/p4/browser.ts                 # §9   (about eight minutes; give it a ten-minute timeout)
+npx tsx scripts/p4/browser.ts                 # §9   (give it a ten-minute timeout)
+npx tsx scripts/p4/chat-reload.ts             # §9a  (spends the model; waits on canonical completion, 8-minute deadline)
 npx tsx scripts/p4/voice.ts                   # §10
 npx tsx scripts/p4/attack.ts                  # §12  (spends the model)
 npx tsx scripts/p4/attack-system.ts           # §11, §12

@@ -618,7 +618,7 @@ export const said_ = (m) => {
       </div>
     </div>`
   }
-  return `<div class="bcsaid${mine ? ' bcsaid--mine' : ''}">
+  return `<div class="bcsaid${mine ? ' bcsaid--mine' : ''}" data-message-id="${esc(m.id ?? '')}">
     ${face(mine ? { name: 'Grant', slug: 'grant' } : person(who))}
     <div class="bcsaidbody">
       <span class="bcsaidwho">${esc(mine ? 'You' : named(who) || who)}</span>${

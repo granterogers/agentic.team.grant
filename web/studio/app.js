@@ -98,6 +98,9 @@ const latest = { lately: null, tasks: null }
   never start. The declaration belongs where the code that uses it can see it.
 */
 let ageTimer = null
+// Projects whose conversation the Chat route has already read this page load (declared up here: a `const` below a hoisted
+// function that uses it is the TDZ trap this file already records).
+const chatRead = new Set()
 
 /*
   The map, per project (#25).
@@ -13607,6 +13610,19 @@ const bcContext = {
   chatFor: (slug) => chat.thread(slug),
   chatIsReal: (slug) => chat.isReal(slug),
   chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, presented()),
+  /*
+    The Chat route READS THE RECORD when it opens, once per project per page load (P4 closure). `chatLoad` existed and
+    nothing in this experience called it, so a fresh load of /p/<slug>/chat said "Nothing has been said here yet" over a
+    conversation the office held - for every person - and the thread only appeared after a message was sent. The
+    fetch is async, so the redraw happens after the surface that asked for it has finished drawing.
+  */
+  needChat: (slug) => {
+    if (chatRead.has(slug)) return
+    chatRead.add(slug)
+    void chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, presented()).then((t) => {
+      if (t !== null) render()
+    })
+  },
   chatSend: (slug, text) => chat.send(slug, text, null),
   /* The Basecamp branch of drawShell returns before its paintDock call, so a
      voice note sent from the dock repaints it through this. */

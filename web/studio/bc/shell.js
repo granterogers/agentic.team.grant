@@ -2624,6 +2624,7 @@ const scheduleSurface = (p) => {
  * ======================================================================== */
 
 const chatSurface = (p) => {
+  ctx?.needChat?.(p.slug)
   const said = ctx?.chatFor?.(p.slug) ?? []
   const shown = said.length > 0 ? said : (p.chat ?? [])
   const real = ctx?.chatIsReal?.(p.slug) === true
