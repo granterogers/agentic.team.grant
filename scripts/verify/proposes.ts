@@ -518,9 +518,11 @@ check(
   from tomorrow — and the assertion is about what it says, not about a count
   that changes with the office's own history.
 */
+// The round is one office's: the claimed job's, so the duty is given a real job in this suite's office.
+const dutyJob = await makeJob(99)
 const out = await proposeHandler(db).handle(
   {
-    jobId: '00000000-0000-0000-0000-000000000000',
+    jobId: dutyJob,
     kind: 'office.propose',
     correlationId: '00000000-0000-0000-0000-000000000000',
     projectId: null,

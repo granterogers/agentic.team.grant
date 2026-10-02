@@ -763,9 +763,11 @@ section = 'the presses'
     action: string,
     args: Record<string, unknown>,
   ): Promise<Record<string, unknown>> => {
-    const named = Object.entries(args)
-      .map(([k, v]) => `${k} => ${v === null ? 'null' : lit(String(v))}`)
-      .join(', ')
+    // The gateway writes the verified office; this suite reads through the office key, which acts in the TEST office.
+    const named = [
+      'p_office => app.test_office()',
+      ...Object.entries(args).map(([k, v]) => `${k} => ${v === null ? 'null' : lit(String(v))}`),
+    ].join(', ')
     const { rows } = await db.execute(`select public.${FUNCTIONS[action]}(${named})::text as r`)
     const raw = (rows[0] as { r?: string } | undefined)?.r ?? '{}'
     const parsed = (() => {

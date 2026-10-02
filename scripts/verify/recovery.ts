@@ -111,7 +111,7 @@ const projectId = String(
     await one(`
       -- Grant's office (#45): a real-looking subject, pressed as the operator.
       insert into public.projects (office_id, slug, name, purpose, status)
-      values (app.operator_office(), ${lit(slug)}, ${lit(`Recovery proof ${run}`)},
+      values (app.test_office(), ${lit(slug)}, ${lit(`Recovery proof ${run}`)},
               'Removed at the end of this run', 'paused')
       returning project_id::text as id`)
   ).id,
@@ -425,10 +425,10 @@ check(
   )
   check(
     'and the recovery list is a section the page reads',
-    /archived: \{ fn: 'recoverable_projects' \}/.test(gateway) && /read\('archived'\)/.test(page)
+    /archived: \{ fn: 'recoverable_projects'(, office: true)? \}/.test(gateway) && /read\('archived'\)/.test(page)
       ? 'bound and read'
       : 'NOT REACHABLE',
-    /archived: \{ fn: 'recoverable_projects' \}/.test(gateway) && /read\('archived'\)/.test(page),
+    /archived: \{ fn: 'recoverable_projects'(, office: true)? \}/.test(gateway) && /read\('archived'\)/.test(page),
   )
 }
 
