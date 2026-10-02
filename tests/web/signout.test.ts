@@ -42,6 +42,7 @@ describe('signing out', () => {
       }),
     )
     vi.stubGlobal('sessionStorage', fakeStorage({ draft: 'secret' }))
+    // @ts-expect-error -- a plain browser module, no declaration file
     const { signOut, DEVICE_KEYS } = await import('../../web/studio/signout.js')
     await signOut({ reload: false })
     expect(Object.keys(localStorage).sort()).toEqual([
@@ -59,7 +60,9 @@ describe('signing out', () => {
   it('moves the epoch, so a response begun earlier is told apart from one begun after', async () => {
     vi.stubGlobal('localStorage', fakeStorage({}))
     vi.stubGlobal('sessionStorage', fakeStorage({}))
+    // @ts-expect-error -- a plain browser module, no declaration file
     const { signOut, current } = await import('../../web/studio/signout.js')
+    // @ts-expect-error -- a plain browser module, no declaration file
     const session = await import('../../web/studio/session.js')
     const began = session.epoch()
     expect(current(began)).toBe(true)
