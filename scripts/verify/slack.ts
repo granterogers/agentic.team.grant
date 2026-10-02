@@ -451,7 +451,7 @@ record(
 
 const earlyKey = `verify:${stamp}:suppressed-early`
 const tombstone = await one<{ r: string }>(
-  `select app.suppress_delivery(${lit(earlyKey)}, 'undo arrived first', 'slack', ${lit(TEAM_ID)}, ${lit(CHANNEL)}) as r`,
+  `select app.suppress_delivery(app.operator_office(), ${lit(earlyKey)}, 'undo arrived first', 'slack', ${lit(TEAM_ID)}, ${lit(CHANNEL)}) as r`,
 )
 const afterSuppression = await office.deliver(
   deliverOpts(earlyKey, CHANNEL, 'This must never be posted.'),
@@ -469,7 +469,7 @@ const sentThenSuppressed = await office.deliver(
   deliverOpts(lateKey, CHANNEL, 'Posted, then undone. It must be deleted, not forgotten.'),
 )
 const tooLate = await one<{ r: string }>(
-  `select app.suppress_delivery(${lit(lateKey)}, 'undo arrived after the post') as r`,
+  `select app.suppress_delivery(app.operator_office(), ${lit(lateKey)}, 'undo arrived after the post') as r`,
 )
 record(
   'an undo that loses the race is told so, rather than silently succeeding',

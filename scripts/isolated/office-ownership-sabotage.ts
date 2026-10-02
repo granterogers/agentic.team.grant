@@ -163,21 +163,6 @@ const sabotages: Sabotage[] = [
     gates: ['edges'],
   },
   {
-    name: 'run the bridge as its invoker again (the live 503 on the Telegram webhook)',
-    break: 'alter function app.office_bridge_trigger() security invoker',
-    prove:
-      "select count(*)::int as n from pg_proc where proname = 'office_bridge_trigger' and prosecdef",
-    restore: 'alter function app.office_bridge_trigger() security definer',
-    suiteRed: [
-      'a project with no office, written by a bypass role',
-      'while Grant is the only real office a legacy writer',
-      'a harness-named writer with no office lands in the TEST office',
-      'with Person A and B active the same unscoped',
-      'a sample office alone with Grant also makes the bridge ambiguous',
-    ],
-    gates: [],
-  },
-  {
     name: 'remove the declared-test-chat rule (test chats would bind to the one person again)',
     break: 'drop trigger a00_declared_test_origin on public.telegram_chats',
     prove: "select count(*)::int as n from pg_trigger where tgname = 'a00_declared_test_origin'",
@@ -187,14 +172,14 @@ const sabotages: Sabotage[] = [
     gates: [],
   },
   {
-    name: 'remove the compatibility bridge from jobs',
-    break: 'drop trigger a0_office_bridge on public.jobs',
+    name: 'let a writer that names no office default to the test office again',
+    break:
+      "alter table public.jobs alter column office_id set default '00000000-0000-0000-0000-000000000000'::uuid",
     prove:
-      "select count(*)::int as n from pg_trigger where tgname = 'a0_office_bridge' and tgrelid = 'public.jobs'::regclass",
-    restore:
-      "create trigger a0_office_bridge before insert on public.jobs for each row execute function app.office_bridge_trigger('project_id', 'parent_job_id', 'requested_by')",
-    suiteRed: ['a harness-named writer with no office lands in the TEST office'],
-    gates: ['edges'],
+      "select count(*)::int as n from pg_attrdef d join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum where d.adrelid = 'public.jobs'::regclass and a.attname = 'office_id'",
+    restore: 'alter table public.jobs alter column office_id drop default',
+    suiteRed: ['a harness-named writer with no office is refused'],
+    gates: [],
   },
 ]
 

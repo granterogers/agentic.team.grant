@@ -5,7 +5,7 @@
  * question P2 exists for: for each place two owned rows could be linked, is there a structure in the database that
  * refuses a link across offices - whoever the writer is, service role and workers included?
  *
- *   carrier           office_id NOT NULL, a foreign key to offices, an index led by it, write-once, and a bridge
+ *   carrier           office_id NOT NULL, a foreign key to offices, an index led by it, write-once, and NO bridge
  *   carrier -> carrier an acknowledged edge has a composite (column, office_id) key to (key, office_id), VALIDATED -
  *                     except the named history exceptions, whose key stays NOT VALID and cannot grow
  *   derived edges     a trigger on the child computes both owners and refuses a disagreement and a move
@@ -171,9 +171,10 @@ export const enforcementProblems = (manifest: Manifest, cat: EnforcementCatalogu
       if (once === undefined)
         problems.push(`${t}: office_id is not write-once (no a1_office_write_once trigger)`)
       else if (!once.enabled) problems.push(`${t}: the write-once trigger is disabled`)
-      if (trig(t, 'a0_office_bridge') === undefined)
+      // The compatibility bridge was removed in P3 (0860): a writer that does not name its office now fails on NOT NULL.
+      if (trig(t, 'a0_office_bridge') !== undefined)
         problems.push(
-          `${t}: no compatibility bridge trigger, so a legacy writer's insert has no office`,
+          `${t}: the compatibility bridge is back, so a legacy writer's insert would be given an office it never named`,
         )
     }
   }

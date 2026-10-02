@@ -198,7 +198,9 @@ await refuses(
 // --- withdrawing ------------------------------------------------------------
 
 {
-  const bad = await one(`select public.unlearn(${lit(strongerId)}::uuid, 'grant', 'no') as r`)
+  const bad = await one(
+    `select public.unlearn(app.test_office(), ${lit(strongerId)}::uuid, 'grant', 'no') as r`,
+  )
   ok(
     'withdrawing a lesson without saying why is refused',
     String((bad.r as { error?: string })?.error ?? '') !== '',
@@ -207,7 +209,7 @@ await refuses(
 
 {
   await db.execute(`
-    select public.unlearn(${lit(strongerId)}::uuid, 'grant',
+    select public.unlearn(app.test_office(), ${lit(strongerId)}::uuid, 'grant',
       'the transcripts were re-tagged and the ambiguity is gone')
   `)
   const live = await all(
@@ -409,7 +411,7 @@ for (const [what, body] of [
   `)
   for (const r of mine) {
     await db.execute(`
-      select public.unlearn(${lit(String(r.lesson_id))}::uuid, 'verify:lessons',
+      select public.unlearn(app.test_office(), ${lit(String(r.lesson_id))}::uuid, 'verify:lessons',
         'written by a verification run and no longer true of anything')
     `)
   }

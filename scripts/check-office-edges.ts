@@ -143,11 +143,14 @@ export const controls = (
     raised: added({ ...cat, officeParams: [...cat.officeParams, 'hq_anything(p_office)'] }),
   })
 
-  const bridge = cat.triggers.find((t) => t.name === 'a0_office_bridge')
-  if (bridge !== undefined)
+  const carrier = cat.officeColumns[0]?.table
+  if (carrier !== undefined)
     out.push({
-      name: `remove the bridge from ${bridge.table}`,
-      raised: added({ ...cat, triggers: cat.triggers.filter((t) => t !== bridge) }),
+      name: `put the compatibility bridge back on ${carrier}`,
+      raised: added({
+        ...cat,
+        triggers: [...cat.triggers, { table: carrier, name: 'a0_office_bridge', enabled: true }],
+      }),
     })
   return out
 }
@@ -179,7 +182,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const used = cat.bridgeUse.reduce((n, b) => n + b.n, 0)
   console.log(
-    `compatibility bridge: ${String(used)} write(s) relied on it (${cat.bridgeUse.map((b) => `${b.table}/${b.rule} ${String(b.n)}`).join(', ') || 'none yet'}); it is removed in P3 (see docs/multi-user/P2-OWNERSHIP.md)`,
+    `compatibility bridge: ${String(used)} write(s) relied on it before it was removed in P3 (${cat.bridgeUse.map((b) => `${b.table}/${b.rule} ${String(b.n)}`).join(', ') || 'none'}); no bridge trigger remains`,
   )
   const ctl = controls(manifest, cat)
   const dead = ctl.filter((c) => c.raised.length === 0)

@@ -808,7 +808,7 @@ try {
   const histTs = '1699999999.000700'
   const back1 = (
     await one(`
-      select app.record_slack_history(${lit(myChannel)}, ${lit(histTs)}, 'U0OLD',
+      select app.record_slack_history(app.test_office(), ${lit(myChannel)}, ${lit(histTs)}, 'U0OLD',
         ${lit(`Something said months ago ${run}`)}) as v
     `)
   ).v as { ok?: boolean; outcome?: string; command?: string }
@@ -836,7 +836,7 @@ try {
 
   const back2 = (
     await one(`
-      select app.record_slack_history(${lit(myChannel)}, ${lit(histTs)}, 'U0OLD',
+      select app.record_slack_history(app.test_office(), ${lit(myChannel)}, ${lit(histTs)}, 'U0OLD',
         ${lit(`Something said months ago ${run}`)}) as v
     `)
   ).v as { outcome?: string }
@@ -867,7 +867,7 @@ try {
 
   const unmapped = (
     await one(`
-      select app.record_slack_history('C0NEVERMAPPED', '1699999999.000800', 'U0OLD', 'orphan') as v
+      select app.record_slack_history(app.test_office(), 'C0NEVERMAPPED', '1699999999.000800', 'U0OLD', 'orphan') as v
     `)
   ).v as { ok?: boolean; error?: string }
   check(
@@ -895,7 +895,7 @@ try {
 
   const before = await digest()
   await db.execute(`
-    select app.record_slack_history(${lit(myChannel)}, '1699999999.000950', 'U0OLD',
+    select app.record_slack_history(app.test_office(), ${lit(myChannel)}, '1699999999.000950', 'U0OLD',
       ${lit(`A message that makes no work ${run}`)})
   `)
   const after = await digest()

@@ -56,10 +56,11 @@ const good: EnforcementCatalogue = {
     },
   ],
   triggers: [
-    ...['projects', 'jobs'].flatMap((table) => [
-      { table, name: 'a0_office_bridge', enabled: true },
-      { table, name: 'a1_office_write_once', enabled: true },
-    ]),
+    ...['projects', 'jobs'].map((table) => ({
+      table,
+      name: 'a1_office_write_once',
+      enabled: true,
+    })),
     { table: 'traces', name: 'a2_office_edges', enabled: true },
     { table: 'relations', name: 'a3_relation_endpoints', enabled: true },
   ],
@@ -131,11 +132,12 @@ describe('enforcementProblems', () => {
     expect(
       enforcementProblems(manifest, {
         ...good,
-        triggers: good.triggers.filter(
-          (t) => !(t.table === 'projects' && t.name === 'a0_office_bridge'),
-        ),
+        triggers: [
+          ...good.triggers,
+          { table: 'projects', name: 'a0_office_bridge', enabled: true },
+        ],
       }).join('\n'),
-    ).toContain('bridge')
+    ).toContain('bridge is back')
   })
 
   it('refuses a derived table with nothing stopping it moving, and a missing relations guard', () => {

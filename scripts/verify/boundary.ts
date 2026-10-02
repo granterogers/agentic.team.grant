@@ -105,7 +105,7 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
   ok('a lesson can assert an authorisation', id !== '')
   ok('and the answer to may-I does not move', !(await mayUse(NOT_HELD)))
   await db.execute(
-    `select app.unlearn(${lit(id)}::uuid, 'verify-boundary', 'verification teardown')`,
+    `select app.unlearn(app.test_office(), ${lit(id)}::uuid, 'verify-boundary', 'verification teardown')`,
   )
 }
 

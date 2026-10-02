@@ -350,7 +350,7 @@ export async function suite(db: Db): Promise<Result[]> {
     'write-once',
   )
   await refused(
-    'a project with no office, written by a bypass role while two real offices exist (the bridge fails closed)',
+    'a project with no office, written by a bypass role, is refused',
     `insert into public.projects (slug, name) values ('atk-nobody', 'nobody')`,
     '23502',
     'office_id',
@@ -508,18 +508,18 @@ export async function suite(db: Db): Promise<Result[]> {
       `${single} insert into public.projects (project_id, slug, name) values ('${id(150)}', 'bridge-single', 'b'); select 1 / (case when (select office_id from public.projects where project_id = '${id(150)}') = '${G}' then 1 else 0 end)`,
     )
     check(
-      msg === '',
-      'while Grant is the only real office a legacy writer with no office is bound to Grant',
-      msg === '' ? 'bound to Grant' : msg.slice(0, 120),
+      msg.includes('23502') && msg.includes('office_id'),
+      'even while Grant is the only real office, a legacy writer with no office is refused (the bridge is gone)',
+      msg === '' ? "ACCEPTED (silently someone's)" : msg.slice(0, 120),
     )
     const harness = await run(
       'service_role',
       `${single} insert into public.jobs (job_id, correlation_id, idempotency_key, kind, requested_by) values ('${id(151)}', '${id(151)}', 'atk-key-151', 'probe', 'verify:bridge'); select 1 / (case when (select office_id from public.jobs where job_id = '${id(151)}') = '${T}' then 1 else 0 end)`,
     )
     check(
-      harness === '',
-      "a harness-named writer with no office lands in the TEST office, never in Grant's",
-      harness === '' ? 'bound to the test office' : harness.slice(0, 120),
+      harness.includes('23502') && harness.includes('office_id'),
+      "a harness-named writer with no office is refused, and is not given the test office or Grant's",
+      harness === '' ? 'ACCEPTED' : harness.slice(0, 120),
     )
     const chat = await run(
       'service_role',
@@ -545,7 +545,7 @@ export async function suite(db: Db): Promise<Result[]> {
     )
     check(
       sample.includes('23502'),
-      'a sample office alone with Grant also makes the bridge ambiguous',
+      'a sample office alone with Grant: an unscoped writer is still refused',
       sample === '' ? 'ACCEPTED' : sample.slice(0, 120),
     )
   }

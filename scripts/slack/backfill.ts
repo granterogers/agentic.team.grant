@@ -149,7 +149,7 @@ for (;;) {
       const r = (
         await one(`
           select app.record_slack_history(
-            ${lit(channelId)}, ${lit(String(m.ts ?? ''))}, ${lit(String(m.user ?? ''))},
+            app.operator_office(), ${lit(channelId)}, ${lit(String(m.ts ?? ''))}, ${lit(String(m.user ?? ''))},
             ${lit(String(m.text ?? ''))},
             ${m.thread_ts === undefined ? 'null' : lit(m.thread_ts)}) as v
         `)

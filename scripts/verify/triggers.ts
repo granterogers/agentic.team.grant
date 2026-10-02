@@ -84,7 +84,7 @@ const SETUP = (extra: Readonly<Record<string, string>> = {}): string => {
 }
 
 const SIGNAL = (ref: string, extra = 'null, null'): string => `
-  app.record_signal('office', 'document.added', ${lit(ref)}, ${PROJECT},
+  app.record_signal(app.test_office(), 'office', 'document.added', ${lit(ref)}, ${PROJECT},
                     'A document called something', '{"connector": "drive"}'::jsonb, ${extra})`
 
 // ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ section = 'the ways it must refuse'
     -- One event fires and makes a job. That job then causes another event.
     insert into r select 'one', app.fire_triggers_for((${SIGNAL('doc-loop-1')} ->> 'signal')::uuid);
     insert into r select 'two', app.fire_triggers_for((
-      app.record_signal('office', 'document.added', 'doc-loop-2', ${PROJECT},
+      app.record_signal(app.test_office(), 'office', 'document.added', 'doc-loop-2', ${PROJECT},
         'Something the job itself made', '{"connector": "drive"}'::jsonb,
         ((select v from r where k = 'one') -> 'triggers' -> 0 ->> 'job')::uuid, null)
       ->> 'signal')::uuid);
@@ -248,7 +248,7 @@ section = 'the ways it must refuse'
     ${SETUP({ not_before_event_at: 'app.now_utc()' })}
     create temp table r (k text, v jsonb) on commit drop;
     insert into r select 'old', app.fire_triggers_for((
-      app.record_signal('office', 'document.added', 'doc-old', ${PROJECT},
+      app.record_signal(app.test_office(), 'office', 'document.added', 'doc-old', ${PROJECT},
         'Something from last week', '{"connector": "drive"}'::jsonb, null,
         app.now_utc() - interval '7 days') ->> 'signal')::uuid);
     select (select v from r where k = 'old') -> 'triggers' -> 0 ->> 'decision' as decided,
@@ -434,7 +434,7 @@ section = 'event content is data'
       'perms', (select count(*) from public.tool_permissions where enabled),
       'standing', (select count(*) from public.autonomy_settings));
     insert into h select 'sig',
-      app.record_signal('office', 'document.added', 'doc-hostile', ${PROJECT},
+      app.record_signal(app.test_office(), 'office', 'document.added', 'doc-hostile', ${PROJECT},
                         ${lit(HOSTILE)},
                         jsonb_build_object('connector', 'drive', 'body', ${lit(HOSTILE)}),
                         null, null);
