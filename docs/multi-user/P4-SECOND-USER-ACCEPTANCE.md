@@ -139,16 +139,22 @@ page's own `adopt()` takes it; **the mail hop is not exercised**).
 5. **One browser, two people, both directions, with and without clearing storage** (eight legs): the browser holds only the
    new person's session; nothing of the previous person survives anywhere; still clean after a reload.
 6. **Team Chat through the real composer** (`#bc-say` → Send): recorded in the second office; an answer produced (read
-   from the canonical row, not the page); the page the second person reads shows it; nothing of Grant's on that page.
+   from the canonical row, not the page); the gateway's conversation section returns it to the second person and the same
+   project id asked as Grant returns nothing; nothing of Grant's on the page. **Not claimed**: that the Chat route *draws*
+   history on load. Measured, it does not request `?section=conversation` and says "Nothing has been said here yet" for
+   Grant too, on his own project with real conversation — a Team HQ chat-route defect, the same for both people (added to #406).
 7. A damaged access token beside a valid refresh token is refreshed as the *same* person; a session with no usable token is
    cleared and the page shows nothing.
 8. **Detector controls**: stale Grant state planted in localStorage, sessionStorage, IndexedDB and Cache storage before an
    account switch is **flagged** by the scan (4/4). The Cache control **failed first**: the scan read URL-encoded cache keys
    and was blind to a name in one — fixed in the detector, then red→green.
 
-Page errors: 0. The isolation assertions never failed in any run; five runs in all. The positive controls (*"the new
-person's own data is shown"*) failed intermittently in three of them when the gateway answered slowly (5–10 s for the heavy
-sections while two browsers ran), which the wait was changed to tolerate: a slow page is not a leak.
+Page errors: 0. **The isolation assertions never failed in any of seven runs.** The positive controls (*"the first / new
+person's own data is shown"*) failed intermittently in five of them (never the same one twice) when the gateway answered
+slowly; the wait was lengthened and one reload added (printed when used). The last run was cut off by the ten-minute shell
+ceiling after the chat leg (it now takes more than ten minutes because it waits on the model), so there is **no final
+all-green tally** to quote: the last complete run was 46/49 — two positive-control flakes and the page-draws-history
+assertion described above, which was replaced. Say so rather than round it up.
 
 ## 10. Voice — `scripts/p4/voice.ts` (14/14)
 
