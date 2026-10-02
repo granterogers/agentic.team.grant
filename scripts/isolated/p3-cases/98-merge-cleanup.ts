@@ -131,6 +131,38 @@ export async function cases(c: Ctx): Promise<void> {
     'no function keeps an office-less overload beside its office-first one (the old overload is a door that answers without an office)',
     c.json(both.map((r) => String(r.fn).slice(0, 60))),
   )
+  // The writer is not the owner. An edge function writes through PostgREST as service_role, and a column default, a CHECK, a
+  // generated column or an index expression runs as THAT role, so a function they call must be executable by it. Every other
+  // case here writes as the table owner, which is how a blanket revoke (0841) broke every inbound message for minutes.
+  const asPostgrest = (sql: string) =>
+    `set local application_name = 'PostgREST 14.5'; select set_config('request.jwt.claims', '{"role":"service_role"}', true); ${sql}`
+  const written = await c.refusal(
+    'service_role',
+    asPostgrest(
+      `insert into public.inbound_commands (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+       values ('${A}', 'voice', ${lit(`m98-${run}:turn`)}, 'verify-m98', 'what projects have we got', ${lit(`verify:merge_door:${run}`)})`,
+    ),
+  )
+  c.check(
+    written === '',
+    'a message written the way the edge functions write it (as service_role, through PostgREST) is accepted: its defaults, constraints and indexes run as that role',
+    written.slice(0, 160),
+  )
+  const unrunnable = await q(
+    `select distinct p.oid::regprocedure::text as fn
+       from pg_depend d join pg_proc p on p.oid = d.refobjid and d.refclassid = 'pg_proc'::regclass
+      where p.pronamespace = 'app'::regnamespace
+        and (d.classid in ('pg_attrdef'::regclass, 'pg_constraint'::regclass, 'pg_policy'::regclass)
+             or (d.classid = 'pg_class'::regclass and exists (select 1 from pg_class k where k.oid = d.objid and k.relkind = 'i')))
+        and not (has_function_privilege('service_role', p.oid, 'execute')
+                 and has_function_privilege('authenticated', p.oid, 'execute')
+                 and has_function_privilege('anon', p.oid, 'execute'))`,
+  )
+  c.check(
+    unrunnable.length === 0,
+    'every app function that a default, a constraint, a policy or an index expression calls is executable by the roles that write',
+    c.json(unrunnable.map((r) => r.fn)),
+  )
   c.check(
     (await bridge()) === bridgeBefore,
     'none of this relied on the compatibility bridge: the meter did not move',

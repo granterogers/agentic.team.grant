@@ -60,13 +60,17 @@ const one = async (sql: string): Promise<Record<string, unknown>> => {
 */
 await db.execute(`
   delete from public.documents
-   where project_id in (select project_id from public.projects where slug = 'verify-assets-fixture')
+   where project_id in (select project_id from public.projects
+                         where slug = 'verify-assets-fixture' and office_id = app.test_office())
 `)
-await db.execute(`delete from public.projects where slug = 'verify-assets-fixture'`)
+await db.execute(
+  `delete from public.projects where slug = 'verify-assets-fixture' and office_id = app.test_office()`,
+)
 
+// The fixture lives in the TEST office, named, so it can never reach a person's office and the delete above can never reach theirs.
 const proj = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values ('verify-assets-fixture', 'Asset verification', 'Thrown away', 'paused')
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (app.test_office(), 'verify-assets-fixture', 'Asset verification', 'Thrown away', 'paused')
   on conflict (office_id, slug) do update set name = excluded.name
   returning project_id
 `)
@@ -130,7 +134,8 @@ ok('adding it to the same collection twice is not two facts', Number(again.n) ==
 
 // --- the graph ---------------------------------------------------------------
 const task = await one(`
-  select public.add_task('${pid}'::uuid, 'Send the outline', '', null, 'verify:assets') as id
+  select (app.task_add(p_office => app.test_office(), p_project => '${pid}'::uuid,
+                       p_title => 'Send the outline', p_added_by => 'verify:assets') ->> 'id') as id
 `)
 const tid = String(task.id)
 
@@ -229,7 +234,8 @@ ok(
 
 await db.execute(`
   select public.approve_document(app.test_office(), '${madeId}'::uuid, 'Planning',
-                                 array['outline','client-facing'], '${tid}'::uuid)
+                                 array['outline','client-facing'], '${tid}'::uuid, null,
+                                 app.office_actor(app.test_office()))
 `)
 const approved = await one(`
   select state, tags from public.documents where document_id = '${madeId}'::uuid
@@ -273,7 +279,9 @@ ok('an asset is findable by tag', (tagged as unknown[]).length === 1)
   about Grant's data, not a tidy-up.
 */
 await db.execute(`delete from public.documents where project_id = '${pid}'::uuid`)
-await db.execute(`delete from public.projects where slug = 'verify-assets-fixture'`)
+await db.execute(
+  `delete from public.projects where slug = 'verify-assets-fixture' and office_id = app.test_office()`,
+)
 const left = await one(`
   select (select count(*) from public.documents where project_id = '${pid}'::uuid)
        + (select count(*) from public.relations where project_id = '${pid}'::uuid)

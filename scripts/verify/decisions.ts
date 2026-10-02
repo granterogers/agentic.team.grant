@@ -106,17 +106,18 @@ const subject = `hexavolt ${run}`
 const searched = await one(`
   begin;
   select app.record_decision_made(
+    app.test_office(),
     ${lit(`Which supplier do we use for the ${subject} order?`)},
     'Northgate',
     array['Bellamy', 'splitting it between both'],
     'Bellamy could not commit to the lead time and splitting it doubles the admin.',
     ${lit(REAL)}, null, null, null);
   select
-    jsonb_array_length(app.decisions_about(app.sole_person_office(), ${lit(`who supplies our ${subject}`)})) as found,
-    (app.decisions_about(app.sole_person_office(), ${lit(`who supplies our ${subject}`)}) -> 0 ->> 'chose') as chose,
-    (app.decisions_about(app.sole_person_office(), ${lit(`did we ever consider Bellamy for ${subject}`)}) -> 0 ->> 'chose')
+    jsonb_array_length(app.decisions_about(app.test_office(), ${lit(`who supplies our ${subject}`)})) as found,
+    (app.decisions_about(app.test_office(), ${lit(`who supplies our ${subject}`)}) -> 0 ->> 'chose') as chose,
+    (app.decisions_about(app.test_office(), ${lit(`did we ever consider Bellamy for ${subject}`)}) -> 0 ->> 'chose')
       as by_ruled_out,
-    jsonb_array_length(app.decisions_about(app.sole_person_office(), ${lit(`what colour is the ${run} van`)})) as unrelated;
+    jsonb_array_length(app.decisions_about(app.test_office(), ${lit(`what colour is the ${run} van`)})) as unrelated;
   rollback;
 `)
 
@@ -148,9 +149,10 @@ console.log('\nit crosses projects — a boundary that is not a privacy boundary
 {
   const got = await one(`
     begin;
-    insert into public.projects (name, slug, status)
-    values (${lit(`Fixture decisions ${run}`)}, ${lit(`fixture-decisions-${run}`)}, 'paused');
+    insert into public.projects (office_id, name, slug, status)
+    values (app.test_office(), ${lit(`Fixture decisions ${run}`)}, ${lit(`fixture-decisions-${run}`)}, 'paused');
     select app.record_decision_made(
+      app.test_office(),
       ${lit(`Do we run the ${run} webinars live or recorded?`)},
       'Recorded, with a live Q and A after',
       array['Fully live'],
@@ -162,8 +164,8 @@ console.log('\nit crosses projects — a boundary that is not a privacy boundary
     -- handler calls. A check that passed one in would be testing a signature
     -- nobody uses.
     select
-      jsonb_array_length(app.decisions_about(app.sole_person_office(), ${lit(`should the ${run} webinars be live`)})) as found,
-      (app.decisions_about(app.sole_person_office(), ${lit(`should the ${run} webinars be live`)}) -> 0 ->> 'project') as named;
+      jsonb_array_length(app.decisions_about(app.test_office(), ${lit(`should the ${run} webinars be live`)})) as found,
+      (app.decisions_about(app.test_office(), ${lit(`should the ${run} webinars be live`)}) -> 0 ->> 'project') as named;
     rollback;
   `)
   check(
@@ -183,9 +185,11 @@ console.log('\nchanging its mind, without losing what it thought before')
   const got = await one(`
     begin;
     select app.record_decision_made(
+      app.test_office(),
       ${lit(`Where do the ${run} module pages live?`)}, 'Google Drive', array['Notion'],
       'Everyone already had Drive open.', ${lit(REAL)}, null, null, null);
     select app.record_decision_made(
+      app.test_office(),
       ${lit(`Where do the ${run} module pages live?`)}, 'Notion', array['Google Drive'],
       'The team needs to edit in place.', ${lit(REAL)}, null, null,
       (select decision_id from public.decisions
@@ -196,7 +200,7 @@ console.log('\nchanging its mind, without losing what it thought before')
         where question = ${lit(`Where do the ${run} module pages live?`)}) as total,
       (select count(*) from public.decisions_live
         where question = ${lit(`Where do the ${run} module pages live?`)}) as live,
-      (app.decisions_about(app.sole_person_office(), ${lit(`where do the ${run} module pages go`)}) -> 0 ->> 'chose') as answer;
+      (app.decisions_about(app.test_office(), ${lit(`where do the ${run} module pages go`)}) -> 0 ->> 'chose') as answer;
     rollback;
   `)
   check(
@@ -261,13 +265,13 @@ console.log('\nanswering a question and settling a proposal both write one down'
 {
   const got = await one(`
     begin;
-    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
-    values (extensions.gen_random_uuid(), null, ${lit(`verify-decisions-${run}`)},
+    insert into public.jobs (office_id, correlation_id, project_id, idempotency_key, kind, requested_by)
+    values (app.test_office(), extensions.gen_random_uuid(), null, ${lit(`verify-decisions-${run}`)},
             'research', ${lit(`teamhq:verify-decisions-${run}`)});
     insert into public.blockers
-      (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+      (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
        approval_options, originating_agent, work_can_continue)
-    values (null, (select job_id from public.jobs
+    values (app.test_office(), null, (select job_id from public.jobs
                     where idempotency_key = ${lit(`verify-decisions-${run}`)}),
             ${lit(`Where do the ${run} pages live?`)},
             'Two places could hold them and only you can say.',
@@ -366,12 +370,13 @@ console.log('\nand harness traffic never reaches a prompt')
   const got = await one(`
     begin;
     select app.record_decision_made(
+      app.test_office(),
       ${lit(`Should the ${run} fixture reach a prompt?`)}, 'No', array['Yes'],
       'Because it is a fixture.', ${lit(WHO)}, null, null, null);
     select
       (select count(*) from public.decisions
         where decided_by = ${lit(WHO)} and is_fixture) as flagged,
-      jsonb_array_length(app.decisions_about(app.sole_person_office(),
+      jsonb_array_length(app.decisions_about(app.test_office(),
         ${lit(`should the ${run} fixture reach a prompt`)})) as reachable,
       jsonb_array_length(app.decisions_so_far(app.owner_office('grant'), 200)) as on_the_page_before;
     rollback;

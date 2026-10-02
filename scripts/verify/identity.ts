@@ -507,11 +507,19 @@ const alias = `the ${run} thing`
     for his chat. The message carried the exact id of an attached notebook and
     the resolver never looked at it (0162).
   */
+  // The notebook is the suite's OWN, in the test office: the resolver reads only the speaker's office, so a notebook borrowed
+  // from whichever office had one attached (a person's real project, as this used to) is correctly invisible to it.
+  const ownNotebook = crypto.randomUUID()
+  await db.execute(`
+    insert into public.project_attachments (project_id, connector, external_ref, display_name, role, enabled)
+    values (${lit(rivalId)}::uuid, 'notebooklm', ${lit(ownNotebook)}, 'identity proof notebook', 'source', true)
+    on conflict do nothing
+  `)
   const attachedRef = (await one(`
       select a.external_ref, p.project_id::text pid
         from public.project_attachments a
         join public.projects p using (project_id)
-       where p.status = 'active' and a.enabled and a.connector = 'notebooklm'
+       where p.project_id = ${lit(rivalId)}::uuid and a.enabled and a.connector = 'notebooklm'
        limit 1
     `)) as { external_ref?: string; pid?: string } | undefined
 

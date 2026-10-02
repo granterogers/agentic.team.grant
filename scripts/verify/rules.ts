@@ -122,7 +122,7 @@ const arc = await one(`
     -- studio would draw Accept on things that perform nothing.
     insert into _r
       select 'page_' || k, x ->> k
-        from jsonb_array_elements(app.hq_governance(app.owner_office('grant'), 400) -> 'noticed') x,
+        from jsonb_array_elements(app.hq_governance(app.test_office(), 400) -> 'noticed') x,
              unnest(array['offer','state','body']) k
        where x ->> 'id' = v_id::text;
 
