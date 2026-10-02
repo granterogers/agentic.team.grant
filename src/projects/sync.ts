@@ -282,7 +282,7 @@ export const upsertSource = async (
     -- reference, so uniqueness is not asserted over a null). A conflict target
     -- without the same predicate matches no index and the insert fails — which
     -- is how the sync silently stored zero rows for one run.
-    on conflict (connector, external_parent_ref, external_ref)
+    on conflict (office_id, connector, external_parent_ref, external_ref)
       where external_ref is not null
       do update
       set title = excluded.title,

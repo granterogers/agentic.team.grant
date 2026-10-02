@@ -103,7 +103,7 @@ export const applyPreference = async (
   // right now" needs a query that can be wrong.
   const conflictTarget =
     ctx.projectId === undefined
-      ? '(subject) where project_id is null'
+      ? '(office_id, subject) where project_id is null'
       : '(subject, project_id) where project_id is not null'
 
   await db.execute(`
@@ -113,7 +113,8 @@ export const applyPreference = async (
       (${office}, ${subject}, ${nul(ctx.projectId)}::uuid, ${cols.map((c) => c.value).join(', ')})
     on conflict ${conflictTarget}
       do update set ${sets.join(', ')}
-      -- the unique keys are global (subject): never overwrite another office's row on a collision
+      -- the global-scope key is per office (0862); a project-scoped key is unique by its project, so a collision can
+      -- only ever be this office's own row, and a row of another office's is never overwritten
       where notification_preferences.office_id = excluded.office_id
   `)
 

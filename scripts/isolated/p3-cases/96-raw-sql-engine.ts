@@ -388,13 +388,19 @@ export async function cases(c: Ctx): Promise<void> {
     'none of the refused writes left a row behind',
     '',
   )
-  // identical content: the fingerprint index is global; A must not see B's row to dedupe against it
+  // identical content: the live-fingerprint key is per office (0862), so A queues its OWN row for it - it is neither
+  // refused (an existence oracle on B's queue) nor deduped against B's row (it would hand A B's sync id)
   const collide = await thrown(() =>
     enqueue(c.db, { office: OA, operation: 'add_note', payload: note('b') }),
   )
+  const mine = await rows(
+    `select sync_id::text as id, office_id::text as o from public.notebook_sync_queue where payload->>'title' = ${lit(String(note('b').title))} order by created_at`,
+  )
   c.check(
-    collide !== '' && !collide.includes(qb.syncId),
-    "content B has already queued cannot be queued by A, and the refusal does not hand A B's sync id",
+    collide === '' &&
+      mine.some((r) => r.o === OA && r.id !== qb.syncId) &&
+      mine.some((r) => r.id === qb.syncId && r.o === B),
+    "content B has already queued is queued by A as A's own row, and B's row is neither touched nor handed to A",
     norm(collide).slice(0, 90),
   )
   // attempt / reconcile on B's row
@@ -651,28 +657,31 @@ export async function cases(c: Ctx): Promise<void> {
     lastEdited: null,
     url: null,
   }
-  const refusedUpsert = await thrown(() =>
-    upsertDocument(c.db, pa, object, `${c.canary.A} A's words`),
-  )
+  // The provider's page id is per-office (0862): A taking the same page files A's OWN document and never touches B's.
+  const ownUpsert = await thrown(() => upsertDocument(c.db, pa, object, `${c.canary.A} A's words`))
   c.check(
-    refusedUpsert.includes('already in use') &&
-      !refusedUpsert.includes(B) &&
-      !refusedUpsert.includes(c.canary.B),
-    'A cannot overwrite or move a Notion page B holds; the pass is told, in words that name no office',
-    refusedUpsert.slice(0, 90),
+    ownUpsert === '',
+    'A files its own copy of a Notion page B also holds, with no refusal that would tell it B holds it',
+    ownUpsert.slice(0, 90),
   )
-  const refusedAuthored = await thrown(() =>
+  const ownAuthored = await thrown(() =>
     registerAuthored(c.db, pa, { id: page, title: 'A authored' }, `${c.canary.A} body`, 'p3'),
   )
   c.check(
-    refusedAuthored.includes('already in use'),
-    'nor can A record a page of its own over it',
-    refusedAuthored.slice(0, 90),
+    ownAuthored === '',
+    'and A can record a page of its own with that id',
+    ownAuthored.slice(0, 90),
+  )
+  const pageRows = await rows(
+    `select office_id::text as o from public.documents where connector = 'notion' and external_ref = ${lit(page)}`,
   )
   c.check(
-    (await c.snapshot(B, ['documents'])) === notionBefore,
-    "B's documents are byte-identical after both refusals",
-    '',
+    (await c.snapshot(B, ['documents'])) === notionBefore &&
+      pageRows.length === 2 &&
+      pageRows.some((r) => r.o === A) &&
+      pageRows.some((r) => r.o === B),
+    "B's documents are byte-identical after both, and each office holds its own document for the page",
+    c.json(pageRows),
   )
   const stub = {
     async *paginate(endpoint: string): AsyncGenerator<Record<string, unknown>> {
@@ -693,10 +702,10 @@ export async function cases(c: Ctx): Promise<void> {
   } as unknown as Parameters<typeof syncNotion>[2]
   const synced = await syncNotion(c.db, { officeId: OA }, stub, pa)
   c.check(
-    synced.added === 1 &&
-      synced.skipped.length === 1 &&
+    synced.added >= 1 &&
+      synced.skipped.length === 0 &&
       !synced.skipped.join(' ').includes(c.canary.B),
-    "syncNotion files A's own page, and lists the page B holds as skipped",
+    "syncNotion files A's own pages, including the one B also holds, and skips nothing on B's account",
     `added ${String(synced.added)} skipped ${synced.skipped.join('; ')}`,
   )
   c.check(

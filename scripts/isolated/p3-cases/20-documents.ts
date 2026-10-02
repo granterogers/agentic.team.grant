@@ -616,19 +616,25 @@ export async function cases(c: Ctx): Promise<void> {
     "hq_document_link files a linked file in A's office",
     c.json(linked).slice(0, 80),
   )
-  // the provider's file id is unique across the deployment: B cannot take A's, and cannot tell why
+  // the provider's file id is unique PER OFFICE (0862): B linking the same Drive file gets its own document, A's is
+  // untouched, and B is not told that A holds it
   const takenFile = c.json(
     await svc(
       `select public.hq_document_link(${q(B)}, '${b.project}', 'drive', 'file-p3', 'B file', 'application/pdf')`,
     ),
   )
-  const stillA = await one(
-    `select office_id from public.documents where connector = 'drive' and external_ref = 'file-p3'`,
-  )
+  const held = (
+    await c.db.execute(
+      `select office_id::text as o, title from public.documents where connector = 'drive' and external_ref = 'file-p3' order by office_id`,
+    )
+  ).rows as { o: string; title: string }[]
   c.check(
-    stillA === A && takenFile.includes('could not be filed') && !takenFile.includes(canary.A),
-    "B linking a file A already holds changes nothing of A's and learns nothing",
-    takenFile.slice(0, 90),
+    held.length === 2 &&
+      held.some((r) => r.o === A && r.title === 'A file') &&
+      held.some((r) => r.o === B && r.title === 'B file') &&
+      !takenFile.includes(canary.A),
+    "B linking a file A already holds makes B's own document, changes nothing of A's and learns nothing",
+    c.json(held),
   )
   const rec = (await svc(
     `select public.record_file_document(${q(A)}, '${a.project}', 'A report', 'p3/a.pdf', 'application/pdf', 99, null, null, null, 'chief-of-staff', '${a.job}')`,

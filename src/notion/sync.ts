@@ -199,7 +199,7 @@ export async function upsertDocument(
               limit 1),
             ${officeOfProject(projectId)})
     -- The index is partial (0051), so the conflict target repeats its predicate.
-    on conflict (connector, external_parent_ref, external_ref)
+    on conflict (office_id, connector, external_parent_ref, external_ref)
       where external_ref is not null
       do update
       set title = excluded.title,
@@ -279,7 +279,7 @@ export async function registerAuthored(
             ${nul(page.title === '' ? null : page.title)}, 'page',
             ${lit(body)}, ${lit(fingerprint)}, ${String(body.length)},
             app.now_utc(), 'made', ${lit(producedBy)}, ${officeOfProject(projectId)})
-    on conflict (connector, external_parent_ref, external_ref)
+    on conflict (office_id, connector, external_parent_ref, external_ref)
       where external_ref is not null
       do update set origin = 'made',
                     produced_by = coalesce(public.documents.produced_by, excluded.produced_by)

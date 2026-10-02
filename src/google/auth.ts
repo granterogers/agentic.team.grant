@@ -150,7 +150,7 @@ export async function recordGoogleHealth(
             ${lit(access.ok ? `connected; scopes: ${access.scopes.join(' ')}` : access.reason).slice(0, 400)},
             app.office_actor(${lit(office)}::uuid),
             'Settings → Google on the web front end', app.now_utc(), ${lit(office)}::uuid)
-    on conflict (service, credential) do update
+    on conflict (office_id, service, credential) do update
       set state = excluded.state, detail = excluded.detail,
           action = excluded.action, checked_at = app.now_utc()
       where public.connection_health.office_id = excluded.office_id

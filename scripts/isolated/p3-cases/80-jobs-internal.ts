@@ -1216,10 +1216,10 @@ async function proposalsAndFanIn(c: Ctx, e: Env): Promise<void> {
   )
   c.check(
     sharedB.office_id === B &&
-      rA.held_elsewhere === 1 &&
-      !aRows.some((r) => r.needed === needS) &&
+      rA.held_elsewhere === 0 &&
+      aRows.some((r) => r.needed === needS) &&
       (await c.snapshot(B, ['proposals'])) === beforePB,
-    "a need B already raised is not rewritten by A: B's proposal does not move and A reports it as held elsewhere (the key is global: reported)",
+    "a need B already raised is A's own proposal too (the key is per office, 0862): B's proposal does not move and A holds nothing 'elsewhere'",
     c.json(rA),
   )
   const nullR = await c.refusal(W, `select app.raise_proposals(null::uuid)`)

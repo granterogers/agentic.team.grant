@@ -157,7 +157,7 @@ export async function cases(c: Ctx): Promise<void> {
     )
 
   // record_drive_document across the line
-  const dB0 = await docsB()
+  let dB0 = await docsB()
   same(
     'record_drive_document into a project',
     await say(
@@ -167,41 +167,41 @@ export async function cases(c: Ctx): Promise<void> {
       `select app.record_drive_document(${q(A)}::uuid, '${nobody}'::uuid, ${q(FOLDER.B)}, 'file-b1', 'Hijack', ${q('HIJACK')})`,
     ),
   )
-  // The lookup is inside A's office, so it finds nothing of B's to update; the insert then meets the global
-  // (connector, folder, file) key B's row holds and is refused in the usual words (reported, not rebuilt).
+  // The lookup is inside A's office, so it finds nothing of B's to update; the (office, connector, folder, file) key is
+  // per-office (0862), so A's insert files A's OWN document for the same provider file. B's is not touched, and A is
+  // not told that B holds it.
   const rewrite = (await W(
     `select app.record_drive_document(${q(A)}::uuid, '${proj.A}'::uuid, ${q(FOLDER.B)}, 'file-b1', 'Hijack', ${q('HIJACK-CONTENT')})`,
   )) as { ok?: boolean; document?: string; error?: string }
   c.check(
-    rewrite.ok === false &&
-      String(rewrite.error).includes('could not be recorded') &&
-      rewrite.document === undefined,
-    "A recording B's folder and file id cannot update B's document: it is refused, and does not name it",
+    rewrite.ok === true &&
+      rewrite.document !== undefined &&
+      rewrite.document !== String(b1.document) &&
+      (await ownerOf(String(rewrite.document))) === A,
+    "A recording B's folder and file id files A's own document for it, and does not name B's",
     c.json(rewrite).slice(0, 80),
   )
   c.check(
     (await docsB()) === dB0,
-    "B's documents are byte-identical after A tried to write over them",
+    "B's documents are byte-identical after A recorded the same provider file",
     '',
   )
-  // The global (connector, folder, file) key: B recording what A already holds is refused in the usual words.
+  // The same, from B's side: B recording what A already holds files B's own document, and A's is unchanged.
   const dA0 = await docsA()
-  const clash = await say(
+  const clash = (await W(
     `select app.record_drive_document(${q(B)}::uuid, '${proj.B}'::uuid, ${q(FOLDER.A)}, 'file-a1', 'Clash', ${q('CLASH')})`,
-  )
-  const clashMissing = await say(
-    `select app.record_drive_document(${q(B)}::uuid, '${proj.B}'::uuid, ${q(FOLDER.A)}, 'file-a1', 'Clash', ${q('CLASH')})`,
-  )
+  )) as { ok?: boolean; document?: string }
   c.check(
-    clash.includes('could not be recorded') && !clash.includes(String(a1.document)),
-    "B recording a file A already holds is refused in the usual words, without naming A's document",
-    clash.slice(0, 80),
+    clash.ok === true &&
+      clash.document !== undefined &&
+      clash.document !== String(a1.document) &&
+      (await ownerOf(String(clash.document))) === B,
+    "B recording a file A already holds files B's own document, without naming A's",
+    c.json(clash).slice(0, 80),
   )
-  c.check(
-    clash === clashMissing && (await docsA()) === dA0,
-    "and A's document is unchanged by it",
-    '',
-  )
+  c.check((await docsA()) === dA0, "and A's documents are unchanged by it", '')
+  // B has a new document of its own now: the baseline for what A must never touch moves with it.
+  dB0 = await docsB()
 
   // attach_file_to_document across the line
   const aPath = `${proj.A}/drive/a1.pdf`
@@ -268,13 +268,23 @@ export async function cases(c: Ctx): Promise<void> {
       `select app.drive_reconcile(${q(A)}::uuid, '${nobody}'::uuid, ${q(FOLDER.B)}, array['nothing']::text[])`,
     ),
   )
+  // Both offices now hold a document in this folder (the same provider file is two documents, 0862), so A's listing
+  // speaks of A's own and never names B's.
+  const vanishedOwn = await say(
+    `select app.reconcile_vanished(${q(A)}::uuid, 'drive', ${q(FOLDER.B)}, array['nothing']::text[])`,
+  )
+  c.check(
+    !vanishedOwn.includes(String(b1.document)) && !vanishedOwn.includes(B),
+    "reconcile_vanished over a folder both offices hold speaks only of A's own documents",
+    vanishedOwn.slice(0, 80),
+  )
   same(
-    'reconcile_vanished (a folder only B holds)',
-    await say(
-      `select app.reconcile_vanished(${q(A)}::uuid, 'drive', ${q(FOLDER.B)}, array['nothing']::text[])`,
-    ),
+    'reconcile_vanished (a folder nobody holds)',
     await say(
       `select app.reconcile_vanished(${q(A)}::uuid, 'drive', ${q(`no-such-${run}`)}, array['nothing']::text[])`,
+    ),
+    await say(
+      `select app.reconcile_vanished(${q(A)}::uuid, 'drive', ${q(`no-such-2-${run}`)}, array['nothing']::text[])`,
     ),
   )
   c.check(

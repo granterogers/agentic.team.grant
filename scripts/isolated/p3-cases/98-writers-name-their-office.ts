@@ -79,8 +79,10 @@ export async function cases(c: Ctx): Promise<void> {
     `select office_id::text as o, state from public.connection_health where service = 'p3-svc-${run}'`,
   )
   c.check(
-    health.length === 1 && health[0]?.o === A && health[0]?.state === 'ok',
-    "record_connection_health: B's probe of a service A already holds does not overwrite A's reading",
+    health.length === 2 &&
+      health.some((r) => r.o === A && r.state === 'ok') &&
+      health.some((r) => r.o === B && r.state === 'dead'),
+    "record_connection_health: each office has its own reading of the same service (0862), and B's probe does not overwrite A's",
     c.json(health),
   )
 
