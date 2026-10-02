@@ -403,6 +403,13 @@ const topRow = () => {
           </svg>
         </button>
       </span>
+      ${
+        canWrite()
+          ? `<button type="button" class="bcbtn bcsignout" data-bc-signout="1"
+        title="Sign out and clear this browser of your work"
+        aria-label="Sign out">Sign out</button>`
+          : ''
+      }
     </div>
   </header>`
 }

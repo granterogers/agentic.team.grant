@@ -2924,6 +2924,17 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
  * ---------------------------------------------------------------------- */
 [data-experience='basecamp'] .bcofficemenu { display: inline-flex; }
 
+/* Sign out (#405): a plain text button beside the office menu, 44px to touch on a phone. */
+[data-experience='basecamp'] .bcbtn.bcsignout {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcbtn.bcsignout { min-height: 44px; }
+}
+
 /* ---------------------------------------------------------------------- *
  * PUTTING A MODULE BACK (§13). Drawn only when something is off the page, at
  * the end of the board where the gap it left actually is.

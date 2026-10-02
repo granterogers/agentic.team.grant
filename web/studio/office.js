@@ -163,6 +163,7 @@ const refuseUnconfigured = () => {
 
 export async function act(action, args = {}) {
   refuseUnconfigured()
+  const began = session.epoch()
   const r = await fetch(API, {
     method: 'POST',
     headers: {
@@ -172,6 +173,7 @@ export async function act(action, args = {}) {
     body: JSON.stringify({ action, args }),
   })
   const body = await r.json().catch(() => ({}))
+  if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
   if (r.status === 401) {
     /*
       Clear BOTH, because either could be the thing the office refused and a
@@ -228,9 +230,11 @@ export async function read(section, id, extra) {
       parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
     }
   }
+  const began = session.epoch()
   const r = await fetch(`${API}?${parts.join('&')}`, {
     headers: { Authorization: `Bearer ${await toPresent()}` },
   })
+  if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
   if (r.status === 401) {
     session.forget()
     token.clear()

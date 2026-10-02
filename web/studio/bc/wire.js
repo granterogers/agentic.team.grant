@@ -15,6 +15,7 @@
 
 import { act, alreadyAnswered, attempt, canWrite, read, say, token } from '../office.js'
 import * as session from '../session.js'
+import { signOut } from '../signout.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
 import * as live from './livevoice.js'
@@ -730,6 +731,13 @@ export const wire = (root) => {
   for (const b of root.querySelectorAll('[data-bc-settings]')) {
     b.addEventListener('click', () => {
       ctx.openGlobalSettings?.()
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-signout]')) {
+    b.addEventListener('click', () => {
+      b.disabled = true
+      signOut()
     })
   }
 

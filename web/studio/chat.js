@@ -127,12 +127,14 @@ const asBubble = (m) => ({
  */
 export async function load(slug, projectId, token) {
   if (!projectId || !token) return null
+  const began = session.epoch()
   try {
     const r = await fetch(`${API()}?section=conversation&id=${encodeURIComponent(projectId)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!r.ok) return null
     const body = await r.json()
+    if (began !== session.epoch()) return null
     if (!Array.isArray(body.data)) return null
     office.set(slug, body.data.map(asBubble))
     // What was in flight has landed, so the optimistic copy would now be a

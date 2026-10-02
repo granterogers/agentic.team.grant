@@ -69,6 +69,15 @@ const write = (s) => {
   }
 }
 
+/*
+  The epoch: moves when somebody signs out, so a response begun before that can be told from one begun after (#405).
+*/
+let epochNow = 0
+export const epoch = () => epochNow
+export const bump = () => {
+  epochNow += 1
+}
+
 export const forget = () => {
   try {
     localStorage.removeItem(KEY)

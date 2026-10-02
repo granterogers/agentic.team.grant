@@ -69,6 +69,21 @@ export const grantEmail = async (): Promise<string> =>
  * redirects, and the tokens are read from the Location fragment. Session only lives in memory.
  */
 export const grantSession = async (): Promise<Session> => {
+  // Same platform behaviour as the second person's login: a plain-text edge timeout is not an answer.
+  let last = ''
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      return await grantSessionOnce()
+    } catch (e) {
+      last = e instanceof Error ? e.message.slice(0, 80) : String(e)
+      console.log(`  (Grant's session: "${last}" - attempt ${attempt} of 5, waiting)`)
+      await new Promise((ok) => setTimeout(ok, 8000))
+    }
+  }
+  throw new Error(`no session for Grant: ${last}`)
+}
+
+const grantSessionOnce = async (): Promise<Session> => {
   const { anon, service } = await apiKeys()
   const email = await grantEmail()
   if (email === '') throw new Error('Grant has no person email on the office')

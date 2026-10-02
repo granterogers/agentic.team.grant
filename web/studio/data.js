@@ -8,6 +8,7 @@
 */
 
 import * as people from './people.js'
+import * as sessionEpoch from './session.js'
 
 
 /*
@@ -677,10 +678,13 @@ export async function hydrate(endpoint, token) {
       person will wait before deciding the product is broken.
     */
     const stop = AbortSignal.timeout(10_000)
+    const began = sessionEpoch.epoch()
     const r = await fetch(`${endpoint}?section=studio`, {
       headers: { authorization: `Bearer ${token}` },
       signal: stop,
     })
+    // Somebody signed out while this was in flight: it is theirs, not whoever is here now (#405).
+    if (began !== sessionEpoch.epoch()) throw new Error('signed out while loading')
     if (r.status === 401 || r.status === 403) {
       const refused = new Error('that token was not accepted')
       refused.name = 'Refused'
