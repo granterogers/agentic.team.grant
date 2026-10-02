@@ -410,7 +410,9 @@ export async function credential(
 
 /** Ask for a job to stop. It ends after its current step. */
 export async function requestStop(db: SqlExecutor, jobId: string, who: string): Promise<void> {
-  await db.execute(`select app.request_stop(${lit(jobId)}::uuid, ${lit(who)})`)
+  await db.execute(
+    `select app.request_stop(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, ${lit(who)})`,
+  )
 }
 
 /** Stop the job where it is, with a reason a person can act on. */

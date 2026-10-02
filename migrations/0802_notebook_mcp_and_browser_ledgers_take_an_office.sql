@@ -438,12 +438,11 @@ begin
     end if;
     execute v;
   end if;
-  -- hq_settings: not converted yet (cluster d-governance owns it). It shows the allowance of the deployment's own
-  -- office, which is what it showed when there was one office.
-  v := pg_get_functiondef('app.hq_settings()'::regprocedure);
+  -- hq_settings(p_office) (cluster d-governance) shows the allowance of the office it is asked for.
+  v := pg_get_functiondef('app.hq_settings(uuid)'::regprocedure);
   if position('app.notebook_allowance()' in v) > 0 then
-    v := replace(v, 'app.notebook_allowance()', 'app.notebook_allowance(app.operator_office())');
-    if position('app.notebook_allowance()' in v) > 0 or position('app.notebook_allowance(app.operator_office())' in v) = 0 then
+    v := replace(v, 'app.notebook_allowance()', 'app.notebook_allowance(p_office)');
+    if position('app.notebook_allowance()' in v) > 0 or position('app.notebook_allowance(p_office)' in v) = 0 then
       raise exception 'hq_settings splice did not land';
     end if;
     execute v;

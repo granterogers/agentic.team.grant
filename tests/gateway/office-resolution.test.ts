@@ -5,6 +5,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 const OFFICE = '2a2cd4d4-48c9-41ba-8271-a798631997da'
+/** What the machine key resolves to: the test office, never a person. */
+const TEST_OFFICE = 'e13ce7a9-831b-49d7-83a5-2ede9c1a97d0'
 const jwt = `${'a'.repeat(30)}.${'b'.repeat(30)}.${'c'.repeat(30)}`
 
 type Handler = (r: Request) => Promise<Response>
@@ -21,6 +23,8 @@ const fake = vi.fn(async (url: string | URL | Request, init?: RequestInit): Prom
     return new Response(JSON.stringify([{ ok: true, owner_key: 'sam', kind: 'person' }]), {
       status: 200,
     })
+  if (u.endsWith('/rpc/resolve_machine_office'))
+    return new Response(JSON.stringify({ ok: true, office_id: TEST_OFFICE }), { status: 200 })
   if (u.endsWith('/rpc/resolve_office')) {
     if (resolverDown) return new Response('boom', { status: 500 })
     return new Response(
@@ -97,12 +101,19 @@ describe('the gateway resolves the office from the verified login', () => {
       office_id: 'x',
       owner_key: 'grant',
     }
-    for (const token of [`${jwt}3`, 'machine-key-for-tests']) {
+    // The entry takes an office, so the gateway SUPPLIES one: the verified login's (the machine key's is the test
+    // office's). It is never the one the caller named, and the other office-shaped keys are discarded outright.
+    for (const [token, expected] of [
+      [`${jwt}3`, OFFICE],
+      ['machine-key-for-tests', TEST_OFFICE],
+    ] as const) {
       rpc.length = 0
       await post(token, 'appearance_set', hostile)
       const call = rpc.find((c) => c.fn === 'hq_appearance_set')
       expect(call, token).toBeDefined()
-      for (const k of ['p_office', 'office_id', 'owner_key'])
+      expect(call?.body.p_office, token).toBe(expected)
+      expect(call?.body.p_office, token).not.toBe(hostile.p_office)
+      for (const k of ['office_id', 'owner_key'])
         expect(call?.body, `${token} ${k}`).not.toHaveProperty(k)
     }
   })

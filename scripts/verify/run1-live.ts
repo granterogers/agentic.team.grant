@@ -331,7 +331,7 @@ try {
     await origins.declare('telegram', chat)
     const q = await withQuestion(chat)
     const r = await one(
-      `select app.hq_answer_blocker(${lit(q.blocker)}::uuid, 'Yes, do it', null)::text as r`,
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q.blocker)}::uuid), app.test_office()), ${lit(q.blocker)}::uuid, 'Yes, do it', null)::text as r`,
     ).catch((e: Error) => ({ r: `raised: ${e.message.slice(0, 80)}` }))
     const b = await blockerRow(q.blocker)
     check(

@@ -16,7 +16,7 @@ import { PgExecutor } from '../src/db/pg-executor.ts'
 
 const ROOTS = ['src', 'supabase', 'scripts', 'tests']
 const OK_FIRST =
-  /^(office_id\b|app\.operator_office\s*\(|o\.office_id|p_office\s*(=>|:=)|null::uuid|uuid\b.*|app\.test_office\s*\(|app\.sole_person_office\s*\(|app\.job_office\s*\(|app\.require_office\s*\(|.*\boffice\b.*|.*\bOFFICE\b.*|[A-Za-z_.]*\.office\b|\$\{[^}]*(office|Office|OFFICE)[^}]*\}|'?\$\{|[A-Za-z_]+\.office_id\b|\(\s*select\s+[A-Za-z_]+\.office_id\b|\(\s*select\s+office_id\b)/
+  /^(office_id\b|app\.operator_office\s*\(|app\.owner_office\s*\(|app\.system_office\s*\(|coalesce\(\s*\(\s*select\s+[A-Za-z_]+\.office_id|o\.office_id|p_office\s*(=>|:=)|null::uuid|uuid\b.*|app\.test_office\s*\(|app\.sole_person_office\s*\(|app\.job_office\s*\(|app\.require_office\s*\(|.*\boffice\b.*|.*\bOFFICE\b.*|[A-Za-z_.]*\.office\b|\$\{[^}]*(office|Office|OFFICE)[^}]*\}|'?\$\{|[A-Za-z_]+\.office_id\b|\(\s*select\s+[A-Za-z_]+\.office_id\b|\(\s*select\s+office_id\b)/
 
 export type Call = { file: string; line: number; fn: string; first: string }
 
@@ -172,6 +172,8 @@ if (process.argv[1]?.endsWith('check-office-callers.ts')) {
       const callerName = f.fn.split('.')[1] as string
       for (const m of f.body.matchAll(reDb)) {
         if (m[1] === callerName) continue
+        // A mention inside a string literal (a reversal method described in words) is not a call.
+        if (((f.body.slice(0, m.index ?? 0).match(/'/g) ?? []).length & 1) === 1) continue
         const first = firstArgument(f.body, (m.index ?? 0) + m[0].length)
         if (
           (first !== '' || needsOffice.has(m[1] as string)) &&

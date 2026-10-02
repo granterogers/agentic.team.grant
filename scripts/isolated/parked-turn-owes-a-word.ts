@@ -251,7 +251,11 @@ const park = (id: string, reason: string, resumable: boolean) =>
 // ---- and the control he is told to press works on it (0635) ---------------------------------------------------------
 {
   const stop = async (id: string) =>
-    (await one(`select app.request_stop(${lit(id)}::uuid, 'grant')::text as r`)).r as string
+    (
+      await one(
+        `select app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, 'grant')::text as r`,
+      )
+    ).r as string
   const stateOf = async (id: string) =>
     String(
       (await one(`select state::text as s from public.jobs where job_id = ${lit(id)}::uuid`)).s,

@@ -119,7 +119,7 @@ const projectId = String(project.id)
   depend on a global setting nobody here chose.
 */
 await db.execute(`
-  select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+  select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'act_with_review', ${lit(projectId)}::uuid,
     'verify:composes', 'so the plan can actually be carried out')`)
 
 await db.execute(`

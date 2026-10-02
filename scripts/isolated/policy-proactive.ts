@@ -31,7 +31,9 @@ const OUTWARD = ['slack.post', 'drive.ingest', 'notebook.write', 'slack.channel'
 const CONSEQUENTIAL = ['task.board.delete', 'slack.rotate']
 const SWITCHED_OFF = ['gmail.send', 'db.delete', 'production.write', 'spend.money', 'github.write']
 for (const dial of DIALS) {
-  await one(`select app.hq_autonomy_set(${lit(dial)}, null, 'grant') as r`)
+  await one(
+    `select app.hq_autonomy_set(app.owner_office('grant'), ${lit(dial)}, null, 'grant') as r`,
+  )
   const t: Record<string, string> = {}
   for (const tool of [
     ...READ,
@@ -149,6 +151,6 @@ check(
   !String(noticed.r).startsWith('error'),
   JSON.stringify(noticed.r).slice(0, 80),
 )
-await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'suggest', null, 'grant') as r`)
 void db
 await w.finish()

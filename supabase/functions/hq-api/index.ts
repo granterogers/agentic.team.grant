@@ -238,15 +238,15 @@ const SECTIONS: Readonly<
   >
 > = {
   overview: { fn: 'hq_overview', office: true },
-  staff: { fn: 'hq_staff' },
+  staff: { fn: 'hq_staff', office: true },
   usage: { fn: 'hq_usage', office: true },
   activity: { fn: 'hq_activity', office: true, args: { p_limit: 50 } },
   series: { fn: 'hq_series', office: true, args: { p_days: 30 } },
-  connections: { fn: 'hq_connections' },
+  connections: { fn: 'hq_connections', office: true },
   projects: { fn: 'hq_projects', office: true },
   artifacts: { fn: 'hq_artifacts', office: true },
-  settings: { fn: 'hq_settings' },
-  team: { fn: 'hq_team' },
+  settings: { fn: 'hq_settings', office: true },
+  team: { fn: 'hq_team', office: true },
   // Everything the studio renders, in the shape web/studio/data.js already
   // exports (#68, ADR-0019). One call rather than nine: the studio paints the
   // whole shell at once and a page that fetches per section feels broken while
@@ -264,7 +264,7 @@ const SECTIONS: Readonly<
   */
   pulse: { fn: 'hq_pulse', office: true },
   // The Settings viewer, in the shapes settings.js already exports (#68).
-  studio_settings: { fn: 'hq_studio_settings' },
+  studio_settings: { fn: 'hq_studio_settings', office: true },
   /*
     The usage dashboard (#61), from `usage_overview` rather than `hq_usage`.
 
@@ -357,17 +357,17 @@ const SECTIONS: Readonly<
   // The first-run checklist, for the Setting up pane (#68). `setup` already
   // exists above and serves the same function; named apart so the studio's
   // fetch is legible next to `studio` and `studio_settings`.
-  studio_setup: { fn: 'hq_setup' },
+  studio_setup: { fn: 'hq_setup', office: true },
   google: { fn: 'hq_google' },
   // What to do next, for a person who has just opened this for the first time.
-  setup: { fn: 'hq_setup' },
+  setup: { fn: 'hq_setup', office: true },
   // What each kind of work costs, measured and modelled (§11).
   cost: { fn: 'hq_cost_per_outcome', office: true, args: { p_days: 30 } },
   // Which bot speaks as whom, and which are spare.
   bots: { fn: 'hq_bots' },
   // Who may message Grant directly, how loud a thing has to be to reach his
   // phone, and which recurring duties run at all (0151).
-  routing: { fn: 'hq_routing' },
+  routing: { fn: 'hq_routing', office: true },
   // What the build session is doing, as it does it — so Grant can open the page
   // instead of a terminal (0170).
   build: { fn: 'hq_build' },
@@ -388,7 +388,7 @@ const SECTIONS: Readonly<
     and `portfolio_tasks` are: it reads four tables nobody else on the first
     paint touches, and governance is a screen you navigate TO.
   */
-  governance: { fn: 'hq_governance', args: { p_limit: 40 } },
+  governance: { fn: 'hq_governance', office: true, args: { p_limit: 40 } },
   /*
     What the office may do without asking, and what Grant has said not to ask
     about again (#15, migrations 0421 and 0422).
@@ -402,7 +402,7 @@ const SECTIONS: Readonly<
     on the one page that lists every permission in force — a security surface
     that can only be read a project at a time is one nobody audits.
   */
-  standing: { fn: 'hq_standing' },
+  standing: { fn: 'hq_standing', office: true },
   /*
     What the office has settled, and what that ruled out (#129).
 
@@ -412,7 +412,7 @@ const SECTIONS: Readonly<
     crosses every project (ADR-0036), so folding it into a payload that is
     otherwise project-shaped would invite somebody to scope it.
   */
-  decisions: { fn: 'hq_decisions', args: { p_limit: 40 } },
+  decisions: { fn: 'hq_decisions', office: true, args: { p_limit: 40 } },
   /*
     What a project has MADE, as opposed to what it was given (#260).
 
@@ -522,7 +522,7 @@ const SECTIONS: Readonly<
     reasoning — the Issue says "do not expose private reasoning traces" and the
     function that serves this holds none.
   */
-  job_progress: { fn: 'job_progress', arg: 'p_job' },
+  job_progress: { fn: 'job_progress', office: true, arg: 'p_job' },
   /*
     Every trigger and how it is doing (#264).
 
@@ -530,7 +530,7 @@ const SECTIONS: Readonly<
     twice and declined ninety times is either working exactly as designed or
     badly misconfigured, and only both numbers can tell them apart.
   */
-  triggers: { fn: 'trigger_health' },
+  triggers: { fn: 'trigger_health', office: true },
   /*
     Registered providers, what they offer, and what of that is USABLE (#265).
 
@@ -779,12 +779,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // line: `skills` is append-only, so this writes a retirement row rather than
   // removing anything, and writing the procedure again undoes it. `p_reason` is
   // optional — the RPC supplies an honest default rather than an empty string.
-  retire_skill: { fn: 'hq_retire_skill', required: ['p_skill_id'] },
+  retire_skill: { fn: 'hq_retire_skill', office: true, required: ['p_skill_id'] },
   // How much the office does without asking (#15). Its own action rather than a
   // `set_setting` key: it lives in `autonomy_settings`, it is scoped — a project
   // can override the global — and every change is a new row so "when did it
   // start acting on its own" stays answerable.
-  autonomy_set: { fn: 'hq_autonomy_set', required: ['p_level'], by: 'p_by' },
+  autonomy_set: { fn: 'hq_autonomy_set', office: true, required: ['p_level'], by: 'p_by' },
   /*
     Answering the office when it asks for a capability (ADR-0018, #272).
 
@@ -818,8 +818,18 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     `hq_approve_tool` does — an agent cannot widen its own permissions because
     there is no argument through which to try.
   */
-  grant_standing: { fn: 'hq_grant_standing', required: ['p_tool', 'p_reason'], by: 'p_by' },
-  revoke_standing: { fn: 'hq_revoke_standing', required: ['p_authorization'], by: 'p_by' },
+  grant_standing: {
+    fn: 'hq_grant_standing',
+    office: true,
+    required: ['p_tool', 'p_reason'],
+    by: 'p_by',
+  },
+  revoke_standing: {
+    fn: 'hq_revoke_standing',
+    office: true,
+    required: ['p_authorization'],
+    by: 'p_by',
+  },
   /*
     Registering and disconnecting an outside provider (#265).
 
@@ -859,16 +869,17 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   /*
     Stop. A column the runner reads between steps, not a socket.
   */
-  stop_job: { fn: 'request_stop', required: ['p_job'], by: 'p_who' },
+  stop_job: { fn: 'request_stop', office: true, required: ['p_job'], by: 'p_who' },
   revoke_connector: { fn: 'revoke_mcp_provider', office: true, required: ['p_provider'] },
   offer_connector_tool: { fn: 'offer_mcp_tool', office: true, required: ['p_discovered'] },
-  approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'], by: 'p_by' },
-  decline_tool: { fn: 'hq_decline_tool', required: ['p_request_id'], by: 'p_by' },
-  revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'], by: 'p_by' },
+  approve_tool: { fn: 'hq_approve_tool', office: true, required: ['p_request_id'], by: 'p_by' },
+  decline_tool: { fn: 'hq_decline_tool', office: true, required: ['p_request_id'], by: 'p_by' },
+  revoke_tool: { fn: 'hq_revoke_tool', office: true, required: ['p_slug', 'p_tool'], by: 'p_by' },
   // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
   // the two, and refuses a grant for a globally disabled tool (§11).
   staff_tool_set: {
     fn: 'hq_staff_tool_set',
+    office: true,
     required: ['p_slug', 'p_tool', 'p_granted'],
     by: 'p_by',
   },
@@ -988,8 +999,18 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     would resolve the row and strand the job, which is the worst outcome
     available: the interface would report success.
   */
-  answer_blocker: { fn: 'hq_answer_blocker', required: ['p_blocker_id', 'p_answer'], by: 'p_by' },
-  withdraw_refusal: { fn: 'hq_withdraw_refusal', required: ['p_blocker_id'], by: 'p_by' },
+  answer_blocker: {
+    fn: 'hq_answer_blocker',
+    office: true,
+    required: ['p_blocker_id', 'p_answer'],
+    by: 'p_by',
+  },
+  withdraw_refusal: {
+    fn: 'hq_withdraw_refusal',
+    office: true,
+    required: ['p_blocker_id'],
+    by: 'p_by',
+  },
   // `p_reason` is optional here and required by the RPC when the state is
   // `blocked` — the schema's own check constraint, said in a sentence.
   task_state: { fn: 'hq_task_state', office: true, required: ['p_task_id', 'p_state'], by: 'p_by' },
@@ -1116,11 +1137,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // connection. Reinstalling produces both at the same moment.
   set_slack_credentials: {
     fn: 'hq_set_slack_credentials',
+    office: true,
     required: ['p_bot_token', 'p_signing_secret'],
   },
   // The way back out. There was a way in and none out, which made a consent
   // granted through a browser effectively permanent from this page's side.
-  forget_google: { fn: 'hq_forget_google', required: [] },
+  forget_google: { fn: 'hq_forget_google', office: true, required: [] },
   /*
     Disconnecting anything (#90, migration 0252).
 
@@ -1133,7 +1155,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     is how it reaches him. It returns a refusal with the reason rather than a
     cheerful ok, and this list does not second-guess it. §5.
   */
-  disconnect: { fn: 'hq_disconnect', required: ['p_service'] },
+  disconnect: { fn: 'hq_disconnect', office: true, required: ['p_service'] },
   /*
     How a dashboard project looks (#83, migration 0253).
 
@@ -1160,7 +1182,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // One setter over three kinds of routing change, allow-listed inside the
   // function for the same reason `set_setting` is: the page is not the only
   // possible caller.
-  routing_set: { fn: 'hq_routing_set', required: ['p_what', 'p_value'] },
+  routing_set: { fn: 'hq_routing_set', office: true, required: ['p_what', 'p_value'] },
   /*
     Taking something back (#118, migrations 0263-0265).
 
@@ -1282,7 +1304,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   },
   reference_add: { fn: 'add_project_reference', office: true, required: ['p_slug', 'p_url'] },
   reference_remove: { fn: 'remove_project_reference', office: true, required: ['p_reference_id'] },
-  lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
+  lesson_retract: { fn: 'retract_lesson', office: true, required: ['p_lesson_id'] },
   /*
     ACCEPT OR DECLINE A DRAFTED STANDING RULE (#147).
 
@@ -1295,7 +1317,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     Accepting is the ONLY path by which a correction becomes a rule. Nothing in
     the answering handler stores one.
   */
-  suggestion_decide: { fn: 'decide_suggestion', required: ['p_suggestion_id', 'p_accept'] },
+  suggestion_decide: {
+    fn: 'decide_suggestion',
+    office: true,
+    required: ['p_suggestion_id', 'p_accept'],
+  },
   /*
     HOW THE STUDIO LOOKS (#124, migration 0400).
 
@@ -1305,8 +1331,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
 
     ADR-0021: localStorage is the cache in front of this and never the record.
   */
-  appearance_set: { fn: 'hq_appearance_set', required: ['p_settings'] },
-  proposal_decide: { fn: 'decide_proposal', required: ['p_proposal_id', 'p_state'] },
+  appearance_set: { fn: 'hq_appearance_set', office: true, required: ['p_settings'] },
+  proposal_decide: { fn: 'decide_proposal', office: true, required: ['p_proposal_id', 'p_state'] },
   /*
     Project Settings (#36, migrations 0323-26).
 
@@ -1384,11 +1410,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   vikunja_connect: {
     fn: 'hq_set_vikunja',
+    office: true,
     required: ['p_base_url', 'p_project_id', 'p_api_token'],
     // Connecting the board is the yes to create/update on it, and only a person's connecting counts (0641).
     by: 'p_by',
   },
-  vikunja_forget: { fn: 'hq_forget_vikunja', required: [] },
+  vikunja_forget: { fn: 'hq_forget_vikunja', office: true, required: [] },
 }
 
 /**

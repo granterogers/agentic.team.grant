@@ -105,9 +105,10 @@ describe("the handler answers only this conversation's ONE open question", () =>
     .replace(/^[ \t]*\/\/.*$/gm, '')
   it('through the same door the dashboard uses', () => {
     // And AS whoever the door recorded on this turn (0608): the principal is read
-    // from the command, never supplied by the handler.
+    // from the command, never supplied by the handler. In the office of the CLAIMED
+    // job (P3): the office is read from the job, never taken from the question.
     expect(src).toMatch(
-      /app\.hq_answer_blocker\(\$\{lit\(q\.id\)\}::uuid, \$\{lit\(option\)\},\s*app\.command_principal\(/,
+      /app\.hq_answer_blocker\(app\.job_office\(\$\{lit\(job\.jobId\)\}::uuid\), \$\{lit\(q\.id\)\}::uuid, \$\{lit\(option\)\},\s*app\.command_principal\(/,
     )
   })
   it('an unclear reading leaves the question open and asks, before any option is chosen', () => {

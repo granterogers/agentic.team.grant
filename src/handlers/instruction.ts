@@ -4997,7 +4997,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   gets a refusal back, which the line below reports.
                 */
                 const res = await deps.db.execute(
-                  `select app.hq_answer_blocker(${lit(q.id)}::uuid, ${lit(option)},
+                  `select app.hq_answer_blocker(app.job_office(${lit(job.jobId)}::uuid), ${lit(q.id)}::uuid, ${lit(option)},
                      app.command_principal(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
                 )
                 const out = (res.rows[0] as { r?: unknown })?.r

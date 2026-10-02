@@ -523,7 +523,7 @@ check(
   const refused = json(
     (
       await one(
-        `select app.hq_answer_blocker(${lit(real)}::uuid, 'Yes, do that from now on without asking me', 'verify-operator') as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(real)}::uuid), app.test_office()), ${lit(real)}::uuid, 'Yes, do that from now on without asking me', 'verify-operator') as r`,
       )
     ).r,
   )
@@ -537,7 +537,7 @@ check(
   const direct = json(
     (
       await one(
-        `select app.grant_standing('notebook.write', ${lit(realProject)}::uuid, 'proof', 'verify-operator', null) as r`,
+        `select app.grant_standing(app.test_office(), 'notebook.write', ${lit(realProject)}::uuid, 'proof', 'verify-operator', null) as r`,
       )
     ).r,
   )
@@ -552,7 +552,7 @@ check(
   const okFixture = json(
     (
       await one(
-        `select app.hq_answer_blocker(${lit(fixtureQ)}::uuid, 'Yes, do that from now on without asking me', 'verify-operator') as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(fixtureQ)}::uuid), app.test_office()), ${lit(fixtureQ)}::uuid, 'Yes, do that from now on without asking me', 'verify-operator') as r`,
       )
     ).r,
   )
@@ -565,7 +565,7 @@ check(
   const okPerson = json(
     (
       await one(
-        `select app.hq_answer_blocker(${lit(personQ)}::uuid, 'Yes, do that from now on without asking me', 'grant') as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(personQ)}::uuid), app.test_office()), ${lit(personQ)}::uuid, 'Yes, do that from now on without asking me', 'grant') as r`,
       )
     ).r,
   )

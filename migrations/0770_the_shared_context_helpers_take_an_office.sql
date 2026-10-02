@@ -30,7 +30,7 @@ as $f$
 $f$;
 revoke all on function app.office_project(uuid, uuid) from public, anon, authenticated, service_role;
 
-create function app.append_event(
+create or replace function app.append_event(
   p_office uuid, p_correlation_id uuid, p_actor_kind text, p_actor text, p_trigger text, p_action_type text,
   p_reversible boolean, p_project_id uuid default null::uuid, p_before_state jsonb default null::jsonb,
   p_after_state jsonb default null::jsonb, p_rationale_summary text default null::text,

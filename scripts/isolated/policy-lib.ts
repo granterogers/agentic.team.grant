@@ -150,7 +150,7 @@ export async function policyWorld(defaultDb: string): Promise<World> {
       json(
         (
           await one(
-            `select app.hq_answer_blocker(${lit(blocker)}::uuid, ${lit(option)}, ${lit(by)}) as r`,
+            `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(blocker)}::uuid), app.test_office()), ${lit(blocker)}::uuid, ${lit(option)}, ${lit(by)}) as r`,
           )
         ).r,
       ),

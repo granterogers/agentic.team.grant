@@ -50,6 +50,10 @@ export async function cases(c: Ctx): Promise<void> {
         where table_name in ('lessons','events','suggestions','briefings','mail_messages','notification_preferences')`,
     )
   const bridgeBefore = await bridge()
+  // Other case files write lessons into B too, so "nothing of B's changed" is measured against B as this file found it.
+  const strangersLessonsInB = await count(
+    `select count(*)::int as n from public.lessons where office_id = '${B}' and learned_by <> 'ctx-person'`,
+  )
 
   // ---- the seed -----------------------------------------------------------------------------------------------------------------
   const P = { A: uid('a-proj'), B: uid('b-proj') }
@@ -1457,7 +1461,7 @@ export async function cases(c: Ctx): Promise<void> {
   c.check(
     (await count(
       `select count(*)::int as n from public.lessons where office_id = '${B}' and learned_by <> 'ctx-person'`,
-    )) === 0,
+    )) === strangersLessonsInB,
     "no lesson of B's was written or altered by A",
     '',
   )

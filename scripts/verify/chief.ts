@@ -75,7 +75,7 @@ const project = await one(`
   returning project_id::text as id`)
 const projectId = String(project.id)
 await db.execute(`
-  select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+  select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'act_with_review', ${lit(projectId)}::uuid,
     'verify:chief', 'a real user who wants work carried out sets this')`)
 await db.execute(`
   insert into public.documents

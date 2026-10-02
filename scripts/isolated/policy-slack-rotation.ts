@@ -111,7 +111,11 @@ check(
 
 // ---- 3. nothing standing, nothing implied ------------------------------------------------------------------------
 const standing = json(
-  (await one(`select app.grant_standing('slack.rotate', null, 'always', 'grant') as r`)).r,
+  (
+    await one(
+      `select app.grant_standing(app.test_office(), 'slack.rotate', null, 'always', 'grant') as r`,
+    )
+  ).r,
 )
 const viaGateway = await w.asPerson('grant_standing', {
   p_tool: 'slack.rotate',
@@ -123,7 +127,9 @@ check(
   String(standing.error).slice(0, 80),
 )
 for (const dial of ['act', 'act_with_review', 'suggest']) {
-  await one(`select app.hq_autonomy_set(${lit(dial)}, null, 'grant') as r`)
+  await one(
+    `select app.hq_autonomy_set(app.owner_office('grant'), ${lit(dial)}, null, 'grant') as r`,
+  )
   await run(await w.dutyJob('office.slack_rotate'))
 }
 const rotationJob1 = (await w.dutyJob('office.slack_rotate')).jobId
@@ -134,7 +140,7 @@ const decisionAtAct = json(
     )
   ).d,
 )
-await one(`select app.hq_autonomy_set('act', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'act', null, 'grant') as r`)
 const rotationJob2 = (await w.dutyJob('office.slack_rotate')).jobId
 const atAct = json(
   (
@@ -148,7 +154,7 @@ check(
   atAct.verdict === 'ask' && decisionAtAct.verdict === 'ask' && rotations === 0,
   `act -> ${String(atAct.verdict)}`,
 )
-await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'suggest', null, 'grant') as r`)
 
 // ---- 4. nothing a job carries is an approval -------------------------------------------------------------------------
 const forged = await w.dutyJob('office.slack_rotate')

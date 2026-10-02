@@ -113,7 +113,7 @@ $function$;
 
 revoke all on function app.lessons_for(uuid, uuid, text, text, integer, boolean) from public, anon, authenticated, service_role;
 
-create function app.learn(p_office uuid, p_scope lesson_scope, p_body text, p_learned_by text, p_project_id uuid DEFAULT NULL::uuid, p_staff_slug text DEFAULT NULL::text, p_job_kind text DEFAULT NULL::text, p_from_job uuid DEFAULT NULL::uuid, p_confidence numeric DEFAULT 0.50, p_supersedes uuid DEFAULT NULL::uuid)
+create or replace function app.learn(p_office uuid, p_scope lesson_scope, p_body text, p_learned_by text, p_project_id uuid DEFAULT NULL::uuid, p_staff_slug text DEFAULT NULL::text, p_job_kind text DEFAULT NULL::text, p_from_job uuid DEFAULT NULL::uuid, p_confidence numeric DEFAULT 0.50, p_supersedes uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER

@@ -216,7 +216,9 @@ const b = String(
     )
   ).id,
 )
-await db.execute(`select app.hq_answer_blocker('${b}'::uuid, 'Yes, do it', 'grant')`)
+await db.execute(
+  `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${b}'::uuid), app.test_office()), '${b}'::uuid, 'Yes, do it', 'grant')`,
+)
 await step(job)
 check(
   'and answering it performs the step exactly once',

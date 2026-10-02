@@ -154,7 +154,7 @@ const projectId = String(project.id)
   and a separate control below proves `observe` refuses.
 */
 await db.execute(`
-  select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+  select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'act_with_review', ${lit(projectId)}::uuid,
     'verify:pursues', 'so the suite can prove what a plan does')`)
 
 await db.execute(`
@@ -325,7 +325,7 @@ const emptyId = String(empty.id)
   nothing, and a check cannot tell them apart from `found: false` alone.
 */
 await db.execute(`
-  select app.hq_autonomy_set('act_with_review', ${lit(emptyId)}::uuid,
+  select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(emptyId)}::uuid), app.owner_office('grant')), 'act_with_review', ${lit(emptyId)}::uuid,
     'verify:pursues', 'so the control refuses for its own reason')`)
 const emptyJob = await one(`
   insert into public.jobs
@@ -1035,7 +1035,7 @@ const askPlan: GoalPlan = {
 }
 try {
   await db.execute(`
-    select app.hq_autonomy_set('suggest', ${lit(projectId)}::uuid,
+    select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'suggest', ${lit(projectId)}::uuid,
       'verify:pursues', 'the control for the asking path')`)
   asked = await runSteps(
     db,
@@ -1045,7 +1045,7 @@ try {
   )
 } finally {
   await db.execute(`
-    select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+    select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'act_with_review', ${lit(projectId)}::uuid,
       'verify:pursues', 'restored')`)
 }
 check(
@@ -1123,7 +1123,7 @@ const spokenJobId = String(spokenJob.id)
 let spokenBody = ''
 try {
   await db.execute(`
-    select app.hq_autonomy_set('suggest', ${lit(projectId)}::uuid,
+    select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'suggest', ${lit(projectId)}::uuid,
       'verify:pursues', 'so the handler has a pause to describe')`)
   const out = await pursueHandler({
     db,
@@ -1142,7 +1142,7 @@ try {
   spokenBody = out.body
 } finally {
   await db.execute(`
-    select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+    select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'act_with_review', ${lit(projectId)}::uuid,
       'verify:pursues', 'restored')`)
 }
 await settle(spokenJobId)
@@ -1220,7 +1220,7 @@ let watched: Record<string, unknown> = {}
 let readUnderObserve: Record<string, unknown> = {}
 try {
   await db.execute(`
-    select app.hq_autonomy_set('observe', ${lit(projectId)}::uuid,
+    select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'observe', ${lit(projectId)}::uuid,
       'verify:pursues', 'the control for the dial')`)
   const onObserve = await runSteps(
     db,
@@ -1237,7 +1237,7 @@ try {
   ) as Record<string, unknown>
 } finally {
   await db.execute(`
-    select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+    select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'act_with_review', ${lit(projectId)}::uuid,
       'verify:pursues', 'restored')`)
 }
 check(
@@ -1647,7 +1647,7 @@ const noRouteJobId = String(noRouteJob.id)
 let noRouteOut = { body: '', facts: {} as Record<string, unknown> }
 try {
   await db.execute(`
-    select app.hq_autonomy_set('observe', ${lit(projectId)}::uuid,
+    select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'observe', ${lit(projectId)}::uuid,
       'verify:pursues', 'a refusal must not be re-planned around')`)
   const out = await pursueHandler({
     db,
@@ -1666,7 +1666,7 @@ try {
   noRouteOut = { body: out.body, facts: (out.facts ?? {}) as Record<string, unknown> }
 } finally {
   await db.execute(`
-    select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+    select app.hq_autonomy_set(coalesce((select zz_o.office_id from public.projects zz_o where zz_o.project_id = ${lit(projectId)}::uuid), app.owner_office('grant')), 'act_with_review', ${lit(projectId)}::uuid,
       'verify:pursues', 'restored')`)
 }
 await settle(noRouteJobId)

@@ -347,10 +347,10 @@ check(
 
 // ---- 6. review findings: the most permissive dial does not make an unprompted channel, nothing broad is standing,
 //         and a stale reason lapses --------------------------------------------------------------------------------
-await one(`select app.hq_autonomy_set('act', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'act', null, 'grant') as r`)
 const U = await mk('unprompted-act', 'sql')
 const atAct = await handler().handle(await sweepJob(U), db)
-await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'suggest', null, 'grant') as r`)
 check(
   'dial at "Act", nobody asked: still no channel, and a question is raised (a channel cannot be deleted)',
   (await channelsFor(U)) === 0 &&
@@ -359,12 +359,16 @@ check(
   atAct.body.slice(0, 90),
 )
 const broad = json(
-  (await one(`select app.grant_standing('slack.channel', null, 'anywhere', 'grant') as r`)).r,
+  (
+    await one(
+      `select app.grant_standing(app.test_office(), 'slack.channel', null, 'anywhere', 'grant') as r`,
+    )
+  ).r,
 )
 const broadProject = json(
   (
     await one(
-      `select app.grant_standing('slack.channel', ${lit(U)}::uuid, 'anywhere', 'grant') as r`,
+      `select app.grant_standing(app.test_office(), 'slack.channel', ${lit(U)}::uuid, 'anywhere', 'grant') as r`,
     )
   ).r,
 )

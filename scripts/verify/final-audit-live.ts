@@ -655,7 +655,7 @@ try {
         String(
           (
             await one(
-              `select app.hq_answer_blocker(${lit(b)}::uuid, 'Yes', 'verify-operator')::text as r`,
+              `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, 'Yes', 'verify-operator')::text as r`,
             )
           ).r,
         ),
@@ -703,7 +703,7 @@ try {
       'ask',
     )
     await one(
-      `select app.hq_answer_blocker(${lit(q)}::uuid, 'No, leave it', 'verify-operator')::text as r`,
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q)}::uuid), app.test_office()), ${lit(q)}::uuid, 'No, leave it', 'verify-operator')::text as r`,
     )
     const no = await decide(ja, fp)
     check(

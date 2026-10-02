@@ -210,6 +210,7 @@ export async function remember(
     if (withdrawing !== null && inForce !== undefined) {
       const { rows } = await db.execute(`
         select app.retract_lesson(
+          p_office => app.job_office(${uuid(jobId)}),
           p_lesson_id => ${lit(inForce.id)}::uuid,
           /*
             NAMED, because the two text arguments were the wrong way round and
@@ -291,6 +292,7 @@ export async function remember(
     if (withdrawing !== null && widerInForce !== undefined) {
       const { rows } = await db.execute(`
         select app.retract_lesson(
+          p_office => app.job_office(${uuid(jobId)}),
           p_lesson_id => ${lit(widerInForce.id)}::uuid,
           p_why => 'Withdrawn everywhere: ' || ${lit(teaching.body.slice(0, 200))},
           p_by => ${lit(by)}) as r`)

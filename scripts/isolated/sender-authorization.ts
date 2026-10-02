@@ -68,7 +68,9 @@ const unchanged = (
   b: Awaited<ReturnType<typeof snapshot>>,
 ) => JSON.stringify(a) === JSON.stringify(b)
 const pagerChat = async () =>
-  String((await one(`select app.telegram_chat_for('grant', ${lit(BOT)}) as c`)).c)
+  String(
+    (await one(`select app.telegram_chat_for(app.test_office(), 'grant', ${lit(BOT)}) as c`)).c,
+  )
 
 // ---- positive control: Grant --------------------------------------------------
 const b0 = await snapshot()

@@ -212,9 +212,13 @@ for (const [a, want] of [
   const j = await make([t])
   await step(j)
   const b = await blocker(j)
-  await db.execute(`select app.hq_answer_blocker('${b}'::uuid, '${a}', 'grant')`)
+  await db.execute(
+    `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${b}'::uuid), app.test_office()), '${b}'::uuid, '${a}', 'grant')`,
+  )
   const second = await db
-    .execute(`select app.hq_answer_blocker('${b}'::uuid, '${a}', 'grant')::text as r`)
+    .execute(
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${b}'::uuid), app.test_office()), '${b}'::uuid, '${a}', 'grant')::text as r`,
+    )
     .then((r) => String((r.rows[0] as { r?: string }).r))
     .catch((e: unknown) => `refused: ${String((e as Error).message).slice(0, 60)}`)
   await step(j)

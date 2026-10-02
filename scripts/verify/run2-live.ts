@@ -43,7 +43,7 @@ const withdrawAsPerson = async (id: string, by: string) =>
   json(
     (
       await one(
-        `select app.withdraw_refusal(${lit(id)}::uuid, ${lit(by)})::text as r
+        `select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, ${lit(by)})::text as r
            from (select set_config('request.jwt.claims', '{"role":"service_role"}', true)) c`,
       )
     ).r,
@@ -431,7 +431,11 @@ await answer(qn.id, 'No, leave it')
   const anon = await gateway(null, 'withdraw_refusal', { p_blocker_id: qn.id })
   check('unauthenticated: cannot reopen the No', anon.status === 401, `http ${String(anon.status)}`)
   const sql = json(
-    (await one(`select app.withdraw_refusal(${lit(qn.id)}::uuid, 'grant')::text as r`)).r,
+    (
+      await one(
+        `select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(qn.id)}::uuid), app.test_office()), ${lit(qn.id)}::uuid, 'grant')::text as r`,
+      )
+    ).r,
   )
   check(
     'plain SQL (what a handler or a synthetic job can do) cannot erase it, even naming Grant',

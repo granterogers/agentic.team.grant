@@ -248,7 +248,7 @@ as $f$ select app.hq_store_google_refresh(p_office, p_refresh_token, p_scopes) $
 revoke all on function public.hq_store_google_refresh(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.hq_store_google_refresh(uuid, text, text) to service_role;
 
-create function app.google_revoke_begin(p_office uuid)
+create or replace function app.google_revoke_begin(p_office uuid)
  returns jsonb
  language plpgsql
  security definer
@@ -299,14 +299,8 @@ end;
 $f$;
 revoke all on function app.google_revoke_begin(uuid) from public, anon, authenticated, service_role;
 
--- The caller that has not moved yet (hq_forget_google, cluster d-governance) keeps working and keeps meaning what it
--- always meant: the deployment's own Google. It can no longer reach another office's.
-create or replace function app.google_revoke_begin()
- returns jsonb
- language sql
- security definer
- set search_path to 'public', 'pg_catalog'
-as $f$ select app.google_revoke_begin(app.google_home_office()) $f$;
+-- (The zero-argument form this migration once kept for hq_forget_google is gone: the governance cluster moved that caller
+-- to the office-first form and dropped the old signature in 0742.)
 
 -- app.internal_root_ok recognises the jobs the database itself creates. The Google revoke job was recognised by the pair
 -- (grant, google.revoke), which only the deployment's own office could ever produce; it is now also (hq, google.revoke),

@@ -380,7 +380,7 @@ section = 'a person can see what every trigger is doing'
     ${SETUP({ cooldown_seconds: '3600' })}
     select app.fire_triggers_for((${SIGNAL('doc-h1')} ->> 'signal')::uuid);
     select app.fire_triggers_for((${SIGNAL('doc-h2')} ->> 'signal')::uuid);
-    select x as health from jsonb_array_elements(app.trigger_health()) x
+    select x as health from jsonb_array_elements(app.trigger_health(app.owner_office('grant'))) x
      where x ->> 'name' = ${lit(`fixture-trigger-${run}`)};
     rollback;`)
 

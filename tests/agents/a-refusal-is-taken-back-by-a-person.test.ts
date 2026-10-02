@@ -21,7 +21,7 @@ describe('taking a No back is a person-only door', () => {
   it('the gateway exposes it with the verified principal injected, never the page-supplied one', () => {
     const gw = readFileSync('supabase/functions/hq-api/index.ts', 'utf8')
     expect(gw).toMatch(
-      /withdraw_refusal: \{\s*fn: 'hq_withdraw_refusal',\s*required: \['p_blocker_id'\],\s*by: 'p_by'/,
+      /withdraw_refusal: \{\s*fn: 'hq_withdraw_refusal',\s*(?:office: true,\s*)?required: \['p_blocker_id'\],\s*by: 'p_by'/,
     )
   })
   it('the page presses it and names the action', () => {

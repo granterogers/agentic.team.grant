@@ -129,7 +129,7 @@ for (const [level, want] of Object.entries(EXPECT)) {
   const p = await project('standing')
   await setDial(p, 'suggest')
   await db.execute(
-    `select app.grant_standing('notebook.write', ${lit(p)}::uuid, 'characterisation', 'grant', null)`,
+    `select app.grant_standing(app.test_office(), 'notebook.write', ${lit(p)}::uuid, 'characterisation', 'grant', null)`,
   )
   const up = await mayAct(db as never, { projectId: p, tool: 'notebook.write' })
   check(

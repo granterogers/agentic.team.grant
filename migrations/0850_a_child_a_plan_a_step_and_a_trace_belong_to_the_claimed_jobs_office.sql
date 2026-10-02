@@ -450,9 +450,9 @@ begin
       ('app.fan_in_over(uuid,uuid,text,jsonb,text,timestamp with time zone,uuid,text,bigint)'::text,
        'app.enqueue_child(p_parent, p_synthesis_kind,',
        'app.enqueue_child(p_office, p_parent, p_synthesis_kind,'),
-      ('app.hq_answer_blocker(uuid,text,text)',
+      ('app.hq_answer_blocker(uuid,uuid,text,text)',
        'app.enqueue_child(b.job_id, b.on_answer',
-       'app.enqueue_child(app.job_office(b.job_id), b.job_id, b.on_answer')
+       'app.enqueue_child(p_office, b.job_id, b.on_answer')
     ) as x(fn, anchor, repl)
   loop
     v := pg_get_functiondef(r.fn::regprocedure);

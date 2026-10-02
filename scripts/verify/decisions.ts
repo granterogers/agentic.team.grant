@@ -215,10 +215,10 @@ console.log('\nchanging its mind, without losing what it thought before')
   // be read in order, so the index refuses it.
   const said = await refusedBy(`
     begin;
-    select app.record_decision_made('a', 'b', array[]::text[], 'c', ${lit(WHO)});
-    select app.record_decision_made('d', 'e', array[]::text[], 'f', ${lit(WHO)}, null, null,
+    select app.record_decision_made(app.test_office(), 'a', 'b', array[]::text[], 'c', ${lit(WHO)});
+    select app.record_decision_made(app.test_office(), 'd', 'e', array[]::text[], 'f', ${lit(WHO)}, null, null,
       (select decision_id from public.decisions where question = 'a' and decided_by = ${lit(WHO)}));
-    select app.record_decision_made('g', 'h', array[]::text[], 'i', ${lit(WHO)}, null, null,
+    select app.record_decision_made(app.test_office(), 'g', 'h', array[]::text[], 'i', ${lit(WHO)}, null, null,
       (select decision_id from public.decisions where question = 'a' and decided_by = ${lit(WHO)}));
     rollback;
   `)
@@ -241,7 +241,7 @@ for (const [what, sql] of [
 ] as const) {
   const said = await refusedBy(`
     begin;
-    select app.record_decision_made('a', 'b', array[]::text[], 'c', ${lit(WHO)});
+    select app.record_decision_made(app.test_office(), 'a', 'b', array[]::text[], 'c', ${lit(WHO)});
     ${sql};
     rollback;
   `)
@@ -274,7 +274,8 @@ console.log('\nanswering a question and settling a proposal both write one down'
             'Nothing moves until you answer.',
             array['Notion', 'Google Drive', 'Neither, leave it'],
             'chief-of-staff', true);
-    select app.hq_answer_blocker(
+    select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = (select blocker_id from public.blockers
+        where requested_action = ${lit(`Where do the ${run} pages live?`)})), app.test_office()), 
       (select blocker_id from public.blockers
         where requested_action = ${lit(`Where do the ${run} pages live?`)}), 'Notion', 'grant');
     select chose, array_to_string(ruled_out, ' | ') as ruled_out, decided_by
@@ -302,7 +303,7 @@ console.log('\nanswering a question and settling a proposal both write one down'
     values ('growth-director', 'missing_tool', ${lit(`Reading a page on the open web (${run})`)},
             'web.search', 'Nine research jobs ended with a citation I could not read.',
             'Free tier, 100 lookups a day', ${lit(`fixture-need-${run}`)}, 'open');
-    select app.decide_proposal(
+    select app.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = (select proposal_id from public.proposals where needed = ${lit(`fixture-need-${run}`)})), app.test_office()), 
       (select proposal_id from public.proposals where needed = ${lit(`fixture-need-${run}`)}),
       'declined', 'Not until there is a free tier we can live inside.', ${lit(REAL)});
     select chose, array_to_string(ruled_out, ' | ') as ruled_out, because
@@ -337,10 +338,10 @@ console.log('\nanswering a question and settling a proposal both write one down'
       (staff_slug, kind, title, remedy, argument, cost_note, needed, state)
     values ('growth-director', 'missing_tool', ${lit(`Reopened (${run})`)}, 'web.search',
             'x', 'none', ${lit(`fixture-reopen-${run}`)}, 'open');
-    select app.decide_proposal(
+    select app.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = (select proposal_id from public.proposals where needed = ${lit(`fixture-reopen-${run}`)})), app.test_office()), 
       (select proposal_id from public.proposals where needed = ${lit(`fixture-reopen-${run}`)}),
       'declined', 'Not now.', ${lit(REAL)});
-    select app.decide_proposal(
+    select app.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = (select proposal_id from public.proposals where needed = ${lit(`fixture-reopen-${run}`)})), app.test_office()), 
       (select proposal_id from public.proposals where needed = ${lit(`fixture-reopen-${run}`)}),
       'open', null, ${lit(REAL)});
     -- ONE, from the decline. The reopen adds nothing.
@@ -372,7 +373,7 @@ console.log('\nand harness traffic never reaches a prompt')
         where decided_by = ${lit(WHO)} and is_fixture) as flagged,
       jsonb_array_length(app.decisions_about(app.sole_person_office(),
         ${lit(`should the ${run} fixture reach a prompt`)})) as reachable,
-      jsonb_array_length(app.decisions_so_far(200)) as on_the_page_before;
+      jsonb_array_length(app.decisions_so_far(app.owner_office('grant'), 200)) as on_the_page_before;
     rollback;
   `)
   check(

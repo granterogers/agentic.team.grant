@@ -212,7 +212,7 @@ check(
 const grantDelete = json(
   (
     await one(
-      `select app.grant_standing('task.board.delete', null, 'proof', 'grant', null, ${lit(`vikunja:${BOARD}#7`)}) as r`,
+      `select app.grant_standing(app.test_office(), 'task.board.delete', null, 'proof', 'grant', null, ${lit(`vikunja:${BOARD}#7`)}) as r`,
     )
   ).r,
 )
@@ -220,7 +220,11 @@ check(
   'and no standing yes for delete can be made, with a scope or without (level 3)',
   grantDelete.ok === false &&
     json(
-      (await one(`select app.grant_standing('task.board.delete', null, 'proof', 'grant') as r`)).r,
+      (
+        await one(
+          `select app.grant_standing(app.test_office(), 'task.board.delete', null, 'proof', 'grant') as r`,
+        )
+      ).r,
     ).ok === false,
   String(grantDelete.error).slice(0, 80),
 )

@@ -244,7 +244,9 @@ check(
   )
   const rec = await one(`select deliverable, undeliverable_reason as why from public.telegram_chats
     where chat_id = ${lit(chatA)} and bot_id = ${lit(BOT)}`)
-  const pager = await one(`select app.telegram_chat_for('grant', ${lit(BOT)}) as c`)
+  const pager = await one(
+    `select app.telegram_chat_for(app.test_office(), 'grant', ${lit(BOT)}) as c`,
+  )
   check(
     "a declared chat the webhook records is never where Grant's messages go",
     rec.deliverable === false && pager.c === CHAT,

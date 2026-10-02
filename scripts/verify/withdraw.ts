@@ -91,7 +91,7 @@ const sweep = async (): Promise<void> => {
                        where learned_by = ${lit(BY)}`)
   ).rows as { id: string }[]) {
     await db
-      .execute(`select app.retract_lesson(${lit(row.id)}::uuid,
+      .execute(`select app.retract_lesson(coalesce((select zz_o.office_id from public.lessons zz_o where zz_o.lesson_id = ${lit(row.id)}::uuid), app.test_office()), ${lit(row.id)}::uuid,
                   'verify:withdraw teardown -- nothing this run stated outlives it.',
                   ${lit(BY)}) as r`)
       .catch(() => undefined)
@@ -180,7 +180,7 @@ check(
 /*
   AND THE RETRACTION IT WROTE SAYS WHO DID IT AND WHY, IN THAT ORDER.
 
-  `app.retract_lesson(p_lesson_id, p_why, p_by)` writes `body = p_why` and
+  `app.retract_lesson(coalesce((select zz_o.office_id from public.lessons zz_o where zz_o.lesson_id = p_lesson_id), app.test_office()), p_lesson_id, p_why, p_by)` writes `body = p_why` and
   `learned_by = p_by`. `remember()` passed the author second, so the AUTHOR
   went into the reason column and the REASON into the author column, on every
   retraction the office has ever written -- and `lessons.is_fixture` is

@@ -55,7 +55,7 @@ $function$;
 
 revoke all on function app.recurring_failures(uuid, integer, integer) from public, anon, authenticated, service_role;
 
-create function app.impediments_tally(p_office uuid, p_days integer DEFAULT 30, p_min integer DEFAULT 2, p_include_fixtures boolean DEFAULT false)
+create or replace function app.impediments_tally(p_office uuid, p_days integer DEFAULT 30, p_min integer DEFAULT 2, p_include_fixtures boolean DEFAULT false)
  RETURNS TABLE(kind impediment_kind, needed text, staff_slug text, times integer, first_seen timestamp with time zone, last_seen timestamp with time zone, projects integer, for_instance text)
  LANGUAGE sql
  STABLE SECURITY DEFINER

@@ -96,7 +96,7 @@ const answer = async (b: string, by = 'grant') =>
     String(
       (
         await one(
-          `select app.hq_answer_blocker(${lit(b)}::uuid, 'Yes, do it', ${lit(by)})::text as r`,
+          `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, 'Yes, do it', ${lit(by)})::text as r`,
         )
       ).r,
     ),

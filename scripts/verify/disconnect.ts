@@ -100,7 +100,7 @@ for (const [service, must] of [
 ] as const) {
   const r = await one(`
     begin;
-    create temp table _r as select (app.hq_disconnect('${service}'))::text as d;
+    create temp table _r as select (app.hq_disconnect(app.owner_office('grant'), '${service}'))::text as d;
     select (select d from _r) as d;
     rollback;
   `)
@@ -122,7 +122,7 @@ for (const [service, must] of [
 ] as const) {
   const r = await one(`
     begin;
-    create temp table _d as select (app.hq_disconnect('${service}'))::text as d;
+    create temp table _d as select (app.hq_disconnect(app.owner_office('grant'), '${service}'))::text as d;
     select (select d from _d) as d;
     rollback;
   `)
@@ -157,9 +157,9 @@ for (const [service, must] of [
 */
 const after = await one(`
   begin;
-  create temp table _said as select app.hq_disconnect('notion') as v;
+  create temp table _said as select app.hq_disconnect(app.owner_office('grant'), 'notion') as v;
   select (select v::text from _said) as said,
-         (select x::text from jsonb_array_elements(app.hq_studio_settings() -> 'connections') x
+         (select x::text from jsonb_array_elements(app.hq_studio_settings(app.owner_office('grant')) -> 'connections') x
            where x ->> 'key' = 'notion') as row,
          (select count(*)::int from vault.secrets where name = 'notion.integration_token') as left_behind;
   rollback;
@@ -199,7 +199,7 @@ check(
 
 const nb = await one(`
   begin;
-  create temp table _nb as select app.hq_disconnect('notebooklm') as v;
+  create temp table _nb as select app.hq_disconnect(app.owner_office('grant'), 'notebooklm') as v;
   select (select v::text from _nb) as said,
          (select value::text from public.system_config where key = 'notebook.enabled') as enabled;
   rollback;
@@ -212,7 +212,7 @@ check(
 
 const gg = await one(`
   begin;
-  create temp table _gg as select app.hq_disconnect('calendar') as v;
+  create temp table _gg as select app.hq_disconnect(app.owner_office('grant'), 'calendar') as v;
   select (select v::text from _gg) as said,
          (select value::text from public.system_config where key = 'calendar.enabled') as enabled,
          (select count(*)::int from vault.secrets where name = 'google.refresh_token') as left_behind;
@@ -260,7 +260,7 @@ const revoking = await one(`
     end if;
   end
   $do$;
-  create temp table _rv as select app.hq_forget_google() as v;
+  create temp table _rv as select app.hq_forget_google(app.owner_office('grant')) as v;
   select (select v::text from _rv) as said,
          (select count(*)::int from vault.secrets
            where name = 'google.refresh_token') as still_ours,
@@ -366,8 +366,8 @@ for (const [what, ok] of [
 */
 const twice = await one(`
   begin;
-  create temp table _once as select app.hq_disconnect('notion') as v;
-  select (app.hq_disconnect('notion'))::text as again;
+  create temp table _once as select app.hq_disconnect(app.owner_office('grant'), 'notion') as v;
+  select (app.hq_disconnect(app.owner_office('grant'), 'notion'))::text as again;
   rollback;
 `)
 check(

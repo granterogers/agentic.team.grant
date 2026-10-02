@@ -570,14 +570,20 @@ export async function cases(c: Ctx): Promise<void> {
     (await sealed('app.approve_tool(uuid,uuid,text,jsonb)')) &&
       (await sealed('app.decline_tool(uuid,uuid,text,text)')) &&
       (await sealed('app.revoke_tool(uuid,text,text,text)')) &&
-      (await sealed('app.withdraw_tool_request(uuid,uuid,text)')) &&
-      // the old signatures stay for the governance gateway wrappers, but no browser role can call them
-      (await sealed('app.approve_tool(uuid,text,jsonb)')) &&
-      (await sealed('app.decline_tool(uuid,text,text)')) &&
-      (await sealed('app.revoke_tool(text,text,text)')) &&
-      (await sealed('app.withdraw_tool_request(uuid,text)')),
-    'the tool decisions, old signatures included: no browser role can execute them',
+      (await sealed('app.withdraw_tool_request(uuid,uuid,text)')),
+    'the four tool decisions: no browser role can execute them',
     '',
+  )
+  const oldTools = await one(
+    `select to_regprocedure('app.approve_tool(uuid,text,jsonb)') is null as a,
+            to_regprocedure('app.decline_tool(uuid,text,text)') is null as d,
+            to_regprocedure('app.revoke_tool(text,text,text)') is null as r,
+            to_regprocedure('app.withdraw_tool_request(uuid,text)') is null as w`,
+  )
+  c.check(
+    oldTools.a === true && oldTools.d === true && oldTools.r === true && oldTools.w === true,
+    'the one-argument-fewer decisions about reach no longer exist (a second overload would be a legacy door)',
+    c.json(oldTools),
   )
 
   // ======================================================================================================================

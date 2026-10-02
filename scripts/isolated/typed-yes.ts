@@ -62,7 +62,7 @@ const forNext = async (command: string) =>
 const settleAll = () =>
   db.execute(`do $x$ declare r record; begin
     for r in select blocker_id from public.blockers where state = 'open' loop
-      perform app.hq_answer_blocker(r.blocker_id, 'No', 'grant');
+      perform app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = r.blocker_id), app.test_office()), r.blocker_id, 'No', 'grant');
     end loop; end $x$`)
 // ---- shown: delivered to his chat -------------------------------------------------------------------------------
 {

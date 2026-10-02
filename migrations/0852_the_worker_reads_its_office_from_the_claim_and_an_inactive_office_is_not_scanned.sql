@@ -392,8 +392,7 @@ begin
   end loop;
 end
 $m$;
-revoke all on function app.learn(public.lesson_scope, text, text, uuid, text, text, uuid, numeric, uuid)
-  from public, anon, authenticated, service_role;
+-- (the old app.learn is dropped outright by 0841, so there is nothing left to revoke from)
 
 -- the public wrappers of the scans: service_role only
 revoke all on function public.dispatch_due_responsibilities() from public, anon, authenticated;

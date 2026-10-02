@@ -1329,10 +1329,12 @@ export async function cases(c: Ctx): Promise<void> {
     "and Grant's finish marks Grant's health row, says what to do when Google did not confirm, and deletes the parked copy",
     '',
   )
-  const legacy = (await W(`select app.google_revoke_begin()`)) as { parked?: boolean }
+  const legacy = await c.db.execute(
+    `select to_regprocedure('app.google_revoke_begin()') is null as gone`,
+  )
   c.check(
-    legacy.parked === false,
-    "the zero-argument google_revoke_begin (kept for hq_forget_google) can only ever act for the deployment's own office: with its token gone it parks nothing",
+    (legacy.rows[0] as { gone?: boolean }).gone === true,
+    'the zero-argument google_revoke_begin is gone: hq_forget_google names the office, so no door acts for "the deployment\'s Google"',
     '',
   )
 
