@@ -2149,6 +2149,12 @@ v925 is deployed but unproven; the voice function and the new page are not deplo
 `npx tsx scripts/p3/worker-heartbeat.ts resume` once `select count(*) from public.jobs` returns in under a second.
 Details and the exact resume sequence: `docs/multi-user/P4-SECOND-USER-ACCEPTANCE.md` §21.
 
+*Update, later the same day:* the platform recovered at 16:06 UTC; worker v925 was proven, the page
+(`dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z`) and voice (v623/v652) were deployed, and #405 passed 38/38 on production. It degraded
+again from about 16:50 under worker plus test load, so the heartbeat is PAUSED again. Still owed: the #404 second-person
+prompt inspection, the production send-reload-compare Chat proof, and the production stale-request run. #407 (Google duties
+`no_office`) is a separate pre-existing defect.
+
 ### What a fresh session should read
 
 `CLAUDE.md`, then `docs/AUTONOMOUS-RUN.md`, whose progress table has a row per

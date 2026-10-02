@@ -400,3 +400,36 @@ Verdict at this point: BLOCKED (platform), not PASS. #404 and #405 stay open.
 **Second check, 15:12 UTC.** Not recovered: a count over `jobs` still exceeded the 20 s statement limit, and the project
 health API now reports the database itself unhealthy as well (auth, rest, realtime, storage already were; only the pooler
 was healthy). Heartbeat still paused. No application change was made. No further automatic checks are scheduled.
+
+**Recovery and the second attempt, 2 October, 16:06-17:35 UTC.** At 16:06 the platform had recovered (a `jobs` count in
+1 s; db, auth, rest healthy). Recovery time from the 12:23 onset: about 3 h 40 min, unprompted: the heartbeat had been
+paused for about 1 h 30 min of that, so pausing may have helped and is not proven to have. Done while it was up:
+
+* **Worker v925 proven**: an authenticated kick returned 200, `handled 5`, 9 duties, 52 s; jobs processed, none duplicated.
+* **Page deployed** (`dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z`; rollback `dpl_4h72j3jmK4DQh18JXmiJPeSqVyhZ`), with
+  `hq-page-delta.ts` now accepting new files only when named (`--allow-new=`). **Voice deployed**: voice v623, voice-token
+  v652, probes 401/200/200.
+* **#405 live (production page)**: `scripts/p5/signout.ts`, stages A-D and the phone, **38/38**, planted canaries seen
+  before sign-out and gone after in localStorage, sessionStorage, IndexedDB (`bc.notes` included) and Cache storage; device
+  preferences kept; second person never sees Grant's data and the reverse. A defect was found by the stale-request stage and
+  fixed first: the page's own open IndexedDB connection blocked deletion of `bc.notes` until a reload, so sign-out now closes
+  it (`notestore.release`). The stale-request fence passed locally 6/6 with its control (a late Grant response IS drawn
+  without sign-out and is NOT drawn with it). Against production it was attempted once and did not run: the sign-in step
+  timed out while the database was slow.
+* **P4 Chat fix live**: a fresh load of the second person's Chat route showed 27 persisted earlier answers before anything was
+  sent. The send-and-compare half did not complete (below).
+* **Not completed**: the second-person prompt/context inspection for #404 and the send-reload-compare half of the Chat smoke.
+
+**Second degradation.** From about 16:50 (about 45 minutes after the heartbeat was resumed and heavy test runs began) the
+platform degraded again: health API db/auth/rest flapping unhealthy, queries 10-50 s for `select 1`, worker passes again
+timing out at 120 s from 17:05, and the second person's own test job died with its worker (`recovery: worker edge-... died
+holding this in running`, attempt 2) and stayed `retrying` for 10+ min. The recovery path behaved as designed. This pattern
+(healthy while idle, degraded under worker plus harness load, an instance too small for both) is a hypothesis the timing fits;
+it is not proven. Mitigation applied: heartbeat PAUSED again. Resume with `npx tsx scripts/p3/worker-heartbeat.ts resume`
+when the health API is green, and do not run harness suites while it is.
+
+**Found, not fixed (#407)**: `google.read_mail` / `google.read_calendar` fail with `no_office` since 06:57-07:39 UTC, before
+this closure, because they fall back to the sole-person office and there are now two.
+
+**Verdict**: BLOCKED, with real progress: #405 is proven live; #404 is not (no second-person prompt inspection); #404 and
+#405 stay open until the platform allows the remaining runs.
