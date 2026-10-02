@@ -1,3 +1,18 @@
+> ## 2026-10-02 - MULTI-USER P4: SECOND-USER ACCEPTANCE (branch `claude/multi-user-p4`; HARD STOP: nobody invited)
+>
+> A controlled second PERSON now exists in production (office `205669cc-…`, login on the reserved `.invalid` domain, password
+> in the Vault as `p4.second_person.password`): provisioned by `app.provision_person_office` (0863), retired by
+> `app.retire_person_office`, both operator-only (`npm run office:second-person`). Real session, real gateway, real worker,
+> real model path: first login empty; same-name objects isolated; foreign id = nonexistent id for 11 reads and 15 writes;
+> Claire and her children stay in the office (49 model calls, 0 deliveries); retrieval canaries both directions with positive
+> controls; two browsers, both switch directions, four storage kinds; voice, MCP; 47 attack checks; five sabotages red then
+> green; Grant's own account 42/42 afterwards; harness contamination in his office unchanged (1827/3251/10/0/1014).
+> **One defect found and fixed**: `google`, `build`, `ci_lately`, `ci_budget`, `bots` took no office so no office check covered
+> them; they are now the operator's (`hq-api` v852). **Open, filed, Grant's to decide before a real person tries it**: the
+> agents address the second person as "Grant"; there is no sign-out control; Telegram, Slack, Google and MCP are not
+> configured for a second person. Canonical: `docs/multi-user/P4-SECOND-USER-ACCEPTANCE.md`. `app.sole_person_office()` is
+> now NULL by design; operator tools name `app.operator_office()`.
+>
 > ## 2026-10-01 - MULTI-USER P2: THE OWNERSHIP FOUNDATION (branch `claude/multi-user-p2`; P3 NOT started)
 >
 > Migrations **0653-0666** applied (13 waves, each verified before the next). Every private row now has an office: a

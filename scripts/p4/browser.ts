@@ -383,6 +383,72 @@ for (const variant of ['without a sign-out', 'with the storage cleared']) {
   await ctx.close()
 }
 
+// ---- 6. Team Chat and Claire, through the real composer: type, press Send, read the answer on the page
+{
+  const { ctx, page } = await open()
+  await adopt(page, second)
+  await page.goto(`${BASE}/p/personal/chat`, { waitUntil: 'domcontentloaded', timeout: 45000 })
+  await page.waitForSelector('#bc-say', { timeout: 40000 })
+  const said = `p4 ui chat ${Date.now().toString(36)}: what is on my list, and what has Grant been working on?`
+  await page.fill('#bc-say', said)
+  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  // The ANSWER comes from the canonical row, never from the page's own idea of one: an empty thread draws an invented
+  // example conversation, and a loose pattern over page text read it as Claire (the harness was wrong, not Claire).
+  const quoted = said.replace(/'/g, "''")
+  const deadline = Date.now() + 6 * 60_000
+  let rec: Record<string, unknown>[] = []
+  let answer = ''
+  while (Date.now() < deadline && answer === '') {
+    await page.waitForTimeout(6000)
+    rec = await rows(
+      `select c.job_id::text id, c.office_id::text off, c.origin_channel ch, c.project_id::text proj from public.inbound_commands c where c.instruction = '${quoted}'`,
+    )
+    if (rec.length > 0) {
+      const out = await rows(
+        `with recursive t as (select * from public.jobs where job_id = '${String(rec[0]?.id)}' union select c.* from public.jobs c join t on c.parent_job_id = t.job_id)
+         select o.body b, t.state from t join public.outputs o using (job_id) where t.state = 'complete' order by o.created_at desc limit 1`,
+      ).catch(() => [])
+      answer = String(out[0]?.b ?? '')
+    }
+  }
+  check(
+    "6. the typed message was recorded in the second person's office, from the page's own composer",
+    rec.length >= 1 &&
+      rec.every((r) => r.off === '205669cc-c270-4f11-ad63-b7ac4f994340' && r.proj !== null),
+    JSON.stringify(rec),
+  )
+  check(
+    '6. an answer was produced for it (canonical row)',
+    answer.length > 20,
+    `${answer.length} chars`,
+  )
+  // and the PAGE shows that answer once the thread is read back
+  await page.goto(`${BASE}/p/personal/chat`, { waitUntil: 'domcontentloaded', timeout: 45000 })
+  // a list in the answer is drawn as list items, so the numerals are not in the page text: look for the first words only
+  const lead = answer.replace(/\s+/g, ' ').split(/\d+\./)[0]?.trim().slice(0, 24) as string
+  await page
+    .waitForFunction(
+      `(document.body.innerText || '').replace(/\\s+/g, ' ').includes(${JSON.stringify(lead)})`,
+      undefined,
+      { timeout: 60000 },
+    )
+    .catch(() => null)
+  const n = await snap(page)
+  console.log(`   Claire's answer (canonical): ${answer.replace(/\s+/g, ' ').slice(0, 200)}`)
+  check(
+    "6. Claire's answer is on the page the second person reads",
+    n.body.includes(lead),
+    `${lead} | page: ${n.body.slice(0, 160)}`,
+  )
+  check(
+    "6. and nothing of Grant's is on that page",
+    grantHits(n).length === 0,
+    JSON.stringify(grantHits(n)),
+  )
+  await page.screenshot({ path: '.out/p4-second-chat.png' }).catch(() => null)
+  await ctx.close()
+}
+
 // ---- DETECTOR CONTROLS (sabotage): stale client state surviving an account switch must make this scan go RED.
 // Each kind of storage gets a planted Grant string while Grant is signed in; after the switch to the second person the
 // scan has to find it. A detector that stays green here cannot be trusted over the product.

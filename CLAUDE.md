@@ -409,7 +409,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **732 applied** (0862 is the latest).
+`npm run migrate` applies plain SQL from `migrations/`. **734 applied** (0864 is the latest).
 
 ## Asking the office about itself
 
@@ -4250,6 +4250,37 @@ Each of these cost real time. They are here so they cost it once.
 - **A stale excuse list that is meant to reach empty needs a control that does not use it.** `check-machine-key`'s pins
   became empty when every reach was converted, and its own "a pinned reach is accepted" control read the real list. The
   controls now carry a pin of their own, because a control with nothing to be wrong about proves nothing.
+
+- **A second real person makes `app.sole_person_office()` NULL, and that is the system working.** Every operator tool and
+  about 27 suites asked it for "Grant" and failed closed the moment the second office existed. They name
+  `app.operator_office()` now. A suite that ASSERTS the sole-person behaviour still uses the old one, deliberately. The
+  inverse is the trap: a suite that counts or picks "the newest real row" without naming an office will pick the second
+  person's, or count both (`run3-live` counted a grant row and picked a blocker across offices).
+- **An office boundary does not cover a page that has no office.** `google`, `build`, `ci_lately`, `ci_budget` and `bots`
+  take no office, so every office check, every composite key and every canary passed over them, and a signed-in second
+  person read the deployment's Google connection (shown as connected, with its OAuth client id) and the operator's
+  development feed. Found by tasting the surface as the second person and listing what answered, not by any gate.
+  `OPERATOR_SECTIONS` now names them and `tests/gateway/operator-only.test.ts` classifies every section that carries no
+  `office: true`, so a new one fails until somebody decides.
+- **A scan over page text can read the page's own sample data as the answer.** An empty chat draws an invented example
+  conversation (*"Nothing is in hand at the moment"*); a loose pattern over page text took it for Claire and passed. Read the
+  ANSWER from the canonical row and then look for it on the page.
+- **A detector blind to an ENCODING is blind to the thing it encodes.** The browser scan read Cache storage keys as stored,
+  `AI%20Learning`, and could not see the name in them; its own planted-state control failed and the detector was fixed, which
+  is what the control is for. And it read IndexedDB by NAME only until the same control asked what was in it.
+- **`goto('/#token')` from `/` is a same-document jump that never runs the page's session adoption.** A magic link opens as a
+  navigation; leave the document first (`about:blank`) or the harness reports "the new person's session is not held" about a
+  page that never saw it.
+- **A positive control that depends on a slow gateway is a coin that lands heads when the gateway is busy.** Three of five
+  browser runs failed *"the new person's own data is shown"* and never failed an isolation assertion; wait for the data to
+  arrive, not for a pause.
+- **Printing an error can print a token.** A navigation failure rendered the whole URL, fragment included, into tool output.
+  The account was a controlled throwaway and its sessions were revoked at once; wrap anything that navigates with a session in
+  a catch that prints a clipped message.
+- **A person office needs three rows that agree and none of them is the login.** `auth.users` is the login;
+  `office_members` and `offices` are what makes it an office. `app.provision_person_office` (0863) writes both and a narrower
+  default grant set; it is operator-only and refuses a duplicate. Retiring is `state = 'disabled'` and the gateway refuses the
+  session within seconds. Offices are never deleted.
 
 ---
 
