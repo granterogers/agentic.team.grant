@@ -196,12 +196,12 @@ await pg.waitForTimeout(500)
 for (const t of [
   'team',
   'behaviour',
-  'governance',
+  'requests',
+  'memory',
   'connections',
   'channels',
   'models',
   'appearance',
-  'setup',
   'help',
 ]) {
   await pg.locator(`[data-setting="${t}"]`).click()

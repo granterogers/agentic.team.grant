@@ -35,43 +35,57 @@
 import { CREW, DESIGN } from './data.js'
 import { MARKS } from './logos/marks.js'
 
-export const TABS = [
-  { id: 'team', name: 'Team' },
-  { id: 'behaviour', name: 'Behaviour' },
-  /*
-    What the office learned, and why it changed (#54).
+/*
+  THE PAGE'S MAP.
 
-    A sibling of Behaviour rather than part of it, which is a deliberate
-    departure from the Issue's suggestion that Behaviour "is the obvious home".
-    Behaviour is a control panel — eight switches, each a single decision — and
-    this is a reading surface with four lists on it. Folding them together
-    makes the switches hard to find and the lists hard to read. It sits
-    immediately after Behaviour, which is what the Issue was actually asking
-    for: governance lives with how-the-office-runs, not with diagnostics.
-  */
-  { id: 'governance', name: 'Governance' },
-  { id: 'connections', name: 'Connections' },
-  { id: 'channels', name: 'Channels' },
-  /*
-    "Usage", not "Models & cost".
+  Nine tabs of one width became four groups that say what kind of thing is inside. The order is the order a person
+  needs them: who works for me, how they reach the world, how it looks for me, and the machinery. `icon` names a
+  drawing in settings-ui.js. `lead` is the one sentence under the page title - written for the person, not for the
+  engineer who built the tab.
 
-    Grant asked for *"a dashboard dedicated to usage across the various API
-    keys, third party services, you know, everything"* — and "Models & cost"
-    names two things when the tab should name one. Models are now one card on
-    it among six.
-  */
-  { id: 'models', name: 'Usage' },
-  { id: 'appearance', name: 'Appearance' },
-  /*
-    The last two of the six sections that lived only on the plain page (#68).
-
-    Setting up is a checklist and belongs beside Connections, which is what it
-    is a checklist ABOUT. Help is last because it is the one you reach for when
-    the others have not answered you.
-  */
-  { id: 'setup', name: 'Setting up' },
-  { id: 'help', name: 'Help' },
+  Two tabs from the old list no longer exist and their ids still resolve (TAB_ALIAS), because a command-bar row, a link
+  in a message or a remembered tab may still name them: Governance became Requests and What it has learned, and Setting
+  up was a second checklist about the services the Services tab already lists.
+*/
+export const TAB_GROUPS = [
+  {
+    name: 'Your team',
+    tabs: [
+      { id: 'team', name: 'Team', icon: 'team', lead: 'The people who work for you. Bring in a specialist for a piece of work and they leave when it is finished.' },
+      { id: 'behaviour', name: 'Autonomy and approvals', icon: 'autonomy', lead: 'How much the team does on its own, and what always waits for you.' },
+      { id: 'requests', name: 'Requests', icon: 'requests', lead: 'Things the team is asking you to decide.' },
+      { id: 'memory', name: 'What it has learned', icon: 'memory', lead: 'The rules and decisions the team now works by. You can take any of them back.' },
+    ],
+  },
+  {
+    name: 'Connections',
+    tabs: [
+      { id: 'connections', name: 'Services', icon: 'services', lead: 'The accounts and tools your team can reach, and whether each one is working.' },
+      { id: 'channels', name: 'Messaging', icon: 'messaging', lead: 'How the team gets in touch with you, and where you can talk to it.' },
+    ],
+  },
+  {
+    name: 'You',
+    tabs: [{ id: 'appearance', name: 'Appearance', icon: 'appearance', lead: 'How Team HQ looks on this device.' }],
+  },
+  {
+    name: 'System',
+    tabs: [
+      { id: 'models', name: 'Usage and health', icon: 'system', lead: 'What the team is using, what it costs, and how well it is running.' },
+      { id: 'help', name: 'Help', icon: 'help', lead: 'Short answers to the things people ask first.' },
+    ],
+  },
 ]
+
+/** Every tab, flat - for the command bar and for anything that looks one up by id. */
+export const TABS = TAB_GROUPS.flatMap((g) => g.tabs)
+
+/** Old ids that still resolve, to the tab that now holds what they held. */
+export const TAB_ALIAS = { governance: 'requests', setup: 'connections' }
+export const tabId = (id) => {
+  const want = TAB_ALIAS[id] ?? id
+  return TABS.some((t) => t.id === want) ? want : 'team'
+}
 
 /** Shaped like `connection_health` joined to `knowledge_connectors`. */
 const FALLBACK_CONNECTIONS = [

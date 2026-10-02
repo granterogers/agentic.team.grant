@@ -30,7 +30,7 @@ describe('taking a No back is a person-only door', () => {
   })
   it('the page says reopening does not approve (Reopen sounds like Allow)', () => {
     const app = readFileSync('web/studio/app.js', 'utf8')
-    expect(app).toMatch(/Reopening does not approve it/)
+    expect(app).toMatch(/(?:Reopening|Letting it ask again) does not approve/)
   })
 })
 

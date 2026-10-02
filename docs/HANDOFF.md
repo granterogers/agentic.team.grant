@@ -1104,6 +1104,18 @@ rather than rediscovery.
 
 ---
 
+## 3 October 2026 - Global Settings redesigned (page only, not deployed)
+
+New information architecture (4 groups, 9 sections), its own design layer (`web/studio/settings-ui.css`, `settings-ui.js`,
+`settings-copy.js`), real Accent colour control, in-page confirm dialogs, shell made `inert` behind the page. Audit and
+reasoning: `docs/ux/global-settings-audit-2026-10-03.md`. Checks: `npx tsx scripts/p5/settings-shots.ts <label>` (captures at
+four widths) and `npx tsx scripts/p5/settings-qa.ts` (sizes, contrast, names, Basecamp, accent persistence, keyboard) - both
+local, neither touches the office. `verify:wired`, `smoke`, lint, typecheck, `npm test`, check:templates/branding/secrets
+green. Still pointing at the old DOM: `verify:studio`, `layouts`, `controls`, `keyboard`, `system`. No policy, RPC or
+authorisation changed. Not deployed; nothing run against production.
+
+---
+
 ## 30 September 2026 - final audit reconciliation
 
 Verdict **AUDIT PARTIAL - 82 findings remain** (`docs/final-audit/FINAL-RECONCILIATION.md`, ADR-0057). Migrations 0627-0632

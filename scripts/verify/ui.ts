@@ -85,12 +85,12 @@ const ROUTES = [
   // Activity was removed as a section by #222; its panel lives on Overview.
   { kind: 'pane', at: 'team', name: 'settings · team' },
   { kind: 'pane', at: 'behaviour', name: 'settings · behaviour' },
-  { kind: 'pane', at: 'governance', name: 'settings · governance' },
+  { kind: 'pane', at: 'requests', name: 'settings · requests' },
+  { kind: 'pane', at: 'memory', name: 'settings · what it has learned' },
   { kind: 'pane', at: 'connections', name: 'settings · connections' },
   { kind: 'pane', at: 'channels', name: 'settings · channels' },
   { kind: 'pane', at: 'models', name: 'settings · usage' },
   { kind: 'pane', at: 'appearance', name: 'settings · appearance' },
-  { kind: 'pane', at: 'setup', name: 'settings · setting up' },
   { kind: 'pane', at: 'help', name: 'settings · help' },
   /*
     THE CALL IS NOT A SCREEN, so it is not a route here.
@@ -403,7 +403,7 @@ const MEASURE = `() => {
         So the same rule verify:controls arrived at in #190: find what is in
         front, and measure that.
       */
-      const order = ['#settings .setbody', '#viewer .docbody', '#viewer', 'main', '.main']
+      const order = ['#settings .stg-main', '#viewer .docbody', '#viewer', 'main', '.main']
       for (const sel of order) {
         const box = document.querySelector(sel)
         if (box === null) continue
