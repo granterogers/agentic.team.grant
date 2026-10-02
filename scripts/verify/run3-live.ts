@@ -252,7 +252,7 @@ try {
     const held = Number(
       (
         await one(
-          `select count(*)::int as n from public.staff_tools where staff_slug = 'chief-of-staff' and tool = 'db.read'`,
+          `select count(*)::int as n from public.staff_tools where staff_slug = 'chief-of-staff' and tool = 'db.read' and office_id = app.operator_office()`,
         )
       ).n,
     )
@@ -267,7 +267,7 @@ try {
       `held ${String(held)}`,
     )
     const q = await one(`select blocker_id::text as id from public.blockers b
-      where b.state = 'open' and not app.harness_job(b.job_id) order by b.created_at desc limit 1`)
+      where b.state = 'open' and b.office_id = app.operator_office() and not app.harness_job(b.job_id) order by b.created_at desc limit 1`)
     if (q?.id) {
       const r = await gateway(test.access, 'answer_blocker', {
         p_blocker_id: String(q.id),
@@ -278,7 +278,9 @@ try {
       )
       check(
         "the test member cannot answer one of Grant's REAL open questions",
-        still.s === 'open' && /test principal/i.test(JSON.stringify(r.body)),
+        // Either refusal is the property holding: the test principal rule, or (the stronger one, since the question is in
+        // ANOTHER office) the same sentence a question that does not exist gets. What must never happen is a resolution.
+        still.s === 'open' && /test principal|nothing here to answer/i.test(JSON.stringify(r.body)),
         `${String(still.s)} ${JSON.stringify(r.body).slice(0, 80)}`,
       )
     } else {

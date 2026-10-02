@@ -1757,6 +1757,20 @@ const operators = new Map<string, number>()
 const OPERATOR_TTL_MS = 60_000
 
 /*
+  The read-only pages that describe the DEPLOYMENT rather than an office. None carries `office: true` because there is
+  nothing to scope them to, so the office boundary never covered them (found by the P4 second-person acceptance).
+  tests/gateway/operator-only.test.ts refuses a section whose function takes no office and which is in neither this set
+  nor the reasoned list beside it.
+*/
+const OPERATOR_SECTIONS: ReadonlySet<string> = new Set([
+  'google',
+  'build',
+  'ci_lately',
+  'ci_budget',
+  'bots',
+])
+
+/*
   Asked of the database by owner key. Fails CLOSED: a lookup that does not answer is a refusal, and only a
   positive answer is remembered (for a minute) - a revoked operator must not stay one because a cache said so.
 */
@@ -2566,6 +2580,32 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const name = url.searchParams.get('section') ?? 'overview'
+  /*
+    THE DEPLOYMENT'S OWN PAGES (P4, second-user acceptance).
+
+    A second real person signed in and read these: `google` (the deployment's single Google connection, shown as
+    connected, with its OAuth client id), `build` (the operator's development feed, with screenshots), `ci_lately` and
+    `ci_budget` (the CI ledger, naming the suites that ran) and `bots` (the deployment's bot handle). None is an office's
+    data - they carry no `office: true` because there is no office to scope them to - which is exactly why an office
+    boundary never covered them. They describe the deployment, so they are the operator's, like Drive (#400) and the
+    deployment-wide actions (E14). The machine key may still read them (it is the deployment's own credential and the
+    suites and the deploy probes use it); a person who is not an operator, and a harness member, may not.
+  */
+  if (OPERATOR_SECTIONS.has(name)) {
+    const mayRead =
+      kind === 'service' ||
+      (kind === 'person' && principal !== null && principal !== '' && (await isOperator(principal)))
+    if (!mayRead) {
+      return json(
+        {
+          error: 'operator_required',
+          message: 'That page describes the deployment itself, so only its operator can read it.',
+          section: name,
+        },
+        403,
+      )
+    }
+  }
   // `Object.hasOwn`, not a bare lookup. `SECTIONS['constructor']` and
   // `SECTIONS['__proto__']` are both truthy through the prototype chain, so a
   // bare `!== undefined` let three inherited names past the guard and on to a

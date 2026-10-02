@@ -347,6 +347,7 @@
     "verify:p3-app": "tsx scripts/isolated/p3-app-attack.ts",
     "p3:inventory": "tsx scripts/p3/inventory.ts",
     "check:office-raw-sql": "tsx scripts/p3/raw-sql.ts --check",
+    "office:second-person": "tsx scripts/p4/provision-second-person.ts",
     "check:arity": "tsx scripts/p3/check-arity.ts",
     "check:carrier-writers": "tsx scripts/p3/check-carrier-writers.ts",
     "check:answerable": "tsx scripts/check-answerable.ts",

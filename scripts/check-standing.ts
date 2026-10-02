@@ -110,8 +110,7 @@ if (wrong.length > 0) {
 */
 const person = {
   officeId: String(
-    ((await db.execute('select app.operator_office()::text as id')).rows[0] as { id: string })
-      .id,
+    ((await db.execute('select app.operator_office()::text as id')).rows[0] as { id: string }).id,
   ),
 }
 const briefs = await Promise.all(

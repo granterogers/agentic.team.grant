@@ -103,6 +103,48 @@ describe('the gateway enforces it', () => {
     expect(fn).toMatch(/if \(answer !== true\) \{\s*operators\.delete\(owner\)\s*return false/)
   })
 
+  it('refuses a person who is not an operator the deployment-level pages, consuming the answer (P4)', () => {
+    const gate = slice(
+      'if (OPERATOR_SECTIONS.has(name)) {',
+      '// `Object.hasOwn`, not a bare lookup.',
+    )
+    // the answer is consumed: a non-operator person is refused with a 403, and a harness member never reads it
+    expect(gate).toMatch(
+      /const mayRead =\s*kind === 'service' \|\|\s*\(kind === 'person' && principal !== null && principal !== '' && \(await isOperator\(principal\)\)\)/,
+    )
+    expect(gate).toMatch(/if \(!mayRead\) \{\s*return json\(/)
+    expect(gate).toMatch(/operator_required/)
+    expect(gate).toMatch(/403/)
+  })
+
+  it('classifies every section that has no office to scope to: operator-only, or a written reason it is not (P4)', () => {
+    const body = slice('const SECTIONS', '\n}\n')
+    // Every top-level entry starts with two spaces and `name: {`; its text runs to the next one. An entry is scoped to an
+    // office if it says `office: true` anywhere in its own text.
+    const starts = [...body.matchAll(/^ {2}([a-z_0-9]+): \{/gm)]
+    const sections = starts.map((m, i) => ({
+      name: m[1] as string,
+      scoped: /office: true/.test(body.slice(m.index, starts[i + 1]?.index ?? body.length)),
+    }))
+    expect(sections.length).toBeGreaterThanOrEqual(50)
+    expect(sections.some((s) => s.scoped)).toBe(true)
+    expect(sections.some((s) => !s.scoped)).toBe(true)
+    const named = new Set(names(slice('const OPERATOR_SECTIONS', '])\n')))
+    const NOT_OPERATOR_SECTION: Readonly<Record<string, string>> = {
+      actions:
+        'the static catalogue of what an asset can be asked to do; no office or deployment data in it',
+    }
+    const unclassified = sections
+      .filter((s) => !s.scoped)
+      .filter((s) => !named.has(s.name) && NOT_OPERATOR_SECTION[s.name] === undefined)
+      .map((s) => s.name)
+    expect(unclassified).toEqual([])
+    // the control: the five that were found by a real second person are in the set the gate reads
+    for (const n of ['google', 'build', 'ci_lately', 'ci_budget', 'bots']) {
+      expect(named.has(n), n).toBe(true)
+    }
+  })
+
   it('also guards the Drive browse, a GET section with no kind rule of its own', () => {
     const drive = slice("if (name === 'drive') {", 'const access = await googleToken(')
     expect(drive).toMatch(
