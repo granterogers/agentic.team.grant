@@ -176,6 +176,28 @@ drop function app.undo_none(text, text);
 drop function app.withdraw_tool_request(uuid, text);
 drop function public.retire_skill(uuid, text, text);
 
+-- Defence in depth for the whole `app` schema. PostgreSQL grants EXECUTE on a new function to PUBLIC, and the conversions
+-- revoked it function by function, so the ones nobody remembered (three of the identity doors among them) were still
+-- executable by anon and authenticated. Nothing can reach them today - neither role has USAGE on the schema, and PostgREST
+-- exposes only `public` - but a grant that depends on a second grant staying absent is one edit from a hole. Revoke it for
+-- every function that exists, and for every function created from here on.
+do $m$
+declare r record;
+begin
+  for r in
+    select p.oid::regprocedure::text as sig
+      from pg_proc p
+     where p.pronamespace = 'app'::regnamespace and p.prokind in ('f', 'p')
+       and (has_function_privilege('public', p.oid, 'execute')
+            or has_function_privilege('anon', p.oid, 'execute')
+            or has_function_privilege('authenticated', p.oid, 'execute'))
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', r.sig);
+  end loop;
+end
+$m$;
+alter default privileges in schema app revoke execute on functions from public, anon, authenticated;
+
 -- Four public wrappers over the shapes dropped above. Nothing in the repository, the edge functions or the gateway reaches
 -- them, and each would now fail on first use (found by scripts/p3/check-arity.ts, which reads every body for a call by an
 -- argument list that no longer exists). Dropped rather than converted: an unused door has no reason to be rebuilt.

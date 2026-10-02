@@ -208,5 +208,60 @@
     "class": "OFFICE_TRUSTED_DERIVED",
     "reason": "The principal resolver: refuses an empty or unknown name with a fixed sentence. It takes a name and no office and reads no content.",
     "proof": "k-proof: app.principal_refusal is the resolver: it takes a name and no office, refuses an empty or unknown one with a fixed sentence and says nothing for a person the office knows"
+  },
+  "app.enqueue_inbound(p_command_id uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the adapter writes the command under the verified sender (or the signed-in person) and then asks for the job; the job takes the office of that command. The command id comes from the adapter's own insert, never from a request.",
+    "proof": "identity-door: enqueue_inbound makes the job in the office of the command the adapter wrote, each command's own, and cannot be asked for an office"
+  },
+  "public.enqueue_inbound(p_command_id uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the adapter writes the command under the verified sender (or the signed-in person) and then asks for the job; the job takes the office of that command. The command id comes from the adapter's own insert, never from a request.",
+    "proof": "identity-door: enqueue_inbound makes the job in the office of the command the adapter wrote, each command's own, and cannot be asked for an office"
+  },
+  "app.mcp_client_for(p_token_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the MCP bearer token (hashed) IS the identity. It returns the one enabled client that holds that hash and the office the client was issued in, in an active non-system office. No office is accepted, so none can be named.",
+    "proof": "identity-door: mcp_client_for turns a token hash into that client's own office, a hash nobody holds into nothing, and cannot be asked for an office"
+  },
+  "public.mcp_client_for(p_token_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the MCP bearer token (hashed) IS the identity. It returns the one enabled client that holds that hash and the office the client was issued in, in an active non-system office. No office is accepted, so none can be named.",
+    "proof": "identity-door: mcp_client_for turns a token hash into that client's own office, a hash nobody holds into nothing, and cannot be asked for an office"
+  },
+  "app.mcp_code_challenge(p_code_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the hash of an authorisation code nobody can guess IS the lookup. It returns the challenge of an unredeemed, unexpired code and nothing else; it accepts no office.",
+    "proof": "identity-door: mcp_code_challenge answers only for the holder of an unredeemed, unexpired code, and cannot be asked for an office"
+  },
+  "public.mcp_code_challenge(p_code_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the hash of an authorisation code nobody can guess IS the lookup. It returns the challenge of an unredeemed, unexpired code and nothing else; it accepts no office.",
+    "proof": "identity-door: mcp_code_challenge answers only for the holder of an unredeemed, unexpired code, and cannot be asked for an office"
+  },
+  "app.mcp_redeem_code(p_code_sha256 text, p_client_id text, p_redirect_uri text, p_token_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: redeeming a code binds the client to the office the code was issued in (written when the signed-in person consented). A code of another office cannot take or re-bind a client, and a code works once. It accepts no office.",
+    "proof": "identity-door: mcp_redeem_code binds a client to the office its code was issued in; another office's code does not take that client, and a code works once"
+  },
+  "public.mcp_redeem_code(p_code_sha256 text, p_client_id text, p_redirect_uri text, p_token_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: redeeming a code binds the client to the office the code was issued in (written when the signed-in person consented). A code of another office cannot take or re-bind a client, and a code works once. It accepts no office.",
+    "proof": "identity-door: mcp_redeem_code binds a client to the office its code was issued in; another office's code does not take that client, and a code works once"
+  },
+  "app.record_telegram_chat(p_chat_id text, p_chat_type text, p_bot_id text, p_subject text, p_title text, p_username text, p_sender text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: a private chat is its own sender's office, a group is recorded only for an operator's office, a stranger is ignored, and a chat is never moved from the office it was first recorded in. It accepts no office.",
+    "proof": "identity-door: record_telegram_chat files a private chat under its own sender's office, ignores a stranger and a non-operator's group, and cannot be asked for an office"
+  },
+  "public.record_telegram_chat(p_chat_id text, p_chat_type text, p_bot_id text, p_subject text, p_title text, p_username text, p_sender text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: a private chat is its own sender's office, a group is recorded only for an operator's office, a stranger is ignored, and a chat is never moved from the office it was first recorded in. It accepts no office.",
+    "proof": "identity-door: record_telegram_chat files a private chat under its own sender's office, ignores a stranger and a non-operator's group, and cannot be asked for an office"
+  },
+  "public.sender_admitted(p_channel text, p_actor text, p_conversation text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the verified sender on a channel becomes their office (app.office_for_sender), a declared test conversation becomes the test office, a stranger becomes none. It accepts no office; the adapter has already verified the signature.",
+    "proof": "identity-door: sender_admitted gives a verified sender their own office, a stranger none, and cannot be asked for an office"
   }
 }
