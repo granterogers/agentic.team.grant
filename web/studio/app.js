@@ -2917,7 +2917,7 @@ function portfolio() {
   return `<main class="main">
     <div class="head">
       <div>
-        <h1 class="t-display">${esc(greeting())}, Grant</h1>
+        <h1 class="t-display">${esc(greeting())}</h1>
         <p class="t-lead" style="margin:var(--s2) 0 0">${esc(standing())}</p>
       </div>
       <!--

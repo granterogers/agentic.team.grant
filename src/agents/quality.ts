@@ -28,6 +28,7 @@
  * someone wrote a second caller.
  */
 
+import { currentPerson } from '../office/person.ts'
 import { datesIn, isoForMention, MONTH_WORD, wrongWeekday } from './derivable.ts'
 import type { Domain } from './provenance.ts'
 
@@ -1814,9 +1815,9 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
       problems.push({
         field: 'body',
         problem:
-          `the text tells Grant what he said ("${said}") and this conversation has no ` +
-          'earlier turn at all — there is nothing he could have told you. Ask what he ' +
-          'means, or say you have nothing on it; never attribute a fact to him that ' +
+          `the text tells ${currentPerson().name} what they said ("${said}") and this conversation has no ` +
+          'earlier turn at all — there is nothing they could have told you. Ask what they ' +
+          'mean, or say you have nothing on it; never attribute a fact to them that ' +
           'only the model produced.',
       })
     }
@@ -1880,8 +1881,8 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
       problem:
         `the text promises to contact somebody on a named channel ("${promised}"), and ` +
         'nothing in this job can do that — the notifier turns THIS answer into a ' +
-        'message to Grant and opens no other conversation. Say who should be asked ' +
-        'and let him ask, or hand the work to the specialist, but do not promise a ' +
+        `message to ${currentPerson().name} and opens no other conversation. Say who should be asked ` +
+        'and let them ask, or hand the work to the specialist, but do not promise a ' +
         'message that will never be sent.',
     })
   }
@@ -2005,9 +2006,9 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
     problems.push({
       field: 'body',
       problem:
-        `${deliberating}. What Grant receives has to be the answer, not the ` +
+        `${deliberating}. What ${currentPerson().name} receives has to be the answer, not the ` +
         'working — no planning out loud, no tool calls, no scratch. Say the ' +
-        'thing itself, in prose, addressed to him.',
+        'thing itself, in prose, addressed to them.',
     })
   }
 
@@ -2022,7 +2023,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
       problem:
         `the text claims to have read something ("${readClaim}") while evidence is ` +
         `"${m.evidence}", which means nothing was read. One of the two is wrong, and ` +
-        'the sentence is the half Grant sees.',
+        `the sentence is the half ${currentPerson().name} sees.`,
     })
   }
 

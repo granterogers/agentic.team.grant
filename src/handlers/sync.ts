@@ -53,6 +53,7 @@ import { officeOfJob } from '../db/office.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { type NotebookAdapter, UnavailableNotebookAdapter } from '../notebook/adapter.ts'
 import { notebookEnabled } from '../notebook/sync-queue.ts'
+import { currentPerson } from '../office/person.ts'
 import { type RemoteNotebook, runSync, SyncAlreadyRunningError } from '../projects/sync.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
@@ -250,7 +251,7 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
       const said = announce
         ? await sayAs(db, router, 'operations-director', {
             purpose:
-              'Tell Grant what turned up in his notebooks. This is a routine ' +
+              `Tell ${currentPerson().name} what turned up in their notebooks. This is a routine ` +
               'hourly check and most of them find nothing, so keep it brief ' +
               'and do not make it sound like an event.',
             facts: [

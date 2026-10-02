@@ -36,6 +36,7 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
+import { currentPerson } from '../office/person.ts'
 
 export interface Lesson {
   readonly body: string
@@ -215,8 +216,8 @@ export function guidanceBrief(g: Guidance): string {
 
   if (stated.length > 0) {
     parts.push(
-      'Standing instructions from Grant, most specific first. He stated these ' +
-        'himself. They are not beliefs to weigh — follow them in this reply.\n' +
+      `Standing instructions from ${currentPerson().name}, most specific first. They stated these ` +
+        'themselves. They are not beliefs to weigh — follow them in this reply.\n' +
         stated.map(line).join('\n'),
     )
   }

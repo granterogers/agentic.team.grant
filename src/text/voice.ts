@@ -41,6 +41,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { scrub } from './scrub.ts'
 
@@ -118,15 +119,15 @@ export async function say(
     `You are ${who.name}, ${who.title} on a small team. ` +
     (who.responsibilities === null ? '' : `Your remit: ${who.responsibilities} `) +
     (who.style === null ? '' : `How you talk: ${who.style} `) +
-    'You are writing to Grant, who runs the place. He is a colleague you know ' +
-    'well, not a customer, and he is your boss.\n\n' +
-    'You are REPORTING, not instructing. Tell him what happened. Do not open ' +
+    `You are writing to ${currentPerson().name}, who runs the place. They are a colleague you know ` +
+    'well, not a customer, and they are your boss.\n\n' +
+    'You are REPORTING, not instructing. Tell them what happened. Do not open ' +
     'with an imperative — "Make the decision now", "Approve the request", ' +
-    '"Review that" are all wrong, because you do not give him orders and ' +
+    '"Review that" are all wrong, because you do not give them orders and ' +
     'because you would be inventing an action nobody described. If something ' +
-    'is waiting on him, say that it is waiting on him.\n\n' +
+    'is waiting on them, say that it is waiting on them.\n\n' +
     'Write like a person, in one or two short sentences. Contractions. No ' +
-    'greeting, no sign-off, no "just checking in" — he can see who it is ' +
+    'greeting, no sign-off, no "just checking in" — they can see who it is ' +
     'from.\n\n' +
     // The whole point. Said twice because it is the instruction most likely to
     // be ignored, and the one this function exists for.

@@ -51,6 +51,7 @@
  * property that made `understand.ts` safe to put in front of the recognisers.
  */
 import type { SqlExecutor } from '../db/executor.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 
 /** One capability, exactly as the registry describes it. */
@@ -429,7 +430,7 @@ export function validate(
     )
     if (capability === 'task.create' && colleague !== undefined) {
       refused.push(
-        `${id} is work for ${colleague}, and task.create only puts things on Grant's own list`,
+        `${id} is work for ${colleague}, and task.create only puts things on ${currentPerson().possessive} own list`,
       )
       continue
     }
@@ -483,8 +484,9 @@ export function validate(
   }
 }
 
-const SYSTEM = (sheet: string, roster: string): string =>
-  [
+const SYSTEM = (sheet: string, roster: string): string => {
+  const person = currentPerson().name
+  return [
     'You are the chief of staff of a small office. You are given one clear request',
     'and you say what work is required to satisfy it. You do NOT do the work and you',
     'do NOT answer the request.',
@@ -515,10 +517,10 @@ const SYSTEM = (sheet: string, roster: string): string =>
     '   reading is ONE step and nothing more — do NOT add a write, a draft or an',
     '   artifact that was not asked for. Padding a question into work is the worst',
     '   thing you can do here.',
-    '3b. draft.create is for when Grant asked for something WRITTEN — a document, a',
-    '   write-up, a report, a message to be prepared. Analysis he wants told to him',
+    `3b. draft.create is for when ${person} asked for something WRITTEN — a document, a`,
+    '   write-up, a report, a message to be prepared. Analysis they want told to them',
     '   is not a draft.',
-    '3c. task.create is for putting something on GRANT\u2019S OWN list. Work the office',
+    `3c. task.create is for putting something on ${person.toUpperCase()}\u2019S OWN list. Work the office`,
     '   should go and do is a step of its own, not a task telling somebody to do it.',
     '3d. A standing instruction about how the office should behave in future is',
     '   preference.update. One step, nothing else.',
@@ -526,16 +528,18 @@ const SYSTEM = (sheet: string, roster: string): string =>
     '   remark — return no steps at all.',
     '5. specialist is a slug from the list of people, and only when the work genuinely',
     '   belongs to their subject. null otherwise.',
-    '6. audience says WHO the step output is for: "office" (us), "grant" (him), or',
+    `6. audience says WHO the step output is for: "office" (us), "grant" (${person}, the`,
+    '   person you work for — the value is spelt "grant" whoever that is), or',
     '   "outside" (anybody else — a client, a supplier, a cohort, the public).',
     '   Say it honestly. A step whose audience is outside the office may only ever',
     '   be draft.create: preparing what would be sent is as far as you go, and the',
-    '   sending is Grant’s decision. Never reach for a channel just because it',
+    `   sending is ${person}’s decision. Never reach for a channel just because it`,
     '   happens to be available.',
     '7. If the request is too vague to act on, or names something you cannot',
     '   identify, return no steps and say what you would need in unreachable.',
-    '8. why is one short phrase for Grant, not an explanation to yourself.',
+    `8. why is one short phrase for ${person}, not an explanation to yourself.`,
   ].join('\n')
+}
 
 /*
   An outcome he wants to KEEP is a written one (ledger R47).

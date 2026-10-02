@@ -46,6 +46,7 @@
 import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
@@ -382,7 +383,7 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
 
       if (written.r?.already_written === true) {
         return {
-          body: `Grant has already been briefed for ${f.for_date}. Not sending a second one.`,
+          body: `${currentPerson().name} has already been briefed for ${f.for_date}. Not sending a second one.`,
           // The whole point of the unique key. A duty re-attempted after a
           // crash must not brief him twice.
           announce: false,
@@ -398,9 +399,9 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
       return {
         body: await sayAs(db, router, 'chief-of-staff', {
           purpose:
-            'Write Grant his morning briefing. You send this every morning, so ' +
+            `Write ${currentPerson().name} their morning briefing. You send this every morning, so ` +
             'vary the opening — some days there is something to remark on and ' +
-            'most there is not. Lead with whatever actually needs him. Do not ' +
+            'most there is not. Lead with whatever actually needs them. Do not ' +
             'add anything that is not in the facts, and do not pad a quiet ' +
             'morning into a busy-sounding one. Where a fact says a number is ' +
             'an estimate or our own count, keep that — dropping the hedge ' +

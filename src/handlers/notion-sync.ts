@@ -56,6 +56,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
 import { syncNotion } from '../notion/sync.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count, list } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
@@ -203,7 +204,7 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
       const body = announce
         ? await sayAs(db, router, 'operations-director', {
             purpose:
-              'Tell Grant what came in from his Notion pages. He writes notes ' +
+              `Tell ${currentPerson().name} what came in from their Notion pages. They write notes ` +
               'there; this is you noticing them, not announcing a milestone.',
             facts: [
               `${String(result.shared)} page(s) are shared with the integration`,

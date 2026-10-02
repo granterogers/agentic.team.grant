@@ -34,6 +34,7 @@
 
 import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { currentPerson } from '../office/person.ts'
 import { NotionApiError, NotionClient } from './api.ts'
 
 export type State =
@@ -383,6 +384,6 @@ export function capabilitySummary(c: NotionCapabilities): string {
     `Notion is connected as ${String(c.bot)} in ${String(c.workspace)}, with ` +
     `${String(c.dataSources)} data source(s) shared. You CAN: ${can.join(', ')}. ` +
     `Notion itself cannot do: ${impossible.join(', ')}. ` +
-    'Do not tell Grant you are unable to do something on this list without trying it first.'
+    `Do not tell ${currentPerson().name} you are unable to do something on this list without trying it first.`
   )
 }

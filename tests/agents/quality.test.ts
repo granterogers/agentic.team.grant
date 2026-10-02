@@ -454,7 +454,7 @@ describe('#231: telling Grant what he said, when he said nothing', () => {
         sources: ['job:a'],
         contradictions: null,
         body,
-      }).some((p) => p.problem.includes('tells Grant what he said')),
+      }).some((p) => p.problem.includes('what they said')),
     ).toBe(false)
     // There WAS a conversation, so the attribution may well be true.
     expect(
@@ -465,7 +465,7 @@ describe('#231: telling Grant what he said, when he said nothing', () => {
         contradictions: null,
         body,
         hadHistory: true,
-      }).some((p) => p.problem.includes('tells Grant what he said')),
+      }).some((p) => p.problem.includes('what they said')),
     ).toBe(false)
     // No earlier turn at all: there is nothing he could have told it.
     expect(
@@ -476,7 +476,7 @@ describe('#231: telling Grant what he said, when he said nothing', () => {
         contradictions: null,
         body,
         hadHistory: false,
-      }).some((p) => p.problem.includes('tells Grant what he said')),
+      }).some((p) => p.problem.includes('what they said')),
     ).toBe(true)
   })
 })

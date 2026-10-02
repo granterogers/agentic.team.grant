@@ -43,6 +43,7 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
+import { currentPerson } from '../office/person.ts'
 
 export interface Reach {
   /** How a person would name it: "Notion", "Slack", "Google NotebookLM". */
@@ -319,8 +320,8 @@ export function capabilityBrief(cap: Capability): string {
     // The specific sentence Grant objected to, forbidden by name.
     'And do not offer to produce something "ready for you to add" when you can ' +
     'add it yourself — if a verb above covers it, use it. ' +
-    NO_CALL_CHANNEL +
-    CHANNEL_TRUTHS
+    noCallChannel() +
+    channelTruths()
   )
 }
 
@@ -366,22 +367,23 @@ export function capabilityBrief(cap: Capability): string {
  * half of the fix is `deliberationLeak` in `src/agents/quality.ts`; this is the
  * half that stops the model wanting to do it.
  */
-const NO_CALL_CHANNEL =
+// Functions, not constants: they name the person the running job is for (#404), which is known only when a job runs.
+const noCallChannel = (): string =>
   'One thing about the list above, because it is easy to misread: those are ' +
   'things the OFFICE does on the strength of what you write, not functions you ' +
   'can call. There is no call syntax here and no tool channel — your reply goes ' +
-  'to Grant exactly as you type it. So never write a tool name, a call, or any ' +
+  `to ${currentPerson().name} exactly as you type it. So never write a tool name, a call, or any ` +
   'JSON in your answer, and never narrate what you are about to do or which ' +
   'tool you are weighing up. Do the thinking silently and send only the result: ' +
-  'what you found, what you did, or what you need from him. If you cannot do ' +
-  'something, say so plainly in his words rather than naming the switch. '
+  'what you found, what you did, or what you need from them. If you cannot do ' +
+  'something, say so plainly in their words rather than naming the switch. '
 
-const CHANNEL_TRUTHS =
+const channelTruths = (): string =>
   'Facts about how your messages are sent, which are true whether or not you ' +
   'do anything: every Telegram message you send automatically carries thumbs ' +
   'up and thumbs down buttons, and a request for permission carries Go ahead ' +
-  'and Not now. Voice notes Grant sends are transcribed before you see them. ' +
-  'You reach him on Telegram and the team on Slack. Never tell him you can ' +
+  `and Not now. Voice notes ${currentPerson().name} sends are transcribed before you see them. ` +
+  'You reach them on Telegram and the team on Slack. Never tell them you can ' +
   'only produce plain text, or that you cannot add buttons — you can, because ' +
   'the office adds them for you.'
 

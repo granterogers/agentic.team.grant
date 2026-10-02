@@ -137,7 +137,7 @@ import {
   consulted,
   established,
   howComposed as howComposedFrom,
-  PROVENANCE_NOTE,
+  provenanceNote,
 } from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
 import { asksForWork } from '../agents/request.ts'
@@ -185,6 +185,7 @@ import {
   waitingBlock,
 } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import { escapeHtml } from '../telegram/message.ts'
@@ -862,8 +863,8 @@ export async function speaker(
         ...s,
         reason:
           also.length === 0
-            ? 'addressed directly — Grant opened this person’s bot'
-            : `Grant picked ${String(also.length + 1)} people himself`,
+            ? `addressed directly — ${currentPerson().name} opened this person’s bot`
+            : `${currentPerson().name} picked ${String(also.length + 1)} people themselves`,
         alsoConvened: also,
         // Addressing somebody IS convening them, so this one is not empty:
         // Grant picked the specialist himself.
@@ -5745,7 +5746,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 (d) =>
                   `· ${d.question} → ${d.chose}${
                     d.ruled_out.length === 0 ? '' : ` (not: ${d.ruled_out.join(', ')})`
-                  } — ${d.because} [${d.by === 'grant' ? 'Grant decided' : `${d.by} decided`}${
+                  } — ${d.because} [${d.by === 'grant' ? `${currentPerson().name} decided` : `${d.by} decided`}${
                     d.project === null ? '' : `, on ${d.project}`
                   }]`,
               )
@@ -6010,9 +6011,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   // not an instruction about this reply.
                   (localBrief === ''
                     ? ''
-                    : `On this project specifically, Grant has told you: ${localBrief} `) +
-                  'You are replying to Grant, who runs the place, in a private chat. He is ' +
-                  'a colleague you know well, not a customer.\n\n' +
+                    : `On this project specifically, ${currentPerson().name} has told you: ${localBrief} `) +
+                  `You are replying to ${currentPerson().name}, who runs the place, in a private chat. ` +
+                  'They are a colleague you know well, not a customer.\n\n' +
                   /*
                       Say which constraint you set aside (#231).
 
@@ -6054,7 +6055,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                       and CLAUDE.md records why a prompt alone is not enough —
                       the same build obeys one run and not the next.
                     */
-                  `${PROVENANCE_NOTE}\n\n` +
+                  `${provenanceNote()}\n\n` +
                   // Grant: *"I want messages in general from everyone to be
                   // more human and easier to read."* Two things, and the
                   // second was the one being missed: the replies were
@@ -6161,10 +6162,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                          */
                       ' Numbered excerpts from our documents follow. Cite them as [1], [2], ' +
                       'and say plainly when they do not answer the question. Prefer them ' +
-                      'over anything you merely know.\n\nBut what Grant states in his own ' +
-                      'message outranks every document. If he gives you a figure, a name or ' +
-                      'a fact, use HIS, even where a document says otherwise — and when a ' +
-                      'document disagrees with him, say so rather than quietly choosing ' +
+                      `over anything you merely know.\n\nBut what ${currentPerson().name} states in their own ` +
+                      'message outranks every document. If they give you a figure, a name or ' +
+                      'a fact, use THEIRS, even where a document says otherwise — and when a ' +
+                      'document disagrees with them, say so rather than quietly choosing ' +
                       'one.'),
               },
               ...(context === ''

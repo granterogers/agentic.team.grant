@@ -39,6 +39,7 @@ import { recordDecision } from '../agents/router.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { scrub } from '../text/scrub.ts'
 
@@ -146,8 +147,8 @@ export function sourceHandler(deps: {
               (who.communication_style === null
                 ? ''
                 : `How you talk: ${who.communication_style} `) +
-              'A new source has just landed in the project. Grant did not ask you anything — ' +
-              'you are telling him it arrived and whether it matters.\n\n' +
+              `A new source has just landed in the project. ${currentPerson().name} did not ask you anything — ` +
+              'you are telling them it arrived and whether it matters.\n\n' +
               'Answer one question: WHAT DOES THIS CHANGE? Not what it says. If it confirms ' +
               'what we already had, say that plainly and stop — "nothing new here, it agrees ' +
               'with the pricing note" is a complete and useful answer, and inventing ' +

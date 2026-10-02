@@ -60,7 +60,8 @@ const server = createServer(async (req, res) => {
   }
 })
 await new Promise<void>((r) => server.listen(PORT, '127.0.0.1', () => r()))
-const BASE = `http://127.0.0.1:${PORT}`
+// PAGE=https://ai-team-hq.vercel.app runs the same proof against the DEPLOYED page instead of the local files.
+const BASE = process.env.PAGE ?? `http://127.0.0.1:${PORT}`
 const rows = async (sql: string): Promise<Record<string, unknown>[]> =>
   (await db.execute(sql)).rows as Record<string, unknown>[]
 const sleep = (ms: number): Promise<void> => new Promise((ok) => setTimeout(ok, ms))
@@ -189,6 +190,18 @@ check(
 )
 await page.goto(`${BASE}/p/personal/chat`, { waitUntil: 'domcontentloaded', timeout: 45000 })
 await page.waitForSelector('#bc-say', { timeout: 90000 })
+// a FRESH load of the Chat route must already show the persisted history (earlier answers of this person), before anything is sent
+await page
+  .waitForSelector('.bcsaid[data-message-id]:not(.bcsaid--mine)', { timeout: 60000 })
+  .catch(() => null)
+const earlierShown = (await page
+  .locator('.bcsaid[data-message-id]:not(.bcsaid--mine)')
+  .count()) as number
+check(
+  '0. a fresh load of the Chat route shows persisted history before anything is sent',
+  earlierShown >= 1,
+  `${earlierShown} earlier answer bubble(s)`,
+)
 const said = `p4 reload proof ${Date.now().toString(36)}: in one short sentence, what is on my task list right now?`
 await page.fill('#bc-say', said)
 await page.getByRole('button', { name: 'Send', exact: true }).click()
@@ -307,7 +320,7 @@ check(
 // ================= 6-7. full reload, same context, then a brand-new context
 const verdicts: { where: string; r: { found: boolean; equal: boolean; text: string } }[] = []
 await page.reload({ waitUntil: 'domcontentloaded' })
-await page.waitForSelector('#bc-say', { timeout: 40000 })
+await page.waitForSelector('#bc-say', { timeout: 90000 })
 await page
   .waitForSelector(`.bcsaid[data-message-id=${JSON.stringify(outputId)}]`, { timeout: 60000 })
   .catch(() => null)

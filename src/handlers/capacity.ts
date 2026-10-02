@@ -29,6 +29,7 @@
 import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
@@ -248,7 +249,7 @@ export function capacityHandler(
         // that nobody wrote it. Claire writes it now, from these exact lines.
         body: await sayAs(db, router, 'chief-of-staff', {
           purpose:
-            'Write Grant his morning note. You send this every day, so vary ' +
+            `Write ${currentPerson().name} their morning note. You send this every day, so vary ` +
             'it — some mornings there is something to remark on and most ' +
             'there is not. Lead with whatever actually matters today.',
           facts: lines,

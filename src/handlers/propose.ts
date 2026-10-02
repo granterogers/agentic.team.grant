@@ -48,6 +48,7 @@
 import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
@@ -185,8 +186,8 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
       const lines = waiting.map((w) => `${w.who} could not ${w.needed} — ${w.remedy}`)
       const said = await sayAs(db, router, 'chief-of-staff', {
         purpose:
-          'Tell Grant what the team has run into that it cannot do, and that each one ' +
-          'is waiting for a yes or no from him on the Governance page. Do not argue for ' +
+          `Tell ${currentPerson().name} what the team has run into that it cannot do, and that each one ` +
+          'is waiting for a yes or no from them on the Governance page. Do not argue for ' +
           'any of them and do not invent a cost. Keep the list as given.',
         facts: [
           `there ${waiting.length === 1 ? 'is' : 'are'} ${count(waiting.length, 'thing', 'things')} the team could not do`,

@@ -36,6 +36,7 @@ import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import { withoutStrayQuotes } from '../agents/stray-quotes.ts'
 import { withJobScope } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { personOfJob, withPerson } from '../office/person.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
 import type { Plan } from '../tools/plan.ts'
@@ -95,7 +96,9 @@ async function recordPlan(db: SqlExecutor, job: Job, handler: Handler): Promise<
   const planOf = handler.plan
   if (planOf === undefined) return
   try {
-    const plan = await withJobScope(job.jobId, () => planOf.call(handler, job, db))
+    const plan = await withJobScope(job.jobId, async () =>
+      withPerson(await personOfJob(db, job.jobId), () => planOf.call(handler, job, db)),
+    )
     const steps = JSON.stringify(plan.steps)
     const reaches =
       plan.reaches.length === 0
@@ -1134,7 +1137,10 @@ const runJobHeld = async (
   */
   await recordPlan(db, job, handler)
   try {
-    output = await withJobScope(job.jobId, () => handler.handle(job, db))
+    // WHO the work is for travels with it (#404): the sentences a handler composes name the office's person, never "Grant".
+    output = await withJobScope(job.jobId, async () =>
+      withPerson(await personOfJob(db, job.jobId), () => handler.handle(job, db)),
+    )
     output = { ...output, body: withoutStrayQuotes(output.body) }
   } catch (error) {
     /*

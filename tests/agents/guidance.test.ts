@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { type Guidance, guidanceBrief } from '../../src/agents/guidance.ts'
+import { guidanceBrief as briefFor, type Guidance } from '../../src/agents/guidance.ts'
+import { personFrom, withPerson } from '../../src/office/person.ts'
+
+// The brief names the person the running job is for (#404); these tests are about Grant's office.
+const guidanceBrief = (g: Guidance): string =>
+  withPerson(personFrom('person', 'Grant'), () => briefFor(g))
 
 const skill = (over: Partial<Guidance['skills'][number]> = {}) => ({
   skillId: 'a1',

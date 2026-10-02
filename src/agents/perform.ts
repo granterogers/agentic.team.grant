@@ -45,6 +45,7 @@ import { raiseBlocker } from '../inference/record.ts'
 import { fingerprint, type Outcome, type Paused, type Step } from '../jobs/checkpoint.ts'
 import { type Claimed, callerArgs } from '../jobs/fence.ts'
 import { isUntrusted, retrieveAcrossOffice, whereFrom } from '../knowledge/retrieval.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { mayAct, refusalSentence } from './approval.ts'
 import type { GoalPlan, PlanStep } from './goal.ts'
@@ -373,7 +374,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
             {
               role: 'system',
               content:
-                'You are writing up what colleagues found, for Grant.\n\n' +
+                `You are writing up what colleagues found, for ${currentPerson().name}.\n\n` +
                 'THE ONLY THING YOU MAY USE IS THE MATERIAL THE USER TURN ' +
                 'CARRIES. Do not add a fact, a number, a date, a name or a ' +
                 'recommendation that is not in it. Where it does not answer the ' +
@@ -490,7 +491,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         capability: 'task.create',
         found: true,
         ids: [got.id],
-        saw: `Put on Grant's list: "${title}"`,
+        saw: `Put on ${currentPerson().possessive} list: "${title}"`,
         title,
       }
     },
@@ -805,8 +806,8 @@ export const compile = (
             detail: `${step.capability}: ${decision.because}`,
             resumeWhen:
               decision.reason === 'outside_audience'
-                ? 'Grant answers. This reaches somebody outside the office, which no autonomy setting lifts.'
-                : `Grant answers, or raises this project's autonomy above ${
+                ? `${currentPerson().name} answers. This reaches somebody outside the office, which no autonomy setting lifts.`
+                : `${currentPerson().name} answers, or raises this project's autonomy above ${
                     decision.autonomy ?? 'its current level'
                   }.`,
             /*

@@ -31,15 +31,27 @@ export const secondSession = async (): Promise<Session> => {
   const { anon } = await apiKeys()
   const password = await vaultSecret('p4.second_person.password')
   if (password === '') throw new Error('the second person has no stored password')
-  const r = await fetch(`https://${REF}.supabase.co/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: { apikey: anon, 'content-type': 'application/json' },
-    body: JSON.stringify({ email: SECOND_EMAIL, password }),
-  })
-  const b = (await r.json()) as Partial<Session> & { msg?: string; error_description?: string }
-  if (!r.ok || b.access_token === undefined)
-    throw new Error(`no session for the second person: ${String(b.msg ?? b.error_description)}`)
-  return b as Session
+  // The provider's auth edge sometimes answers "upstream request timeout" (plain text): that is the platform, not a
+  // result. Retry with a pause, and say so, rather than letting an infra failure enter a measurement as data.
+  let last = ''
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const r = await fetch(`https://${REF}.supabase.co/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: anon, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: SECOND_EMAIL, password }),
+    })
+    const text = await r.text()
+    try {
+      const b = JSON.parse(text) as Partial<Session> & { msg?: string; error_description?: string }
+      if (r.ok && b.access_token !== undefined) return b as Session
+      last = String(b.msg ?? b.error_description)
+    } catch {
+      last = text.slice(0, 60)
+    }
+    console.log(`  (auth edge said "${last}" - attempt ${attempt} of 5, waiting)`)
+    await new Promise((ok) => setTimeout(ok, 8000))
+  }
+  throw new Error(`no session for the second person: ${last}`)
 }
 
 /** Grant's email, read from the office - never typed here. */
