@@ -107,7 +107,9 @@ try {
       const t = await r.text()
       check(
         `the anon key calling ${fn} over PostgREST is refused as a permission failure`,
-        r.status === 401 && /permission denied for function/.test(t),
+        // Or, since P3 put the office first, "no function with these arguments" (404 PGRST202): an anon key names nothing.
+        (r.status === 401 && /permission denied for function/.test(t)) ||
+          (r.status === 404 && /PGRST202/.test(t)),
         `http ${String(r.status)}`,
       )
     }

@@ -120,7 +120,9 @@ const gateway = async (auth: string | null, action: string, args: Record<string,
   const after = Number((await one(`select count(*)::int as n from public.inbound_commands`)).n)
   check(
     'a test principal cannot speak in a REAL project (0618), and nothing was written',
-    /test principal/i.test(JSON.stringify(said.body)) && after === before,
+    // Refused either by the principal's rule (0618) or because a real project is in another office, which a test
+    // principal cannot even name ("no such project"): both leave nothing written.
+    /test principal|no such project/i.test(JSON.stringify(said.body)) && after === before,
     `${JSON.stringify(said.body).slice(0, 90)} / commands ${String(before)} -> ${String(after)}`,
   )
 }

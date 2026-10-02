@@ -320,7 +320,9 @@ try {
     await db.execute(
       `select app.pause_job(${lit(A)}::uuid, 'awaiting_approval', 'asks a question', 'when he answers', false, null, null, ${lit(FP)})`,
     )
-    const polled = json(await one(`select app.mcp_job_status(${lit(A)}::uuid) as s`))
+    const polled = json(
+      await one(`select app.mcp_job_status(app.job_office(${lit(A)}::uuid), ${lit(A)}::uuid) as s`),
+    )
     check(
       'a job that asked reads paused / waiting_for_grant to a client that polls it (state and situation differ, truthfully)',
       polled.state === 'paused' && polled.situation === 'waiting_for_grant',
