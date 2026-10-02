@@ -396,3 +396,7 @@ loss were not checked in depth because every query is costly during the incident
 **State left.** The worker heartbeat (`worker-heartbeat`) is PAUSED to stop piling 120 s passes onto a starved instance;
 resume with `npx tsx scripts/p3/worker-heartbeat.ts resume`. Until it is resumed no duty runs and no message is answered.
 Verdict at this point: BLOCKED (platform), not PASS. #404 and #405 stay open.
+
+**Second check, 15:12 UTC.** Not recovered: a count over `jobs` still exceeded the 20 s statement limit, and the project
+health API now reports the database itself unhealthy as well (auth, rest, realtime, storage already were; only the pooler
+was healthy). Heartbeat still paused. No application change was made. No further automatic checks are scheduled.
