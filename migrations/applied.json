@@ -730,5 +730,6 @@
   "0859_the_six_writers_that_leaned_on_the_bridge_name_their_office.sql": "f221c071c92756d50710a4a60cd61edf6de88b46f7d5d00a3c60f32920b1aa59",
   "0860_the_compatibility_bridge_is_removed_and_a_writer_that_names_no_office_is_refused.sql": "efe137dcfbe5cb26675c6fdb953670bbdc1dc851cea9e9ce2ddbba964f3a85b8",
   "0861_the_last_helper_of_the_bridge_is_removed.sql": "60d06ca41c196ca913c634927c9064a3b1fc3a2c023f94caae8e3ee868d8bd11",
-  "0862_the_keys_a_person_chooses_are_per_office.sql": "534cde76180c3b4144d661246e975caafff7404234e957c1c106c6962c5d99eb"
+  "0862_the_keys_a_person_chooses_are_per_office.sql": "534cde76180c3b4144d661246e975caafff7404234e957c1c106c6962c5d99eb",
+  "0863_a_second_person_office_can_be_provisioned_and_retired.sql": "a0ae2cdd10a4c3ba7ddf0c8b32c910cb5e84a91982cecaa28e6c82545932d2c9"
 }
