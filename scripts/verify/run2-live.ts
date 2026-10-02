@@ -198,7 +198,9 @@ for (const tool of ['notion.write', 'slack.post', 'notebook.write', 'drive.inges
     const t = (await r.text()).slice(0, 80)
     check(
       `anon key calling ${fn} is refused (nothing it names exists or changes)`,
-      r.status === 401 || r.status === 403 || /permission denied/i.test(t),
+      // A function an anon key cannot see is answered 404 PGRST202 ("not found, with these arguments"): since P3 the
+      // doors take an office first, so the old argument shape names nothing - which is a refusal, not an exposure.
+      r.status === 401 || r.status === 403 || /permission denied|PGRST202/i.test(t),
       `http ${String(r.status)} ${t}`,
     )
   }
@@ -364,6 +366,13 @@ await answer(qn.id, 'No, leave it')
   // the same duty does not nag, through the real governOutward
   // A duty-shaped job (requested by a schedule, so nobody "asked" for it), named as a harness
   // job from birth, and cancelled at once so the deployed worker never runs it.
+  // A specialist holds a tool per OFFICE and the project's office is the test office, which holds none: grant it for
+  // this block and take it back at the end.
+  await db.execute(`
+    insert into public.staff_tools (office_id, staff_slug, tool, granted_by, note)
+    select p.office_id, 'research-director', 'notion.write', 'verify:run2-live', 'fixture grant for the duty proof'
+      from public.projects p where p.project_id = ${lit(project)}::uuid
+    on conflict do nothing`)
   const dutyJob = String(
     (
       await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
@@ -384,7 +393,7 @@ await answer(qn.id, 'No, leave it')
     agent: String(
       (
         await one(
-          `select staff_slug as s from public.staff_tools where tool = 'notion.write' limit 1`,
+          `select staff_slug as s from public.staff_tools where tool = 'notion.write' and office_id = (select office_id from public.projects where project_id = ${lit(project)}::uuid) limit 1`,
         )
       ).s,
     ),
@@ -405,7 +414,7 @@ await answer(qn.id, 'No, leave it')
     agent: String(
       (
         await one(
-          `select staff_slug as s from public.staff_tools where tool = 'notion.write' limit 1`,
+          `select staff_slug as s from public.staff_tools where tool = 'notion.write' and office_id = (select office_id from public.projects where project_id = ${lit(project)}::uuid) limit 1`,
         )
       ).s,
     ),
@@ -425,6 +434,7 @@ await answer(qn.id, 'No, leave it')
     `select b.blocker_id::text as id from public.blockers b where b.job_id = ${lit(dutyJob)}::uuid and b.standing_tool = 'notion.write' order by b.created_at limit 1`,
   )
   ;(globalThis as { __dutyNo?: string }).__dutyNo = String(duties.id)
+  await db.execute(`delete from public.staff_tools where granted_by = 'verify:run2-live'`)
 }
 // reversal
 {
@@ -553,7 +563,11 @@ await answer(qn.id, 'No, leave it')
     )
   else {
     const refused = json(
-      (await one(`select app.hq_task_state(${lit(x.t)}, 'done', null, null)::text as r`)).r,
+      (
+        await one(
+          `select app.hq_task_state((select office_id from public.tasks where task_id = ${lit(x.t)}::uuid), ${lit(x.t)}, 'done', null, null)::text as r`,
+        )
+      ).r,
     )
     const s1 = await one(
       `select b.state::text as bs, t.state::text as ts from public.blockers b, public.tasks t where b.blocker_id = ${lit(x.b)}::uuid and t.task_id = ${lit(x.t)}::uuid`,
@@ -569,7 +583,7 @@ await answer(qn.id, 'No, leave it')
     const unknown = json(
       (
         await one(
-          `select app.hq_task_state(${lit(x.t)}, 'done', null, 'somebody-unknown')::text as r`,
+          `select app.hq_task_state((select office_id from public.tasks where task_id = ${lit(x.t)}::uuid), ${lit(x.t)}, 'done', null, 'somebody-unknown')::text as r`,
         )
       ).r,
     )
