@@ -126,9 +126,9 @@ const refFor = async (name: string): Promise<string> =>
 
 await db.execute(`
   insert into public.slack_app_credentials
-    (slack_app_id, team_id, app_name, config_token_ref, config_refresh_ref,
+    (office_id, slack_app_id, team_id, app_name, config_token_ref, config_refresh_ref,
      config_token_expires_at, config_token_rotated_at, rotation_failures, last_rotation_error)
-  values ('${APP_ID}', 'T0BUCJ2L5FD', 'AI Team HQ',
+  values (app.require_office(app.operator_office()), '${APP_ID}', 'T0BUCJ2L5FD', 'AI Team HQ',
           '${await refFor('slack.config_token')}'::app.vault_secret_ref,
           '${await refFor('slack.config_refresh_token')}'::app.vault_secret_ref,
           to_timestamp(${pair.expiresAt}), now(), 0, null)

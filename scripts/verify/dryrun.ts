@@ -189,8 +189,8 @@ console.log('\nand it is written down where an approval can read it')
   has to be a real row because `job_plans` has a foreign key to it.
 */
 const jobRow = await one(`
-  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, priority)
-  values (gen_random_uuid(), ${lit(`dryrun-${String(Date.now())}`)},
+  insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by, priority)
+  values (app.test_office(), gen_random_uuid(), ${lit(`dryrun-${String(Date.now())}`)},
           'verification.dryrun', 'verify:dryrun', 900)
   returning job_id::text as id
 `)
@@ -343,8 +343,8 @@ check(
   followed by nothing reads as a bug in the office.
 */
 const noPlanJob = await one(`
-  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, priority)
-  values (gen_random_uuid(), ${lit(`dryrun-noplan-${String(Date.now())}`)},
+  insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by, priority)
+  values (app.test_office(), gen_random_uuid(), ${lit(`dryrun-noplan-${String(Date.now())}`)},
           'verification.dryrun', 'verify:dryrun', 900)
   returning job_id::text as id
 `)

@@ -139,8 +139,8 @@ if (stillMine > 0) {
 
 const project = await one(`
   with created as (
-    insert into public.projects (slug, name, status)
-    values (${lit(`fixture-worker-${run}`)}, 'Fixture: worker', 'active')
+    insert into public.projects (office_id, slug, name, status)
+    values (app.test_office(), ${lit(`fixture-worker-${run}`)}, 'Fixture: worker', 'active')
     returning project_id
   ),
   attached as (
@@ -157,8 +157,8 @@ const projectId = String(project?.id)
 const enqueue = async (kind: string, key: string): Promise<string> => {
   const r = await one(`
     insert into public.jobs
-      (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
-    values (gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(key)}, ${lit(kind)},
+      (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, priority)
+    values (app.test_office(), gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(key)}, ${lit(kind)},
             'verify:worker', 100)
     returning job_id::text as id
   `)
@@ -802,8 +802,8 @@ const FOREIGN = 'verify:worker-someone-else'
 const PROBE_KIND = 'research.scope_probe'
 const foreignJob = await one(`
   insert into public.jobs
-    (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
-  values (gen_random_uuid(), ${lit(projectId)}::uuid,
+    (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, priority)
+  values (app.test_office(), gen_random_uuid(), ${lit(projectId)}::uuid,
           ${lit(`fixture-foreign-${run}`)}, ${lit(PROBE_KIND)}, ${lit(FOREIGN)}, 100)
   returning job_id::text as id
 `)

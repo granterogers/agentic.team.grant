@@ -26,12 +26,12 @@ import { ManagementApiExecutor } from '../src/db/executor.ts'
 export type Reach = { action: string; fn: string; param: string; default: string }
 
 /** Known, and why that is acceptable until offices exist. */
-export const PINNED: Readonly<Record<string, string>> = {
-  appearance_set:
-    'writes the single deployment-wide appearance row (owner defaults to grant); one human today. Becomes (p_office, ...) in the ownership phase',
-  project_archive:
-    'machine-fixture-only: MACHINE_FIXTURE_ONLY refuses a real project, so the default person is never a real one',
-}
+/**
+ * Empty since multi-user P3: every gateway door takes an explicit office, and the machine key resolves to the TEST office
+ * rather than to a person, so no reach of an ambient person remains to excuse. A reach that reappears fails the gate
+ * until somebody pins it here with a reason.
+ */
+export const PINNED: Readonly<Record<string, string>> = {}
 
 const body = (source: string, from: string, to: string): string => {
   const a = source.indexOf(from)
@@ -103,8 +103,10 @@ export const controls = (): { name: string; ok: boolean; detail: string }[] => {
     ...real,
     { action: 'task_add', fn: 'hq_task_add', param: 'p_by', default: 'grant' },
   ]
-  const unpinned = problems(injected, PINNED)
-  const stale = problems(real, { ...PINNED, ghost_action: 'a pin for something that is gone' })
+  // The controls use a pin of their own: the real list is empty, and a control with nothing to be wrong about proves nothing.
+  const pins = { appearance_set: 'a pin the control supplies, long enough to read as a reason' }
+  const unpinned = problems(injected, pins)
+  const stale = problems(real, { ...pins, ghost_action: 'a pin for something that is gone' })
   return [
     {
       name: 'a new unpinned reach is refused',
@@ -118,7 +120,7 @@ export const controls = (): { name: string; ok: boolean; detail: string }[] => {
     },
     {
       name: 'a pinned reach is accepted',
-      ok: problems(real, PINNED).filter((p) => p.startsWith('appearance_set')).length === 0,
+      ok: problems(real, pins).filter((p) => p.startsWith('appearance_set')).length === 0,
       detail: 'appearance_set is pinned',
     },
   ]

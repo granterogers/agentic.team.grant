@@ -76,8 +76,8 @@ const makeJob = async (tag: string): Promise<string> =>
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by, priority, announce)
-        values (gen_random_uuid(), null, ${lit(`stop-${run}-${tag}`)}, ${lit(`stopprobe.${run}`)},
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, priority, announce)
+        values (app.test_office(), gen_random_uuid(), null, ${lit(`stop-${run}-${tag}`)}, ${lit(`stopprobe.${run}`)},
                 ${lit(MINE)}, 100, false)
         returning job_id::text as id`)
     ).id,

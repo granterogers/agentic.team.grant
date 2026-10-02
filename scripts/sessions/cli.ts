@@ -246,8 +246,8 @@ if ((session.projects ?? []).length > 0) {
     const made = (
       (
         await db.execute(`
-          insert into public.projects (name, slug, status)
-          values (${lit(`Fixture ${label} ${session.name}`)}, ${lit(slug)}, 'paused')
+          insert into public.projects (office_id, name, slug, status)
+          values (app.test_office(), ${lit(`Fixture ${label} ${session.name}`)}, ${lit(slug)}, 'paused')
           returning project_id::text as id`)
       ).rows as { id: string }[]
     )[0]

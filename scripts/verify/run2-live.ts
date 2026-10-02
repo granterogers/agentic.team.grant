@@ -257,8 +257,8 @@ const question = async (fp: string | null, kind: 'plan' | 'duty' = 'plan') => {
   children.push(c)
   const b = await one(`
     with k as (update public.jobs set state = 'cancelled', state_reason = 'run2-live fixture' where job_id = ${lit(c)}::uuid and state = 'queued' returning job_id)
-    insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
-    select ${lit(project)}::uuid, job_id, ${lit(`Run 2 live proof ${kind} ${run}`)}, 'run2-live fixture', 'Nothing happens until somebody answers this question.',
+    insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
+    select app.job_office(job_id), ${lit(project)}::uuid, job_id, ${lit(`Run 2 live proof ${kind} ${run}`)}, 'run2-live fixture', 'Nothing happens until somebody answers this question.',
            array['Yes, do it','No, leave it'], 'chief-of-staff', ${kind === 'duty' ? 'true' : 'false'}, ${fp === null ? 'null' : lit(fp)}, 'No, leave it' from k
     returning blocker_id::text as id, job_id::text as job`)
   return { id: String(b.id), job: String(b.job) }
@@ -366,8 +366,8 @@ await answer(qn.id, 'No, leave it')
   // job from birth, and cancelled at once so the deployed worker never runs it.
   const dutyJob = String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values ('verify.ask', ${lit(`duty:verify-run2-${run}`)}, ${lit(project)}::uuid, ${lit(`r2-duty-${run}`)}, gen_random_uuid())
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+        values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), 'verify.ask', ${lit(`duty:verify-run2-${run}`)}, ${lit(project)}::uuid, ${lit(`r2-duty-${run}`)}, gen_random_uuid())
         returning job_id::text as id`)
     ).id,
   )
@@ -532,8 +532,8 @@ await answer(qn.id, 'No, leave it')
   const mk = async () => {
     const b = await one(`
       with k as (update public.jobs set state = 'cancelled', state_reason = 'run2-live fixture' where job_id = ${lit(c)}::uuid and state = 'queued' returning job_id)
-      insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-      select ${lit(project)}::uuid, job_id, ${lit(`Run 2 live tick ${run}`)}, 'run2-live fixture', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false from k
+      insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      select app.job_office(job_id), ${lit(project)}::uuid, job_id, ${lit(`Run 2 live tick ${run}`)}, 'run2-live fixture', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false from k
       returning blocker_id::text as id`)
     const t = String(
       (

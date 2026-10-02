@@ -52,7 +52,8 @@ describe('the machine key', () => {
       { fn: 'something_else', param: 'p_by', default: 'grant' },
     ])
     expect(found).toHaveLength(1)
-    expect(problems(found, { appearance_set: PINNED.appearance_set ?? '' })).toEqual([])
+    expect(problems(found, { appearance_set: 'pinned, with a reason of substance' })).toEqual([])
+    expect(problems(found, PINNED).join('\n')).toContain('not pinned')
   })
 
   it('pins nothing without a reason of substance', () => {

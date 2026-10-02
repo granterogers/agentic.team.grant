@@ -66,8 +66,8 @@ if (apiToken === '') {
 const projectId = String(
   (
     await one(`
-      insert into public.projects (name, slug, status)
-      values (${lit(`Fixture upload ${run}`)}, ${lit(SLUG)}, 'paused')
+      insert into public.projects (office_id, name, slug, status)
+      values (app.test_office(), ${lit(`Fixture upload ${run}`)}, ${lit(SLUG)}, 'paused')
       returning project_id::text as id`)
   ).id ?? '',
 )

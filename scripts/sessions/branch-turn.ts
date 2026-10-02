@@ -49,8 +49,8 @@ for (const say of says) {
     (
       await one(`
     begin;
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
-      values ('teamhq', ${lit(`${chat}:${String(i)}`)}, ${lit(actor)}, ${lit(say)}, ${lit(key)}, app.now_utc(), ${lit(proj)}::uuid);
+    insert into public.inbound_commands (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
+      values ((select office_id from public.projects where project_id = ${lit(proj)}::uuid), 'teamhq',${lit(`${chat}:${String(i)}`)}, ${lit(actor)}, ${lit(say)}, ${lit(key)}, app.now_utc(), ${lit(proj)}::uuid);
     create temp table _j on commit drop as select (app.enqueue_inbound((select command_id from public.inbound_commands where dedupe_key = ${lit(key)})) ->> 'job_id')::uuid as id;
     /*
       Not runnable for three seconds, so the deployed worker - which is kicked

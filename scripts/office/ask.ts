@@ -102,8 +102,8 @@ console.log(
 // --- §7: a real job --------------------------------------------------------
 const job = await one(`
   insert into public.jobs
-    (correlation_id, project_id, idempotency_key, kind, intent_class, requested_by, priority)
-  values (gen_random_uuid(), ${lit(projectId)}::uuid,
+    (office_id, correlation_id, project_id, idempotency_key, kind, intent_class, requested_by, priority)
+  values (app.require_office(app.operator_office()), gen_random_uuid(), ${lit(projectId)}::uuid,
           ${lit(`ask-${Date.now().toString(36)}`)}, 'office.ask',
           ${lit(decision.intent)}, 'grant', 100)
   returning job_id::text as id, correlation_id::text as corr

@@ -211,8 +211,8 @@ const verdict = async (job: string) =>
     String(claimed.state),
   )
   const other = await one(`
-    insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
-    values (${lit(project)}::uuid, ${lit(rootJob)}::uuid, ${lit(`Run 3 effects proof ${run}`)}, 'run3-effects-live fixture', 'Nothing happens until somebody answers.', array['Yes','No'], 'chief-of-staff', false, 'not-the-fingerprint-of-anything', 'No')
+    insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
+    values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(rootJob)}::uuid, ${lit(`Run 3 effects proof ${run}`)}, 'run3-effects-live fixture', 'Nothing happens until somebody answers.', array['Yes','No'], 'chief-of-staff', false, 'not-the-fingerprint-of-anything', 'No')
     returning blocker_id::text as id`)
   const wrong = await verdict(
     await fixtureJob('notebook.generate', {

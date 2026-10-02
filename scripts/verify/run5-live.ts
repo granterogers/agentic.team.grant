@@ -156,8 +156,8 @@ try {
   const ask = async (job: string, what: string) =>
     String(
       (
-        await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
-          values (${lit(project)}::uuid, ${lit(job)}::uuid, ${lit(`Run 5 live ${what} ${run}`)}, 'run5-live fixture', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false, 'No')
+        await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+          values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(job)}::uuid, ${lit(`Run 5 live ${what} ${run}`)}, 'run5-live fixture', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false, 'No')
           returning blocker_id::text as id`)
       ).id,
     )
@@ -166,8 +166,8 @@ try {
     ref0 += 1
     const d = String(
       (
-        await one(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
-          values ('telegram', ${lit(`run5-live-${crypto.randomUUID()}`)}, coalesce(app.command_account((select ic.office_id from public.inbound_commands ic where ic.command_id = ${lit(turnCommand)}::uuid), ${lit(turnCommand)}::uuid), 'run5-live'), ${lit(chat)}, 'blocker', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(String(ref0))})
+        await one(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
+          values (app.job_office(${lit(job)}::uuid), 'telegram', ${lit(`run5-live-${crypto.randomUUID()}`)}, coalesce(app.command_account((select ic.office_id from public.inbound_commands ic where ic.command_id = ${lit(turnCommand)}::uuid), ${lit(turnCommand)}::uuid), 'run5-live'), ${lit(chat)}, 'blocker', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(String(ref0))})
           returning delivery_id::text as id`)
       ).id,
     )

@@ -306,8 +306,8 @@ try {
     const raise = async () =>
       String(
         (
-          await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
-            values (${lit(project)}::uuid, ${lit(A)}::uuid, ${lit(`Run 4 live proof ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'run4-live fixture', 'nothing happens until answered', array['Yes, do it','No, leave it'], 'chief-of-staff', false, 'No, leave it')
+          await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+            values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(A)}::uuid,${lit(`Run 4 live proof ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'run4-live fixture', 'nothing happens until answered', array['Yes, do it','No, leave it'], 'chief-of-staff', false, 'No, leave it')
             returning blocker_id::text as id`)
         ).id,
       )
@@ -407,16 +407,16 @@ try {
       )
       const b = String(
         (
-          await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
-            values (${lit(project)}::uuid, ${lit(c)}::uuid, ${lit(`Run 4 live typed ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'run4-live fixture', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false, 'No')
+          await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+            values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(c)}::uuid,${lit(`Run 4 live typed ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'run4-live fixture', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false, 'No')
             returning blocker_id::text as id`)
         ).id,
       )
       if (shown) {
         // A row only: nothing is sent, and the target is a declared test chat.
         // The bot the turn came through (0623: what he was shown is per bot) and the question the message named.
-        await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
-          values ('telegram', ${lit(`run4-live-${crypto.randomUUID()}`)}, coalesce(app.command_account((select ic.office_id from public.inbound_commands ic where ic.command_id = ${lit(String(turnJob.command))}::uuid), ${lit(String(turnJob.command))}::uuid), 'run4-live'), ${lit(chat)}, 'blocker', ${lit(c)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
+        await db.execute(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
+          values (app.job_office(${lit(c)}::uuid), 'telegram', ${lit(`run4-live-${crypto.randomUUID()}`)}, coalesce(app.command_account((select ic.office_id from public.inbound_commands ic where ic.command_id = ${lit(String(turnJob.command))}::uuid), ${lit(String(turnJob.command))}::uuid), 'run4-live'), ${lit(chat)}, 'blocker', ${lit(c)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
       }
       return b
     }

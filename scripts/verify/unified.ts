@@ -86,8 +86,9 @@ const TOKEN = `quorlinth${run}`
 console.log('unified project knowledge (#257) —\n')
 
 const project = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values (${lit(SLUG)}, ${lit(`Unified knowledge proof ${run}`)},
+  -- Grant's office on purpose (#45): a real-looking subject, because the readers under test filter fixtures.
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (app.operator_office(), ${lit(SLUG)}, ${lit(`Unified knowledge proof ${run}`)},
           'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const projectId = String(project.id)
@@ -106,9 +107,9 @@ await db.execute(`
   values (${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)},
           'A linked Google Notebook', 'source');
   insert into public.documents
-    (project_id, connector, external_parent_ref, external_ref, title, content,
+    (office_id, project_id, connector, external_parent_ref, external_ref, title, content,
      content_fingerprint, content_chars, fetched_at, state)
-  values (${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)}, ${lit(`src-${run}`)},
+  values (${PO}, ${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)}, ${lit(`src-${run}`)},
           ${lit(`The ${TOKEN} onboarding note`)},
           ${lit(
             `The ${TOKEN} process has three stages. Stage one is a written brief. ` +
@@ -195,8 +196,8 @@ interface Answer {
 const askOnce = async (tag: string): Promise<Answer> => {
   const command = await one(`
     insert into public.inbound_commands
-      (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
-    values ('telegram', ${lit(`unified-${run}-${tag}`)}, 'verify-unified', ${lit(ASK)},
+      (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
+    values (${PO}, 'telegram', ${lit(`unified-${run}-${tag}`)}, 'verify-unified', ${lit(ASK)},
             ${lit(`telegram:message:unified-${run}-${tag}`)}, ${lit(projectId)}::uuid)
     returning command_id::text as id`)
   const enqueued = await one(`select app.enqueue_inbound(${lit(String(command.id))}::uuid) as j`)

@@ -75,8 +75,9 @@ async function setUp(): Promise<void> {
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by, recipient_agent)
-        values (extensions.gen_random_uuid(), ${lit(project)}::uuid,
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, recipient_agent)
+        values ((select office_id from public.projects where project_id = ${lit(project)}::uuid),
+                extensions.gen_random_uuid(), ${lit(project)}::uuid,
                 ${lit(`verify-handoff-${run}`)}, 'research', 'verify:handoff', 'research-director')
         returning job_id::text as id
       `)
@@ -86,8 +87,9 @@ async function setUp(): Promise<void> {
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by)
-        values (extensions.gen_random_uuid(), ${lit(project)}::uuid,
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by)
+        values ((select office_id from public.projects where project_id = ${lit(project)}::uuid),
+                extensions.gen_random_uuid(), ${lit(project)}::uuid,
                 ${lit(`verify-handoff-plain-${run}`)}, 'research', 'verify:handoff')
         returning job_id::text as id
       `)

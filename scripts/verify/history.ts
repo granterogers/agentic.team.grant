@@ -165,8 +165,9 @@ const said = async (project: string, body: string, surface = 'telegram'): Promis
   const id = `${PREFIX}-${Math.random().toString(36).slice(2, 12)}`
   await db.execute(`
     insert into public.inbound_commands
-      (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
-    values (${lit(surface)}, ${lit(id)},
+      (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
+    values ((select office_id from public.projects where project_id = ${lit(project)}::uuid),
+            ${lit(surface)}, ${lit(id)},
             'grant', ${lit(body)},
             ${lit(`${surface}:message:${id}`)},
             ${lit(project)}::uuid)
@@ -280,8 +281,9 @@ try {
     to it and this check would pass by seeing nothing.
   */
   await db.execute(`
-    insert into public.jobs (correlation_id, project_id, kind, requested_by, idempotency_key)
-    values (gen_random_uuid(), ${lit(mine)}::uuid, 'verification.conversation',
+    insert into public.jobs (office_id, correlation_id, project_id, kind, requested_by, idempotency_key)
+    values ((select office_id from public.projects where project_id = ${lit(mine)}::uuid),
+            gen_random_uuid(), ${lit(mine)}::uuid, 'verification.conversation',
             'grant', ${lit(`convproof-fixture-${run}`)})
   `)
   const fixtureJob = String(
@@ -329,8 +331,9 @@ try {
     (
       await one(`
         insert into public.inbound_commands
-          (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
-        values ('teamhq', ${lit(`${PREFIX}-ask`)}, 'grant', ${lit(`Please look at this ${run}`)},
+          (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
+        values ((select office_id from public.projects where project_id = ${lit(mine)}::uuid),
+                'teamhq', ${lit(`${PREFIX}-ask`)}, 'grant', ${lit(`Please look at this ${run}`)},
                 ${lit(`teamhq:message:${PREFIX}-ask`)}, ${lit(mine)}::uuid)
         returning command_id as v
       `)
@@ -428,8 +431,9 @@ try {
           pr := (app.hq_create_project(app.test_office(), ${lit(`Conversation shape ${run}`)}, 'upload',
                    ${lit(`shape-${run}`)}, ${lit(`Conversation shape ${run}`)}, true) ->> 'project_id')::uuid;
           insert into public.inbound_commands
-            (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
-          values ('teamhq', ${lit(`s${run}`)}, 'grant', ${lit(`Please look at this, really ${run}`)},
+            (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
+          values ((select office_id from public.projects where project_id = pr),
+                  'teamhq', ${lit(`s${run}`)}, 'grant', ${lit(`Please look at this, really ${run}`)},
                   ${lit(key)}, pr)
           returning command_id into c;
           e := app.enqueue_inbound(c);

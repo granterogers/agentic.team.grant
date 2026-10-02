@@ -79,8 +79,9 @@ const mk = async (slug: string): Promise<string> =>
   String(
     (
       await one(`
-        insert into public.projects (slug, name, purpose, status)
-        values (${lit(slug)}, ${lit(`Artifact chain ${run}`)},
+        -- Grant's office on purpose (#45): a real-looking subject, because the reader under test filters fixtures.
+        insert into public.projects (office_id, slug, name, purpose, status)
+        values (app.operator_office(), ${lit(slug)}, ${lit(`Artifact chain ${run}`)},
                 'Removed at the end of this run', 'paused')
         returning project_id::text as id`)
     ).id,
@@ -93,9 +94,10 @@ await db.execute(`
   insert into public.project_attachments (project_id, connector, external_ref, display_name, role)
   values (${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)}, 'A linked notebook', 'source');
   insert into public.documents
-    (project_id, connector, external_parent_ref, external_ref, title, content,
+    (office_id, project_id, connector, external_parent_ref, external_ref, title, content,
      content_fingerprint, content_chars, fetched_at, state)
-  values (${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)}, ${lit(`src-${run}`)},
+  values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+          ${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)}, ${lit(`src-${run}`)},
           ${lit(`The ${TOKEN} programme`)},
           ${lit(
             `The ${TOKEN} programme runs in three phases. Phase one is discovery and takes ` +
@@ -110,8 +112,9 @@ await db.execute(`
 const ask = async (project: string, what: string, tag: string): Promise<string> => {
   const command = await one(`
     insert into public.inbound_commands
-      (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
-    values ('slack', ${lit(`artifact-${run}-${tag}`)}, 'verify-artifact', ${lit(what)},
+      (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
+    values ((select office_id from public.projects where project_id = ${lit(project)}::uuid),
+            'slack', ${lit(`artifact-${run}-${tag}`)}, 'verify-artifact', ${lit(what)},
             ${lit(`slack:message:artifact-${run}-${tag}`)}, ${lit(project)}::uuid)
     returning command_id::text as id`)
   const enqueued = await one(`select app.enqueue_inbound(${lit(String(command.id))}::uuid) as j`)

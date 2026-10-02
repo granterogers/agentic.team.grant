@@ -142,8 +142,8 @@ const slug = `mytasks-proof-${run}`
 const projectId = String(
   (
     await one(`
-      insert into public.projects (slug, name, purpose, status)
-      values (${lit(slug)}, ${lit(`My tasks proof ${run}`)},
+      insert into public.projects (office_id, slug, name, purpose, status)
+      values (app.test_office(), ${lit(slug)}, ${lit(`My tasks proof ${run}`)},
               'Removed at the end of this run', 'paused')
       returning project_id::text as id`)
   ).id,
@@ -207,8 +207,9 @@ check(
 const theirsId = String(
   (
     await one(`
-      insert into public.tasks (project_id, title, state, assigned_to_human, added_by)
-      values (${lit(projectId)}::uuid, ${lit(`The office drafts the note ${run}`)},
+      insert into public.tasks (office_id, project_id, title, state, assigned_to_human, added_by)
+      values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+              ${lit(projectId)}::uuid, ${lit(`The office drafts the note ${run}`)},
               'todo', false, 'chief-of-staff')
       returning task_id::text as id`)
   ).id,
@@ -397,8 +398,8 @@ check(
   const ask = async (what: string, tag: string): Promise<string> => {
     const command = await one(`
       insert into public.inbound_commands
-        (origin_channel, origin_ref, actor, instruction, dedupe_key)
-      values ('teamhq', ${lit(`mytasks-${run}-${tag}`)}, ${lit(`verify-mytasks-${run}`)},
+        (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+      values (app.test_office(), 'teamhq', ${lit(`mytasks-${run}-${tag}`)}, ${lit(`verify-mytasks-${run}`)},
               ${lit(what)}, ${lit(`teamhq:my_tasks:${run}-${tag}`)})
       returning command_id::text as id`)
     const got = await one(
@@ -495,8 +496,8 @@ check(
   const key = `credential:${probe.toLowerCase()}:token`
   await db.execute(`
     insert into public.connection_health
-      (service, credential, state, detail, owner, action, checked_at)
-    values (${lit(probe)}, 'token', 'dead', 'refused, by this suite',
+      (office_id, service, credential, state, detail, owner, action, checked_at)
+    values (app.test_office(), ${lit(probe)}, 'token', 'dead', 'refused, by this suite',
             '✅ grant', 'Settings → somewhere on the web front end', app.now_utc())`)
 
   const raised = JSON.parse(
@@ -564,8 +565,8 @@ check(
   */
   await db.execute(`
     insert into public.connection_health
-      (service, credential, state, detail, owner, action, checked_at)
-    values (${lit(`Parked probe ${run}`)}, 'token', 'dead', 'refused, by this suite',
+      (office_id, service, credential, state, detail, owner, action, checked_at)
+    values (app.test_office(), ${lit(`Parked probe ${run}`)}, 'token', 'dead', 'refused, by this suite',
             '⏸ parked', 'Settings → somewhere on the web front end', app.now_utc())`)
   await db.execute(`select app.chores_for_credentials()`)
   const parked = await one(`
@@ -678,18 +679,20 @@ check(
 console.log('\nthe human-action bridge (#259)')
 
 const blocked = await one(`
-  insert into public.jobs (kind, state, project_id, requested_by, correlation_id,
+  insert into public.jobs (office_id, kind, state, project_id, requested_by, correlation_id,
                            idempotency_key, pinned_config)
-  values ('office.instruction', 'waiting_user', ${lit(projectId)}::uuid,
+  values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+          'office.instruction', 'waiting_user', ${lit(projectId)}::uuid,
           ${lit(`teamhq:verify-mytasks-${run}`)}, gen_random_uuid(),
           ${lit(`mytasks-bridge-${run}`)}, '{}'::jsonb)
   returning job_id::text as id`)
 
 const blocker = await one(`
   insert into public.blockers
-    (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+    (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
      approval_options, originating_agent, work_can_continue)
-  values (${lit(projectId)}::uuid, ${lit(String(blocked.id))}::uuid,
+  values (app.job_office(${lit(String(blocked.id))}::uuid),
+          ${lit(projectId)}::uuid, ${lit(String(blocked.id))}::uuid,
           ${lit(`Authorize Google Drive ${run}`)},
           'The office cannot read the folder until you sign in once.',
           'The weekly digest will have nothing in it.',
@@ -810,17 +813,19 @@ check(
   reading the list.
 */
 const second = await one(`
-  insert into public.jobs (kind, state, project_id, requested_by, correlation_id,
+  insert into public.jobs (office_id, kind, state, project_id, requested_by, correlation_id,
                            idempotency_key, pinned_config)
-  values ('office.instruction', 'waiting_user', ${lit(projectId)}::uuid,
+  values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+          'office.instruction', 'waiting_user', ${lit(projectId)}::uuid,
           ${lit(`teamhq:verify-mytasks-${run}`)}, gen_random_uuid(),
           ${lit(`mytasks-bridge-2-${run}`)}, '{}'::jsonb)
   returning job_id::text as id`)
 const secondBlocker = await one(`
   insert into public.blockers
-    (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+    (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
      approval_options, originating_agent, work_can_continue)
-  values (${lit(projectId)}::uuid, ${lit(String(second.id))}::uuid,
+  values (app.job_office(${lit(String(second.id))}::uuid),
+          ${lit(projectId)}::uuid, ${lit(String(second.id))}::uuid,
           ${lit(`Rotate the key ${run}`)}, 'The stored key expired.', 'Nothing runs.',
           array['Done', 'Not now']::text[], 'marcus', false)
   returning blocker_id::text as id`)
@@ -843,9 +848,10 @@ check(
 */
 const question = await one(`
   insert into public.blockers
-    (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+    (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
      approval_options, originating_agent, work_can_continue)
-  values (${lit(projectId)}::uuid, ${lit(String(second.id))}::uuid,
+  values (app.job_office(${lit(String(second.id))}::uuid),
+          ${lit(projectId)}::uuid, ${lit(String(second.id))}::uuid,
           ${lit(`A question that stops nothing ${run}`)}, 'Curiosity.', 'None.',
           array['Go ahead', 'Not now']::text[], 'marcus', true)
   returning blocker_id::text as id`)
@@ -1100,8 +1106,9 @@ console.log('\nsubtasks')
   const theirs = String(
     (
       await one(`
-        insert into public.tasks (title, assigned_to_human, added_by, state, project_id)
-        values (${lit(`Theirs ${run}`)}, false, 'verify:mytasks', 'todo',
+        insert into public.tasks (office_id, title, assigned_to_human, added_by, state, project_id)
+        values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+                ${lit(`Theirs ${run}`)}, false, 'verify:mytasks', 'todo',
                 ${lit(projectId)}::uuid)
         returning task_id::text as id`)
     ).id ?? '',
@@ -1202,8 +1209,8 @@ console.log('\nreminders (#259, migration 0512)')
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by, state, announce)
-        values (extensions.gen_random_uuid(), null, ${lit(`verify-mytasks-remind-${run}`)},
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, state, announce)
+        values (app.test_office(), extensions.gen_random_uuid(), null, ${lit(`verify-mytasks-remind-${run}`)},
                 'tasks.remind', ${lit(`verify:mytasks-${run}`)}, 'queued', false)
         returning job_id::text as id`)
     ).id ?? '',
@@ -1303,8 +1310,8 @@ console.log('\n"actually make that Monday" (#259, migration 0516)')
       (
         await one(`
           insert into public.inbound_commands
-            (origin_channel, origin_ref, actor, instruction, dedupe_key)
-          values ('teamhq', ${lit(`${THREAD}:${String(said)}`)},
+            (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+          values (app.test_office(), 'teamhq', ${lit(`${THREAD}:${String(said)}`)},
                   ${lit(`verify-mytasks-${run}`)}, ${lit(text)},
                   ${lit(`teamhq:message:${THREAD}-${String(said)}`)})
           returning command_id::text as v`)
@@ -1446,8 +1453,8 @@ console.log('\n"call it X" answers the question rather than renaming something e
       (
         await one(`
           insert into public.inbound_commands
-            (origin_channel, origin_ref, actor, instruction, dedupe_key)
-          values ('teamhq', ${lit(`${THREAD}:${String(n)}`)},
+            (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+          values (app.test_office(), 'teamhq', ${lit(`${THREAD}:${String(n)}`)},
                   ${lit(`verify-mytasks-${run}`)}, ${lit(text)},
                   ${lit(`teamhq:message:${THREAD}-${String(n)}`)})
           returning command_id::text as v`)

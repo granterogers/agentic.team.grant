@@ -91,8 +91,8 @@ const makeJob = async (n: number): Promise<string> =>
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by, recipient_agent)
-        values (extensions.gen_random_uuid(), ${lit(projectId)}::uuid,
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, recipient_agent)
+        values (${office()}, extensions.gen_random_uuid(), ${lit(projectId)}::uuid,
                 ${lit(`fixture-proposes-${run}-${String(n)}`)}, 'research', 'verify:proposes', ${lit(WHO)})
         returning job_id::text as id
       `)
@@ -339,8 +339,8 @@ try {
   */
   const realOne = (
     await one(`
-    insert into public.proposals (staff_slug, kind, needed, title, remedy, argument, times_seen)
-    values ('growth-director', 'not_capable', ${lit(`realproof-${run}`)},
+    insert into public.proposals (office_id, staff_slug, kind, needed, title, remedy, argument, times_seen)
+    values (${office()}, 'growth-director', 'not_capable', ${lit(`realproof-${run}`)},
             'real proof', 'real proof', 'real proof', 3)
     returning proposal_id::text as id
   `)

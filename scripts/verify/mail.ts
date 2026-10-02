@@ -283,9 +283,9 @@ try {
   }
   const draft = (cols: string, vals: string): string => `
     insert into public.mail_messages
-      (message_id, thread_id, to_count, has_attachments, unread,
+      (office_id, message_id, thread_id, to_count, has_attachments, unread,
        first_seen_at, last_seen_at, labels, ${cols})
-    values (${lit(`c-${run}`)}, ${lit(`c-${run}`)}, 1, false, false,
+    values (app.test_office(), ${lit(`c-${run}`)}, ${lit(`c-${run}`)}, 1, false, false,
        app.now_utc(), app.now_utc(), array[]::text[], ${vals});`
 
   await refuse(
@@ -399,8 +399,9 @@ console.log('\nthe correspondence, and which project it belongs to (#172)')
 
   const got = (await one(`
     begin;
-    insert into public.projects (name, slug, status)
-    values (${lit(A)}, ${lit(slugA)}, 'active'), (${lit(B)}, ${lit(slugB)}, 'active');
+    insert into public.projects (office_id, name, slug, status)
+    values (app.test_office(), ${lit(A)}, ${lit(slugA)}, 'active'),
+           (app.test_office(), ${lit(B)}, ${lit(slugB)}, 'active');
 
     insert into public.project_aliases (project_id, alias, source, confidence)
     values

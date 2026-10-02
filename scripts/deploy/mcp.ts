@@ -80,8 +80,8 @@ if (clientArg !== undefined) {
   const hash = createHash('sha256').update(token, 'utf8').digest('hex')
 
   await db.execute(`
-    insert into public.mcp_clients (client_id, display_name, token_sha256, scopes)
-    values (${lit(clientId)}, ${lit(displayName)}, ${lit(hash)}, ${scopes})
+    insert into public.mcp_clients (office_id, client_id, display_name, token_sha256, scopes)
+    values (app.require_office(app.operator_office()), ${lit(clientId)}, ${lit(displayName)}, ${lit(hash)}, ${scopes})
     on conflict (client_id) do update
       set token_sha256 = excluded.token_sha256,
           display_name = excluded.display_name,

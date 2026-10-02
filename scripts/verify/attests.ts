@@ -103,8 +103,8 @@ const projectId = String(
   (
     await one(`
       with created as (
-        insert into public.projects (slug, name, status)
-        values (${lit(`fixture-attests-${run}`)}, 'Fixture: attests', 'active')
+        insert into public.projects (office_id, slug, name, status)
+        values (app.test_office(), ${lit(`fixture-attests-${run}`)}, 'Fixture: attests', 'active')
         returning project_id
       ),
       attached as (
@@ -124,8 +124,9 @@ const enqueue = async (kind: string, key: string): Promise<string> =>
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
-        values (gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(key)}, ${lit(kind)},
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, priority)
+        values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+                gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(key)}, ${lit(kind)},
                 ${lit(MINE)}, 100)
         returning job_id::text as id
       `)

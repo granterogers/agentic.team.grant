@@ -424,8 +424,13 @@ export function usageTab(data = USAGE) {
 */
 function growthCard(g) {
   if (g === null || !Array.isArray(g.surfaces)) return ''
-  const gb = (n) => `${(Number(n) / 1024 / 1024).toFixed(0)} MB`
-  const pct = Math.round((Number(g.db_bytes) / Number(g.tier_bytes)) * 100)
+  // An ordinary office may have no reading yet; say so rather than printing NaN or Infinity.
+  const finite = (n) => Number.isFinite(Number(n)) && n !== null && n !== undefined
+  const gb = (n) => (finite(n) ? `${(Number(n) / 1024 / 1024).toFixed(0)} MB` : 'an unmeasured amount')
+  const pct =
+    finite(g.db_bytes) && finite(g.tier_bytes) && Number(g.tier_bytes) > 0
+      ? String(Math.round((Number(g.db_bytes) / Number(g.tier_bytes)) * 100))
+      : 'unmeasured'
   const years = g.years_of_room === null || g.years_of_room === undefined
     ? null
     : Number(g.years_of_room)
@@ -445,7 +450,7 @@ function growthCard(g) {
     </ul>
     <p class="t-meta">
       The database is ${esc(gb(g.db_bytes))} of the free tier's ${esc(gb(g.tier_bytes))}
-      — ${esc(String(pct))}%.
+      — ${esc(pct)}${pct === 'unmeasured' ? '' : '%'}.
       ${years === null
         ? 'Nothing has been said yet, so there is no rate to project.'
         : `At this rate there is room for about ${esc(String(years))} more years of

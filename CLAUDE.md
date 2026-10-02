@@ -409,7 +409,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **679 applied** (0666 is the latest).
+`npm run migrate` applies plain SQL from `migrations/`. **730 applied** (0860 is the latest).
 
 ## Asking the office about itself
 
@@ -4228,6 +4228,28 @@ Each of these cost real time. They are here so they cost it once.
   chats a suite had declared test origins to the person (0666). A compatibility shim without a counter is a leak with a name.
 - **Raising a question also files a to-do on his personal list**, so a suite that raises fixture blockers leaves to-dos behind
   (ten, twice - the same ten the P1 closure cleared). Each suite now sweeps that class in its own teardown.
+
+- **A function that a default, an index or a CHECK calls runs with the WRITING role's privilege.** 0841 revoked EXECUTE on
+  every `app` function from the browser roles and `public`; `app.now_utc()` is the default of dozens of columns and
+  `normalise_name` is in an index expression, so every PostgREST insert (Telegram, Slack, voice - all `service_role`) failed
+  with `permission denied for function now_utc` for about five minutes. The attack harness wrote as the table owner and could
+  not see it. 0842 grants those four and `98-merge-cleanup` is red without it. Model the writer with the privileges
+  production gives it, and when you revoke a privilege, list what the catalogue says depends on the function first.
+- **A meter that counts what ran says nothing about what has not.** The compatibility bridge read zero across the worker's
+  ticks while six operator commands and rare paths still leaned on it (`record_signal`, `record_connection_health`,
+  `record_slack_history`, `suppress_delivery`, `unlearn`, the tombstone trigger) - found only when removing the bridge made
+  a rehearsal fail on the document trigger. They were classed "trusted derived" with no door, which claimed a derivation
+  nothing performed. `npm run check:carrier-writers` reads every function body for an insert into a carrier without
+  `office_id`; the meter and the callers check could not see it.
+- **A verification suite that relied on a bridge fails the day the bridge goes, in a hundred places at once.** About 110
+  suites under `scripts/verify` insert into carrier tables with no office; they failed closed (23502) when 0860 landed, which
+  is the safe direction and a large debt. A shim that quietly fixes test fixtures is the shim that lets production writers
+  lean on it too.
+- **`unnest(proargnames)` includes a function's OUT and TABLE columns.** `check:office-edges` reported `dequeue_job(office_id)`
+  as a caller choosing an office; `office_id` is a column it RETURNS. Filter on `proargmodes`.
+- **A stale excuse list that is meant to reach empty needs a control that does not use it.** `check-machine-key`'s pins
+  became empty when every reach was converted, and its own "a pinned reach is accepted" control read the real list. The
+  controls now carry a pin of their own, because a control with nothing to be wrong about proves nothing.
 
 ---
 

@@ -51,8 +51,8 @@ const TOKEN = `zarquon${run}`
 
 const project = await one(`
   with created as (
-    insert into public.projects (slug, name, status)
-    values (${lit(`fixture-knowledge-${run}`)}, 'Fixture: knowledge', 'active')
+    insert into public.projects (office_id, slug, name, status)
+    values (app.test_office(), ${lit(`fixture-knowledge-${run}`)}, 'Fixture: knowledge', 'active')
     returning project_id
   ),
   attached as (
@@ -70,8 +70,8 @@ const PO = `(select office_id from public.projects where project_id = ${lit(proj
 
 const other = await one(`
   with created as (
-    insert into public.projects (slug, name, status)
-    values (${lit(`fixture-knowledge-other-${run}`)}, 'Fixture: knowledge (other)', 'active')
+    insert into public.projects (office_id, slug, name, status)
+    values (app.test_office(), ${lit(`fixture-knowledge-other-${run}`)}, 'Fixture: knowledge (other)', 'active')
     returning project_id
   ),
   attached as (
@@ -103,9 +103,10 @@ const insertDoc = async (input: {
 }): Promise<string> => {
   const r = await one(`
     insert into public.documents
-      (project_id, connector, external_parent_ref, external_ref, title, content,
+      (office_id, project_id, connector, external_parent_ref, external_ref, title, content,
        content_fingerprint, content_chars, fetched_at)
-    values (${lit(input.project)}::uuid, ${lit(input.connector)},
+    values ((select office_id from public.projects where project_id = ${lit(input.project)}::uuid),
+            ${lit(input.project)}::uuid, ${lit(input.connector)},
             ${input.ref === null ? 'null' : lit(input.parent)},
             ${input.ref === null ? 'null' : lit(input.ref)}, ${lit(input.title)},
             ${lit(input.content)}, ${lit(fingerprint(input.ref ?? input.title))},
@@ -422,8 +423,9 @@ record(
 // so the guards have to be exercised on a project shaped like a real one.
 const realish = await one(`
   with created as (
-    insert into public.projects (slug, name, status)
-    values (${lit(`newsroom-${run}`)}, ${lit(`Newsroom ${run}`)}, 'active')
+    -- Real-looking name only to dodge the fixture-name guards (0107); the office is the TEST office.
+    insert into public.projects (office_id, slug, name, status)
+    values (app.test_office(), ${lit(`newsroom-${run}`)}, ${lit(`Newsroom ${run}`)}, 'active')
     returning project_id
   ),
   attached as (
@@ -858,9 +860,9 @@ console.log('\nwhat happens when a source vanishes from its listing (ADR-0040)')
     begin;
       create temp table vanish (k text, v jsonb) on commit drop;
       insert into public.documents
-        (project_id, connector, external_parent_ref, external_ref, title, content,
+        (office_id, project_id, connector, external_parent_ref, external_ref, title, content,
          content_fingerprint, content_chars, fetched_at)
-      select ${lit(projectId)}::uuid, 'notebooklm', ${lit(parent)}, r.ref,
+      select ${OFFICE_OF}, ${lit(projectId)}::uuid, 'notebooklm', ${lit(parent)}, r.ref,
              'Vanishing ' || r.ref, 'body ' || r.ref,
              encode(sha256(('body ' || r.ref)::bytea), 'hex'), 6, app.now_utc()
         from (values ('a'), ('b'), ('c'), ('d')) r(ref);

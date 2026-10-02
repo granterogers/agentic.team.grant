@@ -102,6 +102,8 @@ export const ENFORCEMENT_SQL = `
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         cross join lateral unnest(coalesce(p.proargnames, '{}'::text[])) with ordinality as a(arg, ord)
        where n.nspname = 'public' and a.arg ~* '(^|_)(office|offices)(_id|_key|_ref|_uuid)?$' and a.arg !~* 'rate'
+         -- a column the function RETURNS (an OUT or TABLE column) is an answer, not a caller choosing an office
+         and coalesce((p.proargmodes)[a.ord], 'i') in ('i', 'b', 'v')
          -- P3: the ONE shape of door that takes an office. The gateway writes it from a verified login; the function
          -- is reachable by the service role alone. Anything else - a different name, a later position, a default, a
          -- grant to a browser role - is a caller choosing its office.

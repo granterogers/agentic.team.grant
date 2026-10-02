@@ -84,8 +84,9 @@ async function setUp(): Promise<void> {
   projectId = String(
     (
       await one(`
-        insert into public.projects (name, slug, status)
-        values ('Probe waiting ${run}', ${lit(slug)}, 'paused')
+        insert into public.projects (office_id, name, slug, status)
+        -- A real-looking subject on purpose (#45): the old bridge put it in Grant's office, so the operator office.
+        values (app.operator_office(), 'Probe waiting ${run}', ${lit(slug)}, 'paused')
         returning project_id
       `)
     ).project_id,
@@ -94,8 +95,9 @@ async function setUp(): Promise<void> {
     (
       await one(`
         insert into public.jobs
-          (project_id, correlation_id, kind, requested_by, idempotency_key, state)
-        values (${lit(projectId)}::uuid, extensions.gen_random_uuid(),
+          (office_id, project_id, correlation_id, kind, requested_by, idempotency_key, state)
+        values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+                ${lit(projectId)}::uuid, extensions.gen_random_uuid(),
                 'research.summarise', 'grant', 'waiting-probe-${run}', 'waiting_user')
         returning job_id
       `)
@@ -105,9 +107,10 @@ async function setUp(): Promise<void> {
     (
       await one(`
         insert into public.blockers
-          (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+          (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
            approval_options, originating_agent, work_can_continue, state)
-        values (${lit(projectId)}::uuid, ${lit(jobId)}::uuid,
+        values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+                ${lit(projectId)}::uuid, ${lit(jobId)}::uuid,
                 'Probe: may the team read the shared folder?',
                 'It is the only place the source material is.',
                 'Nothing happens until you answer.',

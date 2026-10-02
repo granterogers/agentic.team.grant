@@ -467,8 +467,8 @@ export const askOnce = async (
               in its third location.
             */
             insert into public.inbound_commands
-              (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
-            values ('teamhq', ${lit(`${chat}:${String(index)}`)}, ${lit(actor)},
+              (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
+            values (app.test_office(), 'teamhq',${lit(`${chat}:${String(index)}`)}, ${lit(actor)},
                     ${lit(turn.say)}, ${lit(key)}, app.now_utc(),
                     /*
                       The DEFAULT, not an explicit null, when the turn names

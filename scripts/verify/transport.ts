@@ -111,8 +111,8 @@ try {
     `correlation_id` are both NOT NULL and neither defaults.
   */
   const made = await one(`
-    insert into public.jobs (kind, state, requested_by, correlation_id, idempotency_key)
-    values ('note', 'queued', 'slack:verify-transport-${run}', gen_random_uuid(),
+    insert into public.jobs (office_id, kind, state, requested_by, correlation_id, idempotency_key)
+    values (app.test_office(), 'note', 'queued', 'slack:verify-transport-${run}', gen_random_uuid(),
             'verify-transport-${run}')
     returning job_id::text as id, is_fixture`)
   jobId = String(made.id ?? '')
