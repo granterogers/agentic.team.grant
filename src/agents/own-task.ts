@@ -42,8 +42,38 @@ const references = (who: Speaking): string[] => {
 
 const reEscape = (v: string): string => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+/*
+  NOBODY IN PARTICULAR IS ALSO ADDRESSED TO WHOEVER WAS CHOSEN (#408 closure).
+
+  "Ask the appropriate person on the team to review our launch preparation" names no one, so the office chose the quality director,
+  and she was handed that sentence whole and answered "Who's the best person to review our launch prep?": the delegation was done
+  and the work reached her as a question about delegating. A frame that names a kind of person ("the appropriate / right / best /
+  relevant person") is addressed to whoever answers. Not for the chief of staff, for whom it is exactly the request to convene
+  somebody.
+*/
+const ANYONE = new RegExp(
+  `^\\s*(?:please\\s+|can you\\s+|could you\\s+)?(?:ask|have|get|tell|let)\\s+(?:the\\s+)?` +
+    `(?:appropriate|right|best|relevant|correct|suitable|proper|responsible|most suitable)\\s+${ROLE_NOUN}` +
+    `(?:\\s+(?:on|in|from)\\s+(?:the|our|my)\\s+(?:team|office))?\\s*(?:to\\s+|if\\s+(?:she|he|they)\\s+can\\s+|whether\\s+|:\\s*)?`,
+  'i',
+)
+
 export function ownTask(instruction: string, who: Speaking): string {
   const text = String(instruction ?? '')
+  if (who.slug !== 'chief-of-staff') {
+    const open = ANYONE.exec(text)
+    if (open !== null) {
+      const rest = text.slice(open[0].length).replace(/^\s+/, '')
+      // Same rules as below: a task has to follow, and somebody else being named is a request to convene them.
+      if (
+        rest.split(/\s+/).filter(Boolean).length >= 3 &&
+        !/^(?:and|&|,|then\b|plus\b)/i.test(rest)
+      )
+        return INTERROGATIVE.test(rest)
+          ? `Tell me ${rest}`
+          : rest.charAt(0).toUpperCase() + rest.slice(1)
+    }
+  }
   const refs = references(who)
   if (refs.length === 0) return text
   const named = refs.map(reEscape).join('|')

@@ -86,3 +86,42 @@ describe('the handler uses it where only the model reads the result', () => {
     expect(src).not.toMatch(/ownTask\(turn\.kept/)
   })
 })
+
+describe('a frame that names a kind of person is addressed to whoever was chosen (#408 closure)', () => {
+  const quality: Speaking = {
+    slug: 'quality-director',
+    name: 'Grace',
+    title: 'Quality & Risk Director',
+  }
+  it.each([
+    [
+      'Ask the appropriate person on the team to review our launch preparation and identify anything important that is still unfinished.',
+      'Review our launch preparation and identify anything important that is still unfinished.',
+    ],
+    [
+      'Have the right person look at the venue contract for anything risky.',
+      'Look at the venue contract for anything risky.',
+    ],
+    [
+      'Please get the best colleague to check which tasks are blocked.',
+      'Check which tasks are blocked.',
+    ],
+  ])('%s', (said, expected) => {
+    expect(ownTask(said, quality)).toBe(expected)
+  })
+
+  it.each([
+    // the chief of staff is the one who convenes: for her this is the request itself
+    [
+      'Ask the appropriate person on the team to review our launch preparation and flag anything unfinished.',
+      claire,
+    ],
+    // nothing follows, or somebody else is named as well
+    ['Ask the appropriate person.', quality],
+    ['Ask the right person and Emma to review it.', quality],
+    // a statement, not a delegation frame
+    ['The appropriate person on the team is Grace, so review the launch plan.', quality],
+  ])('left whole: %s', (said, who) => {
+    expect(ownTask(said as string, who as Speaking)).toBe(said)
+  })
+})
