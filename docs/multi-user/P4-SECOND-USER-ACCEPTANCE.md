@@ -496,6 +496,7 @@ Platform healthy throughout (health API once before each production step; no pol
   (grep of `soleOffice`/`sole_person_office` in `src/` and the functions). Test: `tests/handlers/google-duties-act-in-the-jobs-office.test.ts`
   (two offices, and a job with no office fails closed), proved red without the fix. Grant's Google token is still dead
   (since 15 Sep), so the duty will now report that, once a day, instead of `no_office`.
+* **#407 verified live and CLOSED:** the 06:19 duty jobs failed `no_office`; the 07:20 jobs after the deploy both completed and report "Google refused the stored refresh token".
 * **Deployed:** gateway v858 and page (`dpl_E3kwyjeRHR96qCAkbJVKB45PQXwm`; **rollback `dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z`**), worker v931.
 * **Supabase:** `SUPABASE-DEGRADATION-2026-10.md` (facts, likely contributors, unproven, weakened; no upgrade, no timeout raised).
 * **Testing architecture:** `docs/testing/SUITE-CLASSES.md`, `npm run suite`, `npm run check:suite-classes`.
