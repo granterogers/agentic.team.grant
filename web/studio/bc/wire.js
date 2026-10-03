@@ -780,6 +780,11 @@ const wireSearch = (root) => {
   const box = root.querySelector('#bc-search-q')
   if (box !== null) {
     /*
+      Search runs as you type, so Enter has nothing left to do. Left alone it submitted the form, which reloaded the page
+      and threw the query away: the one key a person presses to say "go" cleared what they had written.
+    */
+    box.closest('form')?.addEventListener('submit', (e) => e.preventDefault())
+    /*
       Filters as you type (§7.1's "immediately"), and the caret is put back
       where it was: `render()` replaces every node, so a redraw on each
       keystroke would otherwise send the cursor to the start of the box after
@@ -2924,6 +2929,11 @@ const wireTasks = (root) => {
       }
       const who = String(root.querySelector('#bc-edit-who')?.value ?? '').trim()
       const due = String(root.querySelector('#bc-edit-due')?.value ?? '').trim()
+      const title = String(root.querySelector('#bc-edit-title')?.value ?? '').trim()
+      if (title === '') {
+        say(b, 'A task needs words. What needs doing?', 'warn')
+        return
+      }
       /*
         `p_clear` is how the office is told to EMPTY a field, because null
         means "leave it alone" to `hq_task_update` — so clearing the assignee
@@ -2938,6 +2948,7 @@ const wireTasks = (root) => {
         () =>
           act('task_update', {
             p_task_id: id,
+            p_title: title,
             p_assignee: who === '' ? null : who,
             p_due_on: due === '' ? null : due,
             p_clear: clear,
@@ -2945,6 +2956,36 @@ const wireTasks = (root) => {
         'Saved.',
       )
       if (done !== null) await ctx.refresh()
+    })
+  }
+
+  /*
+    REMOVING A TASK. Two presses, because removing is the one thing on this form that is not a save: the first press says
+    what the second will do. It is a cancellation, not a deletion, so it is kept for history and can be taken back from
+    the undo strip that every write offers.
+  */
+  for (const b of root.querySelectorAll('[data-bc-taskremove]')) {
+    let armed = false
+    b.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true
+        b.textContent = 'Press again to remove'
+        setTimeout(() => {
+          armed = false
+          if (b.isConnected) b.textContent = 'Remove task'
+        }, 6000)
+        return
+      }
+      const done = await attempt(
+        b,
+        'Removing…',
+        () => act('task_state', { p_task_id: b.dataset.bcTaskremove, p_state: 'cancelled' }),
+        'Removed.',
+      )
+      if (done !== null) {
+        await ctx.refresh()
+        ctx.goAnywhere(`/p/${ctx.state.project}/tasks`)
+      }
     })
   }
 

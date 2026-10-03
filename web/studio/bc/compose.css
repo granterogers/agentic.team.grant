@@ -338,7 +338,7 @@
   display: grid;
   place-items: center;
   aspect-ratio: 1;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--bc-text-muted);
   border-radius: 4px;
 }
@@ -369,7 +369,7 @@
   box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
 }
 [data-experience='basecamp'] .bcagendadd { font-size: 14px; font-weight: 600; line-height: 1; color: var(--bc-text-strong); }
-[data-experience='basecamp'] .bcagendamm { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcagendamm { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcagendawhat {
   flex: 1 1 auto;
   min-width: 0;
@@ -1210,7 +1210,7 @@
   box-shadow: none;
 }
 [data-experience='basecamp'] .bcobjword {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1472,7 +1472,7 @@
   cannot be the thing that makes row two fall below the fold.
 */
 [data-experience='basecamp'] .bccomp--c .bcdocs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 9px; }
-[data-experience='basecamp'] .bccomp--c .bcdocmeta { font-size: 11px; }
+[data-experience='basecamp'] .bccomp--c .bcdocmeta { font-size: 12px; }
 
 /* The two views of the workspace, and the segmented control that picks one. */
 [data-experience='basecamp'] .bcseg { display: inline-flex; gap: 0; }
@@ -2209,7 +2209,7 @@
   border-radius: 6px;
   background: color-mix(in srgb, var(--bc-accent) 22%, transparent);
   color: var(--bc-text-strong);
-  font: 600 11px/1 var(--bc-font);
+  font: 600 12px/1 var(--bc-font);
 }
 [data-experience='basecamp'] .bcsources--full .bcsource { align-items: center; }
 

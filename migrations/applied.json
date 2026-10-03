@@ -734,5 +734,6 @@
   "0863_a_second_person_office_can_be_provisioned_and_retired.sql": "a0ae2cdd10a4c3ba7ddf0c8b32c910cb5e84a91982cecaa28e6c82545932d2c9",
   "0864_the_acceptance_login_password_has_a_credential_class.sql": "156cdaf7c0fdb10ff5d137445deecf5e50b9276c18936bb5778de86f2390733a",
   "0865_a_role_title_corrupted_by_repeated_escaping_is_repaired.sql": "1659e3d2a0cb3965c2d82673cb0c6a027765f5753d7389f6abc62e56da6343f0",
-  "0866_a_verified_stranger_can_open_their_own_office.sql": "c2c2faf50a3483ea48741936a714b6af5023d806f5fdb7d626387a24c57ecba1"
+  "0866_a_verified_stranger_can_open_their_own_office.sql": "c2c2faf50a3483ea48741936a714b6af5023d806f5fdb7d626387a24c57ecba1",
+  "0867_a_task_is_not_answered_with_a_status_report.sql": "1bdc0812260bb59e473ecc8b4794b1e345d33be993466ee0f8a1dd47880e5899"
 }

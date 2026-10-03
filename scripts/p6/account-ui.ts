@@ -346,7 +346,12 @@ const journey = async (p: Person, other: Person | null): Promise<void> => {
 
   // 6. It persists across a reload.
   await page.reload({ waitUntil: 'domcontentloaded' })
-  await page.waitForTimeout(2500)
+  // The page paints twice and a production read takes one to three seconds; wait for the thing, not for a pause.
+  await page
+    .waitForFunction(`document.body.innerText.includes(${JSON.stringify(p.project)})`, undefined, {
+      timeout: 20000,
+    })
+    .catch(() => null)
   check(
     `${t}: after a reload the project is still there and the person is still signed in`,
     (await text(page)).includes(p.project) &&

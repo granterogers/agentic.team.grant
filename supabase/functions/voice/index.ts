@@ -517,9 +517,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   return json({
     speak:
-      'Right — I have put that to the team. It takes a few minutes, and the answer ' +
-      'appears in Slack. If it turns out to be important you will get a Telegram ' +
-      'as well.',
+      'Right — I have put that to the team. It takes a few minutes. The answer will ' +
+      'be on the Team page of your project, and in Slack or Telegram if you have ' +
+      'connected them.',
     did: 'delegated',
     job_id: queued.job_id,
     command_id: commandId,

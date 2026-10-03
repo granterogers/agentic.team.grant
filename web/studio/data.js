@@ -745,6 +745,8 @@ export async function hydrate(endpoint, token) {
       PROJECTS,
       data.projects.map((p) => ({
         ...p,
+        // The catch-all where loose conversations are filed is called Unnamed in the database, which reads as a mistake.
+        name: p.slug === 'unnamed' ? 'Conversations' : p.name,
         hue: hues[p.slug] ?? hueFor(p.slug),
         // Every section the studio renders, guaranteed to be an array so a
         // renderer never has to ask. An absent section and an empty one are the
@@ -755,7 +757,9 @@ export async function hydrate(endpoint, token) {
         waiting: p.waiting ?? [],
         modules: p.modules ?? [],
         documents: p.documents ?? [],
-        tasks: p.tasks ?? [],
+        // A removed task is kept by the office for history and is not shown: it used to come back as a struck-through
+        // "done" one, so removing a task looked like completing it.
+        tasks: (p.tasks ?? []).filter((t) => t.state_raw !== 'cancelled'),
         contacts: p.contacts ?? [],
         sources: p.sources ?? [],
         activity: p.activity ?? [],

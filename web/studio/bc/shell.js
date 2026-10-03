@@ -428,7 +428,7 @@ const tray = () =>
       typed team chat away from a phone on the projects screen rather than
       removing a duplicate.
     -->
-    <button type="button" class="bcnarrow-only" data-bc-dock>
+    <button type="button"${state().view === 'project' ? ' class="bcnarrow-only"' : ''} data-bc-dock>
       <span aria-hidden="true">${trayMark(TRAY_MARKS.chat)}</span><span>Chat</span>
     </button>
     ${trayItems()
@@ -1288,6 +1288,7 @@ const taskRecord = (p) => {
         has to address. Anybody the row names who is not on the team stays
         selectable, so opening a record can never silently reassign it.
       -->
+      ${input({ id: 'bc-edit-title', label: 'What needs doing', name: 'title', autocomplete: 'off', value: t.title })}
       ${assigneePicker('bc-edit-who', t.who)}
       <!--
         The date the row actually carries. This read t.due, which is prose
@@ -1308,6 +1309,11 @@ const taskRecord = (p) => {
           'data-bc-taskdone': key,
           'data-bc-want': done ? 'todo' : 'done',
         })}
+        ${
+          t.local === true || t.id === undefined || t.id === null || t.id === ''
+            ? ''
+            : button('Remove task', { kind: 'danger', 'data-bc-taskremove': key })
+        }
       </div>
       ${
         t.local === true || t.id === undefined || t.id === null || t.id === ''

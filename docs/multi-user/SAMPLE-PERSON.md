@@ -99,6 +99,34 @@ unreleased page can be driven with real reads and writes before it is deployed. 
 `openSettings`, `closeSettings`. Wait for the thing being asserted, not for a guess: a production write takes one to three
 seconds.
 
+## The UX gate, and how to use the Sample (3 October 2026)
+
+**If a feature is meant for an ordinary signed-in person, it is tested as the Sample Person.** A change to Team HQ that has only been looked at
+on the static prototype (`web/studio` served locally with no session) has not been tested: the prototype shows invented projects and hides every
+writer-only control. Use, in order of cost:
+
+```
+npm run sample:status | sample:seed | sample:reset | sample:inventory   # the baseline, and proof it is intact
+npm run sample:tour -- <label> [--widths desktop,laptop,tablet,phone]    # every surface, four widths, measured + captured (read-only)
+npm run sample:use -- <label>                                           # 21 real interactions (writes; reset afterwards)
+npm run sample:chat -- <label> [1,2,3]                                  # up to 3 PAID model turns through the real worker
+npm run sample:voice -- <label>                                         # voice note (substituted mic/transcription) + call-session boundary
+npm run sample:voice-answer                                             # the canned-answer path, driven in rolled-back blocks
+npm run verify:account-ui | verify:entry-ui | verify:account-lifecycle # a stranger becomes a person: the page, the form, the gateway
+```
+
+**Authentication for automation:** `scripts/sample/browser.ts` serves the working-tree page and hands the browser the Sample's session in the URL
+fragment, exactly as a magic link ends (the mail hop is the one thing not exercised). The login password is in the Vault (`p4.second_person.password`).
+`verify:account-ui` additionally maps a real-looking host name to the local server so the page behaves as deployed (a stranger sees the entry screen);
+on 127.0.0.1 it draws the prototype, as always.
+
+**Real, simulated, impossible:** see `docs/ux/sample-uat-2026-10-03.md`. In short, the office's data is real; the mailbox, microphone and transcription
+are substituted by named harnesses; internal calendar events, Needs You/Stuck fixtures, hand-made activity and chat history cannot honestly be seeded
+today and are not faked; Slack, Telegram and Google need real external connections and are not connected for the Sample.
+
+**Adding coverage safely:** extend `scripts/sample/plan.ts` (dates relative to today, assertions by property), keep every write inside the Sample office
+through the existing guard, and finish with `sample:reset` and the other-offices fingerprint it prints. New suites go in `docs/testing/suite-classes.json`.
+
 ## Known limits
 
 * A production write is real latency and real (free-tier) cost; the Sample's jobs run on the real worker. Do not drive

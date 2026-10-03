@@ -3451,8 +3451,8 @@ const bubble = (m) => {
           the page imply it was there. No backticks in this comment.
         -->
         ${m.backfilled ? '<span class="t-meta pendmark">From the channel history, before the office was watching</span>' : ''}
-        ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer comes
-          back in Slack and Telegram too.</span>` : ''}
+        ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer will be on
+          the Team page, and in Slack or Telegram if you have connected them.</span>` : ''}
         <!--
           Could not be delivered (#202).
 

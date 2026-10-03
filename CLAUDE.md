@@ -418,6 +418,9 @@ UX, interaction and browser work runs as that person (`npm run sample:reset`, `n
 `docs/testing/SUITE-CLASSES.md`: 182 of the suites write to or press on the real office; run them with `npm run suite -- <name> --production`,
 and not at all while Supabase is unhealthy. A signed-in browser harness needs the real gateway and a real login (`scripts/sample/browser.ts`);
 a local static server shows the page's read-only prototype and says nothing about writer flows.
+**A feature meant for an ordinary person is tested as the Sample Person** (`npm run sample:tour | sample:use | sample:chat | sample:voice`, then
+`sample:reset`); see `docs/multi-user/SAMPLE-PERSON.md` and `docs/ux/sample-uat-2026-10-03.md`. A stranger's journey (create account, set up the
+office, first project, sign out) is `npm run verify:account-ui`. Team HQ had no way to create a project until the Sample was used as a customer.
 
 ## Asking the office about itself
 

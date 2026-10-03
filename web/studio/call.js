@@ -418,7 +418,7 @@ const send = async (said) => {
     const body = await askOffice(said)
     show('The team', body.speak, body.did === 'delegated' ? 'delegated' : '')
     say(body.did === 'delegated'
-      ? 'Put to the team — the answer comes back in Slack and Telegram.'
+      ? 'Put to the team — the answer will be on the Team page, and in Slack or Telegram if you have connected them.'
       : 'Ask another.')
   } catch (e) {
     show('The team', 'I could not reach the office: ' + e.message, 'bad')
