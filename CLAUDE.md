@@ -4335,6 +4335,24 @@ Each of these cost real time. They are here so they cost it once.
   database rather than the DOM.
 - **Process slip, recorded so it is not repeated:** several edits this session were made with `python3 - <<EOF` and `biome
   --write` instead of the Edit tool, against the File editing rule above. The results were read back before use; the rule stands.
+  It happened twice more in the closure continuation (a test appended with a heredoc, one `sed -i` on a scratch file); disclosed.
+- **A role is a name, and a "review" is a reading.** "Ask the finance director to review the outstanding work and tell me what needs
+  attention" convened nobody (a role word named no one), then once routed, the planner composed `notebook.read -> task.extract` and the
+  office FILED SIX TASKS into the project as the review (twelve for the travel project). The answer to "what needs attention" is in the
+  tasks the project already has; extraction is a write. A plan may write to a task list only when HIS words ask for tasks
+  (`asksForTasks`, `src/agents/goal.ts`). Found by reading the job tree and `sample:status`'s "not baseline: 18 tasks", never the answer.
+- **A frame naming a KIND of person is addressed to whoever answers.** "Ask the appropriate person on the team to ..." reached the
+  quality director whole and she asked who the appropriate person was (`ownTask`). Not for the chief of staff, for whom it is the request.
+- **Widening a gate's vocabulary to catch one leak can refuse ordinary English.** The #412 leak was caught by adding access, fetch, check
+  and "cannot" beside the generic nouns the policy, the instructions, the schema; that would have refused "We need to check the policy with
+  the accountant". Strong evidence (a registry tool NAME) earns the wide verb set; generic nouns earn only the original calling verbs. The
+  fix is heuristic and defence in depth: the provider puts working in the answer field and nothing here can make that impossible.
+- **Ask the platform before blaming the harness.** When signed-in acceptance started timing out (`upstream request timeout` from the auth
+  token endpoint for over an hour, a 546 from the worker, a `Connection timeout` from the Management API), the project health API
+  (`GET /v1/projects/<ref>/health?services=auth&services=db&services=rest&services=storage`) said auth, storage and then the database
+  were UNHEALTHY while 14 to 17 client backends were in use of a 57-slot limit. That is the platform, not slot exhaustion and not our
+  harness; retries and reruns add load to a sick instance. Stop, read the health API, wait. The log endpoint that would show an earlier
+  slot-exhaustion window answers 410, so that single event stays UNKNOWN.
 
 ---
 
