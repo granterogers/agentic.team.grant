@@ -152,6 +152,12 @@ const turns: {
   /** What the answer (or the delegated answer) must say, and must not, judged on the words and never a canned list */
   expect?: RegExp
   forbid?: RegExp
+  /**
+   * A delegation to a named or role-described colleague, asserted on the job TREE the real worker produced (#408): which
+   * specialists were convened (exactly these, or for an open-ended request, exactly one of `among`), that every job belongs
+   * to the Sample's office and the page's project, and that the result is in the conversation and survives a reload.
+   */
+  tree?: { only?: string; among?: string[]; project: string }
 }[] = [
   { path: '/', words: 'What should I focus on today across my projects?', wait: 150000 },
   {
@@ -176,6 +182,37 @@ const turns: {
     wait: 150000,
     project: 'wellness-studio-launch',
     expect: /kumquat/i,
+  },
+  {
+    path: '/p/2027-financial-plan',
+    words:
+      'Ask the finance director to review the outstanding work in this project and tell me what needs attention first.',
+    wait: 300000,
+    project: '2027-financial-plan',
+    expect: /budget|savings|emergency fund|self-assessment|lock-in|fixed-rate/i,
+    forbid: /Japan|ryokan|rail pass|sprung|signage|instructor|Haneda/i,
+    tree: { only: 'finance-director', project: '2027-financial-plan' },
+  },
+  {
+    path: '/p/japan-spring-trip',
+    words:
+      'Have the research director review the unresolved travel work and identify the most important next steps.',
+    wait: 300000,
+    project: 'japan-spring-trip',
+    expect: /flight|passport|ryokan|ticket|insurance|booking|rail pass|eSIM|cherry/i,
+    forbid: /sprung|signage|instructor|self-assessment|savings account|lock-in/i,
+    tree: { only: 'research-director', project: 'japan-spring-trip' },
+  },
+  {
+    path: '/p/wellness-studio-launch',
+    words:
+      'Ask the appropriate person on the team to review our launch preparation and identify anything important that is still unfinished.',
+    wait: 300000,
+    project: 'wellness-studio-launch',
+    expect:
+      /sprung|signage|timetable|instructor|venue|hire agreement|supplier|quote|pay rate|launch/i,
+    forbid: /Japan|ryokan|rail pass|Haneda|self-assessment|savings account/i,
+    tree: { project: 'wellness-studio-launch', among: [] },
   },
 ]
 const asked: string[] = []
@@ -252,7 +289,8 @@ try {
         leakLater ?? '',
       )
     }
-    if (t.expect !== undefined || t.forbid !== undefined) {
+    // A tree turn judges the RESULT further down; the immediate reply is the specialist's acknowledgement and plan.
+    if (t.tree === undefined && (t.expect !== undefined || t.forbid !== undefined)) {
       const said = `${r.reply} ${lastBody}`
       if (t.expect !== undefined)
         check(
@@ -278,6 +316,116 @@ try {
       'and it is not an error sentence',
       !/could not record|unauthori[sz]ed|not signed in/i.test(r.reply),
     )
+    if (t.tree !== undefined) {
+      const q = t.words.replace(/'/g, "''")
+      const rootOf = async (): Promise<string> =>
+        String(
+          (
+            await rows(
+              `select c.job_id::text id from public.inbound_commands c where c.office_id = '${O}' and c.instruction = '${q}' order by c.received_at desc limit 1`,
+            )
+          )[0]?.id ?? '',
+        )
+      const root = await rootOf()
+      const family = `(j.job_id = '${root}'::uuid or j.root_job_id = '${root}'::uuid)`
+      const till = Date.now() + t.wait
+      let live = 1
+      while (Date.now() < till && live > 0) {
+        live = Number(
+          (
+            await rows(
+              `select count(*) n from public.jobs j where ${family} and j.state not in ('complete','failed','cancelled')`,
+            )
+          )[0]?.n ?? 0,
+        )
+        if (live > 0) await sleep(5000)
+      }
+      check('the whole delegation tree finished', live === 0)
+      const tree = await rows(
+        `select j.kind, j.state::text state, coalesce(j.recipient_agent,'') who, j.office_id::text office, coalesce(p.slug,'') project
+           from public.jobs j left join public.projects p on p.project_id = j.project_id
+          where ${family} order by j.created_at`,
+      )
+      console.log(`  tree: ${tree.map((x) => `${x.kind}/${x.state}/${x.who || '-'}`).join(', ')}`)
+      const specialists = [
+        ...new Set(
+          tree.map((x) => String(x.who)).filter((w) => w !== '' && w !== 'chief-of-staff'),
+        ),
+      ]
+      console.log(`  specialists convened: ${specialists.join(', ') || '(none)'}`)
+      if (t.tree.only !== undefined)
+        check(
+          `Claire delegated to ${t.tree.only} and to nobody else`,
+          specialists.length === 1 && specialists[0] === t.tree.only,
+          specialists.join(', '),
+        )
+      else
+        check(
+          'Claire delegated to exactly one specialist, chosen from the request',
+          specialists.length === 1,
+          specialists.join(', '),
+        )
+      check(
+        'every job in the tree belongs to the Sample office',
+        tree.every((x) => x.office === O),
+      )
+      check(
+        `and to the project the page was on (${t.tree.project})`,
+        tree.every((x) => x.project === t.tree?.project),
+        [...new Set(tree.map((x) => x.project))].join(', '),
+      )
+      const result = await rows(
+        `select o.body b, coalesce(j.recipient_agent,'') who from public.outputs o join public.jobs j on j.job_id = o.job_id
+          where ${family} and o.body is not null and j.kind = 'office.instruction' and coalesce(j.recipient_agent,'') not in ('', 'chief-of-staff')
+          order by o.created_at desc`,
+      )
+      const final = String(result[0]?.b ?? '')
+      console.log(
+        `  result (${String(result[0]?.who)}): ${final.slice(0, 500).replace(/\s+/g, ' ')}`,
+      )
+      const filed = Number(
+        (
+          await rows(
+            `select count(*) n from public.tasks t where t.office_id = '${O}' and t.job_id is not null and t.created_at > '${since}'::timestamptz`,
+          )
+        )[0]?.n ?? 0,
+      )
+      check(
+        'a review wrote no tasks into the project',
+        filed === 0,
+        `${filed} task(s) filed by jobs`,
+      )
+      check('a result was written', final.length > 60)
+      if (t.expect !== undefined)
+        check('result is about this project’s work', t.expect.test(final), final.slice(0, 100))
+      if (t.forbid !== undefined)
+        check('result names nothing from the other projects', !t.forbid.test(final), '')
+      const gleak = grantNames.find((n) => final.toLowerCase().includes(n.toLowerCase()))
+      check('result names nothing from Grant’s office', gleak === undefined, gleak ?? '')
+      // in the chat now, and after a reload
+      const squash2 = (v: string): string => v.toLowerCase().replace(/[^a-z0-9]+/g, '')
+      const want2 = squash2(final).slice(0, 40)
+      await sleep(4000)
+      check(
+        'the result is in the Team Chat thread',
+        squash2((await thread(page)).join(' ')).includes(want2),
+      )
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.waitForLoadState('networkidle').catch(() => null)
+      await sleep(3500)
+      if (
+        !(await page
+          .locator('[data-docksay]')
+          .isVisible()
+          .catch(() => false))
+      )
+        await page.locator('[data-bc-dock]').first().click()
+      await sleep(2500)
+      check(
+        'and it is still there after a reload',
+        squash2((await thread(page)).join(' ')).includes(want2),
+      )
+    }
     await page.screenshot({ path: `${out}/turn-${asked.length}.png`, fullPage: false })
   }
   if (only.length > 1)

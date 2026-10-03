@@ -71,7 +71,13 @@ const taskCount = (title: string, state?: string): Promise<number> =>
 
 const studio = await startStudio(4792)
 const s = await session()
-const { page, errors } = await newPage(studio, { width: 1440, height: 1000 })
+// PHONE=1 drives the same flow on an iPhone-sized touch screen (390x844), where the controls are the ones a person taps.
+const PHONE = process.env.PHONE === '1'
+const { page, errors } = await newPage(
+  studio,
+  PHONE ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+  PHONE,
+)
 // The product asks before archiving with the browser's own confirm; a person presses OK.
 page.on('dialog', (d) => void d.accept())
 try {

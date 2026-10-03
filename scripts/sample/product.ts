@@ -64,7 +64,13 @@ const count = async (sql: string): Promise<number> => Number((await rows(sql))[0
 
 const studio = await startStudio(4794)
 const s = await session()
-const { page, errors } = await newPage(studio, { width: 1440, height: 1000 })
+// PHONE=1 drives the same flow on an iPhone-sized touch screen (390x844).
+const PHONE = process.env.PHONE === '1'
+const { page, errors } = await newPage(
+  studio,
+  PHONE ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+  PHONE,
+)
 page.on('dialog', (d) => void d.accept())
 try {
   await signIn(studio, page, s)

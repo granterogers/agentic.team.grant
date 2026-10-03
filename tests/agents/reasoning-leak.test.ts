@@ -10,7 +10,7 @@
  * the office's own machinery named in the SAME sentence, and every case has an honest neighbour that must survive.
  */
 import { describe, expect, it } from 'vitest'
-import { deliberationLeak } from '../../src/agents/quality.ts'
+import { deliberationLeak, metadataProblems } from '../../src/agents/quality.ts'
 import type { SqlExecutor, SqlResult } from '../../src/db/executor.ts'
 import { EmptyCompletionError, ProviderRouter } from '../../src/providers/router.ts'
 
@@ -39,12 +39,50 @@ describe('and an honest answer in the same voice survives', () => {
     'db.read is switched off at the moment, so I have not looked in the database.',
     'In this simulation of cashflow, the closing balance in March is 19,090.',
     'Reasoning about the lock-in period, the break-even point is month nine.',
+    // ordinary English that shares words with the leak, including beside the generic machinery nouns
+    'We cannot access Google until you reconnect it.',
+    'You need to fetch the document from the source.',
+    'This simulation shows the projected result.',
+    'We need to check the policy with the accountant before Friday.',
+    'We need to open the instructions with the venue manager first.',
+    'I cannot access the description field until you share the file.',
+    'We will read the schema together on Monday and then agree the fields.',
   ])('%s', (body) => {
     expect(deliberationLeak(body, TOOLS)).toBeNull()
   })
 
   it('does not depend on the list: without registry names, plain planning is still left alone', () => {
     expect(deliberationLeak('We need to access the records and then report back.', [])).toBeNull()
+  })
+})
+
+describe('the refusal reaches the retry loop, and a good answer produces none', () => {
+  const meta = (body: string) =>
+    metadataProblems({
+      confidence: 'medium',
+      evidence: 'inferred',
+      sources: [],
+      contradictions: null,
+      body,
+      toolNames: TOOLS,
+    } as never)
+
+  it('a leaked working is a body problem naming what to do instead (the next attempt reads it)', () => {
+    const p = meta('We need to access office records: db.read but we cannot actually run.')
+    const mine = p.find((x) => x.field === 'body' && /plans out loud/.test(x.problem))
+    expect(mine).toBeDefined()
+    expect(mine?.problem).toMatch(/answer, not the working/)
+  })
+
+  it('and an ordinary long answer, or one that only talks about cannot / simulation, produces no problem', () => {
+    const long = `${'The December closing balance is 21,700. '.repeat(40)}We cannot access Google until you reconnect it. This simulation shows the projected result.`
+    expect(meta(long).filter((x) => /plans out loud|questions itself/.test(x.problem))).toEqual([])
+  })
+
+  it('an empty or malformed body is not a leak (other gates own it)', () => {
+    expect(deliberationLeak('', TOOLS)).toBeNull()
+    expect(deliberationLeak('{', TOOLS)).toBeNull()
+    expect(deliberationLeak('}{ ,', TOOLS)).toBeNull()
   })
 })
 

@@ -609,6 +609,54 @@ export const withoutUnaskedDrafts = (plan: GoalPlan, request: string): GoalPlan 
 }
 
 /**
+ * Did he ask for TASKS to be made? The condition for a plan that writes to a task list (#408).
+ *
+ * Closure acceptance, 3 October 2026: "Ask the finance director to review the outstanding work in this project and tell me
+ * what needs attention first" was planned as `notebook.read -> task.extract`, and the office put six new tasks into the
+ * project (twelve for the travel project) and called that the review. A review is a reading; extraction WRITES a task list
+ * nobody asked for, and the answer to "what needs attention" is in the tasks the project already has.
+ *
+ * Both halves are required, a thing made and a task to make it: "next steps", "what needs doing" and "outstanding work" name
+ * a finding, never a request to file one, so they do not count.
+ */
+export const asksForTasks = (request: string): boolean =>
+  // A result to keep is a written one (R47), and "remind me" is a task by its own words.
+  KEPT_FOR_LATER.test(request) ||
+  /\bremind\s+me\b/i.test(request) ||
+  (/\b(?:create|make|add|put|turn|pull|extract|file|log|raise|generate|set\s+up|assign|remind|track|schedule|write\s+down|note\s+down)\b/i.test(
+    request,
+  ) &&
+    /\b(?:tasks?|to-?dos?|action\s+items?|follow-?ups?|reminders?)\b|\bon\s+(?:my|the|our)\s+(?:to-?do\s+|task\s+)?list\b/i.test(
+      request,
+    ))
+
+/** A plan without the task-list writes nobody asked for, and without anything that depended on them. */
+export const withoutUnaskedTasks = (plan: GoalPlan, request: string): GoalPlan => {
+  if (plan.how === 'fallback' || asksForTasks(request)) return plan
+  const dropped = new Set<string>()
+  const kept = plan.steps.filter((st) => {
+    if (
+      st.capability === 'task.extract' ||
+      st.capability === 'task.create' ||
+      st.needs.some((n) => dropped.has(n))
+    ) {
+      dropped.add(st.id)
+      return false
+    }
+    return true
+  })
+  if (dropped.size === 0) return plan
+  const refused = [
+    ...plan.refused,
+    `${[...dropped].join(', ')} would have written tasks nobody asked for`,
+  ]
+  if (kept.length === 0 && plan.unreachable.length === 0) {
+    return fellBack(`only unasked task writes were proposed: ${[...dropped].join(', ')}`)
+  }
+  return { ...plan, steps: kept, refused }
+}
+
+/**
  * Ask what this goal requires. Never throws; every failure is today's behaviour.
  */
 /**
@@ -724,6 +772,6 @@ export async function planFor(
     new Set(roster.map((r) => r.slug)),
     roster.map((r) => (r.name ?? '').trim()).filter((n) => /^[A-Za-z]{2,}$/.test(n)),
   )
-  const checked = withoutUnaskedDrafts(validated, said)
+  const checked = withoutUnaskedTasks(withoutUnaskedDrafts(validated, said), said)
   return checked.how === 'fallback' ? checked : { ...checked, model: result.model ?? null }
 }
