@@ -225,6 +225,30 @@ const CASES: Case[] = [
     note: 'a request addressed TO the finance specialist is answered with the work, not with a question about who she is',
   },
   {
+    id: 'C-F',
+    project: FIN,
+    ask: 'Ask the finance director to review the outstanding work in this project and tell me what needs attention first.',
+    prompt: [],
+    answer: [],
+    note: 'Claire-mediated delegation: finance',
+  },
+  {
+    id: 'C-J',
+    project: JAPAN,
+    ask: 'Have the research specialist review the unresolved travel work and identify the most important next steps.',
+    prompt: [],
+    answer: [],
+    note: 'Claire-mediated delegation: research on travel',
+  },
+  {
+    id: 'C-W',
+    project: WELL,
+    ask: 'Ask the appropriate person on the team to review our launch preparation and identify anything important that is still unfinished.',
+    prompt: [],
+    answer: [],
+    note: 'Claire-mediated delegation: wellness launch',
+  },
+  {
     id: 'J1',
     project: JAPAN,
     ask: 'Which rail pass option is cheapest, and which one does not pay back on this route?',
@@ -542,6 +566,20 @@ try {
     console.log(
       `     ANSWER ${gotAnswer ? 'ok' : 'not as expected'} (model, not gated): ${r.outputs.replace(/\s+/g, ' ').slice(0, 170)}`,
     )
+    if (process.env.INSPECT === '1') {
+      const rd = await rows(
+        `select d.intent_class, d.confident, d.roster::text r, d.roster_reason, d.intent_reason from public.routing_decisions d where d.job_id in (${r.tree.map((j) => lit(j.job_id)).join(',')}) order by d.decided_at`,
+      )
+      const who = await rows(
+        `select j.kind, j.state::text s, coalesce(j.recipient_agent,'') w, (j.parent_job_id is not null) child from public.jobs j where j.job_id in (${r.tree.map((j) => lit(j.job_id)).join(',')}) order by j.created_at`,
+      )
+      console.log(
+        `     TREE: ${who.map((x) => `${x.kind}/${x.s}/${x.w}${x.child ? '/child' : ''}`).join(', ')}`,
+      )
+      console.log(
+        `     ROUTING: ${rd.map((x) => `${x.intent_class} conf=${x.confident} roster=${x.r} (${x.roster_reason}; ${x.intent_reason})`).join(' || ')}`,
+      )
+    }
     const tail = r.tree.every((j) => j.o === SECOND_OFFICE)
     check(
       `${c.id}: every job belongs to the Sample office`,

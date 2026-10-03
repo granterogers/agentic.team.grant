@@ -85,6 +85,19 @@ const one = async (sql: string): Promise<Record<string, unknown> | undefined> =>
 const all = async (sql: string): Promise<Record<string, unknown>[]> =>
   (await db.execute(sql)).rows as Record<string, unknown>[]
 
+/*
+  A RUN THAT DIES BEFORE ITS TEARDOWN LEAVES ACTIVE PROJECTS, AND THE NEXT RUN IS THE ONLY THING THAT WILL EVER MEET THEM.
+  Eight `identity-proof-*` projects sat active in the quarantine test office from two runs a minute apart on 2 October
+  (neither reached the teardown at the bottom). They are not Grant's - this suite always acts in `app.test_office()` - but a
+  teardown that only runs on success is not a teardown. So every run first archives what an earlier run left: the TEST
+  office only, the `identity-proof-` slug only, and only projects older than ten minutes so a concurrent run is untouched.
+  Archived, never deleted: each carries a job, and a job cannot be removed.
+*/
+await db.execute(`
+  update public.projects set status = 'archived', updated_at = app.now_utc()
+   where office_id = app.test_office() and status = 'active'
+     and slug like 'identity-proof-%' and created_at < app.now_utc() - interval '10 minutes'`)
+
 const checks: { what: string; outcome: string; passed: boolean }[] = []
 const record = (what: string, outcome: string, passed: boolean): void => {
   checks.push({ what, outcome, passed })

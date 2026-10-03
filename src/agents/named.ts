@@ -25,6 +25,8 @@ export interface Colleague {
 
 const VERBS = String.raw`(?:ask|get|have|let|tell|put|send|give|pass\s+(?:it|this|that)\s+to|hand\s+(?:it|this|that)\s+(?:over\s+)?to|loop\s+in|bring\s+in)`
 
+const ROLE_NOUN = '(?:specialist|director|lead|team|person|expert|colleague|analyst|manager|agent)'
+
 export function namedColleague(clause: string, staff: readonly Colleague[]): string | null {
   const text = String(clause ?? '')
   for (const s of staff) {
@@ -38,7 +40,44 @@ export function namedColleague(clause: string, staff: readonly Colleague[]): str
     )
     if (delegated.test(text) || vocative.test(text)) return s.slug
   }
+  /*
+    A ROLE IS A NAME TOO (#408). "Ask the finance director to review the outstanding work" names the finance director as
+    plainly as "ask Daniel" does, and nothing read it: the request was classified a question, routed by SUBJECT to the quality
+    and strategy directors ("outstanding work", "attention"), and the finance director - the one he chose - was never convened.
+    The role word is the first word of the slug (`finance-director` -> finance), so it follows the roster the same way the first
+    names do. It must be a delegation frame AND either end in a role noun ("the finance director", "the research specialist") or
+    be followed by "to": "ask finance questions" names nobody.
+  */
+  const roles = new Map<string, string[]>()
+  for (const s of staff) {
+    const role = s.slug.split('-')[0] ?? ''
+    if (role.length < 4 || role === 'chief') continue
+    roles.set(role, [...(roles.get(role) ?? []), s.slug])
+  }
+  for (const [role, slugs] of roles) {
+    if (slugs.length !== 1) continue // two people share the word: that names nobody in particular
+    const framed = new RegExp(
+      String.raw`\b${VERBS}\s+(?:the\s+)?${role}(?:\s+${ROLE_NOUN}\b|\s+to\b)`,
+      'i',
+    )
+    if (framed.test(text)) return slugs[0] ?? null
+  }
   return null
+}
+
+/**
+ * Is this clause the REPORT of the work the clause before it handed to somebody (#408)?
+ *
+ * "Ask the finance director to review the outstanding work and tell me what needs attention first" is one delegation: the
+ * second clause is what the finance director is to hand back, and read alone ("what needs attention") it matches the
+ * strategy director by subject, who then answers a question nobody put to them. A clause that opens by asking for a finding
+ * - tell me, let me know, report back, identify, list, summarise, flag, recommend - has no work of its own to route. A clause
+ * that asks for something NEW to be made (draft, write, create) is a different piece of work and keeps its own subject.
+ */
+const REPORTS = String.raw`^\s*(?:(?:and|then|also)\s+)*(?:(?:please\s+)?(?:tell|let|show|give|send)\s+me\b|report\s+back\b|come\s+back\b|(?:please\s+)?(?:identify|list|summari[sz]e|flag|highlight|recommend|advise|prioriti[sz]e|rank)\b)`
+
+export function reportsBackOn(clause: string): boolean {
+  return new RegExp(REPORTS, 'i').test(String(clause ?? ''))
 }
 
 /**

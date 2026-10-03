@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { namedColleague } from '../../src/agents/named.ts'
+import { namedColleague, reportsBackOn } from '../../src/agents/named.ts'
 
 const STAFF = [
   { slug: 'research-director', name: 'Emma' },
@@ -7,6 +7,36 @@ const STAFF = [
   { slug: 'communications-director', name: 'Oliver' },
   { slug: 'quality-director', name: 'Grace' },
 ]
+
+describe('a ROLE named as the one to do it (#408)', () => {
+  it.each([
+    ['Ask the finance director to review the outstanding work in this project', 'finance-director'],
+    ['Have the research specialist review the unresolved travel work', 'research-director'],
+    ['can you get finance to look at the cashflow', 'finance-director'],
+    ['Please ask the communications director which wording is safest', 'communications-director'],
+  ])('%s', (clause, slug) => {
+    expect(namedColleague(clause, STAFF)).toBe(slug)
+  })
+
+  it.each([
+    'Ask finance questions at the meeting',
+    'the finance director said the deposit was high',
+    'Ask the appropriate person on the team to review our launch preparation',
+    'What would the finance director make of it?',
+    'review the research director schedule',
+  ])('leaves alone: %s', (clause) => {
+    expect(namedColleague(clause, STAFF)).toBeNull()
+  })
+
+  it('does not name anybody when two people share the role word', () => {
+    expect(
+      namedColleague('Ask the finance director to check it', [
+        { slug: 'finance-director', name: 'Daniel' },
+        { slug: 'finance-analyst', name: 'Ines' },
+      ]),
+    ).toBeNull()
+  })
+})
 
 describe('a colleague named as the one to do it (ledger R21)', () => {
   it.each([
@@ -60,4 +90,22 @@ describe('a new task title is grounded in what he said (ledger R4b)', () => {
   ])('grounded: "%s"', (title, said) => {
     expect(groundedIn(title, said)).toBe(true)
   })
+})
+
+describe('the report of a delegation belongs to whoever was given it (#408)', () => {
+  it.each([
+    'tell me what needs attention first',
+    'and identify the most important next steps',
+    'let me know what is still unfinished',
+    'report back with the three biggest risks',
+    'summarise what you find',
+  ])('%s', (clause) => expect(reportsBackOn(clause)).toBe(true))
+
+  it.each([
+    'draft the announcement for the board',
+    'write up the pricing change',
+    'create a task to chase the roofer',
+    'the telling is in the detail',
+    'book the minibus',
+  ])('new work keeps its own subject: %s', (clause) => expect(reportsBackOn(clause)).toBe(false))
 })

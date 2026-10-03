@@ -115,7 +115,7 @@ import {
   subtaskRequest,
   taskStateChange,
 } from '../agents/mine.ts'
-import { groundedIn, namedColleague } from '../agents/named.ts'
+import { groundedIn, namedColleague, reportsBackOn } from '../agents/named.ts'
 import {
   asksWhatWasSaid,
   closesWithoutAsking,
@@ -996,7 +996,14 @@ export async function speaker(
     .execute(`select slug, coalesce(name, '') as name from public.staff where active`)
     .then((r) => r.rows as { slug: string; name: string }[])
     .catch(() => [] as { slug: string; name: string }[])
-  const named = asks.map((t) => namedColleague(t, colleagues))
+  const namedHere = asks.map((t) => namedColleague(t, colleagues))
+  // A clause that only asks for the finding of the one before it belongs to whoever that one was given to (#408).
+  const named = namedHere.map((n, i) => {
+    if (n !== null || i === 0) return n
+    const before = namedHere[i - 1] ?? null
+    const join = parts[i]?.joinedBy ?? ''
+    return before !== null && !/\bthen\b/.test(join) && reportsBackOn(asks[i] ?? '') ? before : null
+  })
   const found =
     matched === undefined
       ? named.every((n) => n === null)

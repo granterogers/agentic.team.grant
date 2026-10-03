@@ -1589,9 +1589,9 @@ export const deliberationLeak = (
   // Split on terminators AND newlines: deliberation arrives as short lines as
   // often as as sentences.
   const PLAN =
-    /\b(?:we|i)\s*(?:'ll|'d)?\s*(?:need to|needs to|must|should|will|shall|can|could|might|may|would)?\s*(?:call|invoke|use|query|read|perform|request|run|attempt|try)\b|^\s*attempt\b|\blet'?s\s+(?:respond|reply|answer|say|do|try|call|use)\b|\bwe'?ll\s+(?:call|request|use|query|read)\b/i
+    /\b(?:we|i)\s*(?:'ll|'d)?\s*(?:need to|needs to|must|should|will|shall|can|could|might|may|would|cannot(?:\s+actually)?|can't(?:\s+actually)?|can\s+not(?:\s+actually)?)?\s*(?:call|invoke|use|query|read|perform|request|run|attempt|try|access|fetch|pull|retrieve|open|load|check)\b|^\s*attempt\b|\blet'?s\s+(?:respond|reply|answer|say|do|try|call|use)\b|\bwe'?ll\s+(?:call|request|use|query|read)\b/i
   const MACHINERY =
-    /\bthe (?:tool|spec|schema|policy|instructions?|description)\b|\bparameters?\s*[:?]|\baccording to the tool\b|\btool call\b/i
+    /\bthe (?:tool|spec|schema|policy|instructions?|description)\b|\bparameters?\s*[:?]|\baccording to the tool\b|\btool call\b|\bin this simulation\b/i
   const dotted = toolNames.filter((t) => t.includes('.'))
 
   const machineryAnywhere = MACHINERY.test(text) || dotted.some((t) => text.includes(t))
