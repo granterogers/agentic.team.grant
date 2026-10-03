@@ -20,6 +20,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOfJob } from '../db/office.ts'
 import { refreshMail } from '../google/mail.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 
@@ -29,7 +30,9 @@ export function mailHandler(db: SqlExecutor): Handler {
   return {
     kind: 'google.read_mail',
     handle: async (job: Job): Promise<HandlerOutput> => {
-      const outcome = await refreshMail(db)
+      // The office is the claimed job's, fixed when the duty made it. Never the "only person" guess: with two real
+      // offices that is no_office, and the duty failed every hour (#407).
+      const outcome = await refreshMail(db, { officeId: await officeOfJob(db, job.jobId) })
 
       if (outcome.ok) {
         // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.

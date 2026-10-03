@@ -722,7 +722,7 @@ for (const app of APPS) {
       settingsTab = tab
       await page.locator('[data-settings]').first().click()
       await page.waitForTimeout(400)
-      await page.locator(`[role="tab"][data-setting="${tab}"]`).first().click()
+      await page.locator(`#settings [data-setting="${tab}"]`).first().click()
       await page.waitForTimeout(300)
     }
 
@@ -765,7 +765,18 @@ for (const app of APPS) {
       const shut = await page.evaluate(
         `(() => { const s = document.querySelector('#settings'); return s === null || s.hidden })()`,
       )
-      if (shut !== true) return
+      if (shut !== true) {
+        // On a phone the sections and one section are two screens, and pressing the page's own Back from inside a section
+        // lands on the LIST with Settings still open. Choose the section again rather than pressing into a hidden pane.
+        const onList = await page.evaluate(
+          `(() => { const g = document.querySelector('#settings .stg'); return g !== null && g.dataset.pane === 'index' && matchMedia('(max-width: 760px)').matches })()`,
+        )
+        if (onList === true) {
+          await page.locator(`#settings [data-setting="${settingsTab}"]`).first().click()
+          await page.waitForTimeout(300)
+        }
+        return
+      }
       /*
         The rail has to be open before the rail's own button can be pressed.
 
@@ -779,7 +790,7 @@ for (const app of APPS) {
       await openRail()
       await page.locator('[data-settings]').first().click()
       await page.waitForTimeout(400)
-      await page.locator(`[role="tab"][data-setting="${settingsTab}"]`).first().click()
+      await page.locator(`#settings [data-setting="${settingsTab}"]`).first().click()
       await page.waitForTimeout(300)
     }
 
@@ -838,7 +849,18 @@ for (const app of APPS) {
             },
           ] as [string, () => Promise<void>],
       ),
-      ...(['team', 'behaviour', 'connections', 'channels', 'models', 'appearance'] as const).map(
+      ...(
+        [
+          'team',
+          'behaviour',
+          'requests',
+          'memory',
+          'connections',
+          'channels',
+          'models',
+          'appearance',
+        ] as const
+      ).map(
         (tab) =>
           [
             `settings/${tab}`,
@@ -880,7 +902,7 @@ for (const app of APPS) {
             : kind === 'team'
               ? `[role="tab"][data-sub="${leaf}"].on`
               : kind === 'settings'
-                ? `[role="tab"][data-setting="${leaf}"].on`
+                ? `#settings [data-setting="${leaf}"][aria-current="page"]`
                 : `[data-tab="${leaf}"].on`
 
       // Every control on this route, by a stable handle.
@@ -922,7 +944,9 @@ for (const app of APPS) {
       const front = (['#settings', '#viewer']
         .map((id) => document.querySelector(id))
         .find((el) => el !== null && !el.hidden) ?? document)
-      for (const el of front.querySelectorAll('button, a[href], [role="tab"], [role="option"]')) {
+      // Settings' own Back is navigation, not a control of the section: pressing it leaves the section being swept (on a
+      // phone it returns to the list of sections). It is exercised by scripts/sample/settings-live.ts instead.
+      for (const el of front.querySelectorAll('button:not([data-stg-back]), a[href], [role="tab"], [role="option"]')) {
         if (el.closest('[hidden]') !== null) continue
         const r = el.getBoundingClientRect()
         if (r.width === 0 || r.height === 0) continue

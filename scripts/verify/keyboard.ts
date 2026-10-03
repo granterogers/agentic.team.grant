@@ -323,7 +323,7 @@ console.log('\nSettings: open it, move between its tabs, get out')
     const there = await page.evaluate(
       `Boolean(document.querySelector('#settings:not([hidden])')) ||
        location.hash.includes('settings') ||
-       Boolean(document.querySelector('[data-setting][role="tab"]'))`,
+       Boolean(document.querySelector('#settings [data-setting]'))`,
     )
     check(
       'Enter gets there',
@@ -331,7 +331,7 @@ console.log('\nSettings: open it, move between its tabs, get out')
       there === true,
     )
 
-    const tab = await tabUntil(`el.matches('[data-setting][role=\\'tab\\']')`, 40)
+    const tab = await tabUntil(`el.matches('#settings [data-setting]')`, 40)
     check(
       'its tabs are reachable without a pointer',
       tab > 0 ? `${String(tab)} press(es): ${(await focused()).name}` : 'NEVER REACHED',
@@ -340,14 +340,14 @@ console.log('\nSettings: open it, move between its tabs, get out')
     if (tab > 0) {
       const was = String(
         await page.evaluate(
-          `document.querySelector('[data-setting][aria-selected="true"]')?.textContent?.trim() || ''`,
+          `document.querySelector('#settings [data-setting][aria-current="page"]')?.textContent?.trim() || ''`,
         ),
       )
       await page.keyboard.press('Enter')
       await page.waitForTimeout(800)
       const now = String(
         await page.evaluate(
-          `document.querySelector('[data-setting][aria-selected="true"]')?.textContent?.trim() || ''`,
+          `document.querySelector('#settings [data-setting][aria-current="page"]')?.textContent?.trim() || ''`,
         ),
       )
       check('and Enter changes pane', `${was || '(none)'} → ${now || '(none)'}`, now !== '')

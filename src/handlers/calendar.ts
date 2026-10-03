@@ -17,6 +17,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOfJob } from '../db/office.ts'
 import { refreshCalendar } from '../google/calendar.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 
@@ -26,7 +27,8 @@ export function calendarHandler(db: SqlExecutor): Handler {
   return {
     kind: 'google.read_calendar',
     handle: async (job: Job): Promise<HandlerOutput> => {
-      const outcome = await refreshCalendar(db)
+      // The office is the claimed job's, fixed when the duty made it (see the mail handler, #407).
+      const outcome = await refreshCalendar(db, { officeId: await officeOfJob(db, job.jobId) })
 
       // Silent unless something changed or something is wrong. The alternative
       // is a message in #the_team every hour saying the diary is the same.

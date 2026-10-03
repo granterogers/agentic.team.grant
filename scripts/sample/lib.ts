@@ -10,10 +10,11 @@
  * office, and its owner key must be the Sample's. Nothing here is decided by typing a name.
  */
 import { act, db, ENDPOINT, read, type Session, secondSession } from '../p4/lib.ts'
-import { SECOND_EMAIL, SECOND_KEY } from '../p4/provision-second-person.ts'
+import { SECOND_EMAIL } from '../p4/provision-second-person.ts'
+import { guardOffice, SAMPLE_OWNER_KEY } from './guard.ts'
 
 export const SAMPLE_EMAIL = SECOND_EMAIL
-export const SAMPLE_OWNER_KEY = SECOND_KEY
+export { guardOffice, SAMPLE_OWNER_KEY }
 /** The persona the baseline content is written for. Fictional, and unlike any of Grant's work so a leak is unmistakable. */
 export const PERSONA = { name: 'Jordan Reyes', business: 'Brightside Café' }
 
@@ -44,20 +45,6 @@ export const sampleOffice = async (): Promise<SampleOffice> => {
     state: String(r.state),
   })
   return { officeId: String(r.office), authUserId: String(r.auth) }
-}
-
-/** The pure rule, so the controls can aim it at Grant's office and watch it refuse. */
-export const guardOffice = (
-  officeId: string,
-  f: { isOperator: boolean; kind: string; ownerKey: string; state: string },
-): void => {
-  if (f.isOperator)
-    throw new Error(`REFUSED: ${officeId} is the operator's office, not the Sample Person's`)
-  if (f.kind !== 'person' && f.kind !== 'sample')
-    throw new Error(`REFUSED: ${officeId} is a ${f.kind} office, not a person's`)
-  if (f.ownerKey !== SAMPLE_OWNER_KEY)
-    throw new Error(`REFUSED: ${officeId} belongs to "${f.ownerKey}", not the Sample Person`)
-  if (f.state !== 'active') throw new Error(`REFUSED: ${officeId} is ${f.state}`)
 }
 
 export const session = (): Promise<Session> => secondSession()

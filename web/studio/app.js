@@ -10076,7 +10076,8 @@ function drawShell() {
   call?.addEventListener('click', () => { toggleCall() })
 
   for (const b of root.querySelectorAll('[data-settings]')) {
-    b.addEventListener('click', () => { settingsSheet(); sheet($('#settings'), true) })
+    // Opening Settings from its button starts at the list of sections on a phone, not wherever it was last left.
+    b.addEventListener('click', () => { state.settingsPane = 'index'; settingsSheet(); sheet($('#settings'), true) })
   }
 
   for (const b of root.querySelectorAll('[data-filter]')) {

@@ -192,15 +192,15 @@ for (const [size, opts] of SIZES) {
       await page.waitForTimeout(400)
       await shoot('appearance')
       await page.locator('[data-palette-pick="clay"]').click()
-      await page.locator('[data-texture-pick="plaster"]').click()
+      // (the texture, density and light/dark pickers were removed: they changed nothing in Team HQ)
       await page.waitForTimeout(400)
-      await page.locator('#settings .close').click()
+      await page.locator('#settings [data-stg-back]').click()
       await page.waitForTimeout(300)
       await shoot('palette-clay')
       // Back to the default so the rest of the captures are comparable.
       await page.locator('[data-settings]').click()
       await page.locator('[data-palette-pick="paper"]').click()
-      await page.locator('#settings .close').click()
+      await page.locator('#settings [data-stg-back]').click()
       await page.waitForTimeout(300)
     }
 
@@ -231,14 +231,14 @@ for (const [size, opts] of SIZES) {
         at all. A panel below the fold in every capture is a panel nobody has
         judged, and these three controls change what the office can reach.
       */
-      for (const tab of ['models', 'behaviour', 'governance', 'connections'] as const) {
+      for (const tab of ['models', 'behaviour', 'requests', 'memory', 'connections'] as const) {
         await page.locator(`[data-setting="${tab}"]`).click()
         await page.waitForTimeout(450)
         await shoot(`settings-${tab}`)
         // A string, not a closure: this file has no DOM lib and `document` is
         // not in scope at compile time. Playwright evaluates either.
         const scrolled = await page.evaluate(`(() => {
-          const el = document.querySelector('#settings .setbody')
+          const el = document.querySelector('#settings .stg-main')
           if (el === null) return false
           const box = el.closest('.sheet, .settings') || el
           const target = box.scrollHeight > box.clientHeight ? box : el
@@ -281,9 +281,9 @@ for (const [size, opts] of SIZES) {
           await page.waitForTimeout(350)
           await shoot('settings-providers')
         }
-        if (tab === 'governance' && scrolled) {
+        if (tab === 'requests' && scrolled) {
           await page.evaluate(`(() => {
-            const el = document.querySelector('#settings .setbody')
+            const el = document.querySelector('#settings .stg-main')
             if (el === null) return
             const box = el.closest('.sheet, .settings') || el
             const target = box.scrollHeight > box.clientHeight ? box : el
@@ -293,7 +293,7 @@ for (const [size, opts] of SIZES) {
           await shoot(`settings-${tab}-middle`)
         }
       }
-      await page.locator('#settings .close').click()
+      await page.locator('#settings [data-stg-back]').click()
       await page.waitForTimeout(300)
     }
 
@@ -443,7 +443,8 @@ for (const [size, opts] of SIZES) {
       for (const tab of [
         'team',
         'behaviour',
-        'governance',
+        'requests',
+        'memory',
         'connections',
         'channels',
         'models',
@@ -453,7 +454,7 @@ for (const [size, opts] of SIZES) {
         await page.waitForTimeout(400)
         await shoot(`settings-${tab}`)
       }
-      await page.locator('#settings .close').click()
+      await page.locator('#settings [data-stg-back]').click()
       await page.waitForTimeout(400)
 
       await page.locator('[data-rail]').click()
@@ -1028,11 +1029,13 @@ for (const [size, opts] of SIZES) {
       )
       await page.waitForTimeout(350)
       await shoot('settings-providers')
-      await page.locator('[data-setting="governance"]').click()
+      // on a phone the sections and one section are two screens: go back to the list to choose another
+      await page.locator('#settings [data-stg-back]').click()
+      await page.locator('[data-setting="requests"]').click()
       await page.waitForTimeout(500)
       await shoot('settings-governance')
       await page.evaluate(`(() => {
-        const el = document.querySelector('#settings .setbody')
+        const el = document.querySelector('#settings .stg-main')
         if (el === null) return
         const box = el.closest('.sheet, .settings') || el
         const target = box.scrollHeight > box.clientHeight ? box : el
@@ -1041,7 +1044,7 @@ for (const [size, opts] of SIZES) {
       await page.waitForTimeout(400)
       await shoot('settings-governance-middle')
       await page.evaluate(`(() => {
-        const el = document.querySelector('#settings .setbody')
+        const el = document.querySelector('#settings .stg-main')
         if (el === null) return
         const box = el.closest('.sheet, .settings') || el
         const target = box.scrollHeight > box.clientHeight ? box : el
@@ -1049,7 +1052,8 @@ for (const [size, opts] of SIZES) {
       })()`)
       await page.waitForTimeout(400)
       await shoot('settings-governance-lower')
-      await page.locator('#settings .close').click()
+      await page.locator('#settings [data-stg-back]').click() // back to the list
+      await page.locator('#settings [data-stg-back]').click() // and out
       await page.waitForTimeout(400)
     }
     await page.locator('[data-switch-open]').click()

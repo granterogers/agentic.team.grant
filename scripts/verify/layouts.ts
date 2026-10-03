@@ -113,7 +113,16 @@ const ROUTES = [
   'project/automations',
   'project/labels',
   'project/project',
-  'settings/governance',
+  // Global Settings: every section (the page was rebuilt as nine sections in four groups)
+  'settings/team',
+  'settings/behaviour',
+  'settings/requests',
+  'settings/memory',
+  'settings/connections',
+  'settings/channels',
+  'settings/appearance',
+  'settings/models',
+  'settings/help',
 ]
 
 type Finding = { where: string; what: string }
@@ -537,7 +546,7 @@ for (const scheme of ['light', 'dark'] as const) {
       muted state pill, a warning tally and a red count — and none of them
       exists anywhere the overview can see.
     */
-    for (const where of ['overview', 'settings/governance'] as const) {
+    for (const where of ['overview', 'settings/requests', 'settings/behaviour'] as const) {
       await open(page, where)
       const bad = (await page.evaluate(CONTRAST)) as string[]
       checked++
