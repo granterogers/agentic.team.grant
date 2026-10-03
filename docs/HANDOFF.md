@@ -1104,6 +1104,17 @@ rather than rediscovery.
 
 ---
 
+## 3 October 2026 (closure) - office-owned tool requests, guard at the executor, Reconnect Google
+
+`approve_tool`, `decline_tool`, `revoke_tool` are office-owned (no longer operator-only); `staff_tool_set` and everything
+deployment-wide stay operator-only. Proof: `npm run verify:sample-tool-requests` (24/24, cross-office negatives) and
+`tests/gateway/office-owned-tool-requests.test.ts`. The production-heavy guard is enforced in `ManagementApiExecutor.execute`
+(`src/db/suite-guard.ts`); `npm run suite --production`, the gate and e2e state intent. Settings: the health row no longer says
+"Everything that is connected is working" when nothing is; Direct upload says it is always available; an expired Google reads
+"Reconnect Google" with a plain explanation (`npm run verify:google-reconnect`, local). `verify:ui` (54/54, reads the Sample's office,
+class smoke) and `verify:keyboard` (32/32) were stale tests and are repaired. hq-api v861, page deployment `dpl_HAPFk8DoTrBKtrRTgQnL6TsbsB7k`
+(rollback `dpl_4rCCYcZaE455QaiHopaVxc1iADeY`). The Open-for-Grant items in the entry below are closed.
+
 ## 3 October 2026 (later) - Sample Person, Settings deployed, #404/#405 closed, #407 fixed
 
 The Sample Person (the P4 second person, Jordan Reyes / Brightside Café) is the authenticated test environment: `docs/multi-user/SAMPLE-PERSON.md`.

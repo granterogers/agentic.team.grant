@@ -118,8 +118,9 @@ check(
 )
 await openSettings(page, 'requests')
 check(
-  'Requests: tool requests are shown without Approve or Decline',
-  (await count(page, '#settings [data-tool]')) === 0 &&
+  'Requests: the person answers their own office’s tool requests (Approve and Decline are drawn)',
+  (await count(page, '#settings [data-tool$=":approve"]')) > 0 &&
+    (await count(page, '#settings [data-tool$=":decline"]')) > 0 &&
     (await text(page, '#settings .stg-col')).includes('is asking to use'),
 )
 await openSettings(page, 'connections')

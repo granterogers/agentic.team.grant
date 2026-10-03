@@ -1746,9 +1746,11 @@ const OPERATOR_ONLY: ReadonlySet<string> = new Set([
   'staff_update',
   'staff_retire',
   'staff_tool_set',
-  'approve_tool',
-  'decline_tool',
-  'revoke_tool',
+  // approve_tool, decline_tool and revoke_tool are NOT here: a request for reach is raised in ONE office and is
+  // answered by the person that office belongs to. The functions are office-scoped in the database (the request is
+  // matched on `office_id = p_office`, the answerer must be that office's own person, and revoking acts on that
+  // office's grants), so answering carries no deployment authority. The tool switches that govern every office
+  // (`tool_permissions.enabled`) stay the ceiling and are reached only through `set_setting`, which is still here.
   'drive_link',
   'google_connect_start',
 ])

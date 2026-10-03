@@ -116,6 +116,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(4)
     }
   }
-  const r = spawnSync('npm', ['run', suite.name], { stdio: 'inherit' })
+  const r = spawnSync('npm', ['run', suite.name], {
+    stdio: 'inherit',
+    env: { ...process.env, HQ_PRODUCTION_INTENT: '1' },
+  })
   process.exit(r.status ?? 1)
 }

@@ -85,6 +85,12 @@ const check = (what: string, said: string, ok: boolean): void => {
 const browser = await chromium.launch()
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 await context.addInitScript(AS_WRITER)
+/*
+  The writer above is a made-up token, which the page keeps only while the office is unreachable: once the browser can
+  reach Supabase the office refuses the token with a 401 and the page correctly drops it, and every writer-only control
+  (the mark picker's pencil, among them) is gone. So the unreachable office is stated, not left to the network.
+*/
+await context.route(/\.supabase\.co\//, (route) => route.abort())
 await context.addInitScript(seedAppearance('dark'))
 const page = await context.newPage()
 

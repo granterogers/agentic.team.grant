@@ -284,6 +284,8 @@
     "sample:reset": "tsx scripts/sample/sample.ts reset",
     "sample:shots": "tsx scripts/sample/settings-shots-live.ts",
     "verify:sample-settings": "tsx scripts/sample/settings-live.ts",
+    "verify:sample-tool-requests": "tsx scripts/sample/tool-requests-live.ts",
+    "verify:google-reconnect": "tsx scripts/p5/google-reconnect.ts",
     "verify:capability-claims": "tsx scripts/verify/capability-claims.ts",
     "check:tokens": "tsx scripts/check-tokens.ts",
     "verify:lately": "tsx scripts/verify/lately.ts",

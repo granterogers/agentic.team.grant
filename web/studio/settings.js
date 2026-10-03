@@ -727,6 +727,11 @@ export const ROUTES = {
     where this used to point.
   */
   mcp: { how: 'mcp', label: 'How to connect a client' },
+  upload: {
+    how: 'none',
+    label: 'Always available',
+    why: 'Dropping a file into a project needs no connection. It is kept with that project.',
+  },
   zoom: {
     how: 'none',
     label: 'Not supported yet',

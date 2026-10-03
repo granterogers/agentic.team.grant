@@ -9,7 +9,7 @@ Telegram and his Slack.
 | **local** | no database, no real session: static server, jsdom, unit tests | `verify:wired`, `verify:layouts`, `smoke`, `p5/settings-qa` | freely |
 | **sample** | the Sample Person's own office through the real gateway | `verify:sample-settings`, `sample:seed` | freely; it measures Grant's office before and after |
 | **smoke** | a handful of cheap reads of production, or one named proof | `verify:pulse`, `verify:wrappers`, `verify:schema`, `p5/signout`, `p5/person-prompt` | `npm run suite -- <name>`; refuses while Supabase is unhealthy |
-| **production-heavy** | writes fixtures into, or presses on, the real office | everything else that touches the database (182 today) | `npm run suite -- <name> --production`; refuses while Supabase is unhealthy |
+| **production-heavy** | writes fixtures into, or presses on, the real office | everything else that touches the database (181 today) | `npm run suite -- <name> --production`; refuses while Supabase is unhealthy |
 
 Rules:
 
@@ -25,12 +25,19 @@ Rules:
 `npm run suite -- --list` prints every suite and its class; `--classify` prints the counts
 (`{"production-heavy":182,"local":48,"smoke":3,"sample":1}` on the day this was written).
 
-## What is NOT done
+## Enforcement, and what is NOT done
 
-* `npm run verify:<name>` called directly still runs; the runner is the guarded door, not the only door. Wiring the guard into
-  each heavy suite's first line (or renaming the npm scripts) is mechanical and was not done in one pass because 182 edits to
-  suites that write to production is itself a risk.
-* The classification is by source, not by measured cost. Which of the 182 are actually heavy has not been measured.
-* `verify:ui` is broken independently of this work: it calls `app.hq_studio_settings()` with no office, a signature P3 removed.
-* `verify:keyboard` has five failures that predate this work and are not about Settings (the icon-picker tab stop and the
-  slash shortcut).
+* **The guard is at the executor, not only the runner (3 October 2026).** `src/db/suite-guard.ts` is asked by
+  `ManagementApiExecutor.execute` before the first statement leaves the process. A Node process whose entry script is a
+  production-heavy suite under `scripts/verify/` or `scripts/poc/` is refused with a sentence unless `HQ_PRODUCTION_INTENT=1`,
+  which `npm run suite -- <name> --production`, `npm run gate` and `npm run e2e` set. So `npx tsx scripts/verify/x.ts` and
+  `npm run verify:x` stop at the first query, and the unclassified default is "heavy". It is inert in the worker and edge
+  functions (no such entry script; `node:fs` is reached through `process.getBuiltinModule`, so the Deno bundle has no import to
+  resolve). `tests/db/suite-guard.test.ts` runs a real heavy suite with a bogus token and asserts it is refused before any
+  request. Not covered: a suite that opens its own `pg` connection or calls `fetch` against the gateway without the executor;
+  `check:suite-classes` still classes by source for those.
+* The classification is by source, not by measured cost. Which of the 181 are actually heavy has not been measured.
+* `verify:ui` and `verify:keyboard` were repaired, both because the TEST was stale: `verify:ui` called the section functions
+  without the office P3 added (it now reads the Sample's office and is class smoke); `verify:keyboard` used a made-up writer
+  token that the page only kept while the browser could not reach Supabase, so once it could, the office refused it and the
+  writer-only controls (the mark picker's pencil) vanished. It now says "the office is unreachable" with an explicit route abort.

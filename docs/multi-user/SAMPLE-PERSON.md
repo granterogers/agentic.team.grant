@@ -41,7 +41,8 @@ production for decoration). `SAMPLE-ACCOUNT-DESIGN.md` §3 lists how a later pas
 npm run sample:status          # what the office holds, and whether it matches the baseline
 npm run sample:seed            # converge to the baseline (idempotent: run it twice, nothing changes)
 npm run sample:reset           # remove what is not baseline, restore baseline states, then seed
-npm run verify:sample-settings # 55 checks: the redesigned Global Settings, signed in, against the real gateway
+npm run verify:sample-settings # 53 checks: the redesigned Global Settings, signed in, against the real gateway
+npm run verify:sample-tool-requests # 24 checks: answering reach in its own office, and the cross-office negatives
 npm run verify:sample-settings -- --grant   # plus one read-only look at what the operator is offered (the control)
 npm run sample:shots -- <label>             # four widths x nine sections, populated, signed in
 ```
@@ -67,10 +68,12 @@ operator (`OPERATOR_ONLY`). The page used to offer them anyway; a second person 
 That was the whole reason "most of the app looked read-only" for the Sample. The gateway now says who is looking
 (`viewer.operator` on `studio_settings`) and the page stops drawing what would be refused. **No policy changed.**
 
-**Decision for Grant, not made here:** `approve_tool`, `decline_tool`, `revoke_tool` and `staff_tool_set` are operator-only,
-yet `staff_tools` and `tool_requests` are per-office. So a person cannot answer the requests their own office raises.
-That may be intended (tool grants are an authority a deployment operator holds) or an oversight of P3. It is an
-authorisation question and was left exactly as it was.
+**Resolved (3 October 2026): answering reach is office-owned.** `approve_tool`, `decline_tool` and `revoke_tool` are no longer
+operator-only, because `staff_tools` and `tool_requests` are per-office and the functions already match on the verified
+office and require the answerer to be that office's own person. `staff_tool_set` (the Team page's tick box) and every
+other deployment-wide action stay operator-only. Proof: `npm run verify:sample-tool-requests` (24 checks, including a request
+raised in another office that the Sample cannot approve, decline or revoke, a spoofed `p_office` that changes nothing, and
+the other offices' requests and grants fingerprinted unchanged) and `tests/gateway/office-owned-tool-requests.test.ts`.
 
 ## Using it for UX work
 

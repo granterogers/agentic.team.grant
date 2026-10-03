@@ -15,6 +15,8 @@
  * are the artifact, the transport is a detail.
  */
 
+import { assertMayTouchProduction } from './suite-guard.ts'
+
 export interface SqlResult {
   readonly rows: readonly Record<string, unknown>[]
 }
@@ -134,6 +136,7 @@ export class ManagementApiExecutor implements SqlExecutor {
   }
 
   async execute(sql: string): Promise<SqlResult> {
+    assertMayTouchProduction()
     let response!: Response
     for (let attempt = 0; ; attempt += 1) {
       response = await fetch(this.endpoint, {

@@ -803,7 +803,8 @@ const run = (suite: string, script = `verify:${suite}`): Promise<Result> =>
     */
     const child = spawn('npm', ['run', script], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      // The gate is itself the statement of intent: someone ran `npm run gate` or `npm run e2e` knowing what it presses on.
+      env: { ...process.env, HQ_PRODUCTION_INTENT: '1' },
       detached: true,
     })
     const take = (b: Buffer): void => {

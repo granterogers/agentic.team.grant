@@ -45,6 +45,12 @@ const NOT_OPERATOR: Readonly<Record<string, string>> = {
     'the person pastes their OWN session for sites they use; per-office data',
   browser_session_forget: 'forgets that same per-office session',
   project_staff: 'staffs one project',
+  approve_tool:
+    'answers a request raised in the caller’s OWN office; the function matches the request on office_id and the answerer must be that office’s own person',
+  decline_tool:
+    'declines a request raised in the caller’s OWN office, same office and same-person checks as approve_tool',
+  revoke_tool:
+    'withdraws a grant held in the caller’s OWN office (staff_tools is keyed on office_id); the global switch is set_setting, still operator-only',
 }
 
 describe('the operator-only set', () => {

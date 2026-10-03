@@ -5675,9 +5675,7 @@ function requestsTab() {
         r.reason
           ? `Your reason: ${r.reason}`
           : r.state === 'open'
-            ? config.VIEWER.operator
-              ? `Approving lets ${r.who_name} do this from now on. You can take it back under Team.`
-              : 'What the team may use is decided by whoever runs this Team HQ, so this is shown to you and not yours to answer.'
+            ? `Approving lets ${r.who_name} do this from now on. You can take it back from this page.`
             : '',
       meta: ui.facts([
         ...becauseFacts(r.because),
@@ -5685,10 +5683,15 @@ function requestsTab() {
         ui.html(when.stamp(r.at)),
       ]),
       actions:
-        r.state === 'open' && config.VIEWER.operator
+        r.state === 'open'
           ? btn('Decline', 'quiet', { 'data-tool': `${r.id}:decline` }) +
             btn('Approve', 'primary', { 'data-tool': `${r.id}:approve` })
-          : '',
+          : r.state === 'approved'
+            ? btn('Take back', 'quiet', {
+                'data-revoke-tool': `${r.who}:${r.tool}`,
+                'aria-label': `Take back ${copy.toolName(r.tool)} from ${r.who_name}`,
+              })
+            : '',
     })
 
   const offer = (s) =>
@@ -5846,6 +5849,7 @@ function healthTab() {
   const g = config.GOVERNANCE
   const list = config.services()
   const wrong = list.filter((c) => ['degraded', 'dead'].includes(String(c.state)))
+  const anyConnected = list.some((c) => config.isConnected(c.state))
   const stuck = Number((g.stranded ?? {}).total ?? 0)
   const waiting = openRequestCount()
   const open = (label, tab) => ui.button({ label, tone: 'quiet', a: { 'data-goto-setting': tab } })
@@ -5855,9 +5859,13 @@ function healthTab() {
       name: 'Services',
       desc:
         wrong.length === 0
-          ? 'Everything that is connected is working.'
+          ? anyConnected
+            ? 'Everything that is connected is working.'
+            : 'Nothing is connected yet. Connect Google, Slack or Telegram when you want the team to use them.'
           : `${wrong.map((c) => c.name).join(', ')} ${wrong.length === 1 ? 'needs' : 'need'} attention.`,
-      control: ui.chip(wrong.length === 0 ? 'ok' : 'warn', wrong.length === 0 ? 'Working' : `${wrong.length} to look at`) + (wrong.length === 0 ? '' : open('Review', 'connections')),
+      control:
+        ui.chip(wrong.length === 0 ? (anyConnected ? 'ok' : 'off') : 'warn', wrong.length === 0 ? (anyConnected ? 'Working' : 'Nothing connected') : `${wrong.length} to look at`) +
+        (wrong.length === 0 ? '' : open('Review', 'connections')),
     }),
     ui.row({
       name: 'Work in progress',
@@ -6138,6 +6146,7 @@ function serviceRow(c, { showDetail = true } = {}) {
   const [tone, word] = copy.state[c.state] ?? ['off', c.state]
   const route = config.routeFor(c.key)
   const connected = config.isConnected(c.state)
+  const expired = route.how === 'oauth' && !connected && c.state === 'dead'
   const long = String(c.detail ?? '')
   const detail = long.length > 120 ? `${long.slice(0, 118).replace(/[\s,;.]+\S*$/, '')}…` : long
   const checked = c.lastAt || c.last ? `Checked ${when.stamp(c.lastAt, c.last)}` : ''
@@ -6148,7 +6157,7 @@ function serviceRow(c, { showDetail = true } = {}) {
   const op = config.VIEWER.operator
   if (!connected) {
     if (route.how === 'oauth') {
-      if (op) action = ui.button({ label: route.label, tone: 'primary', a: { 'data-google-connect': true } })
+      if (op) action = ui.button({ label: expired ? 'Reconnect Google' : route.label, tone: 'primary', a: { 'data-google-connect': true } })
     } else if (route.how === 'tab' && route.to !== 'setup') {
       action = ui.button({ label: 'Set up', tone: 'primary', a: { 'data-goto-setting': route.to } })
     } else if (route.how === 'mcp') action = ui.button({ label: route.label, tone: 'primary', a: { 'data-mcp-open': true } })
@@ -6161,13 +6170,20 @@ function serviceRow(c, { showDetail = true } = {}) {
   }
   const unreachable = !connected && action === ''
   const whyNot = !op && route.how === 'oauth' ? 'Connected by whoever runs this Team HQ.' : route.why
+  // An expired permission is not a missing one: say so, and say that nothing already read is lost.
+  const expiredNote = expired
+    ? op
+      ? 'Google no longer accepts the permission that was saved, which happens when it expires or is withdrawn. Reconnecting takes one consent screen; nothing already read is lost.'
+      : 'Google needs to be reconnected by whoever runs this Team HQ. Nothing already read is lost.'
+    : ''
   return `<div class="st-svc" data-saidwrap>
     <span class="st-logo"${c.tint ? ` style="--tint:${esc(c.tint)}"` : ''}>${c.svg ?? ''}</span>
     <div class="st-text">
       <p class="st-name">${esc(c.name)}</p>
       <p class="st-desc">${esc(c.used ?? '')}</p>
-      ${showDetail && detail ? `<p class="st-meta">${esc(detail)}</p>` : ''}
-      ${unreachable ? `<p class="st-meta">${esc(whyNot ?? 'Set up outside Team HQ.')}</p>` : ''}
+      ${showDetail && detail && !expired ? `<p class="st-meta">${esc(detail)}</p>` : ''}
+      ${expiredNote ? `<p class="st-meta">${esc(expiredNote)}</p>` : ''}
+      ${unreachable && !expired ? `<p class="st-meta">${esc(whyNot ?? 'Set up outside Team HQ.')}</p>` : ''}
       <span class="st-said" data-said role="status" aria-live="polite"></span>
     </div>
     <div class="st-state">
@@ -7235,7 +7251,7 @@ function settingsSheet() {
           title: 'Approve this?',
           body:
             'They can use it from their next job on, and whatever it reaches, it reaches as you. ' +
-            'You can take it back under Team.',
+            'You can take it back from this page.',
           confirmLabel: 'Approve',
         }))
       ) {
@@ -7252,7 +7268,7 @@ function settingsSheet() {
         reason = await settingsUi.askDialog({
           title: 'Why not?',
           body: 'The team is shown your reason, and so are you if it asks again.',
-          label: 'Your reason',
+          label: 'Your reason (a sentence of at least eight characters)',
           confirmLabel: 'Decline',
         })
         if (reason === null) return
@@ -7263,6 +7279,28 @@ function settingsSheet() {
           yes ? { p_request_id: id } : { p_request_id: id, p_reason: reason },
         ),
         yes ? 'Granted.' : 'Declined.')
+      if (done) await afterGovernance()
+    })
+  }
+
+  /*
+    Taking back a grant that an approval gave. Confirmed, because the team loses something it was using. The request
+    that earned it stays on the page as history; the grant itself is this office's and nothing else's.
+  */
+  for (const b of v.querySelectorAll('[data-revoke-tool]')) {
+    b.addEventListener('click', async () => {
+      const [slug, tool] = String(b.dataset.revokeTool).split(':')
+      if (
+        !(await settingsUi.confirmDialog({
+          title: 'Take this back?',
+          body: 'They stop being able to use it from their next job on. You can approve it again if they ask.',
+          confirmLabel: 'Take it back',
+          danger: true,
+        }))
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Saving…', () => act('revoke_tool', { p_slug: slug, p_tool: tool }), 'Taken back.')
       if (done) await afterGovernance()
     })
   }

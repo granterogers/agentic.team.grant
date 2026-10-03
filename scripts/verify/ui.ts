@@ -53,6 +53,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { sampleOffice } from '../sample/lib.ts'
 import { namesAnOffice } from './lib/office-seam.ts'
 
 const CHROMIUM = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
@@ -174,9 +175,12 @@ const db = new ManagementApiExecutor(
 )
 
 // P3: these read the dashboard of the person whose pages are being captured, so they name that office first.
-const OFFICE_FIRST = new Set(['hq_studio', 'usage_overview', 'hq_studio_lately'])
+// Every one of these takes the office first (checked against pg_proc), so none is called without it. The office is the
+// SAMPLE PERSON's: the pages are captured from a real second office, never from Grant's, which also makes this a read
+// of fictional data rather than of his.
+const sampleOfficeId = (await sampleOffice()).officeId
 const callOf = (fn: string, args: string): string =>
-  `app.${fn}(${OFFICE_FIRST.has(fn) ? `app.operator_office()${args === '' ? '' : `, ${args}`}` : args})`
+  `app.${fn}('${sampleOfficeId}'::uuid${args === '' ? '' : `, ${args}`})`
 const sections: Record<string, unknown> = {}
 for (const [name, fn] of SECTIONS) {
   // Two of these take an argument, and calling them without one is a different
