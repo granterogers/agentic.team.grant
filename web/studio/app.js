@@ -6442,7 +6442,10 @@ function channelsTab() {
     </div>`
   }
 
-  const convo = (config.CONVO_CHANNELS ?? []).map((c) => {
+  const convo = (config.CONVO_CHANNELS ?? [])
+    // Telegram and Slack are the deployment's own: a person who is not the operator is not told how they are doing
+    .filter((c) => operator || !/telegram|slack/i.test(String(c.label ?? '')))
+    .map((c) => {
     const tone = { here: 'ok', carrying: 'ok', quiet: 'ok', degraded: 'warn', disconnected: 'bad', never: 'off', unchecked: 'off' }[String(c.state)] ?? 'off'
     const bits = [
       c.messages > 0 ? `${c.messages} message${c.messages === 1 ? '' : 's'}, last ${c.last_at ? when.words(c.last_at) : 'never'}` : 'No messages yet',

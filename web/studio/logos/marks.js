@@ -130,6 +130,22 @@ export const MARKS = {
     svg: svg(`<path d="M12 15.4V4.2"/><path d="M7.8 8.4 12 4.2l4.2 4.2"/>
               <path d="M4.2 15.6v2.6a1.8 1.8 0 001.8 1.8h12a1.8 1.8 0 001.8-1.8v-2.6"/>`),
   },
+  /*
+    The two ways of reaching the team that are Team HQ's own rather than a company's: talking (a microphone) and mail
+    (an envelope). Generic shapes and no tint, for the reason above. Without them the Messaging rows drew an empty box
+    where the mark goes whenever the payload named them voice and mail.
+  */
+  voice: {
+    name: 'Voice',
+    tint: 'currentColor',
+    svg: svg(`<rect x="9" y="3.2" width="6" height="11" rx="3"/>
+              <path d="M5.6 11.4a6.4 6.4 0 0012.8 0M12 17.8v3"/>`),
+  },
+  mail: {
+    name: 'Email',
+    tint: 'currentColor',
+    svg: svg(`<rect x="3" y="5.4" width="18" height="13.2" rx="2.2"/><path d="m3.6 7.4 8.4 6 8.4-6"/>`),
+  },
 }
 
 export const mark = (key) => MARKS[key] ?? { name: key, tint: 'currentColor', svg: '' }
