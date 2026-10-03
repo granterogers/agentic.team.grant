@@ -57,7 +57,10 @@ const candidates = () => {
     out.push({ group, name, to, kind })
   }
 
-  for (const p of PROJECTS) push('Projects', p.name, at(`/p/${p.slug}`), 'Project', `${p.name} ${p.purpose ?? ''}`)
+  for (const p of PROJECTS) {
+    if (p.slug === 'unnamed') continue
+    push('Projects', p.name, at(`/p/${p.slug}`), 'Project', `${p.name} ${p.purpose ?? ''}`)
+  }
 
   /*
     Tools are offered for the project you are IN, not for all of them at once.

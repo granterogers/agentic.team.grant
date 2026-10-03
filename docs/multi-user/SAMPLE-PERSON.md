@@ -17,23 +17,40 @@ Its login password is in the Vault as `p4.second_person.password` and is never p
 Persona (fictional, unlike any of Grant's work so a leak is unmistakable): **Jordan Reyes**, owner of **Brightside Café**,
 opening a second site. Three projects: *Second Location Launch*, *Seasonal Menu Research*, *Winter Pop-up*.
 
-## What it holds (baseline `sample-baseline-1`)
+## What it holds (baseline `sample-baseline-2`, defined in `scripts/sample/plan.ts`)
 
-| Surface | Content |
-|---|---|
-| Projects | 3, created through the gateway as the Sample |
-| Team tasks | 17: overdue, due today, upcoming, milestone, done, a 120-character title, a 9-character title, two assigned to specialists |
-| Personal tasks | 4, with priorities and due dates (one overdue, one today) |
-| Contacts | 4 fictional people, `.invalid` addresses, one with a note |
-| Documents | 6 uploaded files (markdown, csv, text; one with a 100-character name) |
-| Lessons | 2 the Sample was "taught" |
-| Tool requests | 2 open (shown, not answerable by a non-operator: see below) |
-| Settings | autonomy `act_with_review`, accent Coral |
-| Integrations | truthfully **not connected** to everything: no external credential exists for this office |
+Three projects, deliberately different in shape. Every date is an offset from the day of seeding, so overdue, today and
+tomorrow are always true; `seed` also moves a stale date back.
 
-Not seeded, on purpose: calendar and mail (caches of a connected Google account; fabricating them would show a provider as
-connected), chat history and "Needs you"/"Stuck" (they come from real jobs, and seeding them would put model traffic on
-production for decoration). `SAMPLE-ACCOUNT-DESIGN.md` §3 lists how a later pass could.
+| Project | Shape | Content |
+|---|---|---|
+| Wellness Studio Launch | team-heavy | 3 milestones with subtasks, agent- and person-owned work, blocked and doing states, 5 contacts, 6 documents |
+| 2027 Financial Plan | document-heavy | dated task lists, 130-character document names, dense generated figures, 3 contacts, 8 documents |
+| Japan Spring Trip | calendar-heavy | itinerary days, multi-day spans, hotel check-in/out, booking deadlines, checklists, research tasks, 4 contacts, 7 documents |
+
+Plus personal to-dos with no project, 2 lessons, 4 open tool requests, autonomy `act_with_review`, accent Clay.
+Every task carries categories (labels), a priority, and where it applies a blocked reason. Everything is fictional
+(`.invalid` addresses, reserved fictional phone ranges).
+
+**What the Calendar reads.** The project Schedule tool is built from TASKS with a due or start date
+(`web/studio/bc/miniatures.js` `calendarMini`: "the office keeps no separate diary"). `public.calendar_events` is the cache of
+a connected Google calendar and is read only by the briefing (`app.calendar_ahead`) and the capability index, never by a page.
+It is deliberately NOT seeded: doing so would tell every agent the Sample's calendar is connected. Calendar-heavy content is
+therefore dated tasks, and timed or all-day distinctions are not representable.
+
+**Not seeded, and why.**
+* Chat history and "Needs you" / "Stuck": they come from real jobs, and `public.blockers` can only be created against a job
+  (`app.request_approval` needs one). A job cannot be deleted and the deployed worker would pick it up. Blocked tasks stand
+  in for stuck work.
+* Recent activity: task, contact and document writers append nothing to `public.events`; what the ledger holds is real
+  (autonomy changes, lessons, tool requests). It is not faked.
+* Mail, Drive, Slack, Telegram, Google: not connected, truthfully. No simulated "expired" state is written.
+
+`npm run sample:inventory` prints, read-only, per project: tasks by state and due bucket, subtasks, spans, owners, priorities,
+categories, documents by type and state, contacts, blockers, ledger events; and the office's live jobs (expect 0).
+`seed` and `reset` fingerprint every OTHER office before and after and exit 4 if one moved.
+
+`SAMPLE-ACCOUNT-DESIGN.md` §3 lists how a later pass could go further.
 
 ## Commands
 

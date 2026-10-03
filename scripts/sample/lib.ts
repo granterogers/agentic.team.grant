@@ -18,8 +18,22 @@ export { guardOffice, SAMPLE_OWNER_KEY }
 /** The persona the baseline content is written for. Fictional, and unlike any of Grant's work so a leak is unmistakable. */
 export const PERSONA = { name: 'Jordan Reyes', business: 'Brightside Café' }
 
-const rows = async (sql: string): Promise<Record<string, unknown>[]> =>
-  (await db.execute(sql)).rows as Record<string, unknown>[]
+/**
+ * A read or write through the Management API. The API throttles, and a 429 is not an answer: retry with a growing pause
+ * and say so, rather than letting an infrastructure limit end a run half-way. Any other error is thrown unchanged.
+ */
+const rows = async (sql: string): Promise<Record<string, unknown>[]> => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return (await db.execute(sql)).rows as Record<string, unknown>[]
+    } catch (e) {
+      const throttled = /Throttler|Too Many Requests|429/.test(String(e))
+      if (!throttled || attempt >= 8) throw e
+      console.log(`  (database API throttled - attempt ${attempt} of 8, waiting ${attempt * 6}s)`)
+      await new Promise((ok) => setTimeout(ok, attempt * 6000))
+    }
+  }
+}
 
 export type SampleOffice = { officeId: string; authUserId: string }
 

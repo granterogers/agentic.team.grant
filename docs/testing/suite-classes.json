@@ -1,6 +1,11 @@
 {
   "_about": "Which kind of environment each verification suite may run against. A suite not named here is classified by what its source touches: no database or production host -> local; anything that does -> production-heavy. See docs/testing/SUITE-CLASSES.md.",
-  "sample": ["verify:sample-settings", "verify:sample-tool-requests"],
+  "sample": [
+    "verify:sample-settings",
+    "verify:sample-tool-requests",
+    "verify:account-lifecycle",
+    "verify:account-ui"
+  ],
   "smoke": ["verify:pulse", "verify:wrappers", "verify:schema", "verify:ui"],
   "local": [],
   "scripts": {
@@ -8,6 +13,9 @@
     "scripts/sample/tool-requests-live.ts": "sample",
     "scripts/sample/settings-shots-live.ts": "sample",
     "scripts/sample/sample.ts": "sample",
+    "scripts/p6/account-lifecycle.ts": "sample",
+    "scripts/p6/account-ui.ts": "sample",
+    "scripts/p6/entry-ui.ts": "local",
     "scripts/p5/settings-qa.ts": "local",
     "scripts/p5/google-reconnect.ts": "local",
     "scripts/p5/settings-shots.ts": "local",

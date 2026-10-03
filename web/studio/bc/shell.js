@@ -41,6 +41,7 @@ import * as stopping from './stopping.js'
 import * as contacts from './contacts.js'
 import * as bcDrive from './drive.js'
 import * as todos from './todos.js'
+import * as account from './account.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
 
 /*
@@ -59,6 +60,7 @@ export const mount = (c) => {
   todos.mount(c)
   contacts.mount(c)
   compose.mount(c)
+  account.mount(c)
 }
 
 const state = () => ctx.state
@@ -767,8 +769,24 @@ const projectHeader = (p, latest) => {
  * Portfolio (home)
  * ======================================================================== */
 
+/*
+  THE PROJECTS A PERSON SEES. Every office has one catch-all project called Unnamed, where conversations that belong to
+  no project are filed. Empty, it is plumbing, and showing it made a brand-new office look as if it already had a
+  project and hid the first-run screen. Once something is filed there it is real work, so it is listed.
+*/
+const filedUnder = (p) =>
+  (p.tasks ?? []).length +
+    (p.documents ?? []).length +
+    (p.activity ?? []).length +
+    (p.contacts ?? []).length +
+    (p.waiting ?? []).length >
+  0
+const listed = () => PROJECTS.filter((p) => p.slug !== 'unnamed' || filedUnder(p))
+
 const portfolio = () => {
-  if (PROJECTS.length === 0) {
+  // A signed-in person whose office has nothing in it yet is shown the one next step, not an empty list.
+  if (listed().length === 0 && source.live === true && canWrite()) return account.firstRun()
+  if (listed().length === 0) {
     return `<h1 class="bcsectiontitle">Your projects</h1>
       ${empty(
         {
@@ -778,9 +796,13 @@ const portfolio = () => {
         '',
       )}`
   }
-  return `<h1 class="bcsectiontitle">Your projects</h1>
+  return `<div class="bcportfoliohead"><h1 class="bcsectiontitle">Your projects</h1>${
+    canWrite()
+      ? `<button type="button" class="bcbtn bcbtn--outline" data-bc-newproject-open aria-expanded="false">New project</button>`
+      : ''
+  }</div>${canWrite() ? account.newProject({ open: false }) : ''}
     <div class="bcgrid bcgrid--projects">
-      ${PROJECTS.map((p) => {
+      ${listed().map((p) => {
         const open = (p.tasks ?? []).filter((t) => t.state !== 'done').length
         const waiting = (p.waiting ?? []).length
         const late = bcMini.filtered(p, 'late').length
@@ -3232,7 +3254,7 @@ const searchHits = (q, kind, only) => {
 
   for (const p of PROJECTS) {
     if (only !== null && p.slug !== only) continue
-    if (want('Projects') && match(p.name, p.purpose)) {
+    if (want('Projects') && p.slug !== 'unnamed' && match(p.name, p.purpose)) {
       hits.push({ kind: 'Project', project: p.name, title: p.name, excerpt: p.purpose ?? '', who: '', when: '', to: at(`/p/${p.slug}`) })
     }
     if (want('Tasks')) {
@@ -3294,7 +3316,7 @@ const search = () => {
       </div>
       <div class="bcinline-list" role="group" aria-label="Filter by project">
         <button type="button" data-bc-only="" aria-pressed="${only === null ? 'true' : 'false'}">Every project</button>
-        ${PROJECTS.map(
+        ${listed().map(
           (p) =>
             `<button type="button" data-bc-only="${esc(p.slug)}" aria-pressed="${only === p.slug ? 'true' : 'false'}">${esc(p.name)}</button>`,
         ).join('')}
@@ -3563,7 +3585,15 @@ const notLive = () => {
   </div>`
 }
 
-export const html = () =>
+export const html = () => {
+  // Arriving, and setting up the office, are their own screens with none of the shell's navigation (bc/account.js).
+  const screen = account.mode()
+  if (screen === 'entry') return account.entry()
+  if (screen === 'setup') return account.setup()
+  return shell()
+}
+
+const shell = () =>
   `<a class="bcskip" href="#bcmain">Skip to main content</a>
   ${topRow()}
   ${notLive()}

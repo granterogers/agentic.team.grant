@@ -1,0 +1,171 @@
+/*
+  Arriving, setting up the office, and the first project (bc/account.js).
+
+  Scoped to the experience root like every other rule in bc/. The entry and set-up screens have no shell around them, so
+  they draw their own calm centred card on the canvas; the first-run block lives inside the ordinary main surface.
+  Phone overrides sit at the end of this file, after the rules they override.
+*/
+
+:root[data-experience='basecamp'] .bcentry {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--bc-6) var(--bc-4);
+}
+:root[data-experience='basecamp'] .bcentry:focus { outline: none; }
+
+.bcentrycard {
+  width: min(480px, 100%);
+  display: grid;
+  gap: var(--bc-4);
+  padding: var(--bc-8) var(--bc-8) var(--bc-6);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 20px;
+  background: var(--bc-surface);
+  box-shadow: var(--bc-shadow-sheet);
+}
+.bcentrykicker {
+  margin: 0;
+  font: 700 12px/16px var(--bc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bc-heading);
+}
+.bcentrytitle {
+  margin: 0;
+  font: 650 28px/34px var(--bc-font);
+  letter-spacing: -0.01em;
+  color: var(--bc-text-strong);
+  text-wrap: balance;
+}
+.bcentrylead { margin: 0; font: var(--bc-body); color: var(--bc-text-muted); }
+.bcentrylead strong { color: var(--bc-text); font-weight: 600; word-break: break-all; }
+.bcentrynote {
+  margin: 0;
+  padding: var(--bc-2) var(--bc-3);
+  border-radius: var(--bc-r-control);
+  background: var(--bc-hover);
+  font: var(--bc-compact);
+  color: var(--bc-text);
+}
+.bcentrynote--bad { color: var(--bc-danger); }
+
+.bcentrytabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  border: 1px solid var(--bc-border-control);
+  border-radius: calc(var(--bc-r-control) + 3px);
+  background: var(--bc-canvas);
+}
+.bcentry .bcinput { min-height: 44px; }
+.bcentrytabs button {
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--bc-r-control);
+  background: transparent;
+  color: var(--bc-text-muted);
+  font: 600 14px/21px var(--bc-font);
+  cursor: pointer;
+}
+.bcentrytabs button:hover { color: var(--bc-text); }
+.bcentrytabs button[aria-selected='true'] {
+  background: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+}
+
+.bcentrypanel { min-height: 0; }
+.bcentryform { display: grid; gap: var(--bc-3); }
+.bcentrygo { width: 100%; height: 44px; }
+.bcentrysmall { margin: 0; font: var(--bc-compact); color: var(--bc-text-muted); }
+.bcentrysaid { margin: 0; min-height: 21px; font: var(--bc-compact); color: var(--bc-section-accent); }
+.bcentrysaid:empty { display: none; }
+.bcentrylink {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--bc-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bcentrysent {
+  display: grid;
+  gap: var(--bc-3);
+  padding: var(--bc-4);
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-control);
+  background: var(--bc-canvas);
+  font: var(--bc-compact);
+  color: var(--bc-text-muted);
+}
+.bcentrysent b { font: 600 16px/24px var(--bc-font); color: var(--bc-text-strong); }
+.bcentrysent strong { color: var(--bc-text); word-break: break-all; }
+.bcentrysent:focus { outline: none; }
+.bcentryrow { display: flex; flex-wrap: wrap; gap: var(--bc-2); }
+
+/* --- First run, and the new-project form -------------------------------- */
+
+.bcportfoliohead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--bc-3);
+  flex-wrap: wrap;
+}
+.bcportfoliohead .bcsectiontitle { margin-bottom: var(--bc-3); }
+.bcnewproject {
+  display: grid;
+  gap: var(--bc-3);
+  max-width: 520px;
+  margin: 0 0 20px;
+}
+.bcnewproject[hidden] { display: none; }
+.bcnewprojectrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bc-2); }
+
+.bcfirst { display: grid; gap: var(--bc-4); max-width: 640px; }
+.bcfirst .bcsectiontitle { margin: 0; }
+.bcfirstlead { margin: 0; font: var(--bc-body); color: var(--bc-text-muted); }
+.bcfirstcard {
+  display: grid;
+  gap: var(--bc-3);
+  padding: 20px;
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-control);
+  background: var(--bc-canvas);
+}
+.bcfirstcard > b { font: 600 16px/24px var(--bc-font); color: var(--bc-text-strong); }
+.bcfirststeps {
+  display: grid;
+  gap: var(--bc-3);
+  margin: var(--bc-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.bcfirststeps li {
+  display: grid;
+  gap: 2px;
+  padding-left: var(--bc-3);
+  border-left: 2px solid var(--bc-border-control);
+}
+.bcfirststeps b { font: 600 14px/21px var(--bc-font); color: var(--bc-heading); }
+.bcfirststeps span { font: var(--bc-compact); color: var(--bc-text-muted); }
+
+/* While arriving, there is no team to talk to yet, so the conversation dock stays shut. */
+:root[data-gate='entry'] #dock,
+:root[data-gate='setup'] #dock,
+:root[data-gate='entry'] [data-dock],
+:root[data-gate='setup'] [data-dock] { display: none !important; }
+
+/* --- Phone: after the rules it overrides --------------------------------- */
+
+@media (max-width: 560px) {
+  :root[data-experience='basecamp'] .bcentry { place-items: start center; padding: var(--bc-4) var(--bc-3); }
+  .bcentrycard { padding: 20px var(--bc-4) var(--bc-4); border-radius: 16px; }
+  .bcentrytitle { font-size: 24px; line-height: 30px; }
+  .bcentryrow .bcbtn { flex: 1 1 100%; }
+  .bcnewprojectrow .bcbtn { flex: 1 1 100%; }
+}

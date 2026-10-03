@@ -269,7 +269,9 @@ const afterOut = (await page.evaluate(
 )) as string
 check(
   "after Sign out none of the Sample's project names remain on the page or in storage",
-  !/Second Location Launch|Seasonal Menu/.test(afterOut),
+  !/Wellness Studio Launch|2027 Financial Plan|Japan Spring Trip|Second Location Launch|Seasonal Menu/.test(
+    afterOut,
+  ),
 )
 await signIn(studio, page, s)
 await openSettings(page, 'memory')

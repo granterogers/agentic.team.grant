@@ -88,6 +88,9 @@ export const forget = () => {
 
 export const signedIn = () => read() !== null
 
+/** The office's own address, for the one call a person with no office yet makes (bc/account.js). */
+export const apiUrl = () => API
+
 const post = async (body, auth = '') => {
   const headers = { 'content-type': 'application/json' }
   if (auth !== '') headers.authorization = `Bearer ${auth}`
@@ -196,6 +199,10 @@ export async function askForLink(email) {
     back: `${window.location.origin}${window.location.pathname}`,
   })
   if (body.error !== undefined) throw new Error(String(body.error))
+  // A link that was not sent is not "check your email". The office says so with ok false and a sentence; say that.
+  if (body.ok === false) {
+    throw new Error(String(body.said ?? 'The link could not be sent just now. Try again shortly.'))
+  }
   return String(body.said ?? 'Check your email for a link to sign in.')
 }
 

@@ -39,6 +39,7 @@ import * as contacts from './contacts.js'
 import * as todos from './todos.js'
 import * as docorder from './docorder.js'
 import * as jump from './jump.js'
+import * as account from './account.js'
 
 let ctx = null
 export const mount = (c) => {
@@ -534,6 +535,9 @@ const followChat = (root) => {
 }
 
 export const wire = (root) => {
+  // The entry and set-up screens are their own world; the rest of the wiring has nothing to attach to there.
+  account.wire(root)
+  if (account.mode() !== 'app') return
   rememberDialogScroll(root)
 
   // Navigation inside the experience.

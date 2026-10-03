@@ -685,9 +685,22 @@ export async function hydrate(endpoint, token) {
     })
     // Somebody signed out while this was in flight: it is theirs, not whoever is here now (#405).
     if (began !== sessionEpoch.epoch()) throw new Error('signed out while loading')
+    if (r.status === 403) {
+      /*
+        A person who has proved an address and has no office yet is not refused: they are somebody who has not finished
+        signing up. The session stays, and the page asks them to set the office up (bc/account.js).
+      */
+      const said = await r.json().catch(() => ({}))
+      if (said.error === 'no_office' && said.can_create === true) {
+        const fresh = new Error('signed in, no office yet')
+        fresh.name = 'NoOffice'
+        throw fresh
+      }
+    }
     if (r.status === 401 || r.status === 403) {
       const refused = new Error('that token was not accepted')
       refused.name = 'Refused'
+      refused.status = r.status
       throw refused
     }
     if (!r.ok) throw new Error(`http ${r.status}`)
@@ -798,10 +811,17 @@ export async function hydrate(endpoint, token) {
       numbers on screen WERE real, and "these are from 11 minutes ago" is a
       different warning from "there has never been anything here".
     */
-    if (e instanceof Error && (e.name === 'Refused' || /http 40[13]/.test(e.message))) {
+    if (e instanceof Error && e.name === 'NoOffice') {
+      // Signed in, nothing set up: keep the session, drop whatever was drawn, and let the page say what comes next.
+      source.state = 'no_office'
+      source.why = 'signed in, no office yet'
+      PROJECTS.length = 0
+    } else if (e instanceof Error && (e.name === 'Refused' || /http 40[13]/.test(e.message))) {
       source.state = 'refused'
       source.why = 'that token was not accepted — sign in again'
       try { localStorage.removeItem('hq.token') } catch { /* nothing to clear */ }
+      // A session the office has refused outright (401) is not worth keeping: the page says it was cleared, so clear it.
+      if (e.status === 401) sessionEpoch.forget()
     } else {
       source.state = source.at === null ? 'unreachable' : 'stale'
       source.why =

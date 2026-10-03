@@ -1583,6 +1583,12 @@ interface Answer {
     that resolves to no active office is refused ('no_office'); the machine key names none.
   */
   readonly office?: string | null
+  /**
+    Set only with 'no_office': the session is a VERIFIED login (confirmed address) that no office member matches, so the
+    person may open an office of their own (self-service account creation). Never set for a member whose office was
+    retired - that is a decision, not a missing step.
+  */
+  readonly canCreate?: boolean
 }
 
 const sessionAllowed = async (presented: string): Promise<Answer> => {
@@ -1647,7 +1653,18 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
     owner_key?: string | null
     kind?: string | null
   }[]
-  if (rows[0]?.ok !== true) return { verdict: 'no', principal: null, kind: null }
+  if (rows[0]?.ok !== true) {
+    /*
+      NOT A MEMBER. A stranger whose address Supabase has CONFIRMED is a real login with no office yet, which is
+      answered with a distinct 'no_office' + canCreate (403, so the page keeps the session and offers to create one).
+      An unconfirmed address stays refused. Nothing is cached: only a 'yes' is remembered, so the moment the office
+      exists the next request resolves it.
+    */
+    const confirmed = String(user.email_confirmed_at ?? '').trim() !== ''
+    return confirmed
+      ? { verdict: 'no_office', principal: null, kind: null, canCreate: true }
+      : { verdict: 'no', principal: null, kind: null }
+  }
   const owner = String(rows[0]?.owner_key ?? '').trim()
   // A member with no owner key is admitted to read and is nobody to answer as.
   const principal = owner === '' ? null : owner
@@ -1915,6 +1932,87 @@ const uploadTarget = async (
     : { error: String(answer.error ?? 'no such target') }
 }
 
+/*
+  SELF-SERVICE ACCOUNT CREATION. One person, one private office.
+
+  Authority is the VERIFIED SESSION and nothing else: the session is checked with Supabase Auth, the address must be
+  confirmed, and the database function derives the owner key from the auth id. A machine key is not a session and is
+  refused. An id, an email, an owner key or an office in the body is never read. Idempotent in the database (one lock
+  per login), so a repeated or concurrent press returns the same office.
+*/
+const createOffice = async (
+  presented: string,
+  body: Record<string, unknown>,
+): Promise<Response> => {
+  if (presented === '' || !looksLikeSession(presented)) return json({ error: 'unauthorized' }, 401)
+  const asking = await askUpstream(`${DB_URL}/auth/v1/user`, {
+    headers: {
+      apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Authorization: `Bearer ${presented}`,
+    },
+  })
+  const couldNot = (): Response =>
+    json({ error: 'The office could not check who you are just now. Try again in a moment.' }, 503)
+  if ('unreachable' in asking) return couldNot()
+  if (!asking.response.ok) {
+    return asking.response.status === 401 || asking.response.status === 403
+      ? json({ error: 'unauthorized' }, 401)
+      : couldNot()
+  }
+  const user = (await asking.response.json().catch(() => ({}))) as {
+    id?: string
+    email?: string
+    email_confirmed_at?: string
+  }
+  const authId = String(user.id ?? '')
+  const email = String(user.email ?? '')
+    .trim()
+    .toLowerCase()
+  if (authId === '' || email === '') return json({ error: 'unauthorized' }, 401)
+  if (String(user.email_confirmed_at ?? '').trim() === '') {
+    return json(
+      { ok: false, error: 'Please confirm your email address first, then try again.' },
+      403,
+    )
+  }
+  const named = body.name ?? (body.args as Record<string, unknown> | undefined)?.name
+  const name = typeof named === 'string' ? named.slice(0, 400) : ''
+  const made = await askUpstream(`${DB_URL}/rest/v1/rpc/self_provision_office`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ p_auth: authId, p_email: email, p_name: name }),
+  })
+  if ('unreachable' in made || !made.response.ok) {
+    return json(
+      {
+        ok: false,
+        error: 'We could not set up your office just now. Please try again in a moment.',
+      },
+      503,
+    )
+  }
+  const answer = (await made.response.json().catch(() => ({}))) as {
+    ok?: boolean
+    created?: boolean
+    office_id?: string
+    error?: string
+  }
+  if (answer.ok === true && typeof answer.office_id === 'string') {
+    return json({ ok: true, created: answer.created === true, office_id: answer.office_id })
+  }
+  return json(
+    {
+      ok: false,
+      error: typeof answer.error === 'string' ? answer.error : 'We could not set up your office.',
+    },
+    400,
+  )
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return json({ ok: true })
 
@@ -1926,8 +2024,30 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  const { verdict, principal, kind, office: sessionOffice } = await allowed(presented)
-  if (verdict === 'no_office') return json({ error: 'no_office' }, 403)
+
+  /*
+    THE ONE ROUTE A PERSON WITH NO OFFICE MAY REACH: create_office (self-service account creation).
+    It is answered BEFORE the normal flow because that flow refuses somebody with no office. It takes nothing from the
+    body but a display name: the login, the address and the confirmation come from Supabase's own verification of the
+    session, and the office and owner key are derived in the database from the verified auth id.
+  */
+  if (request.method === 'POST') {
+    const peek = (await request
+      .clone()
+      .json()
+      .catch(() => null)) as Record<string, unknown> | null
+    if (peek !== null && typeof peek === 'object' && peek.action === 'create_office') {
+      return await createOffice(presented, peek)
+    }
+  }
+
+  const { verdict, principal, kind, office: sessionOffice, canCreate } = await allowed(presented)
+  if (verdict === 'no_office') {
+    return json(
+      canCreate === true ? { error: 'no_office', can_create: true } : { error: 'no_office' },
+      403,
+    )
+  }
   if (verdict === 'no') {
     return json({ error: 'unauthorized' }, 401)
   }
