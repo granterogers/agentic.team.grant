@@ -1104,6 +1104,15 @@ rather than rediscovery.
 
 ---
 
+## 3 October 2026 (later) - Sample Person, Settings deployed, #404/#405 closed, #407 fixed
+
+The Sample Person (the P4 second person, Jordan Reyes / Brightside Café) is the authenticated test environment: `docs/multi-user/SAMPLE-PERSON.md`.
+`npm run sample:seed|reset|status`, `npm run verify:sample-settings -- --grant` (55/55), `npm run sample:shots -- <label>`.
+Settings page deployed (rollback `dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z`), hq-api v858 (`viewer.operator`), worker v931 (#407). #404 and #405
+closed. Which suites may run where: `docs/testing/SUITE-CLASSES.md`, `npm run suite`. Supabase: `docs/multi-user/SUPABASE-DEGRADATION-2026-10.md`
+(no upgrade; read the dashboard CPU/IO for the incident windows first). Open for Grant: whether a person may answer their own office's tool requests;
+`verify:ui` is broken since P3 (calls `app.hq_studio_settings()` with no office); `verify:keyboard` has five unrelated failures. Record: P4 acceptance §22.
+
 ## 3 October 2026 - Global Settings redesigned (page only, not deployed)
 
 New information architecture (4 groups, 9 sections), its own design layer (`web/studio/settings-ui.css`, `settings-ui.js`,

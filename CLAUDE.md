@@ -411,6 +411,14 @@ Deploys probe themselves and fail when the probe fails:
 
 `npm run migrate` applies plain SQL from `migrations/`. **734 applied** (0864 is the latest).
 
+## Testing signed in, without Grant's office
+
+`docs/multi-user/SAMPLE-PERSON.md`: the Sample Person is a real second person with its own office and a populated baseline.
+UX, interaction and browser work runs as that person (`npm run sample:reset`, `npm run verify:sample-settings`), never as Grant.
+`docs/testing/SUITE-CLASSES.md`: 182 of the suites write to or press on the real office; run them with `npm run suite -- <name> --production`,
+and not at all while Supabase is unhealthy. A signed-in browser harness needs the real gateway and a real login (`scripts/sample/browser.ts`);
+a local static server shows the page's read-only prototype and says nothing about writer flows.
+
 ## Asking the office about itself
 
 ```

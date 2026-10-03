@@ -463,3 +463,39 @@ this closure, because they fall back to the sole-person office and there are now
 **Verdict, 19:30: BLOCKED.** Proven live: worker v928, page, voice, #405 (38/38), the production Chat proof (28/28). Not proven
 live: #404 after its fix. #405 is the only issue whose acceptance is complete; it is left open for one reason, the production
 run of the stale-request fence, which passed locally 6/6 and could not complete against production.
+
+## 22. Closure, 3 October 2026 - #404 and #405 closed on live evidence; the Sample Person environment; #407
+
+Platform healthy throughout (health API once before each production step; no polling, no suite against production).
+
+* **#404 CLOSED.** `ASK="What is on my task list right now?" npx tsx scripts/p5/person-prompt.ts`, heartbeat paused for the run
+  and resumed after: **11/11**. Job and children in the Sample office; 2 model requests recorded, 0 contain "Grant", the prompts
+  name the Sample Person; three negative controls pass. Worker v928 at the time; redeployed since as v931 (see #407).
+* **#405 CLOSED.** One smoke of the deployed page, `PAGE=https://ai-team-hq.vercel.app npx tsx scripts/p5/signout.ts`: **40/40**
+  (and 40/40 again against the newly deployed Settings page).
+* **Why Settings "could not be tested as a writer".** It was not the product. The earlier Settings run used a local static
+  server with no session, so the page drew its own read-only prototype. P4's browser harness already signed people in against
+  the real gateway; Settings now uses it (`scripts/sample/`, `docs/multi-user/SAMPLE-PERSON.md`).
+* **The real reason much of Settings looked read-only to a second person:** deployment-wide controls are operator-only at the
+  gateway and the page offered them anyway. The gateway now says who is looking (`viewer.operator`, hq-api v858) and the page
+  draws only what would be accepted. No authorisation changed. Decision left for Grant: whether a person should answer their
+  own office's tool requests (`approve_tool`/`decline_tool`/`revoke_tool` are operator-only while `tool_requests` and
+  `staff_tools` are per-office).
+* **Defects found by using the Sample Person:** a role title double-escaped on every save (one row had thirteen `&amp;`; fixed
+  in the page and repaired by migration 0865); the page's own invented example rows (names resembling Grant's projects) shown
+  to a signed-in person for the seconds before the office answered; the autonomy choice drawn stale for 2-3 s after a save;
+  save feedback lost to the redraw; `say()` stripping the Settings feedback class; keyboard focus walking into the shell behind
+  Settings. All fixed.
+* **Live Settings suite:** `npm run verify:sample-settings -- --grant` **55/55**: every section, the non-operator offer, autonomy
+  narrowing/widening/cancel/confirm/reload, accent persistence, retracting a lesson, the refused team write, Sign out and back in,
+  the phone drill-down, the operator control, and **Grant's office unchanged** (counts and content hashes, before and after).
+* **#407 FIXED AND DEPLOYED (worker v931).** Cause: `google.read_mail` and `google.read_calendar` handlers called
+  `refreshMail(db)` / `refreshCalendar(db)` with no office, so the library fell back to `soleOffice()`, which is `no_office` by
+  design once two person offices exist. The duty jobs were always Grant's office (19 failed + 47 complete in 3 days, all
+  `office_id = Grant`). The trusted source is the claimed job's own office (`officeOfJob`). No other handler had the fallback
+  (grep of `soleOffice`/`sole_person_office` in `src/` and the functions). Test: `tests/handlers/google-duties-act-in-the-jobs-office.test.ts`
+  (two offices, and a job with no office fails closed), proved red without the fix. Grant's Google token is still dead
+  (since 15 Sep), so the duty will now report that, once a day, instead of `no_office`.
+* **Deployed:** gateway v858 and page (`dpl_E3kwyjeRHR96qCAkbJVKB45PQXwm`; **rollback `dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z`**), worker v931.
+* **Supabase:** `SUPABASE-DEGRADATION-2026-10.md` (facts, likely contributors, unproven, weakened; no upgrade, no timeout raised).
+* **Testing architecture:** `docs/testing/SUITE-CLASSES.md`, `npm run suite`, `npm run check:suite-classes`.
