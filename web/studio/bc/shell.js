@@ -1402,10 +1402,10 @@ const personRow = (p, c, on) => {
 */
 const personEditor = (c) => `<form class="bcaddform bcgap-l" data-bc-personform="${esc(c.slug)}">
   <div class="bcformrow">
-    ${input({ id: 'bc-p-name', label: 'Name', name: 'name', value: esc(c.name ?? ''), maxlength: '40' })}
-    ${input({ id: 'bc-p-title', label: 'Role', name: 'title', value: esc(c.title ?? ''), maxlength: '80' })}
+    ${input({ id: 'bc-p-name', label: 'Name', name: 'name', value: c.name ?? '', maxlength: '40' })}
+    ${input({ id: 'bc-p-title', label: 'Role', name: 'title', value: c.title ?? '', maxlength: '80' })}
   </div>
-  ${input({ id: 'bc-p-pronouns', label: 'Pronouns', name: 'pronouns', value: esc(c.pronouns ?? ''), maxlength: '24' })}
+  ${input({ id: 'bc-p-pronouns', label: 'Pronouns', name: 'pronouns', value: c.pronouns ?? '', maxlength: '24' })}
   <label class="bclabel" for="bc-p-remit">What they are responsible for</label>
   <textarea class="bcinput" id="bc-p-remit" name="remit" rows="3">${esc(c.responsibilities ?? '')}</textarea>
   <label class="bclabel" for="bc-p-skills">Subject words</label>

@@ -364,6 +364,9 @@
 #settings .st-said.warn {
   color: var(--st-warn);
 }
+#settings .st-said.good {
+  color: var(--st-ok);
+}
 
 /* a fact: true, quiet, not a control */
 #settings .st-row.fact .st-value {
@@ -881,6 +884,10 @@
 #settings .st-person .st-act {
   grid-column: 1 / -1;
   margin-top: 10px;
+}
+/* a person who may not configure the team has no button here, and the empty row must not keep its space */
+#settings .st-person .st-act:empty {
+  display: none;
 }
 
 /* appearance swatches */

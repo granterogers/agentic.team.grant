@@ -354,7 +354,12 @@ export const ACTIONS = [
   { action: 'compare', label: 'Compare', needs_two: true },
 ]
 
-export const settingsSource = { live: false, why: 'not asked yet' }
+/*
+  `state` says whether the office has answered: 'pending' until it has, then 'ready' or 'failed'. A signed-in person must
+  never be shown the page's own example rows while it is pending (the prototype names things that resemble real
+  projects), so the sections draw "asking" until it is 'ready'.
+*/
+export const settingsSource = { live: false, why: 'not asked yet', state: 'pending' }
 
 const replace = (target, rows) => {
   target.length = 0
@@ -390,6 +395,13 @@ const readable = (n) => {
   direction, which is the worse one.
 */
 export const CONVO_CHANNELS = []
+
+/*
+  Whether the person looking after this deployment is the one looking. The deployment-wide controls (who is on the team,
+  tool grants, the shared Slack and Google connections, the switches that govern every office) are refused by the gateway
+  to anybody else, so the page does not draw them as if they would work. True until the gateway says otherwise.
+*/
+export const VIEWER = { operator: true }
 
 export async function hydrateSettings(read) {
   void read('conversation_channels')
@@ -430,6 +442,8 @@ export async function hydrateSettings(read) {
     )
     replace(SPARE_BOTS, d.spare_bots ?? [])
     replace(BEHAVIOURS, d.behaviours ?? [])
+    // Only an explicit false changes what is drawn: a payload from an older gateway says nothing and offers everything.
+    VIEWER.operator = d.viewer?.operator !== false
 
     /*
       Its own call, because it is its own section (#15).
@@ -442,7 +456,14 @@ export async function hydrateSettings(read) {
       Failing to read it leaves the prototype rows in place and the pane still
       renders, the same rule `hydrateGovernance` follows -- a settings tab
       showing a stack trace is worse than one saying it could not ask.
+
+      But the rows left in place are INVENTED ones (names that resemble a real person's projects), and the payload
+      above has just proved this is a live office. So until its own answer arrives, and if it never does, a signed-in
+      person sees an empty list and not somebody else's example. Found by signing in as a second person: the Autonomy
+      page named "Legacy Coaching Course" for as long as the read took.
     */
+    replace(STANDING, [])
+    replace(DECISIONS, [])
     read('standing')
       .then((rows) => {
         if (Array.isArray(rows)) replace(STANDING, rows)
@@ -567,10 +588,14 @@ export async function hydrateSettings(read) {
 
     settingsSource.live = true
     settingsSource.why = ''
+    settingsSource.state = 'ready'
+    if (typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('hq:viewer'))
     return true
   } catch (e) {
     settingsSource.live = false
+    settingsSource.state = 'failed'
     settingsSource.why = e instanceof Error ? e.message : String(e)
+    if (typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('hq:viewer'))
     return false
   }
 }

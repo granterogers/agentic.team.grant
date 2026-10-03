@@ -3005,5 +3005,23 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
   }
 
+  /*
+    What the page may OFFER. The deployment-wide actions (OPERATOR_ONLY) are refused to anybody who is not the
+    operator, and the Settings page used to offer them anyway: a second person saw Approve, Configure and the Slack
+    credential boxes, pressed one and was told it was not theirs to change. Said once, on the one payload Settings
+    reads, from the same fact the refusal uses. It only decides what is DRAWN; the gateway still refuses.
+  */
+  if (
+    name === 'studio_settings' &&
+    data !== null &&
+    typeof data === 'object' &&
+    !Array.isArray(data)
+  ) {
+    const operator =
+      kind === 'service' ||
+      (kind === 'person' && principal !== null && principal !== '' && (await isOperator(principal)))
+    ;(data as Record<string, unknown>).viewer = { operator }
+  }
+
   return json({ section: name, data })
 })

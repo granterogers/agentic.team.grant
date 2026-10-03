@@ -281,7 +281,9 @@ export function say(el, message, tone = '') {
       return made
     })()
   holder.textContent = message
-  holder.className = `t-meta${tone === '' ? '' : ` ${tone}`}`
+  // The Settings page styles its feedback line by this class; replacing the whole class list used to drop it.
+  const keep = holder.classList.contains('st-said') ? 'st-said ' : ''
+  holder.className = `${keep}t-meta${tone === '' ? '' : ` ${tone}`}`
 }
 
 /**

@@ -40,7 +40,7 @@ import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
-import { DENSITIES, PALETTES, TEXTURES, SCHEMES, appearance, apply, hydrate as hydrateAppearance, readTexture, saveWith, toggleScheme, activeScheme } from './appearance.js'
+import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as dictate from './dictate.js'
@@ -5248,31 +5248,31 @@ function personEditor(c) {
 
         No backticks in this comment. Template literal.
       -->
-      <label class="flab">Skills <span class="t-meta">— comma separated. This decides
-        who gets the work: "how much should we charge" finds whoever owns
-        <i>charge</i>. It grants no tools.</span></label>
+      <label class="flab">Subject words <span class="t-meta">— separated by commas. These decide
+        who is asked: "how much should we charge" goes to whoever owns
+        <i>charge</i>. They do not give access to anything.</span></label>
       <input data-f="p_skills" value="${esc((c.expertise ?? []).join(', '))}"
-             aria-label="Skills" placeholder="pricing, charge, budget, forecast">
+             aria-label="Subject words" placeholder="pricing, charge, budget, forecast">
 
       <div class="srow wrap">
-        <label class="flab" style="margin:0">Bot</label>
-        <select data-bot="${esc(c.slug)}" aria-label="Which bot speaks as ${esc(c.name)}">
+        <label class="flab" style="margin:0">Telegram bot</label>
+        <select data-bot="${esc(c.slug)}" aria-label="Which Telegram bot speaks as ${esc(c.name)}">
           ${botOptions}
         </select>
         ${c.bot ? `<a class="t-meta" href="https://t.me/${esc(c.bot)}" target="_blank" rel="noopener">open chat</a>` : ''}
       </div>
 
       <details class="tools">
-        <summary>Tools — ${held} of ${tools.length} allowed</summary>
+        <summary>What ${esc(c.name)} may use — ${held} of ${tools.length} allowed</summary>
         <div class="toolbody">
           ${groups}
-          <p class="t-meta">Ticking saves at once. A greyed row is switched off for
-            everyone by policy, and granting it here cannot turn it on.</p>
+          <p class="t-meta">Each tick saves at once. A greyed row is switched off for
+            everyone, and cannot be turned on here.</p>
         </div>
       </details>
 
       ${procs.length === 0 ? '' : `<details class="tools">
-        <summary>How they work — ${procs.length} procedure${procs.length === 1 ? '' : 's'}</summary>
+        <summary>Ways of working you have taught ${esc(c.name)} — ${procs.length}</summary>
         <div class="toolbody">
           ${procs
             .map(
@@ -5322,9 +5322,9 @@ function teamTabSettings() {
             <p class="st-desc" style="margin:0">${esc(c.role ?? '')}</p>
             <p class="st-meta" style="margin:0">${esc(c.active === false ? 'Retired' : (c.doing ?? 'Available'))}</p>
           </div>
-          <div class="st-act">${ui.button({ label: 'Configure', tone: 'quiet', a: { 'data-configure': c.slug, 'aria-label': `Configure ${c.name}` } })}</div>
+          <div class="st-act">${config.VIEWER.operator ? ui.button({ label: 'Configure', tone: 'quiet', a: { 'data-configure': c.slug, 'aria-label': `Configure ${c.name}` } }) : ''}</div>
         </article>`
-  const hire = canWrite()
+  const hire = canWrite() && config.VIEWER.operator
     ? `<div class="st-form" data-hire-form data-saidwrap hidden>
         <p class="st-desc" style="margin:0">A specialist is brought in for a piece of work, with a reason and an end date, so the team never grows quietly. They leave when the date comes.</p>
         <div class="st-formrow">
@@ -5346,9 +5346,11 @@ function teamTabSettings() {
   return [
     ui.section({
       title: 'Your team',
-      note: 'Permanent members of the team. Choose Configure to change what someone does, who they are allowed to act as and what they may use.',
+      note: config.VIEWER.operator
+        ? 'Permanent members of the team. Choose Configure to change what someone does, who they are allowed to act as and what they may use.'
+        : 'Permanent members of the team. Who is on the team, and what each of them may use, is set by whoever runs this Team HQ.',
       count: `${active.length} ${active.length === 1 ? 'person' : 'people'}`,
-      action: canWrite() ? ui.button({ label: 'Bring someone in', tone: 'primary', a: { 'data-hire': true } }) : '',
+      action: canWrite() && config.VIEWER.operator ? ui.button({ label: 'Bring someone in', tone: 'primary', a: { 'data-hire': true } }) : '',
       body: hire + `<div class="st-people">${active.map(card).join('')}</div>`,
     }),
     retired.length === 0
@@ -5516,7 +5518,8 @@ function behaviourTab() {
         desc: c.note,
         wrap: true,
         said: true,
-        control: ui.toggle({ id: b.id, name: c.name, on: b.value === true, via: b.via, disabled: !editable(b) }),
+        // these switches govern every office, so only the operator's are live (the gateway refuses anybody else)
+        control: ui.toggle({ id: b.id, name: c.name, on: b.value === true, via: b.via, disabled: !editable(b) || !config.VIEWER.operator }),
       })
     })
 
@@ -5568,7 +5571,9 @@ function behaviourTab() {
       ? ''
       : ui.section({
           title: 'Things the team does by itself',
-          note: 'Each of these is a real, saved setting.',
+          note: config.VIEWER.operator
+            ? 'Each of these is a real, saved setting.'
+            : 'These are shared by everyone using this Team HQ, so they are set by whoever runs it. You can see how they are set.',
           body: ui.card(helperRows),
         }),
     ui.section({
@@ -5670,7 +5675,9 @@ function requestsTab() {
         r.reason
           ? `Your reason: ${r.reason}`
           : r.state === 'open'
-            ? `Approving lets ${r.who_name} do this from now on. You can take it back under Team.`
+            ? config.VIEWER.operator
+              ? `Approving lets ${r.who_name} do this from now on. You can take it back under Team.`
+              : 'What the team may use is decided by whoever runs this Team HQ, so this is shown to you and not yours to answer.'
             : '',
       meta: ui.facts([
         ...becauseFacts(r.because),
@@ -5678,7 +5685,7 @@ function requestsTab() {
         ui.html(when.stamp(r.at)),
       ]),
       actions:
-        r.state === 'open'
+        r.state === 'open' && config.VIEWER.operator
           ? btn('Decline', 'quiet', { 'data-tool': `${r.id}:decline` }) +
             btn('Approve', 'primary', { 'data-tool': `${r.id}:approve` })
           : '',
@@ -6136,26 +6143,31 @@ function serviceRow(c, { showDetail = true } = {}) {
   const checked = c.lastAt || c.last ? `Checked ${when.stamp(c.lastAt, c.last)}` : ''
   // (already HTML: the stamp is a time element that keeps itself current)
   let action = ''
+  // The shared connections (Google, Slack, Telegram) are made and withdrawn by the operator; for anyone else the row
+  // says so rather than offering a button the gateway would refuse.
+  const op = config.VIEWER.operator
   if (!connected) {
-    if (route.how === 'oauth') action = ui.button({ label: route.label, tone: 'primary', a: { 'data-google-connect': true } })
-    else if (route.how === 'tab' && route.to !== 'setup') {
+    if (route.how === 'oauth') {
+      if (op) action = ui.button({ label: route.label, tone: 'primary', a: { 'data-google-connect': true } })
+    } else if (route.how === 'tab' && route.to !== 'setup') {
       action = ui.button({ label: 'Set up', tone: 'primary', a: { 'data-goto-setting': route.to } })
     } else if (route.how === 'mcp') action = ui.button({ label: route.label, tone: 'primary', a: { 'data-mcp-open': true } })
   } else if (route.how === 'mcp') {
     action = ui.button({ label: 'How to connect an app', tone: 'quiet', a: { 'data-mcp-open': true } })
-  } else if (route.off !== undefined && canWrite()) {
+  } else if (route.off !== undefined && canWrite() && op) {
     action = ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-disconnect': route.off, 'data-service': c.name } })
   } else if (route.how === 'tab' && route.to !== 'setup') {
     action = ui.button({ label: 'Manage', tone: 'quiet', a: { 'data-goto-setting': route.to } })
   }
   const unreachable = !connected && action === ''
+  const whyNot = !op && route.how === 'oauth' ? 'Connected by whoever runs this Team HQ.' : route.why
   return `<div class="st-svc" data-saidwrap>
     <span class="st-logo"${c.tint ? ` style="--tint:${esc(c.tint)}"` : ''}>${c.svg ?? ''}</span>
     <div class="st-text">
       <p class="st-name">${esc(c.name)}</p>
       <p class="st-desc">${esc(c.used ?? '')}</p>
       ${showDetail && detail ? `<p class="st-meta">${esc(detail)}</p>` : ''}
-      ${unreachable ? `<p class="st-meta">${esc(route.why ?? 'Set up outside Team HQ.')}</p>` : ''}
+      ${unreachable ? `<p class="st-meta">${esc(whyNot ?? 'Set up outside Team HQ.')}</p>` : ''}
       <span class="st-said" data-said role="status" aria-live="polite"></span>
     </div>
     <div class="st-state">
@@ -6174,7 +6186,8 @@ function connectionsTab() {
   const attention = main.filter((c) => ['degraded', 'dead'].includes(String(c.state)))
   const working = main.filter((c) => !attention.includes(c) && config.isConnected(c.state))
   const idle = main.filter((c) => !attention.includes(c) && !config.isConnected(c.state))
-  const googleNeedsSetup = ((config.SETUP ?? {}).google ?? {}).ready === false
+  const operator = config.VIEWER.operator
+  const googleNeedsSetup = operator && ((config.SETUP ?? {}).google ?? {}).ready === false
 
   const said =
     googleSaid === null
@@ -6223,7 +6236,7 @@ function connectionsTab() {
             status: '',
             control:
               ui.chip(trouble.length === 0 ? 'ok' : 'warn', trouble.length === 0 ? 'In step' : `${trouble.length} to look at`) +
-              (canWrite() ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-vikunja-off': true } }) : ''),
+              (canWrite() && operator ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-vikunja-off': true } }) : ''),
           }),
           ...trouble.slice(0, 5).map((t) => ui.row({ name: String(t.title ?? ''), desc: String(t.why ?? t.state ?? ''), kind: 'fact' })),
         ]),
@@ -6233,7 +6246,7 @@ function connectionsTab() {
       title: 'Your tasks in another app',
       note: 'Your tasks work on their own. If you keep a Vikunja, the team can mirror them both ways. It stays a copy, and disconnecting never loses anything.',
       body: ui.card([
-        canWrite()
+        canWrite() && operator
           ? `<form class="st-form" data-vikunja-on data-saidwrap>
               <div class="st-formrow">
                 <label class="st-field"><span>Address of your Vikunja</span>
@@ -6248,7 +6261,7 @@ function connectionsTab() {
                 <span class="st-said" data-said role="status" aria-live="polite"></span>
               </div>
             </form>`
-          : ui.empty('Sign in to connect one.'),
+          : ui.empty(canWrite() ? 'Connecting another task app is done by whoever runs this Team HQ.' : 'Sign in to connect one.'),
       ]),
     })
   })()
@@ -6301,8 +6314,9 @@ function connectionsTab() {
 
   // What the setup check says still needs the person (it counts what only they can do), in their words.
   const todo = ((config.SETUP ?? {}).services ?? []).filter((x) => x.state === 'action')
+  // (the checklist is about the deployment's own accounts - Slack app, shared notes, the group chat - so it is the operator's)
   const stillToDo =
-    todo.length === 0
+    todo.length === 0 || !operator
       ? ''
       : ui.section({
           title: 'Still to set up',
@@ -6334,7 +6348,10 @@ function connectionsTab() {
       : '',
     tasks,
     mail === '' ? '' : ui.section({ title: 'Your email', body: mail }),
-    ui.advanced({
+    // the database, the AI provider and tool providers are the deployment's own, not a person's
+    !operator
+      ? ''
+      : ui.advanced({
       title: 'Behind the scenes',
       hint: 'The database, the AI provider and tools that cannot be connected from here',
       body:
@@ -6380,6 +6397,7 @@ function channelsTab() {
   const ui = settingsUi
   const channels = config.CHANNELS
   const chiefB = config.BEHAVIOURS.find((b) => b.id === 'chief')
+  const operator = config.VIEWER.operator
   const chiefName =
     config.staff().find((p) => p.slug === 'chief-of-staff')?.name ?? 'the Chief of Staff'
 
@@ -6392,7 +6410,7 @@ function channelsTab() {
     const long = String(c.detail ?? '')
     const detail = long.length > 120 ? `${long.slice(0, 118).replace(/[\s,;.]+\S*$/, '')}…` : long
     const disconnect =
-      connected && route.off !== undefined && canWrite()
+      connected && route.off !== undefined && canWrite() && config.VIEWER.operator
         ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-disconnect': route.off, 'data-service': c.name } })
         : ''
     const how = ui.button({ label: open ? 'Hide details' : 'Details', tone: 'quiet', a: { 'data-channel': c.key, 'aria-expanded': open } })
@@ -6444,16 +6462,19 @@ function channelsTab() {
               desc: copy.chief(chiefName).note,
               wrap: true,
               said: true,
-              control: ui.toggle({ id: chiefB.id, name: copy.chief(chiefName).name, on: chiefB.value === true, via: chiefB.via, disabled: chiefB.settable === false || !canWrite() }),
+              // governs every office, so only the operator's is live
+              control: ui.toggle({ id: chiefB.id, name: copy.chief(chiefName).name, on: chiefB.value === true, via: chiefB.via, disabled: chiefB.settable === false || !canWrite() || !operator }),
             }),
           ]),
         }),
     ui.section({
       title: 'Where you can reach the team',
-      note: 'Team Chat is always available inside Team HQ. The others need a connection.',
-      body: ui.card(channels.map(channelRow)),
+      note: operator
+        ? 'Team Chat is always available inside Team HQ. The others need a connection.'
+        : 'Team Chat is always available inside Team HQ. Telegram and Slack are connected for the whole Team HQ by whoever runs it, and are not set up for your account.',
+      body: ui.card(channels.filter((c) => operator || !['telegram', 'slack'].includes(String(c.key))).map(channelRow)),
     }),
-    slackSetupPanel() === '' ? '' : ui.section({ title: 'Reconnect Slack', body: ui.card([slackSetupPanel()]) }),
+    !operator || slackSetupPanel() === '' ? '' : ui.section({ title: 'Reconnect Slack', body: ui.card([slackSetupPanel()]) }),
     convo.length === 0 ? '' : ui.section({ title: 'How each one is doing', body: ui.card(convo) }),
   ].join('')
 }
@@ -6675,8 +6696,23 @@ function settingsSheet() {
   state.setting = config.tabId(state.setting)
   const tabs = config.TABS
   const here = tabs.find((t) => t.id === state.setting) ?? tabs[0]
+  /*
+    Until the office has answered, a signed-in person is told it is being asked, not shown the page's example rows.
+    The examples name things that resemble real projects, and a second person briefly read one of them as their own
+    standing permissions. Help and Appearance read nothing from the office, so they draw at once.
+  */
+  const unanswered =
+    canWrite() && config.settingsSource.state !== 'ready' && !['help', 'appearance'].includes(state.setting)
   const body =
-    state.setting === 'behaviour' ? behaviourTab()
+    unanswered
+      ? settingsUi.card([
+          settingsUi.empty(
+            config.settingsSource.state === 'failed'
+              ? 'Settings could not be read just now. Close this and open it again in a moment.'
+              : 'Asking Team HQ…',
+          ),
+        ])
+    : state.setting === 'behaviour' ? behaviourTab()
     : state.setting === 'requests' ? requestsTab()
     : state.setting === 'memory' ? memoryTab()
     : state.setting === 'connections' ? connectionsTab()
@@ -6857,7 +6893,30 @@ function settingsSheet() {
       if (kind === 'setting') return act('set_setting', { p_key: name, p_value: value })
       throw new Error('nothing behind that control yet')
     })
-    if (done !== null) await afterWrite()
+    if (done === null) return
+    // Show the new state at once; re-reading the whole payload takes a second or two and the page used to say
+    // "Saved." beside the OLD choice for that long.
+    const held = config.BEHAVIOURS.find((b) => b.via === via)
+    if (held !== undefined) {
+      held.value = kind === 'autonomy' ? value : value === 'true'
+      settingsSheet()
+      sheet(v, true)
+    }
+    await afterWrite()
+    /*
+      Said after the redraw, and found again by attribute: afterWrite rebuilds the page, so the button pressed is gone
+      and the word attempt() put beside it went with it. The state change is its own confirmation for an immediate
+      setting, but a save that took a second reads as nothing having happened without a word.
+    */
+    const again = $(`#settings [data-via="${CSS.escape(String(via ?? ''))}"]`)
+    if (again !== null) {
+      say(again, 'Saved.', 'good')
+      setTimeout(() => {
+        const live = $(`#settings [data-via="${CSS.escape(String(via ?? ''))}"]`)
+        const slot = live?.closest('[data-saidwrap]')?.querySelector('[data-said]')
+        if (slot !== null && slot !== undefined && slot.textContent === 'Saved.') slot.textContent = ''
+      }, 2500)
+    }
   }
 
   for (const b of v.querySelectorAll('[data-toggle]')) {
@@ -7566,58 +7625,11 @@ function wireAppearance(v) {
     settingsSheet()          // redraw so the tick moves
     sheet(v, true)
   }
-  /*
-    The same value the header's shortcut sets (#87). One setting, two doors —
-    which is the only way the two can be guaranteed not to contradict each
-    other, and a page insisting it is light while it is plainly dark is the
-    worst outcome available here.
-  */
-  for (const b of v.querySelectorAll('[data-scheme-pick]')) {
-    b.addEventListener('click', () => {
-      pick('scheme', b.dataset.schemePick)
-      paintSchemeButtons()
-    })
-  }
+  // The accent is the one appearance setting that changes Team HQ (see appearanceTab); the old scheme, density and
+  // texture controls were removed from the page and their wiring with them.
   for (const b of v.querySelectorAll('[data-palette-pick]')) {
     b.addEventListener('click', () => pick('palette', b.dataset.palettePick))
   }
-  /*
-    Density redraws the pane, unlike palette.
-
-    The note under the control says what the chosen one does, so it has to be
-    rewritten — and the pane is the surface whose spacing just changed, which
-    makes it the one worth seeing change.
-  */
-  for (const b of v.querySelectorAll('[data-density-pick]')) {
-    b.addEventListener('click', () => {
-      pick('density', b.dataset.densityPick)
-      settingsSheet()
-      sheet(v, true)
-    })
-  }
-  for (const b of v.querySelectorAll('[data-texture-pick]')) {
-    b.addEventListener('click', () => pick('texture', b.dataset.texturePick))
-  }
-  const file = $('[data-texture-file]', v)
-  file?.addEventListener('change', async () => {
-    const chosen = file.files?.[0]
-    if (!chosen) return
-    const err = $('#texerr', v)
-    err.hidden = true
-    const out = await readTexture(chosen)
-    if (out.error) { err.textContent = out.error; err.hidden = false; return }
-    apply({ ...appearance(), texture: 'own', own: out.data, ownName: out.name })
-    settingsSheet()
-    sheet(v, true)
-  })
-  $('[data-texture-clear]', v)?.addEventListener('click', () => {
-    apply({ ...appearance(), texture: 'plaster', own: null, ownName: '' })
-    settingsSheet()
-    sheet(v, true)
-  })
-
-  $('.close', v)?.addEventListener('click', () => { sheet(v, false) })
-  v.addEventListener('click', (e) => { if (e.target === v) sheet(v, false) })
 }
 
 /*
@@ -14822,6 +14834,11 @@ async function live() {
   }).catch(() => undefined)
   void Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
     render()
+  })
+  // What Settings may OFFER depends on who is looking, which is only known once the settings payload has arrived; if
+  // the page is already open it is drawn again.
+  document.addEventListener('hq:viewer', () => {
+    if (!$('#settings').hidden) settingsSheet()
   })
 
   /*
