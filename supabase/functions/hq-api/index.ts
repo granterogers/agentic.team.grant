@@ -689,6 +689,11 @@ const SECTIONS: Readonly<
     Grant presses Export and at no other time.
   */
   project_export: { fn: 'project_export', office: true, arg: 'p_project_id' },
+  /*
+    How a turn the team was given is getting on (0874). The chat follows the job it was handed and shows exactly this.
+    One office, one job; a job that is not this office's answers as one that does not exist.
+  */
+  turn_status: { fn: 'turn_status', office: true, arg: 'p_job' },
 }
 
 /**
@@ -2514,8 +2519,44 @@ Deno.serve(async (request: Request): Promise<Response> => {
         )
         return json({ error: 'the file was stored but could not be filed' }, 502)
       }
+      const filed = (await recorded.json()) as Record<string, unknown>
+      /*
+        A text file is READ here, because here is the only moment the bytes are in hand (#408). Stored with no text, a
+        document can never be found by what it says, and the office told a person it had no budget while holding one.
+        Only types a person writes in: a PDF or an image needs a reader this function does not have, and says so by
+        leaving `content` null rather than inventing an empty string (0207). A failure to index never costs the file:
+        it is stored and filed, which is what was asked.
+      */
+      const isText =
+        mime.startsWith('text/') ||
+        mime === 'application/json' ||
+        ['txt', 'md', 'markdown', 'csv', 'tsv', 'json'].includes(ext)
+      if (isText && typeof filed.document_id === 'string') {
+        try {
+          // A NUL cannot be stored in a text value, so it is dropped before the call rather than refused by it.
+          const text = new TextDecoder('utf-8', { fatal: false })
+            .decode(bytes)
+            .split(String.fromCharCode(0))
+            .join('')
+          await fetch(`${DB_URL}/rest/v1/rpc/index_file_text`, {
+            method: 'POST',
+            headers: {
+              apikey: SERVICE_KEY,
+              Authorization: `Bearer ${SERVICE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              p_office: office,
+              p_document_id: filed.document_id,
+              p_text: text,
+            }),
+          })
+        } catch {
+          console.error(`hq-api document_upload: ${path} was filed but could not be indexed`)
+        }
+      }
       kickWorker()
-      return json({ action: actionName, result: await recorded.json() })
+      return json({ action: actionName, result: filed })
     }
 
     const done = await fetch(`${DB_URL}/rest/v1/rpc/${action.fn}`, {

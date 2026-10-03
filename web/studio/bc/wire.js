@@ -1772,6 +1772,44 @@ const wireContacts = (root) => {
   }
 
   /*
+    TAKING ONE OFF THE PROJECT. `contacts.putAway` existed and nothing pressed
+    it, so a contact added by mistake could never leave. Two presses, like
+    removing a task, because it is the one thing on this record that cannot be
+    done by correcting a field. The office keeps the row and offers an undo, so
+    "removed" here means put away, and the words say so.
+  */
+  for (const b of root.querySelectorAll('[data-bc-contact-away]')) {
+    let armed = false
+    b.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true
+        b.textContent = 'Press again to remove'
+        setTimeout(() => {
+          armed = false
+          if (b.isConnected) b.textContent = 'Remove contact'
+        }, 6000)
+        return
+      }
+      const key = b.dataset.bcContactAway ?? ''
+      if (localKey(key)) {
+        await contacts.putAway(ctx.state.project, key, true)
+        ctx.closeContact()
+        return
+      }
+      const done = await attempt(
+        b,
+        'Removing…',
+        () => contacts.putAway(ctx.state.project, key, true),
+        'Removed. The office keeps it, and Undo brings it back.',
+      )
+      if (done !== null) {
+        ctx.closeContact()
+        await ctx.refresh()
+      }
+    })
+  }
+
+  /*
     A FACE. Downscaled in the browser before it is sent - see contacts.shrink,
     and 0534's 400KB cap, which is that decision made a rule.
   */

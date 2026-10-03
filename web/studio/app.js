@@ -1692,6 +1692,19 @@ function paintDock() {
   if (pinned === null && slug) pinDock(slug)
   const p = slug ? byId(slug) : null
   const filed = p !== null && p.slug !== state.project
+  /*
+    THE DOCK READS THE RECORD TOO, once per project per page load.
+
+    Only the Chat tab ever read the office's conversation, so the dock - where nearly everything is said - showed this
+    browser's own sent messages and nothing the team had written since. An answer written minutes after the question was in
+    the office's record and on no screen a person was looking at. A failed or empty read changes nothing on screen.
+  */
+  if (p !== null && p.id && !chat.isReal(p.slug) && !chatRead.has(p.slug)) {
+    chatRead.add(p.slug)
+    void chat.load(p.slug, p.id, presented()).then((t) => {
+      if (t !== null) paintDock()
+    })
+  }
   const messages = p ? chat.thread(p.slug) : []
   const draft = $('[data-docksay]')?.value ?? ''
   const at = $('[data-dockthread]')?.scrollTop
@@ -1715,6 +1728,19 @@ function paintDock() {
               : esc(p.name)
         }</span>
       </span>
+      ${
+        /*
+          WHEN THE PAGE IS ONE PROJECT AND THE DOCK IS FILING UNDER ANOTHER, SAY SO AND OFFER THE ONE-PRESS FIX.
+
+          The pin (#376) is right that navigating must not silently move a conversation, and the header says "Filed
+          under". But a person standing in the Finance project who types "summarise the budget documents in this
+          project" is not reading a header: the Sample's chat answered about the Japan trip because the dock had been
+          opened there. The pin stays; the person can move it in one press, on purpose.
+        */
+        filed && state.project && state.project !== 'unnamed' && PROJECTS.some((x) => x.slug === state.project)
+          ? `<button class="btn quiet small" type="button" data-dock-here="${esc(state.project)}">Ask about ${esc(byId(state.project).name)} instead</button>`
+          : ''
+      }
       <button class="closeconv" data-dock-close aria-label="Close the conversation">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -1745,7 +1771,7 @@ function paintDock() {
     }</div>
     <form class="composer" data-dockform${bcNote && p ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
       <div class="crow">
-        <textarea data-docksay rows="1" placeholder="Ask the team…"
+        <textarea data-docksay rows="1" placeholder="${p && p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
                   aria-label="Message the team"></textarea>
         ${bcNote ? bc.dockNoteButton() : ''}
         <button class="btn primary" type="submit">Send</button>
@@ -1763,6 +1789,11 @@ function paintDock() {
 
   $('[data-dock-close]', el)?.addEventListener('click', () => {
     rememberDock(false)
+    paintDock()
+  })
+  // The one-press move to the project the page is on (see the header above). It repaints the dock onto that thread.
+  $('[data-dock-here]', el)?.addEventListener('click', (e) => {
+    pinDock(e.currentTarget.dataset.dockHere ?? null)
     paintDock()
   })
 
@@ -3387,11 +3418,12 @@ const bubble = (m) => {
       No backticks in this comment. Template literal.
     */
     if (typeof m.waiting === 'string' && m.waiting !== '' && m.waiting !== 'failed') {
-      const said = {
+      // `say` is the office's own report of a turn it is following (turn_status): words it derived, never ours.
+      const said = typeof m.say === 'string' && m.say !== '' ? m.say : ({
         sending: 'Sending to the office…',
         thinking: 'With the team. They are working on it.',
         slow: 'No answer yet. The office may still be working — it also answers in Slack and Telegram.',
-      }[m.waiting] ?? 'Waiting.'
+      }[m.waiting] ?? 'Waiting.')
       return `<div class="msg theirs waitrow" role="listitem" aria-live="polite">
         <span class="waitspin" aria-hidden="true"></span>
         <div class="mbody">
@@ -3451,8 +3483,8 @@ const bubble = (m) => {
           the page imply it was there. No backticks in this comment.
         -->
         ${m.backfilled ? '<span class="t-meta pendmark">From the channel history, before the office was watching</span>' : ''}
-        ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer will be on
-          the Team page, and in Slack or Telegram if you have connected them.</span>` : ''}
+        ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer will appear in this chat and
+          on the Team page, and in Slack or Telegram if you have connected them.</span>` : ''}
         <!--
           Could not be delivered (#202).
 
@@ -13145,7 +13177,7 @@ const bcContext = {
   },
   projectSettingsBody: (p) => projectSettings.section(p, state.setpane, people),
   wireProjectSettings: (root, p) => {
-    projectSettings.wire(root, p, people, render, () => { lookSheet(p) })
+    projectSettings.wire(root, p, people, render, () => { lookSheet(p) }, refresh)
   },
   setPane: (id) => {
     state.setpane = id
@@ -14474,6 +14506,20 @@ async function refresh() {
   */
   if (state.sub === 'chat') {
     await chat.load(state.project, byId(state.project)?.id, tokenNow())
+  }
+  /*
+    And the dock's conversation, when the office reports that something changed (an answer landing is a change). It is a
+    different project from the page's whenever it is filing elsewhere, and the page's own was read just above.
+  */
+  if (dockOpen()) {
+    const filedAt = dockPin()
+    if (filedAt !== null && filedAt !== state.project) {
+      const filedProject = byId(filedAt)
+      if (filedProject?.id) await chat.load(filedAt, filedProject.id, tokenNow())
+    } else if (state.sub !== 'chat' && state.project) {
+      await chat.load(state.project, byId(state.project)?.id, tokenNow())
+    }
+    paintDock()
   }
 
   keepingPlace(() => { render() })

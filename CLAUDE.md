@@ -409,7 +409,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **734 applied** (0864 is the latest).
+`npm run migrate` applies plain SQL from `migrations/`. **744 applied** (0874 is the latest).
 
 ## Testing signed in, without Grant's office
 
@@ -4292,6 +4292,49 @@ Each of these cost real time. They are here so they cost it once.
   `office_members` and `offices` are what makes it an office. `app.provision_person_office` (0863) writes both and a narrower
   default grant set; it is operator-only and refuses a duplicate. Retiring is `state = 'disabled'` and the gateway refuses the
   session within seconds. Offices are never deleted.
+- **A write path that stores the bytes and records no text makes a document nobody can find (#408).** `document_upload` put
+  the file in storage and filed a row with `content = null` (0207: null means "not read yet"), and nothing ever read a text file
+  afterwards: all 22 Sample documents had no text, `app.search_documents` could match a title and nothing else, and the team
+  answered "I don't have any budget docs" from a project holding a budget. Found by asking what the table HOLDS
+  (`count(content)` against `count(*)`), not by reading the retrieval code, which was correct. The gateway reads text types at
+  the one moment the bytes are in hand (`app.index_file_text`, 0868/0870); a PDF still stays null, which is true.
+- **The same class, one reader further out: a coverage note that counts by CONNECTOR cannot see a file that has none.**
+  `app.project_knowledge` said the `upload` attachment had "nothing indexed" directly beside the documents it was reporting on,
+  because a dropped file has no connector (0414). A model handed the evidence and a note denying it answers "I have nothing on
+  it". 0873 counts a read file of yours as `upload` material. Two readers of one fact disagreeing is the defect, not either alone.
+- **A project's tasks were read by nothing, so the answer to "what is overdue" was "I don't see any" (#408).** The office
+  retrieved documents per project and the person's own to-do list when asked about it; `app.my_tasks` is the personal list
+  across projects and is the wrong reader for an agent working on one. `app.project_work_brief` (0869) is one office, one
+  project, bounded, most pressing first, with a count beside the list so "31 open" and "due Friday" are both supportable.
+  The projects it reads are the turn's own and any the question NAMES (`app.projects_named_in`), never the rest: that is what
+  keeps a Wellness question from being answered out of Finance.
+- **An exhaustiveness claim needs a census, and a list that says "All of them are listed" is one.** "The only overdue task" was
+  refused by the grounding gate because tasks were consulted and not `complete`, and the office answered "I have nothing on it
+  here" with the task in front of it. A project's tasks are declared complete only when every one was listed (`shown >= total`),
+  so a project with more tasks than fit is still a search and still cannot support the claim.
+- **A retrieval check that matches a string two documents share passes for the wrong one.** The benchmark's first check for the
+  December balance looked for `Dec,`, which also opens the annual budget's header; three runs reported RETRIEVAL ok while the
+  model said it had no cashflow forecast. The check now needs the exact row and the file's own header. Read what the prompt
+  actually contained (`DUMP=1 npm run sample:intelligence -- --only=F2`) before believing a green retrieval line.
+- **Two verdicts, because one number hides the defect.** `npm run sample:intelligence` separates RETRIEVAL (what the model was
+  shown: deterministic, gated) from ANSWER (what a free model then said: stochastic, reported with its count, never the gate).
+  An answer that is wrong while retrieval was right is a different finding from retrieval that was wrong, and a single score
+  cannot tell them apart. Its instrument was wrong first, twice: the matcher did not see U+2011 (a model writes non-breaking
+  hyphens) or U+00A0, and scored correct answers as failures.
+- **A file a person drops in was filed as a DRAFT, and the one screen that lists a project's documents hides drafts.** 0872.
+  The review gate (#28) is for the office's own unreviewed OUTPUT; a file somebody gave the office is theirs and is filed
+  approved. Four of the Sample's seven Wellness documents were invisible and read as an upload that had failed.
+- **Derive activity; do not store a second copy.** The ledger only held the office acting on itself, so a project with 96 tasks
+  said "nothing has happened". 0871 derives lines from the rows that already say when and by whom (tasks, documents, contacts,
+  specialists' outputs), folds a burst into one line with a count, and attributes the person as `you`, never as their owner key.
+  No agent line exists without an `outputs` row behind it. `npm run sample:activity` drives it in a rolled-back block, and refuses
+  to report a negative that held only because nothing came back.
+- **A control that exists in the gateway and nowhere on the page is a feature the person does not have.** `contacts.putAway` and
+  `rename_project` were wired in the code and pressed by nothing in Team HQ, so a contact added by mistake could never leave and a
+  project could not be renamed. `npm run sample:product` presses both as the Sample, with a reload between, and checks the
+  database rather than the DOM.
+- **Process slip, recorded so it is not repeated:** several edits this session were made with `python3 - <<EOF` and `biome
+  --write` instead of the Edit tool, against the File editing rule above. The results were read back before use; the rule stands.
 
 ---
 

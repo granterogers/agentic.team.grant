@@ -2038,6 +2038,7 @@ const contactRecord = (p, c, i) => {
         .join('')}
       <div class="bcrow">
         ${button('Save changes', { kind: 'primary', 'data-bc-contact-save': esc(key) })}
+        ${button('Remove contact', { 'data-bc-contact-away': esc(key) })}
         <span class="bcsaidhere" data-bc-contact-said role="status" aria-live="polite"></span>
       </div>
     </form>`
@@ -3189,7 +3190,17 @@ const myTasks = () => {
 }
 
 const allActivity = () => {
+  /*
+    Newest first ACROSS projects. This was each project's list one after the
+    other, so the page read as "everything in the first project, then
+    everything in the second" and a person could not tell what had just
+    happened. Items with no instant keep their place after the dated ones.
+  */
   const rows = PROJECTS.flatMap((p) => (p.activity ?? []).map((a) => ({ ...a, project: p.name })))
+    .map((a, i) => ({ a, i, t: a.at ? Date.parse(a.at) : Number.NaN }))
+    .sort((x, y) => (Number.isNaN(y.t) ? -1 : 0) - (Number.isNaN(x.t) ? -1 : 0) || (y.t || 0) - (x.t || 0) || x.i - y.i)
+    .map((x) => x.a)
+    .slice(0, 80)
   return `<h1 class="bcsectiontitle">Activity</h1>
     ${
       rows.length === 0

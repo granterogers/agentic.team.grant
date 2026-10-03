@@ -413,7 +413,7 @@ for (const p of PROJECTS) {
   const now = new Map(
     (
       await rows(
-        `select document_id::text id, title, state, pinned, tags from public.documents where office_id = ${O}::uuid and project_id = ${lit(String(row.id))}::uuid and state <> 'archived'`,
+        `select document_id::text id, title, state, pinned, tags, (content is not null) as read from public.documents where office_id = ${O}::uuid and project_id = ${lit(String(row.id))}::uuid and state <> 'archived'`,
       )
     ).map((r) => [String(r.title), r]),
   )
@@ -421,6 +421,12 @@ for (const p of PROJECTS) {
     const cur = now.get(d.name)
     if (cur === undefined) continue
     const id = String(cur.id)
+    // A file stored before the gateway read text files has no text, so no agent can find what it says (#408).
+    // The same writer the gateway calls, with the proven Sample office; a no-op once the text is there.
+    if (cur.read !== true) {
+      await rows(`select app.index_file_text(${O}::uuid, ${lit(id)}::uuid, ${lit(d.text)}) as r`)
+      changed(`indexed ${d.name.slice(0, 48)}`)
+    }
     const tags = Array.isArray(cur.tags) ? cur.tags.map(String) : []
     const wantTags = [...(d.tags ?? [])].sort()
     if (d.approve === true && String(cur.state) !== 'approved') {

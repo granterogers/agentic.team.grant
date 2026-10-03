@@ -95,6 +95,8 @@ import type { Correction } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
 import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
+import { ownTask } from '../agents/own-task.ts'
+import { projectWorkSpine, readProjectWork } from '../agents/project-work.ts'
 import { sentencesOf } from '../agents/sentences.ts'
 
 const entitled = allEntitled
@@ -2537,6 +2539,16 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         payload.addressed_also ?? [],
         job.jobId,
       )
+
+      /*
+        A request addressed TO the person answering is a request for the work, not for an introduction (#408).
+
+        "Ask the finance specialist to summarise the budget assumptions" reached the finance director as is, and she answered
+        "let me know which finance specialist you want to handle this". Only a leading "ask|have|get <her> to" is removed, only
+        when she is the one named, and only from the text a model reads: every reader that decides to DO something reads his own
+        words (`turn.kept`), so this can improve an answer and cannot start work. See own-task.ts.
+      */
+      instruction = ownTask(instruction, who)
 
       /*
         Write down who it went to (#65).
@@ -5929,6 +5941,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             */
             .catch(() => '')
 
+      /*
+        THE WORK IN THE PROJECT, and in a project the question names (#408).
+
+        Documents were retrieved per project and a project's tasks were read by
+        nothing, so "what is overdue on the trip" was answered, truthfully, with
+        "I don't see any". The projects are the ones this turn is about and no
+        others (see project-work.ts), read for the job's own office. An empty
+        result is a failed or absent read, never "the project has no tasks": a
+        project with none says so in its own block.
+      */
+      const projectWorkBriefs = !answering
+        ? []
+        : await readProjectWork(deps.db, job.jobId, job.projectId, instruction, lit)
+      const projectWork = projectWorkSpine(projectWorkBriefs)
+
       // Asked once per answer rather than described in the prompt as a
       // constant: a connector switched off an hour ago must change what she
       // says she can do.
@@ -6222,6 +6249,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               // has an answer that is both honest and useful.
               ...(projectList === '' ? [] : [{ role: 'system' as const, content: projectList }]),
               ...(hisList === '' ? [] : [{ role: 'system' as const, content: hisList }]),
+              ...(projectWork === '' ? [] : [{ role: 'system' as const, content: projectWork }]),
               /*
                 WHAT THIS TURN ALREADY DID (ledger R42). When a turn both acts
                 and asks, the confirmation goes above the answer — and the
@@ -6772,6 +6800,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ...(waitingContext === '' ? [] : [waitingContext]),
           ...(projectList === '' ? [] : [projectList]),
           ...(hisList === '' ? [] : [hisList]),
+          ...(projectWork === '' ? [] : [projectWork]),
         ],
         /*
           What was LOOKED AT, not what came back.
@@ -6797,6 +6826,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         consultedDomains: [
           ...(answering ? (['documents'] as const) : []),
           'projects' as const,
+          // Only when the project's work was actually read: a failed read is not a look that found nothing.
+          ...(projectWorkBriefs.length > 0 ? (['tasks'] as const) : []),
           /*
             Mail, but only when the office could actually read it (#172).
 
@@ -6816,7 +6847,22 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           documents about renewals" and can never support "we hold four
           documents on renewals" — a search is not a census.
         */
-        completeDomains: ['projects' as const],
+        completeDomains: [
+          'projects' as const,
+          /*
+            A project's tasks are held WHOLE when every one was listed (#408).
+
+            "The only overdue task" is an exhaustiveness claim and the gate
+            refuses it unless the list was a census. The reader says how many
+            it listed against how many exist, so the claim is entitled exactly
+            when the block itself said "All of them are listed", and a project
+            with more tasks than fit is still a search that cannot support it.
+          */
+          ...(projectWorkBriefs.length > 0 &&
+          projectWorkBriefs.every((b) => b.shown >= b.counts.total)
+            ? (['tasks'] as const)
+            : []),
+        ],
         /*
           NOT `documents`, and never — see the comment above. This line is
           here to say that #257 did not change it: a search is not a census

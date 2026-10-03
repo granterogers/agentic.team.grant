@@ -486,7 +486,7 @@ export async function ask(slug, text, context, token, to, also, onState) {
       throw new Error('This browser is not signed in to the office. Sign in and try again.')
     }
     if (!r.ok) throw new Error(body.error ?? `the office returned ${r.status}`)
-    reply = { text: body.speak, did: body.did }
+    reply = { text: body.speak, did: body.did, job: body.job_id ?? null }
   } catch (e) {
     reply = { text: `I could not reach the office: ${e.message}`, failed: true }
   }
@@ -516,7 +516,112 @@ export async function ask(slug, text, context, token, to, also, onState) {
     }
   })
   write(slug, next)
+  /*
+    A turn that was put to the team is not finished when the page says so. The acknowledgement is all the office can say
+    at once; the answer is written minutes later by somebody else, and until now it only reached a person who happened to
+    open the Chat tab. Follow the job and bring the answer into this conversation (see `follow`).
+  */
+  if (reply.did === 'delegated' && typeof reply.job === 'string' && reply.job !== '') {
+    void follow(slug, reply.job, token, onState)
+  }
   return next
+}
+
+/*
+  FOLLOWING A TURN THE TEAM IS WORKING ON.
+
+  Team Chat acknowledged "I have put that to the team ... the answer will be on the Team page" and then went silent: the
+  answer, written minutes later, was never in the conversation unless the Chat tab was opened and the office's record
+  re-read, and nothing said whether anybody was working on it, whether it was stuck, or whether it had failed.
+
+  `turn_status` is derived from the jobs and outputs themselves (migration 0874): which of queued, working, waiting, needs
+  you, done or failed the work is in, who holds a live job, and the words written so far. This asks it every few seconds,
+  shows exactly that in a row of the thread, and when the work is finished removes the row and reads the office's record,
+  which holds the answer in the conversation like every other message. Nothing is shown that the office did not report: no
+  plan, no reasoning, and no guess at how long it will take.
+
+  A failed read changes nothing on screen. It is neither "working" nor "failed", so it is neither said.
+*/
+const following = new Set()
+const STATUS_EVERY = 3_000
+const FOLLOW_FOR = 8 * 60_000
+
+const statusWords = (st) => {
+  const names = Array.isArray(st.working) ? st.working.filter((n) => typeof n === 'string' && n !== '') : []
+  const who = names.length === 0 ? '' : names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+  switch (st.state) {
+    case 'queued':
+      return 'Waiting its turn. Nobody has picked it up yet.'
+    case 'working':
+      return who === '' ? 'The team is working on it.' : `${who} ${names.length === 1 ? 'is' : 'are'} working on it.`
+    case 'waiting':
+      return st.waiting_on ? `Waiting: ${st.waiting_on}` : 'Waiting on something before it can go on.'
+    case 'needs_you':
+      return 'It needs something from you. Look under Needs you.'
+    default:
+      return 'The team has it.'
+  }
+}
+
+export async function follow(slug, job, token, onState) {
+  if (following.has(job) || !token) return
+  following.add(job)
+  const began = session.epoch()
+  const rowId = `turn-${job}`
+  const upsert = (row) => {
+    const rest = (all()[slug] ?? []).filter((m) => m.id !== rowId)
+    write(slug, row === null ? rest : [...rest, row])
+    if (typeof onState === 'function') onState()
+  }
+  const until = Date.now() + FOLLOW_FOR
+  try {
+    while (Date.now() < until) {
+      await new Promise((ok) => setTimeout(ok, STATUS_EVERY))
+      if (began !== session.epoch()) return
+      let st = null
+      try {
+        const r = await fetch(`${API()}?section=turn_status&id=${encodeURIComponent(job)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (r.ok) st = (await r.json()).data ?? null
+      } catch {
+        st = null
+      }
+      if (st === null || typeof st.state !== 'string') continue
+      if (st.state === 'done' || st.state === 'failed') {
+        upsert(null)
+        const pid = PROJECTS.find((x) => x.slug === slug)?.id
+        const loaded = await load(slug, pid, token)
+        if (st.state === 'failed') {
+          write(slug, [
+            ...(all()[slug] ?? []),
+            {
+              id: `turn-failed-${job}`, from: 'the-office', at: new Date().toISOString(),
+              text: 'The team could not finish that. Nothing was lost: what you asked is recorded. You can ask again.',
+              pending: false, bad: true, waiting: null, inflight: true,
+            },
+          ])
+        } else if (loaded === null && Array.isArray(st.outputs)) {
+          // The office's record could not be read (a prototype, a refused read): show what the status itself holds.
+          write(slug, [
+            ...(all()[slug] ?? []),
+            ...st.outputs.map((o) => ({
+              id: `turn-out-${String(o.id)}`, from: String(o.who ?? 'the-office'), at: String(o.at ?? ''),
+              text: String(o.body ?? ''), pending: false, bad: false, waiting: null,
+            })),
+          ])
+        }
+        if (typeof onState === 'function') onState()
+        return
+      }
+      upsert({
+        id: rowId, from: 'the-office', at: new Date().toISOString(), inflight: true, pending: true,
+        waiting: st.state, say: statusWords(st), since: Date.parse(String(st.asked_at ?? '')) || Date.now(),
+      })
+    }
+  } finally {
+    following.delete(job)
+  }
 }
 
 /**

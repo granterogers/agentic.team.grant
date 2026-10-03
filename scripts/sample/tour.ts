@@ -8,7 +8,7 @@
  * Signed in through the same hand-off a magic link ends with; writes nothing.
  */
 import { mkdirSync } from 'node:fs'
-import { closeSettings, newPage, openSettings, signIn, startStudio } from './browser.ts'
+import { closeSettings, newPage, openSettings, settle, signIn, startStudio } from './browser.ts'
 import { rows, sampleOffice, session } from './lib.ts'
 
 const args = process.argv.slice(2)
@@ -86,6 +86,9 @@ try {
         m.smallN > 0 ? `small ${m.smallN} (${m.small.slice(0, 3).join('; ')})` : '',
         m.tinyN > 0 ? `tiny ${m.tinyN} (${m.tiny.slice(0, 3).join('; ')})` : '',
       ].filter(Boolean)
+      // A capture of the loading skeleton or the prototype is a capture of nothing, and `clean` over it is the vacuous result.
+      if (/Loading your office|Connecting to your office|Legacy Coaching Course/.test(m.first))
+        flags.push('NOT SETTLED (skeleton or prototype)')
       if (flags.length > 0) problems += 1
       console.log(
         `${w.padEnd(7)} ${name.padEnd(34)} ${flags.join(' | ') || 'clean'}   «${m.first}»`,
@@ -97,7 +100,7 @@ try {
       ['activity', '/activity'],
     ] as const) {
       await page.goto(`${studio.base}${path}`, { waitUntil: 'domcontentloaded' })
-      await page.waitForTimeout(1800)
+      await settle(page)
       await cap(name)
     }
     for (const slug of slugs) {
@@ -106,13 +109,13 @@ try {
         await page.goto(`${studio.base}/p/${slug}${tool === 'overview' ? '' : `/${tool}`}`, {
           waitUntil: 'domcontentloaded',
         })
-        await page.waitForTimeout(1800)
+        await settle(page)
         await cap(`${slug}-${tool}`)
       }
     }
     if (TOOLS.includes('settings')) {
       await page.goto(`${studio.base}/`, { waitUntil: 'domcontentloaded' })
-      await page.waitForTimeout(1800)
+      await settle(page)
       for (const tab of [
         'team',
         'behaviour',

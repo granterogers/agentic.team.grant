@@ -518,8 +518,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
   return json({
     speak:
       'Right — I have put that to the team. It takes a few minutes. The answer will ' +
-      'be on the Team page of your project, and in Slack or Telegram if you have ' +
-      'connected them.',
+      'appear in your project’s chat and on its Team page, and in Slack or Telegram if ' +
+      'you have connected them.',
     did: 'delegated',
     job_id: queued.job_id,
     command_id: commandId,

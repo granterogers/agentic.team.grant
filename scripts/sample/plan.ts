@@ -53,7 +53,7 @@ export type PlanDoc = {
   name: string
   mime: 'text/markdown' | 'text/csv' | 'text/plain'
   text: string
-  /** Approved on seeding (an uploaded file otherwise waits as a draft for review). */
+  /** Approved on seeding. A file the person drops in is filed approved since 0872; this stays so a baseline can still say it. */
   approve?: boolean
   pinned?: boolean
   tags?: string[]
