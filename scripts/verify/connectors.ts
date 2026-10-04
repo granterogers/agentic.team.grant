@@ -304,11 +304,11 @@ section = 'the authority still says no'
     ${REGISTER}
     select app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${ADVERTISED});
     create temp table r (k text, v text) on commit drop;
-    insert into r select 'before', app.staff_may_use(app.operator_office(),'chief-of-staff',
+    insert into r select 'before', app.staff_may_use(app.test_office(),'chief-of-staff',
       ${lit(`${NAME}.delete_contact`)})::text;
     select app.offer_mcp_tool(app.test_office(), (select discovered_id from public.mcp_discovered_tools
       where provider_id = ${PROVIDER} and external_name = 'delete_contact'));
-    insert into r select 'after', app.staff_may_use(app.operator_office(),'chief-of-staff',
+    insert into r select 'after', app.staff_may_use(app.test_office(),'chief-of-staff',
       ${lit(`${NAME}.delete_contact`)})::text;
     select (select v from r where k = 'before') as before,
            (select v from r where k = 'after') as after;
@@ -610,13 +610,14 @@ section = 'one grant, and only that one'
     update public.tool_permissions set enabled = true
      where tool = (select g.v ->> 'tool' from g where g.k = 'offered');
     insert into public.staff_tools (office_id, staff_slug, tool)
-    -- The office staff_may_use is asked of just below (rolled back with the rest).
-    select app.operator_office(), 'research-director', (select g.v ->> 'tool' from g where g.k = 'offered')
+    -- The office staff_may_use is asked of just below (rolled back with the rest): the TEST office, where the tool
+    -- was offered, never the operator's (#414).
+    select app.test_office(), 'research-director', (select g.v ->> 'tool' from g where g.k = 'offered')
     on conflict do nothing;
     select (select g.v ->> 'tool' from g where g.k = 'offered') as granted,
-           app.staff_may_use(app.operator_office(),'research-director',
+           app.staff_may_use(app.test_office(),'research-director',
              (select g.v ->> 'tool' from g where g.k = 'offered')) as may_the_granted,
-           app.staff_may_use(app.operator_office(),'chief-of-staff',
+           app.staff_may_use(app.test_office(),'chief-of-staff',
              (select g.v ->> 'tool' from g where g.k = 'offered')) as may_another_agent,
            (select count(*)::int from public.mcp_discovered_tools
              where provider_id = ${PROVIDER} and reach = 'destructive') as destructive_seen;

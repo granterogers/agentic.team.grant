@@ -40,10 +40,20 @@ Counted from each suite's source for markers (an operator or Grant reference, a 
 a write to a `public` table). **A marker count is not a measurement**: it finds the reach a suite names in its own text, not
 what it does through a function it calls. Read it as where to look first. `npm run gate` is 76 checks today (the issue said 37).
 
-**Names an operator or Grant office reach (convert first, in this order):** `verify:history` (10 markers, also 10 model
-paths), `check:leaks` (6; read-only, it reads Grant's deliveries to prove nothing escaped), `verify:connectors` (5),
-`verify:run3-live` (3), `verify:proposes`, `verify:backups`, `verify:dryrun`, `verify:drains`, `check:standing`,
-`check:believes`, `verify:run2-live` (1 each; `check:standing` and `check:believes` are read-only).
+**CONVERTED on 4 October (class `sample`, no model call; each run bracketed by fingerprints of all 25 offices):**
+`verify:history` (58/58) now builds its subjects in the TEST office and runs every rolled-back block in the SAMPLE office
+(it used Grant's: a transient project, job and lock on every run), with a Slack workspace and sender written inside the
+block; its one "from Grant" assertion became "from the person whose office it is". `verify:connectors` (55/55) already
+wrote to the test office; its remaining reads of Grant's roster (`staff_may_use` over the operator office) now ask the
+test office, where the tool was offered. Both left GRANT and SAMPLE fingerprints unchanged (the test office's project
+count moved, which is the quarantine office doing its job). The marker count had called `verify:history` a model
+spender; reading the file finds no dequeue, no job run and no provider call, so it makes none (the cause of the
+miscount was not established).
+
+**Still names an operator or Grant office reach (convert next, in this order):** `check:leaks` (6; read-only, it reads
+Grant's deliveries to prove nothing escaped, which is its job), `verify:run3-live` (3), `verify:proposes`,
+`verify:backups`, `verify:dryrun`, `verify:drains`, `check:standing`, `check:believes`, `verify:run2-live` (1 each;
+`check:standing` and `check:believes` are read-only).
 
 **Spends model calls by marker:** `verify:history`, `verify:mytasks`, `verify:resumes`, `verify:unified`,
 `verify:artifact-slack`, `verify:collaborates`, `verify:escapes`, `verify:another-go`, `verify:capability-claims`,

@@ -7,7 +7,9 @@
     "verify:account-ui",
     "verify:incidents",
     "verify:named-project",
-    "verify:delivery-office"
+    "verify:delivery-office",
+    "verify:history",
+    "verify:connectors"
   ],
   "smoke": ["verify:pulse", "verify:wrappers", "verify:schema", "verify:ui", "verify:hq"],
   "local": ["verify:basecamp-project-turn", "verify:talk"],
@@ -20,6 +22,8 @@
     "scripts/verify/incidents.ts": "sample",
     "scripts/verify/named-project.ts": "sample",
     "scripts/verify/delivery-office.ts": "sample",
+    "scripts/verify/history.ts": "sample",
+    "scripts/verify/connectors.ts": "sample",
     "scripts/verify/hq.ts": "smoke",
     "scripts/verify/talk.ts": "local",
     "scripts/verify/basecamp-project-turn.ts": "local",

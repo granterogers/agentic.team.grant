@@ -39,6 +39,7 @@
  */
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { sampleOffice } from '../sample/lib.ts'
 import { testOrigins } from './lib/test-origin.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -61,6 +62,13 @@ const one = async (sql: string): Promise<Record<string, unknown>> =>
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 const run = Math.random().toString(36).slice(2, 10)
+/*
+  The office every ROLLED-BACK block runs in is the SAMPLE person's, never the operator's (#414). Those blocks need a
+  real person's office so that a turn through the production door reads as a real turn; they used to borrow Grant's, which
+  put a transient project, job and lock in his office on every run. The Sample is a real second person built for exactly
+  this, and a rollback leaves its fingerprint as it was.
+*/
+const SAMPLE = (await sampleOffice()).officeId
 /*
   Both subjects are named so their slugs fall under ONE prefix. `verify:identity`
   added a subject called "Identity proof rival <run>", whose slug landed outside
@@ -139,7 +147,7 @@ const inRollback = async (body: string): Promise<Record<string, unknown>> => {
         perform set_config('application_name', 'PostgREST 14.5', true);
         -- A REAL turn is the person's: this block is rolled back, and runs in the operator's office so that the
         -- origin the office reads is the one a real turn has.
-        pr := (app.hq_create_project(app.operator_office(), ${lit(`History real ${run}`)}, 'upload',
+        pr := (app.hq_create_project(${lit(SAMPLE)}::uuid, ${lit(`History real ${run}`)}, 'upload',
                  ${lit(`hreal-${run}`)}, ${lit(`History real ${run}`)}, true) ->> 'project_id')::uuid;
         ${body}
         raise exception 'ROLLED-BACK:%', r::text;
@@ -436,7 +444,7 @@ try {
         begin
           perform set_config('application_name', 'PostgREST 14.5', true);
           -- A real project as well: the suite's own are fixtures, which is harness.
-          pr := (app.hq_create_project(app.operator_office(), ${lit(`Conversation shape ${run}`)}, 'upload',
+          pr := (app.hq_create_project(${lit(SAMPLE)}::uuid, ${lit(`Conversation shape ${run}`)}, 'upload',
                    ${lit(`shape-${run}`)}, ${lit(`Conversation shape ${run}`)}, true) ->> 'project_id')::uuid;
           insert into public.inbound_commands
             (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
@@ -448,7 +456,7 @@ try {
           insert into public.outputs (job_id, body, confidence, evidence, sources, deterministic)
           values ((e ->> 'job_id')::uuid, ${lit(`A real answer ${run}`)}, 'medium', 'inferred', '[]'::jsonb, true);
           r := jsonb_build_object('harness', app.harness_job((e ->> 'job_id')::uuid),
-                                  'history', app.conversation_history(app.operator_office(), pr, 100));
+                                  'history', app.conversation_history(${lit(SAMPLE)}::uuid, pr, 100));
           raise exception 'ROLLED-BACK:%', r::text;
         end $x$`)
     } catch (error) {
@@ -581,20 +589,32 @@ try {
       .slice(0, 6)
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, '0')}`
+    const rbTeam = `T0RB${run
+      .slice(0, 6)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '0')}`
+    const rbUser = `U0RB${run
+      .slice(0, 6)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '0')}`
     const r = await inRollback(`
+      insert into public.slack_workspaces (team_id, team_name, bot_user_id, office_id)
+      values (${lit(rbTeam)}, 'zz rollback', ${lit(`B${rbUser}`)}, ${lit(SAMPLE)}::uuid);
+      insert into public.subject_identities (subject, origin_channel, actor, office_id)
+      values (app.office_actor(${lit(SAMPLE)}::uuid), 'slack', ${lit(rbUser)}, ${lit(SAMPLE)}::uuid);
       insert into public.slack_channel_map (channel_id, team_id, project_id, channel_name, purpose, active)
-      values (${lit(realChan)}, (select w.team_id from public.slack_workspaces w where w.office_id = app.operator_office() order by w.team_id limit 1), pr, ${lit(`zz rollback ${run}`)}, 'project', true);
+      values (${lit(realChan)}, ${lit(rbTeam)}, pr, ${lit(`zz rollback ${run}`)}, 'project', true);
       insert into public.inbound_commands (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
-      values (app.operator_office(), 'slack', ${lit(`${realChan}:1790000000.000900`)},
-              -- A REAL turn is from a sender the office admits (0615): Grant's own Slack id. The fixture used to
-              -- be a made-up user, which was a stranger by the rule the door now enforces (Run 4, Phase 0).
-              (select actor from public.subject_identities where origin_channel = 'slack' and subject = 'grant' limit 1),
+      values (${lit(SAMPLE)}::uuid, 'slack', ${lit(`${realChan}:1790000000.000900`)},
+              -- A REAL turn is from a sender the office admits (0615): the person's own Slack id, written in this block
+              -- for the Sample (it has none) and rolled back with it. A made-up user is a stranger by the rule the door enforces.
+              ${lit(rbUser)},
               ${lit(`Asked in a real channel ${run}`)}, ${lit(`slack:message:${realChan}:1790000000.000900`)})
       returning command_id into c;
       e := app.enqueue_inbound(c);
       r := jsonb_build_object('landed', (select project_id = pr from public.inbound_commands where command_id = c),
                               'origin', app.job_origin((e ->> 'job_id')::uuid),
-                              'history', app.conversation_history(app.operator_office(), pr, 100));`)
+                              'history', app.conversation_history(${lit(SAMPLE)}::uuid, pr, 100));`)
     const shown = ((r.history ?? []) as Msg[]).some((m) =>
       String(m.body).includes(`Asked in a real channel ${run}`),
     )
@@ -741,19 +761,24 @@ try {
     reconstructed - and the one addressed to nobody still arriving.
   */
   const studio = await inRollback(`
-    v := app.say_in_project(app.operator_office(), pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
-    e := app.say_in_project(app.operator_office(), pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
+    v := app.say_in_project(${lit(SAMPLE)}::uuid, pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
+    e := app.say_in_project(${lit(SAMPLE)}::uuid, pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
     r := jsonb_build_object('origin', app.job_origin((v ->> 'job')::uuid),
                             'nobody_ok', e ->> 'ok',
-                            'history', app.conversation_history(app.operator_office(), pr, 100));`)
+                            'history', app.conversation_history(${lit(SAMPLE)}::uuid, pr, 100));`)
   const studioHistory = (studio.history ?? []) as (Msg & { backfilled?: boolean })[]
   const realSaid = studioHistory.find((m) =>
     String(m.body).includes(`Said for real from the studio ${run}`),
   )
+  // From the PERSON whose office it is: the Sample's own owner key, which is what `from` carries for a person's turn.
+  const sampleActor = String((await one(`select app.office_actor(${lit(SAMPLE)}::uuid) as a`)).a)
   check(
-    'a REAL studio turn appears in that project’s conversation, from Grant (in a rollback)',
-    `origin=${String(studio.origin)} from=${String(realSaid?.from)}`,
-    studio.origin === 'trusted' && realSaid !== undefined && realSaid.from === 'grant',
+    'a REAL studio turn appears in that project’s conversation, from the person whose office it is (in a rollback)',
+    `origin=${String(studio.origin)} from=${String(realSaid?.from)} (wanted ${sampleActor})`,
+    studio.origin === 'trusted' &&
+      realSaid !== undefined &&
+      sampleActor !== '' &&
+      realSaid.from === sampleActor,
   )
   check(
     'on the teamhq surface — not a new word for the web dashboard (0313)',
@@ -909,7 +934,7 @@ try {
     worth checking is the one that makes NO job.
   */
   const digest = async (): Promise<string> =>
-    JSON.stringify((await one(`select app.hq_pulse(app.operator_office()) as v`)).v)
+    JSON.stringify((await one(`select app.hq_pulse(app.test_office()) as v`)).v)
 
   const before = await digest()
   await db.execute(`
