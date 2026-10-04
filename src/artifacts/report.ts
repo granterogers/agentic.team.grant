@@ -35,31 +35,21 @@
  */
 
 import type { Face } from './metrics.ts'
-import { A4, assemble, type DocumentInfo, Page, rgb, widthOf } from './pdf.ts'
+import { A4, assemble, type DocumentInfo, Page, widthOf } from './pdf.ts'
+import { DEFAULT_THEME, resolveTheme, type StyleProfile, type Theme } from './style.ts'
 
 // --- the design system, such as it is ---------------------------------------
 
-const INK = rgb(0.09, 0.1, 0.12)
-const INK_2 = rgb(0.36, 0.38, 0.42)
-const INK_3 = rgb(0.55, 0.57, 0.6)
-const RULE = rgb(0.85, 0.86, 0.88)
-const ACCENT = rgb(0.13, 0.35, 0.52)
-const WASH = rgb(0.96, 0.965, 0.975)
-const PAPER = rgb(1, 1, 1)
+/*
+  The colours and type scale live in `style.ts` now, as a THEME: `DEFAULT_THEME` is exactly the look every report had
+  before house styles existed, and `layout` swaps in a profile's theme for the duration of one (synchronous) layout.
+  Module-level state, deliberately: a theme threaded through eleven helpers is eleven chances to forget it, and this
+  runs to completion before anything else can read it.
+*/
+let T: Theme = DEFAULT_THEME
 
 const MARGIN = { bottom: 64, left: 64, right: 64, top: 72 } as const
 const COLUMN = A4.width - MARGIN.left - MARGIN.right
-
-const TYPE = {
-  body: { face: 'Times-Roman' as Face, lead: 15.5, size: 10.5 },
-  caption: { face: 'Helvetica' as Face, lead: 12, size: 8.5 },
-  h1: { face: 'Helvetica-Bold' as Face, lead: 23, size: 18 },
-  h2: { face: 'Helvetica-Bold' as Face, lead: 17, size: 12.5 },
-  lead: { face: 'Times-Roman' as Face, lead: 18, size: 12 },
-  quote: { face: 'Times-Italic' as Face, lead: 16, size: 11 },
-  tableCell: { face: 'Helvetica' as Face, lead: 13, size: 9 },
-  tableHead: { face: 'Helvetica-Bold' as Face, lead: 13, size: 9 },
-} as const
 
 // --- what a report is made of -----------------------------------------------
 
@@ -153,7 +143,7 @@ export function coverTakes(blocks: readonly Block[]): {
   )
   if (first === undefined) return { consumed: false, line: '' }
   const whole = first.text.trim().replace(/\s+/g, ' ')
-  const fits = wrap(whole, TYPE.lead.face, TYPE.lead.size, COLUMN).lines.length <= COVER_LINES
+  const fits = wrap(whole, T.type.lead.face, T.type.lead.size, COLUMN).lines.length <= COVER_LINES
   return fits ? { consumed: true, line: whole } : { consumed: false, line: coverLine(blocks) }
 }
 
@@ -209,6 +199,8 @@ export interface Laid {
   readonly pages: readonly Page[]
   /** Empty is the only acceptable value. Anything here fails the artifact. */
   readonly problems: readonly string[]
+  /** What a house style asked for that was not drawn. Informational: it never fails an artifact. */
+  readonly notes: readonly string[]
 }
 
 // --- measuring ---------------------------------------------------------------
@@ -283,7 +275,7 @@ class Flow {
 
   private fresh(): Page {
     const page = new Page(A4.width, A4.height)
-    page.rect(0, 0, A4.width, A4.height, PAPER)
+    page.rect(0, 0, A4.width, A4.height, T.paper)
     this.pages.push(page)
     this.y = A4.height - MARGIN.top
     return page
@@ -334,7 +326,7 @@ class Flow {
     face: Face,
     size: number,
     lead: number,
-    colour = INK,
+    colour = T.ink,
     indent = 0,
     where = 'body',
   ): void {
@@ -365,23 +357,23 @@ class Flow {
         A4.width - MARGIN.right,
         MARGIN.bottom - 18,
         0.5,
-        RULE,
+        T.rule,
       )
       page.text(
         this.title,
         MARGIN.left,
         MARGIN.bottom - 32,
-        TYPE.caption.face,
-        TYPE.caption.size,
-        INK_3,
+        T.type.caption.face,
+        T.type.caption.size,
+        T.ink3,
       )
       page.text(
         label,
-        A4.width - MARGIN.right - widthOf(label, TYPE.caption.face, TYPE.caption.size),
+        A4.width - MARGIN.right - widthOf(label, T.type.caption.face, T.type.caption.size),
         MARGIN.bottom - 32,
-        TYPE.caption.face,
-        TYPE.caption.size,
-        INK_3,
+        T.type.caption.face,
+        T.type.caption.size,
+        T.ink3,
       )
     }
   }
@@ -390,34 +382,37 @@ class Flow {
 /** The cover. Deliberately not a heading on page one. */
 function cover(flow: Flow, report: Report): void {
   const page = flow.current()
-  page.rect(0, A4.height - 260, A4.width, 260, WASH)
-  page.rect(0, A4.height - 264, A4.width, 4, ACCENT)
+  // A band is the field in the primary colour with the type reversed out of it; the standard cover is the wash.
+  const band = T.titlePage === 'band'
+  page.rect(0, A4.height - 260, A4.width, 260, band ? T.primary : T.wash)
+  page.rect(0, A4.height - 264, A4.width, 4, T.accent)
+  const onField = band ? T.paper : null
 
   const kicker = report.author.toUpperCase()
-  page.text(kicker, MARGIN.left, A4.height - 120, 'Helvetica-Bold', 9, ACCENT)
+  page.text(kicker, MARGIN.left, A4.height - 120, T.type.h1.face, 9, onField ?? T.primary)
 
-  const { lines } = wrap(report.title, 'Helvetica-Bold', 30, COLUMN)
+  const { lines } = wrap(report.title, T.type.h1.face, 30, COLUMN)
   let y = A4.height - 160
   for (const line of lines.slice(0, 3)) {
-    page.text(line, MARGIN.left, y, 'Helvetica-Bold', 30, INK)
+    page.text(line, MARGIN.left, y, T.type.h1.face, 30, onField ?? T.ink)
     y -= 36
   }
   const when = report.created.toISOString().slice(0, 10)
-  page.text(when, MARGIN.left, A4.height - 240, 'Helvetica', 9.5, INK_2)
+  page.text(when, MARGIN.left, A4.height - 240, T.type.caption.face, 9.5, onField ?? T.ink2)
 
   // The subtitle sits BELOW the field, in the body face, because it is prose
   // and the title is not.
-  const sub = wrap(report.subtitle, TYPE.lead.face, TYPE.lead.size, COLUMN)
+  const sub = wrap(report.subtitle, T.type.lead.face, T.type.lead.size, COLUMN)
   let sy = A4.height - 310
   for (const line of sub.lines) {
-    page.text(line, MARGIN.left, sy, TYPE.lead.face, TYPE.lead.size, INK_2)
-    sy -= TYPE.lead.lead
+    page.text(line, MARGIN.left, sy, T.type.lead.face, T.type.lead.size, T.ink2)
+    sy -= T.type.lead.lead
   }
   /*
     A foot on the cover, so the lower two thirds are deliberate space rather
     than a page that ran out of things to say.
   */
-  page.line(MARGIN.left, 120, A4.width - MARGIN.right, 120, 0.8, RULE)
+  page.line(MARGIN.left, 120, A4.width - MARGIN.right, 120, 0.8, T.rule)
   /*
     The author is NOT repeated here.
 
@@ -433,7 +428,7 @@ function cover(flow: Flow, report: Report): void {
     alone on the rule.
   */
   const foot = 'Generated by the office from project material. Sources are listed at the end.'
-  page.text(foot, MARGIN.left, 100, 'Helvetica', 8.5, INK_3)
+  page.text(foot, MARGIN.left, 100, 'Helvetica', 8.5, T.ink3)
 
   flow.forceBreak()
 }
@@ -445,34 +440,36 @@ function table(flow: Flow, block: Extract<Block, { kind: 'table' }>): void {
   const cellLines = (row: readonly string[]): number =>
     Math.max(
       1,
-      ...row.map((c) => wrap(c, TYPE.tableCell.face, TYPE.tableCell.size, width - 10).lines.length),
+      ...row.map(
+        (c) => wrap(c, T.type.tableCell.face, T.type.tableCell.size, width - 10).lines.length,
+      ),
       ...(columns > row.length ? [1] : []),
     )
 
-  const headHeight = TYPE.tableHead.lead + 8
-  flow.need(headHeight + TYPE.tableCell.lead * 2)
+  const headHeight = T.type.tableHead.lead + 8
+  flow.need(headHeight + T.type.tableCell.lead * 2)
 
   const drawHead = (): void => {
     const page = flow.current()
     const top = flow.at()
-    page.rect(MARGIN.left, top - headHeight, COLUMN, headHeight, WASH)
+    page.rect(MARGIN.left, top - headHeight, COLUMN, headHeight, T.wash)
     for (const [i, name] of block.columns.entries()) {
       page.text(
-        wrap(name, TYPE.tableHead.face, TYPE.tableHead.size, width - 10).lines[0] ?? '',
+        wrap(name, T.type.tableHead.face, T.type.tableHead.size, width - 10).lines[0] ?? '',
         MARGIN.left + i * width + 5,
         top - headHeight + 6,
-        TYPE.tableHead.face,
-        TYPE.tableHead.size,
-        INK,
+        T.type.tableHead.face,
+        T.type.tableHead.size,
+        T.ink,
       )
     }
-    page.line(MARGIN.left, top - headHeight, MARGIN.left + COLUMN, top - headHeight, 0.8, ACCENT)
+    page.line(MARGIN.left, top - headHeight, MARGIN.left + COLUMN, top - headHeight, 0.8, T.primary)
     flow.gap(headHeight)
   }
 
   drawHead()
   for (const row of block.rows) {
-    const height = cellLines(row) * TYPE.tableCell.lead + 8
+    const height = cellLines(row) * T.type.tableCell.lead + 8
     if (!flow.room(height)) {
       flow.break_()
       drawHead()
@@ -480,31 +477,31 @@ function table(flow: Flow, block: Extract<Block, { kind: 'table' }>): void {
     const page = flow.current()
     const top = flow.at()
     for (const [i, cell] of row.entries()) {
-      const { lines } = wrap(cell, TYPE.tableCell.face, TYPE.tableCell.size, width - 10)
-      let y = top - TYPE.tableCell.lead
+      const { lines } = wrap(cell, T.type.tableCell.face, T.type.tableCell.size, width - 10)
+      let y = top - T.type.tableCell.lead
       for (const line of lines) {
         page.text(
           line,
           MARGIN.left + i * width + 5,
           y,
-          TYPE.tableCell.face,
-          TYPE.tableCell.size,
-          INK,
+          T.type.tableCell.face,
+          T.type.tableCell.size,
+          T.ink,
         )
-        y -= TYPE.tableCell.lead
+        y -= T.type.tableCell.lead
       }
     }
-    page.line(MARGIN.left, top - height, MARGIN.left + COLUMN, top - height, 0.4, RULE)
+    page.line(MARGIN.left, top - height, MARGIN.left + COLUMN, top - height, 0.4, T.rule)
     flow.gap(height)
   }
   if (block.caption !== undefined) {
     flow.gap(6)
     flow.paragraph(
       block.caption,
-      TYPE.caption.face,
-      TYPE.caption.size,
-      TYPE.caption.lead,
-      INK_3,
+      T.type.caption.face,
+      T.type.caption.size,
+      T.type.caption.lead,
+      T.ink3,
       0,
       'a table caption',
     )
@@ -528,10 +525,10 @@ function chart(flow: Flow, block: Extract<Block, { kind: 'chart' }>): void {
   const page = flow.current()
   const top = flow.at()
 
-  page.text(block.title, MARGIN.left, top - 12, 'Helvetica-Bold', 10, INK)
+  page.text(block.title, MARGIN.left, top - 12, 'Helvetica-Bold', 10, T.ink)
   const labelWidth = Math.min(
     150,
-    Math.max(...bars.map((b) => widthOf(b.label, TYPE.caption.face, TYPE.caption.size))) + 10,
+    Math.max(...bars.map((b) => widthOf(b.label, T.type.caption.face, T.type.caption.size))) + 10,
   )
   const plotLeft = MARGIN.left + labelWidth
   const plotWidth = COLUMN - labelWidth - 44
@@ -541,27 +538,27 @@ function chart(flow: Flow, block: Extract<Block, { kind: 'chart' }>): void {
     const y = top - 30 - i * rowHeight
     const w = Math.max(1, (Math.abs(bar.value) / most) * plotWidth)
     const label =
-      wrap(bar.label, TYPE.caption.face, TYPE.caption.size, labelWidth - 8).lines[0] ?? ''
-    page.text(label, MARGIN.left, y - 9, TYPE.caption.face, TYPE.caption.size, INK_2)
-    page.rect(plotLeft, y - 13, w, 11, ACCENT)
+      wrap(bar.label, T.type.caption.face, T.type.caption.size, labelWidth - 8).lines[0] ?? ''
+    page.text(label, MARGIN.left, y - 9, T.type.caption.face, T.type.caption.size, T.ink2)
+    page.rect(plotLeft, y - 13, w, 11, T.primary)
     page.text(
       String(bar.value),
       plotLeft + w + 5,
       y - 9,
-      TYPE.caption.face,
-      TYPE.caption.size,
-      INK_2,
+      T.type.caption.face,
+      T.type.caption.size,
+      T.ink2,
     )
   }
-  page.line(plotLeft, top - 30 - bars.length * rowHeight + 5, plotLeft, top - 26, 0.6, RULE)
+  page.line(plotLeft, top - 30 - bars.length * rowHeight + 5, plotLeft, top - 26, 0.6, T.rule)
   flow.gap(height)
   if (block.caption !== undefined) {
     flow.paragraph(
       block.caption,
-      TYPE.caption.face,
-      TYPE.caption.size,
-      TYPE.caption.lead,
-      INK_3,
+      T.type.caption.face,
+      T.type.caption.size,
+      T.type.caption.lead,
+      T.ink3,
       0,
       'a chart caption',
     )
@@ -570,7 +567,17 @@ function chart(flow: Flow, block: Extract<Block, { kind: 'chart' }>): void {
 }
 
 /** Lay the whole thing out. */
-export function layout(report: Report): Laid {
+export function layout(report: Report, style?: StyleProfile | null): Laid {
+  const resolved = resolveTheme(style)
+  T = resolved.theme
+  try {
+    return layoutWith(report, resolved.unapplied)
+  } finally {
+    T = DEFAULT_THEME
+  }
+}
+
+function layoutWith(report: Report, notes: readonly string[]): Laid {
   const flow = new Flow(report.title)
   cover(flow, report)
 
@@ -602,7 +609,7 @@ export function layout(report: Report): Laid {
         flow.break_()
         break
       case 'heading': {
-        const t = block.level === 1 ? TYPE.h1 : TYPE.h2
+        const t = block.level === 1 ? T.type.h1 : T.type.h2
         flow.gap(block.level === 1 ? 20 : 14)
         /*
           A heading keeps two lines of what follows it.
@@ -612,8 +619,8 @@ export function layout(report: Report): Laid {
           commonest way a generated document announces that nobody looked at
           it.
         */
-        if (!flow.room(t.lead + TYPE.body.lead * 2)) flow.break_()
-        flow.paragraph(block.text, t.face, t.size, t.lead, INK, 0, 'a heading')
+        if (!flow.room(t.lead + T.type.body.lead * 2)) flow.break_()
+        flow.paragraph(block.text, t.face, t.size, t.lead, T.ink, 0, 'a heading')
         if (block.level === 1) {
           /*
             Clear of the descenders, which six points was not.
@@ -625,14 +632,14 @@ export function layout(report: Report): Laid {
           */
           flow.gap(13)
           const page = flow.current()
-          page.line(MARGIN.left, flow.at(), MARGIN.left + 54, flow.at(), 2, ACCENT)
+          page.line(MARGIN.left, flow.at(), MARGIN.left + 54, flow.at(), 2, T.primary)
         }
         flow.gap(block.level === 1 ? 10 : 6)
         break
       }
       case 'paragraph': {
-        const t = block.lead === true ? TYPE.lead : TYPE.body
-        flow.paragraph(block.text, t.face, t.size, t.lead, block.lead === true ? INK_2 : INK)
+        const t = block.lead === true ? T.type.lead : T.type.body
+        flow.paragraph(block.text, t.face, t.size, t.lead, block.lead === true ? T.ink2 : T.ink)
         flow.gap(8)
         break
       }
@@ -640,46 +647,54 @@ export function layout(report: Report): Laid {
       case 'numbers': {
         for (const [i, item] of block.items.entries()) {
           const marker = block.kind === 'bullets' ? '•' : `${String(i + 1)}.`
-          flow.need(TYPE.body.lead)
+          flow.need(T.type.body.lead)
           const page = flow.current()
           // The marker is drawn at the line the first wrapped line will take,
           // which is why the paragraph is measured before either is placed.
           page.text(
             marker,
             MARGIN.left + 2,
-            flow.at() - TYPE.body.lead,
-            TYPE.body.face,
-            TYPE.body.size,
-            INK_2,
+            flow.at() - T.type.body.lead,
+            T.type.body.face,
+            T.type.body.size,
+            T.ink2,
           )
-          flow.paragraph(item, TYPE.body.face, TYPE.body.size, TYPE.body.lead, INK, 20, 'a list')
+          flow.paragraph(
+            item,
+            T.type.body.face,
+            T.type.body.size,
+            T.type.body.lead,
+            T.ink,
+            20,
+            'a list',
+          )
           flow.gap(3)
         }
         flow.gap(6)
         break
       }
       case 'quote': {
-        const { lines } = wrap(block.text, TYPE.quote.face, TYPE.quote.size, COLUMN - 26)
-        const height = lines.length * TYPE.quote.lead + 8
+        const { lines } = wrap(block.text, T.type.quote.face, T.type.quote.size, COLUMN - 26)
+        const height = lines.length * T.type.quote.lead + 8
         flow.need(height)
         const page = flow.current()
-        page.rect(MARGIN.left, flow.at() - height, 2.5, height, ACCENT)
+        page.rect(MARGIN.left, flow.at() - height, 2.5, height, T.accent)
         flow.paragraph(
           block.text,
-          TYPE.quote.face,
-          TYPE.quote.size,
-          TYPE.quote.lead,
-          INK_2,
+          T.type.quote.face,
+          T.type.quote.size,
+          T.type.quote.lead,
+          T.ink2,
           16,
           'a quotation',
         )
         if (block.attribution !== undefined) {
           flow.paragraph(
             `— ${block.attribution}`,
-            TYPE.caption.face,
-            TYPE.caption.size,
-            TYPE.caption.lead,
-            INK_3,
+            T.type.caption.face,
+            T.type.caption.size,
+            T.type.caption.lead,
+            T.ink3,
             16,
             'an attribution',
           )
@@ -709,35 +724,43 @@ export function layout(report: Report): Laid {
   */
   flow.gap(18)
   if (!flow.room(120)) flow.break_()
-  flow.paragraph('Sources', TYPE.h2.face, TYPE.h2.size, TYPE.h2.lead, INK, 0, 'the sources heading')
+  flow.paragraph(
+    'Sources',
+    T.type.h2.face,
+    T.type.h2.size,
+    T.type.h2.lead,
+    T.ink,
+    0,
+    'the sources heading',
+  )
   flow.gap(6)
   if (report.sources.length === 0) {
     flow.paragraph(
       'This report cites nothing. It was written without retrieved material, ' +
         'and should be read as the office thinking aloud rather than as a finding.',
-      TYPE.body.face,
-      TYPE.body.size,
-      TYPE.body.lead,
-      INK_2,
+      T.type.body.face,
+      T.type.body.size,
+      T.type.body.lead,
+      T.ink2,
     )
   } else {
     for (const [i, source] of report.sources.entries()) {
-      flow.need(TYPE.caption.lead)
+      flow.need(T.type.caption.lead)
       const page = flow.current()
       page.text(
         `[${String(i + 1)}]`,
         MARGIN.left,
-        flow.at() - TYPE.caption.lead,
-        TYPE.caption.face,
-        TYPE.caption.size,
-        INK_3,
+        flow.at() - T.type.caption.lead,
+        T.type.caption.face,
+        T.type.caption.size,
+        T.ink3,
       )
       flow.paragraph(
         `${source.label} — ${source.ref}`,
-        TYPE.caption.face,
-        TYPE.caption.size,
-        TYPE.caption.lead,
-        INK_2,
+        T.type.caption.face,
+        T.type.caption.size,
+        T.type.caption.lead,
+        T.ink2,
         24,
         'a source line',
       )
@@ -746,12 +769,15 @@ export function layout(report: Report): Laid {
   }
 
   flow.finish()
-  return { pages: flow.pages, problems: flow.problems }
+  return { notes, pages: flow.pages, problems: flow.problems }
 }
 
 /** Lay the report out and write the file. Throws nothing; problems are returned. */
-export function renderReport(report: Report): { bytes: Uint8Array; problems: readonly string[] } {
-  const laid = layout(report)
+export function renderReport(
+  report: Report,
+  style?: StyleProfile | null,
+): { bytes: Uint8Array; problems: readonly string[]; notes: readonly string[] } {
+  const laid = layout(report, style)
   const info: DocumentInfo = {
     author: report.author,
     created: report.created,
@@ -759,5 +785,5 @@ export function renderReport(report: Report): { bytes: Uint8Array; problems: rea
     subject: report.subtitle,
     title: report.title,
   }
-  return { bytes: assemble(laid.pages, info), problems: laid.problems }
+  return { bytes: assemble(laid.pages, info), notes: laid.notes, problems: laid.problems }
 }

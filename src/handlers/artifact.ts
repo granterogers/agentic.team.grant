@@ -39,6 +39,7 @@
 import { howComposed } from '../agents/provenance.ts'
 import { type Block, coverTakes, type Report, renderReport } from '../artifacts/report.ts'
 import { filenameFor, storeArtifact } from '../artifacts/store.ts'
+import { loadStyle } from '../artifacts/style.ts'
 import { validatePdf } from '../artifacts/validate.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
@@ -252,6 +253,8 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         saying it four times.
       */
       const projectId: string = job.projectId
+      // The house style (0923): the office's, with this project's fields over it. Fails open to the default look.
+      const style = await loadStyle(db, job.jobId, projectId)
 
       /*
         Run as checkpointed steps (#263).
@@ -417,7 +420,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                 subtitle: coverTakes(draft.blocks as Block[]).line,
                 title: String(draft.title ?? 'Report'),
               }
-              const { bytes, problems } = renderReport(report)
+              const { bytes, problems } = renderReport(report, style)
               const verdict = validatePdf(bytes, { layoutProblems: problems })
               if (!verdict.ok) {
                 return { outcome: { failed: verdict.problems.slice(0, 2) } }
@@ -594,7 +597,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         subtitle: coverTakes(drafted.blocks as Block[]).line,
         title: String(drafted.title ?? 'Report'),
       }
-      const again = renderReport(finalReport)
+      const again = renderReport(finalReport, style)
 
       return {
         ...base,

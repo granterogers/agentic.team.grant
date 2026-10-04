@@ -627,6 +627,35 @@ const SECTIONS: Readonly<
     filtered: true,
   },
   /*
+    ONE SEARCH OVER EVERY STORE A PROJECT HAS (migration 0921).
+
+    `search` (above) finds documents and the team's answers. This finds those plus tasks, the project conversation,
+    saved webpages, Post-its, calendar events and the team's research, as typed rows
+    `{kind, id, title, snippet, project_slug, url_hint, score, at}`. `?project=<uuid>` scopes it, `?kinds=task,page`
+    narrows it. The office is the verified session's; a project of another office answers like one that does not
+    exist.
+  */
+  project_search: {
+    fn: 'project_search',
+    office: true,
+    args: { p_limit: 20 },
+    textArg: { param: 'q', arg: 'p_query' },
+    scoped: true,
+    also: [{ param: 'kinds', arg: 'p_kinds' }],
+  },
+  /*
+    THE HOUSE STYLE (migration 0923). `?slug=<project>` returns the profile RESOLVED for that project - the office's
+    default with the project's fields laid over it, each field saying which it came from - and `vocabulary`, the
+    fonts, colours and treatments a profile may use. No `slug` is the office default alone.
+  */
+  style: {
+    fn: 'hq_style_get',
+    office: true,
+    also: [{ param: 'slug', arg: 'p_slug' }],
+  },
+  // Which kinds that search can serve in THIS database (calendar needs 0897) - the page draws only filters that find something.
+  project_search_providers: { fn: 'project_search_providers', office: true },
+  /*
     Everything an object relates to, both directions (#29, migrations 0310-11).
 
     Takes two arguments where every other section takes at most one, so it uses
@@ -783,6 +812,10 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     personBy: 'p_by',
   },
   rename_project: { fn: 'hq_rename_project', office: true, required: ['p_slug', 'p_name'] },
+  // The house style (0923). `p_slug` absent writes the OFFICE default. The channel is the door's fact and is written by
+  // the database wrapper ('teamhq'), never sent. `personBy` records who; the office key is a machine and styles nothing.
+  style_set: { fn: 'hq_style_set', office: true, required: ['p_patch'], personBy: 'p_by' },
+  style_clear: { fn: 'hq_style_clear', office: true, required: [], personBy: 'p_by' },
   // A person connecting their OWN Telegram (#410, 0885). The office is the verified session's; the office key is not in
   // SERVICE_MAY, so a machine cannot start or end a person's connection.
   channel_link_begin: { fn: 'channel_link_begin', office: true, required: ['p_channel'] },
