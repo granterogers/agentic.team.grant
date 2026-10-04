@@ -81,6 +81,35 @@ export function reportsBackOn(clause: string): boolean {
 }
 
 /**
+ * Give each report-back clause the owner of the clause before it, however that owner was chosen (#408 closure).
+ *
+ * `found` is who each ask was routed to (by name, by subject or by meaning), at most a few per ask. A clause that only asks for the
+ * finding of the one before it ("... and identify anything unfinished") has no subject of its own, so it takes that clause's owner,
+ * chained across several such clauses. A clause joined by "then" is a sequence and keeps its own routing (#128).
+ */
+export function carryReportBacks(
+  asks: readonly string[],
+  joins: readonly string[],
+  found: readonly { readonly i: number; readonly slug: string }[],
+): { i: number; slug: string }[] {
+  const owner = new Map<number, string>()
+  const out: { i: number; slug: string }[] = []
+  asks.forEach((text, i) => {
+    const before = owner.get(i - 1)
+    const sequence = /\bthen\b/.test(joins[i] ?? '')
+    if (i > 0 && before !== undefined && !sequence && reportsBackOn(text)) {
+      owner.set(i, before)
+      out.push({ i, slug: before })
+      return
+    }
+    const mine = found.filter((x) => x.i === i)
+    if (mine[0] !== undefined) owner.set(i, mine[0].slug)
+    out.push(...mine.map((x) => ({ i: x.i, slug: x.slug })))
+  })
+  return out
+}
+
+/**
  * Is a new task's title grounded in what he actually said this turn?
  *
  * Behavioural remediation, 24 September 2026 (ledger R4b). "And put it down

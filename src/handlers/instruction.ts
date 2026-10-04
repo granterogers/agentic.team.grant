@@ -115,7 +115,7 @@ import {
   subtaskRequest,
   taskStateChange,
 } from '../agents/mine.ts'
-import { groundedIn, namedColleague, reportsBackOn } from '../agents/named.ts'
+import { carryReportBacks, groundedIn, namedColleague, reportsBackOn } from '../agents/named.ts'
 import {
   asksWhatWasSaid,
   closesWithoutAsking,
@@ -1004,7 +1004,7 @@ export async function speaker(
     const join = parts[i]?.joinedBy ?? ''
     return before !== null && !/\bthen\b/.test(join) && reportsBackOn(asks[i] ?? '') ? before : null
   })
-  const found =
+  const foundBeforeCarry =
     matched === undefined
       ? named.every((n) => n === null)
         ? undefined
@@ -1015,6 +1015,25 @@ export async function speaker(
             return n !== null ? [{ i, slug: n }] : matched.filter((x) => x.i === i)
           })
         : matched
+
+  /*
+    A REPORT-BACK CLAUSE BELONGS TO WHOEVER OWNS THE CLAUSE BEFORE IT, HOWEVER THAT OWNER WAS CHOSEN (#408 closure).
+
+    The carry above only knows an owner who was NAMED. "Ask the appropriate person on the team to review our launch preparation
+    and identify anything important that is still unfinished" names nobody, so the first clause went to the quality director by
+    subject, the second ("identify anything ... unfinished") matched the operations director by its own words, and a second
+    specialist was convened to answer half a sentence. He answered "I have nothing on the launch preparation in our records" and
+    that became the result he was handed. A clause that only asks for the finding of the one before it has no subject of its own;
+    it takes that clause's owner, chained, whichever mechanism picked it. Joined by "then" it is a sequence (#128) and is left.
+  */
+  const found =
+    foundBeforeCarry === undefined
+      ? undefined
+      : carryReportBacks(
+          asks,
+          parts.map((p) => p.joinedBy),
+          foundBeforeCarry,
+        )
 
   // Order matters and duplicates do not: `pickRoster`'s contested branch takes
   // the first name, so the first ask has to come first.

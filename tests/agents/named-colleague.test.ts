@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { namedColleague, reportsBackOn } from '../../src/agents/named.ts'
+import { carryReportBacks, namedColleague, reportsBackOn } from '../../src/agents/named.ts'
 
 const STAFF = [
   { slug: 'research-director', name: 'Emma' },
@@ -108,4 +108,57 @@ describe('the report of a delegation belongs to whoever was given it (#408)', ()
     'the telling is in the detail',
     'book the minibus',
   ])('new work keeps its own subject: %s', (clause) => expect(reportsBackOn(clause)).toBe(false))
+})
+
+describe('a report-back clause takes the owner of the clause before it, however it was chosen (#408 closure)', () => {
+  // Wellness, on the deployed worker: the quality director by subject, then "identify ..." matched operations by its own words.
+  const asks = [
+    'Ask the appropriate person on the team to review our launch preparation',
+    'identify anything important that is still unfinished',
+  ]
+  const found = [
+    { i: 0, slug: 'quality-director' },
+    { i: 1, slug: 'operations-director' },
+  ]
+
+  it('the second clause goes to the first clause owner, not to a second specialist', () => {
+    expect(carryReportBacks(asks, ['', 'and'], found)).toEqual([
+      { i: 0, slug: 'quality-director' },
+      { i: 1, slug: 'quality-director' },
+    ])
+  })
+
+  it('chains across several report-back clauses', () => {
+    const three = [...asks, 'and list what is overdue']
+    expect(
+      carryReportBacks(
+        three,
+        ['', 'and', 'and'],
+        [...found, { i: 2, slug: 'growth-director' }],
+      ).map((x) => x.slug),
+    ).toEqual(['quality-director', 'quality-director', 'quality-director'])
+  })
+
+  it('new work in the second clause keeps its own owner', () => {
+    const two = [asks[0] as string, 'draft the announcement for the board']
+    expect(
+      carryReportBacks(two, ['', 'and'], [
+        found[0],
+        { i: 1, slug: 'communications-director' },
+      ] as never),
+    ).toEqual([
+      { i: 0, slug: 'quality-director' },
+      { i: 1, slug: 'communications-director' },
+    ])
+  })
+
+  it('a sequence ("and then") keeps its own routing', () => {
+    expect(carryReportBacks(asks, ['', 'and then'], found)).toEqual(found)
+  })
+
+  it('a first clause is never carried, and a report-back with nobody before it keeps what it has', () => {
+    expect(
+      carryReportBacks([asks[1] as string], [''], [{ i: 0, slug: 'operations-director' }]),
+    ).toEqual([{ i: 0, slug: 'operations-director' }])
+  })
 })
