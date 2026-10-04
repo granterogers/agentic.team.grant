@@ -40,10 +40,12 @@ begin
   -- another owner's layout in the same office must not be read
   insert into public.dashboard_layouts (owner, project_id, surface, panels)
     values ('someone-else', pa2, 'basecamp', jsonb_build_array(jsonb_build_object('id','__workspace','postits', jsonb_build_array(jsonb_build_object('id','x','text','zyxqnote hidden')))));
-  -- calendar table (stand-in for 0897, created inside the rollback)
-  create table public.project_events (event_id uuid primary key default gen_random_uuid(), office_id uuid not null, project_id uuid not null,
-     title text, description text, location text, starts_at timestamptz default now());
-  insert into public.project_events (office_id, project_id, title, description) values (a, pa, 'Kickoff zyxqcal', 'room 4'), (b, pb, 'Foreign zyxqcal', null);
+  -- calendar: the REAL table from 0897 (0925 is what hides a tombstoned event)
+  insert into public.project_events (office_id, project_id, title, notes, starts_at, ends_at, origin_channel, created_by)
+    values (a, pa, 'Kickoff zyxqcal', 'room 4', now(), now() + interval '1 hour', 'teamhq', 'proof'),
+           (b, pb, 'Foreign zyxqcal', null, now(), now() + interval '1 hour', 'teamhq', 'proof');
+  insert into public.project_events (office_id, project_id, title, starts_at, ends_at, origin_channel, created_by, deleted_at)
+    values (a, pa, 'Gone zyxqcal', now(), now() + interval '1 hour', 'teamhq', 'proof', now());
 
   -- positive: each needle finds exactly the right kind in project A
   for k, n in select * from (values ('zyxqtask',1),('zyxqpage',1),('zyxqdoc',1),('zyxqchat',1),('zyxqresearch',1),('zyxqnote',1),('zyxqcal',1)) v loop
@@ -82,19 +84,7 @@ begin
   begin perform * from app.project_search('00000000-0000-0000-0000-000000000000', 'zyxqtask', null); raise exception 'no_office should refuse'; exception when sqlstate '42501' then null; end;
   -- provider list tells the truth about calendar
   if not (app.project_search_providers(a) -> 5 ->> 'available')::boolean then raise exception 'events should be available here'; end if;
-  raise notice 'PASS 02-project-search (with stand-in calendar table)';
+  raise notice 'PASS 02-project-search (real calendar table, tombstones hidden)';
 end $t$;
 rollback;
 
--- Without the calendar table the provider is silent and says so.
-begin;
-set local application_name = 'PostgREST proof';
-do $t$
-declare a uuid := (select office_id from public.offices where kind = 'person' limit 1); pa uuid;
-begin
-  insert into public.projects (office_id, slug, name) values (a, 'zz-s-a', 'Search A') returning project_id into pa;
-  if (app.project_search_providers(a) -> 5 ->> 'available')::boolean then raise exception 'events must be unavailable without the table'; end if;
-  if (select count(*) from app.project_search(a, 'anything', pa)) <> 0 then raise exception 'no table, no rows, no error'; end if;
-  raise notice 'PASS 02-project-search (no calendar table)';
-end $t$;
-rollback;
