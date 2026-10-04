@@ -26,7 +26,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { soleOffice } from '../db/office.ts'
 import type { OfficeId } from '../office/context.ts'
 import { count } from '../text/plain.ts'
-import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
+import { type GoogleAccess, type GoogleProblem, googleAccess, recordGoogleHealth } from './auth.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const nul = (v: string | null | undefined): string =>
@@ -37,6 +37,8 @@ const EXCERPT_CHARS = 300
 
 export interface CalendarOutcome {
   readonly ok: boolean
+  /** Set when `ok` is false: what kind of problem, for the incident layer (#413). */
+  readonly problem?: GoogleProblem
   readonly note: string
   readonly seen: number
   readonly stored: number
@@ -100,12 +102,15 @@ export async function refreshCalendar(
 
   const access = await googleAccess(db, fetchImpl)
   await recordGoogleHealth(db, access, office)
-  if (!access.ok) return { ok: false, note: access.reason, seen: 0, stored: 0, removed: 0 }
+  if (!access.ok) {
+    return { ok: false, problem: access.code, note: access.reason, seen: 0, stored: 0, removed: 0 }
+  }
 
   const granted = access as GoogleAccess
   if (!granted.scopes.some((s) => s.includes('calendar.readonly') || s.includes('auth/calendar'))) {
     return {
       ok: false,
+      problem: 'missing_scope',
       // A scope he unchecked on the consent screen. Named, because the
       // alternative symptom is a 403 from an endpoint that looks fine.
       note: `the connection has no calendar scope — granted: ${granted.scopes.join(' ') || 'none'}`,
@@ -154,6 +159,7 @@ export async function refreshCalendar(
     if (body.error !== undefined) {
       return {
         ok: false,
+        problem: 'api_error',
         note: `Google refused: ${String(body.error.code ?? '')} ${String(body.error.message ?? '')}`.trim(),
         seen: events.length,
         stored: 0,

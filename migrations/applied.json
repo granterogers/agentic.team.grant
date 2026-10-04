@@ -744,5 +744,8 @@
   "0873_an_upload_counts_as_indexed_material.sql": "22404d26032993a7df3f224bf6d041ec9e7469fe980ca12e795a95dbf826e936",
   "0874_a_question_can_say_how_it_is_getting_on.sql": "9701c629017b4bdb71f68c0fe2ab9afc6f75a22611527f3769c01d4836ccce62",
   "0875_the_model_record_stops_asking_about_every_row.sql": "1d94de56bdcf9b81da8ed2f88f300e1577e18f2340df1925e55e638709f9c4bc",
-  "0876_the_cheap_flags_are_asked_first_for_real.sql": "111137c1274c3a85668fa7462db2267f25ef2200a0556a4f4a1c735a5c1a8db0"
+  "0876_the_cheap_flags_are_asked_first_for_real.sql": "111137c1274c3a85668fa7462db2267f25ef2200a0556a4f4a1c735a5c1a8db0",
+  "0877_an_incident_is_told_once.sql": "6ba46b899dbcae7465239f40e51af34c82ec930628b4429a006071c512a4d831",
+  "0878_an_incident_is_closed_by_what_fixed_it.sql": "728a1bbf148cb4c84da8271bb2ed5034cb80de7b5532f4806005db83ccdcf0e8",
+  "0879_an_incident_keeps_its_office.sql": "7b11969e20c374ec1b982a7323388dcaf99180c52e44b83b5737a4c8c5e72ac3"
 }

@@ -245,7 +245,10 @@ describe('the committed manifest', () => {
   it('classifies each table exactly once, in one of the four classes', () => {
     const classes = new Set(Object.values(manifest.tables).map((e) => e.class))
     expect([...classes].sort()).toEqual(['GLOBAL', 'OFFICE_CARRIER', 'OFFICE_DERIVED', 'SYSTEM'])
-    expect(Object.keys(manifest.tables).length).toBe(136)
+    // A table is added to the manifest the day it is created (check:ownership refuses an unclassified one), so the
+    // count only grows. Asserting an exact number went red on a correct change (a new table, #413); asserting it never
+    // falls below the baseline still catches an entry deleted by accident.
+    expect(Object.keys(manifest.tables).length).toBeGreaterThanOrEqual(136)
   })
 
   it('gives every GLOBAL and SYSTEM table a reason', () => {

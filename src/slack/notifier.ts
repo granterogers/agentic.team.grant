@@ -352,7 +352,16 @@ export function slackChannel(
         blockerId: context.blockerId,
         message: {
           staffTitle: context.staff?.title ?? null,
-          body: output.body,
+          // An operational notice (#413) reads the same here as on Telegram: its heading, then its paragraphs, and the
+          // address behind its button as a link carrying the same label. Slack has no URL button on this path.
+          body:
+            output.notice === undefined
+              ? output.body
+              : `*${output.notice.heading}*\n\n${output.body}${
+                  output.notice.link === undefined
+                    ? ''
+                    : `\n\n<${output.notice.link.url}|${output.notice.link.label}>`
+                }`,
           metadata: {
             confidence: output.confidence,
             evidence: output.evidence,
@@ -362,7 +371,8 @@ export function slackChannel(
             routine: context.routine,
           },
           correlationId: job.correlationId,
-          actions: context.actions,
+          // Nothing to rate, undo or mute on a notice: the incident layer decides when it is said again.
+          actions: output.notice === undefined ? context.actions : [],
           projectUrl: context.projectUrl,
           file,
         },

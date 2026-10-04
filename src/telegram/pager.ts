@@ -34,7 +34,7 @@ import { deliveryKey } from '../jobs/delivery-key.ts'
 import type { HandlerOutput, Job, NotifyOutcome } from '../jobs/worker.ts'
 import type { ActionId } from '../slack/blocks.ts'
 import type { TelegramClient } from './api.ts'
-import { inlineKeyboard, type PagerMessage, pagerText } from './message.ts'
+import { inlineKeyboard, noticeKeyboard, type PagerMessage, pagerText } from './message.ts'
 import { TelegramTransport } from './transport.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -209,8 +209,13 @@ export class TelegramPager {
         routine: input.routine ?? false,
       },
       correlationId: input.job.correlationId,
-      actions: input.actions,
+      // A notice is not an answer: nothing to rate, undo or mute (#413). The incident layer is what decides when it is
+      // said again, so a Mute button on it would only be a second, worse way to say the same thing.
+      actions: input.output.notice === undefined ? input.actions : [],
       projectUrl,
+      ...(input.output.notice === undefined
+        ? {}
+        : { notice: { heading: input.output.notice.heading } }),
     }
 
     const result = await this.delivery.deliver({
@@ -227,7 +232,10 @@ export class TelegramPager {
       blockerId: input.blockerId ?? null,
       body: {
         text: pagerText(message),
-        keyboard: inlineKeyboard(input.actions, input.job.correlationId, projectUrl),
+        keyboard:
+          input.output.notice === undefined
+            ? inlineKeyboard(input.actions, input.job.correlationId, projectUrl)
+            : noticeKeyboard(input.output.notice.link),
         // An `important` result may arrive at 3am. Anything short of urgent
         // goes in silently: it is on the phone when he looks, without the
         // phone asking to be looked at.

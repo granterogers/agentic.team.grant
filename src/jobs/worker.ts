@@ -193,6 +193,20 @@ export interface HandlerOutput {
    */
   readonly topic?: string
   /**
+   * An operational notice rather than an answer (#413): something that needs the person's attention, such as a service
+   * that has to be reconnected. The Telegram pager shows it as a plain heading and short paragraphs, with a real button
+   * into Team HQ when there is somewhere to go, and none of an answer's furniture: no provenance line, no Useful / Not
+   * useful (there is nothing to rate), no Mute (the incident layer already decides when to remind).
+   *
+   * `link.url` comes from `teamHqUrl` (src/incidents/link.ts), the one place that puts the deployment's own base in front
+   * of a path inside Team HQ. A handler that wants a button asks it first and words the message to match: a notice that
+   * says "tap the button" with no button is the defect this field exists to prevent.
+   */
+  readonly notice?: {
+    readonly heading: string
+    readonly link?: { readonly label: string; readonly url: string }
+  }
+  /**
    * Everything the answer could legitimately have taken a SPECIFIC from — the
    * instruction, the conversation replayed into the prompt, and the documents
    * retrieved for it.

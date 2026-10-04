@@ -440,6 +440,11 @@
         }
       ]
     },
+    "incidents": {
+      "class": "OFFICE_CARRIER",
+      "why": "An incident is an office's problem with a service; it has no parent row that decides its owner, so it records the owner itself.",
+      "cross": []
+    },
     "inference_usage": {
       "class": "OFFICE_CARRIER",
       "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",

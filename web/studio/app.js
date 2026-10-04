@@ -12999,11 +12999,35 @@ function cameBackFromGoogle() {
     return false
   }
   const outcome = said.get('google')
-  if (outcome === null) return false
+  if (outcome === null) {
+    /*
+      A link from a message (#413): "Reconnect Google" on a Telegram notice opens Settings on the tab it names.
+
+      Navigation and nothing else: it says WHERE to open, never what to do there, and only three tabs may be named.
+      Anything else is ignored. Signing in is still required to see anything on the tab, so a link does not widen what
+      anybody can read.
+    */
+    const wanted = said.get('settings')
+    if (wanted === null || !['connections', 'channels', 'health'].includes(wanted)) return false
+    state.setting = wanted
+    // On a phone a section replaces the menu: land on the section itself, not on the list of sections.
+    state.settingsPane = 'detail'
+    try {
+      const clean = new URL(location.href)
+      clean.searchParams.delete('settings')
+      history.replaceState({}, '', clean.pathname + clean.search)
+    } catch {
+      /* A page opened from a file has no history to write to. */
+    }
+    // Not true: the caller opens the sheet only for a signed-in person (see where it is opened).
+    return 'link'
+  }
 
   const withWhat = (said.get('with') ?? '').split(',').filter((x) => x !== '')
   const why = (said.get('why') ?? '').slice(0, 160)
   state.setting = 'connections'
+  // The banner below is part of the Connections section, so on a phone the section has to be the thing that opens.
+  state.settingsPane = 'detail'
   googleSaid =
     outcome === 'connected'
       ? {
@@ -13665,7 +13689,12 @@ render()
   Settings is a page rather than a route (#158), so it opens after the paint
   rather than through the router — the sheet reads a shell that has to exist.
 */
-if (backFromGoogle) {
+/*
+  A link from a message opens Settings only for somebody who is signed in (#413). Signed out, Settings would be drawn over
+  the page's invented example office, which is not somewhere to reconnect anything; the person gets the ordinary
+  signed-out page and its way in instead. The Google callback has always opened it, and still does.
+*/
+if (backFromGoogle === 'link' ? canWrite() : backFromGoogle) {
   settingsSheet()
   sheet($('#settings'), true)
 }

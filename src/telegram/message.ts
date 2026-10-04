@@ -104,6 +104,11 @@ export interface PagerMessage {
   readonly correlationId: string
   readonly actions: readonly ActionId[]
   readonly projectUrl?: string | null
+  /**
+   * Set for an operational notice (#413): a heading above short paragraphs, and none of an answer's furniture.
+   * See `HandlerOutput.notice`.
+   */
+  readonly notice?: { readonly heading: string }
 }
 
 /**
@@ -198,6 +203,17 @@ export function inlineKeyboard(
     rows.push(buttons.slice(i, i + BUTTONS_PER_ROW))
   }
   return rows
+}
+
+/**
+ * The keyboard of an operational notice (#413): one URL button when the notice has somewhere to send the person, and no
+ * keyboard at all when it has not. A URL button sends no callback, so nothing here needs a handler on the way back.
+ */
+export function noticeKeyboard(
+  link: { readonly label: string; readonly url: string } | undefined,
+): readonly (readonly InlineButton[])[] {
+  if (link === undefined) return []
+  return [[{ text: link.label.slice(0, BUTTON_TEXT_LIMIT), url: link.url }]]
 }
 
 /**
@@ -349,7 +365,8 @@ export function pagerText(message: PagerMessage): string {
   // see it twice." (#208)
   if (project !== null) parts.push(`${project.mark} <b>${escapeHtml(project.label)}</b>`)
 
-  const warnedUnreviewed = message.metadata !== null && !message.metadata.reviewed
+  const warnedUnreviewed =
+    message.notice === undefined && message.metadata !== null && !message.metadata.reviewed
   if (warnedUnreviewed) {
     parts.push('⚠️ <b>Not reviewed</b> — do not rely on this yet')
   }
@@ -378,6 +395,28 @@ export function pagerText(message: PagerMessage): string {
     could resolve still wrote a word, and removing words from an answer is a
     worse failure than leaving one oddly punctuated.
   */
+  if (message.notice !== undefined) {
+    /*
+      A NOTICE IS NOT AN ANSWER (#413).
+
+      A heading, then the body with its paragraph breaks kept and its `*bold*` markers turned into tags. No provenance
+      line (a notice claims nothing to be confident about), no unreviewed warning (nothing was drafted) and no body
+      trimming that could cut the one sentence saying what to do: a notice is composed in code, to fit.
+    */
+    parts.push(`<b>${escapeHtml(message.notice.heading)}</b>`)
+    parts.push(
+      message.body
+        .trim()
+        .split(/\n{2,}/)
+        .map((paragraph) => paragraph.split('\n').map(slackEmphasisToHtml).join('\n'))
+        .join('\n\n'),
+    )
+    const noticeText = parts.join('\n\n')
+    return noticeText.length <= TELEGRAM_MAX_TEXT
+      ? noticeText
+      : `${noticeText.slice(0, TELEGRAM_MAX_TEXT - 1)}…`
+  }
+
   parts.push(slackEmojiToUnicode(escapeHtml(trimForPager(message.body)), 'keep'))
 
   if (message.metadata !== null) {

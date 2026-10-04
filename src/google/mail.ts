@@ -42,7 +42,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { soleOffice } from '../db/office.ts'
 import type { OfficeId } from '../office/context.ts'
 import { count } from '../text/plain.ts'
-import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
+import { type GoogleAccess, type GoogleProblem, googleAccess, recordGoogleHealth } from './auth.ts'
 import { heldBody, type Part } from './body.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -52,6 +52,8 @@ const nullable = (v: string | null | undefined): string =>
 /** Matches `CalendarOutcome` so the two handlers can report identically. */
 export interface MailOutcome {
   readonly ok: boolean
+  /** Set when `ok` is false: what kind of problem, for the incident layer (#413). */
+  readonly problem?: GoogleProblem
   readonly note: string
   readonly seen: number
   readonly stored: number
@@ -123,12 +125,15 @@ export async function refreshMail(
 
   const access = await googleAccess(db, fetchImpl)
   await recordGoogleHealth(db, access, office)
-  if (!access.ok) return { ok: false, note: access.reason, seen: 0, stored: 0, removed: 0 }
+  if (!access.ok) {
+    return { ok: false, problem: access.code, note: access.reason, seen: 0, stored: 0, removed: 0 }
+  }
 
   const granted = access as GoogleAccess
   if (!granted.scopes.some((s) => s.includes('gmail.readonly') || s.includes('gmail.modify'))) {
     return {
       ok: false,
+      problem: 'missing_scope',
       // A scope unchecked on the consent screen. Named, because the alternative
       // symptom is a 403 from an endpoint that looks fine.
       note: `the connection has no Gmail read scope — granted: ${granted.scopes.join(' ') || 'none'}`,
@@ -161,6 +166,7 @@ export async function refreshMail(
     if (body.error !== undefined) {
       return {
         ok: false,
+        problem: 'api_error',
         note: `Google refused: ${String(body.error.code ?? '')} ${String(body.error.message ?? '')}`.trim(),
         seen: ids.length,
         stored: 0,

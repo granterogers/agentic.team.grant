@@ -147,7 +147,11 @@ export async function cases(c: Ctx): Promise<void> {
     await c.db.execute(
       `delete from public.connection_health where service = 'google_calendar' and credential = 'oauth_client'`,
     )
-    await recordGoogleHealth(c.db, { ok: false, reason: `${c.canary.B} is not connected` }, OB)
+    await recordGoogleHealth(
+      c.db,
+      { ok: false, code: 'not_connected', reason: `${c.canary.B} is not connected` },
+      OB,
+    )
     const health = (
       await rows(
         `select office_id, owner, detail from public.connection_health where service = 'google_calendar' and credential = 'oauth_client'`,
