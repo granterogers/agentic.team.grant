@@ -6,6 +6,8 @@ Evidence first. Every time is UTC. Everything below was read from the provider's
 
 At about 19:30 the database host became starved. From then on every statement, including trivial ones, took seconds to minutes, new connections could not finish their handshake inside 15 s, auth and the worker's edge function timed out, and it stayed that way for at least five hours **with almost no traffic**. It was not connection-slot exhaustion (no slot error in the whole window), not a pathological query (the slowest statements are one-line functions), and not worker-deployment amplification (the failures began before the deployments that were suspected, and the worker received only 4 to 9 calls per half hour during the degradation, against 30 normally). The pattern is a database host out of CPU and/or I/O budget, probably burst-credit depletion on a very small instance, triggered by a heavy half hour of my own acceptance traffic and then kept down by the standing background load. That is a hypothesis consistent with every measurement; the one measurement that would prove it (the host's CPU and I/O-budget graphs) is not obtainable from here.
 
+> **Update, 4 October 06:50 UTC: the working conclusion above is revised by section "Programmatic evidence" below.** The platform had recovered by then (everything ok, queue empty), the metrics scrape answered, and it shows the host has **434 MiB of RAM, is permanently swapping, and its CPU steal is negligible**. That contradicts CPU-credit depletion as the mechanism and points at chronic memory starvation and paging I/O. Read that section before the classification table; the table keeps its original rows and gets a revised verdict there.
+
 ## Timeline
 
 | Time | Observation | Source |
@@ -66,6 +68,60 @@ None found in the incident itself. Two things worth backlog attention, neither p
 ## What is still uncertain
 
 The host's CPU, memory and disk-I/O history; the compute size; why the host has not recovered after more than five hours (credit refill versus a stuck process versus a provider fault). The two things to read are in the Supabase dashboard: Reports, Database (CPU, memory, disk IOPS and throughput, "Disk IO budget" if shown) for 18:30 to now, and Settings, Compute and Disk. If the credit balance is empty, the fix is capacity (a larger compute size) or removing the idle load, not code.
+
+## Programmatic evidence (added 4 October 06:50 to 07:15 UTC)
+
+### What the API can and cannot give
+
+| Item | Status | How |
+|---|---|---|
+| Compute size | **partly**: no compute add-on is selected (`billing/addons` `selected_addons: []`), so the project is on the plan's included default. The default's name and RAM come from the host itself (`MemTotal` 434 MiB, `max_connections` 60 = a nano/micro-class host), not from a field that says "Nano" | `GET /billing/addons`, metrics scrape |
+| Disk type, size, IOPS, throughput | **available** | `GET /config/disk`: gp3, 2 GB, 3,000 IOPS, 125 MiB/s (volume level). `GET /config/disk/util`: 676 MB used of 1.93 GiB. Autoscale: not configured |
+| Instance-level disk bandwidth (the burst limit that bites on small hosts) | **not exposed per project**; only the published per-size table is in `billing/addons` for sizes from Micro up (Micro: baseline 87 MB/s, burst 2,085) and the default size is not in that list | |
+| CPU by mode (user, system, iowait, steal) | **available as cumulative counters since boot (2 September) and as a live scrape**, **not as history** | `GET /analytics/endpoints/metrics` (Prometheus text, about 860 KB, 318 series names, refreshed about once a minute, answered 500 and 504 during the incident and 200 once healthy) |
+| Memory and swap | **available** (live and cumulative), not history | same |
+| Disk reads, writes, IOPS, IO time per volume | **available as cumulative counters**, not history | same |
+| Connections, WAL, checkpoints, temp files, database size | **available** (live and cumulative) | same, plus `pg_stat_*` |
+| Request volumes (auth, REST, storage, realtime) | **available hourly** for 1 day | `usage.api-counts?interval=1day` |
+| Postgres, pgbouncer, Auth, Storage, gateway, function logs for a window | **available** | `/analytics/endpoints/logs` (ClickHouse SQL, `from logs where source = ...`, throttled to about one query a minute, 24 h window) |
+| Per-minute history of CPU, memory, swap, disk IO, IOPS or balance | **not available to us**; the endpoint is a point-in-time scrape and there is no historical metrics API | dashboard Reports only |
+| Burst / credit balance (CPU credits, EBS burst balance) | **not exposed anywhere via API**; Supabase's own documentation says the underlying balance is not exported | dashboard at most, possibly not at all |
+
+### What the live scrape shows (at 06:53 and 06:55, healthy)
+
+* **Memory.** `MemTotal` **434 MiB**, `MemAvailable` 106 to 147 MiB, `MemFree` 11 MiB, **swap 1,024 MiB of which 474 to 532 MiB is in use**. `shared_buffers` is 224 MB (more than half of RAM), `work_mem` 2.1 MB, `temp_file_limit` unlimited.
+* **Swap and paging, cumulative since boot (31 days).** Swapped in 161.7 million pages (about 617 GiB), swapped out 136.1 million pages (about 519 GiB), 281.6 million major page faults. No OOM kills.
+* **The same, right now, while idle and healthy** (70 s between two scrapes): swap-in 48 pages/s, swap-out 19 pages/s, 145 major faults/s, the root volume (`nvme0n1`) reading 2.6 MB/s at 98 reads/s, CPU 96 % idle. The host pages continuously even when nothing is happening.
+* **CPU, cumulative.** user 1.6 %, system 1.2 %, **iowait 4.68 %**, **steal 0.03 % (1,480 vCPU-seconds in 31 days)**, idle 92.5 %. Two vCPUs. Load average 0.17.
+* **Disk, cumulative.** Root volume `nvme0n1`: 5.11 TB read, 0.61 TB written, 173,980 s of I/O time. Data volume `nvme1n1`: 0.66 TB read, 0.44 TB written. **Temp files account for 381 GB of the data volume's 442 GB written: 86 % of all write traffic to the data volume in a month is sort and hash spill** (`work_mem` 2.1 MB, `log_temp_files` off, so nothing says which statements).
+* **Checkpoints.** 9,061 timed, 37 requested; 128 MB WAL; database size 346 MB. Not a WAL problem.
+* **Connections.** 4 to 17 backends of 57 usable throughout.
+
+### Request volumes and gateway errors
+
+Hourly gateway requests (auth / REST / storage): 09:00 3,400 / 10,581 / 623; 13:00 2,512 / 7,718 / 1,305; 17:00 717 / 2,257 / 67; 18:00 985 / 3,011 / 311; **19:00 1,318 / 3,864 / 564**; 20:00 67 / 23 / 8; nothing logged in the hours after. By 30 minutes (`edge_logs`): 5xx first appear in the 19:00 bucket (13 REST), then 19:30 (34 auth, 16 REST), 20:00 (22 auth, 19 REST), 20:30 (5 auth). The failures follow the heaviest recent period but that period was **not** the day's heaviest: 09:00 and 13:00 carried two to three times the volume with no incident.
+
+### Verdict on the burst-credit hypothesis
+
+*"Acceptance traffic exhausted CPU and/or disk burst capacity, after which baseline/background work prevented rapid recovery."*
+
+* **CPU-credit depletion: weakened.** CPU steal over the whole month is 1,480 vCPU-seconds. A five-hour throttle of two vCPUs to a small baseline would show tens of thousands of stolen seconds (5 h x 2 vCPU = 36,000 vCPU-s at full demand). The month's total is a twentieth of that. *Assumption stated:* throttling of a burstable instance is reported to the guest as steal. If it is not, this argument fails and the CPU case is open again, because the counters are cumulative and cannot isolate the incident.
+* **Single acceptance spike as the trigger: weakened.** Two earlier hours that day were heavier and passed.
+* **Memory starvation and paging: strengthened, and it is chronic.** A 434 MiB host with a 224 MB shared-buffer pool, 530 MiB in swap, and continuous swap-in and major faults even at rest has almost no headroom. The measurements during the incident fit that mechanism: a pure-CPU count taking 7 s and 476 ms of planning (the backend's own pages and the catalogs being faulted in from disk), index scans at 7 ms per heap fetch, connection handshakes exceeding 15 s. Anything that pushes resident memory up (more concurrent backends and PostgREST and pgbouncer work from a burst of signed-in sessions, a large sort, an autovacuum) can tip it into a swap storm, and the paging reads compete with the data volume on the same instance's disk bandwidth.
+* **Disk-bandwidth burst exhaustion on top of that: still open and not testable from here.** The volume is gp3 3,000 IOPS / 125 MiB/s, which is not a burst volume, but small hosts have an instance-level EBS baseline well below that with a time-limited burst (Supabase's published table; not exposed per project). The only series that would show it, per-minute disk throughput and IOPS against the instance limit, is not available through any API.
+* **Why it persisted for hours with no traffic: unexplained.** A swap storm that sustains itself (a hot working set larger than RAM) is consistent; so is an I/O budget that refills slowly. The recovery by about 06:50 with an empty queue is consistent with both.
+
+**Revised working conclusion: chronic memory starvation on a 0.5 GB host (swap thrash and paging I/O), tipped over by the heavy period at about 19:00, with disk-bandwidth burst exhaustion possible and unproven. CPU-credit depletion is not supported. Credit depletion of any kind is not proven.** Confidence: medium that memory pressure is the mechanism, low on the trigger.
+
+### What still needs a person, and exactly what
+
+Only the history, which no API returns. In the Supabase dashboard, Reports, Database, for 18:30 UTC on 3 October to 03:00 on 4 October (retention depends on the plan; the dashboard shows the window it keeps), read **memory used including swap**, **swap in/out**, and **disk IO consumption or throughput against the limit**, plus the **compute size** shown in Settings, Compute and Disk. Nothing else is needed from a person. If the memory chart shows the ceiling at 19:00 and swap climbing, the diagnosis is confirmed and the fix is memory (a larger compute size, or `shared_buffers` and `work_mem` and the idle background load brought down), not code.
+
+### Cheap application-side levers this evidence suggests (none applied; not deployed)
+
+1. Reduce standing background work: every minute the worker pass and five cron statements; most find nothing.
+2. Find and fix the statements that spill 12 GB a day (`log_temp_files` is off, so first turn it on); each `work_mem`-sized spill is write traffic on the data volume.
+3. The `app.model_order` and dequeue statements read the most from disk per call and run every pass.
 
 ## Tooling
 
