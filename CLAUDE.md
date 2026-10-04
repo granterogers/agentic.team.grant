@@ -4526,6 +4526,29 @@ Each of these cost real time. They are here so they cost it once.
   attribute is not a reason to hide.
 - **Disclosed process slip, this window:** one more `sed -i … /dev/null` was typed by reflex (targets no repository file; sed
   refused it; nothing changed). Every repository edit went through Edit or Write.
+- **"BLOCKED by the platform" had never been attempted, and a privilege check is not an attempt.** `log_temp_files` was recorded as
+  unsettable ("ask Supabase support") on the strength of `has_parameter_privilege(…, 'SET')` returning false and a config `GET` returning
+  `{}`. Supabase's `supautils` extension lets the `postgres` role set a listed set of superuser parameters by intercepting the `SET`, so the
+  privilege check cannot see it, and an empty `GET` only says no overrides exist. The current docs list the parameter as "CLI + SQL, no
+  restart" and the API spec accepts it. The recommended 10 MB threshold was also wrong: the average temp file is 5.5 MB, so it would have
+  logged almost none. Fifth instance of a documented excuse that was a claim about the product nobody ran. Read the vendor's CURRENT docs and
+  OpenAPI spec before writing "cannot", and try the call (dry-run first) before recording a block.
+- **A cumulative counter cannot say when a state began, and "the average equals the rate now" proves nothing about the past.** Month-average
+  swap-in matching the idle swap-in rate was read as "paging predates multi-user". A quiet first half and a heavy second half average the same,
+  and the swap-OUT average was 2.7 times the idle rate, which says bursts. Withdrawn in `supabase-forensics-2026-10-04.md`. A rate needs two
+  readings a known time apart; "since when" needs a history, and the only history of the host is the dashboard's 24-hour chart.
+- **A test written for the helper found the helper's bug on its first run.** `qualify()` rewrote `from pg_catalog.pg_locks` to
+  `from pg_catalog.pg_catalog.pg_locks`, because `pg_catalog` itself matched `pg_\w+`. The first draft of the tool would have sent that to the
+  read-only endpoint during the one healthy window. Test the pure parts of a capture tool offline, including "already qualified".
+- **Per-unit cost A/B on two replica generations is cheap and answers "did we make it heavier" without production.** Same Postgres, same code
+  path, the schema before and after (`scripts/forensics/replica-generations.sh`), the real worker pass and a job's real life: +10% statements,
+  +24% buffer reads, +19% WAL, +5% backend memory. It cannot say how a 434 MiB host behaves, only how much WORK a unit of the product is, and the
+  repository's own incident notes should say which of the two a number is.
+- **Disclosed process slip, this window (production contact):** `forensics:capture --control-plane` was run once to test argument handling with the
+  access token in the environment, so five Management API GETs reached production at 21:18 to 21:19 UTC on 4 October while the outage rule
+  said not to poll. No SQL, no write, no retry; it produced real evidence (all four services UNHEALTHY, read-only mode off, the metrics scrape
+  500 after 10.4 s). Test a tool's argument handling with the token unset, which is what the other check in the same command did. One more
+  `sed -i … /dev/null` was typed by reflex and refused.
 
 ---
 

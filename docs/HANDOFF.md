@@ -8,7 +8,7 @@
 > provenance is the system office, never the operator; an operator sender may not address another office's chat or channel
 > (`verify:delivery-office`). **verify:talk** now drives Team HQ with SIMULATED audio (voice note and Talk to Team real-audio
 > acceptance remain MANUAL). **#414:** `verify:history` and `verify:connectors` converted (test office + Sample rollbacks);
-> `gate:safe` has three parts. **Temp files:** the producer is NOT identified; `log_temp_files` is not settable by our role
+> `gate:safe` has three parts. **Temp files:** the producer is NOT identified; `log_temp_files` was reported not settable by our role (CORRECTED: never tried; the docs and API spec say it is configurable, see `docs/ops/supabase-forensics-2026-10-04.md`)
 > (`docs/ops/supabase-efficiency-2026-10-04.md`). Old `npm run gate` still PARTIAL.
 >
 > ## 2026-10-04 - P4 CONTINUATION (branch `claude/multi-user-p4`): incidents, project context, learning, labels, safe gate

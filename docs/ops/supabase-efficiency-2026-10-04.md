@@ -65,6 +65,11 @@ running; worker heartbeat true, queue empty; no incident in the last 30 minutes.
 383,528,486,989 over 69,295 files. This is a single reading with no matching earlier reading taken at a known instant, so
 it states no rate; it only adds a point for whoever turns on `log_temp_files` and compares.
 
+> **Correction, 4 October (late): the "BLOCKED by the platform" finding below was not tested and is withdrawn.** It rested on a privilege check
+> and an empty GET; neither tried the change, and the current Supabase docs and API spec say `log_temp_files` is configurable (CLI + SQL, no
+> restart). Whether this project's token may set it is unproven. Also withdrawn: the 10 MB threshold (the average temp file is 5.5 MB; use `0`).
+> See `supabase-forensics-2026-10-04.md` section 1. The measurements below stand.
+
 ## TEMP-FILE ATTRIBUTION ATTEMPT (4 October, second run) - the producer is NOT identified
 
 **MEASURED**

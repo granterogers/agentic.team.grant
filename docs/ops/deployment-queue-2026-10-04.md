@@ -45,10 +45,21 @@ Applied already (production): through `0891` (761 migrations). `0888` chunks, `0
 
 ## Supabase temp files (owner action)
 
-`log_temp_files` is superuser-context; this project's role and the Management API cannot set it. Ask Supabase support to set
-`log_temp_files = 10240` for about 24 hours, for ATTRIBUTION only. Do not raise `work_mem`, resize compute or disk, change
-connection limits or disable duties without evidence. Status of the producer: UNKNOWN (about 1 GB of 365 GB is attributable to
-tracked statements: MEASURED; the remainder: UNKNOWN).
+**Corrected 4 October (late):** the earlier line here said the role and the Management API cannot set `log_temp_files` and that support must.
+That was never tried. The current Supabase docs list it as "CLI + SQL, no restart" and the API spec accepts it (`docs/ops/supabase-forensics-2026-10-04.md`
+section 1). It is still a configuration change, so it needs Grant's approval, and the value should be **`0`** (log every file; the average temp
+file is 5.5 MB, so 10 MB would miss most). Prepared: `npm run forensics:temp-logging` (dry run by default; `--apply` needs
+`GRANT_APPROVED_DB_CONFIG=log_temp_files` and a healthy platform). Do not raise `work_mem`, resize compute or disk, change connection limits or
+disable duties without evidence. Status of the producer: UNKNOWN (about 1 GB of 384 GB is attributable to tracked statements: MEASURED; the
+remainder: UNKNOWN).
+
+## Forensic capture around the deployment (read-only; protocol in `supabase-forensics-2026-10-04.md` section 5)
+
+* **Now, a person, before about 15:00 UTC on 5 October:** screenshot the dashboard's Observability, Database charts (memory with swap, CPU, disk IOPS,
+  Disk IO % consumed, connections) for the last 24 hours. They are the only per-minute history and expire.
+* **Each check while unhealthy:** `npm run forensics:capture -- --control-plane --gap=0`; on the first check also `-- --logs`. No database statement.
+* **At recovery, before step 3 below:** `forensics:capture -- --control-plane --gap=60` then `-- --db` (refuses by itself unless the host answers fast).
+  Record `temp_bytes`, the per-table sizes and the active-office count it prints.
 
 ## Still MANUAL, never to be claimed from automation
 
