@@ -56,6 +56,14 @@ passes `answerEnvelope: true` for a listed office. **Retry ceiling:** the router
 turn stops with a named error once four `malformed_response` rows are recorded against its correlation, so a job retrying
 four times cannot become twelve calls; the existing out-of-attempts path tells the person (#211).
 
+**Wiring proof (control with a sabotage):** the Sample's F2 benchmark question through the real handler sent a prompt of 2,952
+tokens with the Sample listed and 2,889 with the list emptied: the 63-token difference is the envelope instruction, so the
+flag reaches the real call and the setting is what decides it. Restored and read back (`true` for the Sample, `false` for Grant).
+The reply was correct both times (December closing 21,700), answered by `openai/gpt-oss-120b`, 1 model call each.
+
+**Verdict: PROVEN FOR SAMPLE (wiring, no extra attempts, no leak) / PARTIAL for rollout.** Not shown: the envelope preventing a
+leak (none occurs in 36 + 2 calls), fallback behaviour inside a real long prompt, or more than n=12 per fallback model.
+
 ## What this does NOT show
 
 * **Nothing about the leak itself.** The leak is rare (0 of 513 real model-written outputs open like working-out; one live
