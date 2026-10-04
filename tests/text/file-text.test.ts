@@ -312,3 +312,89 @@ describe('PDF', () => {
     expect(r.text).toBeNull()
   })
 })
+
+/** ASCII85, written independently of the reader: 4 bytes -> 5 characters, a short tail of n bytes -> n + 1 characters. */
+function toAscii85(data: Uint8Array): string {
+  let out = ''
+  for (let i = 0; i < data.length; i += 4) {
+    const n = Math.min(4, data.length - i)
+    let v = 0
+    for (let k = 0; k < 4; k += 1) v = v * 256 + (k < n ? (data[i + k] as number) : 0)
+    const chars: string[] = []
+    for (let k = 0; k < 5; k += 1) {
+      chars.unshift(String.fromCharCode((v % 85) + 33))
+      v = Math.floor(v / 85)
+    }
+    out += chars.slice(0, n + 1).join('')
+  }
+  return `${out}~>`
+}
+
+describe('the stream filters real generators chain (a real ReportLab PDF read as "a scan" until this)', () => {
+  const TEXT = 'BT /F1 12 Tf 72 700 Td (The December balance is 41,250 pounds.) Tj ET'
+  const page = (stream: string): Uint8Array =>
+    pdf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+      stream,
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    ])
+
+  it('ASCII85 then Flate, the ReportLab default, is read', async () => {
+    const body = toAscii85(deflateSync(Buffer.from(TEXT)))
+    const r = await fileText(
+      page(streamObj('/Filter [ /ASCII85Decode /FlateDecode ]', body)),
+      'application/pdf',
+      'a.pdf',
+    )
+    expect(r.text).toContain('December balance is 41,250 pounds')
+  })
+
+  it('ASCIIHex then Flate, and RunLength alone, are read too', async () => {
+    const hex = `${Buffer.from(deflateSync(Buffer.from(TEXT))).toString('hex')}>`
+    const a = await fileText(
+      page(streamObj('/Filter [/ASCIIHexDecode /FlateDecode]', hex)),
+      'application/pdf',
+      'a.pdf',
+    )
+    expect(a.text).toContain('December balance')
+    // literal run-length: a length byte n (0-127) then n + 1 bytes, terminated by 128
+    const bytes = [...TEXT].map((c) => c.charCodeAt(0))
+    const rl: number[] = []
+    for (let i = 0; i < bytes.length; i += 128) {
+      const chunk = bytes.slice(i, i + 128)
+      rl.push(chunk.length - 1, ...chunk)
+    }
+    rl.push(128)
+    const b = await fileText(
+      page(streamObj('/Filter /RunLengthDecode', String.fromCharCode(...rl))),
+      'application/pdf',
+      'a.pdf',
+    )
+    expect(b.text).toContain('December balance')
+  })
+
+  it('a picture filter in the chain is still declined, never half-read into garbage', async () => {
+    const r = await fileText(
+      page(streamObj('/Filter [/ASCII85Decode /DCTDecode]', toAscii85(Buffer.from(TEXT)))),
+      'application/pdf',
+      'a.pdf',
+    )
+    expect(r.text).toBeNull()
+  })
+
+  it('ASCII85 with a short tail decodes every byte (the length arithmetic is the usual defect)', async () => {
+    for (const n of [1, 2, 3, 4, 5, 6, 7]) {
+      const text = `BT /F1 12 Tf (The quarterly balance is high${'!'.repeat(n)} and the forecast is steady.) Tj ET`
+      const r = await fileText(
+        page(streamObj('/Filter /ASCII85Decode', toAscii85(latin(text)))),
+        'application/pdf',
+        'a.pdf',
+      )
+      expect(r.text ?? '', `tail ${String(n)}`).toContain(
+        `high${'!'.repeat(n)} and the forecast is steady.`,
+      )
+    }
+  })
+})

@@ -4488,6 +4488,17 @@ Each of these cost real time. They are here so they cost it once.
   was read back and linted. One `sed -i` was pointed at `/dev/null` (a no-op). One `pkill -f phone-header` matched the shell that
   ran it and killed it (exit 144), and one command chained two long runs past the ten-minute ceiling and was moved to the
   background by the harness. The reflex is the trap: use Edit, and one long command per call.
+- **A reader that treats "I cannot decode this" as "there is nothing here" tells a person their file is a scan when it is not.**
+  `src/text/file-text.ts` was proved on PDFs its own author built and on one office-made file, then run over four REAL ones
+  (`npm run verify:file-text-corpus`, `pdftotext` as ground truth): all four ReportLab files, 35 to 183 words each, came back
+  *"this PDF has no text in it (it may be a scan)"*. ReportLab's default is `[ /ASCII85Decode /FlateDecode ]` and the reader
+  undid only a lone Flate, so any chain fell through to `null`, which the caller words as an absence. 0 of 4 became 4 of 4 at 100%
+  recall (and the fifth, a Type0 font file, stays at 95%). The honest-decline path is right for a picture filter (DCT, CCITT, JBIG2,
+  JPX, LZW stay declined, with a control) and wrong for a text filter nobody wrote. Third instance in this file of a synthetic
+  corpus agreeing with its author: **run a reader over files the author did not make before believing its recall.** And
+  the declined count is printed, never folded into the pass: a corpus where everything declines is "0 failed" and means nothing.
+- **Disclosed process slip, this window:** `scripts/verify/file-text-corpus.ts` was first written with a `cat > file <<EOF` heredoc
+  instead of the Write tool, against the File editing rule; the file was then edited with Edit and formatted with biome.
 
 ---
 

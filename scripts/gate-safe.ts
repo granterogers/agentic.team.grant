@@ -74,6 +74,10 @@ const LOCAL: readonly Step[] = [
     why: 'the Your Slack card in every state and both presses, against a fake gateway (ADR-0065)',
   },
   {
+    name: 'verify:file-text-corpus',
+    why: 'the file reader over REAL PDFs against pdftotext: 90% word recall, and a decline is reported, never counted as a pass (#419)',
+  },
+  {
     name: 'verify:phone-header',
     why: 'the phone header keeps the project’s name at 320, 360, 390 and 430, and every control is 44px (P5)',
   },

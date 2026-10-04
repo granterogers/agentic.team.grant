@@ -293,6 +293,7 @@
     "sample:channel-link": "tsx scripts/sample/channel-link-ui.ts",
     "verify:slack-link": "tsx scripts/verify/slack-link.ts",
     "verify:phone-header": "tsx scripts/verify/phone-header-local.ts",
+    "verify:file-text-corpus": "tsx scripts/verify/file-text-corpus.ts",
     "verify:slack-card": "tsx scripts/p5/slack-link-card.ts",
     "verify:dialogs": "tsx scripts/verify/dialogs-local.ts",
     "sample:documents": "tsx scripts/sample/documents-live.ts",

@@ -266,15 +266,84 @@ async function decodeStream(dict: string, raw: Uint8Array): Promise<Uint8Array |
       /\/(FlateDecode|Fl|ASCIIHexDecode|ASCII85Decode|LZWDecode|DCTDecode|CCITTFaxDecode|JBIG2Decode|JPXDecode|RunLengthDecode)\b/g,
     ),
   ].map((m) => m[1])
-  if (filters.length === 0) return raw
-  if (filters.length === 1 && (filters[0] === 'FlateDecode' || filters[0] === 'Fl')) {
+  // Applied in the order the dictionary lists them: ReportLab writes [ /ASCII85Decode /FlateDecode ], which is the commonest
+  // chain on the web and was read as "no text" (a scan) until a real file said otherwise.
+  let data = raw
+  for (const f of filters) {
     try {
-      return await inflate(raw, 'deflate')
+      if (f === 'FlateDecode' || f === 'Fl') data = await inflate(data, 'deflate')
+      else if (f === 'ASCII85Decode') data = ascii85(data)
+      else if (f === 'ASCIIHexDecode') data = asciiHex(data)
+      else if (f === 'RunLengthDecode') data = runLength(data)
+      else return null // a picture or an LZW stream: nothing here this reader can undo
     } catch {
       return null
     }
   }
-  return null
+  return data
+}
+
+function ascii85(data: Uint8Array): Uint8Array {
+  const out: number[] = []
+  const group: number[] = []
+  const flush = (n: number): void => {
+    // a short final group of n characters is padded with 'u' and yields n - 1 bytes
+    while (group.length < 5) group.push(84)
+    let v = 0
+    for (const g of group) v = v * 85 + g
+    const bytes = [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255]
+    out.push(...bytes.slice(0, n - 1))
+    group.length = 0
+  }
+  for (let i = 0; i < data.length; i += 1) {
+    const c = data[i] as number
+    if (c === 0x7e) break // the end marker '~>'
+    if (c <= 32) continue
+    if (c === 0x7a && group.length === 0) {
+      out.push(0, 0, 0, 0)
+      continue
+    }
+    if (c < 33 || c > 117) throw new Error('not ASCII85')
+    group.push(c - 33)
+    if (group.length === 5) flush(5)
+  }
+  if (group.length > 1) flush(group.length)
+  return Uint8Array.from(out)
+}
+
+function asciiHex(data: Uint8Array): Uint8Array {
+  const out: number[] = []
+  let hi = -1
+  for (const c of data) {
+    if (c === 0x3e) break
+    const v =
+      c >= 48 && c <= 57 ? c - 48 : c >= 65 && c <= 70 ? c - 55 : c >= 97 && c <= 102 ? c - 87 : -1
+    if (v < 0) continue
+    if (hi < 0) hi = v
+    else {
+      out.push(hi * 16 + v)
+      hi = -1
+    }
+  }
+  if (hi >= 0) out.push(hi * 16)
+  return Uint8Array.from(out)
+}
+
+function runLength(data: Uint8Array): Uint8Array {
+  const out: number[] = []
+  for (let i = 0; i < data.length; ) {
+    const n = data[i] as number
+    if (n === 128) break
+    if (n < 128) {
+      for (let k = 1; k <= n + 1 && i + k < data.length; k += 1) out.push(data[i + k] as number)
+      i += n + 2
+    } else {
+      const b = data[i + 1] as number
+      for (let k = 0; k < 257 - n; k += 1) out.push(b)
+      i += 2
+    }
+  }
+  return Uint8Array.from(out)
 }
 
 async function pdfObjects(bytes: Uint8Array): Promise<Map<number, PdfObject>> {
