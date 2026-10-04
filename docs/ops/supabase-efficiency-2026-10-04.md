@@ -65,4 +65,34 @@ running; worker heartbeat true, queue empty; no incident in the last 30 minutes.
 383,528,486,989 over 69,295 files. This is a single reading with no matching earlier reading taken at a known instant, so
 it states no rate; it only adds a point for whoever turns on `log_temp_files` and compares.
 
+## TEMP-FILE ATTRIBUTION ATTEMPT (4 October, second run) - the producer is NOT identified
+
+**MEASURED**
+* `log_temp_files` is `-1` (off), context `superuser`. Our role (`postgres`) is not a superuser and
+  `has_parameter_privilege(current_user, 'log_temp_files', 'SET')` is false, so it cannot be enabled with `ALTER ROLE` or
+  `ALTER DATABASE`. `GET /v1/projects/<ref>/config/database/postgres` returns `{}` (platform defaults), and the parameters the
+  Management API documents as settable do not include `log_temp_files`. Nothing was changed. **BLOCKED by the platform.**
+* Statements `pg_stat_statements` still holds account for about 1.1 GB of the 383.7 GB counter (postgres 718 MB, service_role
+  388 MB, everyone else 0). The biggest are a project-usage query of ours (394 MB over 130 calls, about 3 MB a call) and
+  PostgREST's own schema-introspection queries (about 380 MB over 259 calls, about 1.5 MB a call at a 2 MB `work_mem`).
+* `pg_stat_statements_info.dealloc = 100` (cap 5,000 entries): entries have been evicted 100 times since the 2 September
+  reset, and the statistics reset on 2 September while the database counter reset on 25 August, so the first eight days of
+  the build are in the counter and in no statement.
+* A 5.6-minute window (12:16:52 to 12:22:30, with a snapshot of every statement that had spilled before and after): the
+  tracked statements spilled **0 MB** while the counter rose **43.7 MB**. That window contained my own reads of
+  `pg_stat_statements`, one migration and one verification suite, so the idle rate is not read from it.
+
+**INFERRED**
+* The spill is mostly NOT in statements this database keeps statistics for. Candidates, none proven: evicted statement entries
+  (utility and migration statements), the eight unobserved days, platform services using the same instance, and a steady
+  background producer (1 to 3 MB a minute at rest would be 60 to 170 GB over 40 days, the same order as the counter).
+
+**UNKNOWN**
+* Which process writes the idle temp files. Neither `pg_stat_statements` nor `pg_ls_tmpdir()` shows it.
+
+**To inspect next (owner action, because it needs a superuser setting)**: ask Supabase support to set `log_temp_files = 10240`
+(kB, 10 MB) on this project for 24 hours; it logs the statement beside every spill of that size, at a volume bounded by the
+number of large spills (a handful an hour on the evidence above). Then read the Postgres logs endpoint
+(`GET /v1/projects/<ref>/analytics/endpoints/logs`) for "temporary file" lines. Restore to `-1` afterwards.
+
 Not claimed: that the incident is solved, that memory starvation is proven, or that the instance needs resizing.
