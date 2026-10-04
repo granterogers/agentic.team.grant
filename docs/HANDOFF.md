@@ -1142,8 +1142,10 @@ rather than rediscovery.
   upload and says "not searchable" plus why for a scan. Proofs: `scripts/isolated/chunks.ts` (a fact at the END of a 134,000
   character document, foreign office and project canaries, re-index, archive, delete, sabotage controls), `sample:documents`
   (the DEPLOYED gateway). `npm run deploy:hq-api` deploys the gateway alone and uploads `file-text.ts` beside it.
-* Not done: OCR (an image-only PDF stays unsearchable by design), scanned Drive files, a retention sweep of stale passages beyond
-  the one generation kept, Drive/NotebookLM files fetched as bytes are not yet routed through `fileText`.
+* Drive files that arrive as bytes (PDF, Word) are read through `fileText` before they are recorded (`handlers/drive-read.ts`,
+  unit-tested with a red-on-sabotage control; NOT yet driven against a real Drive file).
+* Not done: OCR (an image-only PDF stays unsearchable by design), a retention sweep of stale passages beyond the one
+  generation kept, NotebookLM sources that arrive as bytes.
 
 ## 3 October 2026 (closure) - office-owned tool requests, guard at the executor, Reconnect Google
 
