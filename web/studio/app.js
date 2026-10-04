@@ -6488,8 +6488,27 @@ function connectionsTab() {
   const sectionFor = (title, list, note) =>
     list.length === 0 ? '' : ui.section({ title, note, count: list.length, body: ui.card(list.map((c) => serviceRow(c))) })
 
+  /*
+    ONE GOOGLE, NOT THREE (4 October). Drive, Calendar and Gmail are one
+    connection made by one consent screen, so the page says it once: a single
+    line with a tick for each service that works. The three rows below it remain
+    because each can be in a different state (a revoked scope) and the person
+    needs to see which. NotebookLM is not part of this line: Google offers no
+    API for it, so it is set up separately and is never ticked here.
+  */
+  const googleRows = [...attention, ...working, ...idle].filter((c) => config.routeFor(c.key).family === 'google')
+  const googleLine =
+    googleRows.length === 0
+      ? ''
+      : `<p class="st-desc st-googleline" data-google-summary>
+          <b>Google</b> — ${googleRows.some((c) => config.isConnected(c.state)) ? 'Connected' : 'Not connected'}
+          ${googleRows
+            .map((c) => `<span class="st-gtick${config.isConnected(c.state) ? ' is-on' : ''}">${esc(c.name)} ${config.isConnected(c.state) ? '&#10003;' : '&ndash;'}</span>`)
+            .join(' ')}
+        </p>`
   return [
     said,
+    googleLine,
     sectionFor('Needs attention', attention, 'These were connected and are not working properly.'),
     sectionFor('Connected', working),
     sectionFor('Not connected', idle),
