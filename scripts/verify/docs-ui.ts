@@ -182,6 +182,18 @@ await page.screenshot({ path: '.out/ux-docs-04-viewer.png' })
 await page.goBack()
 await page.waitForTimeout(400)
 
+/* an image previews in place */
+await page.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.bcdocfilter')
+await page.waitForTimeout(400)
+await page.locator('.bcdocs--wall [data-bc-doc]', { hasText: 'The venue' }).locator('[data-bc-doc-open]').click()
+await page.waitForSelector('.bcdocgrid')
+await page.waitForTimeout(800)
+check('an image document previews as the image itself', (await page.locator('.bcdocimage').count()) === 1)
+await page.screenshot({ path: '.out/ux-docs-07-image.png' })
+await page.goBack()
+await page.waitForTimeout(300)
+
 /* --- the office's own list, versions and import (stubbed gateway) -------- */
 const calls: { action?: string; args?: Record<string, unknown>; section?: string }[] = []
 const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } })
