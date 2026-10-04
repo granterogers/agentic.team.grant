@@ -98,6 +98,11 @@ import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
 import { ownTask } from '../agents/own-task.ts'
 import { projectWorkSpine, readProjectWork } from '../agents/project-work.ts'
 import { sentencesOf } from '../agents/sentences.ts'
+import {
+  pointsAtAProject,
+  projectsToAskAbout,
+  whichProjectQuestion,
+} from '../agents/which-project.ts'
 
 const entitled = allEntitled
 
@@ -2471,6 +2476,41 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               last !== undefined && Number(last.stillGoing ?? 0) > 0
                 ? 'Right. I will come back to you when what is still going on has finished.'
                 : 'Right — nothing else from me.',
+            confidence: 'high',
+            evidence: 'verified',
+            sources: [`job:${job.jobId}`],
+            contradictions: null,
+            path: await howComposed(deps.db, job.jobId),
+            model: null,
+          } satisfies HandlerOutput
+        }
+      }
+
+      /*
+        "THIS PROJECT", WITH NO PROJECT TO MEAN (#416).
+
+        Telegram and Slack have no loaded project. A name in the message resolves in `enqueue_inbound` (0880) and a
+        conversation that has been about a project stays on it; what is left is a message that POINTS at a project it has
+        not named, in a conversation with none established. Answering from the general Conversation would be a guess,
+        so this asks. The dashboard never reaches here: its page states the project.
+
+        On HIS words (`cleanedWords`), never a rewrite: a guard that permits or refuses must read what he said (#322).
+      */
+      if (!isBranch && pointsAtAProject(cleanedWords)) {
+        const names = await projectsToAskAbout(
+          deps.db,
+          job.jobId,
+          String(payload.origin_channel ?? ''),
+        )
+        if (names !== null) {
+          // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
+          await deps.db
+            .execute(`
+              update public.jobs set recipient_agent = 'chief-of-staff'
+               where job_id = ${lit(job.jobId)}::uuid`)
+            .catch(() => undefined)
+          return {
+            body: whichProjectQuestion(names),
             confidence: 'high',
             evidence: 'verified',
             sources: [`job:${job.jobId}`],

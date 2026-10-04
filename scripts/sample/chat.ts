@@ -94,14 +94,16 @@ const ask = async (
   )
     await page.locator('[data-bc-dock]').first().click()
   await page.waitForSelector('[data-docksay]', { state: 'visible', timeout: 15000 })
-  // A dock left open from an earlier project files under THAT project (#376). A person standing here who wants to ask about
-  // this project presses the one control that says so; the harness does the same, and the run checks it was offered.
-  const here = page.locator('[data-dock-here]').first()
-  if (await here.isVisible().catch(() => false)) {
-    await here.click()
-    await sleep(1200)
-    movedDock += 1
-  }
+  // The dock IS the page's project (#416): whatever it showed before this page, it shows this one, and nothing is offered
+  // to move it. Recorded here and asserted once at the end, so every turn is checked and not only the last.
+  const shown = String(
+    await page
+      .locator('#dock .dockhead .t-meta')
+      .first()
+      .innerText()
+      .catch(() => ''),
+  ).trim()
+  dockShowed.push({ path, shown, movable: await page.locator('[data-dock-here]').count() })
   // The thread now loads the office's record, so it may already hold earlier days. A reply to THIS message is whatever
   // comes after the last place these words appear, never an index taken before sending.
   const squashed = (v: string): string => v.toLowerCase().replace(/[^a-z0-9]+/g, '')
@@ -256,7 +258,7 @@ const turns: {
   },
 ]
 const asked: string[] = []
-let movedDock = 0
+const dockShowed: { path: string; shown: string; movable: number }[] = []
 try {
   await signIn(studio, page, s)
   const jobsBefore = Number(
@@ -468,12 +470,27 @@ try {
     }
     await page.screenshot({ path: `${out}/turn-${asked.length}.png`, fullPage: false })
   }
-  if (only.length > 1)
+  {
+    const wrong: string[] = []
+    for (const d of dockShowed) {
+      const slug = /^\/p\/([^/]+)/.exec(d.path)?.[1]
+      if (slug === undefined) continue
+      const name = String(
+        (
+          await rows(
+            `select name from public.projects where office_id = '${O}' and slug = '${slug.replace(/'/g, "''")}'`,
+          )
+        )[0]?.name ?? '',
+      )
+      if (d.shown !== name || d.movable !== 0)
+        wrong.push(`${d.path}: shows "${d.shown}", movable ${d.movable}`)
+    }
     check(
-      'a dock left on an earlier project offered a one-press move to the page’s project, and it was used',
-      movedDock >= 1,
-      `${movedDock} move(s)`,
+      'on every project page the dock is that project, with nothing to move (#416)',
+      wrong.length === 0 && dockShowed.length > 0,
+      wrong.length === 0 ? `${dockShowed.length} page(s)` : wrong.join(' | '),
     )
+  }
   const jobsAfter = Number(
     (await rows(`select count(*) n from public.jobs where office_id = '${O}'`))[0]?.n ?? 0,
   )

@@ -1612,6 +1612,11 @@ const dockOpen = () => {
   try { return localStorage.getItem('studio.dock') === 'open' } catch { return false }
 }
 /*
+  SUPERSEDED BY #416 FOR EVERY SCREEN THAT HAS A PROJECT: the dock is the page's project and follows it (see paintDock).
+  The pin below survives only to carry the deliberately chosen general Conversation across repaints on screens with no
+  project loaded, and to keep the voice note and composer in step. What follows is the reasoning of #376, kept because it
+  explains why the pin exists at all.
+
   AN OPEN DOCK IS PINNED TO THE THREAD IT WAS OPENED ON (#376).
 
   It used to take its project from the page on every repaint. So a dock opened
@@ -1647,7 +1652,9 @@ const rememberDock = (open, slug) => {
   try { localStorage.setItem('studio.dock', open ? 'open' : 'shut') } catch { /* not fatal */ }
   if (!open) { pinDock(null); return }
   if (slug !== undefined) pinDock(slug)
-  else if (!was || dockPin() === null) pinDock(state.project ?? 'unnamed')
+  // #416: the page's project, or nothing. Opening the dock on a screen with no project loaded does not pick one for the
+  // person (it used to fall to the general Conversation); the dock asks.
+  else if (!was || dockPin() === null) pinDock(state.view === 'project' ? state.project : null)
 }
 
 /*
@@ -1722,12 +1729,29 @@ function paintDock() {
     project this office does not list (yet: the prototype's projects are
     replaced when the office answers) is neither used nor overwritten.
   */
+  /*
+    THE PAGE'S PROJECT IS THE PROJECT (#416, which replaces the pin of #376).
+
+    The trusted page knows which project is loaded and the team must not guess from the words. So on a project page the
+    dock IS that project, whatever it showed before: navigating to another project moves it, and nothing is ever filed
+    under a project the person is not looking at. The stored pin is kept in step so the voice note and the typed
+    composer, which read the project from the dock's own markup, cannot disagree with it.
+
+    Anywhere else (the portfolio, my tasks, activity) no project is loaded, so none is chosen: the dock asks which one,
+    and the only thing a person can pick that is not a project is the general Conversation, on purpose and by name.
+  */
   const pinned = dockPin()
-  const known = pinned !== null && PROJECTS.some((x) => x.slug === pinned)
-  const slug = known ? pinned : state.project ?? loose?.slug ?? PROJECTS[0]?.slug
-  if (pinned === null && slug) pinDock(slug)
+  const onProject =
+    state.view === 'project' && state.project !== null && PROJECTS.some((x) => x.slug === state.project)
+  const slug = onProject
+    ? state.project
+    : pinned === 'unnamed' && loose !== undefined
+      ? 'unnamed'
+      : null
+  if (onProject && pinned !== slug) pinDock(slug)
   const p = slug ? byId(slug) : null
-  const filed = p !== null && p.slug !== state.project
+  // The dock is never filing somewhere other than the page any more (#416), so there is no "Filed under" state.
+  const filed = false
   /*
     THE DOCK READS THE RECORD TOO, once per project per page load.
 
@@ -1770,25 +1794,10 @@ function paintDock() {
         <b>The team</b>
         <span class="t-meta">${
           p === null
-            ? 'No project yet'
-            : filed
-              ? `Filed under ${esc(p.slug === 'unnamed' ? 'Conversation' : p.name)}`
-              : esc(p.name)
+            ? 'No project open'
+            : esc(p.slug === 'unnamed' ? 'Conversation' : p.name)
         }</span>
       </span>
-      ${
-        /*
-          WHEN THE PAGE IS ONE PROJECT AND THE DOCK IS FILING UNDER ANOTHER, SAY SO AND OFFER THE ONE-PRESS FIX.
-
-          The pin (#376) is right that navigating must not silently move a conversation, and the header says "Filed
-          under". But a person standing in the Finance project who types "summarise the budget documents in this
-          project" is not reading a header: the Sample's chat answered about the Japan trip because the dock had been
-          opened there. The pin stays; the person can move it in one press, on purpose.
-        */
-        filed && state.project && state.project !== 'unnamed' && PROJECTS.some((x) => x.slug === state.project)
-          ? `<button class="btn quiet small" type="button" data-dock-here="${esc(state.project)}">Ask about ${esc(byId(state.project).name)} instead</button>`
-          : ''
-      }
       <button class="closeconv" data-dock-close aria-label="Close the conversation">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -1804,7 +1813,22 @@ function paintDock() {
         own treatment: no box, centred, and the two examples do more work than
         the explanation did.
       */
-      messages.length === 0
+      p === null
+        ? `<div class="dockblank dockpick">
+             <p class="t-meta">The team works inside a project. Open one to talk to the team about it.</p>
+             <div class="dockpicks">${PROJECTS.filter((x) => x.slug !== 'unnamed')
+               .map(
+                 (x) =>
+                   `<button class="btn quiet" type="button" data-dock-pick="${esc(x.slug)}">${esc(x.name)}</button>`,
+               )
+               .join('')}</div>
+             ${
+               loose === undefined
+                 ? ''
+                 : '<p class="t-meta dockwhere">Or <button class="btn quiet small" type="button" data-dock-pick="unnamed">start a general conversation</button>, which belongs to no project.</p>'
+             }
+           </div>`
+        : messages.length === 0
         ? `<div class="dockblank">
              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1817,15 +1841,20 @@ function paintDock() {
            </div>`
         : messages.map(bubble).join('')
     }</div>
-    <form class="composer" data-dockform${bcNote && p ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
+    ${
+      /* No project loaded, so nothing to type to: the picker above is the way in (#416). */
+      p === null
+        ? ''
+        : `<form class="composer" data-dockform${bcNote ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
       <div class="crow">
-        <textarea data-docksay rows="1" placeholder="${p && p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
+        <textarea data-docksay rows="1" placeholder="${p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
                   aria-label="Message the team"></textarea>
         ${bcNote ? bc.dockNoteButton() : ''}
         <button class="btn primary" type="submit">Send</button>
       </div>
       ${bcNote ? '<div class="bcnote" data-bc-notepanel hidden></div>' : ''}
     </form>`
+    }`
   if (keptMic !== null) el.querySelector('[data-bc-note]')?.replaceWith(keptMic)
   if (keptPanel !== null) el.querySelector('[data-bc-notepanel]')?.replaceWith(keptPanel)
   if (bcNote) bcWire.wireDockNote(el)
@@ -1841,11 +1870,33 @@ function paintDock() {
     rememberDock(false)
     paintDock()
   })
-  // The one-press move to the project the page is on (see the header above). It repaints the dock onto that thread.
-  $('[data-dock-here]', el)?.addEventListener('click', (e) => {
-    pinDock(e.currentTarget.dataset.dockHere ?? null)
-    paintDock()
-  })
+  /*
+    Choosing where to talk when no project is loaded (#416).
+
+    A real project is OPENED, the same way the portfolio opens one, and the dock then follows the page. The general
+    Conversation is the one choice that is not a project; it is pinned on purpose and named as what it is.
+  */
+  for (const b of el.querySelectorAll('[data-dock-pick]')) {
+    b.addEventListener('click', () => {
+      const slug = b.dataset.dockPick
+      if (slug === undefined) return
+      if (slug === 'unnamed') {
+        pinDock('unnamed')
+        paintDock()
+        return
+      }
+      carry(null, null, () => {
+        state.project = slug
+        state.view = 'project'
+        state.tab = tabFor(slug)
+        state.attach = null
+        markSeen(slug)
+        render()
+      })
+      pinDock(slug)
+      paintDock()
+    })
+  }
 
   /*
     Retry, in the dock as well (#215).
