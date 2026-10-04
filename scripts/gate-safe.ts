@@ -66,6 +66,10 @@ const LOCAL: readonly Step[] = [
     why: 'the page states its project, and the dock IS the page’s project (#416), against a fake office',
   },
   {
+    name: 'verify:slack-card',
+    why: 'the Your Slack card in every state and both presses, against a fake gateway (ADR-0065)',
+  },
+  {
     name: 'verify:phone-header',
     why: 'the phone header keeps the project’s name at 320, 360, 390 and 430, and every control is 44px (P5)',
   },

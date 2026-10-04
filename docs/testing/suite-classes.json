@@ -18,7 +18,12 @@
     "verify:proposes"
   ],
   "smoke": ["verify:pulse", "verify:wrappers", "verify:schema", "verify:ui", "verify:hq"],
-  "local": ["verify:basecamp-project-turn", "verify:talk", "verify:phone-header"],
+  "local": [
+    "verify:basecamp-project-turn",
+    "verify:talk",
+    "verify:phone-header",
+    "verify:slack-card"
+  ],
   "scripts": {
     "scripts/sample/dock-contract.ts": "sample",
     "scripts/sample/labels.ts": "sample",
@@ -57,6 +62,7 @@
     "scripts/p6/entry-ui.ts": "local",
     "scripts/p5/settings-qa.ts": "local",
     "scripts/p5/google-reconnect.ts": "local",
+    "scripts/p5/slack-link-card.ts": "local",
     "scripts/p5/settings-shots.ts": "local",
     "scripts/p5/signout.ts": "smoke",
     "scripts/p5/person-prompt.ts": "smoke"
