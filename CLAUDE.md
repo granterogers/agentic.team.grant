@@ -4460,6 +4460,17 @@ Each of these cost real time. They are here so they cost it once.
   from `app.slack_install_redeem` did not let one office take another's workspace: the same-office composite key refused it as a
   23503, so the callback answered "failed" instead of "refused". Both are right and the sabotage control asserts BOTH: the answer
   changes (the rule is what said "refused") and the database still holds (the key is the second line).
+- **A status that is derived from one table while the door reads another says "connected" about a person nobody will hear.**
+  The Slack install wrote `slack_installs` and bound the sender, and `can_receive` was true; the events door asked
+  `slack_ingress_ok`, which knew only the deployment's `slack_app_credentials` row, and would have answered "unrecognised
+  workspace" to every message. Both halves right alone, only their disagreement wrong (0282/0293's shape, again). Found by
+  building the end-to-end proof (the real door, the real Slack channel, a recorded Slack double), not by any unit test or by the
+  page; 0893 fixes it and makes the page ask the door's own predicate, and `slack-send.ts` reinstates the old predicate to show
+  the message is ignored. When a feature has a status and a door, derive the status FROM the door.
+- **A flag that says what the deployed code can do must be set by the deploy that proves it, and by nothing earlier.**
+  `slack.per_office_delivery` gates the sentence "answers come back in Slack". It is set by `deploy:worker` after the probe, not
+  by a migration: a migration is not a deploy (0283), and a promise the running code cannot keep is the misleading success this
+  file keeps refusing.
 - **A callback that redirects names its destination in the CALLER's vocabulary.** The Slack callback first sent people to
   `?settings=messaging`; the page's deep link takes `connections`, `channels` or `health`, so it would have opened nothing. The
   tab is called Messaging on screen and `channels` in the address. Grep the reader of a redirect before writing the writer.

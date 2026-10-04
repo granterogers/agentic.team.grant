@@ -1,8 +1,9 @@
 # ADR-0065 — A Slack workspace belongs to one office
 
-**Status:** accepted. The decision and the receiving half are BUILT and proved with transport doubles (migrations 0891-0892,
-`src/slack/oauth.ts`, the `slack-oauth` function, the gateway actions, the Settings card); 0892 and the deploys wait on the
-platform recovering. The sending half is described and NOT built. No real Slack install has been run. · **Date:** 4 October 2026 ·
+**Status:** accepted. The decision, the receiving half AND the sending half are BUILT and proved with transport doubles
+(migrations 0891-0893, `src/slack/oauth.ts`, `src/slack/installs.ts`, the `slack-oauth` function, the gateway actions, the
+Settings card; proofs `verify:slack-link`, `scripts/isolated/slack-oauth.ts`, `scripts/isolated/slack-send.ts`). 0892, 0893 and
+the deploys wait on the platform recovering. **No real Slack install has been run.** · **Date:** 4 October 2026 ·
 **Issue:** #410 (Slack)
 
 ## Context
@@ -46,13 +47,22 @@ Not per-office Slack apps: that multiplies apps, credentials and webhooks per pe
 
 A connect flow that completes while nothing is ever delivered would be the misleading success this repository refuses. So the
 status Settings shows is derived from what is true: **installed** (the OAuth completed), **can receive** (the sender is admitted),
-**can reply** (the worker resolves a bot token for that office). Until the sending half exists the third is false and the page says
-so in words; the receiving half is proved, the sending half is the next piece.
+**can reply** (the worker resolves a bot token for that office). **can receive** is asked of the door's OWN predicate
+(`public.slack_ingress_ok`), so the page and the door cannot disagree; **can reply** is `system_config`
+`slack.per_office_delivery`, which `deploy:worker` sets only after the worker that has the sending half passes its probe, so the
+page says "answers appear in Team HQ" until the code that answers in Slack is actually live.
 
-**The sending half (not built here):** `pass.ts` must build one channel per active install and `slackChannel` must pick the client
-by the delivering job's office (`app.job_office`), with `teamId` per install; project-channel provisioning, the handoff narrator
-and token rotation stay the operator's. Slack's reply to a DM or mention needs only the workspace's bot token and the origin
-channel/thread already on the inbound command.
+**The sending half (built):** `src/slack/installs.ts` wraps the worker's Slack channel. The delivering job's office is resolved in
+SQL (`app.job_office`); an office with an active install is answered with THAT install's token and workspace (a client per
+workspace, rebuilt when the token rotates); the operator's own office is answered by the deployment's channel; an office with no
+install is answered by nothing, and never by the operator's token. An install whose token cannot be read delivers nothing and does
+not fall back. Project-channel provisioning, the handoff narrator and token rotation stay the operator's. A reply to a DM or
+mention needs only the workspace's bot token and the origin channel and thread already on the inbound command.
+
+**A defect the end-to-end proof found (0893):** `slack_team_ok` and `slack_ingress_ok` recognised a workspace only through an
+enabled `slack_app_credentials` row, so events from a person's own connected workspace would have been ignored while the page said
+"connected". An active install of the sender's own office now counts as the workspace's installation. `slack-send.ts` reinstates
+the old predicate to show the message is ignored, then restores it.
 
 ## External prerequisites (Grant, once; the code cannot do these)
 

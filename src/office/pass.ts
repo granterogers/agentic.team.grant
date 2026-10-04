@@ -81,9 +81,11 @@ import { drain } from '../jobs/worker.ts'
 import { HttpNotebookAdapter } from '../notebook/http-adapter.ts'
 import { ProviderRouter } from '../providers/router.ts'
 import { SlackClient } from '../slack/api.ts'
+import { installAwareSlackChannel } from '../slack/installs.ts'
 import { narrateHandoffs, narrateOutcomes } from '../slack/narrate.ts'
 import { slackChannel } from '../slack/notifier.ts'
 import { SlackOffice } from '../slack/office.ts'
+import { avatarBaseUrl } from '../staff/presentation.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { TelegramPager } from '../telegram/pager.ts'
@@ -253,6 +255,10 @@ export const buildPass = async (
   const cannotThink = orKey === '' && vaultKey === ''
 
   let slackTeamId = ''
+  // The deployment's own Slack (the operator's workspace), when there is one. Held, not pushed: the channel the worker uses is
+  // the install-aware one below, which serves a person's own workspace with THEIR token and only the operator's office with
+  // this one (ADR-0065).
+  let deploymentSlack: ReturnType<typeof slackChannel> | null = null
   // raw-sql[3]: deployment composition root; it reads the Slack app's installation to build the client, before any job is claimed.
   const botToken = String(
     (
@@ -283,7 +289,7 @@ export const buildPass = async (
       composition root, and a channel that reached the vault itself would be a
       channel that cannot be tested without one.
     */
-    channels.push(slackChannel(db, office, { teamId, projectRef, serviceKey }))
+    deploymentSlack = slackChannel(db, office, { teamId, projectRef, serviceKey })
 
     // Grant: *"create an additional channel in Slack where I see the
     // communications between the Chief of Staff and the rest of the members."*
@@ -305,6 +311,31 @@ export const buildPass = async (
         if (s.outcome === 'sent') log(`floor: outcome ${s.jobId.slice(0, 8)}`)
       }
     }
+  }
+
+  /*
+    Slack, per office (ADR-0065). A person who installed the Slack app into their own workspace is answered with their own
+    bot token, chosen by the delivering job's office in SQL; an office with no install is never served by the operator's
+    token. Built even when the deployment has no Slack of its own, because a personal workspace does not need one.
+  */
+  {
+    const avatarBase = await avatarBaseUrl(db)
+    channels.push(
+      installAwareSlackChannel({
+        db,
+        deployment: deploymentSlack,
+        make: ({ teamId, token }) =>
+          slackChannel(
+            db,
+            new SlackOffice(db, new SlackClient(token), { avatarBaseUrl: avatarBase }),
+            {
+              teamId,
+              projectRef,
+              serviceKey,
+            },
+          ),
+      }),
+    )
   }
 
   const pager = await pagerBot(db)

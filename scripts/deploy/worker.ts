@@ -147,5 +147,16 @@ if (refused.status !== 401 || live.configured !== true || body.ok !== true) {
   console.error('\nthe worker is not usable — see above')
   process.exit(1)
 }
+// The deployed worker answers a person in their own Slack workspace with that person's token (src/slack/installs.ts,
+// ADR-0065). The Settings page says "replying in Slack is not switched on" until this is true, so it is stated HERE, by the
+// deploy that proved the worker runs, and by nothing earlier: a flag set before the code is live is a promise the product
+// cannot keep (a migration is not a deploy).
+await db.execute(`
+  insert into public.system_config (key, value, description)
+  values ('slack.per_office_delivery', 'true'::jsonb,
+          'The deployed worker answers a person in their own Slack workspace with their own token (ADR-0065). Set by deploy:worker after its probe passes.')
+  on conflict (key) do update set value = excluded.value`)
+console.log('slack.per_office_delivery: true (this worker answers personal Slack workspaces)')
+
 console.log(`\nworker: ${url}`)
 console.log('kick secret is in the vault as `worker.kick_secret`, deliberately not printed.')
