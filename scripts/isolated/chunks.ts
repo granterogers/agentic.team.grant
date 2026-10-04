@@ -386,7 +386,9 @@ const quartzForeign = await doc(
         )
       )[0]?.m,
     )
-  check('chunking is deterministic', (await sig()) === (await sig()))
+  const firstRun = await sig()
+  const secondRun = await sig()
+  check('chunking is deterministic', firstRun === secondRun)
   const starts = await q(
     `select bool_and(start_char > lag_end - 400) ok, bool_and(start_char > lag_start) ord from (select start_char, lag(end_char) over (order by seq) lag_end, lag(start_char) over (order by seq) lag_start from app.chunk_text(${lit(big.slice(0, 40000))})) t where lag_end is not null`,
   )
