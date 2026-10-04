@@ -365,15 +365,15 @@ Legend for the Status column: see above. "Evidence" cites files / tests / captur
 | HQ-EXT-016 | Tenant isolation not weakened |  | TESTED | scope, office-from-token, write scope, approval via authorize_effect proved in SQL; no secrets in outputs |
 | HQ-EXT-017 | Approval policies not bypassed |  | TESTED | scope, office-from-token, write scope, approval via authorize_effect proved in SQL; no secrets in outputs |
 | HQ-EXT-018 | Does not block UX work |  | ALREADY SATISFIED | external work stayed in sibling branches and never blocked the UI |
-| HQ-VIC-001 | Locate the ACTUAL Vicuña/Vacunia integration; do not assume spelling |  | NOT INSPECTED |  |
-| HQ-VIC-002 | Audit real code |  | NOT INSPECTED |  |
-| HQ-VIC-003 | Verify create/update note → persistence → sync → representation → read-back |  | NOT INSPECTED |  |
-| HQ-VIC-004 | Determine canonical source |  | NOT INSPECTED |  |
-| HQ-VIC-005 | Determine sync behaviour |  | NOT INSPECTED |  |
-| HQ-VIC-006 | Determine duplicate prevention |  | NOT INSPECTED |  |
-| HQ-VIC-007 | Determine failure behaviour |  | NOT INSPECTED |  |
-| HQ-VIC-008 | Fix concrete defects where possible |  | NOT INSPECTED |  |
-| HQ-VIC-009 | Record what remains to verify if external E2E impossible |  | NOT INSPECTED |  |
+| HQ-VIC-001 | Locate the ACTUAL Vicuña/Vacunia integration; do not assume spelling |  | TESTED | No integration named Vicuna/Vacunia exists; the only notes/to-do provider is Vikunja (docs/ux-be-vikunja-audit.md). Post-its are not synced to it by design |
+| HQ-VIC-002 | Audit real code |  | TESTED | real code audited: src/tasks/{provider,vikunja,sync}.ts, handlers/tasks-sync.ts, migrations 0513-0522 etc. |
+| HQ-VIC-003 | Verify create/update note → persistence → sync → representation → read-back |  | PARTIALLY SATISFIED | create/edit/pull/delete/tombstone/outage/title-collision driven through the real syncOnce and DB functions against an in-memory Vikunja fake (66 tests, tests/tasks). No live Vikunja was available |
+| HQ-VIC-004 | Determine canonical source |  | TESTED | canonical source is Supabase public.tasks; Vikunja is a projection via task_links/task_tombstones |
+| HQ-VIC-005 | Determine sync behaviour |  | TESTED | round = push deletes, push upserts, pull; canonical wins; fields and non-synced fields listed in the audit |
+| HQ-VIC-006 | Determine duplicate prevention |  | TESTED | keyed on external id and the office mark, never title; two defects (D1,D3) found and fixed |
+| HQ-VIC-007 | Determine failure behaviour |  | PARTIALLY SATISFIED | watermark never advances on failure; 401/403 now say the token was refused; but an outage is not shown in Settings (still green), only in a deduped announcement |
+| HQ-VIC-008 | Fix concrete defects where possible |  | TESTED | six defects D1-D6 proven red then fixed; migration 0950 (unapplied) |
+| HQ-VIC-009 | Record what remains to verify if external E2E impossible |  | TESTED | audit lists what needs a live Vikunja: pagination header, done tasks in listing, description round-trip, 429 bodies, UI rendering |
 | HQ-CONV-001 | Workspace operations exposed as reusable actions (conversational control later) | D | IMPLEMENTED | workspace operations are plain exported functions (layout.js: place, setTint, applyPreset, setZoom, saveLayout, add/remove) already invoked by the palette; no natural-language bridge built |
 | HQ-CONV-002 | Examples supported architecturally: bigger / move / tint / zoom / hide / save layout | D | PARTIALLY SATISFIED | the operations exist; mapping "make Documents bigger" to them is not built |
 | HQ-AUTO-001 | Agents may autonomously generate documents/PDFs/versions/non-destructive artifacts | A | TESTED | artifact tests: generating/saving/versioning needs no approval; delivery only to the requesting channel; existing gate untouched |
@@ -418,6 +418,24 @@ Legend for the Status column: see above. "Evidence" cites files / tests / captur
 | HQ-VIS-003 | Preserve and improve current Team HQ identity |  | PARTIALLY SATISFIED | inspected at four widths; judgement is the reader's: see the morning report limitations |
 | HQ-ENG-001 | Extract focused modules (workspace state, layout persistence, module actions, animation, providers, search, calendar adapters, activity) |  | TESTED | new modules: layout.js, stage.js, expand.js, calendar.js, docsources.js, docview.js, finder.js, websources.js, style.js; wire.js/shell.js grew less than they would have |
 | HQ-ENG-002 | No framework rewrite / unrelated refactor |  | ALREADY SATISFIED | no framework change |
+
+
+## Totals (this ledger, after the run)
+
+| Status | Rows |
+|---|---|
+| TESTED | 174 |
+| PARTIALLY SATISFIED | 62 |
+| VISUALLY VERIFIED | 59 |
+| ALREADY SATISFIED | 14 |
+| IMPLEMENTED | 9 |
+| DEFERRED | 2 |
+| BLOCKED | 1 |
+| **All** | **321** |
+
+"Before" column: A = already satisfied, B = partial, C = extend existing, D = missing (from reconnaissance).
+
+**Spec checkpoints.** The specification was re-read against this ledger at roughly the 4-hour mark, the 8-hour mark and at the end. Rows added afterwards: none were found missing; the checks found three behaviours that needed fixing rather than tracking (the 22 Sept header-click and new-tab tests colliding with the new layout and viewer, calendar variants duplicating controls, and a tombstoned event leaking into search).
 
 ### Spec checkpoints
 - 4-hour re-read: _pending_

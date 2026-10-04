@@ -11,11 +11,7 @@
  * NOT proved here (needs a live run, flagged in docs/ux-be-web-notes.md): the DuckDuckGo markup against the real service,
  * the Cloudflare runtime's screenshot and link extraction, and Supabase Storage accepting the bytes.
  */
-import {
-  type BrowserAdapter,
-  type GatherRequest,
-  type GatherResult,
-} from '../../src/browser/adapter.ts'
+import type { BrowserAdapter, GatherRequest, GatherResult } from '../../src/browser/adapter.ts'
 import { FetchedBrowser } from '../../src/browser/fetched.ts'
 import type { SearchProvider } from '../../src/browser/search.ts'
 import { webResearchHandler } from '../../src/handlers/web-research.ts'

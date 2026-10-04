@@ -186,10 +186,16 @@ await page.waitForTimeout(400)
 await page.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.bcdocfilter')
 await page.waitForTimeout(400)
-await page.locator('.bcdocs--wall [data-bc-doc]', { hasText: 'The venue' }).locator('[data-bc-doc-open]').click()
+await page
+  .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'The venue' })
+  .locator('[data-bc-doc-open]')
+  .click()
 await page.waitForSelector('.bcdocgrid')
 await page.waitForTimeout(800)
-check('an image document previews as the image itself', (await page.locator('.bcdocimage').count()) === 1)
+check(
+  'an image document previews as the image itself',
+  (await page.locator('.bcdocimage').count()) === 1,
+)
 await page.screenshot({ path: '.out/ux-docs-07-image.png' })
 await page.goBack()
 await page.waitForTimeout(300)
