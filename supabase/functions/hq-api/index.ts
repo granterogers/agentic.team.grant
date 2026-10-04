@@ -615,6 +615,25 @@ const SECTIONS: Readonly<
     filtered: true,
   },
   /*
+    ONE SEARCH OVER EVERY STORE A PROJECT HAS (migration 0921).
+
+    `search` (above) finds documents and the team's answers. This finds those plus tasks, the project conversation,
+    saved webpages, Post-its, calendar events and the team's research, as typed rows
+    `{kind, id, title, snippet, project_slug, url_hint, score, at}`. `?project=<uuid>` scopes it, `?kinds=task,page`
+    narrows it. The office is the verified session's; a project of another office answers like one that does not
+    exist.
+  */
+  project_search: {
+    fn: 'project_search',
+    office: true,
+    args: { p_limit: 20 },
+    textArg: { param: 'q', arg: 'p_query' },
+    scoped: true,
+    also: [{ param: 'kinds', arg: 'p_kinds' }],
+  },
+  // Which kinds that search can serve in THIS database (calendar needs 0897) - the page draws only filters that find something.
+  project_search_providers: { fn: 'project_search_providers', office: true },
+  /*
     Everything an object relates to, both directions (#29, migrations 0310-11).
 
     Takes two arguments where every other section takes at most one, so it uses
