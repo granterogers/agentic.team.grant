@@ -12,6 +12,7 @@ first; if it disagrees with a chat, this wins. Checkpoint: branch `claude/multi-
 |---|---|---|
 | Migration `0892` (`app.slack_install_client`, `public.slack_link_client`) | written, replica-proved, NOT applied | The Settings card and `slack-oauth` read the client id and scopes through it. |
 | Migration `0893` (a person's own workspace counts as an installation) | written, replica-proved (`slack-send.ts` 18/18), NOT applied | Without it a person's connected workspace is IGNORED by `slack-events` while the page says connected. Apply with, or before, the worker. |
+| Migration `0894` (a passage of only whitespace is not content) | written, replica-proved (`chunks.ts`: red before, green after), NOT applied | `app.chunk_text` and `app.index_document_chunks` used `btrim`, which strips spaces only. Re-indexes any affected document (none expected). Apply with 0892/0893; no service depends on it. |
 | `hq-api` | changed after its last deploy (`slack_link*` sections and actions, `oauth.ts` symlink) | `deploy:hq-api` uploads `file-text.ts` and `oauth.ts` beside `index.ts`. |
 | `slack-oauth` (new function) | never deployed | `npm run deploy:slack-oauth`. Needs `slack.client_id` set before it can do anything. |
 | `worker` | changed after its last deploy (install-aware Slack channel `src/slack/installs.ts`, envelope miss ceiling, Drive-bytes text path) | `deploy:worker` sets `slack.per_office_delivery` only after its probe passes. Read the deployed version first: if the Drive text path or the ceiling already shipped, the delta is the Slack channel only. |
@@ -24,7 +25,7 @@ Applied already (production): through `0891` (761 migrations). `0888` chunks, `0
 
 1. **Judge recovery on function, not one green endpoint.** `GET /v1/projects/<ref>/health?services=auth&services=db&services=rest&services=storage` is necessary, not sufficient. Also require a trivial `select 1` through the Management API in well under a second, a sign-in token endpoint answer, and connection count sane against the 57-slot limit. One reading at a checkpoint; no polling.
 2. `npm run incident:snapshot` (once). Note `temp_bytes`.
-3. `npm run check:migrations` then `npm run migrate` (applies 0892, 0893 only; refuses on any checksum drift, which is correct).
+3. `npm run check:migrations` then `npm run migrate` (applies 0892, 0893, 0894 only; refuses on any checksum drift, which is correct).
 4. `npm run deploy:hq-api`, probe, then `npm run deploy:slack-oauth`, probe (expect "no client id yet" until step 8, which is the honest state), then `npm run deploy:worker`, probe. One at a time; stop if any probe is not clean.
 5. Page: `hq-page-delta.ts` dry run, read the file list, `--go`.
 6. Smallest relevant verification, in this order: `npm run verify:slack-link` (production, rolled back), `npm run sample:confirm-ux`, `npm run sample:documents`, `npm run verify:phone-header` against the live page at 320/360/390/430.

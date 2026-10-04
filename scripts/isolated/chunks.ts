@@ -340,6 +340,63 @@ const quartzForeign = await doc(
   )
 }
 
+// 6c. the chunker's edge cases (0894): whitespace, long unbroken text, Unicode, bounds, determinism
+{
+  const n = async (text: string): Promise<number> =>
+    Number((await q(`select count(*) n from app.chunk_text(${lit(text)})`))[0]?.n)
+  check(
+    'text of only newlines, tabs and spaces yields no passage',
+    (await n('\n\n\n   \n\n\t\n')) === 0,
+  )
+  check('empty and null yield none', (await n('')) === 0)
+  check(
+    'CONTROL: btrim(x) alone WOULD have called that whitespace content (the defect 0894 fixes)',
+    Number(
+      (await q(`select count(*) n from (select 1 where btrim(E'\\n\\n\\t') <> '') x`))[0]?.n,
+    ) === 1,
+  )
+  const unbroken = 'x'.repeat(30000)
+  const u = await q(
+    `select count(*) n, max(length(body)) mx, max(end_char) e from app.chunk_text(${lit(unbroken)})`,
+  )
+  check(
+    'a long unbroken line is cut to bounded passages that reach the last character',
+    Number(u[0]?.mx) <= 1200 && Number(u[0]?.e) === 30000 && Number(u[0]?.n) <= 35,
+    JSON.stringify(u[0]),
+  )
+  const uni = '東京の天気は晴れ。café déjà vu — “quoted” 😀 '.repeat(700)
+  const c = await q(
+    `select count(*) n, max(length(body)) mx, min(start_char) s, max(end_char) e from app.chunk_text(${lit(uni)})`,
+  )
+  check(
+    'Unicode (CJK, accents, emoji) is cut by characters and reaches the end',
+    Number(c[0]?.mx) <= 1200 && Number(c[0]?.s) === 1 && Number(c[0]?.e) === [...uni].length,
+    JSON.stringify(c[0]),
+  )
+  const big = 'word '.repeat(100000)
+  check(
+    'no pathological explosion: 500,000 characters give about one passage per 1,000',
+    (await n(big)) <= 500 + 5,
+  )
+  const sig = async (): Promise<string> =>
+    String(
+      (
+        await q(
+          `select md5(string_agg(body || seq::text || start_char::text, '|' order by seq)) m from app.chunk_text(${lit(big.slice(0, 40000))})`,
+        )
+      )[0]?.m,
+    )
+  check('chunking is deterministic', (await sig()) === (await sig()))
+  const starts = await q(
+    `select bool_and(start_char > lag_end - 400) ok, bool_and(start_char > lag_start) ord from (select start_char, lag(end_char) over (order by seq) lag_end, lag(start_char) over (order by seq) lag_start from app.chunk_text(${lit(big.slice(0, 40000))})) t where lag_end is not null`,
+  )
+  check(
+    'overlap is bounded and order is strictly increasing',
+    starts[0]?.ok === true && starts[0]?.ord === true,
+    JSON.stringify(starts[0]),
+  )
+}
+
 // 7. sabotage: a chunker that drops the tail must turn the END check red
 {
   const dropped = await q(`
