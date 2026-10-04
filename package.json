@@ -434,7 +434,7 @@
     "verify:basecamp-todos": "tsx scripts/verify/basecamp-todos.ts",
     "verify:basecamp-board": "tsx scripts/verify/workspace.ts",
     "verify:workspace": "tsx scripts/verify/workspace.ts",
-    "verify:calendar": "tsx scripts/verify/calendar.ts",
+    "verify:calendar-ui": "tsx scripts/verify/calendar-ui.ts",
     "basecamp:shots": "tsx scripts/verify/basecamp-shots.ts",
     "basecamp:measure": "tsx scripts/verify/basecamp-measure.ts",
     "verify:basecamp-actions": "tsx scripts/verify/basecamp-actions.ts",
