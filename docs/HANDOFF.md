@@ -1130,6 +1130,30 @@ rather than rediscovery.
 
 ---
 
+## 4 October 2026 (run 2, last stretch) - production frozen, local and replica work only
+
+**Read `docs/ops/deployment-queue-2026-10-04.md` first: it is the authority for what is waiting and the order to do it in.**
+Nothing from this stretch is applied or deployed. Supabase read UNHEALTHY at 17:28 and 18:20 UTC; production interaction is
+suspended (no migrations, deploys, production suites or model calls) until Grant asks or there is concrete evidence of recovery.
+Written and NOT applied: migrations 0892, 0893, 0894.
+
+Done here, each with a red-then-green control: the PDF reader undoes chained text filters (four real ReportLab files were
+called scans; `verify:file-text-corpus`); a DOCX from a real producer over 50,000 characters (`verify:file-text-docx`); an
+explicitly named secondary project read at its end of document with a same-name foreign-office control (`chunks.ts`);
+whitespace-only passages (0894); the envelope retry ceiling as a pure tested decision and a larger golden corpus (#412);
+Slack adversarial edges 26/26 on the replica; the phone header keeps more of the name at 320px and its regression adds a long
+name and the portfolio; a double-tap on a dialog's Confirm no longer reaches the control underneath (`verify:dialogs`);
+`check:tokens` stops crying wolf and joins `gate:safe`; `check:secrets` is green again (it had been red on made-up Slack
+fixtures). Full unit suite: 297 files, 4,462 tests.
+
+**A decision for Grant, not changed:** detaching a source keeps its documents and so their passages (ADR-0013). If it should
+withdraw them from answers, that reverses the ADR.
+
+Still manual: voice note and Talk to Team on a real iPhone, the Telegram pairing tap, a real Slack install (after the Slack app
+settings in the queue file), `npm run backup:rehearse`, and a Supabase support request for `log_temp_files = 10240` for 24 hours.
+
+---
+
 ## 4 October 2026 (run 2, later) - Slack self-service built (receiving half), phone header, native dialogs gone, platform down
 
 **State at the end of this stretch:** branch `claude/multi-user-p4`; migrations applied through **0891** (761); **0892 is
