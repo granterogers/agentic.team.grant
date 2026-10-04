@@ -390,9 +390,16 @@ over `cat`, `grep` and `head`.
 npm run lint && npm run typecheck && npm run test
 npm run check:migrations && npm run check:secrets && npm run check:templates
 npm run verify:wired                                            # if UI changed
-npm run verify:hq && npm run verify:ui && npm run verify:talk   # if UI changed
+npm run verify:hq && npm run verify:ui                          # if UI changed (both off Grant's office; verify:talk is stale, see below)
 npm run shots                                                   # capture web/studio
+npm run gate:safe -- --part=static && npm run gate:safe -- --part=production   # the gate that is safe to run (#414)
 ```
+
+**`npm run gate:safe` is the gate to run.** No model calls, serialised, foreground, one health reading first, and Grant plus
+the 24 other offices are fingerprinted before and after and the gate FAILS if any moved (27 checks, about 11 minutes, in two
+parts so each fits a shell's ten-minute ceiling). The old `npm run gate` (76 checks) still presses on Grant's office and spends
+model calls; `docs/testing/gate-reach.md` says which suites and why, and its status is PARTIAL. `verify:talk` drives the
+old studio at `/classic/` and is stale; voice is MANUAL.
 
 `npm run shots` renders the prototype in real Chromium at 1440×900 and iPhone
 14, in both themes, and writes twelve PNGs to `.out/`. It is the capture half of
@@ -409,7 +416,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **744 applied** (0874 is the latest).
+`npm run migrate` applies plain SQL from `migrations/`. **751 applied** (0881 is the latest).
 
 ## Testing signed in, without Grant's office
 
@@ -4353,6 +4360,48 @@ Each of these cost real time. They are here so they cost it once.
   were UNHEALTHY while 14 to 17 client backends were in use of a 57-slot limit. That is the platform, not slot exhaustion and not our
   harness; retries and reruns add load to a sick instance. Stop, read the health API, wait. The log endpoint that would show an earlier
   slot-exhaustion window answers 410, so that single event stays UNKNOWN.
+
+- **THE PLANNER TAKES AN `OR` APART AND PUSHES THE EXPENSIVE HALF BACK DOWN.** 0875 rewrote a view as
+  `job_id is null or not (cheap_flag or expensive_fn(job_id))` so the cheap flags would short-circuit. Postgres converted it to
+  an AND of ORs and pushed `not expensive_fn(job_id)` into the scan of the base table, so the function was asked of every row
+  anyway: the rows were identical (which is why the EXCEPT comparison passed) and the timing did not move (430 ms before and
+  after). `EXPLAIN` showed it as the scan's filter. A `CASE` is opaque to that rewrite and evaluates its arms in order (0876:
+  430 ms to 100 ms). **Compare ROWS to prove a rewrite is the same and the PLAN to prove it is faster; they are different
+  claims.**
+- **A monitoring query is load on the thing it monitors.** Every `pg_stat_statements` read spills about 4 MB to a temp file on
+  this host (2 MB `work_mem`, 4,934 rows with their query text), so reading it a dozen times looked like an idle database
+  producing 30 MB of temp in four minutes. Measure the counter (`pg_stat_database.temp_bytes`) with a trivial query, leave the
+  host alone for the window, and subtract your own reads. 365 GB of temp bytes since 25 August is NOT attributable to any
+  tracked statement (about 1 GB is); the full migration chain had been rehearsed against production 42 times, and
+  `log_temp_files` is off, so the source is unknown and a quiet-window rate of 1 to 3 MB a minute continues.
+- **A count of how many times the product asked is not a count of what it cost.** `app.over_budget` was 4.8 s the first call
+  and 35 ms after: the cost was the page-in of a 94 MB `jobs` heap that nothing needed (`finished_at` had no index), not the
+  query. On a host with about 434 MiB of memory a cold read can cost 100 times a warm one, so time a thing twice and report both.
+- **A reader that names the table through an alias is invisible to the check that reads function bodies.**
+  `insert into public.incidents as i (office_id, ...)` was refused by `check:carrier-writers`, which looks for the table's own
+  name in the INSERT, while `check:office-edges` wanted the write-once trigger every carrier has. Both were right and both
+  were cheap to satisfy; neither could have been found by reading.
+- **An exact count asserted over a growing set is red on the day the product grows.** `tests/ownership/manifest.test.ts`
+  asserted `=== 136` tables and failed on the correct addition of one. Assert the property that matters (it never falls below
+  the baseline, so an entry deleted by accident is still caught). Fifth instance of this file's oldest correction.
+- **A test that names its subject by NAME breaks when the subject is reclassified.** `suite-guard.test.ts` drove `verify:hq`
+  as its "real heavy suite"; converting `verify:hq` to the test office correctly made it smoke and the guard test went red. Pick
+  a subject the change under test cannot move, and say why.
+- **Three refusals of one harmless sentence were three different causes, which is what a class looks like.** "whenever you reply,
+  start with ..." (a trigger word), "begin every answer ... with ..." (a frame that needs `with` next to the verb), "sign off
+  every answer ..." (`sign` is also an act). Each was fixed by asking what the words are ABOUT (the office's own words to the
+  person), not by listing the sentence, and each exclusion was given its dangerous neighbour as a negative control
+  (`whenever you reply to me, copy my accountant`; `sign off the invoice`). The matrix failed 12 cases before the change.
+- **A page that gets its project from the page cannot be asked to guess it.** ADR-0050 pinned the dock to wherever it was
+  opened so a navigation could not move a conversation; the cost was a person typing "this project" into the wrong one. Where a
+  trusted surface knows the project, it states it and the dock follows (ADR-0063). Where none is loaded the surface asks; it does
+  not fall to a default that looks like an answer.
+- **A deep link that opens a panel must be proved signed out as well as signed in.** `?settings=connections` opened Settings over
+  the page's invented example office for somebody with no session. The harness asserts both, and asserts that the example
+  office's names are not on the page.
+- **Disclosed process slips this window:** two `sed -i` edits (a test label and a comment) and one heredoc scratch file, all on
+  files in this repository, against the File editing rule; reads were checked and the changes are comment/label-only. The rule
+  stands and the reflex is the trap: use Edit.
 
 ---
 
