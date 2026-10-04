@@ -13,21 +13,29 @@
     "section:ci_budget": "MISSING READER, same measurement. The monthly ceiling is enforced in the database and nothing has ever been dispatched against it, so the panel would read 0 of 1,500 for ever. It is also the one reading that is genuinely useful the MOMENT Actions return, so it goes back on with `ci_lately` and not before (#17).",
     "section:relations": "NOT NEEDED BY THE PAGE today. The project map draws its own edges; `relations_of` is the API answer to the same question.",
     "action:document_new_version": "Called by the Documents module of the UX overnight branch (claude/ux-overnight, web/studio), which is merged separately from this backend branch: the gateway entry and database function land first so the page has something to call. Remove this entry in the commit that names it in web/ - the check will then fail until you do. Not an agent door: it is a person's explicit press (not on SERVICE_MAY).",
-    "section:project_search_providers": "MISSING CONTROL, awaiting the search filter chips in Team HQ: it tells the page which kinds this database can serve (calendar needs 0897). Remove when the page reads it."
+    "section:project_search_providers": "MISSING CONTROL, awaiting the search filter chips in Team HQ: it tells the page which kinds this database can serve (calendar needs 0897). Remove when the page reads it.",
+    "action:style_set": "MISSING CONTROL, awaiting the Team HQ Style page (sibling UI work, ux-overnight). Written, driven and tested server-side by scripts/isolated/ux-be/04-style-profiles.sql (migration 0923, unapplied). Remove this entry when the page presses it.",
+    "action:style_clear": "MISSING CONTROL, awaiting the Team HQ Style page (sibling UI work). Same migration and proof as style_set. Remove when the page presses it.",
+    "section:project_search": "MISSING CONTROL, awaiting the Team HQ project search box (sibling UI work); also read by external assistants through the MCP search_project tool. Driven by scripts/isolated/ux-be/02-project-search.sql (migration 0921, unapplied).",
+    "section:web_sources": "MISSING CONTROL, awaiting the Team HQ project Sources page (sibling UI work): the list of pages and files the web gave a project, with where each came from (url, retrieval time, agent, research task and question, found-via, indexed, screenshot, citing outputs). Read by ?section=web_sources&project=<slug>. Driven by scripts/isolated/ux-be/05-web-sources.sql and scripts/isolated/web-research.ts (migration 0930, unapplied). Remove when the page reads it."
   },
   "unpressed": [
     "action:document_new_version",
     "action:grant_standing",
     "action:set_google_secret",
+    "action:style_clear",
+    "action:style_set",
     "section:artifacts",
     "section:bots",
     "section:ci_budget",
     "section:ci_lately",
     "section:cost",
+    "section:project_search",
     "section:project_search_providers",
     "section:relations",
     "section:series",
     "section:staff",
-    "section:usage"
+    "section:usage",
+    "section:web_sources"
   ]
 }

@@ -56,7 +56,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
-  citationRef,
+  citedSource,
   contextBlock,
   correspondence,
   type Hit,
@@ -456,6 +456,25 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               const have = new Set(explicit.map((h) => h.documentId))
               const found = [...explicit, ...rest.filter((h) => !have.has(h.documentId))]
               const post = await correspondence(db, { jobId: job.jobId }, projectId, brief, 4)
+              // raw-sql[2]: reads the address of documents this job's own retrieval just returned, scoped by the claimed job's office.
+              const browsed = found
+                .filter((h) => h.connector === 'browser')
+                .map((h) => h.documentId)
+              const urls = new Map<string, string>(
+                browsed.length === 0
+                  ? []
+                  : (
+                      (
+                        await db.execute(
+                          `select d.document_id::text as id, d.external_ref as url
+                             from public.documents d
+                            where d.document_id in (${browsed.map((i) => `'${i}'::uuid`).join(',')})
+                              and d.office_id = app.job_office('${job.jobId}'::uuid)
+                              and d.connector = 'browser' and d.external_ref is not null`,
+                        )
+                      ).rows as { id: string; url: string }[]
+                    ).map((r) => [r.id, r.url]),
+              )
               return {
                 outcome: {
                   ask,
@@ -480,6 +499,8 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                   documents: found.map((h) => ({
                     connector: h.connector,
                     id: h.documentId,
+                    // Where a web page lives, so the sources page says so (see citedSource).
+                    url: urls.get(h.documentId) ?? null,
                     // Carried so the citation can say `made` where the office
                     // made it, rather than printing the word null on the
                     // sources page of a PDF Grant reads.
@@ -596,11 +617,9 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                     id: string
                     origin?: string
                     title: string
+                    url?: string | null
                   }[]
-                ).map((d) => ({
-                  label: d.title,
-                  ref: citationRef({ connector: d.connector, documentId: d.id, origin: d.origin }),
-                })),
+                ).map(citedSource),
                 ...((done.gather?.mail ?? []) as { id: string; subject: string }[]).map((m) => ({
                   label: m.subject,
                   ref: `mail:${m.id}`,
@@ -850,11 +869,9 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               id: string
               origin?: string
               title: string
+              url?: string | null
             }[]
-          ).map((d) => ({
-            label: d.title,
-            ref: citationRef({ connector: d.connector, documentId: d.id, origin: d.origin }),
-          })),
+          ).map(citedSource),
           ...((gathered.mail ?? []) as { id: string; subject: string }[]).map((m) => ({
             label: m.subject,
             ref: `mail:${m.id}`,

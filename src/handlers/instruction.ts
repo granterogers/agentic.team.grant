@@ -4337,9 +4337,52 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? null
           : entitled.page(turn.kept)
       const wantsPage = askedForPage?.why === 'asked' ? askedForPage : null
+      /*
+        Looking something up on the web (web research). Same guards as a page request and for the same reasons: not on a
+        branch (a second reading of one request would search twice), not when a file or a repeat already claimed the
+        sentence, and only from his own words (`entitled`, which a forwarded message makes silent). A sentence carrying a
+        link is the page request's; this one needs no link.
+      */
+      const wantsResearch =
+        job.projectId === null ||
+        isBranch ||
+        wantsFile !== null ||
+        alreadyOn !== null ||
+        wantsPage !== null
+          ? null
+          : entitled.research(turn.kept)
+      const researching =
+        wantsResearch === null
+          ? null
+          : await deps.db
+              .execute(`
+                select app.enqueue_child(
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'web.research',
+                  jsonb_build_object(
+                    'question', ${lit(wantsResearch.question.slice(0, 500))},
+                    'by', ${lit(who.slug)},
+                    'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
+                    'command_id', ${lit(String(payload.command_id ?? ''))}
+                  ),
+                  interval '0', true${callerArgs(job)}
+                )::text as id`)
+              .then(
+                () =>
+                  'Looking that up on the web now \u2014 I will read the best pages and keep the useful ones ' +
+                  'with this project. I only read; I do not press anything.',
+              )
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'search the web', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))}, null)`)
+                  .catch(() => undefined)
+                return null
+              })
       const reading =
         wantsPage === null
-          ? null
+          ? researching
           : await deps.db
               .execute(`
                 select app.enqueue_child(

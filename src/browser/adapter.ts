@@ -39,6 +39,12 @@ export interface Cookie {
 
 export type GatherVerb = 'read' | 'shot'
 
+/** A link a page offers. Offered, not followed: following is the caller's decision and is a read. */
+export interface PageLink {
+  readonly url: string
+  readonly text: string
+}
+
 export interface GatherRequest {
   readonly url: string
   readonly verbs: readonly GatherVerb[]
@@ -56,6 +62,11 @@ export interface GatherResult {
   readonly title: string | null
   /** Rendered text, already stripped of markup. Null when `read` was not asked. */
   readonly text: string | null
+  /**
+   * The links on the page, when the runtime could read them. Absent when it could not.
+   * Optional on purpose: a runtime that cannot list links is not a broken one.
+   */
+  readonly links?: readonly PageLink[]
   /** PNG bytes. Null when `shot` was not asked or the shot failed. */
   readonly shot: Uint8Array | null
   /**

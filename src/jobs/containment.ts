@@ -85,6 +85,7 @@ export const REACH: Readonly<Record<string, KindReach>> = {
   'notebook.collect_artifact': { reach: 'reads' },
   'notebook.list_artifacts': { reach: 'reads' },
   'office.sync': { reach: 'reads' },
+  'web.research': { reach: 'reads' },
 
   // --- internal: this office's own tables, and the delivery layer -----------
   'artifact.report': { reach: 'internal' },

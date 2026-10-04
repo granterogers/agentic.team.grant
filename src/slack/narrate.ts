@@ -384,6 +384,7 @@ const WORK_READS_AS: Record<string, string> = {
   'artifact.report': 'writing it up as a file',
   'browser.gather': 'reading a page',
   'office.extract_tasks': 'pulling out what needs doing',
+  'web.research': 'looking it up on the web',
   'notebook.generate': 'making something in the notebook',
   'notebook.list_artifacts': 'looking through the notebook',
   'notebook.add_source': 'adding a source to the notebook',
