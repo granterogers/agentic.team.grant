@@ -16,6 +16,12 @@ mkdirSync(out, { recursive: true })
 const office = await sampleOffice()
 const O = office.officeId
 const PHONE = process.env.PHONE === '1'
+// The wording taught and the pattern that says it was stored are both overridable, so any natural phrasing can be proved
+// live (#417): LESSON_WORDS="..." LESSON_KEY="namaste" npm run sample:lesson
+const WORDS =
+  process.env.LESSON_WORDS ??
+  'From now on, when you answer me about the studio, give me the conclusion first.'
+const KEY = new RegExp(process.env.LESSON_KEY ?? 'conclusion first', 'i')
 const sleep = (ms: number): Promise<void> => new Promise((ok) => setTimeout(ok, ms))
 let failed = 0
 const check = (what: string, ok: boolean, detail = ''): void => {
@@ -46,9 +52,7 @@ const { page, errors } = await newPage(
 try {
   await signIn(studio, page, s)
   // Resumable: a run that taught the lesson and then failed later leaves it live; reuse it rather than pay for another call.
-  let learned: { id: string; body: string } | undefined = sampleBefore.find((l) =>
-    /conclusion first/i.test(l.body),
-  )
+  let learned: { id: string; body: string } | undefined = sampleBefore.find((l) => KEY.test(l.body))
   if (learned === undefined) {
     await page.goto(`${studio.base}/p/wellness-studio-launch`, { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle').catch(() => null)
@@ -61,7 +65,7 @@ try {
     )
       await page.locator('[data-bc-dock]').first().click()
     await page.waitForSelector('[data-docksay]', { state: 'visible', timeout: 15000 })
-    const words = 'From now on, when you answer me about the studio, give me the conclusion first.'
+    const words = WORDS
     await page.fill('[data-docksay]', words)
     await page.keyboard.press('Enter')
     const end = Date.now() + 240000
@@ -79,7 +83,7 @@ try {
   await page.screenshot({ path: `${out}/1-taught.png` })
   if (learned === undefined) throw new Error('nothing was learned; stopping before anything else')
   const id = learned.id
-  const keyword = /conclusion/i.test(learned.body)
+  const keyword = KEY.test(learned.body)
   check('the stored rule is about the preference taught', keyword, learned.body.slice(0, 120))
 
   const paneHas = async (): Promise<boolean> => {
