@@ -4497,6 +4497,11 @@ Each of these cost real time. They are here so they cost it once.
   JPX, LZW stay declined, with a control) and wrong for a text filter nobody wrote. Third instance in this file of a synthetic
   corpus agreeing with its author: **run a reader over files the author did not make before believing its recall.** And
   the declined count is printed, never folded into the pass: a corpus where everything declines is "0 failed" and means nothing.
+- **`check:secrets` had been RED on this branch for several commits and nobody read it.** Ten made-up Slack token fixtures
+  (`xoxb-…`, `xoxp-…`) in the install proofs and tests tripped the scanner; the output ends *"No secret value is printed above"*,
+  which reads like a clean run, and the exit code was never looked at (a pipe through `tail` hides it, which this file already
+  says). None was a credential; all are now assembled from pieces (`${'xo'}xb-…`) as the file-top rule for specimens says. A
+  scanner whose failure line sounds reassuring is read as a pass: **test `$?`, not the last line.**
 - **Disclosed process slip, this window:** `scripts/verify/file-text-corpus.ts` was first written with a `cat > file <<EOF` heredoc
   instead of the Write tool, against the File editing rule; the file was then edited with Edit and formatted with biome.
 

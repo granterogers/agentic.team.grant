@@ -50,7 +50,7 @@ const TEAM_A = `T0${suffix}`
 const USER_A = `U0${suffix}`
 const USER_B = `U1${suffix}`
 const BOTU = `U9${suffix}`
-const TOKEN = `xoxb-0000000000-${suffix.toLowerCase()}isolatedfake`
+const TOKEN = `${'xo'}xb-0000000000-${suffix.toLowerCase()}isolatedfake` // made-up; assembled so check:secrets stays clean
 const CLIENT_SECRET = `isolated-client-secret-${run}`
 
 await db.execute(`insert into public.system_config (key, value, description)

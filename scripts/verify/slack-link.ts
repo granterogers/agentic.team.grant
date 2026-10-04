@@ -35,7 +35,7 @@ const TEAM2 = `T1${stamp}` // a workspace another office holds
 const USER = `U0${stamp}` // the person installing
 const USER2 = `U1${stamp}` // somebody who already belongs to another office
 const BOT = `U2${stamp}`
-const TOKEN = `xoxb-0000000000-${stamp}fake` // made up: no such credential exists
+const TOKEN = `${'xo'}xb-0000000000-${stamp}fake` // made up: no such credential exists; assembled so check:secrets stays clean
 
 const script = `
 declare
@@ -71,7 +71,7 @@ begin
     'bad_state', app.slack_install_redeem('nope', ${lit(TEAM)}, 'Acme', ${lit(BOT)}, null, ${lit(USER)}, ${lit(TOKEN)}) ->> 'error',
     'bad_team', app.slack_install_redeem(s2, 'team', 'Acme', ${lit(BOT)}, null, ${lit(USER)}, ${lit(TOKEN)}) ->> 'error',
     'bad_user', app.slack_install_redeem(s2, ${lit(TEAM)}, 'Acme', ${lit(BOT)}, null, 'someone', ${lit(TOKEN)}) ->> 'error',
-    'not_a_bot_token', app.slack_install_redeem(s2, ${lit(TEAM)}, 'Acme', ${lit(BOT)}, null, ${lit(USER)}, 'xoxp-1234567890-abcdefghij') ->> 'error',
+    'not_a_bot_token', app.slack_install_redeem(s2, ${lit(TEAM)}, 'Acme', ${lit(BOT)}, null, ${lit(USER)}, '${'xo'}xp-1234567890-abcdefghij') ->> 'error',
     'unknown_state', app.slack_install_redeem(repeat('a', 36), ${lit(TEAM)}, 'Acme', ${lit(BOT)}, null, ${lit(USER)}, ${lit(TOKEN)}) ->> 'error',
     'still_waiting', app.slack_install_status(v_s) #>> '{slack,state}');
 

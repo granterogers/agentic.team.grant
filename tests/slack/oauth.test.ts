@@ -11,7 +11,8 @@ import {
 const STATE = 'a1b2c3d4e5f60718293a4b5c6d7e8f901234'
 const CODE = '1234567890.0987654321.abcdef0123456789'
 const SECRET = 'client-secret-value-not-real'
-const TOKEN = 'xoxb-1234567890-abcdefghijklmnop'
+// A made-up specimen, assembled from pieces so no token-shaped literal sits in the repository (check:secrets).
+const TOKEN = `${'xo'}xb-1234567890-abcdefghijklmnop`
 const SUPABASE = 'https://ref.supabase.co'
 
 type Call = { url: string; body: string }
@@ -173,7 +174,7 @@ describe('the callback', () => {
     const w = world({
       slack: {
         ok: true,
-        access_token: 'xoxp-1234567890-abcdefghijklmnop',
+        access_token: `${'xo'}xp-1234567890-abcdefghijklmnop`,
         bot_user_id: 'U0BOTUSER1',
         team: { id: 'T0TEAMID01', name: 'Acme' },
         authed_user: { id: 'U0PERSON01' },

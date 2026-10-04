@@ -4,9 +4,11 @@ import type { Job, NotifyOutcome } from '../../src/jobs/worker.ts'
 import { installAwareSlackChannel, type SlackChannelLike } from '../../src/slack/installs.ts'
 
 const JOB = { jobId: '11111111-1111-4111-8111-111111111111' } as unknown as Job
-const TOKEN_A = 'xoxb-1111111111-installTokenAAAAAA'
-const TOKEN_A2 = 'xoxb-1111111111-installTokenRotated'
-const DEPLOYMENT_TOKEN = 'xoxb-9999999999-deploymentTokenXX'
+// Made-up specimens, assembled from pieces so no token-shaped literal sits in the repository (check:secrets).
+const PFX = `${'xo'}xb-`
+const TOKEN_A = `${PFX}1111111111-installTokenAAAAAA`
+const TOKEN_A2 = `${PFX}1111111111-installTokenRotated`
+const DEPLOYMENT_TOKEN = `${PFX}9999999999-deploymentTokenXX`
 
 type Row = { operator: boolean; team_id: string | null; token: string | null }
 const world = (row: Row | (() => Row) | Error) => {

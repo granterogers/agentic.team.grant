@@ -62,8 +62,9 @@ const USER_B = `U1${suffix}`
 const STRANGER = `U7${suffix}`
 const BOT_A = `U8${suffix}`
 const BOT_B = `U9${suffix}`
-const TOKEN_A = `xoxb-0000000001-${suffix.toLowerCase()}tokenforofficea`
-const TOKEN_B = `xoxb-0000000002-${suffix.toLowerCase()}tokenforofficeb`
+// Made-up specimens assembled from pieces so no token-shaped literal sits in the repository (check:secrets).
+const TOKEN_A = `${'xo'}xb-0000000001-${suffix.toLowerCase()}tokenforofficea`
+const TOKEN_B = `${'xo'}xb-0000000002-${suffix.toLowerCase()}tokenforofficeb`
 const DM_A = `D0${suffix}`
 const DM_B = `D1${suffix}`
 const SECRET = 'isolated-slack-signing-secret'
