@@ -711,7 +711,7 @@ export const postits = (slug) => {
         y: 6,
         ...POSTIT_DEFAULT,
         w: sw,
-        z: 1000,
+        z: 7,
         text: '',
       },
       stage,

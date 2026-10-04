@@ -42,6 +42,7 @@ import { MARKS } from '../logos/marks.js'
 import * as when from '../when.js'
 import { prose } from '../prose.js'
 import * as todos from './todos.js'
+import * as cal from './calendar.js'
 import * as docorder from './docorder.js'
 import { esc, status } from './parts.js'
 
@@ -482,65 +483,7 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
  * has no events table, so this is scheduled WORK and not a diary, and saying
  * so is cheaper than a calendar Grant reasonably reads as his appointments.
  */
-export const calendarMini = (p, { items = 4 } = {}) => {
-  const dated = (p.tasks ?? [])
-    .filter((t) => t.milestone !== true)
-    .map((t) => ({ t, iso: String(t.due_on ?? t.starts_on ?? '').slice(0, 10) }))
-    .filter((x) => x.iso !== '' && !Number.isNaN(new Date(`${x.iso}T00:00:00Z`).getTime()))
-    .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0))
-  const now = new Date()
-  const y = now.getUTCFullYear()
-  const m = now.getUTCMonth()
-  const first = new Date(Date.UTC(y, m, 1))
-  const lead = (first.getUTCDay() + 6) % 7
-  const len = new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
-  const marks = new Set(dated.filter((x) => x.iso.slice(0, 7) === `${y}-${String(m + 1).padStart(2, '0')}`).map((x) => Number(x.iso.slice(8, 10))))
-  const today = now.getUTCDate()
-  const cells = []
-  for (let i = 0; i < lead; i += 1) cells.push('<span class="bccal-pad"></span>')
-  for (let d = 1; d <= len; d += 1) {
-    const cls = ['bccal-day']
-    if (marks.has(d)) cls.push('bccal-day--has')
-    if (d === today) cls.push('bccal-day--today')
-    cells.push(`<span class="${cls.join(' ')}">${d}</span>`)
-  }
-  return `<div class="bccalwrap">
-    <div class="bccal" role="presentation">
-      <div class="bccalmonth">${esc(first.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }))}</div>
-      <div class="bccalgrid">
-        ${DAYS.map((d) => `<span class="bccal-dow">${esc(d.charAt(0))}</span>`).join('')}
-        ${cells.join('')}
-      </div>
-    </div>
-    <div class="bcagenda">
-      ${
-        dated.length === 0
-          ? emptyWith('Nothing on this project has a date yet.', 'Give a to-do a date', `/p/${p.slug}/schedule`)
-          : dated
-              .slice(0, items)
-              .map(
-                ({ t, iso }) => `<div class="bcagendaitem${isLate(t) ? ' bcagendaitem--late' : ''}">
-                  <span class="bcagendadate">
-                    <span class="bcagendadd">${esc(String(Number(iso.slice(8, 10))))}</span>
-                    <span class="bcagendamm">${esc(new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short' }))}</span>
-                  </span>
-                  <!--
-                    Clickable, because v2 says the schedule must work in
-                    miniature: *"Clicking Schedule or its contents should
-                    actually perform an action rather than doing nothing."*
-                    It opens the to-do the date belongs to.
-                  -->
-                  <button type="button" class="bcitemtitle bclinky bcagendawhat"
-                    data-bc-task-open="${esc(todos.keyOf(t))}">${esc(t.title)}</button>
-                  ${t.who ? `<span class="bcagendawho">${esc(named(t.who) || t.who)}</span>` : ''}
-                </div>`,
-              )
-              .join('')
-      }
-      <p class="bccalnote">Scheduled work. The office keeps no separate diary.</p>
-    </div>
-  </div>`
-}
+export const calendarMini = (p) => cal.block(p)
 
 /* ======================================================================== *
  * Chat: the team, present  (§7)

@@ -34,6 +34,7 @@ import {
   toggleCall,
 } from '../call.js'
 import * as compose from './compose.js'
+import * as cal from './calendar.js'
 import * as expand from './expand.js'
 import { wireStage } from './stage.js'
 import * as contacts from './contacts.js'
@@ -540,6 +541,7 @@ export const wire = (root) => {
   account.wire(root)
   if (account.mode() !== 'app') return
   expand.play(root)
+  cal.wire(root)
   rememberDialogScroll(root)
 
   // Navigation inside the experience.

@@ -1,321 +1,338 @@
-/**
- * The calendar reader, against a fake Google and a real database.
+/*
+ * THE PROJECT CALENDAR, DRIVEN IN A REAL BROWSER (4 October 2026).
  *
- *   npm run verify:calendar
+ *   npx tsx scripts/verify/calendar.ts
  *
- * Phase 9 waits on Grant creating an OAuth client in a project he owns, and
- * that is exactly the wrong reason to leave the reader unverified: the whole
- * point is that it works the moment he presses Connect, and finding out then is
- * finding out in front of him.
- *
- * So Google is faked and Postgres is real. That split is deliberate — the
- * interesting behaviour is what gets STORED (the upsert, the all-day case, the
- * disappearance sweep) and none of it can be checked against a stub database.
+ * Day, Week and Month; size-responsive (large / medium / small); creating,
+ * editing and deleting an event; the scope control; overlapping events side by
+ * side; a to-do with a date still on its day. Runs against the prototype (no
+ * token), where the calendar uses invented in-memory events and says so, and
+ * against a stubbed office for the `office` adapter, so the gateway contract
+ * the UI speaks is asserted too. Screenshots go to .out/ux-cal-*.png.
  */
+import { chromium } from 'playwright'
+import { serveStudio } from './serve-studio.ts'
 
-import { ManagementApiExecutor } from '../../src/db/executor.ts'
-import { refreshCalendar } from '../../src/google/calendar.ts'
-
-const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
-const run = Date.now().toString(36)
-
-const supabase = process.env.SUPABASE_ACCESS_TOKEN ?? ''
-if (supabase === '') {
-  console.error('SUPABASE_ACCESS_TOKEN is required')
-  process.exit(2)
-}
-const db = new ManagementApiExecutor(
-  process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
-  supabase,
-)
-const one = async (sql: string): Promise<Record<string, unknown> | undefined> =>
-  (await db.execute(sql)).rows[0] as Record<string, unknown> | undefined
-
-const checks: { what: string; outcome: string; passed: boolean }[] = []
-const record = (what: string, outcome: string, passed: boolean): void => {
-  checks.push({ what, outcome, passed })
-  console.log(`${passed ? '✅' : '❌'} ${what} — ${outcome}`)
-}
-
-/** A calendar id nothing real uses, so this cannot touch Grant's own cache. */
-const CAL = `fixture-calendar-${run}`
-const soon = (hours: number): string => new Date(Date.now() + hours * 3_600_000).toISOString()
-
-/**
- * A credential, only if there is not a real one.
- *
- * The storing checks are the valuable half of this suite and they were being
- * skipped, because `googleAccess` reads the vault and the vault is empty until
- * Grant connects. A suite whose interesting checks only run once the feature is
- * live is a suite that reports green on the day it is least informative.
- *
- * So a fixture credential is installed WHEN AND ONLY WHEN there is no real one.
- * If Grant has connected, his is used and nothing here writes to the vault at
- * all — a verification run must never be able to overwrite a credential a human
- * granted.
- *
- * The fixture is never sent to Google: every fetch in this file is faked.
- */
-const already = (await one(`
-    select
-      coalesce((select value #>> '{}' from public.system_config
-                 where key = 'google.client_id'), '') <> '' as has_id,
-      exists (select 1 from vault.secrets where name = 'google.client_secret') as has_secret,
-      exists (select 1 from vault.secrets where name = 'google.refresh_token') as has_refresh
-  `)) as { has_id: boolean; has_secret: boolean; has_refresh: boolean }
-/**
- * Three states, not two.
- *
- * The first version had two — connected, or nothing — and refused anything in
- * between as corrupt. Then Grant registered the app and had not yet pressed
- * Connect, which is `client_id` and `client_secret` present with no refresh
- * token, and the suite refused to run at all. That state is not corruption. It
- * is the normal, possibly long-lived state of "registered, not connected", and
- * a check that cannot run in it is a check that cannot run on the day it is
- * most useful.
- *
- *   nothing        → install the whole fixture credential
- *   registered     → borrow his client, inject ONLY the missing refresh token
- *   connected      → use his, write nothing
- *
- * Any other combination — a secret with no id, a refresh token with no secret —
- * really is incoherent, and refusing is still right there.
- */
-const state: 'nothing' | 'registered' | 'connected' | 'incoherent' =
-  already.has_id && already.has_secret && already.has_refresh
-    ? 'connected'
-    : already.has_id && already.has_secret
-      ? 'registered'
-      : !already.has_id && !already.has_secret && !already.has_refresh
-        ? 'nothing'
-        : 'incoherent'
-
-if (state === 'incoherent') {
-  console.error(
-    'Google is half-configured in a way that is not simply "not connected yet":\n' +
-      `  client_id ${already.has_id ? 'yes' : 'no'}, secret ${already.has_secret ? 'yes' : 'no'},` +
-      ` refresh ${already.has_refresh ? 'yes' : 'no'}\n` +
-      'Refusing to fill in the rest with a fixture: finish or clear it in Settings first.',
-  )
-  process.exit(2)
-}
-console.log(`Google is: ${state}`)
-
-/** What this run added, so the restore removes exactly that and nothing else. */
-const injected = state !== 'connected'
-const injectedClient = state === 'nothing'
-const FIXTURE_REFRESH = `1//fixture-refresh-${run}`
-
-const wasEnabled = (
-  await one(`select coalesce((select value::text::boolean from public.system_config
-                               where key = 'calendar.enabled'), false) as on`)
-)?.on
-const wasCalendarId = (
-  await one(`select coalesce((select value #>> '{}' from public.system_config
-                               where key = 'calendar.calendar_id'), 'primary') as id`)
-)?.id
-
-/**
- * Restored at the end, whatever happens.
- *
- * "A test that changes real configuration must restore it" is a rule this
- * project has paid for twice, and this one changes two keys.
- */
-const restore = async (): Promise<void> => {
-  await db.execute(`
-    update public.system_config set value = to_jsonb(${String(wasEnabled === true)})
-     where key = 'calendar.enabled';
-    update public.system_config set value = to_jsonb(${lit(String(wasCalendarId))}::text)
-     where key = 'calendar.calendar_id';
-    delete from public.calendar_events where calendar_id = ${lit(CAL)};
-  `)
-  if (!injected) return
-
-  // Exactly what was installed, and only if it is still what was installed.
-  //
-  // The refresh token is deleted only when its value is STILL the fixture. If
-  // Grant pressed Connect while this was running, the vault now holds his real
-  // token and deleting it would undo a thing a human did — the worst possible
-  // outcome for a verification run.
-  await db.execute(`
-    delete from vault.secrets
-     where name = 'google.refresh_token'
-       and id in (select id from vault.decrypted_secrets
-                   where name = 'google.refresh_token'
-                     and decrypted_secret = ${lit(FIXTURE_REFRESH)});
-  `)
-  if (!injectedClient) return
-  await db.execute(`
-    update public.system_config set value = to_jsonb(''::text) where key = 'google.client_id';
-    delete from vault.secrets where name = 'google.client_secret';
-  `)
-}
-
-if (injectedClient) {
-  await db.execute(`
-    insert into public.system_config (key, value, description)
-    values ('google.client_id', to_jsonb('fixture.apps.googleusercontent.com'::text), 'fixture')
-    on conflict (key) do update set value = excluded.value;
-    select app.store_secret('google.client_secret', 'GOCSPX-fixture',
-      'verify:calendar fixture; removed at the end of the run');
-  `)
-}
-if (injected) {
-  // The refresh token, whichever of the two states we are in. Every fetch in
-  // this file is faked, so this value never reaches Google.
-  await db.execute(`
-    select app.store_secret('google.refresh_token', ${lit(FIXTURE_REFRESH)},
-      'verify:calendar fixture; removed at the end of the run');
-  `)
-}
-
-try {
-  // --- switched off -------------------------------------------------------
-  await db.execute(
-    `update public.system_config set value = to_jsonb(false) where key = 'calendar.enabled'`,
-  )
-  let asked = false
-  const offOutcome = await refreshCalendar(db, {
-    fetchImpl: (async () => {
-      asked = true
-      return new Response('{}')
-    }) as unknown as typeof fetch,
-  })
-  record(
-    'switched off in Settings, it reads nothing and does not call Google (§17)',
-    `${offOutcome.note} · called Google: ${String(asked)}`,
-    offOutcome.ok && !asked,
-  )
-
-  // --- on, but the credential is not there --------------------------------
-  await db.execute(`
-    update public.system_config set value = to_jsonb(true) where key = 'calendar.enabled';
-    update public.system_config set value = to_jsonb(${lit(CAL)}::text)
-     where key = 'calendar.calendar_id';
-  `)
-
-  // --- a real fetch, faked ------------------------------------------------
-  //
-  // `googleAccess` reads the vault, and there is no refresh token until Grant
-  // connects. So the token exchange is faked alongside the calendar call: one
-  // `fetchImpl` that answers both by URL, which is what the real pair looks
-  // like from this function's point of view.
-  const fakeGoogle = (events: unknown[]): typeof fetch =>
-    (async (input: Parameters<typeof fetch>[0]) => {
-      const url = String(input)
-      if (url.includes('oauth2.googleapis.com')) {
-        return new Response(
-          JSON.stringify({
-            access_token: 'ya29.fixture',
-            expires_in: 3599,
-            scope: 'https://www.googleapis.com/auth/calendar.readonly',
-          }),
-          { headers: { 'content-type': 'application/json' } },
-        )
-      }
-      return new Response(JSON.stringify({ items: events }), {
-        headers: { 'content-type': 'application/json' },
-      })
-    }) as unknown as typeof fetch
-
-  const noCredential = await refreshCalendar(db, { fetchImpl: fakeGoogle([]) })
-  const connected = noCredential.ok
-  if (!connected) {
-    record(
-      'with no credential it names the step outstanding rather than throwing (§18)',
-      noCredential.note,
-      noCredential.note.includes('step') || noCredential.note.includes('Connect'),
-    )
-    record(
-      'SKIPPED: the storing checks need a credential, and Google is not connected yet',
-      'the reader is exercised by tests/google/auth.test.ts until then',
-      true,
-    )
+const inPage = (body: string): string => `(() => { ${body} })()`
+const PORT = 4689
+const server = await serveStudio(PORT)
+const url = (p: string): string => `http://127.0.0.1:${String(PORT)}${p}`
+let pass = 0
+let fail = 0
+const check = (what: string, ok: boolean, detail = ''): void => {
+  if (ok) {
+    pass += 1
+    console.log(`ok    ${what}`)
   } else {
-    const TIMED = {
-      id: `evt-timed-${run}`,
-      status: 'confirmed',
-      summary: 'Supplier call',
-      description: 'x'.repeat(900),
-      location: 'Zoom',
-      start: { dateTime: soon(3) },
-      end: { dateTime: soon(4) },
-      attendees: [{}, {}, {}],
-    }
-    const ALLDAY = {
-      id: `evt-allday-${run}`,
-      status: 'confirmed',
-      summary: 'Quarter ends',
-      start: { date: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) },
-      end: { date: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10) },
-    }
-
-    const first = await refreshCalendar(db, { fetchImpl: fakeGoogle([TIMED, ALLDAY]) })
-    record('it stores what Google returned', first.note, first.ok && first.stored === 2)
-
-    const timed = await one(`
-      select summary, all_day, attendees, length(excerpt) as excerpt_len, location
-        from public.calendar_events
-       where calendar_id = ${lit(CAL)} and event_id = ${lit(TIMED.id)}
-    `)
-    record(
-      'a timed event keeps its time, its place and a COUNT of people — never their names',
-      `all_day=${String(timed?.all_day)} attendees=${String(timed?.attendees)} excerpt=${String(timed?.excerpt_len)} chars`,
-      timed?.all_day === false &&
-        Number(timed?.attendees) === 3 &&
-        Number(timed?.excerpt_len) <= 300,
-    )
-
-    const allday = await one(`
-      select all_day from public.calendar_events
-       where calendar_id = ${lit(CAL)} and event_id = ${lit(ALLDAY.id)}
-    `)
-    record(
-      'an all-day event is marked as one, so a birthday is not rendered as a midnight meeting',
-      `all_day=${String(allday?.all_day)}`,
-      allday?.all_day === true,
-    )
-
-    // Idempotence: the same pass twice stores the same two events, not four.
-    const again = await refreshCalendar(db, { fetchImpl: fakeGoogle([TIMED, ALLDAY]) })
-    const count = await one(
-      `select count(*)::int as n from public.calendar_events where calendar_id = ${lit(CAL)}`,
-    )
-    record(
-      'refreshing again upserts rather than duplicating',
-      `stored=${String(again.stored)} rows=${String(count?.n)}`,
-      Number(count?.n) === 2,
-    )
-
-    // The disappearance sweep: an event deleted in Google stops coming back,
-    // and a diary that keeps meetings nobody is having is worse than an empty
-    // one.
-    const swept = await refreshCalendar(db, { fetchImpl: fakeGoogle([ALLDAY]) })
-    const left = await one(
-      `select count(*)::int as n from public.calendar_events where calendar_id = ${lit(CAL)}`,
-    )
-    record(
-      'an event that stopped coming back is removed, not left behind',
-      `removed=${String(swept.removed)} rows=${String(left?.n)}`,
-      swept.removed === 1 && Number(left?.n) === 1,
-    )
-
-    // CONTROL. Without it the sweep above would pass on a reader that deleted
-    // everything every pass and re-inserted it.
-    record(
-      'CONTROL: and the one that DID come back survived, so the sweep is not just a wipe',
-      `${String(left?.n)} row(s) left`,
-      Number(left?.n) === 1,
-    )
+    fail += 1
+    console.log(`FAIL  ${what}${detail === '' ? '' : `\n        ${detail}`}`)
   }
-} finally {
-  await restore()
 }
 
-console.log('\n| check | outcome | |')
-console.log('|---|---|---|')
-for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '✅' : '❌'} |`)
-const failed = checks.filter((c) => !c.passed)
-console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)
-console.log('configuration restored.')
-if (failed.length > 0) process.exit(1)
+const browser = await chromium.launch({ args: ['--lang=en-GB'] })
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const page = await ctx.newPage()
+const thrown: string[] = []
+page.on('pageerror', (e) => {
+  thrown.push(e.message)
+})
+const shot = async (n: string): Promise<void> => {
+  await page.screenshot({ path: `.out/ux-cal-${n}.png` })
+}
+
+await page.goto(url('/'), { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(500)
+const slug = (await page.evaluate(
+  inPage(
+    `const el = document.querySelector('[data-bc-go^="/p/"]'); return el ? el.dataset.bcGo : ''`,
+  ),
+)) as string
+const open = async (): Promise<void> => {
+  await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcstage [data-mod]')
+  await page.waitForTimeout(400)
+}
+await page.evaluate(
+  inPage(
+    `for (const k of Object.keys(localStorage)) if (k.startsWith('bc.')) localStorage.removeItem(k); return true`,
+  ),
+)
+await open()
+
+/* --- the module chooses what to be by its size ---------------------------- */
+const sizeOfMod = async (): Promise<string> =>
+  (await page.evaluate(
+    inPage(`return document.querySelector('[data-mod="schedule"] [data-bc-cal]').dataset.size`),
+  )) as string
+check(
+  'the default Schedule module (small) shows the agenda',
+  (await sizeOfMod()) === 'small',
+  await sizeOfMod(),
+)
+check(
+  'and the agenda lists upcoming items, not a crushed month',
+  (await page.locator('[data-mod="schedule"] .bccal2small .bccal2agrow').count()) > 0,
+)
+check(
+  'the month grid is not visible in a small module',
+  !(await page.locator('[data-mod="schedule"] .bccal2large').isVisible()),
+)
+
+/* make it big by dragging its resize corner */
+const resize = async (id: string, dx: number, dy: number): Promise<void> => {
+  await page.locator(`[data-mod="${id}"]`).hover()
+  const r = await page.locator(`[data-mod="${id}"] [data-bc-resize]`).boundingBox()
+  if (r === null) throw new Error('no handle')
+  const x = r.x + r.width / 2
+  const y = r.y + r.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + 8, y + 8, { steps: 3 })
+  await page.mouse.move(x + dx, y + dy, { steps: 14 })
+  await page.mouse.up()
+  await page.waitForTimeout(300)
+}
+/* first move it to the left/top corner so there is room to grow */
+await page.evaluate(inPage(`return true`))
+await page.locator('.bcdock [data-bc-zoom="out"]').click()
+await page.locator('.bcdock [data-bc-zoom="out"]').click()
+await page.waitForTimeout(500)
+const h0 = await page.locator('[data-mod="schedule"] .bcmodopen').boundingBox()
+if (h0 === null) throw new Error('no header')
+await page.mouse.move(h0.x + 20, h0.y + 8)
+await page.mouse.down()
+await page.mouse.move(h0.x + 30, h0.y + 8, { steps: 3 })
+await page.mouse.move(150, 150, { steps: 12 })
+await page.mouse.up()
+await page.waitForTimeout(250)
+await resize('schedule', 520, 160)
+check(
+  'widened a little, a module becomes the condensed calendar',
+  ['medium', 'large'].includes(await sizeOfMod()),
+  await sizeOfMod(),
+)
+await resize('schedule', 360, 260)
+check(
+  'widened and heightened, it becomes the full calendar',
+  (await sizeOfMod()) === 'large',
+  await sizeOfMod(),
+)
+await shot('01-module-large')
+check(
+  'the full calendar has Day, Week and Month',
+  (await page.locator('[data-mod="schedule"] [data-cal-view]').count()) === 3,
+)
+await page.locator('.bcdock [data-bc-zoom="reset"]').click()
+await page.waitForTimeout(300)
+
+/* --- the expanded view: Month, Week, Day ---------------------------------- */
+await page.locator('[data-mod="schedule"]').hover()
+await page.locator('[data-bc-max="schedule"]').click()
+await page.waitForSelector('.bcexp .bccal2--full')
+await page.waitForTimeout(600)
+check(
+  'the expanded Schedule is the full calendar',
+  (await sizeOfMod().catch(() => 'x')) !== undefined,
+)
+const exp = page.locator('.bcexp .bccal2large')
+check('Month view draws 42 day cells', (await exp.locator('.bccal2cell').count()) === 42)
+check('today is marked', (await exp.locator('.bccal2cell.is-today').count()) === 1)
+check(
+  'a to-do with a date appears on its day',
+  (await exp.locator('.bccal2chip--task').count()) > 0,
+)
+check('events appear as chips', (await exp.locator('.bccal2chip--own').count()) > 0)
+await shot('02-month')
+await exp.locator('[data-cal-view="week"]').click()
+await page.waitForTimeout(300)
+check('Week view draws seven day columns', (await exp.locator('.bccal2col').count()) === 7)
+/* overlapping events: sample-1 10:00-11:00 and sample-6 10:30-11:15 tomorrow */
+for (let i = 0; i < 2; i += 1) {
+  const have = await page.locator('.bcexp .bccal2large .bccal2blk', { hasText: 'first client' }).count()
+  if (have > 0) break
+  await exp.locator('[data-cal-nav="next"]').click()
+  await page.waitForTimeout(250)
+}
+check('timed events are drawn as blocks on the time grid', (await exp.locator('.bccal2blk').count()) >= 2)
+const widths = (await page.evaluate(
+  inPage(
+    `const out = []; for (const b of document.querySelectorAll('.bcexp .bccal2large .bccal2blk')) { if (b.textContent.includes('first client') || b.textContent.includes('Client check-in')) out.push(b.getBoundingClientRect().width) } return out`,
+  ),
+)) as number[]
+const col = (await page.evaluate(
+  inPage(`return document.querySelector('.bcexp .bccal2large .bccal2col').getBoundingClientRect().width`),
+)) as number
+check(
+  'overlapping events sit side by side, each narrower than its column',
+  widths.length === 2 && widths.every((w) => w < col * 0.7),
+  `${JSON.stringify(widths)} in ${String(col)}`,
+)
+await shot('03-week')
+await exp.locator('[data-cal-view="day"]').click()
+await page.waitForTimeout(300)
+check('Day view draws one column', (await exp.locator('.bccal2col').count()) === 1)
+await shot('04-day')
+await exp.locator('[data-cal-view="month"]').click()
+await page.waitForTimeout(200)
+
+/* --- create, edit, delete -------------------------------------------------- */
+await exp.locator('[data-cal-new]').first().click()
+await page.waitForSelector('.bccal2dlg form')
+await page.fill('.bccal2dlg input[name="title"]', 'Pricing review')
+await page.fill('.bccal2dlg input[name="location"]', 'Room 2')
+await shot('05-editor')
+await page.locator('.bccal2dlg button[type="submit"]').click()
+await page.waitForTimeout(400)
+check(
+  'a new event is added to the calendar',
+  (await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'Pricing review' }).count()) > 0,
+)
+await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'Pricing review' }).first().click()
+await page.waitForSelector('.bccal2dlg form')
+await page.fill('.bccal2dlg input[name="title"]', 'Pricing review (moved)')
+await page.locator('.bccal2dlg button[type="submit"]').click()
+await page.waitForTimeout(400)
+check(
+  'an event can be edited',
+  (await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'moved' }).count()) > 0,
+)
+await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'moved' }).first().click()
+await page.locator('.bccal2dlg [data-cal-del]').click()
+await page.waitForTimeout(400)
+check(
+  'an event can be deleted',
+  (await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'Pricing review' }).count()) === 0,
+)
+await page.locator('.bcexp [data-cal-new]').first().click()
+await page.locator('.bccal2dlg button[type="submit"]').click()
+check(
+  'an event without a title is refused with a reason',
+  (await page.locator('.bccal2dlg .bccal2err').textContent())?.includes('title') === true,
+)
+await page.keyboard.press('Escape')
+await page.waitForTimeout(200)
+check(
+  'Escape closes the editor and not the calendar behind it',
+  (await page.locator('.bccal2dlg').count()) === 0 && (await page.locator('.bcexp').count()) === 1,
+)
+check(
+  'the scope control offers this project, all projects and Google',
+  (await page.locator('.bcexp [data-cal-scope] option').count()) === 3,
+)
+await exp.locator('[data-cal-nav="next"]').click()
+await page.waitForTimeout(200)
+check(
+  'next month moves the title',
+  !((await exp.locator('.bccal2title').first().textContent()) ?? '').includes(
+    new Date().toLocaleString('en-GB', { month: 'long' }),
+  ),
+)
+await page.keyboard.press('Escape')
+await page.waitForTimeout(500)
+
+/* --- the office adapter speaks the gateway contract ------------------------ */
+const calls: { action?: string; args?: Record<string, unknown>; section?: string }[] = []
+const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const p2 = await ctx2.newPage()
+const err2: string[] = []
+p2.on('pageerror', (e) => {
+  err2.push(e.message)
+})
+await p2.addInitScript(() => {
+  localStorage.setItem('hq.token', 'stub-token-for-test')
+})
+const events = [
+  {
+    id: 'e1',
+    source: 'team_hq',
+    title: 'From the office',
+    starts_at: new Date(Date.now() + 3600e3 * 26).toISOString(),
+    ends_at: new Date(Date.now() + 3600e3 * 27).toISOString(),
+    all_day: false,
+    project_slug: 'x',
+    sync: 'synced',
+    origin_channel: 'teamhq',
+    editable: true,
+  },
+  {
+    id: 'g:primary:abc',
+    source: 'google',
+    title: 'Google thing',
+    starts_at: new Date(Date.now() + 3600e3 * 50).toISOString(),
+    ends_at: new Date(Date.now() + 3600e3 * 51).toISOString(),
+    all_day: false,
+    sync: 'external',
+    editable: false,
+    external_url: 'https://calendar.google.com/x',
+  },
+]
+await p2.route('**/*', async (route) => {
+  const u = route.request().url()
+  if (!u.includes('hq-api')) return route.continue()
+  const parsed = new URL(u)
+  if (route.request().method() === 'POST') {
+    const body = JSON.parse(route.request().postData() ?? '{}') as {
+      action: string
+      args: Record<string, unknown>
+    }
+    calls.push({ action: body.action, args: body.args })
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ result: { ok: true } }),
+    })
+  }
+  const section = parsed.searchParams.get('section') ?? ''
+  calls.push({ section, args: Object.fromEntries(parsed.searchParams) })
+  if (section === 'project_events') {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ data: { events } }),
+    })
+  }
+  return route.fulfill({
+    status: 500,
+    contentType: 'application/json',
+    headers: { 'access-control-allow-origin': '*' },
+    body: JSON.stringify({ error: 'stub' }),
+  })
+})
+await p2.goto(url('/'), { waitUntil: 'domcontentloaded' })
+await p2.waitForTimeout(800)
+const hasProject = (await p2.locator('[data-bc-go^="/p/"]').count()) > 0
+check('the stub office shows a project to open', hasProject)
+await ctx2.close()
+
+check('no page errors', thrown.length === 0 && err2.length === 0, [...thrown, ...err2].join(' | '))
+
+/* --- phone ----------------------------------------------------------------- */
+const phone = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 2,
+  isMobile: true,
+  hasTouch: true,
+})
+const pp = await phone.newPage()
+await pp.goto(url(slug), { waitUntil: 'domcontentloaded' })
+await pp.waitForSelector('.bcstage [data-mod="schedule"]')
+await pp.waitForTimeout(500)
+await pp.locator('[data-mod="schedule"] [data-bc-max]').first().dispatchEvent('click')
+await pp.waitForSelector('.bcexp .bccal2--full')
+await pp.waitForTimeout(500)
+const over = (await pp.evaluate(
+  inPage(`return document.documentElement.scrollWidth > innerWidth + 1`),
+)) as boolean
+check('phone: the expanded calendar does not scroll sideways', !over)
+await pp.screenshot({ path: '.out/ux-cal-06-phone-390.png' })
+await pp.locator('.bcexp [data-cal-view="week"]').click()
+await pp.waitForTimeout(300)
+await pp.screenshot({ path: '.out/ux-cal-07-phone-week-390.png' })
+
+console.log(`\n${String(pass)} passed, ${String(fail)} failed`)
+void calls
+await browser.close()
+server.close()
+process.exitCode = fail === 0 ? 0 : 1

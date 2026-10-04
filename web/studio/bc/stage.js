@@ -131,6 +131,7 @@ export const wireStage = (root, ctx) => {
     stageEl.style.width = `${String(st.w)}px`
     stageEl.style.height = `${String(st.h)}px`
     stageEl.style.transform = `scale(${String(zoomLive)})`
+    stageEl.style.setProperty('--bc-zoom', String(zoomLive))
     paintAll()
   }
 

@@ -35,6 +35,7 @@ import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
 import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
+import * as cal from './calendar.js'
 import * as when from '../when.js'
 import * as bcDocOrder from './docorder.js'
 import * as stopping from './stopping.js'
@@ -61,6 +62,7 @@ export const mount = (c) => {
   contacts.mount(c)
   compose.mount(c)
   account.mount(c)
+  cal.init(c)
 }
 
 const state = () => ctx.state
@@ -2522,58 +2524,9 @@ const boardSurface = (p) => {
  * and `starts_on`, both already returned by `app.studio_tasks`.
  * ======================================================================== */
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
-
-const monthGrid = (ym, marks, today) => {
-  const [y, m] = ym.split('-').map(Number)
-  const first = new Date(Date.UTC(y, m - 1, 1))
-  const lead = (first.getUTCDay() + 6) % 7
-  const len = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  const cells = []
-  for (let i = 0; i < lead; i += 1) cells.push('<span class="bccal-pad"></span>')
-  for (let d = 1; d <= len; d += 1) {
-    const iso = `${ym}-${String(d).padStart(2, '0')}`
-    const n = marks.get(iso) ?? 0
-    const cls = ['bccal-day']
-    if (n > 0) cls.push('bccal-day--has')
-    if (iso === today) cls.push('bccal-day--today')
-    cells.push(
-      `<span class="${cls.join(' ')}"${n > 0 ? ` title="${esc(n === 1 ? '1 thing due' : `${n} things due`)}"` : ''}>${d}</span>`,
-    )
-  }
-  return `<div class="bccal">
-    <div class="bccalmonth">${esc(`${MONTHS[m - 1]} ${String(y)}`)}</div>
-    <div class="bccalgrid">
-      ${DOW.map((d) => `<span class="bccal-dow">${esc(d)}</span>`).join('')}
-      ${cells.join('')}
-    </div>
-  </div>`
-}
-
 const scheduleSurface = (p) => {
   const all = (p.tasks ?? []).filter((t) => t.milestone !== true)
-  const dated = all
-    .map((t) => ({ t, iso: String(t.due_on ?? t.starts_on ?? '').slice(0, 10) }))
-    .filter((x) => x.iso !== '' && !Number.isNaN(new Date(`${x.iso}T00:00:00Z`).getTime()))
-    .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0))
   const undated = all.filter((t) => String(t.due_on ?? t.starts_on ?? '') === '')
-  const now = new Date()
-  const today = now.toISOString().slice(0, 10)
-  const marks = new Map()
-  for (const { iso } of dated) marks.set(iso, (marks.get(iso) ?? 0) + 1)
-  /*
-    The months that HAVE something in them, plus this one. A month stepper
-    would need state the router does not carry, and scrolling a short list of
-    real months is a better answer than paging through empty ones.
-  */
-  const months = [...new Set([today.slice(0, 7), ...dated.map((x) => x.iso.slice(0, 7))])].sort()
-  const byMonth = new Map()
-  for (const d of dated) {
-    const k = d.iso.slice(0, 7)
-    if (!byMonth.has(k)) byMonth.set(k, [])
-    byMonth.get(k).push(d)
-  }
   return `${crumbFor(p, 'schedule')}
     <div class="bcrecordhead">
       <h1>${esc(toolById('schedule')?.name ?? 'Schedule')}</h1>
@@ -2582,53 +2535,11 @@ const scheduleSurface = (p) => {
     <p class="bcpmeta bcprose bcgap-l">
       When this project's to-dos are due. Anything without a date is listed at the foot.
     </p>
+    ${cal.block(p, { full: true })}
     ${
-      dated.length === 0 && undated.length === 0
-        ? empty(
-            {
-              title: 'Nothing is scheduled',
-              body: 'A to-do with a date appears here, on its day. Give one a date and this fills in.',
-            },
-            button('Go to the to-dos', { kind: 'primary', 'data-bc-go': at(`/p/${p.slug}/tasks`) }),
-          )
-        : months
-            .map((ym) => {
-              const items = byMonth.get(ym) ?? []
-              return `<section class="bcmonth">
-                ${monthGrid(ym, marks, today)}
-                <div class="bcagenda">
-                  <h2 class="bcagendamonth">${esc(`${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`)}</h2>
-                  ${
-                    items.length === 0
-                      ? `<p class="bcpmeta">Nothing is due this month.</p>`
-                      : items
-                          .map(
-                            ({ t, iso }) => `<div class="bcagendaitem${bcMini.isLate(t) ? ' bcagendaitem--late' : ''}">
-                              <span class="bcagendadate">
-                                <span class="bcagendadd">${esc(String(Number(iso.slice(8, 10))))}</span>
-                                <span class="bcagendamm">${esc(MONTHS[Number(iso.slice(5, 7)) - 1].slice(0, 3))}</span>
-                              </span>
-                              <button type="button" class="bcitemtitle bcitemlink bcagendawhat"
-                                data-bc-task-open="${esc(taskKey(t))}">${esc(t.title)}</button>
-                              <!--
-                                IN WORDS AS WELL AS IN COLOUR. A date box with
-                                a different border is not a statement anybody
-                                can read out, and the one thing a schedule owes
-                                a person is which of these is already late.
-                              -->
-                              ${bcMini.isLate(t) ? status('Overdue', 'blocked') : ''}
-                              ${t.who ? `<span class="bcagendawho">${esc(whoName(t.who))}</span>` : ''}
-                            </div>`,
-                          )
-                          .join('')
-                  }
-                </div>
-              </section>`
-            })
-            .join('') +
-          (undated.length === 0
-            ? ''
-            : `<section class="bcundated">
+      undated.length === 0
+        ? ''
+        : `<section class="bcundated">
                 <h2>No date yet</h2>
                 <p class="bcpmeta bcprose">
                   Work with nothing to be due by. Giving one a date puts it on
@@ -2665,7 +2576,7 @@ const scheduleSurface = (p) => {
                     )
                     .join('')}
                 </div>
-              </section>`)
+              </section>`
     }`
 }
 
