@@ -48,6 +48,7 @@ import { briefingHandler } from '../handlers/briefing.ts'
 import { browserGatherHandler } from '../handlers/browser-gather.ts'
 import { buildShotsHandler } from '../handlers/build-shots.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
+import { calendarEventsHandler } from '../handlers/calendar-events.ts'
 import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { channelsHandler } from '../handlers/channels.ts'
@@ -426,6 +427,8 @@ export const buildPass = async (
     // The other direction: dated tasks into the diary (#94, ADR-0020). Off
     // until `calendar.sync_tasks` is turned on.
     calendarTasksHandler(db),
+    // Project calendars both ways: a project's own events to Google, and Google's edits back (0897).
+    calendarEventsHandler(db),
     jobTracesHandler(db),
     /*
       #21. The build diary pruned its rows and kept its pictures — 38 orphans
