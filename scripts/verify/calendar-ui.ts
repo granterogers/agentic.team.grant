@@ -148,19 +148,26 @@ await page.waitForTimeout(300)
 check('Week view draws seven day columns', (await exp.locator('.bccal2col').count()) === 7)
 /* overlapping events: sample-1 10:00-11:00 and sample-6 10:30-11:15 tomorrow */
 for (let i = 0; i < 2; i += 1) {
-  const have = await page.locator('.bcexp .bccal2large .bccal2blk', { hasText: 'first client' }).count()
+  const have = await page
+    .locator('.bcexp .bccal2large .bccal2blk', { hasText: 'first client' })
+    .count()
   if (have > 0) break
   await exp.locator('[data-cal-nav="next"]').click()
   await page.waitForTimeout(250)
 }
-check('timed events are drawn as blocks on the time grid', (await exp.locator('.bccal2blk').count()) >= 2)
+check(
+  'timed events are drawn as blocks on the time grid',
+  (await exp.locator('.bccal2blk').count()) >= 2,
+)
 const widths = (await page.evaluate(
   inPage(
     `const out = []; for (const b of document.querySelectorAll('.bcexp .bccal2large .bccal2blk')) { if (b.textContent.includes('first client') || b.textContent.includes('Client check-in')) out.push(b.getBoundingClientRect().width) } return out`,
   ),
 )) as number[]
 const col = (await page.evaluate(
-  inPage(`return document.querySelector('.bcexp .bccal2large .bccal2col').getBoundingClientRect().width`),
+  inPage(
+    `return document.querySelector('.bcexp .bccal2large .bccal2col').getBoundingClientRect().width`,
+  ),
 )) as number
 check(
   'overlapping events sit side by side, each narrower than its column',
@@ -185,7 +192,8 @@ await page.locator('.bccal2dlg button[type="submit"]').click()
 await page.waitForTimeout(400)
 check(
   'a new event is added to the calendar',
-  (await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'Pricing review' }).count()) > 0,
+  (await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'Pricing review' }).count()) >
+    0,
 )
 await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'Pricing review' }).first().click()
 await page.waitForSelector('.bccal2dlg form')
@@ -201,7 +209,8 @@ await page.locator('.bccal2dlg [data-cal-del]').click()
 await page.waitForTimeout(400)
 check(
   'an event can be deleted',
-  (await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'Pricing review' }).count()) === 0,
+  (await page.locator('.bcexp .bccal2large .bccal2chip', { hasText: 'Pricing review' }).count()) ===
+    0,
 )
 await page.locator('.bcexp [data-cal-new]').first().click()
 await page.locator('.bccal2dlg button[type="submit"]').click()
