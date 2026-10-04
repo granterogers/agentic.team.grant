@@ -37,10 +37,21 @@
  */
 
 import { howComposed } from '../agents/provenance.ts'
+import { applyDesign, type Design, designBrief, effectiveStyle } from '../artifacts/design.ts'
 import { type Block, coverTakes, type Report, renderReport } from '../artifacts/report.ts'
+import { resolveSourceDocument, revisesEarlier, sourcePhrase } from '../artifacts/source.ts'
 import { filenameFor, storeArtifact } from '../artifacts/store.ts'
-import { loadStyle } from '../artifacts/style.ts'
+import { loadStyle, type StyleProfile } from '../artifacts/style.ts'
 import { validatePdf } from '../artifacts/validate.ts'
+import {
+  madeHead,
+  provenanceOf,
+  recordProvenance,
+  reviseMade,
+  styleHash,
+  styleUpdatedAt,
+  versionNote,
+} from '../artifacts/versions.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
@@ -48,6 +59,7 @@ import {
   citationRef,
   contextBlock,
   correspondence,
+  type Hit,
   type MailCoverage,
   mailBlock,
   retrieve,
@@ -75,14 +87,20 @@ const MOST_BLOCKS = 60
  * receives, and a block with a missing field is a hole in a document rather
  * than an exception somebody sees.
  */
-export function readReport(text: string): { title: string; blocks: Block[] } | null {
+export function readReport(
+  text: string,
+): { title: string; blocks: Block[]; design?: unknown } | null {
   const cleaned = scrub(text)
   const start = cleaned.indexOf('{')
   const end = cleaned.lastIndexOf('}')
   if (start === -1 || end <= start) return null
-  let parsed: { title?: unknown; blocks?: unknown }
+  let parsed: { title?: unknown; blocks?: unknown; design?: unknown }
   try {
-    parsed = JSON.parse(cleaned.slice(start, end + 1)) as { title?: unknown; blocks?: unknown }
+    parsed = JSON.parse(cleaned.slice(start, end + 1)) as {
+      title?: unknown
+      blocks?: unknown
+      design?: unknown
+    }
   } catch {
     return null
   }
@@ -182,7 +200,8 @@ export function readReport(text: string): { title: string; blocks: Block[] } | n
     .slice(0, MOST_BLOCKS)
 
   if (title === '' || blocks.length === 0) return null
-  return { blocks, title }
+  // A design SUGGESTION, kept raw: `designBrief` validates it against what the renderer can draw.
+  return { blocks, ...(parsed.design === undefined ? {} : { design: parsed.design }), title }
 }
 
 const BRIEF =
@@ -197,6 +216,8 @@ const BRIEF =
   '  {"kind":"quote","text":"...","attribution":"..."}\n' +
   '  {"kind":"table","columns":["..."],"rows":[["..."]],"caption":"..."}\n' +
   '  {"kind":"chart","title":"...","bars":[{"label":"...","value":3}],"caption":"..."}\n\n' +
+  'Optionally add "design":{"title_page":"band"|"standard","density":"comfortable"|"compact","charts":true|false} ' +
+  'if you have a view; anything else in it is ignored, and the house style outranks it.\n\n' +
   'Write for a person who will read this on paper. Open with one lead paragraph ' +
   'saying where things stand. Use a table when you are comparing things and a ' +
   'chart when you are counting them — never for decoration, and never with ' +
@@ -205,6 +226,85 @@ const BRIEF =
   'write that it does not, in the report, rather than filling the gap. Do not ' +
   'invent a figure, a date, a name or a quotation. A short honest report is ' +
   'worth more than a long invented one.'
+
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+
+/**
+ * Documents named by id - the resolved source, or the sources an earlier version cited - as hits, in the order given.
+ * Only documents with text are returned: a source that holds none cannot be read from, and the caller says so.
+ */
+async function explicitHits(
+  db: SqlExecutor,
+  jobId: string,
+  ids: readonly string[],
+): Promise<readonly Hit[]> {
+  if (ids.length === 0) return []
+  const { rows } = await db.execute(
+    `select d.document_id::text as id, d.title, d.connector, d.origin, d.content
+       from public.documents d
+      where d.office_id = app.job_office(${lit(jobId)}::uuid)
+        and d.document_id = any (array[${ids.map((i) => `${lit(i)}::uuid`).join(',')}])
+        and coalesce(d.content_chars, 0) > 0`,
+  )
+  const byId = new Map(rows.map((r) => [String(r.id), r]))
+  return ids.flatMap((id, index): Hit[] => {
+    const r = byId.get(id)
+    if (r === undefined) return []
+    return [
+      {
+        connector: typeof r.connector === 'string' ? r.connector : null,
+        documentId: id,
+        excerpt: String(r.content ?? '').slice(0, 30_000),
+        origin: String(r.origin ?? 'source'),
+        rank: 1_000 - index,
+        title: String(r.title ?? ''),
+      },
+    ]
+  })
+}
+
+/**
+ * The renderer's inputs, decided once from the draft: the blocks with the design applied, and the style with the
+ * design's choices laid over it. Deterministic - called again on a resume it gives the same answer.
+ */
+export function compose(
+  draft: { readonly blocks: readonly Block[]; readonly design?: unknown },
+  style: StyleProfile | null,
+): { blocks: Block[]; style: StyleProfile; design: Design } {
+  const design = designBrief({ blocks: draft.blocks, proposal: draft.design, style })
+  return {
+    blocks: applyDesign(draft.blocks, design.choice),
+    design,
+    style: effectiveStyle(style, design.choice),
+  }
+}
+
+/** The question the office asks instead of guessing which document was meant. Never names a file it did not find. */
+export function askWhich(
+  phrase: string,
+  status: string,
+  candidates: readonly { title: string }[],
+): string {
+  const list = candidates.map((c, i) => `${String(i + 1)}. ${c.title}`).join('\n')
+  if (status === 'unreadable') {
+    return (
+      `I found "${candidates[0]?.title ?? phrase}" for "${phrase}", but I hold no text from it, so I cannot ` +
+      'write a report from it yet. Nothing was created. Ask me to read it in, or point me at another document.'
+    )
+  }
+  if (candidates.length === 0) {
+    return (
+      `I could not find a document matching "${phrase}" in this project, and nothing was created. ` +
+      'Tell me which document you mean, or attach it, and I will start.'
+    )
+  }
+  return (
+    (status === 'ambiguous'
+      ? `More than one document could be "${phrase}". `
+      : `Nothing in this project matched "${phrase}" exactly. `) +
+    `Which one do you want turned into a PDF?\n${list}\nNothing was created yet.`
+  )
+}
 
 export function artifactHandler(deps: ArtifactDeps): Handler {
   const { db, router } = deps
@@ -255,6 +355,16 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
       const projectId: string = job.projectId
       // The house style (0923): the office's, with this project's fields over it. Fails open to the default look.
       const style = await loadStyle(db, job.jobId, projectId)
+      const where = (
+        await db.execute(
+          `select app.job_office(${lit(job.jobId)}::uuid)::text as office,
+                  (select p.slug from public.projects p
+                    where p.project_id = ${lit(projectId)}::uuid
+                      and p.office_id = app.job_office(${lit(job.jobId)}::uuid)) as slug`,
+        )
+      ).rows[0] as { office?: string; slug?: string } | undefined
+      const office = String(where?.office ?? '')
+      const projectSlug = String(where?.slug ?? '')
 
       /*
         Run as checkpointed steps (#263).
@@ -290,10 +400,76 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
           {
             name: 'gather',
             run: async () => {
-              const found = await retrieve(db, { jobId: job.jobId }, brief, projectId, 8)
+              /*
+                Which document is meant, decided before any search. A named source ("the latest customer research
+                report") is resolved over the project's logical documents; when it cannot be, the job ASKS rather
+                than writing a beautiful PDF of the wrong one. A revision names the earlier version it revises.
+              */
+              const phrase = sourcePhrase(brief)
+              let source: { id: string; title: string } | null = null
+              let ask: {
+                phrase: string
+                status: string
+                candidates: { id: string; title: string }[]
+              } | null = null
+              if (phrase !== null) {
+                const res = await resolveSourceDocument(db, {
+                  office,
+                  phrase,
+                  project: projectSlug,
+                }).catch(() => null)
+                if (res?.status === 'resolved') {
+                  source = { id: res.document.id, title: res.document.title }
+                } else if (res !== null) {
+                  ask = {
+                    candidates: res.candidates.map((c) => ({ id: c.id, title: c.title })),
+                    phrase,
+                    status: res.status,
+                  }
+                }
+              }
+              const head = revisesEarlier(brief)
+                ? await madeHead(db, { office, projectId }).catch(() => null)
+                : null
+              const prior =
+                head === null
+                  ? null
+                  : await provenanceOf(db, { documentId: head.documentId, office }).catch(
+                      () => null,
+                    )
+              const priorIds =
+                source === null && prior !== null
+                  ? prior.sources.flatMap((x) => UUID.exec(x.ref)?.[0] ?? [])
+                  : []
+              const explicit = await explicitHits(db, job.jobId, [
+                ...(source === null ? [] : [source.id]),
+                ...priorIds,
+              ])
+              if (source !== null && explicit.length === 0 && ask === null) {
+                ask = {
+                  candidates: [{ id: source.id, title: source.title }],
+                  phrase: phrase ?? '',
+                  status: 'unreadable',
+                }
+              }
+              const rest = await retrieve(db, { jobId: job.jobId }, brief, projectId, 8)
+              const have = new Set(explicit.map((h) => h.documentId))
+              const found = [...explicit, ...rest.filter((h) => !have.has(h.documentId))]
               const post = await correspondence(db, { jobId: job.jobId }, projectId, brief, 4)
               return {
                 outcome: {
+                  ask,
+                  revises:
+                    head === null
+                      ? null
+                      : {
+                          id: head.documentId,
+                          state: head.state,
+                          title: head.title,
+                          version: head.version,
+                        },
+                  explicitIds: explicit.map((h) => h.documentId),
+                  source,
                   /*
                   References, not contents. The Issue asks for "safe tool
                   inputs/outputs or references to them" and a document's text
@@ -318,6 +494,9 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
           {
             name: 'draft',
             run: async (done) => {
+              if (done.gather?.ask !== null && done.gather?.ask !== undefined) {
+                return { outcome: { asked: true } }
+              }
               const documents = (done.gather?.documents ?? []) as {
                 connector: string
                 id: string
@@ -336,7 +515,17 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               call — and on a resume it is the only way the text is available
               at all.
             */
-              const hits = await retrieve(db, { jobId: job.jobId }, brief, projectId, 8)
+              const gathered_ = done.gather as
+                | {
+                    source?: { id: string; title: string } | null
+                    revises?: { title: string; version: number } | null
+                    explicitIds?: string[]
+                  }
+                | undefined
+              const first = await explicitHits(db, job.jobId, gathered_?.explicitIds ?? [])
+              const rest = await retrieve(db, { jobId: job.jobId }, brief, projectId, 8)
+              const seen = new Set(first.map((h) => h.documentId))
+              const hits = [...first, ...rest.filter((h) => !seen.has(h.documentId))]
               const post = await correspondence(db, { jobId: job.jobId }, projectId, brief, 4)
               /*
               WHAT THE OFFICE COULD NOT LOOK AT, not merely what it found.
@@ -368,6 +557,13 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                   {
                     content:
                       `What was asked for: ${brief}\n\n` +
+                      (gathered_?.source
+                        ? `The source document to turn into the report: "${gathered_.source.title}" ([1] below).\n\n`
+                        : '') +
+                      (gathered_?.revises
+                        ? `This revises version ${String(gathered_.revises.version)} of "${gathered_.revises.title}": ` +
+                          'keep its subject and apply the changes asked for.\n\n'
+                        : '') +
                       `${contextBlock(hits, 40_000)}\n\n${mailBlock(post, cover)}`,
                     role: 'user',
                   },
@@ -377,6 +573,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               return {
                 outcome: {
                   blocks: read?.blocks ?? [],
+                  design: read?.design ?? null,
                   model: completion.model,
                   title: read?.title ?? '',
                   unreadable: read === null,
@@ -389,7 +586,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
             effect: 'local',
             run: async (done) => {
               const draft = done.draft ?? {}
-              if (draft.nothing === true || draft.unreadable === true) {
+              if (draft.nothing === true || draft.unreadable === true || draft.asked === true) {
                 return { outcome: { skipped: true } }
               }
               const sources = [
@@ -409,18 +606,23 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                   ref: `mail:${m.id}`,
                 })),
               ]
+              // Design is decided here by rule (design.ts); the model only proposed. Same inputs, same bytes.
+              const composed = compose(
+                { blocks: draft.blocks as Block[], design: draft.design },
+                style,
+              )
               const report: Report = {
                 author: 'Agentic Team',
-                blocks: draft.blocks as Block[],
+                blocks: composed.blocks,
                 created: new Date(),
                 sources,
                 // The document's own opening, not the request that asked for it.
                 // See `coverLine`: every report so far printed Grant's
                 // instruction on its cover above two thirds of an empty page.
-                subtitle: coverTakes(draft.blocks as Block[]).line,
+                subtitle: coverTakes(composed.blocks).line,
                 title: String(draft.title ?? 'Report'),
               }
-              const { bytes, problems } = renderReport(report, style)
+              const { bytes, problems } = renderReport(report, composed.style)
               const verdict = validatePdf(bytes, { layoutProblems: problems })
               if (!verdict.ok) {
                 return { outcome: { failed: verdict.problems.slice(0, 2) } }
@@ -441,10 +643,62 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               if (!kept.ok) {
                 return { outcome: { pages: verdict.pages, stored: false, why: kept.error } }
               }
+              /*
+                How it was made, kept: the job (documents.produced_by_job already holds it), the style in force (a
+                hash, and when it last changed), the design chosen and the sources cited. A failure to record is
+                said in the outcome and never fails the file - the PDF is stored and valid either way.
+              */
+              const hash = styleHash(style)
+              const stamped = await styleUpdatedAt(db, { office, projectId })
+              const provenanceProblem =
+                kept.documentId === null
+                  ? 'no document id'
+                  : await recordProvenance(
+                      db,
+                      { documentId: kept.documentId, office },
+                      {
+                        design: { ...composed.design.choice, reasons: composed.design.reasons },
+                        jobId: job.jobId,
+                        sources,
+                        styleHash: hash,
+                        styleUpdatedAt: stamped,
+                      },
+                    ).catch((e: unknown) => String((e as Error).message))
+              /*
+                A revision is a NEW VERSION of the document it revises, not a second document. First creation is
+                version 1 and needs no link. Idempotent on the new document, so a retry cannot make version 3.
+              */
+              const revises = (done.gather?.revises ?? null) as {
+                id: string
+                title: string
+                version: number
+              } | null
+              let version = 1
+              let versionProblem: string | null = null
+              if (revises !== null && kept.documentId !== null && revises.id !== kept.documentId) {
+                const made = await reviseMade(
+                  db,
+                  { headId: revises.id, newId: kept.documentId, office },
+                  versionNote({ instruction: brief, jobId: job.jobId, sources, styleHash: hash }),
+                ).catch((e: unknown) => ({
+                  already: false,
+                  error: String((e as Error).message),
+                  ok: false,
+                  version: null,
+                }))
+                if (made.ok) version = made.version ?? revises.version + 1
+                else versionProblem = made.error
+              }
               return {
                 effectRef: `document:${kept.documentId ?? ''}`,
                 outcome: {
+                  design: composed.design.reasons,
                   documentId: kept.documentId,
+                  provenanceProblem,
+                  styleHash: hash,
+                  version,
+                  versionProblem,
+                  revisedFrom: revises?.title ?? null,
                   pages: verdict.pages,
                   /*
                   AND WHERE THE BYTES ARE (#258).
@@ -515,6 +769,15 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
       const drafted = run.outcomes.draft ?? {}
       const kept = run.outcomes.store ?? {}
 
+      if (typeof gathered.ask === 'object' && gathered.ask !== null) {
+        const a = gathered.ask as {
+          phrase: string
+          status: string
+          candidates: { title: string }[]
+        }
+        // Asked, not guessed: no file was made and none was stored.
+        return say(askWhich(a.phrase, a.status, a.candidates))
+      }
       if (drafted.nothing === true) {
         return say(
           'I have nothing read in on this project to write a report FROM. Attach a ' +
@@ -572,9 +835,13 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         reading the object back out of Storage — is a network round trip to
         recover something that is deterministic from the draft.
       */
+      const recomposed = compose(
+        { blocks: drafted.blocks as Block[], design: drafted.design },
+        style,
+      )
       const finalReport: Report = {
         author: 'Agentic Team',
-        blocks: drafted.blocks as Block[],
+        blocks: recomposed.blocks,
         created: new Date(),
         sources: [
           ...(
@@ -594,10 +861,16 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
           })),
         ],
         // As above — the cover says what the report found, never what was asked.
-        subtitle: coverTakes(drafted.blocks as Block[]).line,
+        subtitle: coverTakes(recomposed.blocks).line,
         title: String(drafted.title ?? 'Report'),
       }
-      const again = renderReport(finalReport, style)
+      const again = renderReport(finalReport, recomposed.style)
+      const versionLine =
+        typeof kept.revisedFrom === 'string'
+          ? typeof kept.versionProblem === 'string'
+            ? ` I could not link it as a new version of \u201c${kept.revisedFrom}\u201d (${kept.versionProblem}), so it is saved as a separate document.`
+            : ` It is version ${String(kept.version)} of \u201c${kept.revisedFrom}\u201d; the earlier version is kept in its history.`
+          : ''
 
       return {
         ...base,
@@ -625,7 +898,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         body:
           `${finalReport.title} — ${String(kept.pages)} pages, from ${String(
             finalReport.sources.length,
-          )} source(s). It is in the project’s documents as well, so you can open it ` +
+          )} source(s).${versionLine} It is in the project’s documents as well, so you can open it ` +
           'from the dashboard or ask me to send it anywhere else.',
         evidence: 'verified',
         model: String(drafted.model ?? '') || null,

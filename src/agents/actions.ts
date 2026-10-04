@@ -337,7 +337,7 @@ const ARTIFACT_NOUN =
 
 /** Asking for it to be MADE, as opposed to asking about one that exists. */
 const MAKE_IT =
-  /\b(write|create|produce|draft|generate|put\s+together|prepare|make|compile|pull\s+together)\b/i
+  /\b(write|create|produce|draft|generate|put\s+together|prepare|make|compile|pull\s+together|revise|redo|re-do|rework|redesign|regenerate|remake|convert|turn\s[^.!?]{0,120}?\binto)\b/i
 
 /*
   Asking for one WITHOUT a making verb, which is how people mostly ask.

@@ -139,8 +139,18 @@ const n = (v: number): string => {
  * needs to know about widows, page breaks and section headings and a drawing
  * surface should not.
  */
+/** Where a piece of text was put, for the layout QA (`qa.ts`). `y` is the baseline from the bottom. */
+export interface TextBox {
+  readonly text: string
+  readonly x: number
+  readonly y: number
+  readonly size: number
+  readonly width: number
+}
+
 export class Page {
   private readonly ops: string[] = []
+  private readonly placed: TextBox[] = []
 
   constructor(
     readonly width: number,
@@ -150,6 +160,7 @@ export class Page {
   /** Text at a baseline, in a face and size. `x`/`y` are from the bottom left. */
   text(value: string, x: number, y: number, face: Face, size: number, colour: Rgb): this {
     if (value === '') return this
+    this.placed.push({ size, text: value, width: widthOf(value, face, size), x, y })
     this.ops.push(
       'BT',
       `${n(colour.r)} ${n(colour.g)} ${n(colour.b)} rg`,
@@ -222,6 +233,11 @@ export class Page {
    */
   said(): string {
     return this.raw.map((r) => r.value).join('\n')
+  }
+
+  /** Every text object drawn, with its box, so a layout check can compare them without decoding the stream. */
+  boxes(): readonly TextBox[] {
+    return this.placed
   }
 
   /** The finished content stream, as bytes. */

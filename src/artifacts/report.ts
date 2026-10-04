@@ -36,6 +36,7 @@
 
 import type { Face } from './metrics.ts'
 import { A4, assemble, type DocumentInfo, Page, widthOf } from './pdf.ts'
+import { layoutCollisions } from './qa.ts'
 import { DEFAULT_THEME, resolveTheme, type StyleProfile, type Theme } from './style.ts'
 
 // --- the design system, such as it is ---------------------------------------
@@ -359,8 +360,18 @@ class Flow {
         0.5,
         T.rule,
       )
+      /*
+        The title in the foot is cut at a word to leave room for the page number. A long title ran under it - found by
+        the layout check (qa.ts), which reported the number printed over the last words of the title.
+      */
+      let foot = this.title
+      const room = COLUMN - widthOf(label, T.type.caption.face, T.type.caption.size) - 24
+      while (foot.length > 1 && widthOf(foot, T.type.caption.face, T.type.caption.size) > room) {
+        const cut = foot.replace(/\u2026$/, '').replace(/\s*\S+$/, '')
+        foot = `${cut === '' ? foot.slice(0, -2) : cut}\u2026`
+      }
       page.text(
-        this.title,
+        foot,
         MARGIN.left,
         MARGIN.bottom - 32,
         T.type.caption.face,
@@ -391,14 +402,40 @@ function cover(flow: Flow, report: Report): void {
   const kicker = report.author.toUpperCase()
   page.text(kicker, MARGIN.left, A4.height - 120, T.type.h1.face, 9, onField ?? T.primary)
 
-  const { lines } = wrap(report.title, T.type.h1.face, 30, COLUMN)
+  /*
+    A title that needs a third line is set a size smaller instead: at 30 points three lines left the date jammed
+    against the last of them (seen in the rendered capture), and the field is a fixed height. One or two lines are
+    exactly as before.
+  */
+  let titleSize = 30
+  let titleLead = 36
+  let { lines } = wrap(report.title, T.type.h1.face, titleSize, COLUMN)
+  if (lines.length > 2) {
+    titleSize = 25
+    titleLead = 30
+    lines = wrap(report.title, T.type.h1.face, titleSize, COLUMN).lines
+  }
   let y = A4.height - 160
+  let lastBaseline = y
   for (const line of lines.slice(0, 3)) {
-    page.text(line, MARGIN.left, y, T.type.h1.face, 30, onField ?? T.ink)
-    y -= 36
+    page.text(line, MARGIN.left, y, T.type.h1.face, titleSize, onField ?? T.ink)
+    lastBaseline = y
+    y -= titleLead
   }
   const when = report.created.toISOString().slice(0, 10)
-  page.text(when, MARGIN.left, A4.height - 240, T.type.caption.face, 9.5, onField ?? T.ink2)
+  /*
+    Under the LAST title line, not at a fixed height. A three-line title ends at A4.height - 232 and the date used to
+    sit at -240, eight points below it: the layout check (qa.ts) found the date printed over the third line. Two lines
+    or fewer still put it at -240, so no existing document moves.
+  */
+  page.text(
+    when,
+    MARGIN.left,
+    Math.min(A4.height - 240, lastBaseline - 20),
+    T.type.caption.face,
+    9.5,
+    onField ?? T.ink2,
+  )
 
   // The subtitle sits BELOW the field, in the body face, because it is prose
   // and the title is not.
@@ -769,7 +806,7 @@ function layoutWith(report: Report, notes: readonly string[]): Laid {
   }
 
   flow.finish()
-  return { notes, pages: flow.pages, problems: flow.problems }
+  return { notes, pages: flow.pages, problems: [...flow.problems, ...layoutCollisions(flow.pages)] }
 }
 
 /** Lay the report out and write the file. Throws nothing; problems are returned. */
