@@ -18,6 +18,7 @@
     "verify:arrangement": "tsx scripts/verify/arrangement.ts",
     "verify:wired": "tsx scripts/verify/wired.ts",
     "incident:snapshot": "tsx scripts/incident-snapshot.ts",
+    "sample:fingerprint": "tsx scripts/sample/fp-compare.ts",
     "verify:google-connect": "tsx scripts/verify/google-connect.ts",
     "check:secrets": "python3 scripts/secret-scan.py",
     "check:gateway-wrappers": "tsx scripts/check-gateway-wrappers.ts",
