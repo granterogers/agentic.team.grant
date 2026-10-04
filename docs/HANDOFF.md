@@ -1,3 +1,16 @@
+> ## 2026-10-04 - P4 CONTINUATION (branch `claude/multi-user-p4`): incidents, project context, learning, labels, safe gate
+>
+> Migrations through **0882** (752 files). Worker **v959**, page `dpl_DPj4Nmnu5J3xy7afcNsUNccnCd3f` (rollback
+> `dpl_5PTmaiPmmrJjxWfteNsUoPXQce8K`). **#413** an unresolved problem is told once per office/service/problem
+> (`public.incidents`, `app.incident_seen`, resolution reports whether he was told); live on Telegram and Slack for two failing
+> duties. **#416** the loaded project is the project (ADR-0063); Telegram/Slack/voice resolve a single named project (0880).
+> **#417** teaching recogniser fixed and proved live. **#418** the office's own actor reads `you` (0881). **#414** `npm run
+> gate:safe` (serial, no model calls, fingerprints 25 offices before and after; last run 10/10, all diffs empty) -
+> `docs/testing/gate-reach.md`; the old `npm run gate` is NOT converted (PARTIAL). **#408** closed, **#412** narrowed.
+> 0882 corrects the browser Settings card. P0: `docs/ops/supabase-efficiency-2026-10-04.md` (measured / inferred / unknown;
+> the temp-spill source is NOT attributed, memory starvation NOT proven). Still MANUAL: VOICE NOTE real-mic and TALK TO TEAM
+> real-audio acceptance. `verify:talk` is stale (drives `/classic/`).
+>
 > ## 2026-10-02 - MULTI-USER P4: SECOND-USER ACCEPTANCE (branch `claude/multi-user-p4`; HARD STOP: nobody invited)
 >
 > A controlled second PERSON now exists in production (office `205669cc-…`, login on the reserved `.invalid` domain, password

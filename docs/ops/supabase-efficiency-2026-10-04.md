@@ -58,4 +58,11 @@ was skipped.
 * Whether memory starvation caused the 3 October degradation. This pass added no evidence either way.
 * Burst-credit state, disk burst balance and per-minute memory history remain dashboard-only.
 
+## LATE READING (4 October, after the deploys, office idle)
+
+`incident:snapshot`: auth, db, rest and storage all `ok`; db round trip 918 ms; 13 of 57 connections, 1 active, none long
+running; worker heartbeat true, queue empty; no incident in the last 30 minutes. `pg_stat_database.temp_bytes` read
+383,528,486,989 over 69,295 files. This is a single reading with no matching earlier reading taken at a known instant, so
+it states no rate; it only adds a point for whoever turns on `log_temp_files` and compares.
+
 Not claimed: that the incident is solved, that memory starvation is proven, or that the instance needs resizing.
