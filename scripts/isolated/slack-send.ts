@@ -107,7 +107,13 @@ const door = await startEdge({
   },
 })
 let n = 0
-const post = async (team: string, user: string, channel: string, text: string) => {
+const post = async (
+  team: string,
+  user: string,
+  channel: string,
+  text: string,
+  channelType = 'im',
+) => {
   n += 1
   const raw = JSON.stringify({
     type: 'event_callback',
@@ -117,7 +123,7 @@ const post = async (team: string, user: string, channel: string, text: string) =
       type: 'message',
       user,
       channel,
-      channel_type: 'im',
+      channel_type: channelType,
       text,
       ts: `1790000${String(100 + n)}.000100`,
     },
@@ -380,6 +386,54 @@ const sendFor = async (
   )
 }
 
+// ---- the lifecycle's adversarial edges -----------------------------------------------------------------------------------------
+{
+  // a channel (not a DM) of one's own workspace is still one's own office
+  const tc = `in a channel of A ${run}`
+  const rc = await post(TEAM_A, USER_A, `C0${suffix}`, tc, 'channel')
+  check(
+    'a message in a CHANNEL of the person’s own workspace is stored as their office’s',
+    rc.status === 200 && (await commandOf(tc))?.office === A,
+    JSON.stringify(rc.body),
+  )
+
+  // the wrong channel: A's workspace and A's sender, naming B's conversation. The reply may only ever carry A's token.
+  const tw = `A names B's conversation ${run}`
+  const rw = await post(TEAM_A, USER_A, DM_B, tw)
+  const cw = await commandOf(tw)
+  check(
+    'a message from A’s workspace that names B’s conversation is stored in A’s office, never B’s',
+    rw.status === 200 && cw?.office === A,
+    JSON.stringify(rw.body),
+  )
+  if (cw?.job !== undefined) {
+    const w = await sendFor(cw.job)
+    check(
+      'and its reply carries A’s token only (Slack refuses it; B’s token and the deployment’s are never used)',
+      w.calls.every((c) => c.auth === `Bearer ${TOKEN_A}`) && deploymentCalls.length === 1,
+      JSON.stringify(w.calls.map((c) => ({ ...c, auth: c.auth.slice(0, 12) }))),
+    )
+  }
+
+  // a delivery with no job behind it has no person: nothing is posted and nothing is borrowed
+  const ghost = {
+    jobId: crypto.randomUUID(),
+    kind: 'office.instruction',
+    correlationId: crypto.randomUUID(),
+    projectId: null,
+    idempotencyKey: `ghost-${run}`,
+    attempt: 1,
+  } as Job
+  posted.length = 0
+  const before = deploymentCalls.length
+  const g = await channel.notify(ghost, OUTPUT, crypto.randomUUID(), CONTEXT)
+  check(
+    'a job-less delivery posts nothing and borrows no token',
+    g.delivered === false && posted.length === 0 && deploymentCalls.length === before,
+    String(g.note),
+  )
+}
+
 // ---- SABOTAGE: B's install points at A's token; the same assertion must now fail --------------------------------------------
 {
   const refA = String(
@@ -419,6 +473,43 @@ const sendFor = async (
   check(
     'restored: B’s answer carries B’s token again',
     right.calls[0]?.auth === `Bearer ${TOKEN_B}`,
+  )
+}
+
+// ---- disconnect: the same person's next message is ignored, and a reply for their old job posts nothing --------------------------
+{
+  const before = deploymentCalls.length
+  const gone = (await one(`select public.slack_link_disconnect(${lit(A)}::uuid) r`)).r as {
+    error?: string
+    bot_token?: string
+  }
+  // the result carries the bot token so the gateway can revoke it at Slack: print its shape, never the value
+  check(
+    'A disconnects',
+    gone.error === undefined,
+    JSON.stringify({
+      ...gone,
+      bot_token: gone.bot_token === undefined ? undefined : '[held, not printed]',
+    }),
+  )
+  const td = `after A disconnected ${run}`
+  const rd = await post(TEAM_A, USER_A, DM_A, td)
+  check(
+    'after disconnect the same person’s message is ignored and stored nowhere',
+    rd.body.ignored !== undefined && (await commandOf(td)) === undefined,
+    JSON.stringify(rd.body),
+  )
+  const old = await sendFor(String(cA?.job))
+  check(
+    'and an answer for their old job posts nothing, with no token borrowed from anybody',
+    old.outcome.delivered === false && old.calls.length === 0 && deploymentCalls.length === before,
+    String(old.outcome.note),
+  )
+  const tb = `B still works ${run}`
+  const stillB = await post(TEAM_B, USER_B, DM_B, tb)
+  check(
+    'CONTROL: B, who never disconnected, is unaffected',
+    stillB.status === 200 && (await commandOf(tb))?.office === B,
   )
 }
 
