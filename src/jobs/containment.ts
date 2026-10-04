@@ -63,6 +63,7 @@ export const REACH: Readonly<Record<string, KindReach>> = {
   'office.notion_adopt': { reach: 'external', service: 'Notion' },
   'office.notion_sync': { reach: 'external', service: 'Notion' },
   'google.write_calendar_tasks': { reach: 'external', service: 'Google Calendar' },
+  'calendar.sync_events': { reach: 'external', service: 'Google Calendar' },
   'google.revoke': { reach: 'external', service: 'Google' },
   'ci.dispatch': { reach: 'external', service: 'GitHub' },
   'office.provision_channels': { reach: 'external', service: 'Slack' },
