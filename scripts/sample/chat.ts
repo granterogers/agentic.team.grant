@@ -42,7 +42,14 @@ const sleep = (ms: number): Promise<void> => new Promise((ok) => setTimeout(ok, 
 
 const studio = await startStudio(4790)
 const s = await session()
-const { page, errors } = await newPage(studio, { width: 1440, height: 1000 })
+// PHONE=1 drives Team Chat on an iPhone-sized touch screen (390x844): the Chat button in the bottom bar, the composer, a
+// shrunken viewport standing in for the soft keyboard (a real keyboard is NOT exercised here), the thread after a reload.
+const PHONE = process.env.PHONE === '1'
+const { page, errors } = await newPage(
+  studio,
+  PHONE ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+  PHONE,
+)
 const thread = async (p: Page): Promise<string[]> =>
   (await p.locator('[data-dockthread] .msg').allInnerTexts()).map((t) =>
     t.replace(/\s+/g, ' ').trim(),
@@ -102,6 +109,37 @@ const ask = async (
   // The same words may already be in the record from an earlier run: only a NEW occurrence is this message.
   const already = (await thread(page)).filter((m) => squashed(m).includes(key)).length
   await page.fill('[data-docksay]', words)
+  if (PHONE) {
+    // Stand-in for the soft keyboard: the visible height shrinks to about what is left above it. The composer must stay in view
+    // (#197), and its text must be 16px or more or iOS zooms the page when it takes focus.
+    const atBottom =
+      "(() => { const t = document.querySelector('[data-dockthread]'); return t === null ? -1 : Math.round(t.scrollHeight - t.scrollTop - t.clientHeight) })()"
+    const gapBefore = Number(await page.evaluate(atBottom))
+    await page.locator('[data-docksay]').focus()
+    await page.setViewportSize({ width: 390, height: 520 })
+    await sleep(1500)
+    const gapAfter = Number(await page.evaluate(atBottom))
+    check(
+      'phone: with the keyboard up the thread is still showing its latest message',
+      gapAfter >= 0 && gapAfter <= 8,
+      `distance from the end: ${gapBefore}px before, ${gapAfter}px after`,
+    )
+    const box = await page.locator('[data-docksay]').boundingBox()
+    const size = Number.parseFloat(
+      String(
+        await page.evaluate("getComputedStyle(document.querySelector('[data-docksay]')).fontSize"),
+      ),
+    )
+    await page.screenshot({ path: `${out}/phone-keyboard-${asked.length + 1}.png` })
+    check(
+      'phone: with the keyboard up the composer is still on screen',
+      box !== null && box.y >= 0 && box.y + box.height <= 521,
+      box === null ? 'no box' : `y ${Math.round(box.y)} h ${Math.round(box.height)} of 520`,
+    )
+    check('phone: the composer text is 16px or more (no iOS zoom)', size >= 16, `${size}px`)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await sleep(400)
+  }
   const began = Date.now()
   await page.locator('[data-dockform] button[type=submit]').click()
   const end = began + waitMs
@@ -178,10 +216,12 @@ const turns: {
   },
   {
     path: '/p/wellness-studio-launch',
-    words: 'What does the supplier note say the signature scent for the studio is?',
+    // A fact in a BASELINE document (the preview evening run sheet). This case used to ask for a word in a file the product
+    // harness uploads, which a reset archives, so it failed on every run after a reset for a reason that was not the product.
+    words: 'What time does the taster class start at the preview evening?',
     wait: 150000,
     project: 'wellness-studio-launch',
-    expect: /kumquat/i,
+    expect: /18[:.]30|6[:.]30\s*(?:pm)?/i,
   },
   {
     path: '/p/2027-financial-plan',

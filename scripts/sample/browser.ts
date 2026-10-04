@@ -89,7 +89,26 @@ export const signIn = async (studio: Studio, page: Page, s: Session): Promise<vo
 }
 
 export const openSettings = async (page: Page, tab?: string): Promise<void> => {
-  await page.locator('[data-bc-settings]').first().click({ force: true })
+  const open = await page
+    .locator('#settings')
+    .isVisible()
+    .catch(() => false)
+  const listShown = await page
+    .locator('#settings .stg-navitem')
+    .first()
+    .isVisible()
+    .catch(() => false)
+  if (open && !listShown) {
+    // On a phone a section replaces the list; a person goes back to choose another, so the harness does too.
+    await page
+      .locator('#settings [data-stg-back]:visible')
+      .first()
+      .click({ force: true, timeout: 5000 })
+      .catch(() => null)
+    await page.waitForTimeout(400)
+  } else if (!open) {
+    await page.locator('[data-bc-settings]').first().click({ force: true })
+  }
   await page.waitForSelector('#settings .stg-navitem', { timeout: 20000 })
   if (tab !== undefined) {
     await page.locator(`#settings [data-setting="${tab}"]`).click({ force: true })

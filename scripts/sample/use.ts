@@ -146,9 +146,12 @@ try {
   // ---- the temporary fourth project ---------------------------------------------------------------------------
   // A name that shares no words with the three real ones: the office asks before making a near match, and that is tested
   // below on purpose.
+  // SKIP_PROJECT=1 leaves this block out: a project that was made and archived stays as an archived row for ever.
+  const makeProject = process.env.SKIP_PROJECT !== '1'
   const temp = `Allotment ${RUN}`
   let slug = ''
-  await step('creating a project that resembles an existing one asks first', async () => {
+  const pstep = makeProject ? step : async (): Promise<void> => undefined
+  await pstep('creating a project that resembles an existing one asks first', async () => {
     await go('/')
     await page.locator('[data-bc-newproject-open]').click()
     await page.fill('#bc-newproject-name', 'Japan Spring Trip')
@@ -164,7 +167,7 @@ try {
     )
     await shot(page, 'project-duplicate-question')
   })
-  await step('create a fourth project from Home', async () => {
+  await pstep('create a fourth project from Home', async () => {
     await go('/')
     await page.locator('[data-bc-newproject-open]').click()
     await page.fill('#bc-newproject-name', temp)
@@ -175,7 +178,7 @@ try {
     await shot(page, 'project-new')
     return slug
   })
-  await step('add a task to it and see it after a reload', async () => {
+  await pstep('add a task to it and see it after a reload', async () => {
     await go(`/p/${slug}/tasks`)
     await page.locator('[data-bc-addtask]').first().click()
     const form = page.locator('[data-bc-taskform]:not([hidden])').first()
@@ -191,13 +194,13 @@ try {
     await go(`/p/${slug}/tasks`)
     must((await body(page)).includes('First thing in the new project'), 'lost on reload')
   })
-  await step('its settings open, and Project has an Archive control', async () => {
+  await pstep('its settings open, and Project has an Archive control', async () => {
     await go(`/p/${slug}/settings`)
     await page.locator('[data-setpane="project"]').click()
     await page.waitForSelector('[data-archive]', { timeout: 15000 })
     await shot(page, 'project-settings')
   })
-  await step('archive it, and it leaves Home', async () => {
+  await pstep('archive it, and it leaves Home', async () => {
     await page.locator('[data-archive]').click()
     await eventually(
       'archived',
@@ -218,14 +221,17 @@ try {
       page.context().waitForEvent('page', { timeout: 20000 }),
       page.locator('[data-bc-doc-open]').first().click(),
     ])
-    await tab.waitForLoadState('domcontentloaded').catch(() => null)
-    await sleep(1500)
-    const text = (
-      await tab
-        .locator('body')
-        .innerText()
-        .catch(() => '')
-    ).trim()
+    // The tab now opens on the tap, blank, and is pointed at the file when the office answers: wait for the words, not the tab.
+    let text = ''
+    for (let i = 0; i < 30 && text.length <= 200; i += 1) {
+      await sleep(500)
+      text = (
+        await tab
+          .locator('body')
+          .innerText()
+          .catch(() => '')
+      ).trim()
+    }
     await tab.screenshot({ path: `${out}/document-open.png` }).catch(() => null)
     await tab.close()
     must(text.length > 200, `the document tab was nearly empty (${text.length} characters)`)

@@ -1650,6 +1650,42 @@ const rememberDock = (open, slug) => {
   else if (!was || dockPin() === null) pinDock(state.project ?? 'unnamed')
 }
 
+/*
+  THE KEYBOARD MUST NOT TAKE THE NEWEST MESSAGE OUT OF THE TEAM CHAT (closure, 4 October).
+
+  The Chat tab's thread has this (see the resize handler on data-thread) and the dock's thread, which is the Team Chat a person on a
+  phone actually uses, did not: shrinking the visible height by what a keyboard takes put the thread 4,356 px from its end, showing
+  the top of the history with the box to type in underneath. Where the person was reading is remembered on every scroll, so the
+  resize handler answers about the moment BEFORE the geometry changed; if they were at the newest message they still are, and if
+  they were reading further up they are left there. Wired once; the thread is looked up fresh each time because a repaint replaces it.
+*/
+function wireDockKeyboard() {
+  if (state.dockKbWired === true) return
+  state.dockKbWired = true
+  document.addEventListener(
+    'scroll',
+    (e) => {
+      const t = e.target
+      if (t instanceof Element && t.matches('[data-dockthread]'))
+        state.dockAtEnd = t.scrollHeight - t.scrollTop - t.clientHeight < 40
+    },
+    { capture: true, passive: true },
+  )
+  const follow = () => {
+    if (state.dockAtEnd === false) return
+    const pin = () => {
+      const t = $('[data-dockthread]')
+      if (t !== null) t.scrollTop = t.scrollHeight
+    }
+    pin()
+    requestAnimationFrame(pin)
+    window.setTimeout(pin, 180)
+    window.setTimeout(pin, 420)
+  }
+  window.addEventListener('resize', follow, { passive: true })
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', follow, { passive: true })
+}
+
 function paintDock() {
   const el = $('#dock')
   if (!el) return
@@ -1708,6 +1744,18 @@ function paintDock() {
   const messages = p ? chat.thread(p.slug) : []
   const draft = $('[data-docksay]')?.value ?? ''
   const at = $('[data-dockthread]')?.scrollTop
+  /*
+    WHERE THE PERSON WAS, NOT JUST HOW FAR DOWN (closure, 4 October).
+
+    Restoring the old scrollTop is right for somebody reading further up and wrong for somebody at the newest message whose thread then
+    GROWS: the history loads after the dock first draws, the old box was short and its scrollTop was 0, and restoring 0 left the
+    thread at the top of 5,000 px of history with the newest message 4,500 px below the box to type in. A thread that was at its end
+    (or had nothing to scroll) stays at its end.
+  */
+  const prevThread = $('[data-dockthread]')
+  const wasAtEnd =
+    prevThread === null ||
+    prevThread.scrollHeight - prevThread.scrollTop - prevThread.clientHeight < 40
   /*
     THE BASECAMP EXPERIENCE'S VOICE NOTE LIVES IN THIS COMPOSER, and a repaint
     must not take a recording with it: the live microphone and panel nodes are
@@ -1785,7 +1833,9 @@ function paintDock() {
   const box = $('[data-docksay]', el)
   if (box) box.value = draft
   const thread = $('[data-dockthread]', el)
-  if (thread) thread.scrollTop = at ?? thread.scrollHeight
+  if (thread) thread.scrollTop = wasAtEnd ? thread.scrollHeight : (at ?? thread.scrollHeight)
+  state.dockAtEnd = thread ? thread.scrollHeight - thread.scrollTop - thread.clientHeight < 40 : true
+  wireDockKeyboard()
 
   $('[data-dock-close]', el)?.addEventListener('click', () => {
     rememberDock(false)

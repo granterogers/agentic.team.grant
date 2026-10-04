@@ -145,138 +145,145 @@ try {
     must((await contactRows(who)) === 1, 'the row was deleted rather than put away')
   })
 
-  // ---- a project: create, rename, add work, see the activity, archive -------------------------------------------
-  const first = `Allotment ${RUN}`
-  const second = `Orchard ${RUN}`
-  let slug = ''
-  await step('create a project', async () => {
-    await go('/')
-    await page.locator('[data-bc-newproject-open]').click()
-    await page.fill('#bc-newproject-name', first)
-    await page.locator('[data-bc-newproject-go]').click()
-    await page.waitForURL(/\/p\//, { timeout: 40000 })
-    slug = new URL(page.url()).pathname.split('/')[2] ?? ''
-    await eventually('opened', async () => (await body(page)).includes(first))
-  })
-  await step('rename it in Project settings; the address does not change', async () => {
-    await go(`/p/${slug}/settings`)
-    await page.locator('[data-setpane="project"]').click()
-    await page.waitForSelector('[data-projname]', { timeout: 15000 })
-    must(
-      (await page.inputValue('[data-projname]')) === first,
-      'the field does not hold the current name',
-    )
-    await page.fill('[data-projname]', second)
-    await page.locator('[data-projrename]').click()
-    await eventually(
-      'renamed in the database',
-      async () =>
+  // ONLY_CONTACTS=1 stops here: the rest makes a project and renames it, and a renamed project can never be deleted.
+  if (process.env.ONLY_CONTACTS !== '1') {
+    // ---- a project: create, rename, add work, see the activity, archive -------------------------------------------
+    const first = `Allotment ${RUN}`
+    const second = `Orchard ${RUN}`
+    let slug = ''
+    await step('create a project', async () => {
+      await go('/')
+      await page.locator('[data-bc-newproject-open]').click()
+      await page.fill('#bc-newproject-name', first)
+      await page.locator('[data-bc-newproject-go]').click()
+      await page.waitForURL(/\/p\//, { timeout: 40000 })
+      slug = new URL(page.url()).pathname.split('/')[2] ?? ''
+      await eventually('opened', async () => (await body(page)).includes(first))
+    })
+    await step('rename it in Project settings; the address does not change', async () => {
+      await go(`/p/${slug}/settings`)
+      await page.locator('[data-setpane="project"]').click()
+      await page.waitForSelector('[data-projname]', { timeout: 15000 })
+      must(
+        (await page.inputValue('[data-projname]')) === first,
+        'the field does not hold the current name',
+      )
+      await page.fill('[data-projname]', second)
+      await page.locator('[data-projrename]').click()
+      await eventually(
+        'renamed in the database',
+        async () =>
+          (await count(
+            `select count(*) n from public.projects where office_id = '${O}' and slug = '${slug}' and name = '${second}'`,
+          )) === 1,
+      )
+      await eventually('the page shows the new name', async () =>
+        (await body(page)).includes(second),
+      )
+      await shot(page, 'project-renamed')
+      await go('/')
+      const home = await body(page)
+      must(home.includes(second) && !home.includes(first), 'Home still shows the old name')
+    })
+    await step('renaming to a name another project holds is refused in words', async () => {
+      await go(`/p/${slug}/settings`)
+      await page.locator('[data-setpane="project"]').click()
+      await page.waitForSelector('[data-projname]', { timeout: 15000 })
+      await page.fill('[data-projname]', 'Japan Spring Trip')
+      await page.locator('[data-projrename]').click()
+      await eventually('a refusal', async () =>
+        /already belongs|two projects/i.test(await body(page)),
+      )
+      must(
         (await count(
           `select count(*) n from public.projects where office_id = '${O}' and slug = '${slug}' and name = '${second}'`,
         )) === 1,
-    )
-    await eventually('the page shows the new name', async () => (await body(page)).includes(second))
-    await shot(page, 'project-renamed')
-    await go('/')
-    const home = await body(page)
-    must(home.includes(second) && !home.includes(first), 'Home still shows the old name')
-  })
-  await step('renaming to a name another project holds is refused in words', async () => {
-    await go(`/p/${slug}/settings`)
-    await page.locator('[data-setpane="project"]').click()
-    await page.waitForSelector('[data-projname]', { timeout: 15000 })
-    await page.fill('[data-projname]', 'Japan Spring Trip')
-    await page.locator('[data-projrename]').click()
-    await eventually('a refusal', async () =>
-      /already belongs|two projects/i.test(await body(page)),
-    )
-    must(
-      (await count(
-        `select count(*) n from public.projects where office_id = '${O}' and slug = '${slug}' and name = '${second}'`,
-      )) === 1,
-      'the name changed anyway',
-    )
-  })
-  await step('add a task to it', async () => {
-    await go(`/p/${slug}/tasks`)
-    await page.locator('[data-bc-addtask]').first().click()
-    const form = page.locator('[data-bc-taskform]:not([hidden])').first()
-    await form.locator('input[name=title]').fill('Order the seed potatoes')
-    await form.locator('[data-bc-tasksave]').click()
-    await eventually(
-      'stored',
-      async () =>
-        (await count(
-          `select count(*) n from public.tasks t join public.projects p on p.project_id = t.project_id where t.office_id = '${O}' and p.slug = '${slug}' and t.title = 'Order the seed potatoes'`,
-        )) === 1,
-    )
-  })
-  await step('its Activity tab says what the person did, in words, as "You"', async () => {
-    await go(`/p/${slug}/activity`)
-    const text = await body(page)
-    must(/You created this project/.test(text), 'no "You created this project"')
-    must(/You added the task .?Order the seed potatoes/.test(text), 'no "You added the task ..."')
-    must(!/p4-second-person|P4 Second Person/i.test(text), 'a raw owner key is shown as a name')
-    await shot(page, 'project-activity')
-  })
-  await step(
-    'the global Activity page lists newest first, and this project is at the top',
-    async () => {
-      await go('/activity')
+        'the name changed anyway',
+      )
+    })
+    await step('add a task to it', async () => {
+      await go(`/p/${slug}/tasks`)
+      await page.locator('[data-bc-addtask]').first().click()
+      const form = page.locator('[data-bc-taskform]:not([hidden])').first()
+      await form.locator('input[name=title]').fill('Order the seed potatoes')
+      await form.locator('[data-bc-tasksave]').click()
+      await eventually(
+        'stored',
+        async () =>
+          (await count(
+            `select count(*) n from public.tasks t join public.projects p on p.project_id = t.project_id where t.office_id = '${O}' and p.slug = '${slug}' and t.title = 'Order the seed potatoes'`,
+          )) === 1,
+      )
+    })
+    await step('its Activity tab says what the person did, in words, as "You"', async () => {
+      await go(`/p/${slug}/activity`)
       const text = await body(page)
-      const at = text.indexOf('Order the seed potatoes')
-      must(at >= 0, 'the new work is not on the page')
-      must(at < 600, `it is not near the top (position ${at})`)
-      await shot(page, 'activity-global')
-    },
-  )
-  await step('archive it, and it leaves Home', async () => {
-    await go(`/p/${slug}/settings`)
-    await page.locator('[data-setpane="project"]').click()
-    await page.locator('[data-archive]').click()
-    await eventually(
-      'archived',
-      async () =>
-        (await count(
-          `select count(*) n from public.projects where office_id = '${O}' and slug = '${slug}' and status = 'archived'`,
-        )) === 1,
+      must(/You created this project/.test(text), 'no "You created this project"')
+      must(/You added the task .?Order the seed potatoes/.test(text), 'no "You added the task ..."')
+      must(!/p4-second-person|P4 Second Person/i.test(text), 'a raw owner key is shown as a name')
+      await shot(page, 'project-activity')
+    })
+    await step(
+      'the global Activity page lists newest first, and this project is at the top',
+      async () => {
+        await go('/activity')
+        const text = await body(page)
+        const at = text.indexOf('Order the seed potatoes')
+        must(at >= 0, 'the new work is not on the page')
+        must(at < 600, `it is not near the top (position ${at})`)
+        await shot(page, 'activity-global')
+      },
     )
-  })
+    await step('archive it, and it leaves Home', async () => {
+      await go(`/p/${slug}/settings`)
+      await page.locator('[data-setpane="project"]').click()
+      await page.locator('[data-archive]').click()
+      await eventually(
+        'archived',
+        async () =>
+          (await count(
+            `select count(*) n from public.projects where office_id = '${O}' and slug = '${slug}' and status = 'archived'`,
+          )) === 1,
+      )
+    })
 
-  // ---- a document, through the page (needs the deployed gateway) -------------------------------------------------
-  if (docs) {
-    const word = `kumquat${RUN}`
-    const name = `ux-note-${RUN}.md`
-    await step('drop a text file into a project; it is filed, approved and shown', async () => {
-      await go('/p/wellness-studio-launch/documents')
-      await page.locator('[data-bc-upload]').first().click()
-      await page.locator('[data-bc-from="computer"]').click()
-      await page.setInputFiles('#bc-upload-file', {
-        name,
-        mimeType: 'text/markdown',
-        buffer: Buffer.from(`# Supplier note\n\nThe signature scent for the studio is ${word}.\n`),
+    // ---- a document, through the page (needs the deployed gateway) -------------------------------------------------
+    if (docs) {
+      const word = `kumquat${RUN}`
+      const name = `ux-note-${RUN}.md`
+      await step('drop a text file into a project; it is filed, approved and shown', async () => {
+        await go('/p/wellness-studio-launch/documents')
+        await page.locator('[data-bc-upload]').first().click()
+        await page.locator('[data-bc-from="computer"]').click()
+        await page.setInputFiles('#bc-upload-file', {
+          name,
+          mimeType: 'text/markdown',
+          buffer: Buffer.from(
+            `# Supplier note\n\nThe signature scent for the studio is ${word}.\n`,
+          ),
+        })
+        await page.locator('[data-bc-uploadsave]').click()
+        await eventually(
+          'filed approved',
+          async () =>
+            (await count(
+              `select count(*) n from public.documents where office_id = '${O}' and title = '${name}' and origin = 'yours' and state = 'approved'`,
+            )) === 1,
+        )
+        await go('/p/wellness-studio-launch/documents')
+        must((await body(page)).includes(name), 'the file is not shown in Docs and Files')
+        await shot(page, 'document-uploaded')
       })
-      await page.locator('[data-bc-uploadsave]').click()
-      await eventually(
-        'filed approved',
-        async () =>
-          (await count(
-            `select count(*) n from public.documents where office_id = '${O}' and title = '${name}' and origin = 'yours' and state = 'approved'`,
-          )) === 1,
-      )
-      await go('/p/wellness-studio-launch/documents')
-      must((await body(page)).includes(name), 'the file is not shown in Docs and Files')
-      await shot(page, 'document-uploaded')
-    })
-    await step('its words are indexed, so the team can find them', async () => {
-      await eventually(
-        'indexed',
-        async () =>
-          (await count(
-            `select count(*) n from app.search_documents('${O}'::uuid, '${word}', null, 5) s`,
-          )) === 1,
-      )
-    })
+      await step('its words are indexed, so the team can find them', async () => {
+        await eventually(
+          'indexed',
+          async () =>
+            (await count(
+              `select count(*) n from app.search_documents('${O}'::uuid, '${word}', null, 5) s`,
+            )) === 1,
+        )
+      })
+    }
   }
 } finally {
   const failed = results.filter((r) => !r.ok)

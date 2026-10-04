@@ -2392,8 +2392,31 @@ const openDoc = async (ref, title) => {
     ctx.openDocDetail?.(ref, title)
     return
   }
+  /*
+    THE TAB IS OPENED ON THE TAP, AND POINTED AT THE DOCUMENT WHEN IT IS KNOWN (closure, 4 October).
+
+    Everything below the next line waits for the office to say where the file is. A browser only lets a page open a tab for a
+    press it is still counting as the press, and on an iPhone that window is short: with the office slow (a tap measured at 7.5
+    seconds before anything opened) a tab opened AFTER the wait is refused, and the person sees nothing happen at all. So the
+    tab is opened here, synchronously, blank, which is also the only feedback a slow office could give; it is pointed at the
+    file when the answer comes and closed if the answer is "show the details here" instead.
+  */
+  const pending = globalThis.open('', '_blank')
+  if (pending !== null) pending.opener = null
+  const drop = () => {
+    try {
+      pending?.close()
+    } catch {
+      /* already gone */
+    }
+  }
+  const land = (href) => {
+    if (pending === null || pending.closed) openInTab(href)
+    else pending.location.href = href
+  }
   const file = await fileFor(ref)
   if (file === null) {
+    drop()
     ctx.openDocDetail?.(ref, title)
     return
   }
@@ -2412,15 +2435,16 @@ const openDoc = async (ref, title) => {
   */
   const elsewhere = bcDrive.opensAt(file)
   if (elsewhere !== '') {
-    globalThis.open(elsewhere, '_blank', 'noopener')
+    land(elsewhere)
     return
   }
   if (file.url !== '') {
     if (isAudioRef(file.url) || String(file.mime ?? '').startsWith('audio/')) {
+      drop()
       ctx.openDocDetail?.(ref, title)
       return
     }
-    openInTab(file.url)
+    land(file.url)
     return
   }
   /*
@@ -2430,12 +2454,13 @@ const openDoc = async (ref, title) => {
   */
   const text = String(file.content ?? '')
   if (text === '') {
+    drop()
     ctx.openDocDetail?.(ref, title)
     return
   }
   const blob = new Blob([`${title}\n\n${text}`], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
-  openInTab(url)
+  land(url)
   globalThis.setTimeout(() => {
     URL.revokeObjectURL(url)
   }, 60_000)
