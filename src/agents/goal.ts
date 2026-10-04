@@ -626,7 +626,7 @@ export const asksForTasks = (request: string): boolean =>
   (/\b(?:create|make|add|put|turn|pull|extract|file|log|raise|generate|set\s+up|assign|remind|track|schedule|write\s+down|note\s+down)\b/i.test(
     request,
   ) &&
-    /\b(?:tasks?|to-?dos?|action\s+items?|follow-?ups?|reminders?)\b|\bon\s+(?:my|the|our)\s+(?:to-?do\s+|task\s+)?list\b/i.test(
+    /\b(?:tasks?|to-?dos?|action\s+items?|actions|follow-?ups?|reminders?)\b|\bon\s+(?:my|the|our)\s+(?:to-?do\s+|task\s+)?list\b/i.test(
       request,
     ))
 

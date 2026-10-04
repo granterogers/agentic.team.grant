@@ -34,6 +34,11 @@ describe('asking to be told is not asking for tasks', () => {
     'Ask the appropriate person on the team to review our launch preparation and identify anything important that is still unfinished.',
     'Go through the onboarding material and tell me what needs doing first.',
     'Review the open tasks and tell me which are most at risk.',
+    'Summarise where the venue booking has got to.',
+    'Analyse the cashflow forecast and tell me what looks wrong.',
+    'Identify unresolved work in this project.',
+    'Tell me what needs attention across the three actions we discussed.',
+    'Review the actions from the last meeting and say which are overdue.',
   ])('%s', (said) => {
     expect(asksForTasks(said)).toBe(false)
     const plan = planOf(step('s1', 'notebook.read'), step('s2', 'task.extract', ['s1']))
@@ -62,6 +67,8 @@ describe('and asking for tasks keeps the write', () => {
     'Turn the itinerary into tasks.',
     'Add a task to chase the roofer.',
     'Remind me to renew the insurance.',
+    'Create tasks for these recommendations.',
+    'Add these three actions to the project.',
   ])('%s', (said) => {
     expect(asksForTasks(said)).toBe(true)
     const plan = planOf(step('s1', 'notebook.read'), step('s2', 'task.extract', ['s1']))

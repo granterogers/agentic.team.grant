@@ -151,6 +151,19 @@ const report = async () => {
   console.log(
     `  projects ${st.projects.length}   tasks ${st.tasks.length}   contacts ${st.contacts.length}   documents ${st.docs.length}`,
   )
+  // Reset is SEMANTIC, not row-identical: work a job made is the team's and cannot be deleted from here, so reset cancels it and the
+  // row stays. A digest over every task row therefore differs after any reset that had debris to remove; this is the figure that
+  // explains it, and the baseline comparison above (which excludes cancelled work) is the proof of equivalence.
+  const cancelled = Number(
+    (
+      await rows(
+        `select count(*) n from public.tasks where office_id = ${O}::uuid and state = 'cancelled'`,
+      )
+    )[0]?.n ?? 0,
+  )
+  console.log(
+    `  cancelled rows kept (not counted above; job-made work cannot be deleted): ${cancelled}`,
+  )
   console.log(
     `  not baseline: ${a.extraTasks.length} task(s), ${a.extraProjects.length} project(s), ${a.extraContacts.length} contact(s), ${a.extraDocs.length} document(s)`,
   )
