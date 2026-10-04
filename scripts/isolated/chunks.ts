@@ -8,7 +8,7 @@
  * re-index that must stale the old text, an archive and a delete that must leave nothing active, and sabotage controls that
  * prove each check can fail. Nothing here spends a model call.
  */
-import { retrieve } from '../../src/knowledge/retrieval.ts'
+import { retrieve, retrieveAcrossOffice } from '../../src/knowledge/retrieval.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'chunks_proof')
@@ -272,6 +272,74 @@ const evolving = await doc(
   check('a document with no text yields no passages and no crash', Array.isArray(hits))
 }
 
+// 6b. an explicitly NAMED secondary project is read (policy: widening is bounded by the office and by being named), at its END
+const activeProject = async (office: string, name: string): Promise<string> =>
+  String(
+    (
+      await q(
+        `with p as (insert into public.projects (slug, name, status, office_id)
+                    values (${lit(`chunks-${run}-${name.toLowerCase().replace(/ /g, '-')}`)}, ${lit(name)}, 'active', ${lit(office)}::uuid)
+                    returning project_id)
+         insert into public.project_attachments (project_id, connector, external_ref, display_name, role)
+         select project_id, 'upload', ${lit(`chunks-${run}-${name}`)}, ${lit(name)}, 'source' from p
+         returning project_id::text id`,
+      )
+    )[0]?.id,
+  )
+const PQ = await activeProject(OFFICE, 'Quartz Ledger')
+const PQO = await activeProject(OTHER, 'Quartz Ledger')
+const QEND = 'The audit sign-off was given by Ingrid Valdemar on the last day.'
+const quartz = await doc(OFFICE, PQ, 'Quartz audit notes', `${filler(450, 'q')}${QEND}\n`)
+const quartzForeign = await doc(
+  OTHER,
+  PQO,
+  'Quartz audit notes',
+  `${filler(450, 'f')}${QEND} (the other office)\n`,
+)
+{
+  const named = await retrieveAcrossOffice(
+    db,
+    { officeId: OFFICE },
+    'What does the Quartz Ledger project say about the audit sign-off by Valdemar',
+    PA,
+  )
+  const h = named.find((x) => x.documentId === quartz)
+  check(
+    'a NAMED secondary project is read, and its END of document is shown',
+    h !== undefined && h.excerpt.includes('Ingrid Valdemar'),
+    h?.excerpt.slice(0, 60) ?? 'no hit',
+  )
+  check(
+    'and it says it came from the other project, by name',
+    h?.scope === 'other_project' && h?.fromProject?.name === 'Quartz Ledger',
+  )
+  check(
+    "CONTROL: the same words in another OFFICE's project of the same name are never read",
+    !named.some((x) => x.documentId === quartzForeign || x.excerpt.includes('the other office')),
+  )
+  const unnamed = await retrieveAcrossOffice(
+    db,
+    { officeId: OFFICE },
+    'what is said about the audit sign-off by Valdemar and the zzunrelatedtopic',
+    PA,
+  )
+  check(
+    'CONTROL: not named, and not every word present: the secondary project is not read',
+    !unnamed.some((x) => x.documentId === quartz),
+  )
+  await q(`update public.documents set state = 'archived' where document_id = ${lit(quartz)}::uuid`)
+  const after = await retrieveAcrossOffice(
+    db,
+    { officeId: OFFICE },
+    'What does the Quartz Ledger project say about the audit sign-off by Valdemar',
+    PA,
+  )
+  check(
+    'an archived document in the secondary project is no longer read',
+    !after.some((x) => x.documentId === quartz),
+  )
+}
+
 // 7. sabotage: a chunker that drops the tail must turn the END check red
 {
   const dropped = await q(`
@@ -291,13 +359,12 @@ const evolving = await doc(
 }
 
 // teardown: this replica copy is disposable, but leave nothing behind anyway
-await q(
-  `delete from public.documents where project_id in (${[PA, PB, PO].map(lit).join(',')}::uuid[])`.replace(
-    '::uuid[]',
-    '',
-  ),
-)
-await q(`delete from public.projects where project_id in (${[PA, PB, PO].map(lit).join(',')})`)
+const MINE = [PA, PB, PO, PQ, PQO].map(lit).join(',')
+// ADR-0014's order: archive, then attachments, then the project
+await q(`update public.projects set status = 'archived' where project_id in (${MINE})`)
+await q(`delete from public.documents where project_id in (${MINE})`)
+await q(`delete from public.project_attachments where project_id in (${MINE})`)
+await q(`delete from public.projects where project_id in (${MINE})`)
 const left = Number(
   (
     await q(
