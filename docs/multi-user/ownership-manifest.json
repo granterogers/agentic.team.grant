@@ -289,6 +289,11 @@
           "constraint": "documents_mirrors_document_id_fkey"
         },
         {
+          "columns": ["imported_from_document_id"],
+          "parent": "documents",
+          "constraint": "documents_imported_from_document_id_fkey"
+        },
+        {
           "columns": ["produced_by_job"],
           "parent": "jobs",
           "constraint": "documents_produced_by_job_fkey"
@@ -461,6 +466,45 @@
           "columns": ["document_id"],
           "parent": "documents",
           "constraint": "document_chunks_document_id_fkey"
+        }
+      ]
+    },
+    "document_version_notes": {
+      "class": "OFFICE_CARRIER",
+      "why": "Provenance of a document version (0900); written only by app.document_version_link, which copies the head document's own office, and tied to its documents by same-office composite keys so a note cannot belong to a different office than the version it describes.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_version_notes_document_id_fkey"
+        },
+        {
+          "columns": ["previous_document_id"],
+          "parent": "documents",
+          "constraint": "document_version_notes_previous_document_id_fkey"
+        },
+        {
+          "columns": ["rolled_back_to"],
+          "parent": "documents",
+          "constraint": "document_version_notes_rolled_back_to_fkey"
+        }
+      ]
+    },
+    "document_import_requests": {
+      "class": "OFFICE_CARRIER",
+      "why": "A person's explicit request to import an external document that Team HQ does not hold yet (0900); written only by app.hq_document_import under the verified office, and tied to its documents by same-office composite keys.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_import_requests_document_id_fkey"
+        },
+        {
+          "columns": ["copy_document_id"],
+          "parent": "documents",
+          "constraint": "document_import_requests_copy_document_id_fkey"
         }
       ]
     },

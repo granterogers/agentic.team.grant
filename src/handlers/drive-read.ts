@@ -133,11 +133,39 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
         return said(`I read the file but could not record it — ${String(doc?.error)}`, false)
       }
 
+      /*
+        An explicit import request (0900, `app.hq_document_import`) waits for exactly this: the material to be held.
+        `document_import_fulfil` does nothing unless a person's request is recorded for this very document, so reading
+        a file never imports one that nobody asked for. A failure is said, not swallowed: the request stays pending.
+      */
+      const fulfil = async (document: string): Promise<string> => {
+        try {
+          const done = (
+            await deps.db.execute(
+              `select app.document_import_fulfil(app.job_office(${lit(job.jobId)}::uuid), ${lit(document)}::uuid) as r`,
+            )
+          ).rows[0] as { r?: { fulfilled?: boolean } } | undefined
+          return done?.r?.fulfilled === true
+            ? ' Your import request is done: a Team HQ copy now exists.'
+            : ''
+        } catch (e) {
+          // A database that has not had 0900 yet has no request to complete: say nothing rather than alarm on every read.
+          if (
+            e instanceof Error &&
+            /document_import_fulfil/.test(e.message) &&
+            /does not exist/.test(e.message)
+          )
+            return ''
+          return ` Your import request could not be completed yet (${e instanceof Error ? e.message : String(e)}).`
+        }
+      }
+
       if (got.text !== null) {
         const chars = got.text.length
+        const imported = await fulfil(doc.document)
         return said(
           `Read “${title === '' ? fileId : title}” from Drive — ${String(chars)} characters, ` +
-            `${doc.outcome === 'unchanged' ? 'unchanged since last time' : String(doc.outcome)}.`,
+            `${doc.outcome === 'unchanged' ? 'unchanged since last time' : String(doc.outcome)}.${imported}`,
           doc.outcome !== 'unchanged',
         )
       }
@@ -176,9 +204,10 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       }
 
       const size = `${String(Math.max(1, Math.round(bytes.byteLength / 1024)))} KB`
+      const importedFile = await fulfil(doc.document)
       return said(
         `Brought “${title === '' ? fileId : title}” in from Drive — ${describeKind(mime)}, ` +
-          `${size}. You can read it in the project.`,
+          `${size}. You can read it in the project.${importedFile}`,
         attached.r.already_there !== true,
       )
     },

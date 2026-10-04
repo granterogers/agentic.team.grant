@@ -298,6 +298,18 @@ const SECTIONS: Readonly<
   */
   document: { fn: 'studio_document', office: true, arg: 'p_document_id' },
   /*
+    THE UNIFIED DOCUMENTS LIST (0900). One item per logical document for a project, across Drive references, NotebookLM
+    material, uploads and what the team generated, with source classification, import and index state and version
+    count. `?slug=` names the project (free text, hence textArg, not a uuid).
+  */
+  project_documents: {
+    fn: 'hq_project_documents',
+    office: true,
+    textArg: { param: 'slug', arg: 'p_slug' },
+  },
+  // The versions of one logical document, v1..vN, from any one of them (0900). A uuid, so `arg`.
+  document_versions: { fn: 'hq_document_versions', office: true, arg: 'p_document_id' },
+  /*
     ONE OUTPUT, so the thing the team made can be READ (§19).
 
     The office has written thousands and there has never been a way to open
@@ -1128,6 +1140,23 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // press of "this one is current again" carries nothing and means approved.
   document_restore: { fn: 'hq_document_restore', office: true, required: ['p_document_id'] },
   document_pin: { fn: 'hq_document_pin', office: true, required: ['p_document_id', 'p_pinned'] },
+  /*
+    VERSIONS AND IMPORT (0900). All three are a person's explicit press: none is on SERVICE_MAY, so the office key
+    (a machine) is refused, and nothing in the product calls them but this page.
+    - document_new_version: the next version from new text (`p_content`) OR by adopting an existing approved document in
+      the same project (`p_by_document_id`). `p_approve` approves a draft being adopted. The old one is archived, never
+      deleted.
+    - document_rollback: make an older version current by writing it as a NEW version.
+    - document_import: make the durable Team HQ copy of an external document (or record the request when the text is not
+      held yet). Never silent: this is the only caller.
+  */
+  document_new_version: {
+    fn: 'hq_document_new_version',
+    office: true,
+    required: ['p_document_id'],
+  },
+  document_rollback: { fn: 'hq_document_rollback', office: true, required: ['p_document_id'] },
+  document_import: { fn: 'hq_document_import', office: true, required: ['p_document_id'] },
   /*
     Handled above rather than dispatched, because it carries bytes (#126). It
     is listed here so the whitelist is still the one place that says which
