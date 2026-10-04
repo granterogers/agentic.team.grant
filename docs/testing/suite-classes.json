@@ -23,6 +23,7 @@
     "verify:talk",
     "verify:phone-header",
     "verify:file-text-corpus",
+    "verify:file-text-docx",
     "verify:slack-card",
     "verify:dialogs"
   ],
@@ -51,6 +52,7 @@
     "scripts/verify/talk.ts": "local",
     "scripts/verify/phone-header-local.ts": "local",
     "scripts/verify/file-text-corpus.ts": "local",
+    "scripts/verify/file-text-docx.ts": "local",
     "scripts/verify/dialogs-local.ts": "local",
     "scripts/verify/basecamp-project-turn.ts": "local",
     "scripts/sample/settings-live.ts": "sample",

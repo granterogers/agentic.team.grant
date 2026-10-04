@@ -78,6 +78,10 @@ const LOCAL: readonly Step[] = [
     why: 'the file reader over REAL PDFs against pdftotext: 90% word recall, and a decline is reported, never counted as a pass (#419)',
   },
   {
+    name: 'verify:file-text-docx',
+    why: 'a Word file from a REAL producer (docx-js), over 50,000 characters: every sentinel, the table cell and the last paragraph come back (#419)',
+  },
+  {
     name: 'verify:phone-header',
     why: 'the phone header keeps the project’s name at 320, 360, 390 and 430, and every control is 44px (P5)',
   },
