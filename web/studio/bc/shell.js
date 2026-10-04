@@ -3271,13 +3271,13 @@ const searchHits = (q, kind, only) => {
     if (want('Tasks')) {
       for (const t of p.tasks ?? []) {
         if (!match(t.title, t.note, t.who)) continue
-        hits.push({ kind: 'Task', project: p.name, title: t.title, excerpt: t.note ?? '', who: whoName(t.who), when: bcMini.dueWords(t), to: at(`/p/${p.slug}/tasks`) })
+        hits.push({ kind: 'Task', project: p.name, open: { type: 'task', key: todos.keyOf(t) }, title: t.title, excerpt: t.note ?? '', who: whoName(t.who), when: bcMini.dueWords(t), to: at(`/p/${p.slug}/tasks`) })
       }
     }
     if (want('Documents')) {
       for (const d of bcMini.docsOf(p)) {
         if (!match(d.title, d.kind, d.origin, docsrc.nameOfSource(d.src))) continue
-        hits.push({ kind: d.src === 'web' ? 'Web page' : 'Document', project: p.name, title: d.title, excerpt: [d.kind, d.size].filter(Boolean).join(' · '), who: d.origin ?? '', when: d.when ?? '', to: at(`/p/${p.slug}/documents`) })
+        hits.push({ kind: d.src === 'web' ? 'Web page' : 'Document', project: p.name, open: { type: 'doc', ref: bcMini.docRef(d), title: d.title }, title: d.title, excerpt: [d.kind, d.size].filter(Boolean).join(' · '), who: d.origin ?? '', when: d.when ?? '', to: at(`/p/${p.slug}/documents`) })
       }
     }
     if (want('People')) {

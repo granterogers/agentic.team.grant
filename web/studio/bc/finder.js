@@ -83,7 +83,7 @@ export const PROVIDERS = [
             who: '',
             when: e.startDay,
             to: at(`/p/${p.slug}/schedule`),
-            open: { type: 'event', id: e.id },
+            open: { type: 'event', id: e.id, slug: p.slug },
           })),
       ),
   },

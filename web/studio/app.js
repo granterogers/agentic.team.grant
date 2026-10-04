@@ -13228,6 +13228,8 @@ document.addEventListener('drop', (e) => {
 
 document.addEventListener('keydown', (e) => {
   const cmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
+  /* Team HQ's own palette (bc/jump.js) answers Cmd or Ctrl and K there; this older bar is the classic studio's. */
+  if (cmdK && state.experience === 'basecamp') return
   if (cmdK) { e.preventDefault(); state.cmd.open ? (closeCmd(), render()) : openCmd(); return }
   // Escape closes whatever is open, outermost first.
   if (e.key === 'Escape' && state.cmd.open) { closeCmd(); render() }
