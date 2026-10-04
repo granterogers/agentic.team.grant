@@ -20,6 +20,7 @@
     "scripts/sample/lesson.ts": "sample",
     "scripts/sample/notice-link.ts": "sample",
     "scripts/sample/channel-link-ui.ts": "sample",
+    "scripts/sample/documents-live.ts": "sample",
     "scripts/sample/envelope-canary.ts": "sample",
     "scripts/sample/chat.ts": "sample",
     "scripts/verify/incidents.ts": "sample",

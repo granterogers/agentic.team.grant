@@ -65,6 +65,13 @@ form.append(
   JSON.stringify({ name: 'hq-api', entrypoint_path: 'index.ts', verify_jwt: false }),
 )
 form.append('file', new File([entrypoint], 'index.ts', { type: 'application/typescript' }))
+// The file reader the upload action imports as ./file-text.ts (#419): one source, uploaded beside the entrypoint.
+form.append(
+  'file',
+  new File([await readFile('src/text/file-text.ts', 'utf8')], 'file-text.ts', {
+    type: 'application/typescript',
+  }),
+)
 
 const deployed = await fetch(`${api}/functions/deploy?slug=hq-api`, {
   method: 'POST',

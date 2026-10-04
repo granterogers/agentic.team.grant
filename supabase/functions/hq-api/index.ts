@@ -38,6 +38,9 @@
  * rejects everything rather than waving requests through.
  */
 
+// Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
+import { fileText } from './file-text.ts'
+
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -2533,36 +2536,44 @@ Deno.serve(async (request: Request): Promise<Response> => {
         leaving `content` null rather than inventing an empty string (0207). A failure to index never costs the file:
         it is stored and filed, which is what was asked.
       */
-      const isText =
-        mime.startsWith('text/') ||
-        mime === 'application/json' ||
-        ['txt', 'md', 'markdown', 'csv', 'tsv', 'json'].includes(ext)
-      if (isText && typeof filed.document_id === 'string') {
+      /*
+        #419: text, Markdown, HTML, Word and PDF are all read (`fileText`); anything else, and a PDF that is a picture of a
+        page, is stored and filed but NOT searchable, and the reply says so rather than leaving the person to find out when
+        a question about it goes unanswered. `searchable` is a fact about this file at this moment, not a promise.
+      */
+      let searchable: { searchable: boolean; why?: string } = {
+        searchable: false,
+        why: 'the file was filed but its text could not be read',
+      }
+      if (typeof filed.document_id === 'string') {
         try {
-          // A NUL cannot be stored in a text value, so it is dropped before the call rather than refused by it.
-          const text = new TextDecoder('utf-8', { fatal: false })
-            .decode(bytes)
-            .split(String.fromCharCode(0))
-            .join('')
-          await fetch(`${DB_URL}/rest/v1/rpc/index_file_text`, {
-            method: 'POST',
-            headers: {
-              apikey: SERVICE_KEY,
-              Authorization: `Bearer ${SERVICE_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              p_office: office,
-              p_document_id: filed.document_id,
-              p_text: text,
-            }),
-          })
+          const read = await fileText(bytes, mime, name)
+          if (read.text === null) {
+            searchable = { searchable: false, why: read.why }
+          } else {
+            const idx = await fetch(`${DB_URL}/rest/v1/rpc/index_file_text`, {
+              method: 'POST',
+              headers: {
+                apikey: SERVICE_KEY,
+                Authorization: `Bearer ${SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                p_office: office,
+                p_document_id: filed.document_id,
+                p_text: read.text,
+              }),
+            })
+            searchable = idx.ok
+              ? { searchable: true }
+              : { searchable: false, why: 'the file was filed but its text could not be stored' }
+          }
         } catch {
           console.error(`hq-api document_upload: ${path} was filed but could not be indexed`)
         }
       }
       kickWorker()
-      return json({ action: actionName, result: filed })
+      return json({ action: actionName, result: { ...filed, ...searchable } })
     }
 
     const done = await fetch(`${DB_URL}/rest/v1/rpc/${action.fn}`, {
