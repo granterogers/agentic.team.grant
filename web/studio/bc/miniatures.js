@@ -1057,7 +1057,10 @@ const emptyWith = (line, label, to) =>
     <a class="bcmptyact" href="${esc(to)}" data-bc-go="${esc(to)}">${esc(label)}</a></div>`
 
 /** The project's documents as one logical item each, with source and type worked out. */
-export const docsOf = (p) => docsrc.dedupe((p.documents ?? []).map(docsrc.enrich))
+export const docsOf = (p) => {
+  const office = docsrc.officeList(p.slug)
+  return docsrc.dedupe((office ?? p.documents ?? []).map(docsrc.enrich))
+}
 
 export const docThumbs = (docs) => docs.map((d, i) => thumb(d, i)).join('')
 

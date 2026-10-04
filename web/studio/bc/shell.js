@@ -64,6 +64,7 @@ export const mount = (c) => {
   compose.mount(c)
   account.mount(c)
   cal.init(c)
+  docsrc.init(c)
 }
 
 const state = () => ctx.state
@@ -2866,12 +2867,15 @@ const documentRecord = (p) => {
     ['In Team HQ', e.src === 'drive' || e.src === 'notebook' || e.src === 'notion' || e.src === 'web' ? (d.imported === true ? 'A durable copy is kept' : 'Read from the source; no copy kept') : ''],
   ].filter(([, v]) => v !== '' && v !== undefined)
   const sourceHref = docsrc.sourceUrl(e)
-  const canImport = ['drive', 'notebook', 'notion', 'web'].includes(e.src) && d.imported !== true && String(d.id ?? '') !== ''
+  const canImport =
+    String(d.id ?? '') !== '' &&
+    (d.fromOffice === true ? d.import_available === true && d.import_state !== 'imported' : ['drive', 'notebook', 'notion', 'web'].includes(e.src) && d.imported !== true)
+  const importPending = d.import_state === 'pending'
   return `<div class="bcrecordhead">
       <h1>${esc(d.title ?? 'Document')}</h1>
       <span class="bcactions">
         ${sourceHref === '' ? '' : `<a class="bcbtn bcbtn--outline" href="${esc(sourceHref)}" target="_blank" rel="noopener" data-bc-opensource>Open source</a>`}
-        ${canImport ? button('Import to Team HQ', { 'data-bc-docimport': esc(String(d.id)) }) : ''}
+        ${canImport ? (importPending ? '<span class="bcpmeta">Import requested. It completes the next time the office reads this file.</span>' : button('Import to Team HQ', { 'data-bc-docimport': esc(String(d.id)) })) : ''}
       </span>
     </div>
     <div class="bcdocgrid">

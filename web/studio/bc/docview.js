@@ -95,7 +95,7 @@ const paintPreview = async (host, fileFor) => {
 }
 
 /** The version history, drawn only when the office has one to show. */
-const paintVersions = async (host) => {
+const paintVersions = async (host, ctx) => {
   const id = host.dataset.bcDocversions ?? ''
   if (id === '') return
   let out = null
@@ -115,16 +115,30 @@ const paintVersions = async (host) => {
         (v) => `<li class="bcversion${v.is_current ? ' is-current' : ''}">
           <span class="bcvn">v${esc(String(v.version))}</span>
           <span class="bcvw">${esc(String(v.updated_at ?? v.created_at ?? '').slice(0, 10))}${v.produced_by ? ` · ${esc(String(v.produced_by))}` : ''}</span>
-          ${v.is_current ? '<span class="bcvcur">current</span>' : `<button type="button" class="bcversionbtn" data-bc-docrestore="${esc(String(v.document_id))}">Make current</button>`}
+          ${v.is_current ? '<span class="bcvcur">current</span>' : `<button type="button" class="bcversionbtn" data-bc-docrestore="${esc(String(v.document_id))}" title="Brings this version back as a new version. Nothing is deleted.">Return to this version</button>`}
         </li>`,
       )
       .join('')}</ol>`
+  /* Bound here, after the list exists: it is drawn when the office answers, which is after the page was wired. */
+  for (const b of host.querySelectorAll('[data-bc-docrestore]')) {
+    b.addEventListener('click', async () => {
+      b.disabled = true
+      try {
+        await act('document_rollback', { p_document_id: b.dataset.bcDocrestore })
+        docsrc.forgetList(ctx.state.project)
+        ctx.render?.()
+      } catch (e) {
+        b.disabled = false
+        say(b, String(e?.message ?? e), 'bad')
+      }
+    })
+  }
 }
 
 export const wire = (root, ctx, fileFor) => {
   /* --- the preview, and the versions beside it */
   for (const host of root.querySelectorAll('[data-bc-docpreview]')) void paintPreview(host, fileFor)
-  for (const host of root.querySelectorAll('[data-bc-docversions]')) void paintVersions(host)
+  for (const host of root.querySelectorAll('[data-bc-docversions]')) void paintVersions(host, ctx)
 
   /* --- import: only ever on a press */
   for (const b of root.querySelectorAll('[data-bc-docimport]')) {
@@ -133,20 +147,11 @@ export const wire = (root, ctx, fileFor) => {
       b.disabled = true
       say(b, 'Importing a copy into Team HQ…')
       try {
-        await act('document_import', { p_document: id })
-        say(b, 'Done. A durable copy is now kept in Team HQ, whatever happens to the original.', 'good')
+        const out = await act('document_import', { p_document_id: id })
+        docsrc.forgetList(ctx.state.project)
+        if (out?.state === 'pending') say(b, out.note ?? 'Requested. The copy is made the next time the office reads this file.', 'good')
+        else say(b, 'Done. A durable copy is now kept in Team HQ, whatever happens to the original.', 'good')
         b.remove()
-      } catch (e) {
-        b.disabled = false
-        say(b, String(e?.message ?? e), 'bad')
-      }
-    })
-  }
-  for (const b of root.querySelectorAll('[data-bc-docrestore]')) {
-    b.addEventListener('click', async () => {
-      b.disabled = true
-      try {
-        await act('document_restore', { p_document_id: b.dataset.bcDocrestore })
         ctx.render?.()
       } catch (e) {
         b.disabled = false
@@ -154,7 +159,6 @@ export const wire = (root, ctx, fileFor) => {
       }
     })
   }
-
   /* --- the filter bar on the document list */
   const slug = ctx.state.project
   for (const b of root.querySelectorAll('[data-bc-docsrc]')) {

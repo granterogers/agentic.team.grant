@@ -34,6 +34,7 @@
 */
 
 import { MARKS } from '../logos/marks.js'
+import { canWrite, read } from '../office.js'
 
 /** The sources, in the order the filter offers them. */
 export const SOURCES = [
@@ -246,3 +247,83 @@ export const sourceUrl = (d) => {
 }
 
 export { nameOfSource }
+
+/* ------------------------------------------------- the unified list, from the office --- */
+
+/*
+  When signed in, the office's own `project_documents` is the list: one item per
+  logical document, deduplicated where identity is certain, with source, size,
+  dates, version count and import state worked out in the database. It is read
+  lazily, once per project, and the page falls back to the studio payload's
+  `documents` until it arrives or when the office does not have it (an older
+  deployment) - so nothing here can make a project's documents disappear.
+*/
+
+let redraw = null
+export const init = (c) => {
+  redraw = c?.render ?? null
+}
+const lists = new Map()
+
+const sizeLabel = (it) => {
+  if (Number.isFinite(it.words) && it.words >= 100) return `${Math.round(it.words).toLocaleString('en-GB')} words`
+  if (Number.isFinite(it.size_bytes) && it.size_bytes >= 1024) {
+    const kb = it.size_bytes / 1024
+    return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.round(kb)} KB`
+  }
+  return ''
+}
+
+/** An office item in the shape the rest of the page already draws. */
+export const fromItem = (it) => ({
+  id: it.id,
+  title: it.title,
+  kind: it.kind === 'audio' ? 'audio' : it.source === 'generated' ? 'made' : it.mime === 'application/pdf' || it.kind === 'pdf' ? 'pdf' : 'doc',
+  origin: it.source === 'upload' ? 'Yours' : (it.produced_by ?? nameOfSource(it.source ?? 'other')),
+  size: sizeLabel(it),
+  uploaded: it.added_at ?? null,
+  added: it.added_at ?? null,
+  modified: it.modified_at ?? null,
+  source: it.source,
+  connector: it.connector ?? '',
+  external_ref: it.external_ref ?? '',
+  external_url: it.external_url ?? '',
+  mime: it.mime ?? '',
+  size_bytes: it.size_bytes ?? null,
+  imported: it.imported === true,
+  import_available: it.import_available === true,
+  import_state: it.import_state ?? 'none',
+  version_count: it.version_count ?? 1,
+  current_version: it.current_version ?? 1,
+  alsoIn: Array.isArray(it.also_in) ? it.also_in : [],
+  tags: it.tags ?? [],
+  indexed: it.indexed === true,
+  duplicates: it.duplicates ?? [],
+  fromOffice: true,
+})
+
+/** The office's list for a project, or null while it is not (yet) available. */
+export const officeList = (slug) => {
+  if (!canWrite()) return null
+  const hit = lists.get(slug)
+  if (hit === undefined) {
+    lists.set(slug, { state: 'loading', docs: [] })
+    read('project_documents', undefined, { slug })
+      .then((out) => {
+        lists.set(slug, { state: 'ready', docs: Array.isArray(out?.documents) ? out.documents.map(fromItem) : [] })
+      })
+      .catch(() => {
+        lists.set(slug, { state: 'off', docs: [] })
+      })
+      .finally(() => {
+        redraw?.()
+      })
+    return null
+  }
+  return hit.state === 'ready' ? hit.docs : null
+}
+
+/** Forget a project's list so the next draw asks again (after an import, a new version). */
+export const forgetList = (slug) => {
+  lists.delete(slug)
+}

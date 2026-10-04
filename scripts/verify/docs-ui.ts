@@ -182,6 +182,148 @@ await page.screenshot({ path: '.out/ux-docs-04-viewer.png' })
 await page.goBack()
 await page.waitForTimeout(400)
 
+/* --- the office's own list, versions and import (stubbed gateway) -------- */
+const calls: { action?: string; args?: Record<string, unknown>; section?: string }[] = []
+const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const p2 = await ctx2.newPage()
+const err2: string[] = []
+p2.on('pageerror', (e) => {
+  err2.push(e.message)
+})
+await p2.addInitScript(() => {
+  localStorage.setItem('hq.token', 'stub-token-for-test')
+})
+const item = (o: Record<string, unknown>): Record<string, unknown> => ({
+  source: 'upload',
+  connector: null,
+  origin: 'yours',
+  mime: 'application/pdf',
+  size_bytes: 20480,
+  words: 4000,
+  added_at: '2026-10-01T10:00:00Z',
+  modified_at: '2026-10-02T10:00:00Z',
+  imported: false,
+  import_available: false,
+  import_state: 'none',
+  version_count: 1,
+  current_version: 1,
+  also_in: [],
+  tags: [],
+  duplicates: [],
+  ...o,
+})
+const docs = [
+  item({
+    id: 'd1',
+    title: 'Office Drive report',
+    source: 'drive',
+    connector: 'drive',
+    external_ref: 'abc',
+    import_available: true,
+    version_count: 3,
+    current_version: 3,
+    kind: 'google-doc',
+  }),
+  item({ id: 'd2', title: 'Office upload', source: 'upload' }),
+]
+await p2.route('**/*', async (route) => {
+  const u = route.request().url()
+  if (!u.includes('hq-api')) return route.continue()
+  const headers = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': '*',
+    'access-control-allow-methods': '*',
+  }
+  if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
+  const parsed = new URL(u)
+  if (route.request().method() === 'POST') {
+    const body = JSON.parse(route.request().postData() ?? '{}') as {
+      action: string
+      args: Record<string, unknown>
+    }
+    calls.push({ action: body.action, args: body.args })
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers,
+      body: JSON.stringify({ result: { ok: true, state: 'pending', note: 'Requested.' } }),
+    })
+  }
+  const section = parsed.searchParams.get('section') ?? ''
+  calls.push({ section, args: Object.fromEntries(parsed.searchParams) })
+  if (section === 'project_documents')
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers,
+      body: JSON.stringify({ data: { documents: docs } }),
+    })
+  if (section === 'document_versions')
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers,
+      body: JSON.stringify({
+        data: {
+          versions: [
+            { document_id: 'd1a', version: 1, is_current: false },
+            { document_id: 'd1', version: 3, is_current: true },
+            { document_id: 'd1b', version: 2, is_current: false },
+          ],
+        },
+      }),
+    })
+  return route.fulfill({
+    status: 500,
+    contentType: 'application/json',
+    headers,
+    body: JSON.stringify({ error: 'stub' }),
+  })
+})
+await p2.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })
+await p2.waitForTimeout(1500)
+const asked = calls.find((c) => c.section === 'project_documents')
+check(
+  'signed in, the page asks the office for the unified list for this project',
+  asked !== undefined && String(asked.args?.slug ?? '') !== '',
+  JSON.stringify(asked),
+)
+check(
+  'and shows the office list instead of the prototype documents',
+  (await p2.locator('.bcdocs--wall [data-bc-doc]').count()) === 2,
+  String(await p2.locator('.bcdocs--wall [data-bc-doc]').count()),
+)
+await p2
+  .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Office Drive report' })
+  .locator('[data-bc-doc-open]')
+  .click()
+await p2.waitForSelector('.bcdocgrid')
+await p2.waitForTimeout(800)
+check(
+  'a document with history lists its versions, newest first',
+  (await p2.locator('.bcversion .bcvn').allTextContents()).join(',') === 'v3,v2,v1',
+  (await p2.locator('.bcversion .bcvn').allTextContents()).join(','),
+)
+await p2.locator('[data-bc-docimport]').click()
+await p2.waitForTimeout(500)
+const imp = calls.find((c) => c.action === 'document_import')
+check(
+  'Import sends document_import with p_document_id, only on the press',
+  imp !== undefined && imp.args?.p_document_id === 'd1',
+  JSON.stringify(imp),
+)
+await p2.waitForSelector('[data-bc-docrestore]')
+await p2.locator('[data-bc-docrestore]').first().click()
+await p2.waitForTimeout(400)
+const rb = calls.find((c) => c.action === 'document_rollback')
+check(
+  'returning to a version sends document_rollback (a new version, nothing deleted)',
+  rb !== undefined && typeof rb.args?.p_document_id === 'string',
+  JSON.stringify(rb),
+)
+await ctx2.close()
+check('no page errors from the office path', err2.length === 0, err2.join(' | '))
+
 check('no page errors', thrown.length === 0, thrown.join(' | '))
 console.log(`\n${String(pass)} passed, ${String(fail)} failed`)
 await browser.close()
