@@ -4428,8 +4428,9 @@ Each of these cost real time. They are here so they cost it once.
 - **A stale isolated replica is worse than none.** `/var/tmp/pgl` held a `post` database without 0867 onwards, so a proof would
   have run against a schema that lacked `app.office_actor`. `bash scripts/isolated/replica.sh` rebuilds it in about 36 seconds
   and the proofs in `scripts/isolated/` (the REAL edge function, in Node, with every non-replica URL refused and recorded) then
-  mean what they say. `sender-authorization` has three failures on the pager assertions at this commit that reproduce with the
-  webhook change stashed, so they are the suite's own staleness (it asks `telegram_chat_for` of the test office).
+  mean what they say. `sender-authorization` was failing at this commit with the webhook change stashed (it asked
+  `telegram_chat_for` of the TEST office, and its "old edge function" inserts predate NOT NULL `office_id`/`project_id`); it is
+  39/39 again, and the one relaxed assertion (a chat nobody knows has no row OR no subject) still fails if a subject appears.
 - **Disclosed process slips this run:** one `sed -i` with a pattern that matched nothing (no change), one Python heredoc that
   read a file and wrote nothing, and one long command run without an explicit timeout that the harness moved to the
   background (it finished; the foreground rule is to pass the timeout). The reflex is the trap.
