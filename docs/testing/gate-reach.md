@@ -10,6 +10,11 @@ Two gates exist, and they answer different questions.
 | Runs when | Any time, serialised, in the foreground; one health reading first, and it stops rather than add load to a slow platform | Deliberately, with `HQ_PRODUCTION_INTENT=1`, when the platform is healthy |
 | Length | about 11 minutes, in two parts (`--part=static`, `--part=production`) | much longer |
 
+**Update, later on 4 October:** three parts now. `--part=identity` adds `verify:delivery-office`, `verify:channel-link`,
+`sample:channel-link`, `verify:history` and `verify:connectors`; `verify:talk` joined the static part. The fingerprint check
+excepts the TEST office only (the quarantine office, where `verify:history` writes its fixtures). Last result: static 18/18,
+production 10/10 (GRANT [], FOREIGN [], SAMPLE []), identity 8 of 8 suites passing.
+
 ## What `gate:safe` runs (all passed on 4 October)
 
 **Static and local** (about 3 minutes): lint, typecheck, the unit and regression tests (4,276), `check:migrations`,

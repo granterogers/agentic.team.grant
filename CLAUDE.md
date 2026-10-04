@@ -392,12 +392,12 @@ npm run check:migrations && npm run check:secrets && npm run check:templates
 npm run verify:wired                                            # if UI changed
 npm run verify:hq && npm run verify:ui && npm run verify:talk  # if UI changed (verify:talk is Team HQ, simulated audio; see below)
 npm run shots                                                   # capture web/studio
-npm run gate:safe -- --part=static && npm run gate:safe -- --part=production   # the gate that is safe to run (#414)
+npm run gate:safe -- --part=static && npm run gate:safe -- --part=production && npm run gate:safe -- --part=identity   # the gate that is safe to run (#414)
 ```
 
 **`npm run gate:safe` is the gate to run.** No model calls, serialised, foreground, one health reading first, and Grant plus
-the 24 other offices are fingerprinted before and after and the gate FAILS if any moved (27 checks, about 11 minutes, in two
-parts so each fits a shell's ten-minute ceiling). The old `npm run gate` (76 checks) still presses on Grant's office and spends
+the 24 other offices are fingerprinted before and after and the gate FAILS if any moved, the TEST office alone excepted
+(37 steps, about 17 minutes, in three parts so each fits a shell's ten-minute ceiling: static 18, production 10, identity 9). The old `npm run gate` (76 checks) still presses on Grant's office and spends
 model calls; `docs/testing/gate-reach.md` says which suites and why, and its status is PARTIAL. `verify:talk` drives Team HQ
 (control, states, loaded project) with SIMULATED audio; real voice is MANUAL.
 
@@ -416,7 +416,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **751 applied** (0881 is the latest).
+`npm run migrate` applies plain SQL from `migrations/`. **756 applied** (0886 is the latest).
 
 ## Testing signed in, without Grant's office
 
@@ -4402,6 +4402,37 @@ Each of these cost real time. They are here so they cost it once.
 - **Disclosed process slips this window:** two `sed -i` edits (a test label and a comment) and one heredoc scratch file, all on
   files in this repository, against the File editing rule; reads were checked and the changes are comment/label-only. The rule
   stands and the reflex is the trap: use Edit.
+
+- **A fallback the next check refuses is still an ATTRIBUTION.** `app.delivery_office` answered the operator for any delivery
+  with no job, and `claim_delivery` then refused it as "no provenance" - so nothing reached Grant, but every refused attempt
+  was recorded in HIS office, and an operator sender could address somebody else's chat and be claimed in his. 0883 makes
+  missing provenance the SYSTEM office, and an operator sender may not address a destination another office owns. A Slack
+  channel's office is its WORKSPACE's (`slack_workspaces.office_id`), not its project's: 0883 asked the project and 0884 corrected
+  it, because a channel with no project has none. Ask the owner the database enforces.
+- **`log_temp_files` is superuser-context and our role is not one.** The Management API's `config/database/postgres` accepts a
+  fixed list that does not include it, and `has_parameter_privilege('log_temp_files','SET')` is false, so the one setting that
+  would name the temp-file producer is Supabase support's to turn on. `pg_stat_statements` was reset on 2 September and the
+  database counter on 25 August, and it has evicted entries 100 times: a statement table cannot account for a counter it did
+  not exist for.
+- **Converting a suite to a safe office can reveal that its assertion was about the OWNER, not the property.** `verify:history`
+  asserted a real turn was "from Grant"; in the Sample it is from the Sample's owner key, and the property is "from the person
+  whose office it is". The gate's "every other office unchanged" then failed on the TEST office, whose fixtures the suite exists
+  to write: the quarantine office is the one exception, stated in the gate.
+- **A control that is only drawn for one kind of person is invisible to `verify:wired`.** The Connect/Disconnect Telegram
+  buttons exist for a non-operator only, so the audit walked 21 screens and said nothing about them; `sample:channel-link`
+  presses them as the Sample on a desktop and a phone. And the phone capture found the waiting row squeezed to a few pixels
+  wide ("Telegra / m") by two side-by-side buttons that no assertion could have seen: open the PNG.
+- **A rate limit is the product working, and a re-run of its own suite is how you meet it.** Five link attempts an hour made a
+  fourth run of `sample:channel-link` fail with no link on the page; the suite now clears the Sample's own challenges first. A
+  harness that creates rows under a ceiling must say it is clearing them.
+- **A stale isolated replica is worse than none.** `/var/tmp/pgl` held a `post` database without 0867 onwards, so a proof would
+  have run against a schema that lacked `app.office_actor`. `bash scripts/isolated/replica.sh` rebuilds it in about 36 seconds
+  and the proofs in `scripts/isolated/` (the REAL edge function, in Node, with every non-replica URL refused and recorded) then
+  mean what they say. `sender-authorization` has three failures on the pager assertions at this commit that reproduce with the
+  webhook change stashed, so they are the suite's own staleness (it asks `telegram_chat_for` of the test office).
+- **Disclosed process slips this run:** one `sed -i` with a pattern that matched nothing (no change), one Python heredoc that
+  read a file and wrote nothing, and one long command run without an explicit timeout that the harness moved to the
+  background (it finished; the foreground rule is to pass the timeout). The reflex is the trap.
 
 ---
 

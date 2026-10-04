@@ -1,3 +1,16 @@
+> ## 2026-10-04 (later) - TELEGRAM SELF-SERVICE, DELIVERY OFFICE, TALK, GATE (branch `claude/multi-user-p4`)
+>
+> Migrations through **0886**. hq-api **v884**, telegram-webhook **v689**, page `dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M` (rollback
+> `dpl_DPj4Nmnu5J3xy7afcNsUNccnCd3f`). **#410 Telegram** (ADR-0064): a person connects their own Telegram from Settings >
+> Messaging by a single-use ten-minute link; the webhook binds the SENDER to the TOKEN's office; refusals and the operator's
+> office are covered; proofs `verify:channel-link`, `sample:channel-link`, `scripts/isolated/telegram-link.ts` (real webhook).
+> NOT proven: a real iPhone tap on a real link (MANUAL). **Slack not attempted.** **delivery_office (0883/0884):** missing
+> provenance is the system office, never the operator; an operator sender may not address another office's chat or channel
+> (`verify:delivery-office`). **verify:talk** now drives Team HQ with SIMULATED audio (voice note and Talk to Team real-audio
+> acceptance remain MANUAL). **#414:** `verify:history` and `verify:connectors` converted (test office + Sample rollbacks);
+> `gate:safe` has three parts. **Temp files:** the producer is NOT identified; `log_temp_files` is not settable by our role
+> (`docs/ops/supabase-efficiency-2026-10-04.md`). Old `npm run gate` still PARTIAL.
+>
 > ## 2026-10-04 - P4 CONTINUATION (branch `claude/multi-user-p4`): incidents, project context, learning, labels, safe gate
 >
 > Migrations through **0882** (752 files). Worker **v959**, page `dpl_DPj4Nmnu5J3xy7afcNsUNccnCd3f` (rollback

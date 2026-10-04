@@ -29,8 +29,9 @@ const SKIP_FINGERPRINT = process.argv.includes('--skip-fingerprint')
 // The whole gate is longer than a shell's ten-minute ceiling, and Grant's rule is to split rather than background:
 //   --part=static       lint, typecheck, unit tests, check:*, and the local suites
 //   --part=production   health, fingerprints, and the Sample / test-office suites
-// With neither, both run in order.
-const PART = /--part=(static|production)/.exec(process.argv.join(' '))?.[1] ?? 'all'
+//   --part=identity     health, fingerprints, and the suites that drive who a delivery or a Telegram user belongs to
+// With none, all three run in order.
+const PART = /--part=(static|production|identity)/.exec(process.argv.join(' '))?.[1] ?? 'all'
 const out = '.out/gate-safe'
 mkdirSync(out, { recursive: true })
 
@@ -79,10 +80,6 @@ const SAMPLE: readonly Step[] = [
     why: 'a project named in a message, and its negatives, rolled back (#416)',
   },
   {
-    name: 'verify:delivery-office',
-    why: 'a delivery takes its office from provenance; none is never the operator (0883, rolled back)',
-  },
-  {
     name: 'sample:dock',
     why: 'on the real page as the Sample, the dock is the page’s project (#416)',
   },
@@ -91,6 +88,29 @@ const SAMPLE: readonly Step[] = [
     why: 'the Reconnect link opens the right place, signed in and signed out (#413)',
   },
   { name: 'sample:labels', why: 'no internal owner key reaches a screen (#418)' },
+]
+const IDENTITY: readonly Step[] = [
+  {
+    name: 'verify:delivery-office',
+    why: 'a delivery takes its office from provenance; none is never the operator (0883, rolled back)',
+  },
+  {
+    name: 'verify:channel-link',
+    why: 'a person connects their own Telegram and nobody else’s, rolled back (#410)',
+  },
+  {
+    name: 'sample:channel-link',
+    why: 'the same, on the real page as the Sample; ends disconnected, nothing sent (#410)',
+  },
+  {
+    name: 'verify:history',
+    why: 'the conversation store: test office plus Sample rollbacks, never Grant (#414)',
+  },
+  {
+    name: 'verify:connectors',
+    why: 'discovering a tool grants nothing; test office (#414)',
+    env: { HQ_PRODUCTION_INTENT: '1' },
+  },
 ]
 
 const results: { name: string; ok: boolean; seconds: number }[] = []
@@ -121,7 +141,7 @@ const run = (step: Step, n: number): boolean => {
 }
 
 let n = 0
-if (PART !== 'production') for (const s of [...STATIC, ...LOCAL]) run(s, ++n)
+if (PART === 'all' || PART === 'static') for (const s of [...STATIC, ...LOCAL]) run(s, ++n)
 
 // One health reading before anything touches production. Stop, rather than add load, if it is slow.
 let healthy = true
@@ -150,7 +170,9 @@ if (healthy && PART !== 'static') {
       },
       ++n,
     )
-  for (const s of SAMPLE) run(s, ++n)
+  const chosen =
+    PART === 'identity' ? IDENTITY : PART === 'production' ? SAMPLE : [...SAMPLE, ...IDENTITY]
+  for (const s of chosen) run(s, ++n)
   if (!SKIP_FINGERPRINT && fingerprinted) {
     run(
       {
@@ -176,8 +198,31 @@ if (healthy && PART !== 'static') {
     console.log(
       `\noffice fingerprints  GRANT ${grant ?? '?'}  FOREIGN ${foreign ?? '?'}  SAMPLE ${sample ?? '?'}`,
     )
+    // The TEST office is the quarantine office: the suites that need real-looking subjects write fixtures there by
+    // design (verify:history), so its own tables may move. Every other office - a person, the Sample's neighbours - may not.
+    const testOffice = (
+      spawnSync('npm', ['run', '-s', 'qq', '--', 'select app.test_office()::text as t'], {
+        encoding: 'utf8',
+        timeout: 2 * 60 * 1000,
+      }).stdout ?? ''
+    ).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/)?.[0]
+    let foreignReal: string | null = null
+    try {
+      const moved = JSON.parse(foreign ?? 'null') as string[] | null
+      foreignReal =
+        moved === null || testOffice === undefined
+          ? null
+          : JSON.stringify(moved.filter((m) => !m.startsWith(`${testOffice.slice(0, 8)}:`)))
+    } catch {
+      foreignReal = null
+    }
     results.push({ name: 'Grant unchanged', ok: grant === '[]', seconds: 0 })
-    results.push({ name: 'every other office unchanged', ok: foreign === '[]', seconds: 0 })
+    // Fails closed: an unreadable list or an unknown test office is not "no change".
+    results.push({
+      name: 'every other office unchanged (the test office excepted)',
+      ok: foreignReal === '[]',
+      seconds: 0,
+    })
   }
 }
 
