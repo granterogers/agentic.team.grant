@@ -292,6 +292,7 @@
     "sample:labels": "tsx scripts/sample/labels.ts",
     "verify:incidents": "tsx scripts/verify/incidents.ts",
     "verify:named-project": "tsx scripts/verify/named-project.ts",
+    "verify:delivery-office": "tsx scripts/verify/delivery-office.ts",
     "sample:tour": "tsx scripts/sample/tour.ts",
     "sample:chat": "tsx scripts/sample/chat.ts",
     "sample:voice-answer": "tsx scripts/sample/voice-answer.ts",

@@ -122,8 +122,9 @@ export interface DeliveryRequest {
   /**
    * The office this message is sent FOR. Almost every sender has a job and leaves this out: the office is then the
    * job's (`app.delivery_office`). A sender with no job passes it, or - if the destination is a registered test
-   * destination or the sender a registered operator - gets the test or the operator's office. Never a value taken from
-   * a request: a delivery claimed for the wrong office is a message sent in the wrong person's name.
+   * destination or the sender a registered operator - gets the test or the operator's office; anything else is the
+   * system office and is refused for want of provenance (0883: missing provenance never means the operator). Never a
+   * value taken from a request: a delivery claimed for the wrong office is a message sent in the wrong person's name.
    */
   readonly officeId?: string | null
   /**
@@ -290,7 +291,7 @@ export class DeliveryService {
       return `${lit(request.officeId)}::uuid`
     const job =
       request.jobId === null || request.jobId === undefined ? 'null' : `${lit(request.jobId)}::uuid`
-    return `app.delivery_office(${job}, ${lit(this.transport.channel)}, ${lit(request.targetRef)})`
+    return `app.delivery_office(${job}, ${lit(this.transport.channel)}, ${lit(request.targetRef)}, ${lit(request.dedupeKey)})`
   }
 
   private async claim(request: DeliveryRequest, office: string): Promise<ClaimRow> {

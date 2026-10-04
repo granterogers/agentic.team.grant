@@ -75,6 +75,10 @@ const SAMPLE: readonly Step[] = [
     why: 'a project named in a message, and its negatives, rolled back (#416)',
   },
   {
+    name: 'verify:delivery-office',
+    why: 'a delivery takes its office from provenance; none is never the operator (0883, rolled back)',
+  },
+  {
     name: 'sample:dock',
     why: 'on the real page as the Sample, the dock is the page’s project (#416)',
   },

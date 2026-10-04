@@ -1632,12 +1632,13 @@ async function scans(c: Ctx, e: Env): Promise<void> {
   )
   const dOfficeJob = await wq(`select app.delivery_office('${jobAOf(e)}', 'telegram', '1')`)
   const dOfficeNone = await wq(`select app.delivery_office(null, 'telegram', '1')`)
+  const dOfficeSystem = await wq(`select app.system_office()`)
   c.check(
-    (await sealed('app.delivery_office(uuid,text,text)')) &&
-      (await noOfficeParam('app.delivery_office(uuid,text,text)')) &&
+    (await sealed('app.delivery_office(uuid,text,text,text)')) &&
+      (await noOfficeParam('app.delivery_office(uuid,text,text,text)')) &&
       dOfficeJob === A &&
-      typeof dOfficeNone === 'string',
-    "k-proof: app.delivery_office is the resolver: it takes no office, a delivery for a job is that job's office, and one for no job is the operator's",
+      dOfficeNone === dOfficeSystem,
+    "k-proof: app.delivery_office is the resolver: it takes no office, a delivery for a job is that job's office, and one with no job and no registered sender is the SYSTEM office, never the operator's (0883)",
     c.json([dOfficeJob === A, dOfficeNone]),
   )
   const chatReturned = await c.try_(W, `select app.operator_chat('k-bot-${run}')`)

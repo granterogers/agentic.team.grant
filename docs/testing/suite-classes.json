@@ -6,7 +6,8 @@
     "verify:account-lifecycle",
     "verify:account-ui",
     "verify:incidents",
-    "verify:named-project"
+    "verify:named-project",
+    "verify:delivery-office"
   ],
   "smoke": [
     "verify:pulse",
@@ -25,6 +26,7 @@
     "scripts/sample/chat.ts": "sample",
     "scripts/verify/incidents.ts": "sample",
     "scripts/verify/named-project.ts": "sample",
+    "scripts/verify/delivery-office.ts": "sample",
     "scripts/verify/hq.ts": "smoke",
     "scripts/verify/talk.ts": "smoke",
     "scripts/verify/basecamp-project-turn.ts": "local",

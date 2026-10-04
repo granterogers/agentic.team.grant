@@ -750,5 +750,7 @@
   "0879_an_incident_keeps_its_office.sql": "7b11969e20c374ec1b982a7323388dcaf99180c52e44b83b5737a4c8c5e72ac3",
   "0880_a_project_he_names_is_the_project.sql": "5edce4895b3da6e2795b566bf9fe8d3de3d17fe974c9dc401bb09d0a9c8612d8",
   "0881_a_person_reads_you_not_their_key.sql": "01ab51f66f2d5e3fa94846cc2eb7f4b5bd1b406708693a8d3f6ba4b5e4fbee1a",
-  "0882_the_browser_card_says_what_it_does.sql": "d501a477876700c0476ee25d88aaceb9e1661346e568f097ab8130297a85394e"
+  "0882_the_browser_card_says_what_it_does.sql": "d501a477876700c0476ee25d88aaceb9e1661346e568f097ab8130297a85394e",
+  "0883_a_delivery_with_no_job_is_not_the_operators.sql": "73edb4627d7dac6f05b5bcecdb9b602d55576ae1d0ff8a43ad3f2122510957b4",
+  "0884_a_slack_channel_belongs_to_its_workspaces_office.sql": "529ae09abcc7f7acd9760854419c2460694267cffb72a0b1578d452c91ee43ae"
 }
