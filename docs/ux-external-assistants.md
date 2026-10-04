@@ -46,7 +46,7 @@ so reaching `public.mcp_*` without the edge function is no better.
 
 ## What an assistant cannot do
 
-* **Delete or cancel anything.** No tool deletes; `update_task` refuses `cancelled`; there is no event delete.
+* **Delete or cancel anything.** No tool deletes; `update_task` refuses `cancelled`; there is no event delete (see below).
 * **Choose its office or its identity.** The office comes from the credential; the client id from the credential. Any
   `p_office` a model supplies is overwritten (`rpcArgs`, unit-tested).
 * **Reach outside the office on its own say-so.**
@@ -76,22 +76,26 @@ The Activity feeds (`app.hq_studio_lately`, `app.studio_activity`) now return `v
 `category` is `task`, `document`, `calendar`, `sync`, `research` or `other`, derived from the action type
 (`app.activity_category`).
 
-## The calendar contract (0897 is a sibling's)
+## The calendar tools (0897 + 0924)
 
-The calendar tools call `public.hq_event_list`, `hq_event_create` and `hq_event_update` **by named arguments** through
-`app.mcp_event_*`, which check the client and set the door first. Assumed parameters, to be confirmed when 0897 lands:
+The calendar tools call the real project calendar, never beside it: `app.mcp_event_list` -> `app.hq_project_events`,
+`app.mcp_event_create` -> `app.hq_event_add`, `app.mcp_event_update` -> `app.hq_event_update`. Each checks the client
+first (office, `write` scope, active non-fixture project) and sets the door (`app.via` = the client's kind).
 
-```
-hq_event_list  (p_office, p_project text, p_from timestamptz, p_to timestamptz, p_limit integer)
-hq_event_create(p_office, p_project text, p_title text, p_starts_at timestamptz, p_ends_at timestamptz, p_location text, p_notes text)
-hq_event_update(p_office, p_event_id text, p_title text, p_starts_at timestamptz, p_ends_at timestamptz, p_location text, p_notes text)
-```
-
-If a name differs the tool answers "the calendar did not accept this call" instead of failing; the mapping is one
-place (`supabase/functions/mcp/tools.ts` and `app.mcp_event_*`).
+* **channel** stored on the event (`project_events.origin_channel`): `chatgpt`, `claude`, else `external`.
+* **authority** is always `agent`, so the calendar's sync asks the approval policy (tool `calendar.write`) before anything
+  reaches Google. Neither value is a tool argument; a model cannot choose them.
+* **Activity** reads "via ChatGPT" / "via Claude" / "via External assistant", category `calendar`.
+* `list_events` returns what the Calendar tab shows (Team HQ events and Google events filed under the project); omit
+  `project` for every active project. Window defaults to now + 90 days.
+* `create_event`: project, title, starts_at, ends_at, all_day, location, notes. `update_event`: uuid + patch (only sent
+  fields change; moving the start keeps the length). A Google-only event cannot be changed by an assistant.
+* **No delete tool.** `app.hq_event_delete` hard-deletes an event that never reached Google (no tombstone, nothing to
+  restore), so exposing it would break "nothing is deleted". Left out on purpose.
+* Calendar tools are listed only when `public.hq_project_events` / `hq_event_add` / `hq_event_update` exist.
 
 ## Deploying (not done)
 
-1. Apply 0920-0922 with `npm run migrate` (renumber if a sibling took the numbers).
+1. Apply 0920-0924 (0924 after the calendar 0897) with `npm run migrate` (renumber if a sibling took the numbers).
 2. `npm run deploy:mcp` (it probes tools/list).
 3. Reconnect the connector in ChatGPT / Claude so it re-lists the tools.

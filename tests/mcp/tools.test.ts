@@ -112,6 +112,76 @@ describe('the catalogue', () => {
     expect(names(['create_event'])).not.toContain('update_event')
   })
 
+  it('calendar tools pass the real calendar its arguments, by name, and never an office or authority', () => {
+    const create = toolNamed('create_event')
+    const args = create?.args(
+      {
+        project: 'plot',
+        title: 'Site visit',
+        starts_at: '2026-10-05T10:00:00+01:00',
+        ends_at: 'garbage',
+        all_day: true,
+        location: 'Plot 4',
+        p_authority: 'person',
+        p_channel: 'teamhq',
+      },
+      'c1',
+    )
+    expect(args).toEqual({
+      p_client_id: 'c1',
+      p_project: 'plot',
+      p_title: 'Site visit',
+      p_starts_at: '2026-10-05T09:00:00.000Z',
+      p_ends_at: null,
+      p_all_day: true,
+      p_location: 'Plot 4',
+      p_notes: null,
+    })
+    // the channel and the authority are decided by the database from the client, never offered to the model
+    for (const n of ['create_event', 'update_event', 'list_events']) {
+      const props = Object.keys(((toolNamed(n)?.schema ?? {}) as { properties: object }).properties)
+      expect(props, n).not.toContain('channel')
+      expect(props, n).not.toContain('authority')
+      const out = toolNamed(n)?.args(
+        { p_authority: 'person', authority: 'person', channel: 'teamhq' },
+        'c',
+      )
+      expect(Object.keys(out ?? {}), n).not.toContain('p_authority')
+      expect(Object.keys(out ?? {}), n).not.toContain('p_channel')
+    }
+  })
+
+  it('update_event is a patch: an omitted field is null, all_day only when a real boolean', () => {
+    const upd = toolNamed('update_event')
+    const id = '33333333-3333-3333-3333-333333333333'
+    expect(upd?.args({ event_id: id, title: 'New' }, 'c1')).toEqual({
+      p_client_id: 'c1',
+      p_event_id: id,
+      p_title: 'New',
+      p_starts_at: null,
+      p_ends_at: null,
+      p_all_day: null,
+      p_location: null,
+      p_notes: null,
+    })
+    expect(upd?.args({ event_id: id, all_day: 'yes' }, 'c1')).toMatchObject({ p_all_day: null })
+    expect(upd?.args({ event_id: id, all_day: false }, 'c1')).toMatchObject({ p_all_day: false })
+    // the control: the schema requires the id, and says it is a uuid from list_events
+    expect(((upd?.schema ?? {}) as { required?: string[] }).required).toEqual(['event_id'])
+  })
+
+  it('list_events and the calendar writes are one-to-one with the functions 0924 defines', () => {
+    expect(toolNamed('list_events')?.fn).toBe('mcp_event_list')
+    expect(toolNamed('create_event')?.fn).toBe('mcp_event_create')
+    expect(toolNamed('update_event')?.fn).toBe('mcp_event_update')
+    // no calendar tool deletes: the calendar hard-deletes what never reached Google
+    expect(
+      Object.keys(TOOLS)
+        .filter((n) => /event/.test(n))
+        .sort(),
+    ).toEqual(['create_event', 'list_events', 'update_event'])
+  })
+
   it('does not treat a prototype property as a tool', () => {
     for (const bad of ['constructor', '__proto__', 'toString', 'hasOwnProperty', '']) {
       expect(toolNamed(bad), bad).toBeUndefined()

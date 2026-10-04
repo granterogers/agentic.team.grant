@@ -377,18 +377,26 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
     }),
   },
 
-  // Calendar: served only where the database has the calendar (see OPTIONAL_TOOLS). Argument names follow the
-  // contract documented in migration 0922 - one place to correct if 0897 differs.
+  // Calendar: served only where the database has the calendar (see OPTIONAL_TOOLS). These call the project calendar
+  // (0897) through app.mcp_event_* (0924), which checks the client, records the door ("via ChatGPT") and marks every
+  // write as an agent's, so the approval policy decides before anything reaches Google. There is deliberately no
+  // delete: the calendar hard-deletes an event that never reached Google, which would leave nothing to restore.
   list_events: {
-    description: 'List calendar events of a project (or of every project) between two instants.',
+    description:
+      "List a project's calendar events (or every active project's) between two instants: Team HQ events and Google " +
+      'events filed under the project, each with id, title, starts_at, ends_at, all_day, location, project_slug and ' +
+      'whether it is editable. All-day events end on the EXCLUSIVE end day. Use the id with update_event.',
     fn: 'mcp_event_list',
     optional: true,
     schema: {
       type: 'object',
       properties: {
-        project: { type: 'string', description: 'Project slug. Omit for every project.' },
+        project: { type: 'string', description: 'Project slug. Omit for every active project.' },
         from: { type: 'string', description: 'ISO 8601 instant. Default: now.' },
-        to: { type: 'string', description: 'ISO 8601 instant.' },
+        to: {
+          type: 'string',
+          description: 'ISO 8601 instant. Default: 90 days after from; at most 400 days.',
+        },
         limit: { type: 'number', description: 'Max events, 1-100. Default 25.' },
       },
     },
@@ -400,17 +408,27 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
     }),
   },
   create_event: {
-    description: 'Add a calendar event to a project. Attributed to this assistant in Activity.',
+    description:
+      'Add an event to a project\'s calendar. It is attributed to this assistant ("via ChatGPT" / "via Claude") ' +
+      "in Activity, and, as an assistant proposal, it reaches Google Calendar only if the owner's approval policy " +
+      'allows it. Without ends_at a timed event lasts an hour and an all-day event one day.',
     fn: 'mcp_event_create',
     write: true,
     optional: true,
     schema: {
       type: 'object',
       properties: {
-        project: { type: 'string', description: 'Project slug.' },
+        project: { type: 'string', description: 'Project slug, from list_projects.' },
         title: { type: 'string' },
         starts_at: { type: 'string', description: 'ISO 8601 instant, with a timezone offset.' },
-        ends_at: { type: 'string', description: 'ISO 8601 instant.' },
+        ends_at: {
+          type: 'string',
+          description: 'ISO 8601 instant. For an all-day event, the EXCLUSIVE end day.',
+        },
+        all_day: {
+          type: 'boolean',
+          description: 'A whole-day event (dates, not times). Default false.',
+        },
         location: { type: 'string' },
         notes: { type: 'string' },
       },
@@ -422,23 +440,27 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
       p_title: String(i.title ?? ''),
       p_starts_at: isoInstant(i.starts_at),
       p_ends_at: isoInstant(i.ends_at),
+      p_all_day: i.all_day === true,
       p_location: i.location === undefined ? null : String(i.location),
       p_notes: i.notes === undefined ? null : String(i.notes),
     }),
   },
   update_event: {
     description:
-      'Change a calendar event: title, time, location or notes. It cannot delete an event.',
+      'Change an event: title, time, all-day, location or notes. Only the fields you send change; moving the start ' +
+      'keeps the length. The id is the uuid from list_events (a Google-only event cannot be changed). It cannot ' +
+      'delete an event. The change is an assistant proposal: it reaches Google only if the approval policy allows.',
     fn: 'mcp_event_update',
     write: true,
     optional: true,
     schema: {
       type: 'object',
       properties: {
-        event_id: { type: 'string', description: 'The id from list_events.' },
+        event_id: { type: 'string', description: 'The event uuid from list_events.' },
         title: { type: 'string' },
-        starts_at: { type: 'string' },
-        ends_at: { type: 'string' },
+        starts_at: { type: 'string', description: 'ISO 8601 instant.' },
+        ends_at: { type: 'string', description: 'ISO 8601 instant.' },
+        all_day: { type: 'boolean' },
         location: { type: 'string' },
         notes: { type: 'string' },
       },
@@ -450,6 +472,7 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
       p_title: i.title === undefined ? null : String(i.title),
       p_starts_at: isoInstant(i.starts_at),
       p_ends_at: isoInstant(i.ends_at),
+      p_all_day: typeof i.all_day === 'boolean' ? i.all_day : null,
       p_location: i.location === undefined ? null : String(i.location),
       p_notes: i.notes === undefined ? null : String(i.notes),
     }),
