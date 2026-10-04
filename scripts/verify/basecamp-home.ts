@@ -171,33 +171,35 @@ const FORBIDDEN = ['chat', 'sources']
   )
 
   /*
-    OPENS IN A NEW TAB, which is the thing §21 asks for by name.
-
-    ASSERTED BY THE REQUEST, not by the tab's address. A PDF opened in a new
-    tab in headless Chromium reports its location as ":" - the viewer that
-    would normally own that tab is not there - so reading the popup's url says
-    ":" however well the product works, and a check written that way fails on
-    correct behaviour for ever. Twenty polls of it said ":" twenty times, which
-    is the instrument being wrong rather than the page.
-
-    What is true either way is that pressing the document made the browser go
-    and fetch that file in a second tab. So: catch the popup, and catch the
-    request for the file, and require both.
+    SUPERSEDED, 4 October 2026. Grant's earlier rule (22 September, section 21)
+    was that a document opens in a new tab. His 4 October brief says routine
+    viewing must NOT require leaving Team HQ: a document is viewable in place,
+    with its details, and the file in a new tab is one deliberate press away.
+    So a press opens the viewer here, and the viewer's own "Open the file"
+    still does what the old press did - which is what is asserted now: it makes
+    the browser go and fetch that file in a second tab (caught by the popup and
+    by the request, as before, because a PDF tab reports its address as ":").
   */
   const wanted = (await page
     .locator('[data-mod="documents"] .bcdoc--openable')
     .first()
     .getAttribute('data-bc-doc')) as string
+  await page.locator('[data-mod="documents"] .bcdoc--openable').first().click()
+  await page.waitForSelector('.bcdocgrid')
+  check(
+    'pressing a document opens it in Team HQ, not in a new tab',
+    (await page.locator('.bcdocgrid').count()) === 1,
+  )
   const asked: string[] = []
   ctx.on('request', (r) => {
     if (r.url().includes(wanted)) asked.push(r.url())
   })
   const popup = page.waitForEvent('popup', { timeout: 8000 }).catch(() => null)
-  await page.locator('[data-mod="documents"] .bcdoc--openable').first().click()
+  await page.locator('[data-bc-doc-tab]').first().click()
   const opened = await popup
   for (let i = 0; i < 30 && asked.length === 0; i += 1) await page.waitForTimeout(100)
-  check('pressing a document opens a new tab', opened !== null, 'no second tab was opened at all')
-  check('and that tab fetches the real file', asked.length > 0, `nothing requested ${wanted}`)
+  check('and its Open the file opens a new tab', opened !== null, 'no second tab was opened at all')
+  check('that fetches the real file', asked.length > 0, `nothing requested ${wanted}`)
   if (opened !== null) await opened.close()
 
   check('nothing was thrown while drawing the home', thrown.length === 0, thrown.join(' | '))

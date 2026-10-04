@@ -593,12 +593,13 @@ export const block = (p, { full = false } = {}) => {
   const selected = onDay(list, s.sel)
   const loading = ev.state === 'loading' ? '<p class="bccal2status" role="status">Loading events…</p>' : ''
   const failed = ev.state === 'error' ? `<p class="bccal2status bccal2status--bad" role="alert">${esc(`Could not load the events: ${ev.error ?? 'unknown error'}`)}</p>` : ''
-  return `<div class="bccal2 ${full ? 'bccal2--full' : ''}" data-bc-cal="${esc(p.slug)}" data-size="${full ? 'large' : 'medium'}" data-view="${esc(s.view)}">
-    <div class="bccal2large">
+  const size = full ? 'large' : (sizes.get(p.slug) ?? 'small')
+  return `<div class="bccal2 ${full ? 'bccal2--full' : ''}" data-bc-cal="${esc(p.slug)}" data-size="${size}" data-view="${esc(s.view)}">
+    ${size === 'large' ? `<div class="bccal2large">
       ${toolbar(s, ev.mode)}${loading}${failed}
       ${s.view === 'month' ? monthBody(list, s, false) : timeGrid(list, days, s)}
-    </div>
-    <div class="bccal2medium">
+    </div>` : ''}
+    ${size === 'medium' ? `<div class="bccal2medium">
       <div class="bccal2minibar">
         <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="prev" aria-label="Previous month">&lsaquo;</button>
         <span class="bccal2minititle">${esc(`${MONTHS[parseDay(s.cursor).getMonth()]} ${String(parseDay(s.cursor).getFullYear())}`)}</span>
@@ -609,19 +610,22 @@ export const block = (p, { full = false } = {}) => {
       <div class="bccal2day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>
         ${selected.length === 0 ? '<p class="bccal2empty">Nothing on this day.</p>' : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')}
       </div>
-    </div>
-    <div class="bccal2small">
+    </div>` : ''}
+    ${size === 'small' ? `<div class="bccal2small">
       ${agenda(list, today, 6, 'Nothing coming up.')}
       <button type="button" class="bccal2btn bccal2btn--small" data-cal-new>New event</button>
-    </div>
+    </div>` : ''}
   </div>`
 }
 
 /* ------------------------------------------------------------------ wiring --- */
 
-const sizeOf = (w, h) => (w >= 560 && h >= 320 ? 'large' : w >= 300 && h >= 250 ? 'medium' : 'small')
+/* A dense month needs about 330px under its header before the day's list has room, so below that the agenda is the honest answer. */
+const sizeOf = (w, h) => (w >= 560 && h >= 380 ? 'large' : w >= 300 && h >= 380 ? 'medium' : 'small')
 
 const observers = new WeakMap()
+/** The size class each project's module was last measured at. Only the matching variant is drawn, so no hidden duplicate controls sit in the page. */
+const sizes = new Map()
 
 const fmtTimeInput = (min) => timeWords(min)
 const minOfInput = (v) => {
@@ -784,7 +788,13 @@ export const wire = (root) => {
       const apply = () => {
         const r = host.getBoundingClientRect()
         const z = Number.parseFloat(globalThis.getComputedStyle(el.closest('.bcstage') ?? document.body).getPropertyValue('--bc-zoom')) || 1
-        el.dataset.size = sizeOf(r.width / z, r.height / z)
+        const now = sizeOf(r.width / z, r.height / z)
+        if (r.width < 8 || now === (sizes.get(slug) ?? 'small')) return
+        /* Never redraw in the middle of a drag: the redraw would take the pointer's capture with it. The drag's end asks again. */
+        if (document.documentElement.classList.contains('bc-dragging')) return
+        /* A different size is a different drawing: remember it and draw again, once. */
+        sizes.set(slug, now)
+        ctx?.render?.()
       }
       apply()
       if (typeof ResizeObserver === 'function') {
@@ -865,6 +875,22 @@ export const wire = (root) => {
     if (sc !== null && sc.dataset.set !== '1') {
       sc.scrollTop = 7 * HOUR
       sc.dataset.set = '1'
+    }
+  }
+}
+
+/** Ask every calendar module whether its size class has changed (after a drag or resize ends). */
+export const recheck = () => {
+  for (const el of document.querySelectorAll('.bcstage [data-bc-cal]')) {
+    const host = el.closest('.bcmodbody') ?? el.parentElement
+    const slug = el.dataset.bcCal
+    const r = host.getBoundingClientRect()
+    const z = Number.parseFloat(globalThis.getComputedStyle(el.closest('.bcstage') ?? document.body).getPropertyValue('--bc-zoom')) || 1
+    const now = sizeOf(r.width / z, r.height / z)
+    if (r.width >= 8 && now !== (sizes.get(slug) ?? 'small')) {
+      sizes.set(slug, now)
+      ctx?.render?.()
+      return
     }
   }
 }

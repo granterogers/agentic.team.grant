@@ -76,38 +76,51 @@ export const play = (root) => {
 }
 
 /**
- * Put the dialog away, back towards its card, then call `done`.
+ * Put the dialog away, back towards its card.
  *
- * `done` is always called, exactly once, even when there is nothing to animate
- * or the animation is interrupted: a close that waits on an animation that
- * never finishes is a dialog that cannot be closed.
+ * THE CLOSE IS INSTANT AND THE MOTION IS A GHOST. `done` is called at once, so
+ * the page underneath is live again the moment the person asks (a close that
+ * waits on an animation also holds the page inert, and the next press lands on
+ * a backdrop that is on its way out). What settles back towards the card is a
+ * picture of the dialog - a clone, fixed, with pointer events off - that removes
+ * itself when it has finished or after a fallback timeout, whichever is first.
  */
 export const exit = (id, done) => {
   const box = document.querySelector('.bcexp .bcexpbox')
   const card = rectOf(cardFor(id))
-  let called = false
-  const finish = () => {
-    if (called) return
-    called = true
-    done()
-  }
   if (box === null || card === null || calm() || typeof box.animate !== 'function') {
-    finish()
+    done()
     return
   }
   const to = box.getBoundingClientRect()
-  const motion = box.animate(
-    [...flip(box, card, { x: to.x, y: to.y, w: to.width, h: to.height })].reverse().map((f, i) => ({
-      ...f,
-      opacity: i === 0 ? 1 : 0.25,
-    })),
-    { duration: 260, easing: EASE_IN, fill: 'forwards' },
-  )
-  document.querySelector('.bcexp .bcexpback')?.animate([{ opacity: 1 }, { opacity: 0 }], {
-    duration: 240,
-    fill: 'forwards',
+  const ghost = box.cloneNode(true)
+  ghost.setAttribute('aria-hidden', 'true')
+  ghost.removeAttribute('role')
+  for (const el of ghost.querySelectorAll('[id]')) el.removeAttribute('id')
+  Object.assign(ghost.style, {
+    position: 'fixed',
+    left: `${String(to.x)}px`,
+    top: `${String(to.y)}px`,
+    width: `${String(to.width)}px`,
+    height: `${String(to.height)}px`,
+    margin: '0',
+    zIndex: '70',
+    pointerEvents: 'none',
+    maxHeight: 'none',
   })
-  motion.onfinish = finish
-  motion.oncancel = finish
-  globalThis.setTimeout(finish, 420)
+  document.body.append(ghost)
+  const gone = () => {
+    ghost.remove()
+  }
+  const motion = ghost.animate(
+    [...flip(ghost, card, { x: to.x, y: to.y, w: to.width, h: to.height })].reverse().map((f, i) => ({
+      ...f,
+      opacity: i === 0 ? 1 : 0.2,
+    })),
+    { duration: 240, easing: EASE_IN, fill: 'forwards' },
+  )
+  motion.onfinish = gone
+  motion.oncancel = gone
+  globalThis.setTimeout(gone, 500)
+  done()
 }

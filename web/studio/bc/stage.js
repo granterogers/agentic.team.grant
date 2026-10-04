@@ -36,6 +36,7 @@
   inside one ends the string.
 */
 
+import * as cal from './calendar.js'
 import * as grid from './layout.js'
 import { NAMES, note } from './compose.js'
 import { esc } from './parts.js'
@@ -228,6 +229,7 @@ export const wireStage = (root, ctx) => {
       grid.place(slug, was.id, was.next)
     }
     paintAll()
+    cal.recheck()
     /*
       SUPPRESS THE CLICK THAT FOLLOWS A DRAG. A pointerup after a real gesture
       is still followed by a click on the header, which would open the module

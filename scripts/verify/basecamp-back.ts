@@ -67,7 +67,7 @@ await page.waitForTimeout(400)
 check('a project opens from the portfolio', here() === slug, here())
 
 /* --- 1. Back closes an expanded module before anything else ------------- */
-await page.locator('[data-mod="documents"] .bcmodhead').first().click()
+await page.locator('[data-mod="documents"] .bcmodhead').first().click({ position: { x: 80, y: 10 } })
 await page.waitForTimeout(500)
 check('a module opens expanded', (await dialogs()) === 1)
 check(
@@ -80,7 +80,7 @@ check('Back closes the expanded view', (await dialogs()) === 0)
 check('and leaves you on the project, not at project selection', here() === slug, here())
 
 /* --- 2. two levels deep: a record inside an expanded view --------------- */
-await page.locator('[data-mod="tasks"] .bcmodhead').first().click()
+await page.locator('[data-mod="tasks"] .bcmodhead').first().click({ position: { x: 80, y: 10 } })
 await page.waitForTimeout(500)
 await page.locator('[data-bc-expanded="tasks"] [data-bc-task-open]').first().click()
 await page.waitForTimeout(500)
@@ -199,7 +199,7 @@ await page.waitForTimeout(400)
 await page.locator(`[data-bc-go="${slug}"]`).first().click()
 await page.waitForSelector('.bcpanes')
 await page.waitForTimeout(400)
-await page.locator('[data-mod="schedule"] .bcmodhead').first().click()
+await page.locator('[data-mod="schedule"] .bcmodhead').first().click({ position: { x: 80, y: 10 } })
 await page.waitForTimeout(500)
 await back()
 await back()

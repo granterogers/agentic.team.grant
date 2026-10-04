@@ -144,9 +144,11 @@ describe('overlapping events', () => {
 describe('the module chooses its size', () => {
   it('large, medium or small, and never a crushed month in a small card', () => {
     expect(C.sizeOf(900, 500)).toBe('large')
-    expect(C.sizeOf(400, 300)).toBe('medium')
+    expect(C.sizeOf(400, 400)).toBe('medium')
+    expect(C.sizeOf(400, 300)).toBe('small')
     expect(C.sizeOf(330, 200)).toBe('small')
     expect(C.sizeOf(560, 300)).not.toBe('large')
+    expect(C.sizeOf(800, 379)).toBe('small')
     expect(C.sizeOf(200, 600)).toBe('small')
   })
 })

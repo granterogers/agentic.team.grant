@@ -310,7 +310,8 @@ export const officeList = (slug) => {
     lists.set(slug, { state: 'loading', docs: [] })
     read('project_documents', undefined, { slug })
       .then((out) => {
-        lists.set(slug, { state: 'ready', docs: Array.isArray(out?.documents) ? out.documents.map(fromItem) : [] })
+        /* An answer with no list is not an empty project: an office that does not know this section is treated as not having it. */
+        lists.set(slug, Array.isArray(out?.documents) ? { state: 'ready', docs: out.documents.map(fromItem) } : { state: 'off', docs: [] })
       })
       .catch(() => {
         lists.set(slug, { state: 'off', docs: [] })
