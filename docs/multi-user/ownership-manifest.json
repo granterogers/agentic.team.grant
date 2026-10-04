@@ -440,6 +440,18 @@
         }
       ]
     },
+    "slack_installs": {
+      "class": "OFFICE_CARRIER",
+      "why": "A person's own Slack workspace install (ADR-0065); written only by app.slack_install_redeem, which takes the office from the verified state's row, and tied to its workspace by a same-office composite key so an install cannot belong to a different office than its workspace.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["team_id"],
+          "parent": "slack_workspaces",
+          "constraint": "slack_installs_team_id_fkey"
+        }
+      ]
+    },
     "document_chunks": {
       "class": "OFFICE_CARRIER",
       "why": "Derived passages of a document's text (#419); written only by app.index_document_chunks, which copies the document's own office, and tied to the document by a same-office composite key so a passage cannot belong to a different office than its document.",

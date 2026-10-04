@@ -71,7 +71,13 @@ const { page, errors } = await newPage(
   PHONE ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
   PHONE,
 )
-page.on('dialog', (d) => void d.accept())
+// The product confirms with its OWN in-page dialog; a person presses its confirm button. A native browser dialog would be a
+// regression (it has no focus handling and no 44px target), so one is declined and the run fails at the end.
+let nativeDialogs = 0
+page.on('dialog', (d) => {
+  nativeDialogs += 1
+  void d.dismiss()
+})
 try {
   await signIn(studio, page, s)
   const go = async (path: string): Promise<void> => {
@@ -238,6 +244,19 @@ try {
       await go(`/p/${slug}/settings`)
       await page.locator('[data-setpane="project"]').click()
       await page.locator('[data-archive]').click()
+      // The in-page dialog: named, with a clear Cancel that holds focus, and nothing is archived until Confirm is pressed.
+      const box = page.locator('.stg-confirmbox')
+      await box.waitFor({ state: 'visible', timeout: 8000 })
+      must(
+        (await box.locator('h2').innerText()).includes('Archive this project'),
+        'the dialog does not say what it asks',
+      )
+      must(
+        await box.locator('[data-no]').evaluate((el) => el === document.activeElement),
+        'Cancel does not hold focus',
+      )
+      await shot(page, 'archive-confirm')
+      await box.locator('[data-yes]').click()
       await eventually(
         'archived',
         async () =>
@@ -290,6 +309,7 @@ try {
   const bad = errors.filter((e) => !/favicon|Failed to load resource/i.test(e))
   if (bad.length > 0) console.log(`page errors: ${bad.slice(0, 5).join(' | ')}`)
   console.log(`\n${results.length - failed.length}/${results.length} steps passed`)
+  console.log(`native browser dialogs shown: ${String(nativeDialogs)} (must be 0)`)
   await studio.close()
-  process.exitCode = failed.length === 0 && bad.length === 0 ? 0 : 1
+  process.exitCode = failed.length === 0 && bad.length === 0 && nativeDialogs === 0 ? 0 : 1
 }

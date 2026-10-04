@@ -758,5 +758,6 @@
   "0887_the_answer_envelope_is_on_for_named_offices_only.sql": "21f5a2fc766ad4fb31427faab3b96113230e2e1d22f5925bd11b3d493099502c",
   "0888_a_long_document_is_read_in_passages.sql": "1f496f19da70116671ae2723cd8770adab22458c0f59eb4dd9ba66450736596b",
   "0889_passages_have_an_office_led_index.sql": "8241a18178ec308d96e048d2f9b66acf65a62bf8d56747f4e39594a9be890dc6",
-  "0890_passages_follow_the_documents_two_key_convention.sql": "c0c78cd89a3d1d4135fc61088f1280363fee27e4bd90ab7c5c51c0eb7beeec70"
+  "0890_passages_follow_the_documents_two_key_convention.sql": "c0c78cd89a3d1d4135fc61088f1280363fee27e4bd90ab7c5c51c0eb7beeec70",
+  "0891_a_person_installs_slack_into_their_own_workspace.sql": "355f390acb9ed97930c97f9375e66e454d9059a13f855db4c427a8ef1d6c098a"
 }

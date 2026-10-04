@@ -799,7 +799,13 @@ export function wire(root, p, people, redraw, openLook, reload) {
     b.addEventListener('click', async () => {
       // Removing an automation is the one thing on this pane that cannot be
       // undone by pressing the same button again.
-      if (!sure(`Remove this automation?\n\n“${b.dataset.what}”\n\nPausing it keeps it.`)) return
+      if (
+        !(await sure(`“${b.dataset.what}” will be removed. Pausing it keeps it.`, 'Remove it', {
+          title: 'Remove this automation?',
+          danger: true,
+        }))
+      )
+        return
       await attempt(
         b,
         'Removing…',
@@ -826,7 +832,13 @@ export function wire(root, p, people, redraw, openLook, reload) {
 
   for (const b of root.querySelectorAll('[data-label-remove]')) {
     b.addEventListener('click', async () => {
-      if (!sure(`Remove the label “${b.dataset.name}”? It comes off every contact carrying it.`)) {
+      if (
+        !(await sure(
+          `Remove the label “${b.dataset.name}”? It comes off every contact carrying it.`,
+          'Remove it',
+          { title: 'Remove this label?', danger: true },
+        ))
+      ) {
         return
       }
       await attempt(b, 'Removing…', () => people.removeLabel(b.dataset.labelRemove), 'Removed.')
@@ -885,11 +897,13 @@ export function wire(root, p, people, redraw, openLook, reload) {
   for (const b of root.querySelectorAll('[data-archive]')) {
     b.addEventListener('click', async () => {
       if (
-        !sure(
-          `Archive “${b.dataset.name}”?\n\n` +
+        !(await sure(
+          `Archive “${b.dataset.name}”? ` +
             'It leaves your project list and stops running anything by itself. ' +
             'Nothing is deleted, and you can bring it back.',
-        )
+          'Archive it',
+          { title: 'Archive this project?' },
+        ))
       ) {
         return
       }

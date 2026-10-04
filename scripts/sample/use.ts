@@ -78,8 +78,13 @@ const { page, errors } = await newPage(
   PHONE ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
   PHONE,
 )
-// The product asks before archiving with the browser's own confirm; a person presses OK.
-page.on('dialog', (d) => void d.accept())
+// The product asks before archiving with its own in-page dialog; a person presses its confirm button. A native dialog is a
+// regression, so one is declined and the run says so.
+let nativeDialogs = 0
+page.on('dialog', (d) => {
+  nativeDialogs += 1
+  void d.dismiss()
+})
 try {
   await signIn(studio, page, s)
   const go = async (path: string): Promise<void> => {
@@ -202,6 +207,7 @@ try {
   })
   await pstep('archive it, and it leaves Home', async () => {
     await page.locator('[data-archive]').click()
+    await page.locator('.stg-confirm [data-yes]').click()
     await eventually(
       'archived',
       async () =>
@@ -368,4 +374,5 @@ const failed = results.filter((r) => !r.ok)
 console.log(
   `sample:use ${label}: ${results.length - failed.length}/${results.length}   (images in ${out}; run \`npm run sample:reset\` to restore the baseline)`,
 )
-if (failed.length > 0 || errors.length > 0) process.exitCode = 1
+console.log(`native browser dialogs shown: ${String(nativeDialogs)} (must be 0)`)
+if (failed.length > 0 || errors.length > 0 || nativeDialogs > 0) process.exitCode = 1

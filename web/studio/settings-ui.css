@@ -1516,3 +1516,11 @@
     border: 2px solid CanvasText;
   }
 }
+
+/* The confirmation dialog is used outside Settings now (every destructive control in the product). On a touch screen its
+   buttons meet the 44px floor; written last so it is not overridden by the base rule above (source order). */
+@media (pointer: coarse), (max-width: 860px) {
+  .stg-confirm .st-btn {
+    min-height: 44px;
+  }
+}

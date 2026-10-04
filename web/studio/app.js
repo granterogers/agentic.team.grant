@@ -9173,7 +9173,9 @@ function wirePlane(root) {
           something he arranged deliberately — so it asks, the way every other
           irreversible control in this product does.
         */
-        const yes = await sure('Put every card back where the studio would have put it?', 'Reset the map')
+        const yes = await sure('Put every card back where the studio would have put it?', 'Reset the map', {
+          title: 'Reset the map?',
+        })
         if (!yes) return
         placed[slug] = { at: {}, view: {} }
         try {
@@ -9564,13 +9566,15 @@ function drawShell() {
     b.addEventListener('click', async () => {
       const kids = Number(b.dataset.kids ?? '0')
       if (
-        !sure(
+        !(await sure(
           `Delete “${b.dataset.name}”? ` +
             (kids === 0
               ? 'This cannot be undone.'
               : `Its ${String(kids)} subtask${kids === 1 ? '' : 's'} go with it. ` +
                 'This cannot be undone.'),
-        )
+          'Delete it',
+          { title: 'Delete this task?', danger: true },
+        ))
       ) {
         return
       }
@@ -9748,7 +9752,13 @@ function drawShell() {
       }
       const force = b.dataset.force === name
 
-      if (!force && !sure(`Create a dashboard project called "${name}"?`)) return
+      if (
+        !force &&
+        !(await sure(`Create a dashboard project called "${name}"?`, 'Create it', {
+          title: 'Create a project?',
+        }))
+      )
+        return
 
       const made = await attempt(
         b,
@@ -9846,10 +9856,12 @@ function drawShell() {
         learn to click through.
       */
       if (
-        !sure(
+        !(await sure(
           `Disconnect ${b.dataset.name}? The documents it already gave stay; ` +
             'nothing new comes in until it is connected again.',
-        )
+          'Disconnect',
+          { title: 'Disconnect this source?', danger: true },
+        ))
       ) {
         return
       }
@@ -9875,7 +9887,14 @@ function drawShell() {
   */
   for (const b of root.querySelectorAll('[data-unarchive]')) {
     b.addEventListener('click', async () => {
-      if (!sure(`Bring ${b.dataset.name} back? Anything it had running stays stopped.`)) return
+      if (
+        !(await sure(
+          `Bring ${b.dataset.name} back? Anything it had running stays stopped.`,
+          'Bring it back',
+          { title: 'Bring this project back?' },
+        ))
+      )
+        return
       const done = await attempt(
         b,
         'Bringing it back…',
@@ -9931,10 +9950,12 @@ function drawShell() {
   for (const b of root.querySelectorAll('[data-forget-site]')) {
     b.addEventListener('click', async () => {
       if (
-        !sure(
+        !(await sure(
           `Forget the sign-in for ${b.dataset.name}? The office will not be able ` +
             'to open it again until you sign it in. Nothing it already read is removed.',
-        )
+          'Forget it',
+          { title: 'Forget this sign-in?', danger: true },
+        ))
       ) {
         return
       }
@@ -10283,7 +10304,10 @@ function drawShell() {
   const bulk = async (button, verb, run) => {
     const ids = [...state.picked]
     if (ids.length === 0) return
-    const yes = await sure(`${verb} ${String(ids.length)} task${ids.length === 1 ? '' : 's'}?`, verb)
+    const yes = await sure(`${verb} ${String(ids.length)} task${ids.length === 1 ? '' : 's'}?`, verb, {
+      title: `${verb} these tasks?`,
+      danger: /^(delete|remove)/i.test(verb),
+    })
     if (!yes) return
     const said = $('[data-picked-said]', root)
     button.disabled = true
@@ -10859,10 +10883,12 @@ function drawShell() {
         by registering it again rather than destructive.
       */
       if (
-        !sure(
+        !(await sure(
           `Stop using ${b.dataset.providerName}? The office will not ask it anything ` +
             'again, and any tool it delivered stops working. You can add it back later.',
-        )
+          'Stop using it',
+          { title: 'Stop using this connector?', danger: true },
+        ))
       ) {
         return
       }
@@ -10902,11 +10928,13 @@ function drawShell() {
     b.addEventListener('click', async (e) => {
       e.stopPropagation()
       if (
-        !sure(
+        !(await sure(
           `Discard ${b.dataset.docTitle}? It leaves this list and does not ` +
             'join the project. Nothing is deleted — the document and where it ' +
             'came from are kept, and it can be brought back.',
-        )
+          'Discard it',
+          { title: 'Discard this document?', danger: true },
+        ))
       ) {
         return
       }
@@ -12717,7 +12745,9 @@ function wireDocActions(v, doc, shut) {
       document disappearing from the list he is looking at, which is
       indistinguishable from one at the moment it happens.
     */
-    const yes = await sure(`Move "${doc.title}" out of ${byId(state.project).name} and into ${name}?`, 'Move it')
+    const yes = await sure(`Move "${doc.title}" out of ${byId(state.project).name} and into ${name}?`, 'Move it', {
+      title: 'Move this document?',
+    })
     if (!yes) return
     const done = await attempt(b, 'Moving…',
       async () => await act('document_move', { p_document_id: doc.id, p_project_id: to }),

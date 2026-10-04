@@ -12,6 +12,7 @@
     "verify:channel-link",
     "verify:connectors",
     "verify:run3-live",
+    "verify:slack-link",
     "verify:drains",
     "verify:dryrun",
     "verify:proposes"
@@ -25,6 +26,7 @@
     "scripts/sample/notice-link.ts": "sample",
     "scripts/sample/channel-link-ui.ts": "sample",
     "scripts/sample/documents-live.ts": "sample",
+    "scripts/sample/confirm-ux.ts": "sample",
     "scripts/sample/envelope-canary.ts": "sample",
     "scripts/sample/chat.ts": "sample",
     "scripts/verify/incidents.ts": "sample",
@@ -34,6 +36,7 @@
     "scripts/verify/channel-link.ts": "sample",
     "scripts/verify/connectors.ts": "sample",
     "scripts/verify/run3-live.ts": "sample",
+    "scripts/verify/slack-link.ts": "sample",
     "scripts/verify/drains.ts": "sample",
     "scripts/verify/dryrun.ts": "sample",
     "scripts/verify/proposes.ts": "sample",

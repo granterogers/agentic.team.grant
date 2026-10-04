@@ -355,8 +355,28 @@ export function alreadyAnswered(result) {
  * changes or removes something asks first, through here, so the wording is
  * consistent and nobody has to decide what counts.
  */
-export function sure(question) {
-  return window.confirm(question)
+export async function sure(question, confirmLabel = 'Continue', options = {}) {
+  /*
+    The in-page dialog (settings-ui confirmDialog), not the browser's: it has a clear Cancel, takes focus, traps Tab,
+    closes on Escape, and its buttons are 44px. It is ASYNC, so every caller awaits it - a caller that forgot would read
+    the pending promise as "yes", which is why the answer is tested as `!(await sure(...))` everywhere. Loaded on first use
+    so this file does not depend on the settings module at start-up; if it cannot load, the native confirm still asks
+    (an unasked destructive press is the worse failure).
+  */
+  let ui = null
+  try {
+    ui = await import('./settings-ui.js')
+  } catch {
+    ui = null
+  }
+  if (ui === null || typeof ui.confirmDialog !== 'function') return window.confirm(question)
+  return await ui.confirmDialog({
+    title: options.title ?? 'Please confirm',
+    body: String(question).replace(/\s*\n\s*/g, ' ').trim(),
+    confirmLabel,
+    cancelLabel: options.cancelLabel ?? 'Cancel',
+    danger: options.danger === true,
+  })
 }
 
 /**

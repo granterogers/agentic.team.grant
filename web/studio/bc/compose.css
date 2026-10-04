@@ -3510,7 +3510,9 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 }
 
 [data-experience='basecamp'] .bcattbell { display: none; }
-@media (max-width: 380px) {
+/* 480, not 380: the text Sign out button (#405) joined the same row, and at 390px the three controls left the project name
+   0px wide - the header showed the mark and no name. Measured by sample:phone-header at 320, 360, 390 and 430. */
+@media (max-width: 480px) {
   [data-experience='basecamp'] .bcattbell { display: block; }
   [data-experience='basecamp'] .bcattword { display: none; }
 }
