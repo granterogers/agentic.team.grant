@@ -72,7 +72,8 @@ for (const [fn, call] of [
     const said = await asRole(role, call)
     check(
       `${role} calling ${fn} is refused as a permission failure`,
-      /permission denied for function/i.test(said),
+      // Since 0841 the browser roles have no usage on schema app either, which refuses earlier and harder.
+      /permission denied for (function|schema app)/i.test(said),
       said === '' ? 'IT RAN' : said.slice(0, 90),
     )
   }
