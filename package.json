@@ -288,6 +288,7 @@
     "sample:lesson": "tsx scripts/sample/lesson.ts",
     "sample:notice-link": "tsx scripts/sample/notice-link.ts",
     "sample:dock": "tsx scripts/sample/dock-contract.ts",
+    "sample:labels": "tsx scripts/sample/labels.ts",
     "verify:incidents": "tsx scripts/verify/incidents.ts",
     "verify:named-project": "tsx scripts/verify/named-project.ts",
     "sample:tour": "tsx scripts/sample/tour.ts",
