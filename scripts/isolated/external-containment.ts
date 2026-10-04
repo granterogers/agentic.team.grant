@@ -65,8 +65,8 @@ const approve = (async () => ({ approved: true })) as unknown as Parameters<type
 const turn = async (channel: string, key: string, ref: string): Promise<string> => {
   const cmd = await one(`
     set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(ref)}, 'grant', ${lit(`External proof ${run}`)}, ${lit(key)}, 'grant')
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), ${lit(channel)}, ${lit(ref)}, 'grant', ${lit(`External proof ${run}`)}, ${lit(key)}, 'grant')
     returning command_id::text as id`)
   const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
   return String(
@@ -159,8 +159,8 @@ for (const kind of EXTERNAL) {
 {
   const legacy = String(
     (
-      await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-        values (gen_random_uuid(), ${lit(`legacy:${run}`)}, 'office.notion_import', ${lit(`verify:legacy-${run}`)})
+      await one(`insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+        values (app.operator_office(), gen_random_uuid(), ${lit(`legacy:${run}`)}, 'office.notion_import', ${lit(`verify:legacy-${run}`)})
         returning job_id::text as v`)
     ).v,
   )
@@ -207,8 +207,8 @@ for (const kind of ['office.notion_import', 'notebook.add_source', 'ci.dispatch'
 {
   const d = String(
     (
-      await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-        values (gen_random_uuid(), ${lit(`duty:notion-sync:${run}`)}, 'office.notion_sync', 'duty:notion-sync')
+      await one(`insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+        values (app.operator_office(), gen_random_uuid(), ${lit(`duty:notion-sync:${run}`)}, 'office.notion_sync', 'duty:notion-sync')
         returning job_id::text as v`)
     ).v,
   )

@@ -39,8 +39,8 @@ const B = await mk('b')
 const WORD = `zebracrossing${run}`
 const BODY = `${WORD} is the only marker in this document. `.repeat(20)
 const addDoc = (project: string, ref: string) =>
-  one(`insert into public.documents (project_id, title, connector, external_ref, content, content_chars, content_fingerprint, fetched_at, added_by)
-    values (${lit(project)}::uuid, ${lit(`Scope doc ${ref}`)}, 'upload', ${lit(ref)}, ${lit(BODY + ref)}, ${String((BODY + ref).length)},
+  one(`insert into public.documents (office_id, project_id, title, connector, external_ref, content, content_chars, content_fingerprint, fetched_at, added_by)
+    values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(`Scope doc ${ref}`)}, 'upload', ${lit(ref)}, ${lit(BODY + ref)}, ${String((BODY + ref).length)},
             encode(extensions.digest(${lit(BODY + ref)}, 'sha256'), 'hex'), app.now_utc(), 'grant')
     returning document_id::text as id`)
 const docA = String((await addDoc(A, `a-${run}`)).id)

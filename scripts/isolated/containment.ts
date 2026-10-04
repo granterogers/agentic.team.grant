@@ -34,8 +34,8 @@ const turn = async (
 ): Promise<string> => {
   const cmd = await one(`
     ${door ? "set local application_name = 'PostgREST 14.5';" : ''}
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(`${run}-${key.slice(-12)}:1`)}, ${lit(actor)}, 'containment proof', ${lit(key)}, 'grant')
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), ${lit(channel)}, ${lit(`${run}-${key.slice(-12)}:1`)}, ${lit(actor)}, 'containment proof', ${lit(key)}, 'grant')
     returning command_id::text as id`)
   const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
   const v = typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v
@@ -162,12 +162,12 @@ for (const [what, make, channel, target] of genuine) {
 // The new-source trigger needs content over its floor and a project that already
 // has material, so a fixture document is given both.
 const BODY = 'containment proof material. '.repeat(40)
-await db.execute(`insert into public.documents (project_id, connector, external_ref, title, doc_type, content, content_fingerprint, content_chars, fetched_at, added_by)
-  values (app.unnamed_project(app.test_office()), 'upload', ${lit(`seed-${run}`)}, 'seed', 'source', ${lit(BODY)}, encode(extensions.digest(${lit(BODY)}, 'sha256'), 'hex'), ${String(BODY.length)}, now(), 'grant')`)
+await db.execute(`insert into public.documents (office_id, project_id, connector, external_ref, title, doc_type, content, content_fingerprint, content_chars, fetched_at, added_by)
+  values (app.test_office(), app.unnamed_project(app.test_office()), 'upload', ${lit(`seed-${run}`)}, 'seed', 'source', ${lit(BODY)}, encode(extensions.digest(${lit(BODY)}, 'sha256'), 'hex'), ${String(BODY.length)}, now(), 'grant')`)
 const doc = async (added: string, ref: string): Promise<string> => {
   const d = await one(`
-    insert into public.documents (project_id, connector, external_ref, title, doc_type, content, content_fingerprint, content_chars, fetched_at, added_by)
-    values (app.unnamed_project(app.test_office()), 'notebooklm', ${lit(ref)}, ${lit(`containment ${run} ${ref.slice(-6)}`)}, 'source', ${lit(BODY + ref)}, encode(extensions.digest(${lit(BODY + ref)}, 'sha256'), 'hex'), ${String(BODY.length)}, now(), ${lit(added)})
+    insert into public.documents (office_id, project_id, connector, external_ref, title, doc_type, content, content_fingerprint, content_chars, fetched_at, added_by)
+    values (app.test_office(), app.unnamed_project(app.test_office()), 'notebooklm', ${lit(ref)}, ${lit(`containment ${run} ${ref.slice(-6)}`)}, 'source', ${lit(BODY + ref)}, encode(extensions.digest(${lit(BODY + ref)}, 'sha256'), 'hex'), ${String(BODY.length)}, now(), ${lit(added)})
     returning document_id::text as id`)
   const j = await one(
     `select job_id::text as id from public.jobs where pinned_config ->> 'document_id' = ${lit(String(d.id))} limit 1`,

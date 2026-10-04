@@ -95,8 +95,8 @@ const grandkid = await child(kid)
     ).c,
   )
   const staff = String((await one(`select staff_id::text as s from public.staff limit 1`)).s)
-  await db.execute(`insert into public.responsibilities (slug, staff_id, description, job_kind, period_minutes, pinned_config)
-    values (${lit(`zz-launder-${run}`)}, ${lit(staff)}::uuid, 'a duty whose config carries a real command id, to launder trust', 'office.notice', 10,
+  await db.execute(`insert into public.responsibilities (office_id, slug, staff_id, description, job_kind, period_minutes, pinned_config)
+    values (app.operator_office(), ${lit(`zz-launder-${run}`)}, ${lit(staff)}::uuid, 'a duty whose config carries a real command id, to launder trust', 'office.notice', 10,
             jsonb_build_object('command_id', ${lit(cmd)}))`)
   await db.execute(
     `update public.responsibilities set last_run_at = null where slug = ${lit(`zz-launder-${run}`)}`,
@@ -125,8 +125,8 @@ const grandkid = await child(kid)
   const j = String(
     (
       await one(
-        `insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, origin_kind, origin_class, root_job_id)
-         values (gen_random_uuid(), ${lit(`forged-origin-${run}`)}, 'office.notice', 'telegram:grant', 'inbound', 'trusted', null)
+        `insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by, origin_kind, origin_class, root_job_id)
+         values (app.operator_office(), gen_random_uuid(), ${lit(`forged-origin-${run}`)}, 'office.notice', 'telegram:grant', 'inbound', 'trusted', null)
          returning job_id::text as j`,
       )
     ).j,
@@ -142,8 +142,8 @@ const grandkid = await child(kid)
   const claim = String(
     (
       await one(
-        `insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-         values (gen_random_uuid(), ${lit(`inbound-${crypto.randomUUID()}`)}, 'office.notice', 'telegram:grant')
+        `insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+         values (app.operator_office(), gen_random_uuid(), ${lit(`inbound-${crypto.randomUUID()}`)}, 'office.notice', 'telegram:grant')
          returning job_id::text as j`,
       )
     ).j,
@@ -189,8 +189,8 @@ const grandkid = await child(kid)
   const unknownRoot = String(
     (
       await one(
-        `insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-         values (gen_random_uuid(), ${lit(`stranger-root-${run}`)}, 'office.instruction', 'telegram:grant')
+        `insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+         values (app.operator_office(), gen_random_uuid(), ${lit(`stranger-root-${run}`)}, 'office.instruction', 'telegram:grant')
          returning job_id::text as j`,
       )
     ).j,
@@ -202,8 +202,8 @@ const grandkid = await child(kid)
     `${await origin(c)}`,
   )
   const said = await refused(
-    `insert into public.jobs (parent_job_id, correlation_id, idempotency_key, kind, requested_by, origin_class)
-     select ${lit(unknownRoot)}::uuid, correlation_id, ${lit(`up-${run}`)}, 'office.instruction', 'telegram:grant', 'trusted' from public.jobs where job_id = ${lit(unknownRoot)}::uuid`,
+    `insert into public.jobs (office_id, parent_job_id, correlation_id, idempotency_key, kind, requested_by, origin_class)
+     select office_id, ${lit(unknownRoot)}::uuid, correlation_id, ${lit(`up-${run}`)}, 'office.instruction', 'telegram:grant', 'trusted' from public.jobs where job_id = ${lit(unknownRoot)}::uuid`,
   )
   const forgedChild = await one(
     `select job_id::text as j, origin_class from public.jobs where idempotency_key = ${lit(`up-${run}`)}`,
@@ -224,8 +224,8 @@ const grandkid = await child(kid)
   const legacyUnknown = String(
     (
       await one(
-        `insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-         values (gen_random_uuid(), ${lit(`legacy-unknown-${run}`)}, 'office.instruction', 'telegram:grant')
+        `insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+         values (app.operator_office(), gen_random_uuid(), ${lit(`legacy-unknown-${run}`)}, 'office.instruction', 'telegram:grant')
          returning job_id::text as j`,
       )
     ).j,
@@ -241,8 +241,8 @@ const grandkid = await child(kid)
   const legacyTrusted = String(
     (
       await one(
-        `insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, pinned_config)
-         values (gen_random_uuid(), ${lit(`legacy-cmd-${legacyKey}`)}, 'office.instruction', 'telegram:grant',
+        `insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by, pinned_config)
+         values (app.operator_office(), gen_random_uuid(), ${lit(`legacy-cmd-${legacyKey}`)}, 'office.instruction', 'telegram:grant',
                  jsonb_build_object('command_id', ${lit(cmd)}))
          returning job_id::text as j`,
       )
@@ -292,8 +292,8 @@ const grandkid = await child(kid)
   const h = String(
     (
       await one(
-        `insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-         values (gen_random_uuid(), ${lit(`harness-${run}`)}, 'office.instruction', 'verify:run4')
+        `insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+         values (app.operator_office(), gen_random_uuid(), ${lit(`harness-${run}`)}, 'office.instruction', 'verify:run4')
          returning job_id::text as j`,
       )
     ).j,
@@ -321,15 +321,15 @@ const grandkid = await child(kid)
   const fresh = String(
     (
       await one(`set local application_name = 'PostgREST 14.5';
-        insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-        values ('telegram', ${lit(`1386648496:${key.split(':').pop()}`)}, '1386648496', 'a command nobody enqueued yet', ${lit(key)}, 'grant')
+        insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+        values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram', ${lit(`1386648496:${key.split(':').pop()}`)}, '1386648496', 'a command nobody enqueued yet', ${lit(key)}, 'grant')
         returning command_id::text as id`)
     ).id,
   )
   const wrongWho = String(
     (
-      await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-        values (gen_random_uuid(), ${lit(`inbound-${fresh}`)}, 'office.instruction', 'telegram:attacker-999') returning job_id::text as j`)
+      await one(`insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+        values (app.operator_office(), gen_random_uuid(), ${lit(`inbound-${fresh}`)}, 'office.instruction', 'telegram:attacker-999') returning job_id::text as j`)
     ).j,
   )
   const w = await one(
@@ -344,8 +344,8 @@ const grandkid = await child(kid)
   )
   const claimed = String(
     (
-      await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-        values (gen_random_uuid(), ${lit(`inbound-${cmd}`)}, 'office.instruction', 'telegram:grant') returning job_id::text as j`).catch(
+      await one(`insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+        values (app.operator_office(), gen_random_uuid(), ${lit(`inbound-${cmd}`)}, 'office.instruction', 'telegram:grant') returning job_id::text as j`).catch(
         () => ({ j: '' }),
       )
     ).j,
@@ -361,8 +361,8 @@ const grandkid = await child(kid)
   )
   const lie = String(
     (
-      await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, root_job_id)
-        values (gen_random_uuid(), ${lit(`root-lie-${run}`)}, 'office.instruction', 'system:x', ${lit(live)}::uuid) returning job_id::text as j`)
+      await one(`insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by, root_job_id)
+        values (app.operator_office(), gen_random_uuid(), ${lit(`root-lie-${run}`)}, 'office.instruction', 'system:x', ${lit(live)}::uuid) returning job_id::text as j`)
     ).j,
   )
   const rr = await one(

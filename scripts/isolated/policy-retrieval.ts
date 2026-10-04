@@ -34,8 +34,8 @@ const real = async (label: string): Promise<{ id: string; name: string }> => {
   return { id, name }
 }
 const doc = (project: string, title: string, text: string, connector = 'upload') =>
-  one(`insert into public.documents (project_id, title, connector, external_ref, content, content_chars, content_fingerprint, fetched_at, added_by)
-       values (${lit(project)}::uuid, ${lit(title)}, ${lit(connector)}, ${lit(`${title}-${w.run}`)}, ${lit(text)}, ${String(text.length)},
+  one(`insert into public.documents (office_id, project_id, title, connector, external_ref, content, content_chars, content_fingerprint, fetched_at, added_by)
+       values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(title)}, ${lit(connector)}, ${lit(`${title}-${w.run}`)}, ${lit(text)}, ${String(text.length)},
                encode(extensions.digest(${lit(title + text)}, 'sha256'), 'hex'), app.now_utc(), 'grant') returning document_id::text as id`)
 
 const A = await real('Alpha')
@@ -126,7 +126,7 @@ const fixture = String(
     String(
       (
         await one(
-          `select app.hq_create_project(app.test_office(), ${lit(`fixture retrieval ${w.run}`)}, 'upload', ${lit(`f-${w.run}`)}, 'f', true)::text as r`,
+          `select app.hq_create_project(${lit(office.officeId)}::uuid, ${lit(`fixture retrieval ${w.run}`)}, 'upload', ${lit(`f-${w.run}`)}, 'f', true)::text as r`,
         )
       ).r,
     ),

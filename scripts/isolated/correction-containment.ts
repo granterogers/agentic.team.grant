@@ -84,16 +84,16 @@ const real = await turn(
 
 /* A message each job sent earlier, recorded the way the delivery layer records one. */
 const message = async (job: string, ref: string) =>
-  db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
-    values ('telegram', ${lit(`earlier:${ref}:${run}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(job)}::uuid, 'result', 'sent', ${lit(ref)}, app.now_utc(), app.now_utc())`)
+  db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at, office_id)
+    values ('telegram', ${lit(`earlier:${ref}:${run}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(job)}::uuid, 'result', 'sent', ${lit(ref)}, app.now_utc(), app.now_utc(), (select office_id from public.jobs where job_id = ${lit(job)}::uuid))`)
 await message(harness, '501')
 await message(real, '502')
 
 const press = async (ref: string) =>
   one(`
     set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
-    values ('telegram', ${lit(`${CHAT}:${ref}`)}, ${lit(CHAT)}, '', ${lit(`telegram:callback:${run}${ref}:${CHAT}`)}, 'grant', 'not_useful')
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram', ${lit(`${CHAT}:${ref}`)}, ${lit(CHAT)}, '', ${lit(`telegram:callback:${run}${ref}:${CHAT}`)}, 'grant', 'not_useful')
     returning command_id::text as id`)
 const pHarness = String((await press('501')).id)
 const pUnknown = String((await press('503')).id)

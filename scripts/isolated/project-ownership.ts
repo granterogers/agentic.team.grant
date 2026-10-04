@@ -20,7 +20,10 @@ const check = (what: string, ok: boolean, detail: string) => {
   results.push({ ok })
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what} - ${detail}`)
 }
-const unnamed = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
+// a real turn from Grant's chat belongs to the operator's office, so its Unnamed project is the operator's
+const unnamed = String(
+  (await one(`select app.unnamed_project(app.operator_office())::text as p`)).p,
+)
 
 const parent = await realParent(db)
 const p = await one(
