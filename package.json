@@ -289,6 +289,7 @@
     "sample:lesson": "tsx scripts/sample/lesson.ts",
     "sample:notice-link": "tsx scripts/sample/notice-link.ts",
     "sample:channel-link": "tsx scripts/sample/channel-link-ui.ts",
+    "sample:envelope-canary": "tsx scripts/sample/envelope-canary.ts",
     "sample:dock": "tsx scripts/sample/dock-contract.ts",
     "sample:labels": "tsx scripts/sample/labels.ts",
     "verify:incidents": "tsx scripts/verify/incidents.ts",

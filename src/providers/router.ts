@@ -14,6 +14,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import type { UsageOutcome } from '../inference/policy.ts'
 import { recordUsage } from '../inference/record.ts'
 import { redactSecrets } from '../text/secrets.ts'
+import { extractAnswer, NoAnswerEnvelopeError, withEnvelope } from './envelope.ts'
 import type { AllowedModel } from './guards.ts'
 import {
   assertModelAllowed,
@@ -114,6 +115,13 @@ export interface CompletionRequest {
    * MODEL for exactly this reason and stopped one step short.
    */
   readonly temperature?: number
+  /**
+   * Ask for the reply inside an answer envelope and return ONLY what is inside it (#412, src/providers/envelope.ts).
+   * Anything the model wrote outside the tags is dropped, and a reply with no usable envelope is not an answer: the call
+   * fails over to the next model like any other unusable reply. Off unless a caller asks, and no production caller does
+   * until the canary has measured compliance (docs/testing/answer-envelope-canary.md).
+   */
+  readonly answerEnvelope?: boolean
   /** Ties the call to a job for usage accounting and the ledger. */
   readonly correlationId?: string
   /**
@@ -402,7 +410,8 @@ export class ProviderRouter {
     const body = buildRequestBody(
       model,
       {
-        messages: request.messages,
+        messages:
+          request.answerEnvelope === true ? withEnvelope(request.messages) : request.messages,
         ...(request.maxTokens === undefined ? {} : { max_tokens: request.maxTokens }),
         ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
       },
@@ -509,6 +518,30 @@ export class ProviderRouter {
 
     await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
     const costUsd = payload.usage?.cost ?? 0
+
+    // The envelope, when asked for: only what is inside it is the reply. A reply without one is not an answer, so the
+    // attempt is recorded as a malformed response (the call did happen and may have been charged) and the caller's failover
+    // moves on. The breaker is not touched: the provider did its job, the MODEL did not follow the format.
+    let delivered = content
+    if (request.answerEnvelope === true) {
+      const found = extractAnswer(content)
+      if (!found.ok) {
+        await this.account(
+          provider.provider,
+          payload.model ?? model,
+          'malformed_response',
+          request,
+          {
+            prompt: payload.usage?.prompt_tokens ?? 0,
+            completion: payload.usage?.completion_tokens ?? 0,
+          },
+          Date.now() - startedAt,
+          costUsd,
+        )
+        throw new NoAnswerEnvelopeError(payload.model ?? model, found.reason)
+      }
+      delivered = found.answer
+    }
     await this.account(
       provider.provider,
       payload.model ?? model,
@@ -524,7 +557,7 @@ export class ProviderRouter {
 
     return {
       model: payload.model ?? model,
-      content,
+      content: delivered,
       promptTokens: payload.usage?.prompt_tokens ?? 0,
       completionTokens: payload.usage?.completion_tokens ?? 0,
       cost: costUsd,
