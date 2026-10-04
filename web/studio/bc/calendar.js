@@ -292,6 +292,30 @@ const forget = (slug) => {
   for (const k of [...cache.keys()]) if (k.startsWith(`${slug}|`)) cache.delete(k)
 }
 
+/** The events this browser already holds for a project, without asking for more. For search. */
+export const knownEvents = (slug) => {
+  const mode = modeOf(slug)
+  if (mode === 'sample') return (sampleList ?? samples(slug)).map(norm)
+  if (mode === 'local') return readLocal(slug).map(norm)
+  const out = []
+  for (const [k, v] of cache) if (k.startsWith(`${slug}|`) && Array.isArray(v?.list)) out.push(...v.list.map(norm))
+  const seen = new Set()
+  return out.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)))
+}
+
+/** Open the editor for a new event, from anywhere (the command palette). */
+export const newEvent = (slug) => {
+  const p = ctx?.projects?.().find((q) => q.slug === slug) ?? { slug, tasks: [] }
+  openEditor(p, null, { day: todayIso() })
+}
+
+/** Open one event's editor by id (a search result). */
+export const openEvent = (slug, id) => {
+  const p = ctx?.projects?.().find((q) => q.slug === slug) ?? { slug, tasks: [] }
+  const found = eventsFor(slug).list.find((x) => x.id === id)
+  if (found !== undefined) openEditor(p, found, null)
+}
+
 /** Forget every cached window and the sample list (tests). */
 export const reset = () => {
   cache.clear()

@@ -37,6 +37,7 @@ import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
 import * as cal from './calendar.js'
 import * as docsrc from './docsources.js'
+import * as finder from './finder.js'
 import * as when from '../when.js'
 import * as bcDocOrder from './docorder.js'
 import * as stopping from './stopping.js'
@@ -65,6 +66,7 @@ export const mount = (c) => {
   account.mount(c)
   cal.init(c)
   docsrc.init(c)
+  c.find = (q) => searchHits(q, 'Everything', null)
 }
 
 const state = () => ctx.state
@@ -3252,7 +3254,7 @@ const marked = (text, query) => {
   showing. Access control is the office's: this searches what it sent us.
 */
 
-const KINDS = ['Everything', 'Tasks', 'Documents', 'People', 'Sources', 'Outputs', 'Projects']
+const KINDS = ['Everything', 'Tasks', 'Documents', 'People', 'Sources', 'Outputs', 'Projects', ...finder.KINDS]
 
 const searchHits = (q, kind, only) => {
   const needle = q.trim().toLowerCase()
@@ -3273,9 +3275,9 @@ const searchHits = (q, kind, only) => {
       }
     }
     if (want('Documents')) {
-      for (const d of p.documents ?? []) {
-        if (!match(d.title, d.kind, d.origin)) continue
-        hits.push({ kind: 'Document', project: p.name, title: d.title, excerpt: [d.kind, d.size].filter(Boolean).join(' · '), who: d.origin ?? '', when: d.when ?? '', to: at(`/p/${p.slug}/documents`) })
+      for (const d of bcMini.docsOf(p)) {
+        if (!match(d.title, d.kind, d.origin, docsrc.nameOfSource(d.src))) continue
+        hits.push({ kind: d.src === 'web' ? 'Web page' : 'Document', project: p.name, title: d.title, excerpt: [d.kind, d.size].filter(Boolean).join(' · '), who: d.origin ?? '', when: d.when ?? '', to: at(`/p/${p.slug}/documents`) })
       }
     }
     if (want('People')) {
@@ -3305,6 +3307,13 @@ const searchHits = (q, kind, only) => {
       hits.push({ kind: 'Specialist', project: '', title: c.name, excerpt: c.role ?? '', who: '', when: '', to: at('/') })
     }
   }
+  hits.push(
+    ...finder.extra(q, kind, only, {
+      projects: () => PROJECTS,
+      knownEvents: (slug) => cal.knownEvents(slug),
+      chatFor: (slug) => ctx?.chatFor?.(slug) ?? [],
+    }),
+  )
   return hits
 }
 
