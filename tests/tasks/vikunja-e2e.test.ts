@@ -280,7 +280,7 @@ describe.skipIf(REPLICA === undefined)(
       expect(typeof r.conflicts).toBe('number')
     })
 
-    describe('known limits, pinned as they are today (not defects fixed here; see docs/ux-be-vik-vikunja-audit.md)', () => {
+    describe('known limits, pinned as they are today (not defects fixed here; see docs/ux-be-vikunja-audit.md)', () => {
       it('a title longer than Vikunja allows (250) is cut there and the cut copy is pulled back over the original', async () => {
         const long = `${'a'.repeat(260)}`
         const id = await add(long)
