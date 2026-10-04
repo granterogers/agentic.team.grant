@@ -2438,17 +2438,50 @@ const addSourceSurface = (p) => {
   The same two defects as the to-do rows, on the surface whose whole subject
   is when things happened.
 */
+/*
+  FILTERS FOR THE ACTIVITY LIST (4 October). Only the filters the data can
+  honestly answer are offered: a filter whose every result would be empty is a
+  dead control. Who did it is read from `who` (Grant, or a member of the team),
+  the door it came through from `via`, and what it touched from `category`.
+*/
+const ACT_FILTERS = [
+  { id: 'all', name: 'Everything', test: () => true },
+  { id: 'people', name: 'People', test: (a) => ['grant', 'you'].includes(String(a.who ?? '').toLowerCase()) },
+  { id: 'team', name: 'The team', test: (a) => !['grant', 'you', ''].includes(String(a.who ?? '').toLowerCase()) },
+  { id: 'integration', name: 'Integrations', test: (a) => ['ChatGPT', 'Claude', 'External assistant', 'Telegram', 'Slack', 'Voice'].includes(String(a.via ?? '')) },
+  { id: 'sync', name: 'Sync', test: (a) => a.category === 'sync' || /sync/i.test(String(a.via ?? '')) },
+  { id: 'document', name: 'Documents', test: (a) => a.category === 'document' },
+  { id: 'task', name: 'Tasks', test: (a) => a.category === 'task' },
+  { id: 'calendar', name: 'Calendar', test: (a) => a.category === 'calendar' },
+]
 const activitySurface = (p) => {
   const acts = p.activity ?? []
+  const offered = ACT_FILTERS.filter((f) => f.id === 'all' || acts.some(f.test))
+  const want = state().bcActFilter ?? 'all'
+  const on = offered.some((f) => f.id === want) ? want : 'all'
+  const test = (offered.find((f) => f.id === on) ?? offered[0]).test
+  const shown = acts.filter(test)
   return `${crumbFor(p, 'activity')}
     <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
     <p class="bcpmeta bcprose bcgap-l">
-      What has happened on this project, most recent first.
+      What has happened on this project, most recent first. Each line says who did it and, where it is known, which door it came through.
     </p>
+    ${
+      offered.length > 1
+        ? `<div class="bcsrcchips bcactfilter" role="group" aria-label="Filter the activity">${offered
+            .map(
+              (f) =>
+                `<button type="button" class="bcsrcchip${f.id === on ? ' is-on' : ''}" data-bc-actf="${esc(f.id)}" aria-pressed="${f.id === on ? 'true' : 'false'}">${esc(f.name)}${f.id === 'all' ? '' : ` <span class="bcsrcn">${String(acts.filter(f.test).length)}</span>`}</button>`,
+            )
+            .join('')}</div>`
+        : ''
+    }
     ${
       acts.length === 0
         ? empty({ title: 'Nothing yet', body: 'What people and the team do on this project is listed here.' })
-        : bcMini.timelineMini(p, { items: acts.length })
+        : shown.length === 0
+          ? empty({ title: 'Nothing matches', body: 'Nothing on this project fits that filter.' }, button('Show everything', { 'data-bc-actf': 'all' }))
+          : bcMini.timelineMini({ ...p, activity: shown }, { items: shown.length })
     }`
 }
 

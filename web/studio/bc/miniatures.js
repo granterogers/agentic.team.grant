@@ -1190,7 +1190,9 @@ export const timelineMini = (p, { items = 5 } = {}) => {
                 const target = eventTarget(p, a)
                 const words = `${a.verb ?? 'changed'} ${a.what ?? ''}`.trim()
                 const stamp = a.at ? when.precise(a.at) : ''
-                const body = `<b>${esc(prettyWho(a.who) || 'The team')}</b> ${esc(words)}`
+                const body = `<b>${esc(prettyWho(a.who) || 'The team')}</b> ${esc(words)}${
+                  a.via ? ` <span class="bcvia" title="${esc(`This was done through ${a.via}`)}">via ${esc(a.via)}</span>` : ''
+                }`
                 return `<li class="bcevent">
                   <span class="bcdot" aria-hidden="true"></span>
                   <span class="bceventbody">

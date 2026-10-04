@@ -86,3 +86,6 @@
   [data-experience='basecamp'] .bcsrcchip { min-height: 44px; }
   [data-experience='basecamp'] .bcversionbtn { min-height: 44px; }
 }
+
+[data-experience='basecamp'] .bcvia { margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--bc-text-muted); border: 1px solid color-mix(in srgb, var(--bc-text-muted) 28%, transparent); white-space: nowrap; }
+[data-experience='basecamp'] .bcactfilter { margin: 0 0 14px; }

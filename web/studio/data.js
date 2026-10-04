@@ -417,7 +417,9 @@ const FALLBACK_PROJECTS = [
     activity: [
       { who: 'emma', verb: 'pulled', what: 'the WS02 client list into the vision map', at: AGO(2 * 60 + 12, 41), when: '2h ago' },
       { who: 'oliver', verb: 'made', what: 'the course one-pager', at: AGO(2 * 24 * 60 + 95, 7), when: '2d ago' },
-      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', at: AGO(2 * 24 * 60 + 340, 19), when: '2d ago' },
+      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', at: AGO(2 * 24 * 60 + 340, 19), when: '2d ago', category: 'sync' },
+      { who: 'grant', verb: 'edited', what: 'the event Weekly planning', at: AGO(5 * 60, 12), when: '5h ago', via: 'ChatGPT', category: 'calendar' },
+      { who: 'claire', verb: 'created', what: 'the task Book the remaining interview slots', at: AGO(26 * 60, 3), when: '1d ago', via: 'Telegram', category: 'task' },
     ],
   },
   {

@@ -544,6 +544,12 @@ export const wire = (root) => {
   expand.play(root)
   cal.wire(root)
   docview.wire(root, ctx, fileFor)
+  for (const b of root.querySelectorAll('[data-bc-actf]')) {
+    b.addEventListener('click', () => {
+      ctx.state.bcActFilter = b.dataset.bcActf
+      ctx.render()
+    })
+  }
   rememberDialogScroll(root)
 
   // Navigation inside the experience.
