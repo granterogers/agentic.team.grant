@@ -67,6 +67,10 @@ export const mount = (c) => {
   cal.init(c)
   docsrc.init(c)
   c.find = (q) => searchHits(q, 'Everything', null)
+  finder.onArrive(() => {
+    c.render()
+    c.jumpRefresh?.()
+  })
 }
 
 const state = () => ctx.state

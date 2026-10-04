@@ -17,6 +17,7 @@
   what exists anywhere else, and the page says so.
 */
 
+import { canWrite, read } from '../office.js'
 import * as grid from './layout.js'
 
 const at = (p) => p
@@ -121,8 +122,65 @@ export const extra = (q, kind, only, env) => {
       out.push(h)
     }
   }
+  if (kind === 'Everything') out.push(...officeHits(q, env).filter((h) => only === null || h.slug === only))
   return out
 }
 
 /** The kinds the page's filter chips offer for these providers. */
 export const KINDS = PROVIDERS.map((p) => `${p.kind}s`)
+
+/* ------------------------------------------------ the office's own search --- */
+
+/*
+  WHEN SIGNED IN, THE OFFICE SEARCHES TOO. `project_search` reads stores this
+  browser does not hold (the whole chat history, saved web pages, the team's
+  research, every Post-it on every device). It is asked once per query, the
+  answer is cached, and the screen that asked is redrawn when it lands. Until
+  then the local providers answer alone, and an office that does not have the
+  section yet simply adds nothing - never an error on a search box.
+*/
+const asked = new Map()
+let arrived = null
+export const onArrive = (fn) => {
+  arrived = fn
+}
+
+const LABEL = { source: 'Source', page: 'Web page', message: 'Chat', answer: 'Answer', research: 'Research', postit: 'Note', event: 'Event', document: 'Document', task: 'Task' }
+/* The page's own search already covers these from what it holds; the office's copy would only repeat them. */
+const COVERED = new Set(['document', 'task'])
+
+export const officeHits = (q, env) => {
+  const needle = String(q).trim()
+  if (needle.length < 2 || !canWrite()) return []
+  const hit = asked.get(needle)
+  if (hit === undefined) {
+    asked.set(needle, { state: 'loading', rows: [] })
+    read('project_search', undefined, { q: needle })
+      .then((rows) => {
+        asked.set(needle, { state: 'ready', rows: Array.isArray(rows) ? rows : (rows?.results ?? []) })
+      })
+      .catch(() => {
+        asked.set(needle, { state: 'off', rows: [] })
+      })
+      .finally(() => {
+        arrived?.()
+      })
+    return []
+  }
+  const names = new Map(env.projects().map((p) => [p.slug, p.name]))
+  return hit.rows
+    .filter((r) => !COVERED.has(r.kind))
+    .map((r) => ({
+      kind: LABEL[r.kind] ?? r.kind,
+      project: names.get(r.project_slug) ?? r.project_slug ?? '',
+      slug: r.project_slug,
+      title: String(r.title ?? r.snippet ?? ''),
+      excerpt: String(r.snippet ?? ''),
+      who: '',
+      when: String(r.at ?? '').slice(0, 10),
+      to: String(r.url_hint ?? `/p/${r.project_slug}`).split('?')[0],
+    }))
+}
+
+/** Forget answered queries (after a write that could change them). */
+export const forgetOffice = () => asked.clear()

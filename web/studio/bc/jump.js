@@ -38,6 +38,10 @@ export const mount = (c) => {
   ctx = c
 }
 export const isOpen = () => open
+/** Redraw the rows when something they depend on has arrived (the office's search answer). */
+export const refresh = () => {
+  if (open) draw()
+}
 
 // Team HQ's addresses are the site's own (#382).
 const at = (p = '') => (p === '' ? '/' : p)

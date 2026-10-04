@@ -48,6 +48,7 @@ import * as account from './account.js'
 let ctx = null
 export const mount = (c) => {
   ctx = c
+  c.jumpRefresh = jump.refresh
   /*
     ONE key listener for the whole experience, on the document, attached once.
 

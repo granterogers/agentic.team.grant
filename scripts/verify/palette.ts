@@ -166,6 +166,67 @@ await page.waitForSelector('#bcjump')
 check('the palette opens even from inside a Post-it', (await page.locator('#bcjump').count()) === 1)
 await page.keyboard.press('Escape')
 
+/* the office's own search adds what this browser does not hold */
+const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const p2 = await ctx2.newPage()
+const asked: string[] = []
+await p2.addInitScript(() => localStorage.setItem('hq.token', 'stub'))
+await p2.route('**/*', async (route) => {
+  const u = route.request().url()
+  if (!u.includes('hq-api')) return route.continue()
+  const headers = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': '*',
+    'access-control-allow-methods': '*',
+  }
+  if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
+  const q = Object.fromEntries(new URL(u).searchParams)
+  if (q.section === 'project_search') {
+    asked.push(q.q ?? '')
+    return route.fulfill({
+      status: 200,
+      headers,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            kind: 'page',
+            id: 'x',
+            title: 'Pricing page saved from the web',
+            snippet: 'competitor pricing',
+            project_slug: 'legacy-coaching-course',
+            url_hint: '/p/legacy-coaching-course/documents',
+            score: 1,
+          },
+        ],
+      }),
+    })
+  }
+  return route.fulfill({
+    status: 500,
+    headers,
+    contentType: 'application/json',
+    body: JSON.stringify({ error: 'stub' }),
+  })
+})
+await p2.goto(url(slug), { waitUntil: 'domcontentloaded' })
+await p2.waitForSelector('.bcstage [data-mod]')
+await p2.keyboard.press('Control+k')
+await p2.keyboard.type('pricing')
+await p2.waitForTimeout(900)
+const orows = (await p2.locator('#bcjump .bcjumprow').allTextContents()).join(' | ')
+check(
+  'signed in, the palette asks the office to search',
+  asked.includes('pricing'),
+  asked.join(','),
+)
+check(
+  'and shows what the office found when it arrives',
+  /Web page/.test(orows) && /Pricing page saved/.test(orows),
+  orows,
+)
+await ctx2.close()
+
 check('no page errors', thrown.length === 0, thrown.join(' | '))
 console.log(`\n${String(pass)} passed, ${String(fail)} failed`)
 await browser.close()
