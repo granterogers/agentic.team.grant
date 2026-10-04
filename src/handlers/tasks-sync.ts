@@ -51,7 +51,11 @@ export function syncBody(r: {
   failed: number
   held?: number
   down: string | null
+  downKind?: 'unreachable' | 'refused' | null
 }): string {
+  if (r.down !== null && r.downKind === 'refused') {
+    return `Vikunja turned the connection down (${r.down}). Nothing was changed here. Connect it again with a new token in Settings, under Your tasks in another app.`
+  }
   if (r.down !== null) return `Vikunja could not be reached (${r.down}). Nothing was changed here.`
   const said: string[] = []
   if (r.pushed > 0) said.push(`sent ${String(r.pushed)}`)

@@ -102,3 +102,18 @@ export class ProviderDownError extends Error {
     this.name = 'ProviderDownError'
   }
 }
+
+/**
+ * The provider answered, and refused the credential (401/403).
+ *
+ * An outage in effect - every call will be refused the same way until a person reconnects - so it ends the round and
+ * touches nothing, like `ProviderDownError`, which it extends so no caller has to learn a second class. It is its own
+ * class so the sentence Grant reads can say the true thing: "could not be reached" about a server that answered is the
+ * wrong cause, and the fix (a new token) is a different fix.
+ */
+export class ProviderAuthError extends ProviderDownError {
+  constructor(provider: string, status: number) {
+    super(provider, `the token was refused (http ${String(status)})`)
+    this.name = 'ProviderAuthError'
+  }
+}
