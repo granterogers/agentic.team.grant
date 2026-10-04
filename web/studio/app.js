@@ -19,7 +19,7 @@ import {
   hydrate,
   source,
 } from './data.js'
-import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, token, why, presented, presentedFresh} from './office.js'
+import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, token, presented, presentedFresh} from './office.js'
 /*
   Team HQ, the product at every address (ADR-0051; its design history is in
   basecamp_clone.md). The older studio this file also renders is kept at
@@ -10460,9 +10460,10 @@ function drawShell() {
     button.disabled = false
     await refresh()
     if (stuck.length > 0) {
-      window.alert(
-        `${moved} of ${ids.length} done. ${stuck.length} could not be: ${stuck[0]}`,
-      )
+      await settingsUi.noticeDialog({
+        title: 'Some could not be done',
+        body: `${moved} of ${ids.length} done. ${stuck.length} could not be: ${stuck[0]}`,
+      })
     }
   }
 

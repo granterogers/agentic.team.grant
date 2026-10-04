@@ -294,6 +294,7 @@
     "verify:slack-link": "tsx scripts/verify/slack-link.ts",
     "verify:phone-header": "tsx scripts/verify/phone-header-local.ts",
     "verify:slack-card": "tsx scripts/p5/slack-link-card.ts",
+    "verify:dialogs": "tsx scripts/verify/dialogs-local.ts",
     "sample:documents": "tsx scripts/sample/documents-live.ts",
     "sample:confirm-ux": "tsx scripts/sample/confirm-ux.ts",
     "sample:envelope-canary": "tsx scripts/sample/envelope-canary.ts",

@@ -379,22 +379,8 @@ export async function sure(question, confirmLabel = 'Continue', options = {}) {
   })
 }
 
-/**
- * Ask for a sentence, where the RPC behind the button requires one.
- *
- * `app.decline_tool` refuses a decline with no reason — *"it is what makes it
- * worth revisiting in three months"* — and the first draft of the Governance
- * page's Decline button sent none, so the press returned an error and did
- * nothing. Caught by driving it, which is the only thing that catches it: an
- * offer may only promise what the press can perform.
- *
- * Returns the trimmed text, or null for cancel AND for an empty answer. Empty
- * is a cancel rather than a blank reason, because a blank reason is the thing
- * the RPC refuses and a caller should not have to know that.
- */
-export function why(question, suggestion = '') {
-  const said = window.prompt(question, suggestion)
-  if (said === null) return null
-  const text = said.trim()
-  return text === '' ? null : text
-}
+/*
+  There was a `why()` here, a window.prompt for the reason a decline needs. Nothing called it: the Governance page's Decline
+  asks through settings-ui's askDialog (an offer may only promise what the press can perform - app.decline_tool refuses a
+  decline with no reason, and a blank answer is a cancel). Removed with the last native prompt in the product.
+*/

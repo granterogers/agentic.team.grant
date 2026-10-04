@@ -22,7 +22,8 @@
     "verify:basecamp-project-turn",
     "verify:talk",
     "verify:phone-header",
-    "verify:slack-card"
+    "verify:slack-card",
+    "verify:dialogs"
   ],
   "scripts": {
     "scripts/sample/dock-contract.ts": "sample",
@@ -48,6 +49,7 @@
     "scripts/verify/hq.ts": "smoke",
     "scripts/verify/talk.ts": "local",
     "scripts/verify/phone-header-local.ts": "local",
+    "scripts/verify/dialogs-local.ts": "local",
     "scripts/verify/basecamp-project-turn.ts": "local",
     "scripts/sample/settings-live.ts": "sample",
     "scripts/sample/tool-requests-live.ts": "sample",

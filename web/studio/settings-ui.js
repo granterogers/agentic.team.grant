@@ -245,6 +245,51 @@ export function confirmDialog({ title, body, confirmLabel = 'Continue', cancelLa
 }
 
 /**
+ * Tell somebody something they have to read, in the page's own voice rather than the browser's alert: one button, Escape and
+ * the backdrop close it, focus goes to that button first and comes back after. Resolves when it is closed; never rejects.
+ * For a message that carries detail a toast would take away before it could be read (a part-finished batch, a refused undo).
+ */
+export function noticeDialog({ title, body, closeLabel = 'OK' }) {
+  if (typeof document === 'undefined') return Promise.resolve()
+  return new Promise((resolve) => {
+    const before = document.activeElement
+    const wrap = document.createElement('div')
+    wrap.className = 'stg-confirm'
+    wrap.innerHTML = `<div class="stg-confirmbox" role="alertdialog" aria-modal="true" aria-labelledby="stg-n-t" aria-describedby="stg-n-b">
+      <h2 id="stg-n-t">${esc(title)}</h2>
+      <p id="stg-n-b">${esc(body)}</p>
+      <div class="stg-confirmact">
+        <button type="button" class="st-btn primary" data-ok>${esc(closeLabel)}</button>
+      </div>
+    </div>`
+    const done = () => {
+      document.removeEventListener('keydown', onKey, true)
+      wrap.remove()
+      if (before instanceof HTMLElement && before.isConnected) before.focus()
+      resolve()
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        done()
+      } else if (e.key === 'Tab') {
+        // one button: Tab stays on it
+        e.preventDefault()
+        wrap.querySelector('[data-ok]').focus()
+      }
+    }
+    wrap.addEventListener('click', (e) => {
+      if (e.target === wrap) done()
+    })
+    wrap.querySelector('[data-ok]').addEventListener('click', done)
+    document.addEventListener('keydown', onKey, true)
+    document.body.append(wrap)
+    wrap.querySelector('[data-ok]').focus()
+  })
+}
+
+/**
  * Ask for a sentence (a reason) in the page's own voice. Resolves the trimmed text, or null for cancel or empty.
  */
 export function askDialog({ title, body, label, placeholder = '', confirmLabel = 'Save', cancelLabel = 'Cancel' }) {
