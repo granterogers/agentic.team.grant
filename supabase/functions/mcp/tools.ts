@@ -270,7 +270,7 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
   search_project: {
     description:
       'Search EVERYTHING one project holds with one query: its documents, tasks, conversation, saved ' +
-      'webpages, Post-its, calendar events and the team\'s research. Returns typed results ' +
+      "webpages, Post-its, calendar events and the team's research. Returns typed results " +
       '(kind, title, snippet, project, score). Prefer it over search_documents when the question is about a ' +
       'project rather than about the corpus.',
     fn: 'mcp_project_search',
@@ -278,10 +278,14 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'A question or phrase in plain language.' },
-        project: { type: 'string', description: 'Project slug from list_projects. Omit to search every project.' },
+        project: {
+          type: 'string',
+          description: 'Project slug from list_projects. Omit to search every project.',
+        },
         kinds: {
           type: 'string',
-          description: 'Optional comma list to narrow: document, source, page, task, message, answer, research, postit, event.',
+          description:
+            'Optional comma list to narrow: document, source, page, task, message, answer, research, postit, event.',
         },
         limit: { type: 'number', description: 'Max results, 1-50. Default 10.' },
       },
@@ -304,7 +308,11 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
       type: 'object',
       properties: {
         project: { type: 'string', description: 'Project slug. Omit for every project.' },
-        state: { type: 'string', enum: ['open', 'todo', 'doing', 'blocked', 'done'], description: 'open = todo, doing or blocked.' },
+        state: {
+          type: 'string',
+          enum: ['open', 'todo', 'doing', 'blocked', 'done'],
+          description: 'open = todo, doing or blocked.',
+        },
         limit: { type: 'number', description: 'Max tasks, 1-100. Default 25.' },
       },
     },
@@ -318,7 +326,7 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
   create_task: {
     description:
       'Add a task to a project. It is attributed to this assistant ("via ChatGPT" / "via Claude") in the ' +
-      'project\'s Activity. Use it when the user asks to put a to-do on a project.',
+      "project's Activity. Use it when the user asks to put a to-do on a project.",
     fn: 'mcp_task_add',
     write: true,
     schema: {
@@ -343,7 +351,7 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
   update_task: {
     description:
       'Change a task: its state (todo, doing, blocked, done), title, detail or due date. A blocked task needs ' +
-      '`blocked_reason`. It cannot cancel or delete a task - taking work back is the owner\'s to do.',
+      "`blocked_reason`. It cannot cancel or delete a task - taking work back is the owner's to do.",
     fn: 'mcp_task_update',
     write: true,
     schema: {
@@ -419,7 +427,8 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
     }),
   },
   update_event: {
-    description: 'Change a calendar event: title, time, location or notes. It cannot delete an event.',
+    description:
+      'Change a calendar event: title, time, location or notes. It cannot delete an event.',
     fn: 'mcp_event_update',
     write: true,
     optional: true,
@@ -476,7 +485,10 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
       type: 'object',
       properties: {
         project: { type: 'string', description: 'Project slug.' },
-        question: { type: 'string', description: 'The question or request, in full (max 4000 characters).' },
+        question: {
+          type: 'string',
+          description: 'The question or request, in full (max 4000 characters).',
+        },
         to: { type: 'string', description: 'Optional staff slug, e.g. research-director.' },
       },
       required: ['project', 'question'],
@@ -492,7 +504,7 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
   start_research: {
     description:
       'Ask the research director to investigate a topic for a project, optionally starting from one https page. ' +
-      'The owner\'s autonomy policy decides: if it says the owner must approve, NOTHING is started and the reply says ' +
+      "The owner's autonomy policy decides: if it says the owner must approve, NOTHING is started and the reply says " +
       '"needs_approval" with the reason. Returns a job id when it starts; call check_job.',
     fn: 'mcp_start_research',
     write: true,
@@ -516,7 +528,7 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
   generate_artifact: {
     description:
       'Have the team write a report from what a project holds, saved into the project as a document (PDF). The ' +
-      'owner\'s autonomy policy decides: if it says the owner must approve, nothing is started and the reply says ' +
+      "owner's autonomy policy decides: if it says the owner must approve, nothing is started and the reply says " +
       '"needs_approval". Returns a job id when it starts; call check_job.',
     fn: 'mcp_generate_artifact',
     write: true,
@@ -524,7 +536,10 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
       type: 'object',
       properties: {
         project: { type: 'string', description: 'Project slug.' },
-        brief: { type: 'string', description: 'What the report should cover (max 2000 characters).' },
+        brief: {
+          type: 'string',
+          description: 'What the report should cover (max 2000 characters).',
+        },
       },
       required: ['project', 'brief'],
     },
@@ -540,11 +555,15 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
 export const visibleTools = (
   optionalAvailable: readonly string[],
 ): readonly (readonly [string, ToolSpec])[] =>
-  Object.entries(TOOLS).filter(([name, spec]) => spec.optional !== true || optionalAvailable.includes(name))
+  Object.entries(TOOLS).filter(
+    ([name, spec]) => spec.optional !== true || optionalAvailable.includes(name),
+  )
 
 /** The scope a tool needs: write tools need `write`; everything else needs only a valid client. */
 export const scopeRefusal = (spec: ToolSpec, scopes: readonly string[]): string | null =>
-  spec.write === true && !scopes.includes('write') ? 'needs the write scope; this client is read-only' : null
+  spec.write === true && !scopes.includes('write')
+    ? 'needs the write scope; this client is read-only'
+    : null
 
 /** Whether the model named a tool the catalogue holds (own properties only: `constructor` is not a tool). */
 export const toolNamed = (name: string): ToolSpec | undefined =>

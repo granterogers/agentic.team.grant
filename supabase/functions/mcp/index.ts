@@ -466,7 +466,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           'model and is not established fact. You may add documents, tasks and ' +
           'calendar events to a project, ask the team a question, start research ' +
           'and request a report, and everything you do is recorded as yours. You ' +
-          'cannot delete or cancel anything, and where the owner\'s policy says a ' +
+          "cannot delete or cancel anything, and where the owner's policy says a " +
           'request needs their approval you are told so and nothing starts.',
       },
     })
@@ -478,7 +478,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (method === 'tools/list') {
     // Optional tools (the calendar) are listed only where this database can perform them. A failure to ask is "none":
     // advertising a tool that cannot work is worse than not advertising it.
-    const optional = (await rpc('mcp_optional_tools', { p_office: clientOffice }).catch(() => [])) as string[]
+    const optional = (await rpc('mcp_optional_tools', { p_office: clientOffice }).catch(
+      () => [],
+    )) as string[]
     return json({
       jsonrpc: '2.0',
       id: id ?? null,
