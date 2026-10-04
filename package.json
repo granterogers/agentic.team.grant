@@ -285,6 +285,7 @@
     "sample:seed": "tsx scripts/sample/sample.ts seed",
     "sample:reset": "tsx scripts/sample/sample.ts reset",
     "sample:use": "tsx scripts/sample/use.ts",
+    "sample:lesson": "tsx scripts/sample/lesson.ts",
     "sample:tour": "tsx scripts/sample/tour.ts",
     "sample:chat": "tsx scripts/sample/chat.ts",
     "sample:voice-answer": "tsx scripts/sample/voice-answer.ts",
