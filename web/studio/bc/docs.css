@@ -89,3 +89,23 @@
 
 [data-experience='basecamp'] .bcvia { margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--bc-text-muted); border: 1px solid color-mix(in srgb, var(--bc-text-muted) 28%, transparent); white-space: nowrap; }
 [data-experience='basecamp'] .bcactfilter { margin: 0 0 14px; }
+
+/* ======================================================================== *
+ * ACCOUNT CONTROLS, SMALL AND QUIET (4 October 2026)
+ * Login and logout live top-right and take as little of the screen as they
+ * can. At the end of the stylesheets on purpose: they override older rules of
+ * equal weight in bc.css and compose.css by coming after them.
+ * ======================================================================== */
+@media (min-width: 861px) and (pointer: fine) {
+  /* Sign out: the icon alone, the size of the menu dots beside it, named for a screen reader and by its tooltip. */
+  [data-experience='basecamp'] .bcbtn.bcsignout { min-height: 30px; width: 30px; padding: 0; justify-content: center; border-color: transparent; background: transparent; color: var(--bc-text-muted); }
+  [data-experience='basecamp'] .bcbtn.bcsignout:hover,
+  [data-experience='basecamp'] .bcbtn.bcsignout:focus-visible { color: var(--bc-text-strong); background: color-mix(in srgb, var(--bc-text) 12%, transparent); }
+  [data-experience='basecamp'] .bcsignout .bcsotext { display: none; }
+  [data-experience='basecamp'] .bcsignout .bcsoicon { display: block; }
+  /* The sign-in strip: a thin line rather than a band. */
+  [data-experience='basecamp'] .bcnotlive { padding-block: 5px; min-height: 0; gap: 8px 12px; font-size: 12.5px; }
+  [data-experience='basecamp'] .bcnotlive .bcsignin { gap: 6px; }
+  [data-experience='basecamp'] .bcnotlive .bcsignininput { min-height: 28px; height: 28px; padding: 0 8px; width: 190px; font-size: 13px; }
+  [data-experience='basecamp'] .bcnotlive .bcsignin .bcbtn { min-height: 28px; height: 28px; padding: 0 12px; font-size: 12.5px; }
+}
