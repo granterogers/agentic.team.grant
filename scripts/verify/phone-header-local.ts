@@ -83,6 +83,13 @@ try {
         (m.name?.w ?? 0) >= 40,
         String(m.name?.w),
       )
+      if (width <= 360) {
+        check(
+          `${String(width)}px: the mark gives its room to the name (at least 70px)`,
+          (m.name?.w ?? 0) >= 70,
+          String(m.name?.w),
+        )
+      }
       check(
         `${String(width)}px: the header does not widen the page`,
         m.scroll <= m.vw,
@@ -96,6 +103,35 @@ try {
       check(
         `${String(width)}px: Sign out is an icon (its name is still Sign out)`,
         !m.signoutTextShown,
+      )
+      // a LONG project name, put into the real header element: it may shorten, but it stays on screen, the header still
+      // fits, and the controls beside it keep their 44px
+      await page.evaluate(
+        `(() => { var e = document.querySelector('.bcjumpname'); if (e) e.textContent = ${JSON.stringify(
+          'The Extremely Long Legacy Coaching Course Programme For Senior Leadership Teams Across Every Region And Division',
+        )} })()`,
+      )
+      const long = (await page.evaluate(MEASURE)) as typeof m & {
+        name: { w: number; right: number }
+      }
+      check(
+        `${String(width)}px: a 110-character name is still shown (at least 40px) and ends inside the screen`,
+        (long.name?.w ?? 0) >= 40 && (long.name?.right ?? 9999) <= long.vw,
+        JSON.stringify(long.name),
+      )
+      check(
+        `${String(width)}px: and it does not widen the page or shrink a control below 44px`,
+        long.scroll <= long.vw && long.controls.every((c) => c.h >= 43.5),
+        `${String(long.scroll)} of ${String(long.vw)}`,
+      )
+      // the portfolio (no project loaded): the same header, the same floor
+      await page.goto('http://127.0.0.1:4799/', { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('.bctop', { timeout: 20000 })
+      const home = (await page.evaluate(MEASURE)) as typeof m
+      check(
+        `${String(width)}px: the portfolio header fits and its controls are 44px`,
+        home.scroll <= home.vw && home.controls.every((c) => c.h >= 43.5),
+        `${String(home.scroll)} of ${String(home.vw)}; ${home.controls.map((c) => `${c.label}:${String(c.h)}`).join(' ')}`,
       )
     } else {
       check(

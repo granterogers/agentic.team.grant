@@ -3762,4 +3762,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 }
 @media (max-width: 360px) {
   [data-experience='basecamp'] .bctop { padding-inline: var(--bc-2); }
+  /* At this width the project's mark is decoration and its NAME is the identity: the mark gives its room to the name
+     (52px became about 85px at 320, measured). The mark returns above 360px. */
+  [data-experience='basecamp'] .bcjump--in .bcjumpmark { display: none; }
 }
