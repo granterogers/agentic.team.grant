@@ -220,8 +220,24 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
   } else {
     await mkdir(dir, { recursive: true })
     await copyFile(new URL(`../../${o.edgeFile}`, import.meta.url), new URL('index.ts', dir))
+    const laid = new Set<string>()
     for (const [src, as] of o.beside ?? []) {
       await copyFile(new URL(`../../${src}`, import.meta.url), new URL(as, dir))
+      laid.add(as)
+    }
+    /*
+      The deploy uploads every file the entry imports from its own folder (hq-api's `./file-text.ts` and `./oauth.ts` are
+      symlinks to the one source in src/), so the emulator lays the same ones down: a proof that boots the real handler must
+      not fail because a later import was added and nobody listed it. A file the proof named itself wins.
+    */
+    const folder = o.edgeFile.slice(0, o.edgeFile.lastIndexOf('/'))
+    for (const m of sourceText.matchAll(/from '\.\/([A-Za-z0-9_-]+\.ts)'/g)) {
+      const name = m[1]
+      if (name === undefined || laid.has(name) || name === 'index.ts') continue
+      await copyFile(new URL(`../../${folder}/${name}`, import.meta.url), new URL(name, dir)).catch(
+        () => undefined,
+      )
+      laid.add(name)
     }
     await import(new URL(`index.ts?run=${Date.now()}`, dir).href)
   }

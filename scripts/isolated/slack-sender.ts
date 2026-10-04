@@ -35,12 +35,13 @@ const CHANNEL = 'C0ISOLATED1'
 const TEAM = 'T0ISOLATED'
 
 await db.execute(
-  `insert into public.subject_identities (subject, origin_channel, actor, note)
-   values ('grant', 'slack', ${lit(GRANT)}, 'isolated proof') on conflict do nothing`,
+  // Grant's identity belongs to the operator's office (office_id is NOT NULL since the office model, 0860)
+  `insert into public.subject_identities (office_id, subject, origin_channel, actor, note)
+   values (app.operator_office(), 'grant', 'slack', ${lit(GRANT)}, 'isolated proof') on conflict do nothing`,
 )
 // The installed workspace (0630): the app is installed in TEAM, and an event from anywhere else is not this office's.
 await db.execute(
-  `insert into public.slack_app_credentials (slack_app_id, team_id, app_name) values ('A0ISOLATED1', ${lit(TEAM)}, 'isolated proof') on conflict do nothing`,
+  `insert into public.slack_app_credentials (office_id, slack_app_id, team_id, app_name) values (app.operator_office(), 'A0ISOLATED1', ${lit(TEAM)}, 'isolated proof') on conflict do nothing`,
 )
 const resolves = await one(`select app.subject_for('slack', ${lit(GRANT)}) as s`)
 check(
@@ -165,8 +166,8 @@ for (const [label, over] of [
   // did reach the table through the production door is refused when it is turned into work.
   const text = `stranger past the door ${run}`
   await db.execute(`set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key)
-    values ('slack', ${lit(`${CHANNEL}:99${run}`)}, ${lit(STRANGER)}, ${lit(text)}, ${lit(`slack:message:${CHANNEL}:99${run}`)})`)
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), 'slack', ${lit(`${CHANNEL}:99${run}`)}, ${lit(STRANGER)}, ${lit(text)}, ${lit(`slack:message:${CHANNEL}:99${run}`)})`)
   const row = await commandFor(text)
   const j0 = await jobs()
   const enq = (await one(`select public.enqueue_inbound(${lit(String(row?.id))}::uuid) as v`)).v
