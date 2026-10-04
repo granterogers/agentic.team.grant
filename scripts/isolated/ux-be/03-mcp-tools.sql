@@ -99,40 +99,9 @@ begin
   if app.mcp_project_search(b, 'surveyor', null, 10, null)::text like '%surveyor%' then raise exception 'office B found A''s task'; end if;
 
   -- ---- optional tools reflect the database
-  if app.mcp_optional_tools(a) <> '[]'::jsonb then raise exception 'no calendar functions yet: %', app.mcp_optional_tools(a); end if;
+  -- 0897 (the calendar) is applied on this replica, so all three calendar tools are served; the calendar itself is
+  -- proved in 05-mcp-calendar.sql.
+  if app.mcp_optional_tools(a) <> '["list_events","create_event","update_event"]'::jsonb then raise exception 'optional tools: %', app.mcp_optional_tools(a); end if;
   raise notice 'PASS 03-mcp-tools';
-end $t$;
-rollback;
-
--- Calendar tools: absent -> a sentence; present (stand-in with the assumed contract) -> called, door recorded.
-begin;
-set local application_name = 'PostgREST proof';
-do $t$
-declare
-  a uuid := (select office_id from public.offices where kind = 'person' limit 1);
-  pa uuid; r jsonb; w text := 'zz-w-gpt';
-begin
-  insert into public.projects (office_id, slug, name) values (a, 'zz-m-a', 'Mcp A') returning project_id into pa;
-  insert into public.mcp_clients (office_id, client_id, display_name, token_sha256, scopes) values (a, w, 'ChatGPT', repeat('1',64), array['read','write']);
-  r := app.mcp_event_create(a, w, 'zz-m-a', 'Site visit', now() + interval '1 day');
-  if not (r ? 'error') or r ->> 'error' not like '%not available%' then raise exception 'absent calendar must say so: %', r; end if;
-  if app.mcp_event_list(a, 'zz-m-a') ->> 'error' not like '%not available%' then raise exception 'list absent'; end if;
-  -- a stand-in with the contract the tools assume
-  create function public.hq_event_create(p_office uuid, p_project text, p_title text, p_starts_at timestamptz,
-      p_ends_at timestamptz default null, p_location text default null, p_notes text default null) returns jsonb language plpgsql as $g$
-    begin
-      perform app.append_event(p_office, gen_random_uuid(), 'user', app.office_actor(p_office), 'hq', 'calendar.created', false,
-                               (select project_id from public.projects where office_id = p_office and slug = p_project));
-      return jsonb_build_object('ok', true, 'title', p_title, 'location', p_location);
-    end $g$;
-  if app.mcp_optional_tools(a) <> '["create_event"]'::jsonb then raise exception 'optional tools: %', app.mcp_optional_tools(a); end if;
-  r := app.mcp_event_create(a, w, 'zz-m-a', 'Site visit', now() + interval '1 day', null, 'Plot 4');
-  if r ->> 'ok' <> 'true' or r ->> 'location' <> 'Plot 4' then raise exception 'stand-in not reached: %', r; end if;
-  if not exists (select 1 from jsonb_array_elements(app.studio_activity(pa, 20)) e where e->>'via' = 'ChatGPT' and e->>'category' = 'calendar') then
-    raise exception 'calendar write should read via ChatGPT in Activity'; end if;
-  -- a read-only client may not
-  update public.mcp_clients set scopes = array['read'] where client_id = w;
-  if not (app.mcp_event_create(a, w, 'zz-m-a', 'x', now()) ? 'error') then raise exception 'read-only client created an event'; end if;
-  raise notice 'PASS 03-mcp-tools (calendar)';
 end $t$;
 rollback;
