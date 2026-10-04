@@ -54,6 +54,10 @@ export const MODES = [
   { id: 'name', name: 'Name', hint: 'A to Z' },
   { id: 'uploaded', name: 'Date uploaded', hint: 'newest first' },
   { id: 'created', name: 'Date created', hint: 'newest first' },
+  { id: 'modified', name: 'Date modified', hint: 'newest first' },
+  { id: 'size', name: 'Size', hint: 'largest first' },
+  { id: 'type', name: 'Type', hint: 'by kind of file' },
+  { id: 'source', name: 'Source', hint: 'by where it came from' },
 ]
 
 export const isMode = (id) => MODES.some((m) => m.id === id)
@@ -200,6 +204,22 @@ const settle = (a, b) => {
   return idOf(a).localeCompare(idOf(b))
 }
 
+/** Bytes, largest first, with MISSING ALWAYS LAST for the reason dates are. */
+const bySize = (a, b) => {
+  const x = Number.isFinite(a?.bytes) ? a.bytes : null
+  const y = Number.isFinite(b?.bytes) ? b.bytes : null
+  if (x === null && y === null) return 0
+  if (x === null) return 1
+  if (y === null) return -1
+  return y - x
+}
+
+/** A word, ascending, then by name so a group is itself in order. */
+const byWord = (field) => (a, b) => {
+  const c = String(a?.[field] ?? '').localeCompare(String(b?.[field] ?? ''), 'en')
+  return c !== 0 ? c : byName(a, b)
+}
+
 const then = (first) => (a, b) => {
   const answer = first(a, b)
   return answer === 0 ? settle(a, b) : answer
@@ -217,6 +237,10 @@ export const ordered = (slug, docs, which) => {
   if (how === 'name') return list.sort(then(byName))
   if (how === 'uploaded') return list.sort(then(byDate('uploaded')))
   if (how === 'created') return list.sort(then(byDate('created')))
+  if (how === 'modified') return list.sort(then(byDate('modified')))
+  if (how === 'size') return list.sort(then(bySize))
+  if (how === 'type') return list.sort(then(byWord('typeKey')))
+  if (how === 'source') return list.sort(then(byWord('src')))
 
   /*
     CUSTOM. The stored list decides, and anything absent from it is newer than

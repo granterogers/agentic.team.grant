@@ -1,0 +1,88 @@
+/* ======================================================================== *
+ * DOCUMENTS: the filter bar, the source indicator, the viewer (4 October 2026)
+ * Class names start bcdoc / bcsrc / bcversion; grep before inventing another.
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcdocfilter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 14px; }
+[data-experience='basecamp'] .bcdocfind { flex: 1 1 220px; max-width: 340px; }
+[data-experience='basecamp'] .bcdocq { width: 100%; min-height: 36px; font-size: 16px; }
+[data-experience='basecamp'] .bcsrcchips { display: flex; flex-wrap: wrap; gap: 6px; }
+[data-experience='basecamp'] .bcsrcchip {
+  appearance: none;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 30%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bc-text);
+  font: 500 12.5px/1 var(--bc-font);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+[data-experience='basecamp'] .bcsrcchip:hover,
+[data-experience='basecamp'] .bcsrcchip:focus-visible { background: var(--bc-surface-selected); border-color: color-mix(in srgb, var(--bc-accent) 55%, transparent); }
+[data-experience='basecamp'] .bcsrcchip:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
+[data-experience='basecamp'] .bcsrcchip.is-on { background: color-mix(in srgb, var(--bc-accent) 22%, transparent); border-color: color-mix(in srgb, var(--bc-accent) 60%, transparent); color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcsrcn { margin-left: 3px; color: var(--bc-text-muted); font-variant-numeric: tabular-nums; }
+
+/* The indicator is twelve pixels. It is a note about where something came from, not a logo to look at. */
+[data-experience='basecamp'] .bcdocsrc {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  color: var(--bc-text-muted);
+  background: color-mix(in srgb, var(--bc-surface) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 24%, transparent);
+  vertical-align: middle;
+}
+[data-experience='basecamp'] .bcdocsrc svg { width: 12px; height: 12px; }
+[data-experience='basecamp'] .bcdocpress { position: relative; }
+[data-experience='basecamp'] .bcdocpress > .bcdocsrc { position: absolute; left: 6px; top: 6px; z-index: 2; backdrop-filter: blur(4px); }
+[data-experience='basecamp'] .bcitemmeta > .bcdocsrc { margin-right: 6px; }
+[data-experience='basecamp'] .bcdocsrc--drive { color: #4fb985; }
+[data-experience='basecamp'] .bcdocsrc--notebook { color: #7fa4ee; }
+[data-experience='basecamp'] .bcdocsrc--generated { color: #e0b66a; }
+
+/* The viewer. */
+[data-experience='basecamp'] .bcdocgrid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
+[data-experience='basecamp'] .bcdocpreview { min-width: 0; min-height: 200px; max-height: calc(100vh - 230px); overflow: auto; scrollbar-width: thin; border-radius: 10px; }
+[data-experience='basecamp'] .bcdocpages { display: grid; gap: 12px; justify-items: center; }
+[data-experience='basecamp'] .bcdocpage { width: min(100%, 780px); height: auto; background: #fff; border-radius: 3px; box-shadow: 0 6px 22px -10px rgb(0 0 0 / 55%); }
+[data-experience='basecamp'] .bcdocimage { display: block; max-width: 100%; max-height: calc(100vh - 260px); margin: 0 auto; border-radius: 6px; }
+[data-experience='basecamp'] .bcdoctext {
+  margin: 0;
+  padding: 16px 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 22%, transparent);
+  background: color-mix(in srgb, var(--bc-canvas) 55%, var(--bc-surface));
+  color: var(--bc-text);
+  font: 13.5px/1.6 var(--bc-font);
+}
+[data-experience='basecamp'] .bcdocnopreview { padding: 22px 4px; }
+[data-experience='basecamp'] .bcdocside .bcfacts { margin-bottom: 14px; }
+[data-experience='basecamp'] .bcdocacts { flex-wrap: wrap; gap: 8px; }
+[data-experience='basecamp'] [data-bc-docsay][data-tone='good'] { color: var(--bc-accent); }
+[data-experience='basecamp'] [data-bc-docsay][data-tone='bad'] { color: #f0907e; }
+[data-experience='basecamp'] .bcversions { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+[data-experience='basecamp'] .bcversion { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; }
+[data-experience='basecamp'] .bcversion.is-current { background: color-mix(in srgb, var(--bc-accent) 12%, transparent); border-color: color-mix(in srgb, var(--bc-accent) 35%, transparent); }
+[data-experience='basecamp'] .bcvn { font-weight: 600; color: var(--bc-text-strong); font-variant-numeric: tabular-nums; }
+[data-experience='basecamp'] .bcvw { color: var(--bc-text-muted); font-size: 12.5px; }
+[data-experience='basecamp'] .bcvcur { font-size: 12px; color: var(--bc-accent); }
+[data-experience='basecamp'] .bcversionbtn { appearance: none; min-height: 28px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--bc-text-muted) 30%, transparent); border-radius: 8px; background: transparent; color: var(--bc-text); font: 500 12.5px/1 var(--bc-font); cursor: pointer; }
+[data-experience='basecamp'] .bcversionbtn:hover,
+[data-experience='basecamp'] .bcversionbtn:focus-visible { background: var(--bc-surface-selected); }
+
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcdocgrid { grid-template-columns: minmax(0, 1fr); }
+  [data-experience='basecamp'] .bcdocpreview { max-height: 60vh; }
+  [data-experience='basecamp'] .bcdocfind { max-width: none; flex-basis: 100%; }
+}
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcsrcchip { min-height: 44px; }
+  [data-experience='basecamp'] .bcversionbtn { min-height: 44px; }
+}

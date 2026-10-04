@@ -106,3 +106,41 @@ export async function paint(host, url, width) {
     // The drawn page stays. That is the whole fallback.
   }
 }
+
+/**
+ * The first few pages of `url`, for an in-app preview.
+ *
+ * Same discipline as `firstPage`: rendered once and kept, a failure rejects so
+ * the caller can say "no preview" rather than show a broken image. Bounded by
+ * `max` because a preview is a look, not a reader - the file itself is one
+ * press away - and because decoding a 400-page report to show a person its
+ * cover would be a cost with nothing to show for it.
+ */
+export async function pages(url, width = 760, max = 6) {
+  const key = `${url}@${width}x${max}`
+  if (rendered.has(key)) return rendered.get(key)
+  const job = (async () => {
+    const lib = await library()
+    const doc = await lib.getDocument({ url, disableAutoFetch: true, disableStream: true }).promise
+    const total = doc.numPages
+    const out = []
+    for (let n = 1; n <= Math.min(total, max); n += 1) {
+      const page = await doc.getPage(n)
+      const base = page.getViewport({ scale: 1 })
+      const viewport = page.getViewport({ scale: (width * 1.5) / base.width })
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.ceil(viewport.width)
+      canvas.height = Math.ceil(viewport.height)
+      const context = canvas.getContext('2d', { alpha: false })
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      await page.render({ canvasContext: context, viewport }).promise
+      out.push({ src: canvas.toDataURL('image/jpeg', 0.84), ratio: base.width / base.height })
+    }
+    doc.destroy()
+    return { pages: out, total }
+  })()
+  rendered.set(key, job)
+  job.catch(() => rendered.delete(key))
+  return job
+}

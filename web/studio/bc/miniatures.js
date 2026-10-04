@@ -43,6 +43,7 @@ import * as when from '../when.js'
 import { prose } from '../prose.js'
 import * as todos from './todos.js'
 import * as cal from './calendar.js'
+import * as docsrc from './docsources.js'
 import * as docorder from './docorder.js'
 import { esc, status } from './parts.js'
 
@@ -1024,10 +1025,11 @@ const thumb = (d, i) => {
     a title is not unique.
   */
   return `<figure class="bcdoc bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-doc-title="${esc(d.title ?? '')}"
-    data-bc-docid="${esc(String(d.id ?? ''))}" draggable="true">
+    data-bc-dochay="${esc(docsrc.hay(d))}" data-bc-docid="${esc(String(d.id ?? ''))}" draggable="true">
     <button type="button" class="bcdocpress" data-bc-doc-open="${esc(ref)}"
       aria-label="${esc(`Open ${d.title ?? 'document'}`)}">
       ${thumbFace(d, i)}
+      ${docsrc.mark(d, esc)}
       <figcaption>
         <span class="bcdoctitle">${esc(d.title)}</span>
         <span class="bcdocmeta">${esc([kindWordOf(d), d.size].filter(Boolean).join(' · '))}</span>
@@ -1054,10 +1056,13 @@ const emptyWith = (line, label, to) =>
   `<div class="bcmptywrap"><p class="bcmpty">${esc(line)}</p>
     <a class="bcmptyact" href="${esc(to)}" data-bc-go="${esc(to)}">${esc(label)}</a></div>`
 
+/** The project's documents as one logical item each, with source and type worked out. */
+export const docsOf = (p) => docsrc.dedupe((p.documents ?? []).map(docsrc.enrich))
+
 export const docThumbs = (docs) => docs.map((d, i) => thumb(d, i)).join('')
 
 export const docsMini = (p, { items = 6 } = {}) => {
-  const docs = p.documents ?? []
+  const docs = docsOf(p)
   if (docs.length === 0) {
     return emptyWith(
       'Nothing filed on this project yet. What you upload, or the team writes, appears here.',

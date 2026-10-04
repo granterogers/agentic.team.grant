@@ -36,6 +36,7 @@ import * as compose from './compose.js'
 import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
 import * as cal from './calendar.js'
+import * as docsrc from './docsources.js'
 import * as when from '../when.js'
 import * as bcDocOrder from './docorder.js'
 import * as stopping from './stopping.js'
@@ -1809,7 +1810,7 @@ const docRow = (d, i) => {
   const ref = bcMini.docRef(d)
   /* Draggable for the same reason the tile is, and with the same separation:
      the row carries the drag, the control inside it carries the press. */
-  return `<div class="bcitem bcdoc--openable" data-bc-doc="${esc(ref)}"
+  return `<div class="bcitem bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-dochay="${esc(docsrc.hay(d))}"
     data-bc-docid="${esc(String(d.id ?? ''))}" draggable="true"
     data-bc-doc-title="${esc(d.title ?? '')}">
     <!--
@@ -1822,7 +1823,7 @@ const docRow = (d, i) => {
     <div class="bcitembody">
       <button type="button" class="bcitemtitle bcitemlink" data-bc-doc-open="${esc(ref)}"
         data-bc-doc-title="${esc(d.title ?? '')}">${esc(d.title)}</button>
-      <span class="bcitemmeta">${esc([bcMini.kindWordOf(d), d.origin, d.size, d.when].filter(Boolean).join(' · '))}</span>
+      <span class="bcitemmeta">${docsrc.mark(d, esc)}${esc([bcMini.kindWordOf(d), d.origin, d.size, d.when].filter(Boolean).join(' · '))}</span>
     </div>
     <span class="bcpmeta">${esc(opensAs(d))}</span>
   </div>`
@@ -1849,6 +1850,42 @@ const opensAs = (d) => {
   return 'Details'
 }
 
+/*
+  THE FILTER BAR: search, where it came from, what kind of file.
+
+  Only the sources that actually have a document are offered, with a count, so
+  the bar describes this project rather than every connector there could be.
+  The state is a per-viewer convenience (which way you like to look at a shelf),
+  so it lives in this browser, and it is read here and written by wire.js, which
+  is the one place that touches it.
+*/
+const docFilterBar = (p, every, f) => {
+  const by = docsrc.counts(every)
+  const present = docsrc.SOURCES.filter((s) => by.has(s.id))
+  const types = docsrc.TYPES.filter((t) => every.some((d) => d.typeKey === t.id))
+  const chip = (id, label, n) =>
+    `<button type="button" class="bcsrcchip${f.source === id ? ' is-on' : ''}" data-bc-docsrc="${esc(id)}"
+      aria-pressed="${f.source === id ? 'true' : 'false'}">${esc(label)}${n === undefined ? '' : ` <span class="bcsrcn">${String(n)}</span>`}</button>`
+  return `<div class="bcdocfilter" role="search" aria-label="Find and filter these documents">
+    <label class="bcdocfind"><span class="bcvh">Search these documents</span>
+      <input type="search" class="bcinput bcdocq" data-bc-docq placeholder="Search by name, source or tag" value="${esc(f.q)}" autocomplete="off">
+    </label>
+    <span class="bcsrcchips" role="group" aria-label="Where they came from">
+      ${chip('all', 'All', every.length)}
+      ${present.map((s) => chip(s.id, s.short, by.get(s.id))).join('')}
+    </span>
+    ${
+      types.length > 1
+        ? `<label class="bcdoctype"><span class="bcvh">Kind of file</span>
+            <select class="bcdocsortpick" data-bc-doctype aria-label="Kind of file">
+              <option value="all">All types</option>
+              ${types.map((t) => `<option value="${esc(t.id)}"${f.type === t.id ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}
+            </select></label>`
+        : ''
+    }
+  </div>`
+}
+
 const documentsSurface = (p) => {
   /*
     THE SAME ORDER THE MINIATURE USES (§§30, 34).
@@ -1858,7 +1895,9 @@ const documentsSurface = (p) => {
     as an architecture rather than as a promise.
   */
   const how = bcDocOrder.mode(p.slug)
-  const docs = bcDocOrder.ordered(p.slug, p.documents ?? [], how)
+  const every = bcMini.docsOf(p)
+  const f = docsrc.filterOf(p.slug)
+  const docs = bcDocOrder.ordered(p.slug, docsrc.applyFilter(every, f), how)
   const view = docsView()
   return `${crumbFor(p, 'documents')}
     <div class="bcrecordhead">
@@ -1884,6 +1923,7 @@ const documentsSurface = (p) => {
     <p class="bcpmeta bcprose bcgap-l">
       What the team wrote, what you uploaded, and what came in from connected sources.
     </p>
+    ${docFilterBar(p, every, f)}
     <!--
       WHERE THE FILE IS COMING FROM.
 
@@ -1917,7 +1957,15 @@ const documentsSurface = (p) => {
     </form>
     ${bcDrive.panel()}
     ${
-      docs.length === 0
+      docs.length === 0 && every.length > 0
+        ? empty(
+            {
+              title: 'Nothing matches',
+              body: 'No document fits that search and those filters. Clear them to see everything again.',
+            },
+            button('Clear filters', { 'data-bc-docclear': '1' }),
+          )
+        : docs.length === 0
         ? empty(
             {
               title: 'Nothing filed yet',
@@ -1926,8 +1974,8 @@ const documentsSurface = (p) => {
             button('Add a file', { kind: 'primary', 'data-bc-upload': '1' }),
           )
         : view === 'list'
-          ? `<div class="bclist" data-bc-docdrop="${esc(p.slug)}">${docs.map((d, i) => docRow(d, i)).join('')}</div>`
-          : `<div class="bcdocs bcdocs--wall" data-bc-docdrop="${esc(p.slug)}">${bcMini.docThumbs(docs)}</div>`
+          ? `<div class="bclist" data-bc-docdrop="${esc(p.slug)}">${docs.map((d, i) => docRow(d, i)).join('')}</div><p class="bcpmeta" data-bc-docnone hidden>No document fits that search.</p>`
+          : `<div class="bcdocs bcdocs--wall" data-bc-docdrop="${esc(p.slug)}">${bcMini.docThumbs(docs)}</div><p class="bcpmeta" data-bc-docnone hidden>No document fits that search.</p>`
     }`
 }
 
@@ -2775,7 +2823,7 @@ const outputRecord = (p) => {
 
 const documentRecord = (p) => {
   const want = state().bcDoc
-  const docs = p.documents ?? []
+  const docs = bcMini.docsOf(p)
   /*
     THE REFERENCE IS THE FILE, AND TWO DOCUMENTS CAN POINT AT ONE FILE.
 
@@ -2800,51 +2848,56 @@ const documentRecord = (p) => {
         button('Back to Docs & Files', { 'data-bc-go': at(`/p/${p.slug}/documents`) }),
       )}`
   }
+  const e = docsrc.enrich(d)
   const isAudio = bcMini.isAudioDoc(d)
   const file = d.file ?? ''
+  const ref = bcMini.docRef(d)
+  const when_ = (iso) => (iso === null || iso === undefined || iso === '' ? '' : when.precise(iso))
   const facts = [
     ['What it is', bcMini.kindWordOf(d)],
+    ['Source', docsrc.nameOfSource(e.src)],
     ['Size', d.size ?? ''],
     ['Where it came from', d.origin ?? ''],
-    ['When', d.when ?? ''],
+    ['Added', when_(d.uploaded ?? d.added) || (d.when ?? '')],
+    ['Modified', when_(e.modified)],
+    ['Written', when_(d.created)],
+    ['Version', d.version_count > 1 ? `${String(d.current_version ?? d.version_count)} of ${String(d.version_count)}` : ''],
+    ['Also held in', (e.alsoIn ?? []).map(docsrc.nameOfSource).join(', ')],
+    ['In Team HQ', e.src === 'drive' || e.src === 'notebook' || e.src === 'notion' || e.src === 'web' ? (d.imported === true ? 'A durable copy is kept' : 'Read from the source; no copy kept') : ''],
   ].filter(([, v]) => v !== '' && v !== undefined)
+  const sourceHref = docsrc.sourceUrl(e)
+  const canImport = ['drive', 'notebook', 'notion', 'web'].includes(e.src) && d.imported !== true && String(d.id ?? '') !== ''
   return `<div class="bcrecordhead">
       <h1>${esc(d.title ?? 'Document')}</h1>
+      <span class="bcactions">
+        ${sourceHref === '' ? '' : `<a class="bcbtn bcbtn--outline" href="${esc(sourceHref)}" target="_blank" rel="noopener" data-bc-opensource>Open source</a>`}
+        ${canImport ? button('Import to Team HQ', { 'data-bc-docimport': esc(String(d.id)) }) : ''}
+      </span>
     </div>
-    ${
-      isAudio && file !== ''
-        ? `<div class="bcplayer">
-            <audio controls preload="metadata" src="${esc(file)}" data-bc-audio="1"
-              aria-label="${esc(`Play ${d.title ?? 'the recording'}`)}"></audio>
-          </div>`
-        : ''
-    }
-    ${
-      !isAudio && file !== ''
-        ? `<p class="bcpmeta bcprose">
-            ${esc('The file itself opens in a new tab, at full size.')}
-          </p>
-          <div class="bcrow">
-            ${button('Open the file', { kind: 'primary', 'data-bc-doc-tab': esc(file) })}
-            ${button('Download', { 'data-bc-doc-save': esc(file), 'data-bc-doc-title': esc(d.title ?? '') })}
-          </div>`
-        : ''
-    }
-    ${
-      file === ''
-        ? `<p class="bcpmeta bcprose">
-            There is no file behind this one to open — it is a record of
-            something the office knows about rather than something it holds.
-            What it knows is below.
-          </p>`
-        : ''
-    }
-    <h2 class="bcsubhead">Details</h2>
-    <dl class="bcfacts bcgap-l">
-      ${facts
-        .map(([k, v]) => `<div class="bcfact"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`)
-        .join('')}
-    </dl>`
+    <div class="bcdocgrid">
+      <div class="bcdocpreview" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-doctitle="${esc(d.title ?? '')}">
+        ${
+          isAudio && file !== ''
+            ? `<div class="bcplayer">
+                <audio controls preload="metadata" src="${esc(file)}" data-bc-audio="1"
+                  aria-label="${esc(`Play ${d.title ?? 'the recording'}`)}"></audio>
+              </div>`
+            : '<p class="bcpmeta" data-bc-docpreviewnote>Loading the preview…</p>'
+        }
+      </div>
+      <aside class="bcdocside" aria-label="About this document">
+        <h2 class="bcsubhead">Details</h2>
+        <dl class="bcfacts">
+          ${facts.map(([k, v]) => `<div class="bcfact"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
+        </dl>
+        <div class="bcrow bcdocacts">
+          ${!isAudio && file !== '' ? button('Open the file', { 'data-bc-doc-tab': esc(file) }) : ''}
+          ${file !== '' ? button('Download', { 'data-bc-doc-save': esc(file), 'data-bc-doc-title': esc(d.title ?? '') }) : ''}
+        </div>
+        <p class="bcpmeta" data-bc-docsay role="status"></p>
+        <div class="bcdocversions" data-bc-docversions="${esc(String(d.id ?? ''))}" hidden></div>
+      </aside>
+    </div>`
 }
 
 /*

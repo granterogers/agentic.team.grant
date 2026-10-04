@@ -35,6 +35,7 @@ import {
 } from '../call.js'
 import * as compose from './compose.js'
 import * as cal from './calendar.js'
+import * as docview from './docview.js'
 import * as expand from './expand.js'
 import { wireStage } from './stage.js'
 import * as contacts from './contacts.js'
@@ -542,6 +543,7 @@ export const wire = (root) => {
   if (account.mode() !== 'app') return
   expand.play(root)
   cal.wire(root)
+  docview.wire(root, ctx, fileFor)
   rememberDialogScroll(root)
 
   // Navigation inside the experience.
@@ -2129,95 +2131,15 @@ const openInTab = (href) => {
 
 const openDoc = async (ref, title) => {
   /*
-    FOUR ANSWERS, one of which used to be silence.
-
-    A reference beginning `d:` names a document with no file and no record -
-    there is nothing to fetch and nothing to open, and the honest answer is
-    the details rather than nothing happening. That silence was most of
-    Grant's *"some PDFs can be clicked while other assets cannot"*.
+    EVERY PRESS OPENS THE DOCUMENT HERE (4 October). Routine viewing must not
+    send a person to Google Drive: the record draws the preview, the details and
+    the version history beside it, and the two ways out - Open source and Open
+    the file - are buttons on it. What used to be here opened a new tab (and, for
+    a Drive document, Drive itself); that is now a choice rather than the default.
   */
-  if (ref === '' || ref.startsWith('d:')) {
-    ctx.openDocDetail?.(ref, title)
-    return
-  }
-  if (isAudioRef(ref)) {
-    /* A recording plays HERE, with the project still around it. */
-    ctx.openDocDetail?.(ref, title)
-    return
-  }
-  /*
-    THE TAB IS OPENED ON THE TAP, AND POINTED AT THE DOCUMENT WHEN IT IS KNOWN (closure, 4 October).
-
-    Everything below the next line waits for the office to say where the file is. A browser only lets a page open a tab for a
-    press it is still counting as the press, and on an iPhone that window is short: with the office slow (a tap measured at 7.5
-    seconds before anything opened) a tab opened AFTER the wait is refused, and the person sees nothing happen at all. So the
-    tab is opened here, synchronously, blank, which is also the only feedback a slow office could give; it is pointed at the
-    file when the answer comes and closed if the answer is "show the details here" instead.
-  */
-  const pending = globalThis.open('', '_blank')
-  if (pending !== null) pending.opener = null
-  const drop = () => {
-    try {
-      pending?.close()
-    } catch {
-      /* already gone */
-    }
-  }
-  const land = (href) => {
-    if (pending === null || pending.closed) openInTab(href)
-    else pending.location.href = href
-  }
-  const file = await fileFor(ref)
-  if (file === null) {
-    drop()
-    ctx.openDocDetail?.(ref, title)
-    return
-  }
-  /*
-    A DOCUMENT THAT LIVES SOMEWHERE ELSE OPENS THERE.
-
-    Grant's §25: clicking it should open the actual Drive, Docs, Sheets or
-    Slides document, normally in a new tab. The office holds a reference rather
-    than a copy, so there is no file here to show - and showing its details
-    instead would be the product losing the one thing the link was for.
-
-    The address is derived in `drive.js`, in one place, from the id and the
-    kind. A connector this does not know returns '' and falls through to the
-    ordinary handling below, which is the honest answer rather than a guessed
-    URL.
-  */
-  const elsewhere = bcDrive.opensAt(file)
-  if (elsewhere !== '') {
-    land(elsewhere)
-    return
-  }
-  if (file.url !== '') {
-    if (isAudioRef(file.url) || String(file.mime ?? '').startsWith('audio/')) {
-      drop()
-      ctx.openDocDetail?.(ref, title)
-      return
-    }
-    land(file.url)
-    return
-  }
-  /*
-    No file, but real words. A blob is the honest way to put them in a tab:
-    it is the document's own content, not a rendering of it, and it needs no
-    route this experience has not built.
-  */
-  const text = String(file.content ?? '')
-  if (text === '') {
-    drop()
-    ctx.openDocDetail?.(ref, title)
-    return
-  }
-  const blob = new Blob([`${title}\n\n${text}`], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  land(url)
-  globalThis.setTimeout(() => {
-    URL.revokeObjectURL(url)
-  }, 60_000)
+  ctx.openDocDetail?.(ref, title)
 }
+
 
 /* ------------------------------------------------------------------ tasks */
 
