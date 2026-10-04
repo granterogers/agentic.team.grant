@@ -14,6 +14,8 @@ Two gates exist, and they answer different questions.
 `sample:channel-link`, `verify:history` and `verify:connectors`; `verify:talk` joined the static part. The fingerprint check
 excepts the TEST office only (the quarantine office, where `verify:history` writes its fixtures). Last result: static 18/18,
 production 10/10 (GRANT [], FOREIGN [], SAMPLE []), identity 8 of 8 suites passing.
+(Later on 4 October: the static part gained `check:suite-offices`, the #403 ratchet over scripts that still insert into a carrier
+table with no office; it reads source only and was run on its own, the full static part has not been re-run since.)
 
 ## What `gate:safe` runs (all passed on 4 October)
 

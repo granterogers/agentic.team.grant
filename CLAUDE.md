@@ -397,7 +397,7 @@ npm run gate:safe -- --part=static && npm run gate:safe -- --part=production && 
 
 **`npm run gate:safe` is the gate to run.** No model calls, serialised, foreground, one health reading first, and Grant plus
 the 24 other offices are fingerprinted before and after and the gate FAILS if any moved, the TEST office alone excepted
-(37 steps, about 17 minutes, in three parts so each fits a shell's ten-minute ceiling: static 18, production 10, identity 9). The old `npm run gate` (76 checks) still presses on Grant's office and spends
+(38 steps, about 17 minutes, in three parts so each fits a shell's ten-minute ceiling: static 19, production 10, identity 9). The old `npm run gate` (76 checks) still presses on Grant's office and spends
 model calls; `docs/testing/gate-reach.md` says which suites and why, and its status is PARTIAL. `verify:talk` drives Team HQ
 (control, states, loaded project) with SIMULATED audio; real voice is MANUAL.
 

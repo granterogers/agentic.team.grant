@@ -52,6 +52,10 @@ const STATIC: readonly Step[] = [
   { name: 'check:office-edges', why: 'every owned edge is enforced by the database (read-only)' },
   { name: 'check:carrier-writers', why: 'every writer names its office (read-only)' },
   {
+    name: 'check:suite-offices',
+    why: 'no script adds an insert into a carrier table without an office (#403 ratchet, source only)',
+  },
+  {
     name: 'check:anon-exposure',
     why: 'no table or function reachable by a public key (read-only)',
   },
