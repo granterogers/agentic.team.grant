@@ -36,10 +36,10 @@ const check = (what: string, ok: boolean, detail: string) => {
 const jsonOf = (v: unknown) =>
   (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>
 
-await db.execute(`insert into public.telegram_chats (chat_id, chat_type, bot_id, subject)
-  values (${lit(CHAT)}, 'private', ${lit(BOT)}, 'grant') on conflict do nothing`)
-await db.execute(`insert into public.slack_workspaces (team_id, team_name, bot_user_id)
-  values ('T0ISOLATED', 'Isolated', 'U0BOTUSER') on conflict do nothing`)
+await db.execute(`insert into public.telegram_chats (office_id, chat_id, chat_type, bot_id, subject)
+  values (app.operator_office(), ${lit(CHAT)}, 'private', ${lit(BOT)}, 'grant') on conflict do nothing`)
+await db.execute(`insert into public.slack_workspaces (office_id, team_id, team_name, bot_user_id)
+  values (app.operator_office(),'T0ISOLATED', 'Isolated', 'U0BOTUSER') on conflict do nothing`)
 const REAL_SLACK = 'C0C2DAPDN02'
 const project = String(
   jsonOf(

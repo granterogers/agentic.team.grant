@@ -57,7 +57,8 @@ const project = async (label: string, fixture: boolean): Promise<string> => {
     json(
       (
         await one(
-          `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`principals-${label}-${run}`)}, ${lit(name)}, true) as v`,
+          // a "real" project is the operator's (Grant's session can see it, a test member cannot); a fixture is the test office's
+          `select app.hq_create_project(${fixture ? 'app.test_office()' : 'app.operator_office()'}, ${lit(name)}, 'upload', ${lit(`principals-${label}-${run}`)}, ${lit(name)}, true) as v`,
         )
       ).v,
     ).project_id,
@@ -108,8 +109,8 @@ const questionOn = async (job: string) =>
 const harnessJob = async (p: string): Promise<string> =>
   String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values ('office.instruction', ${lit(`verify:principals-${run}`)}, ${lit(p)}::uuid, 'pr-' || gen_random_uuid(), gen_random_uuid())
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+        values ((select office_id from public.projects where project_id = ${lit(p)}::uuid), 'office.instruction', ${lit(`verify:principals-${run}`)}, ${lit(p)}::uuid, 'pr-' || gen_random_uuid(), gen_random_uuid())
         returning job_id::text as id`)
     ).id,
   )
@@ -326,7 +327,10 @@ check(
   const r = await act(S_HARNESS, 'answer_blocker', { p_blocker_id: q.id, p_answer: 'Go ahead' })
   check(
     'a TEST member cannot answer a REAL question, and says why',
-    (await stateOf(q.id)) === 'open' && /test principal/i.test(JSON.stringify(r.body)),
+    // refused either by the test-principal rule or, now that the two live in different offices, by the office boundary
+    // ("there is nothing here to answer"): in both the question stays open and no row of the real office is disclosed
+    (await stateOf(q.id)) === 'open' &&
+      /test principal|nothing here to answer/i.test(JSON.stringify(r.body)),
     `http ${String(r.status)} ${JSON.stringify(r.body).slice(0, 120)}`,
   )
 }
@@ -350,7 +354,8 @@ check(
   const r = await act(S_STRANGER, 'answer_blocker', { p_blocker_id: q.id, p_answer: 'Go ahead' })
   check(
     'a valid session that is not a member is refused before anything is answered',
-    r.status === 401 && (await stateOf(q.id)) === 'open',
+    // 401 (not signed in) or 403 (signed in, not somebody the office works for): refused either way, nothing answered
+    (r.status === 401 || r.status === 403) && (await stateOf(q.id)) === 'open',
     `http ${String(r.status)}`,
   )
 }
@@ -481,7 +486,7 @@ check(
   )
   check(
     'a test member cannot say anything in a REAL project, and nothing is stored',
-    stored === 0 && /test principal/i.test(JSON.stringify(r.body)),
+    stored === 0 && /test principal|no such project/i.test(JSON.stringify(r.body)),
     JSON.stringify(r.body).slice(0, 110),
   )
   const sent = json(
@@ -503,9 +508,9 @@ check(
   const standingQuestion = async (project: string) => {
     const job = await harnessJob(project)
     const b =
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
         approval_options, originating_agent, work_can_continue, decline_option, standing_tool, standing_option)
-      values (${lit(project)}::uuid, ${lit(job)}::uuid, ${lit(`Do it from now on ${run}`)}, 'proof', 'Nothing happens until somebody answers this.',
+      values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(job)}::uuid, ${lit(`Do it from now on ${run}`)}, 'proof', 'Nothing happens until somebody answers this.',
         array['Yes, do that from now on without asking me', 'No, leave it'], 'chief-of-staff', false, 'No, leave it',
         'notebook.write', 'Yes, do that from now on without asking me') returning blocker_id::text as id`)
     return String(b.id)
@@ -747,7 +752,8 @@ const rowFor = async (said: string) =>
     const id = await realParent(db)
     return id
   }
-  const a = await stopJob()
+  // the office key acts in the TEST office (hq-api: the machine key's office is the test office), so its job lives there
+  const a = await harnessJob(fixtureProject)
   const viaKey = await act(TOKEN, 'stop_job', { p_job: a })
   const rowA = await one(
     `select state::text as s, state_reason as r, stop_requested_by as by from public.jobs where job_id = ${lit(a)}::uuid`,
@@ -758,7 +764,7 @@ const rowFor = async (said: string) =>
       rowA.s === 'cancelled' &&
       rowA.by === 'the office' &&
       !/grant/i.test(String(rowA.r)),
-    `${String(rowA.s)} / ${String(rowA.by)} / ${String(rowA.r)}`,
+    `${String(rowA.s)} / ${String(rowA.by)} / ${String(rowA.r)} / http ${String(viaKey.status)} ${JSON.stringify(viaKey.body).slice(0, 120)}`,
   )
   const b = await stopJob()
   const viaTest = await act(S_HARNESS, 'stop_job', { p_job: b })
@@ -766,7 +772,8 @@ const rowFor = async (said: string) =>
   check(
     'a test member cannot stop a REAL job',
     rowB.s !== 'cancelled' &&
-      (viaTest.status !== 200 || JSON.stringify(viaTest.body).includes('test principal')),
+      (viaTest.status !== 200 ||
+        /test principal|no job by that id/i.test(JSON.stringify(viaTest.body))),
     `http ${String(viaTest.status)}; job ${String(rowB.s)}; ${JSON.stringify(viaTest.body).slice(0, 100)}`,
   )
   const c = await stopJob()

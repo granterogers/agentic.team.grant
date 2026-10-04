@@ -61,14 +61,14 @@ BOT = String(
   (await one(`select bot_id from public.telegram_bots where staff_slug = 'chief-of-staff' limit 1`))
     .bot_id,
 )
-await db.execute(`insert into public.telegram_chats (chat_id, chat_type, bot_id)
-  values (${lit(CHAT)}, 'private', ${lit(BOT)}) on conflict do nothing`)
+await db.execute(`insert into public.telegram_chats (office_id, chat_id, chat_type, bot_id)
+  values (app.operator_office(), ${lit(CHAT)}, 'private', ${lit(BOT)}) on conflict do nothing`)
 
 const turn = async (channel: string, key: string, ref: string): Promise<string> => {
   const cmd = await one(`
     set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(ref)}, 'grant', ${lit(`Correction proof ${run}`)}, ${lit(key)}, 'grant')
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), ${lit(channel)}, ${lit(ref)}, 'grant', ${lit(`Correction proof ${run}`)}, ${lit(key)}, 'grant')
     returning command_id::text as id`)
   const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
   return String(
