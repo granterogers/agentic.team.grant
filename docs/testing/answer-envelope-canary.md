@@ -37,6 +37,25 @@ outside the tags can reach a person, whatever shape it has.
 Every call was answered by `openai/gpt-oss-120b`. **The model followed the format on 12 of 12, with no extra attempts and no
 visible latency cost.**
 
+## Fallback models, measured (4 October 2026, run 2, 24 more free-tier calls, envelope only, model named per call)
+
+| model | answered | format followed | misses |
+|---|---|---|---|
+| `qwen/qwen3.7-flash` | 10/12 | no format miss seen | 2 x `empty_completion`: 1,500 tokens spent on reasoning (`finish_reason=length`), the known reasoning-budget behaviour, not the envelope; slow (mean 18 s) |
+| `mistralai/mistral-small-3.2-24b-instruct` | 11/12 | 11/12 | 1 x `malformed_response` (`unclosed`: opened the tag on "three tea-shop names" and never closed it) |
+
+Reading: neither fallback is NOT SUITABLE, and neither is proven. Mistral does miss the format about one call in twelve, which
+the router turns into a failover (one more call, still within its three candidates), never into a delivered leak. Qwen's
+failures are the budget, which the answering call already sets at 2,000 tokens. n = 12 per model on a free tier.
+
+## Wired for the Sample only (migration 0887)
+
+`app.answer_envelope_on(office)` reads `system_config` `answers.envelope_offices`, a JSON array of office ids, initially
+the Sample's alone; an unlisted, unreadable or malformed row means OFF. The answering call in `handlers/instruction.ts`
+passes `answerEnvelope: true` for a listed office. **Retry ceiling:** the router tries at most three models per call, and the
+turn stops with a named error once four `malformed_response` rows are recorded against its correlation, so a job retrying
+four times cannot become twelve calls; the existing out-of-attempts path tells the person (#211).
+
 ## What this does NOT show
 
 * **Nothing about the leak itself.** The leak is rare (0 of 513 real model-written outputs open like working-out; one live

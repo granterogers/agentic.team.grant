@@ -23,6 +23,12 @@ const db = new ManagementApiExecutor(
 )
 const router = new ProviderRouter(db, process.env.OPENROUTER_API_KEY ?? '')
 
+// CANARY_MODEL=<id> asks that one model for every call (a fallback the first model never lets us reach);
+// CANARY_ONLY=envelope skips the baseline half to halve the calls.
+const NAMED = process.env.CANARY_MODEL
+const MODES: readonly ('today' | 'envelope')[] =
+  process.env.CANARY_ONLY === 'envelope' ? ['envelope'] : ['today', 'envelope']
+
 const SYSTEM =
   'You are Claire, the chief of staff for a small business. Answer the person directly and briefly, in plain prose unless they ask for a list, table or code.'
 const PROMPTS: readonly [string, string][] = [
@@ -59,7 +65,7 @@ const rows: Row[] = []
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 for (const [id, ask] of PROMPTS) {
-  for (const mode of ['today', 'envelope'] as const) {
+  for (const mode of MODES) {
     const correlationId = crypto.randomUUID()
     const started = Date.now()
     let content = ''
@@ -73,6 +79,7 @@ for (const [id, ask] of PROMPTS) {
         ],
         maxTokens: 1500,
         correlationId,
+        ...(NAMED === undefined ? {} : { model: NAMED }),
         ...(mode === 'envelope' ? { answerEnvelope: true } : {}),
       })
       content = r.content

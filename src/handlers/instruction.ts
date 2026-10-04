@@ -555,6 +555,9 @@ export async function referentCandidates(
   }
 }
 
+/** Misses of the answer envelope one turn may accumulate across its retries before it stops (#412). */
+const ENVELOPE_MISS_CEILING = 4
+
 const NOTHING_TO_STOP = 'There was nothing still running on that, so there is nothing to stop.'
 
 /** "Monday 28 September" for an ISO date, read as a calendar day. */
@@ -6080,9 +6083,43 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .then((r) => String((r.rows[0] as { v?: string } | undefined)?.v ?? '').trim())
               .catch(() => '')
 
+      /*
+        The answer envelope (#412), for the offices that are listed and no others.
+
+        On: the reply is only what the model put between the answer tags, so working-out outside them cannot reach a
+        person. A model that ignores the format is failed over by the router (at most its three candidates), and a job
+        that retries must not start the whole chain again indefinitely: after ENVELOPE_MISS_CEILING misses recorded
+        against this turn the turn stops here with a named error, and the worker's existing out-of-attempts path tells
+        the person (#211) instead of spending a fourth round of calls. Unreadable settings mean off.
+      */
+      const envelope = !answering
+        ? false
+        : await deps.db
+            .execute(
+              `select app.answer_envelope_on(app.job_office(${lit(job.jobId)}::uuid)) as on,
+                      (select count(*) from public.inference_usage u
+                        where u.correlation_id = ${lit(job.correlationId)}::uuid
+                          and u.outcome = 'malformed_response') as misses`,
+            )
+            .then((r) => {
+              const row = r.rows[0] as { on?: boolean; misses?: number | string } | undefined
+              if (row?.on !== true) return false
+              if (Number(row.misses ?? 0) >= ENVELOPE_MISS_CEILING) {
+                throw new Error(
+                  `the model did not follow the answer format ${String(ENVELOPE_MISS_CEILING)} times on this turn, so no reply was released`,
+                )
+              }
+              return true
+            })
+            .catch((error: unknown) => {
+              if (error instanceof Error && error.message.includes('answer format')) throw error
+              return false
+            })
+
       const completion = !answering
         ? null
         : await deps.router.complete({
+            ...(envelope ? { answerEnvelope: true } : {}),
             messages: [
               {
                 role: 'system',
