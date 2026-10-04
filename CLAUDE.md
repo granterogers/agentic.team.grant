@@ -416,7 +416,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **756 applied** (0886 is the latest).
+`npm run migrate` applies plain SQL from `migrations/`. **760 applied** (0890 is the latest).
 
 ## Testing signed in, without Grant's office
 

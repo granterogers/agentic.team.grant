@@ -33,6 +33,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { extensionFor, filePath, putFile } from '../files/store.ts'
 import { describeKind, driveAccess, readFile } from '../google/drive.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { fileText } from '../text/file-text.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -106,6 +107,12 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
 
       const title = String(p.title ?? '').trim()
 
+      // A PDF or Word file arrives as bytes (#419). Its text is read here, so a Drive file is searchable like an
+      // uploaded one; a scan or an unreadable file leaves the text null, which is true, and the bytes are still kept.
+      const readable = got.bytes === null ? null : await fileText(got.bytes, got.mime, title)
+      const indexText =
+        got.text ?? (readable !== null && readable.text !== null ? readable.text : null)
+
       /*
         The document row first, then the bytes.
 
@@ -118,7 +125,7 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
         await deps.db.execute(`
           select app.record_drive_document(
             app.job_office(${lit(job.jobId)}::uuid), ${lit(projectId)}::uuid, ${lit(folderId)}, ${lit(fileId)}, ${lit(title)},
-            ${got.text === null ? 'null' : lit(got.text)}, 'chief-of-staff') as r
+            ${indexText === null ? 'null' : lit(indexText)}, 'chief-of-staff') as r
         `)
       ).rows[0] as { r?: { ok?: boolean; document?: string; outcome?: string; error?: string } }
       const doc = recorded.r

@@ -1130,6 +1130,21 @@ rather than rediscovery.
 
 ---
 
+## 4 October 2026 (run 2) - answer envelope on for the Sample, documents read in passages (#412, #419)
+
+* **#412:** `answerEnvelope` is wired into the answering call for offices listed in `system_config` `answers.envelope_offices`
+  (0887; the Sample only). Fallback models measured (`docs/testing/answer-envelope-canary.md`): qwen 10/12 (the misses were the
+  reasoning budget), mistral 11/12 (one unclosed tag, failed over). A turn stops after 4 recorded envelope misses. PROVEN FOR
+  SAMPLE; widening is one edit of that row and needs evidence on the fallback models in real, long prompts first.
+* **#419:** `public.document_chunks` (0888-0890) holds ordered, overlapping passages of `documents.content`, written by a trigger on
+  `documents` through `app.index_document_chunks`; retrieval shows the best two passages per document with "part N of M" in the
+  header, and falls back to the head when none was cut. `src/text/file-text.ts` reads text, Markdown, HTML, DOCX and text PDFs at
+  upload and says "not searchable" plus why for a scan. Proofs: `scripts/isolated/chunks.ts` (a fact at the END of a 134,000
+  character document, foreign office and project canaries, re-index, archive, delete, sabotage controls), `sample:documents`
+  (the DEPLOYED gateway). `npm run deploy:hq-api` deploys the gateway alone and uploads `file-text.ts` beside it.
+* Not done: OCR (an image-only PDF stays unsearchable by design), scanned Drive files, a retention sweep of stale passages beyond
+  the one generation kept, Drive/NotebookLM files fetched as bytes are not yet routed through `fileText`.
+
 ## 3 October 2026 (closure) - office-owned tool requests, guard at the executor, Reconnect Google
 
 `approve_tool`, `decline_tool`, `revoke_tool` are office-owned (no longer operator-only); `staff_tool_set` and everything
