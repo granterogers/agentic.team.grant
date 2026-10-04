@@ -3747,3 +3747,19 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
    were centred: a status rule elsewhere starts it. Centred with its row. */
 [data-experience='basecamp'] .bcagendaitem > .bcstatus,
 [data-experience='basecamp'] .bcagendaitem > [class*='status'] { align-self: center; flex: 0 0 auto; }
+
+/* THE PHONE HEADER KEEPS THE PROJECT'S NAME. The shell's right-hand group (Attention, the office menu, Sign out) was 212px
+   wide at every phone width, so the name beside the project's mark was 0px at 320 and 60px at 390 (measured). Both text
+   controls become 44px icons here, the count riding on the bell; their accessible names are unchanged. Last in the file,
+   because a phone override placed above its base rule is silently overridden by source order. */
+[data-experience='basecamp'] .bcsoicon { display: none; }
+@media (max-width: 480px) {
+  [data-experience='basecamp'] .bcbtn.bcsignout { width: 44px; min-width: 44px; min-height: 44px; padding: 0; }
+  [data-experience='basecamp'] .bcsignout .bcsotext { display: none; }
+  [data-experience='basecamp'] .bcsignout .bcsoicon { display: block; }
+  [data-experience='basecamp'] .bctop [data-bc-attention] { position: relative; width: 44px; min-width: 44px; padding: 0; }
+  [data-experience='basecamp'] .bctop [data-bc-attention] .bcstatus { position: absolute; top: 3px; right: 1px; }
+}
+@media (max-width: 360px) {
+  [data-experience='basecamp'] .bctop { padding-inline: var(--bc-2); }
+}

@@ -252,7 +252,9 @@ try {
         'the dialog does not say what it asks',
       )
       must(
-        await box.locator('[data-no]').evaluate((el) => el === document.activeElement),
+        (await page.evaluate(
+          "document.activeElement === document.querySelector('.stg-confirmbox [data-no]')",
+        )) === true,
         'Cancel does not hold focus',
       )
       await shot(page, 'archive-confirm')

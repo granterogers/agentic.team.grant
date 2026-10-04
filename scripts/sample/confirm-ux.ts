@@ -60,13 +60,16 @@ try {
     )
     check(
       `${label}: Cancel holds focus (the safe answer is the default)`,
-      await box.locator('[data-no]').evaluate((el) => el === document.activeElement),
+      (await page.evaluate(
+        "document.activeElement === document.querySelector('.stg-confirmbox [data-no]')",
+      )) === true,
     )
-    const m = await box.evaluate((el) => {
-      const r = el.getBoundingClientRect()
-      const b = [...el.querySelectorAll('button')].map((x) => x.getBoundingClientRect().height)
-      return { left: r.left, right: r.right, vw: window.innerWidth, buttons: b }
-    })
+    const m = (await page.evaluate(`(() => {
+      var el = document.querySelector('.stg-confirmbox');
+      var r = el.getBoundingClientRect();
+      var b = Array.prototype.map.call(el.querySelectorAll('button'), function (x) { return x.getBoundingClientRect().height; });
+      return { left: r.left, right: r.right, vw: window.innerWidth, buttons: b };
+    })()`)) as { left: number; right: number; vw: number; buttons: number[] }
     check(
       `${label}: the box fits the screen`,
       m.left >= 0 && m.right <= m.vw,
@@ -79,19 +82,17 @@ try {
     )
     await page.screenshot({ path: `${out}/${label}-archive.png` })
     // Tab stays inside: two buttons, so three Tabs return to where it began
-    const start = await page.evaluate(
-      () => document.activeElement?.getAttribute('data-no') !== null,
-    )
+    const start = await page.evaluate("document.activeElement.getAttribute('data-no') !== null")
     for (let i = 0; i < 3; i += 1) await page.keyboard.press('Tab')
-    const stays = await page.evaluate(
-      () => document.activeElement?.closest('.stg-confirmbox') !== null,
-    )
-    check(`${label}: Tab never leaves the dialog`, start && stays)
+    const stays = await page.evaluate("document.activeElement.closest('.stg-confirmbox') !== null")
+    check(`${label}: Tab never leaves the dialog`, start === true && stays === true)
     await page.keyboard.press('Escape')
     await box.waitFor({ state: 'detached', timeout: 5000 })
     check(
       `${label}: Escape closes it and puts focus back on Archive`,
-      await archive.evaluate((el) => el === document.activeElement),
+      (await page.evaluate(
+        "document.activeElement === document.querySelector('[data-archive]')",
+      )) === true,
     )
     check(`${label}: and the project is untouched`, (await status()) === before, before)
 

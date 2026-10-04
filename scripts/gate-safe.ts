@@ -66,6 +66,10 @@ const LOCAL: readonly Step[] = [
     why: 'the page states its project, and the dock IS the page’s project (#416), against a fake office',
   },
   {
+    name: 'verify:phone-header',
+    why: 'the phone header keeps the project’s name at 320, 360, 390 and 430, and every control is 44px (P5)',
+  },
+  {
     name: 'verify:talk',
     why: 'Talk to Team on Team HQ: control, states, loaded project; SIMULATED audio (manual real-audio acceptance still required)',
   },
