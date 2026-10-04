@@ -390,7 +390,7 @@ over `cat`, `grep` and `head`.
 npm run lint && npm run typecheck && npm run test
 npm run check:migrations && npm run check:secrets && npm run check:templates
 npm run verify:wired                                            # if UI changed
-npm run verify:hq && npm run verify:ui                          # if UI changed (both off Grant's office; verify:talk is stale, see below)
+npm run verify:hq && npm run verify:ui && npm run verify:talk  # if UI changed (verify:talk is Team HQ, simulated audio; see below)
 npm run shots                                                   # capture web/studio
 npm run gate:safe -- --part=static && npm run gate:safe -- --part=production   # the gate that is safe to run (#414)
 ```
@@ -398,8 +398,8 @@ npm run gate:safe -- --part=static && npm run gate:safe -- --part=production   #
 **`npm run gate:safe` is the gate to run.** No model calls, serialised, foreground, one health reading first, and Grant plus
 the 24 other offices are fingerprinted before and after and the gate FAILS if any moved (27 checks, about 11 minutes, in two
 parts so each fits a shell's ten-minute ceiling). The old `npm run gate` (76 checks) still presses on Grant's office and spends
-model calls; `docs/testing/gate-reach.md` says which suites and why, and its status is PARTIAL. `verify:talk` drives the
-old studio at `/classic/` and is stale; voice is MANUAL.
+model calls; `docs/testing/gate-reach.md` says which suites and why, and its status is PARTIAL. `verify:talk` drives Team HQ
+(control, states, loaded project) with SIMULATED audio; real voice is MANUAL.
 
 `npm run shots` renders the prototype in real Chromium at 1440×900 and iPhone
 14, in both themes, and writes twelve PNGs to `.out/`. It is the capture half of

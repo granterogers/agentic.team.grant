@@ -26,9 +26,12 @@ Last result: **10/10, GRANT [], FOREIGN [], SAMPLE []**.
 
 * Anything that needs a model. A reply's wording, delegation, routing quality, the coherence gates on live answers.
 * Voice. **Voice note: MANUAL REAL-MIC ACCEPTANCE REQUIRED. Talk to Team: MANUAL REAL-AUDIO ACCEPTANCE REQUIRED.**
-  `verify:talk` is class smoke but is **stale**: it drives the old studio at `/classic/` (kept unlinked since #382), and fails on
-  a phone-width Send tap that no longer matches that page's flow (a closed "Type instead" panel). It does not exercise Team HQ's
-  call panel. `sample:voice` covers the session boundary on the real page. Retargeting `verify:talk` at Team HQ is open work.
+  `verify:talk` was retargeted at Team HQ on 4 October (it used to drive `/classic/`) and is in `gate:safe`'s local part: 36
+  checks over a desktop and an iPhone-sized touch leg - the control (44px, hit-tested), the states, the loaded project carried
+  in the session request, every microphone track stopped on hang-up, each failure's wording and recovery, no control on the
+  portfolio or for a project outside the office. **Its media and connection are SIMULATED**: it proves the control and the
+  session boundary and nothing about audio, and it was proved able to fail (project not carried; tracks not stopped).
+  `sample:voice` covers the deployed session boundary as the Sample. The two manual acceptances stand.
 * The delivery side: nothing here sends to Telegram, Slack, email or a phone.
 
 ## What the old gate reaches

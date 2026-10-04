@@ -9,15 +9,8 @@
     "verify:named-project",
     "verify:delivery-office"
   ],
-  "smoke": [
-    "verify:pulse",
-    "verify:wrappers",
-    "verify:schema",
-    "verify:ui",
-    "verify:hq",
-    "verify:talk"
-  ],
-  "local": ["verify:basecamp-project-turn"],
+  "smoke": ["verify:pulse", "verify:wrappers", "verify:schema", "verify:ui", "verify:hq"],
+  "local": ["verify:basecamp-project-turn", "verify:talk"],
   "scripts": {
     "scripts/sample/dock-contract.ts": "sample",
     "scripts/sample/labels.ts": "sample",
@@ -28,7 +21,7 @@
     "scripts/verify/named-project.ts": "sample",
     "scripts/verify/delivery-office.ts": "sample",
     "scripts/verify/hq.ts": "smoke",
-    "scripts/verify/talk.ts": "smoke",
+    "scripts/verify/talk.ts": "local",
     "scripts/verify/basecamp-project-turn.ts": "local",
     "scripts/sample/settings-live.ts": "sample",
     "scripts/sample/tool-requests-live.ts": "sample",

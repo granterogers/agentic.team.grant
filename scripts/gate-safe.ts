@@ -63,6 +63,10 @@ const LOCAL: readonly Step[] = [
     name: 'verify:basecamp-project-turn',
     why: 'the page states its project, and the dock IS the page’s project (#416), against a fake office',
   },
+  {
+    name: 'verify:talk',
+    why: 'Talk to Team on Team HQ: control, states, loaded project; SIMULATED audio (manual real-audio acceptance still required)',
+  },
 ]
 const SAMPLE: readonly Step[] = [
   { name: 'verify:hq', why: 'the gateway, on the TEST office; no Grant write (#414)' },
