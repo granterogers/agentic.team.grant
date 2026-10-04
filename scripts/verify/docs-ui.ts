@@ -322,6 +322,84 @@ check(
   JSON.stringify(rb),
 )
 await ctx2.close()
+/* the saved web pages, on the Sources surface */
+const ctx3 = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const p3 = await ctx3.newPage()
+await p3.addInitScript(() => localStorage.setItem('hq.token', 'stub-token-for-test'))
+const asked3: string[] = []
+await p3.route('**/*', async (route) => {
+  const u = route.request().url()
+  if (!u.includes('hq-api')) return route.continue()
+  const headers = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': '*',
+    'access-control-allow-methods': '*',
+  }
+  if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
+  const q = Object.fromEntries(new URL(u).searchParams)
+  if (q.section === 'web_sources') {
+    asked3.push(q.project ?? '')
+    return route.fulfill({
+      status: 200,
+      headers,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          count: 1,
+          pages: [
+            {
+              document_id: 'w1',
+              url: 'https://example.com/pricing',
+              title: 'Example pricing',
+              kind: 'page',
+              retrieved_at: '2026-10-03T10:00:00Z',
+              agent: { slug: 'emma', name: 'Emma' },
+              research_task: { job_id: 'j', label: 'competitor pricing' },
+              found_via: { how: 'search', query: 'competitor pricing', rank: 2 },
+              indexed: true,
+              citations: { count: 2 },
+              screenshot: { available: true },
+            },
+          ],
+        },
+      }),
+    })
+  }
+  return route.fulfill({
+    status: 500,
+    headers,
+    contentType: 'application/json',
+    body: JSON.stringify({ error: 'stub' }),
+  })
+})
+await p3.goto(url(`${slug}/sources`), { waitUntil: 'domcontentloaded' })
+await p3.waitForTimeout(1500)
+check(
+  "signed in, Sources asks the office for this project's saved web pages",
+  asked3.length > 0 && asked3[0] !== '',
+  asked3.join(','),
+)
+const web =
+  (await p3
+    .locator('.bcwebsrc')
+    .textContent()
+    .catch(() => '')) ?? ''
+check(
+  'each page shows where it came from, who read it and for what',
+  web.includes('Example pricing') &&
+    web.includes('Emma') &&
+    web.includes('competitor pricing') &&
+    web.includes('result 2'),
+  web.replace(/\s+/g, ' '),
+)
+check('and how often a report cites it', web.includes('cited in 2 answers'))
+check(
+  'the link opens the page itself in a new tab, safely',
+  (await p3.locator('.bcwebtitle').getAttribute('rel')) === 'noopener noreferrer',
+)
+await p3.screenshot({ path: '.out/ux-docs-06-websources.png' })
+await ctx3.close()
+
 check('no page errors from the office path', err2.length === 0, err2.join(' | '))
 
 check('no page errors', thrown.length === 0, thrown.join(' | '))

@@ -125,7 +125,10 @@ check(
 await dismissAll()
 
 /* --- 3. the module opens the full board --------------------------------- */
-await page.locator('[data-mod="board"] .bcmodhead').first().click({ position: { x: 80, y: 10 } })
+await page
+  .locator('[data-mod="board"] .bcmodhead')
+  .first()
+  .click({ position: { x: 80, y: 10 } })
 await page.waitForTimeout(600)
 check(
   'the Card Table module opens the board',

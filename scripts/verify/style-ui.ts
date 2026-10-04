@@ -57,7 +57,7 @@ await page.route('**/*', async (route) => {
     })
   }
   const q = Object.fromEntries(new URL(u).searchParams)
-  calls.push({ section: q.section, q })
+  calls.push({ section: q.section ?? '', q })
   if (q.section === 'style')
     return route.fulfill({
       status: 200,

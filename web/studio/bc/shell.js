@@ -38,6 +38,7 @@ import * as bcMini from './miniatures.js'
 import * as cal from './calendar.js'
 import * as docsrc from './docsources.js'
 import * as finder from './finder.js'
+import * as websrc from './websources.js'
 import * as when from '../when.js'
 import * as bcDocOrder from './docorder.js'
 import * as stopping from './stopping.js'
@@ -66,6 +67,7 @@ export const mount = (c) => {
   account.mount(c)
   cal.init(c)
   docsrc.init(c)
+  websrc.init(c)
   c.find = (q) => searchHits(q, 'Everything', null)
   finder.onArrive(() => {
     c.render()
@@ -2312,7 +2314,8 @@ const sourcesSurface = (p) => {
             button('Add Source', { kind: 'primary', 'data-bc-source-add': '1' }),
           )
         : `<div class="bcsources bcsources--full">${ss.map((s, i) => sourceRow(s, i)).join('')}</div>`
-    }`
+    }
+    ${websrc.block(p)}`
 }
 
 /** One source, with the facts the office actually holds about it. */
