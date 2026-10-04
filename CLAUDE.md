@@ -416,7 +416,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **760 applied** (0890 is the latest).
+`npm run migrate` applies plain SQL from `migrations/`. **761 applied** (0891 is the latest applied; 0892 is committed and waits for the platform to recover).
 
 ## Testing signed in, without Grant's office
 
@@ -4434,6 +4434,49 @@ Each of these cost real time. They are here so they cost it once.
 - **Disclosed process slips this run:** one `sed -i` with a pattern that matched nothing (no change), one Python heredoc that
   read a file and wrote nothing, and one long command run without an explicit timeout that the harness moved to the
   background (it finished; the foreground rule is to pass the timeout). The reflex is the trap.
+
+- **A header that gains a text control loses the name beside it, silently.** #405 put a text "Sign out" button in the shell's
+  right-hand group; at 390px the Attention, Settings and Sign out controls were 212px wide and the project's NAME beside its
+  mark measured 0px at 320 and 60px at 390 - present in the DOM, in the accessibility tree and in every capture's alt text,
+  and gone to the eye. No overflow, no contrast failure, no dead control. Found by asking the page for the name's BOX, not for
+  its text. `verify:phone-header` (local, no production) measures it at 320, 360, 390 and 430 with the real signed-in header,
+  and goes red with the phone rules removed. A prior fix had hidden the "Attention" word at 380px only; the next control added
+  made it insufficient, which is why the check measures the name rather than the controls.
+- **`sure()` is async now, and a caller that forgets `await` performs the destructive act unasked.** It returned
+  `window.confirm`'s boolean for months and three call sites already wrote `await sure(question, label)` against it (the label
+  was ignored). It resolves the in-page dialog's answer; a missing `await` reads the pending promise as "yes".
+  `tests/web/no-native-dialogs.test.ts` asserts, over the source, that every call is awaited and that no native confirm, alert
+  or prompt exists outside two named load-failure fallbacks, each detector with a synthetic control.
+- **`page.addLocatorHandler` fires only while an ACTION is waiting on the page, and a poll of the database is not one.** Two Sample
+  suites auto-pressed the confirm dialog with it, and the step that polled for the result never saw the handler run; where the
+  suite also pressed the button itself, the handler pressed it first and the assertion about the dialog failed. Drive the dialog
+  explicitly where it is the subject.
+- **A suite can be red for months because nothing runs it, and its premise can be false for a second reason.** `verify:drains`
+  injected jobs with no `office_id` (NOT NULL since the office model), so its three controls could not run; `verify:backups` did
+  the same in its pager section AND assumed a real restore rehearsal was recent (it was 13 days old: overdue, correctly, with a
+  real chore on Grant's list). Fixed by giving injected rows an office (the Sample's, rolled back; the system office for
+  deployment-level jobs), and by moving the "healthy" threshold far past any real age instead of assuming 192 hours.
+- **A second line of defence hides that the first was removed, until a sabotage asks.** Removing the workspace-ownership rule
+  from `app.slack_install_redeem` did not let one office take another's workspace: the same-office composite key refused it as a
+  23503, so the callback answered "failed" instead of "refused". Both are right and the sabotage control asserts BOTH: the answer
+  changes (the rule is what said "refused") and the database still holds (the key is the second line).
+- **A callback that redirects names its destination in the CALLER's vocabulary.** The Slack callback first sent people to
+  `?settings=messaging`; the page's deep link takes `connections`, `channels` or `health`, so it would have opened nothing. The
+  tab is called Messaging on screen and `channels` in the address. Grep the reader of a redirect before writing the writer.
+- **A harness that gives the page a token makes it read a real office, and the pane then reads "could not be read".** A local
+  suite that wants the PROTOTYPE settings must not store a token; one that wants a writer serves a minimal `studio_settings`
+  and the section under test from a fake gateway, so the card is judged through the page's own read path rather than by poking
+  its store. A token written straight to storage after the pane is drawn avoids the redraw.
+- **The Supabase platform went UNHEALTHY while this work was running, with no process of this session still holding it.** The
+  health API (`GET /v1/projects/<ref>/health`) read auth, db, rest and storage UNHEALTHY ("Failed to connect to database") for
+  more than two hours; `incident:snapshot` timed out. Production traffic was stopped at once (no retries, no polling) and the
+  remaining work was local or isolated. Whether the migration that had just been applied, a long browser run, or the platform
+  itself was the cause is NOT established; the last production writes before it were migration 0891 and a rolled-back proof.
+- **Disclosed process slips this run:** three file edits were made with a `python3` heredoc instead of the Edit tool, against the
+  File editing rule (`package.json`, one line; `scripts/isolated/slack-oauth.ts`, a block; a scratch script, since deleted); each
+  was read back and linted. One `sed -i` was pointed at `/dev/null` (a no-op). One `pkill -f phone-header` matched the shell that
+  ran it and killed it (exit 144), and one command chained two long runs past the ten-minute ceiling and was moved to the
+  background by the harness. The reflex is the trap: use Edit, and one long command per call.
 
 ---
 

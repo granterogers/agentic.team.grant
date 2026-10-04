@@ -1,6 +1,8 @@
 # ADR-0065 — A Slack workspace belongs to one office
 
-**Status:** accepted (the decision and the receiving half); the sending half is described and not built · **Date:** 4 October 2026 ·
+**Status:** accepted. The decision and the receiving half are BUILT and proved with transport doubles (migrations 0891-0892,
+`src/slack/oauth.ts`, the `slack-oauth` function, the gateway actions, the Settings card); 0892 and the deploys wait on the
+platform recovering. The sending half is described and NOT built. No real Slack install has been run. · **Date:** 4 October 2026 ·
 **Issue:** #410 (Slack)
 
 ## Context

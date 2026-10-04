@@ -1130,6 +1130,34 @@ rather than rediscovery.
 
 ---
 
+## 4 October 2026 (run 2, later) - Slack self-service built (receiving half), phone header, native dialogs gone, platform down
+
+**State at the end of this stretch:** branch `claude/multi-user-p4`; migrations applied through **0891** (761); **0892 is
+committed and NOT applied**; the **Supabase platform has been UNHEALTHY for over two hours** (see
+`docs/ops/supabase-efficiency-2026-10-04.md`, run 2 addendum), so nothing below marked "not deployed" could be.
+
+* **#414:** `verify:run3-live`, `verify:drains`, `verify:dryrun`, `verify:proposes` are `sample` class in `gate:safe --part=ops`
+  (8/8, Grant and every other office unchanged); `verify:drains` and `verify:backups` had been RED unnoticed (injected jobs with
+  no office; a stale-rehearsal premise) and are repaired. A real finding: the last passing restore rehearsal is 21 September.
+* **Slack self-service (ADR-0065):** the ownership level is DECIDED (a workspace belongs to one office; the installer is its
+  first admitted sender) and the **receiving half is built**: migrations 0891-0892, `src/slack/oauth.ts` and the `slack-oauth`
+  edge function, the gateway actions `slack_link_begin` / `slack_link_disconnect` and section `slack_link`, the Settings card.
+  Proofs: `verify:slack-link` (DB, 25/25, production, rolled back), `scripts/isolated/slack-oauth.ts` (the REAL callback against
+  the replica with a Slack transport double, 22/22, sabotage red then green), `tests/slack/oauth.test.ts` (15, sabotage red then
+  green), `verify:slack-card` (the card in every state and both presses, local, red then green). **NOT DONE and said so in the
+  product:** replying inside a personal workspace (the worker builds one Slack client from the first credential row; per-office
+  clients are the next piece, and the card says answers appear in Team HQ until `slack.per_office_delivery` is true).
+  **EXTERNAL, only Grant can do:** open the Slack app to other workspaces (Manage Distribution), add the redirect URL
+  `https://<ref>.supabase.co/functions/v1/slack-oauth`, and set `system_config` `slack.client_id` (public). Until then the card
+  says "Not available yet" and offers no button. **A real install has never been run: REAL SLACK INSTALL - MANUAL ACCEPTANCE
+  REQUIRED.**
+* **P5:** `sure()` is async and every destructive control (12 sites) asks in the page's own dialog, 44px on touch; both native
+  alerts are `noticeDialog`; the unused `window.prompt` helper is removed. `verify:dialogs` (local, 29 checks) and
+  `tests/web/no-native-dialogs.test.ts`. The phone header now keeps the project's name (Attention and Sign out are 44px icons
+  under 480px): `verify:phone-header` (local; the name was 0px at 320 and 28px at 360 before, 52 and 92 after). Live
+  `sample:confirm-ux` passed 20/20 before the outage; the header fix is **not deployed** to the page.
+* **To do when the platform recovers:** see the ordered list in the ops note. Deploy the page last.
+
 ## 4 October 2026 (run 2) - answer envelope on for the Sample, documents read in passages (#412, #419)
 
 * **#412:** `answerEnvelope` is wired into the answering call for offices listed in `system_config` `answers.envelope_offices`

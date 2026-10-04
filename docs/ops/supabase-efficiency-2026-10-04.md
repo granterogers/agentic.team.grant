@@ -96,3 +96,22 @@ number of large spills (a handful an hour on the evidence above). Then read the 
 (`GET /v1/projects/<ref>/analytics/endpoints/logs`) for "temporary file" lines. Restore to `-1` afterwards.
 
 Not claimed: that the incident is solved, that memory starvation is proven, or that the instance needs resizing.
+
+## Run 2 addendum (4 October, later)
+
+* **Counter:** `temp_bytes` read 384,464,427,252 at the start of run 2 (it was 384,370,062,422 earlier the same day): about
+  0.1 GB in the interval, the same low background rate. The `log_temp_files` request above is still the only thing that names a
+  producer, and it is still the owner's to make.
+* **A platform event during run 2.** After a normal day of work (migrations 0887-0891 applied, two Sample proofs, a rolled-back
+  proof, a gate part, two browser runs signing in as the Sample) the Management API health reading went to
+  `auth`, `db`, `rest` and `storage` all UNHEALTHY with `Failed to connect to database`, and `npm run incident:snapshot` and a
+  sign-in navigation timed out. No process of this session was left running (checked by `ps`). All production traffic was
+  stopped at once; no retry, no polling (three single health readings over about two and a half hours, all UNHEALTHY), no resize,
+  no setting change. The remaining work was local or isolated. **Cause not established.** The last production writes before the
+  first symptom were migration 0891 (a new table, a new unique constraint on `slack_workspaces`, a CHECK change on
+  `channel_link_challenges`, 1.4 s) and a rolled-back verification; neither holds a lock for any time. The earlier incident of
+  3 October is the same shape (auth and storage first, then the database); a platform-side event is at least as likely as
+  anything here, and this note does not claim either.
+* **What to do when it recovers, in order:** one `npm run incident:snapshot`; `npm run migrate` (applies 0892, one function);
+  `npm run deploy:hq-api`; `npm run deploy:slack-oauth`; the page delta deploy; then `verify:slack-link`, `sample:confirm-ux`,
+  `sample:documents`, `gate:safe --part=ops` and the identity part. Each is listed with what it proves in `docs/HANDOFF.md`.
