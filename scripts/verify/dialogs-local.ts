@@ -159,6 +159,38 @@ try {
       check(`${label}: ${how} closes the notice and returns focus`, await focusedIn('#opener'))
       await page.evaluate("document.getElementById('opener').focus()")
     }
+    // ---- a double-tap on Confirm must not land on whatever lies underneath it ---------------------------------------------
+    {
+      await page.evaluate(
+        "(async () => { const { sure } = await import('/office.js'); window.__answers = []; sure('Archive this thing? Nothing is deleted.', 'Archive it', { title: 'Archive this project?' }).then((v) => { window.__answers.push(v) }) })()",
+      )
+      await page.waitForSelector('.stg-confirmbox [data-yes]', { timeout: 5000 })
+      const at = await page.locator('.stg-confirmbox [data-yes]').boundingBox()
+      if (at === null) throw new Error('no Confirm button to press')
+      const cx = at.x + at.width / 2
+      const cy = at.y + at.height / 2
+      // a stand-in for a destructive control that happens to sit under the Confirm button, below the dialog in the stack
+      await page.evaluate(
+        `(() => { const v = document.createElement('button'); v.id = 'victim'; window.__victim = 0; v.addEventListener('click', () => { window.__victim += 1 }); v.style.cssText = 'position:fixed;z-index:1;left:${String(Math.floor(cx - 30))}px;top:${String(Math.floor(cy - 20))}px;width:60px;height:40px'; document.body.append(v) })()`,
+      )
+      await page.mouse.dblclick(cx, cy)
+      await page.waitForFunction('window.__answers.length > 0', null, { timeout: 5000 })
+      const hit = Number(await page.evaluate('window.__victim'))
+      const said = (await page.evaluate('window.__answers')) as unknown[]
+      check(
+        `${label}: a double-tap on Confirm answers once and never reaches the control underneath`,
+        said.length === 1 && said[0] === true && hit === 0,
+        `answers ${JSON.stringify(said)}, underneath ${String(hit)}`,
+      )
+      await page.waitForTimeout(700)
+      await page.mouse.click(cx, cy)
+      check(
+        `${label}: and the shield is gone afterwards: the same spot works normally`,
+        Number(await page.evaluate('window.__victim')) === 1 &&
+          (await page.locator('.stg-shield').count()) === 0,
+      )
+      await page.evaluate("document.getElementById('victim')?.remove()")
+    }
     check(
       `${label}: no native dialog and no page error`,
       native === 0 && errors.length === 0,

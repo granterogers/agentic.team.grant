@@ -201,6 +201,18 @@ export const facts = (list) =>
  * Resolves true or false. Escape and the backdrop cancel; focus goes to the safe choice first and comes back after.
  * `danger` makes the confirming button the red-outlined kind. Never rejects.
  */
+/**
+ * Take a dialog down without letting the SECOND tap of a double-tap through to whatever lies underneath it. The answer is
+ * resolved at once by the caller; this only replaces the dialog with an invisible shield that swallows pointer events for a
+ * moment, because a Confirm button sits over the page and the control beneath it may be another destructive one.
+ */
+function release(wrap) {
+  wrap.replaceChildren()
+  // its own class, so nothing that asks "is a dialog open" (.stg-confirm) sees a closed one
+  wrap.className = 'stg-shield'
+  setTimeout(() => wrap.remove(), 450)
+}
+
 export function confirmDialog({ title, body, confirmLabel = 'Continue', cancelLabel = 'Cancel', danger = false }) {
   if (typeof document === 'undefined') return Promise.resolve(false)
   return new Promise((resolve) => {
@@ -217,7 +229,7 @@ export function confirmDialog({ title, body, confirmLabel = 'Continue', cancelLa
     </div>`
     const done = (v) => {
       document.removeEventListener('keydown', onKey, true)
-      wrap.remove()
+      release(wrap)
       if (before instanceof HTMLElement && before.isConnected) before.focus()
       resolve(v)
     }
@@ -264,7 +276,7 @@ export function noticeDialog({ title, body, closeLabel = 'OK' }) {
     </div>`
     const done = () => {
       document.removeEventListener('keydown', onKey, true)
-      wrap.remove()
+      release(wrap)
       if (before instanceof HTMLElement && before.isConnected) before.focus()
       resolve()
     }
@@ -311,7 +323,7 @@ export function askDialog({ title, body, label, placeholder = '', confirmLabel =
     const field = wrap.querySelector('[data-text]')
     const done = (v) => {
       document.removeEventListener('keydown', onKey, true)
-      wrap.remove()
+      release(wrap)
       if (before instanceof HTMLElement && before.isConnected) before.focus()
       resolve(v)
     }

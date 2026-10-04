@@ -1267,6 +1267,13 @@
   background: rgb(4 10 13 / 0.72);
   font-family: var(--st-font);
 }
+/* The invisible shield left for a moment after a dialog closes, so a double-tap cannot land on the control underneath. */
+.stg-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: transparent;
+}
 .stg-confirmbox {
   box-sizing: border-box;
   width: min(460px, 100%);
