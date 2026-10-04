@@ -38,7 +38,9 @@ describe('the executor refuses a heavy suite started directly', () => {
   const heavy = Object.entries(
     (JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> })
       .scripts,
-  ).find(([n, c]) => n === 'verify:hq' && /scripts\/verify\/\S+\.ts/.test(c))
+  ).find(([n, c]) => n === 'verify:worker' && /scripts\/verify\/\S+\.ts/.test(c))
+  // verify:worker, not verify:hq: hq was converted to the test office and reclassified smoke (#414), so it is no longer a
+  // heavy suite to drive. The worker suite dequeues work and is genuinely heavy.
   const file = /(scripts\/verify\/\S+\.ts)/.exec(heavy?.[1] ?? '')?.[1] ?? ''
 
   it('has a real heavy suite to drive', () => {

@@ -235,6 +235,7 @@
     "verify:offline": "tsx scripts/verify/offline.ts",
     "verify:design": "tsx scripts/verify/design.ts",
     "gate": "tsx scripts/e2e.ts --gate",
+    "gate:safe": "tsx scripts/gate-safe.ts",
     "deploy:hq-page": "tsx scripts/deploy/hq-page-delta.ts",
     "verify:run1-live": "tsx scripts/verify/run1-live.ts",
     "verify:run2-live": "tsx scripts/verify/run2-live.ts",

@@ -4,11 +4,30 @@
     "verify:sample-settings",
     "verify:sample-tool-requests",
     "verify:account-lifecycle",
-    "verify:account-ui"
+    "verify:account-ui",
+    "verify:incidents",
+    "verify:named-project"
   ],
-  "smoke": ["verify:pulse", "verify:wrappers", "verify:schema", "verify:ui"],
-  "local": [],
+  "smoke": [
+    "verify:pulse",
+    "verify:wrappers",
+    "verify:schema",
+    "verify:ui",
+    "verify:hq",
+    "verify:talk"
+  ],
+  "local": ["verify:basecamp-project-turn"],
   "scripts": {
+    "scripts/sample/dock-contract.ts": "sample",
+    "scripts/sample/labels.ts": "sample",
+    "scripts/sample/lesson.ts": "sample",
+    "scripts/sample/notice-link.ts": "sample",
+    "scripts/sample/chat.ts": "sample",
+    "scripts/verify/incidents.ts": "sample",
+    "scripts/verify/named-project.ts": "sample",
+    "scripts/verify/hq.ts": "smoke",
+    "scripts/verify/talk.ts": "smoke",
+    "scripts/verify/basecamp-project-turn.ts": "local",
     "scripts/sample/settings-live.ts": "sample",
     "scripts/sample/tool-requests-live.ts": "sample",
     "scripts/sample/settings-shots-live.ts": "sample",

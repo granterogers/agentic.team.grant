@@ -84,6 +84,11 @@ const post = async (
   grants (0618) - so this suite, which restores what it changes, calls the function directly, as the
   operator, naming the person. It tests the POLICY (a per-staff grant is not a second place that can say
   yes), which is what these checks are about; the door in front of it is tested elsewhere.
+
+  ON THE TEST OFFICE, NEVER GRANT'S (#414). This used to name `app.owner_office('grant')`, so every run revoked and
+  re-granted a tool on his REAL growth director's sheet, in the real office, while reading the team payload from the test
+  office - two different offices in one check. The office key is a machine and resolves to the test office (above); the press
+  and the permission reads below now name that same office, and the suite puts the grant back EXACTLY as it found it.
 */
 const asPerson = async (
   action: 'staff_tool_set',
@@ -92,7 +97,7 @@ const asPerson = async (
   void action
   const q = (v: string) => `'${v.replace(/'/g, "''")}'`
   const { rows } = await db.execute(
-    `select app.hq_staff_tool_set(app.owner_office('grant'), ${q(args.p_slug)}, ${q(args.p_tool)}, ${String(args.p_granted)}, 'grant')::text as r`,
+    `select app.hq_staff_tool_set(app.test_office(), ${q(args.p_slug)}, ${q(args.p_tool)}, ${String(args.p_granted)}, 'verify:hq')::text as r`,
   )
   return { status: 200, body: String((rows[0] as { r: unknown }).r) }
 }
@@ -569,7 +574,7 @@ record(
 const stillBlocked = String(
   (
     await db.execute(
-      `select app.staff_may_use(app.operator_office(),'growth-director', 'gmail.send')::text as v`,
+      `select app.staff_may_use(app.test_office(),'growth-director', 'gmail.send')::text as v`,
     )
   ).rows[0]?.v ?? 'x',
 )
@@ -592,6 +597,14 @@ record(
   enabled, delivered, and one growth-director already holds — so the revoke and
   the restore both put the roster back exactly where they found it.
 */
+const heldBefore =
+  String(
+    (
+      await db.execute(
+        `select app.staff_may_use(app.test_office(),'growth-director', 'notebook.read')::text as v`,
+      )
+    ).rows[0]?.v ?? 'x',
+  ) === 'true'
 await asPerson('staff_tool_set', {
   p_slug: 'growth-director',
   p_tool: 'notebook.read',
@@ -600,7 +613,7 @@ await asPerson('staff_tool_set', {
 const revoked = String(
   (
     await db.execute(
-      `select app.staff_may_use(app.operator_office(),'growth-director', 'notebook.read')::text as v`,
+      `select app.staff_may_use(app.test_office(),'growth-director', 'notebook.read')::text as v`,
     )
   ).rows[0]?.v ?? 'x',
 )
@@ -612,10 +625,18 @@ await asPerson('staff_tool_set', {
 const restored = String(
   (
     await db.execute(
-      `select app.staff_may_use(app.operator_office(),'growth-director', 'notebook.read')::text as v`,
+      `select app.staff_may_use(app.test_office(),'growth-director', 'notebook.read')::text as v`,
     )
   ).rows[0]?.v ?? 'x',
 )
+// Put it back EXACTLY as found: the control above leaves the tool granted, which is only the original state if it was held.
+if (!heldBefore) {
+  await asPerson('staff_tool_set', {
+    p_slug: 'growth-director',
+    p_tool: 'notebook.read',
+    p_granted: false,
+  })
+}
 record(
   'CONTROL: an allowed tool revokes and re-grants, so the refusal above discriminates',
   `revoked=${revoked} restored=${restored}`,
