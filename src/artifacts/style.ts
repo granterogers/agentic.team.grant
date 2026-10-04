@@ -178,7 +178,16 @@ export function resolveTheme(profile: StyleProfile | null | undefined): Resolved
   if (profile.logo_document_id !== undefined)
     unapplied.push('the logo was not drawn: this renderer cannot embed an image yet')
 
-  const T = DEFAULT_THEME.type
+  const compact = profile.formatting?.density === 'compact'
+  const T = compact
+    ? {
+        ...DEFAULT_THEME.type,
+        body: { ...DEFAULT_THEME.type.body, lead: 14, size: 10 },
+        lead: { ...DEFAULT_THEME.type.lead, lead: 16.5, size: 11.5 },
+        quote: { ...DEFAULT_THEME.type.quote, lead: 14.5, size: 10.5 },
+        tableCell: { ...DEFAULT_THEME.type.tableCell, lead: 12, size: 8.5 },
+      }
+    : DEFAULT_THEME.type
   const theme: Theme = {
     accent,
     ink,

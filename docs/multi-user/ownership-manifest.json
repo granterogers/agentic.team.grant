@@ -508,6 +508,18 @@
         }
       ]
     },
+    "document_provenance": {
+      "class": "OFFICE_CARRIER",
+      "why": "How a made document was made - the house style hash, the design and the cited sources (0940); written once by app.document_provenance_record under the verified office, read by app.document_provenance_of.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_provenance_document_id_fkey"
+        }
+      ]
+    },
     "channel_link_challenges": {
       "class": "OFFICE_CARRIER",
       "why": "A person's one-time request to connect their own messaging identity; it has no parent row that decides its owner, so it records the office itself, from the verified session.",
