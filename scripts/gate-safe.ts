@@ -78,6 +78,10 @@ const LOCAL: readonly Step[] = [
     why: 'the file reader over REAL PDFs against pdftotext: 90% word recall, and a decline is reported, never counted as a pass (#419)',
   },
   {
+    name: 'check:tokens',
+    why: 'every var(--token) names a token some stylesheet defines (component scopes such as #settings count for their own file only)',
+  },
+  {
     name: 'verify:file-text-docx',
     why: 'a Word file from a REAL producer (docx-js), over 50,000 characters: every sentinel, the table cell and the last paragraph come back (#419)',
   },
