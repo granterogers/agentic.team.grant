@@ -69,6 +69,36 @@ describe('retrieval is asked of the office, in the statement that fetches', () =
     expect(sql).toContain(`d.office_id = ${BY_JOB}`)
   })
 
+  it("the passages of what was found are the office's too, and only the found documents are asked about (#419)", async () => {
+    const DOC = '55555555-5555-4555-8555-555555555555'
+    const seen: string[] = []
+    const db = {
+      execute: async (sql: string) => {
+        seen.push(sql.replace(/\s+/g, ' '))
+        if (sql.includes('app.search_documents'))
+          return {
+            rows: [
+              {
+                document_id: DOC,
+                title: 'T',
+                connector: null,
+                origin: 'yours',
+                rank: 1,
+                excerpt: 'head',
+              },
+            ],
+          }
+        return { rows: [] }
+      },
+    } as unknown as SqlExecutor
+    const hits = await retrieve(db, { jobId: JOB }, 'pricing', PROJECT, 5)
+    const passages = seen.filter((s) => s.includes('app.best_chunks('))
+    expect(passages).toHaveLength(1)
+    expect(passages[0]).toContain(`app.best_chunks(${BY_JOB}, array['${DOC}'::uuid]`)
+    // no passage was cut for it, so what the model reads is the head, as before
+    expect(hits[0]?.excerpt).toBe('head')
+  })
+
   it("a retrieval with no project is bounded by the office's own Unnamed, not by every project", async () => {
     const { db, seen } = recorder()
     await retrieve(db, { officeId: OFFICE }, 'pricing', null, 5)

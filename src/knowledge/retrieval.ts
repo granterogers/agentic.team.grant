@@ -62,6 +62,8 @@ export interface Hit {
   readonly origin: string
   readonly rank: number
   readonly excerpt: string
+  /** Which passages of a long document the excerpt is, when it is not the head (#419). */
+  readonly passage?: Passage
   /**
    * Where the source sits relative to the project the question was asked in (decision 6). Absent means the project
    * itself, which is what every caller before cross-project retrieval got and still gets.
@@ -144,23 +146,87 @@ async function searchProject(
       from app.search_documents(${officeOf(office)}, ${lit(query)}, ${projectId === null ? `app.unnamed_project(${officeOf(office)})` : `${lit(projectId)}::uuid`}, ${String(limit)}, ${lit(match)}) s
       join public.documents d on d.document_id = s.document_id and d.office_id = ${officeOf(office)}
   `)
-  return (
-    rows as {
-      document_id: string
-      title: string
-      connector: string | null
-      origin: string
-      rank: number
-      excerpt: string
-    }[]
-  ).map((r) => ({
-    documentId: r.document_id,
-    title: r.title,
-    connector: r.connector,
-    origin: r.origin,
-    rank: Number(r.rank),
-    excerpt: r.excerpt,
-  }))
+  const found = rows as {
+    document_id: string
+    title: string
+    connector: string | null
+    origin: string
+    rank: number
+    excerpt: string
+  }[]
+  const passages = await bestPassages(
+    db,
+    office,
+    query,
+    found.map((r) => r.document_id).filter((id) => typeof id === 'string'),
+  )
+  return found.map((r) => {
+    const own = passages.get(r.document_id)
+    return {
+      documentId: r.document_id,
+      title: r.title,
+      connector: r.connector,
+      origin: r.origin,
+      rank: Number(r.rank),
+      // The passages that best match the question, in the order they sit in the document; the head of the document only
+      // when none was cut (a document not yet read, or one the question matched by title alone).
+      excerpt: own === undefined ? r.excerpt : own.map((p) => p.body).join(PASSAGE_JOIN),
+      ...(own === undefined
+        ? {}
+        : {
+            passage: {
+              seqs: own.map((p) => p.seq),
+              of: own[0]?.total ?? 0,
+              startChars: own.map((p) => p.startChar),
+            },
+          }),
+    }
+  })
+}
+
+/** Where, in a long document, the excerpt a model was shown was cut from (#419). Absent: the head of the document. */
+export interface Passage {
+  readonly seqs: readonly number[]
+  /** How many passages the document holds in all. */
+  readonly of: number
+  readonly startChars: readonly number[]
+}
+
+/** Between two passages of one document, so a reader can see the text was not continuous. */
+export const PASSAGE_JOIN = '\n[...]\n'
+/** Passages shown per document: the best two, so a fact near a boundary and its context both arrive. */
+const PASSAGES_PER_DOCUMENT = 2
+
+async function bestPassages(
+  db: SqlExecutor,
+  office: RetrievalOffice,
+  query: string,
+  documentIds: readonly string[],
+): Promise<Map<string, { seq: number; total: number; startChar: number; body: string }[]>> {
+  const out = new Map<string, { seq: number; total: number; startChar: number; body: string }[]>()
+  if (documentIds.length === 0) return out
+  const { rows } = await db.execute(`
+    select b.document_id::text as document_id, b.seq, b.total, b.start_char, b.body
+      from app.best_chunks(${officeOf(office)}, array[${documentIds.map((d) => `${lit(d)}::uuid`).join(',')}],
+                           ${lit(query)}, ${String(PASSAGES_PER_DOCUMENT)}) b
+     order by b.document_id, b.seq`)
+  for (const r of rows as {
+    document_id: string
+    seq: number
+    total: number
+    start_char: number
+    body: string
+  }[]) {
+    const list = out.get(r.document_id) ?? []
+    list.push({
+      seq: Number(r.seq),
+      total: Number(r.total),
+      startChar: Number(r.start_char),
+      body: r.body,
+    })
+    out.set(r.document_id, list)
+  }
+  return out
 }
 
 /** How many sources another project may add to one question. Relevant and intentional, never a dump. */
@@ -331,6 +397,14 @@ export const whereFrom = (hit: Hit): string =>
       ? ' - account-level material, not from this project'
       : ''
 
+/** Which parts of a long document the excerpt is, said where the model reads it; empty for a short one read whole. */
+export const wherein = (hit: Hit): string => {
+  const p = hit.passage
+  if (p === undefined || p.of <= 1) return ''
+  const parts = p.seqs.map((s) => String(s + 1)).join(' and ')
+  return ` - part${p.seqs.length === 1 ? '' : 's'} ${parts} of ${String(p.of)}`
+}
+
 export function contextBlock(hits: readonly Hit[], budget = CONTEXT_CHARS): string {
   if (hits.length === 0) return ''
   const mine: string[] = []
@@ -339,7 +413,7 @@ export function contextBlock(hits: readonly Hit[], budget = CONTEXT_CHARS): stri
   let dropped = 0
 
   for (const [index, hit] of hits.entries()) {
-    const header = `[${String(index + 1)}] ${hit.title} (${hit.connector})${whereFrom(hit)}\n`
+    const header = `[${String(index + 1)}] ${hit.title} (${hit.connector})${whereFrom(hit)}${wherein(hit)}\n`
     const piece = `${header}${hit.excerpt.trim()}\n`
     if (used + piece.length > budget) {
       dropped += 1
