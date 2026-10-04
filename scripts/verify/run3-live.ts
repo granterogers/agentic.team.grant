@@ -39,6 +39,10 @@ const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Reco
 const run = Date.now().toString(36)
 const origins = await testOrigins(db, 'verify:run3-live')
 const key = await officeKey(db)
+// The office these refusal probes aim at is the SAMPLE's, never Grant's (#414): a regression in a refusal would then change
+// the Sample (reset-able) and not a real person's office. The properties are the same; only the victim moved.
+const VICTIM = String((await one(`select app.owner_office('p4-second-person')::text as o`)).o ?? '')
+if (VICTIM === '') throw new Error("the Sample office is not available as the probes' target")
 
 const gateway = async (auth: string | null, action: string, args: Record<string, unknown>) => {
   const r = await fetch(`${base}/hq-api`, {
@@ -252,7 +256,7 @@ try {
     const held = Number(
       (
         await one(
-          `select count(*)::int as n from public.staff_tools where staff_slug = 'chief-of-staff' and tool = 'db.read' and office_id = app.operator_office()`,
+          `select count(*)::int as n from public.staff_tools where staff_slug = 'chief-of-staff' and tool = 'db.read' and office_id = ${lit(VICTIM)}::uuid`,
         )
       ).n,
     )
@@ -267,7 +271,7 @@ try {
       `held ${String(held)}`,
     )
     const q = await one(`select blocker_id::text as id from public.blockers b
-      where b.state = 'open' and b.office_id = app.operator_office() and not app.harness_job(b.job_id) order by b.created_at desc limit 1`)
+      where b.state = 'open' and b.office_id = ${lit(VICTIM)}::uuid order by b.created_at desc limit 1`)
     if (q?.id) {
       const r = await gateway(test.access, 'answer_blocker', {
         p_blocker_id: String(q.id),
@@ -298,7 +302,7 @@ try {
       const r = json(
         (
           await one(
-            `select public.hq_autonomy_set(app.owner_office('grant'), 'act', null, 'run3 live', ${by})::text as r`,
+            `select public.hq_autonomy_set(${lit(VICTIM)}::uuid, 'act', null, 'run3 live', ${by})::text as r`,
           )
         ).r,
       )

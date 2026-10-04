@@ -31,7 +31,8 @@ const SKIP_FINGERPRINT = process.argv.includes('--skip-fingerprint')
 //   --part=production   health, fingerprints, and the Sample / test-office suites
 //   --part=identity     health, fingerprints, and the suites that drive who a delivery or a Telegram user belongs to
 // With none, all three run in order.
-const PART = /--part=(static|production|identity)/.exec(process.argv.join(' '))?.[1] ?? 'all'
+//   --part=ops          health, fingerprints, and the operational suites converted off Grant's office (#414)
+const PART = /--part=(static|production|identity|ops)/.exec(process.argv.join(' '))?.[1] ?? 'all'
 const out = '.out/gate-safe'
 mkdirSync(out, { recursive: true })
 
@@ -113,6 +114,25 @@ const IDENTITY: readonly Step[] = [
   },
 ]
 
+const OPS: readonly Step[] = [
+  {
+    name: 'verify:run3-live',
+    why: 'the doors refuse what they must; the probes aim at the Sample, never Grant (#414)',
+  },
+  {
+    name: 'verify:drains',
+    why: 'a stuck queue turns the suite red; injected jobs are the Sample’s and rolled back (#414)',
+  },
+  {
+    name: 'verify:dryrun',
+    why: 'what a write-capable handler says it would do; plan read from the Sample (#414)',
+  },
+  {
+    name: 'verify:proposes',
+    why: 'recurring impediments become proposals; test office only (#414)',
+  },
+]
+
 const results: { name: string; ok: boolean; seconds: number }[] = []
 const run = (step: Step, n: number): boolean => {
   const started = Date.now()
@@ -171,7 +191,13 @@ if (healthy && PART !== 'static') {
       ++n,
     )
   const chosen =
-    PART === 'identity' ? IDENTITY : PART === 'production' ? SAMPLE : [...SAMPLE, ...IDENTITY]
+    PART === 'identity'
+      ? IDENTITY
+      : PART === 'ops'
+        ? OPS
+        : PART === 'production'
+          ? SAMPLE
+          : [...SAMPLE, ...IDENTITY, ...OPS]
   for (const s of chosen) run(s, ++n)
   if (!SKIP_FINGERPRINT && fingerprinted) {
     run(

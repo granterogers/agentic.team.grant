@@ -55,6 +55,21 @@ count moved, which is the quarantine office doing its job). The marker count had
 spender; reading the file finds no dequeue, no job run and no provider call, so it makes none (the cause of the
 miscount was not established).
 
+**CONVERTED on 4 October, run 2 (class `sample`, in `gate:safe --part=ops`; Grant and every other office fingerprinted
+before and after, unchanged):** `verify:run3-live` (26/26; its refusal probes now aim at the SAMPLE as the victim, so a
+regression in a refusal would change the Sample and not Grant), `verify:drains` (8/8), `verify:dryrun` (25/25),
+`verify:proposes` (26/26, test office). Two of them were RED and nobody knew: `verify:drains` injected jobs with no
+`office_id` (NOT NULL since the office model), so its three controls could not run, and `verify:backups` did the same in its
+pager section and also assumed a real restore rehearsal was recent (it was 13 days old on 4 October, which is correctly
+overdue and has raised a real chore). Both repaired: injected rows carry an office (the Sample's, rolled back; the system
+office for deployment-level backup jobs), and the healthy threshold is moved far past any real age rather than assumed.
+`verify:backups` (now green, 28 checks) stays `production-heavy` on purpose: backups and their pager are deployment-level and
+its drives write chores for each operator office, always inside a statement that ends in a rollback and asserted not to
+have changed anything; it is not in `gate:safe`.
+**A real finding from it:** the last restore rehearsal that passed was 21 September, so the backup chore "Prove the
+backup can still be restored" is open on Grant's list and correct. `npm run backup:rehearse` restores the newest archive
+into a scratch schema (heavy; not run here).
+
 **Still names an operator or Grant office reach (convert next, in this order):** `check:leaks` (6; read-only, it reads
 Grant's deliveries to prove nothing escaped, which is its job), `verify:run3-live` (3), `verify:proposes`,
 `verify:backups`, `verify:dryrun`, `verify:drains`, `check:standing`, `check:believes`, `verify:run2-live` (1 each;

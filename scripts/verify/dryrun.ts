@@ -542,7 +542,9 @@ console.log(
   planner's whole job is to shape its answer -- so exercising it here covers the
   half the switched-off branch skips, with no write and no toggle.
 */
-const sqlPlan = (await one('select app.calendar_task_plan(app.operator_office()) as p')).p as {
+const sqlPlan = (
+  await one("select app.calendar_task_plan(app.owner_office('p4-second-person')) as p")
+).p as {
   create?: unknown[]
   update?: unknown[]
   remove?: unknown[]

@@ -10,7 +10,11 @@
     "verify:delivery-office",
     "verify:history",
     "verify:channel-link",
-    "verify:connectors"
+    "verify:connectors",
+    "verify:run3-live",
+    "verify:drains",
+    "verify:dryrun",
+    "verify:proposes"
   ],
   "smoke": ["verify:pulse", "verify:wrappers", "verify:schema", "verify:ui", "verify:hq"],
   "local": ["verify:basecamp-project-turn", "verify:talk"],
@@ -29,6 +33,10 @@
     "scripts/verify/history.ts": "sample",
     "scripts/verify/channel-link.ts": "sample",
     "scripts/verify/connectors.ts": "sample",
+    "scripts/verify/run3-live.ts": "sample",
+    "scripts/verify/drains.ts": "sample",
+    "scripts/verify/dryrun.ts": "sample",
+    "scripts/verify/proposes.ts": "sample",
     "scripts/verify/hq.ts": "smoke",
     "scripts/verify/talk.ts": "local",
     "scripts/verify/basecamp-project-turn.ts": "local",

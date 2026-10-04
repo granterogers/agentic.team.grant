@@ -144,7 +144,9 @@ begin
   select count(*) into open2 from public.tasks
    where chore_key = 'backup:unproven' and state <> 'done';
 
-  update public.system_config set value = '192'::jsonb
+  -- Healthy by moving the threshold far past any real age, not by assuming the real rehearsal is recent: it was 13 days
+  -- old on 4 October, which is genuinely overdue, and a drive that restored the usual 192 would then still read overdue.
+  update public.system_config set value = '1000000'::jsonb
    where key = 'backup.rehearsal_max_age_hours';
   r3 := app.chores_for_backups();
 
@@ -161,6 +163,11 @@ begin
 end
 $drive$;`
 
+// What the live duty has legitimately raised already (a real overdue rehearsal is a real chore): the drive may not change it.
+const choresBefore = Number(
+  (await one(`select count(*)::int as n from public.tasks where chore_key like 'backup:%'`)).n ??
+    -1,
+)
 let said = ''
 try {
   await db.execute(DRIVE)
@@ -178,7 +185,11 @@ check(
 const debris = await one(
   `select count(*)::int as n from public.tasks where chore_key like 'backup:%'`,
 )
-check(Number(debris.n ?? -1) === 0, 'the drive left no chore behind', `${String(debris.n)} task(s)`)
+check(
+  Number(debris.n ?? -1) === choresBefore && choresBefore >= 0,
+  'the drive left no chore behind',
+  `${String(debris.n)} task(s), ${String(choresBefore)} before`,
+)
 
 const threshold = await one(
   `select value::text as v from public.system_config where key = 'backup.rehearsal_max_age_hours'`,
@@ -312,10 +323,10 @@ begin
 
   -- 1. HARNESS NEVER PAGES. Excluded by app.harness_job, which since 0541
   --    includes the immutable synthetic mark.
-  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+  insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by,
                            attempt, max_attempts, state, state_reason,
                            created_at, finished_at, synthetic)
-  values (gen_random_uuid(), 'pager-probe-harness', 'office.backup',
+  values (app.system_office(), gen_random_uuid(), 'pager-probe-harness', 'office.backup',
           'verify:backups', 5, 5, 'failed', 'a harness backup that failed',
           now() + interval '1 minute', now() + interval '1 minute', true)
   returning job_id into jh;
@@ -327,15 +338,15 @@ begin
     raise exception 'PAGER-FAIL a harness failure enqueued an HTTP request'; end if;
 
   -- 2. RECOVERY. A real failure that a later backup made good must not page.
-  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+  insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by,
                            attempt, max_attempts, state, state_reason, created_at, finished_at)
-  values (gen_random_uuid(), 'pager-probe-recovered', 'office.backup',
+  values (app.system_office(), gen_random_uuid(), 'pager-probe-recovered', 'office.backup',
           'duty:nightly-backup', 5, 5, 'failed', 'failed, but the next one worked',
           now() + interval '2 minutes', now() + interval '2 minutes')
   returning job_id into jr;
-  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+  insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by,
                            state, created_at, finished_at)
-  values (gen_random_uuid(), 'pager-probe-success', 'office.backup',
+  values (app.system_office(), gen_random_uuid(), 'pager-probe-success', 'office.backup',
           'duty:nightly-backup', 'complete',
           now() + interval '3 minutes', now() + interval '3 minutes')
   returning job_id into jok;
@@ -346,9 +357,9 @@ begin
     raise exception 'PAGER-FAIL a recovered failure enqueued an HTTP request'; end if;
 
   -- 3. THE REAL THING. A terminal failure nothing has made good since.
-  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+  insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by,
                            attempt, max_attempts, state, state_reason, created_at, finished_at)
-  values (gen_random_uuid(), 'pager-probe-terminal', 'office.backup',
+  values (app.system_office(), gen_random_uuid(), 'pager-probe-terminal', 'office.backup',
           'duty:nightly-backup', 5, 5, 'failed',
           'recovery: 5 attempts exhausted while in running',
           now() + interval '4 minutes', now() + interval '4 minutes')
@@ -382,9 +393,9 @@ begin
     raise exception 'PAGER-FAIL a second request was enqueued (% -> %)', q1, q2; end if;
 
   -- 5. NO STORM. A different failed night inside the cooldown.
-  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+  insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by,
                            attempt, max_attempts, state, state_reason, created_at, finished_at)
-  values (gen_random_uuid(), 'pager-probe-second', 'office.backup',
+  values (app.system_office(), gen_random_uuid(), 'pager-probe-second', 'office.backup',
           'duty:nightly-backup', 5, 5, 'failed', 'another night, also failed',
           now() + interval '5 minutes', now() + interval '5 minutes')
   returning job_id into j2;
