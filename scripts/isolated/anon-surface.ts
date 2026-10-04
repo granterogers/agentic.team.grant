@@ -85,23 +85,43 @@ check(
   fns.every((f) => f.service),
   `${String(fns.filter((f) => !f.service).length)} it cannot`,
 )
-const ai =
-  await one(`select count(*) filter (where has_function_privilege('ai_team_app', p.oid, 'execute'))::int as n,
-                             count(*)::int as t
-                        from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f','p')`)
-check(
-  'the office role keeps what it had (it reaches every public function it did before)',
-  // 197+, not 201: 0614 and 0615 recreated wrappers that only the gateway (service_role) calls.
-  Number(ai.n) >= 190,
-  `${String(ai.n)} of ${String(ai.t)}`,
+/*
+  The contract for ai_team_app, from the architecture as it runs (docs/multi-user/ARCHITECTURE.md, decision 6): it is a
+  NOLOGIN role with no password that nothing connects as, kept so a row policy has a name and a suite can prove what a
+  non-bypass role is refused. The gateway and the worker are service_role and postgres. So it reaches NO public
+  function (0895); it was not an old count to preserve, it was 37 grants nobody used, writers of a secret, a setting,
+  the roster and a deletion among them. When it becomes a real login its grants are an allow-list with reasons.
+*/
+const reach = `select count(*)::int as n from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind in ('f','p') and has_function_privilege('ai_team_app', p.oid, 'execute')`
+const aiReach = Number((await one(reach)).n)
+check('the server role reaches no public function', aiReach === 0, `${String(aiReach)} reachable`)
+const aiRole = await one(
+  `select r.rolcanlogin as login, r.rolbypassrls as bypass, a.rolpassword is not null as pw from pg_roles r join pg_authid a on a.oid = r.oid where r.rolname = 'ai_team_app'`,
 )
+check(
+  'and it is NOLOGIN, passwordless and does not bypass row security (nothing connects as it)',
+  aiRole.login === false && aiRole.bypass === false && aiRole.pw === false,
+  JSON.stringify(aiRole),
+)
+{
+  // The detector can fail: grant one door, watch it count, take it back.
+  await db.execute(`grant execute on function public.free_tier_headroom() to ai_team_app`)
+  const seen = Number((await one(reach)).n)
+  await db.execute(`revoke all on function public.free_tier_headroom() from ai_team_app`)
+  const back = Number((await one(reach)).n)
+  check(
+    'SABOTAGE: one grant to the role is counted, and counted out again once revoked',
+    seen === 1 && back === 0,
+    `granted ${String(seen)}, revoked ${String(back)}`,
+  )
+}
 const asOffice = await asRole('ai_team_app', `select app.now_utc()`)
-check('the office role can still call an app function', asOffice === '', asOffice.slice(0, 90))
+check('the server role can still call an app function', asOffice === '', asOffice.slice(0, 90))
 const asOfficePublic = await asRole('ai_team_app', `select public.free_tier_headroom()`)
 check(
-  'the office role can still call a public wrapper',
-  asOfficePublic === '',
-  asOfficePublic.slice(0, 90),
+  'but a public wrapper is refused to it, for the right reason',
+  /permission denied for function/i.test(asOfficePublic),
+  asOfficePublic === '' ? 'IT RAN' : asOfficePublic.slice(0, 90),
 )
 const asService = await asRole('service_role', `select public.free_tier_headroom()`)
 check('the service role can call a public wrapper', asService === '', asService.slice(0, 90))
