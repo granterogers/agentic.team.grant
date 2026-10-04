@@ -688,6 +688,23 @@ const SECTIONS: Readonly<
   plane: { fn: 'studio_plane', office: true, arg: 'p_project_id' },
   plane_layout: { fn: 'hq_plane_layout', office: true, arg: 'p_project_id' },
   project_team: { fn: 'project_team', office: true, arg: 'p_project_id' },
+  /*
+    A project's calendar (0897): its own events plus the Google events filed under it (scope=project), every project's
+    (scope=all), or the whole Google cache including what no project has claimed (scope=google).
+    ?project=<slug> (or ?p_slug=) names the project and is needed only for scope=project; ?from= and ?to= bound the window
+    (dates or timestamps; the function refuses a bad one, a window over 400 days, and an unknown scope by name).
+  */
+  project_events: {
+    fn: 'hq_project_events',
+    office: true,
+    also: [
+      { param: 'project', arg: 'p_slug' },
+      { param: 'p_slug', arg: 'p_slug' },
+      { param: 'from', arg: 'p_from' },
+      { param: 'to', arg: 'p_to' },
+      { param: 'scope', arg: 'p_scope', values: ['project', 'all', 'google'] },
+    ],
+  },
   project_automations: { fn: 'project_automations', office: true, arg: 'p_project_id' },
   /*
     The whole project, as the neutral package §13 names.
@@ -1058,6 +1075,30 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     rather than a position per document, so "the order he chose" and "the order
     they arrived in" stay two different facts.
   */
+  /*
+    A project's calendar (0897). A person's own acts: none is in SERVICE_MAY, so the office key (a machine) is refused.
+    The channel the act came from rides in `p_channel` (default teamhq) and is kept on the event and in Activity.
+    Google follows by itself: the calendar.sync_events duty pushes what is pending, and an agent's proposal asks the
+    approval policy first. Deleting an event already in Google tombstones it until the deletion has reached Google.
+  */
+  event_add: {
+    fn: 'hq_event_add',
+    office: true,
+    required: ['p_slug', 'p_title', 'p_starts_at'],
+  },
+  event_update: { fn: 'hq_event_update', office: true, required: ['p_event'] },
+  event_delete: { fn: 'hq_event_delete', office: true, required: ['p_event'] },
+  // Filing an EXISTING Google event under a project; the event stays Google's.
+  event_assign: {
+    fn: 'hq_event_assign',
+    office: true,
+    required: ['p_calendar_id', 'p_event_id', 'p_slug'],
+  },
+  event_unassign: {
+    fn: 'hq_event_unassign',
+    office: true,
+    required: ['p_calendar_id', 'p_event_id'],
+  },
   document_order_set: { fn: 'hq_document_order_set', office: true, required: ['p_slug', 'p_ids'] },
   document_order_reset: { fn: 'hq_document_order_reset', office: true, required: ['p_slug'] },
   dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', office: true, required: ['p_slug'] },
