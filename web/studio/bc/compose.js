@@ -418,6 +418,7 @@ const head = (p, extra = '') => {
               opened a panel to do what the page does.
             -->
             <button type="button" role="menuitem" data-bc-look="1">How this project looks</button>
+            <button type="button" role="menuitem" data-bc-style="1">Document style</button>
             <button type="button" role="menuitem" data-bc-expand="team">The team</button>
             <button type="button" role="menuitem" data-bc-sources="1">Sources</button>
             <button type="button" role="menuitem" data-bc-go="${esc(at(`/p/${p.slug}/settings`))}">Project settings</button>

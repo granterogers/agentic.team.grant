@@ -36,6 +36,7 @@ import {
 import * as compose from './compose.js'
 import * as cal from './calendar.js'
 import * as docview from './docview.js'
+import * as styleForm from './style.js'
 import * as expand from './expand.js'
 import { wireStage } from './stage.js'
 import * as contacts from './contacts.js'
@@ -1918,6 +1919,13 @@ const wirePageMenu = (root) => {
     expanded view rather than a page, which is the specification's rule for
     every expanded thing now.
   */
+  for (const b of root.querySelectorAll('[data-bc-style]')) {
+    b.addEventListener('click', () => {
+      shut()
+      const p = ctx.projects().find((q) => q.slug === ctx.state.project)
+      if (p !== undefined) void styleForm.open(p)
+    })
+  }
   for (const b of root.querySelectorAll('[data-bc-sources]')) {
     b.addEventListener('click', () => {
       shut()
