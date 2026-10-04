@@ -125,11 +125,17 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
     CLAUDE.md records what a separate grip costs: eighteen buttons inside a
     drag handle that looked fine and did nothing.
   */
+  /*
+    A PLACED MODULE IS A RECTANGLE IN LOGICAL PIXELS on a freeform stage
+    (4 October): left, top, width, height and a stacking order, plus an
+    optional tint hue. Nothing about the grid survives here.
+  */
+  const hue = rect === null ? '' : grid.tintHue(rect.tint)
   const style =
     rect === null
       ? ''
-      : ` style="grid-column:${String(rect.x + 1)}/span ${String(rect.w)};grid-row:${String(rect.y + 1)}/span ${String(rect.h)}"`
-  return `<section class="bcmod${wide ? ' bcmod--wide' : ''}${rect === null ? '' : ' bcmod--placed'}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}"${style}>
+      : ` style="left:${String(rect.x)}px;top:${String(rect.y)}px;width:${String(rect.w)}px;height:${String(rect.h)}px;z-index:${String(rect.z ?? 1)}${hue === '' ? '' : `;--bc-tint:${hue}`}"`
+  return `<section class="bcmod${wide ? ' bcmod--wide' : ''}${rect === null ? '' : ' bcmod--placed'}${hue === '' ? '' : ' bcmod--tinted'}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}"${style}>
     <!--
       THE HEADER IS STILL THE WHOLE POINTER TARGET (Grant, 22 September), but
       it is no longer pretending to be one button. As role=button it held
@@ -155,6 +161,20 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
         rect === null
           ? ''
           : `<span class="bcmodctl">
+              <button type="button" class="bcmodbtn" data-bc-tint="${esc(id)}"
+                aria-label="${esc(`Colour of ${name}`)}" aria-haspopup="true" title="Colour">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"></circle>
+                </svg>
+              </button>
+              <button type="button" class="bcmodbtn" data-bc-max="${esc(id)}"
+                aria-label="${esc(`Maximise ${name}`)}" title="Maximise">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"></path>
+                </svg>
+              </button>
               <button type="button" class="bcmodbtn" data-bc-modoff="${esc(id)}"
                 aria-label="${esc(`Take ${name} off this page`)}" title="Take it off this page">
                 <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none"
@@ -176,8 +196,8 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
           */
           `<span class="bcresize" data-bc-resize="${esc(id)}" role="separator"
             aria-label="${esc(`Resize ${name}`)}" tabindex="0" aria-orientation="vertical"
-            aria-valuemin="1" aria-valuemax="12" aria-valuenow="${esc(String(rect.w))}"
-            aria-valuetext="${esc(`${String(rect.w)} of 12 columns wide`)}">
+            aria-valuemin="${String(grid.MIN.w)}" aria-valuemax="1600" aria-valuenow="${esc(String(rect.w))}"
+            aria-valuetext="${esc(`${String(rect.w)} pixels wide`)}">
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none"
               stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
               <path d="M13 6L6 13M13 10.5l-2.5 2.5"></path>
@@ -280,7 +300,7 @@ export const setPageMenuOpen = (want) => {
   the two communication actions legitimately wrap onto two lines - three
   controls of 44px do not fit across 390px beside a sentence.
 */
-const head = (p) => {
+const head = (p, extra = '') => {
   return `<!--
       The page's name, for anyone navigating by headings. Grant took the
       VISIBLE title away (the top bar's chip already names the project), and
@@ -291,6 +311,7 @@ const head = (p) => {
     <header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}" data-bc-livehost>
     <div class="bcheadrow">
       ${needsYouLine(p)}
+      ${extra}
       <span class="bcheadacts">
         <!--
           CHAT WITH TEAM, and it is a TOGGLE. Grant: "Clicking it should open
@@ -493,7 +514,7 @@ const head = (p) => {
   left here is the one thing dragging cannot express - putting a module back
   after it has been taken off the page - plus the reset.
 */
-const NAMES = {
+export const NAMES = {
   tasks: 'To-dos',
   board: 'Card Table',
   documents: 'Docs & Files',
@@ -508,62 +529,78 @@ export const arrangeReset = (slug) => {
 }
 
 /*
-  PUTTING A MODULE BACK, ON THE PAGE RATHER THAN IN A MENU.
+  THE WORKSPACE DOCK.
 
-  §13: "Remove Arrange this page from project settings. The page already
-  supports direct manipulation. Do not duplicate functionality." It did: panels
-  are dragged by their headers, pulled by their corners and taken off by the
-  cross, and a menu entry opened a panel that explained all three in prose.
+  Grant, 4 October: a subtle Auto Arrange / Tidy, a Reset View, a visible
+  "- 100% +" zoom with a reset, and layouts. They live in ONE small pill at the
+  corner of the stage rather than in a header row, because the stage is the
+  thing that must keep the room. It sits OUTSIDE the scaled stage so it does not
+  shrink when somebody zooms out.
 
-  What the panel also held was the ONLY way back. The cross takes a module off
-  and nothing on the board could return it -- a one-way door, which this
-  repository has already shipped once, when choosing Panels removed the control
-  that had just been pressed. So the restoring half moves onto the page and the
-  explaining half goes: it appears only when something is actually off, sits at
-  the end of the board where the gap is, and says nothing at all when the page
-  is whole.
+  The Layouts popover (presets, saved layouts, modules that are off the page)
+  is built on demand in wire.js: it is transient, and a transient thing in the
+  markup is a thing every redraw has to remember to close.
 */
-const putBack = (p) => {
-  const off = grid.off(p.slug)
-  /*
-    THE RESET IS NOT CONDITIONAL ON SOMETHING BEING MISSING.
-
-    It was, and that was a one-way door: drag and resize six modules, remove
-    none, and this panel never appeared -- so the only control that could undo
-    any of it was unreachable precisely when nothing was wrong enough to
-    summon it. The offer now stands whenever the page differs from the shape it
-    was given, and says nothing at all when it does not.
-  */
-  const changed = grid.customised(p.slug)
-  if (off.length === 0 && !changed) return ''
-  return `<section class="bcputback" data-bc-arrange-panel aria-label="Putting this page back">
-    ${
-      off.length > 0
-        ? `<span class="bclabel">Not on this page</span>
-           <!--
-             CHIPS THAT SAY "ADD". A module's name as a bare word read as a
-             label, not as the way to bring it back.
-           -->
-           ${off
-             .map(
-               (id) => `<button type="button" class="bcbtn bcaddback" data-bc-arr-on="${esc(id)}"
-                 aria-label="${esc(`Put ${NAMES[id] ?? id} back on this page`)}">
-                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                 <span>${esc(NAMES[id] ?? id)}</span>
-               </button>`,
-             )
-             .join('')}`
-        : ''
-    }
-    ${button('Put it back the way it was', { 'data-bc-arr-reset': '1' })}
-    <!--
-      Said once, where the fear arises: taking a module off is about this
-      page, not about the work in it.
-    -->
-    <p class="bcputbacknote">Taking a module off only hides it here. Nothing in it is deleted.</p>
-  </section>`
+const dock = (p) => {
+  const z = grid.zoomOf(p.slug)
+  const ic = (d) =>
+    `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
+  return `<div class="bcdock" role="toolbar" aria-label="Workspace">
+    <button type="button" class="bcdockbtn" data-bc-newnote title="Pull out a new note">
+      ${ic('<path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/>')}<span>Note</span>
+    </button>
+    <button type="button" class="bcdockbtn" data-bc-tidy title="Lightly tidy the arrangement">
+      ${ic('<path d="M4 6h7M4 12h16M13 18h7"/>')}<span>Tidy</span>
+    </button>
+    <button type="button" class="bcdockbtn" data-bc-layouts aria-haspopup="true" aria-expanded="false" title="Layouts and presets">
+      ${ic('<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="4" rx="1"/><rect x="13" y="10" width="7" height="10" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>')}<span>Layouts</span>
+    </button>
+    <button type="button" class="bcdockbtn" data-bc-viewreset title="Reset the view. Notes and everything in the modules are kept"${grid.customised(p.slug) ? '' : ' data-quiet="1"'}>
+      ${ic('<path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/>')}<span>Reset view</span>
+    </button>
+    <span class="bczoom" role="group" aria-label="Zoom">
+      <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="out" aria-label="Zoom out">&minus;</button>
+      <button type="button" class="bcdockbtn bczoomval" data-bc-zoom="reset" aria-label="Reset zoom to 100%" title="Reset zoom">${String(Math.round(z * 100))}%</button>
+      <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="in" aria-label="Zoom in">+</button>
+    </span>
+  </div>`
 }
+
+/*
+  WHAT IS NOT ON THE PAGE, said on the page. A module taken off is a module the
+  person must be able to find the way back to without opening a menu: the
+  chips sit at the left of the dock's row, appear only when something is
+  actually off, and each one says what it will do. The same list is repeated in
+  the Layouts popover, which is where a person looks when they are arranging.
+*/
+const offChips = (p) => {
+  const off = grid.off(p.slug)
+  if (off.length === 0) return '<span class="bcoffrow" aria-hidden="true"></span>'
+  return `<span class="bcoffrow" role="group" aria-label="Not on this page">
+    <span class="bcofflabel">Not on this page</span>
+    ${off
+      .map(
+        (id) => `<button type="button" class="bcdockbtn bcoffchip" data-bc-arr-on="${esc(id)}"
+          aria-label="${esc(`Put ${NAMES[id] ?? id} back on this page`)}" title="Taking a module off only hides it. Nothing in it is deleted.">+ ${esc(NAMES[id] ?? id)}</button>`,
+      )
+      .join('')}
+  </span>`
+}
+
+/** One Post-it: a rectangle, a grip, and a text area that saves as you type. */
+export const note = (n) => `<div class="bcpostit" data-bc-note-id="${esc(n.id)}"
+    style="left:${String(n.x)}px;top:${String(n.y)}px;width:${String(n.w)}px;height:${String(n.h)}px;z-index:${String(n.z ?? 1)}">
+    <div class="bcpostitbar" data-bc-note-grip>
+      <button type="button" class="bcpostitx" data-bc-note-del="${esc(n.id)}" aria-label="Remove this note" title="Remove this note">
+        <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor"
+          stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <textarea class="bcpostittext" data-bc-note-text="${esc(n.id)}" aria-label="Note" spellcheck="true"
+      placeholder="Click and type">${esc(n.text)}</textarea>
+    <span class="bcpostitresize" data-bc-note-resize="${esc(n.id)}" aria-hidden="true"></span>
+  </div>`
 
 /* ======================================================================== *
  * A — the briefing
@@ -703,24 +740,38 @@ const boardMods = (p) => [
 
 export const compositionC = (p) => {
   /*
-    THE BOARD IS A TWELVE-COLUMN GRID and every module carries its own
-    rectangle. The order of the markup no longer decides anything, which is
-    the point: a module is where it was put.
+    THE STAGE IS MEASURED IN THE PAGE. Markup is a string and cannot know how
+    big its container is, so the first draw uses an estimate from the window and
+    wire.js re-measures and repaints the rectangles in place before the browser
+    has painted anything. Once it has measured, the real size is reused.
   */
+  const z = grid.zoomOf(p.slug)
+  if (!grid.stageMeasured() && typeof innerWidth === 'number') {
+    grid.setStage((innerWidth - 170) / z, (innerHeight - 330) / z)
+  }
+  const st = grid.stageSize()
   const place = grid.layout(p.slug)
   const by = new Map(boardMods(p).map((m) => [m.id, m]))
   return `<div class="bchome bccomp bccomp--c">
-    ${head(p)}
-    <div class="bcpanes" data-bc-board="${esc(p.slug)}"
-      style="--bc-rows:${String(place.reduce((n, m) => Math.max(n, m.y + m.h), 0))}">
-      ${place
-        .map((r) => {
-          const m = by.get(r.id)
-          return m === undefined ? '' : mod(p, { ...m, rect: r })
-        })
-        .join('')}
+    ${head(p, `<div class="bcworkbar">${offChips(p)}${dock(p)}</div>`)}
+    <div class="bcworkspace">
+    <div class="bcpanes" data-bc-board="${esc(p.slug)}" style="height:${String(Math.round(st.h * z))}px">
+      <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;transform:scale(${String(z)})">
+        ${place
+          .map((r) => {
+            const m = by.get(r.id)
+            return m === undefined ? '' : mod(p, { ...m, rect: r })
+          })
+          .join('')}
+        ${grid
+          .postits(p.slug)
+          .map((n) => note(n))
+          .join('')}
+        <div class="bcguides" aria-hidden="true"></div>
+        <button type="button" class="bcdockbtn bcphoneonly" data-bc-newnote>+ Note</button>
+      </div>
     </div>
-    ${putBack(p)}
+    </div>
   </div>`
 }
 

@@ -1,0 +1,27 @@
+import { chromium } from 'playwright'
+import { serveStudio } from './serve-studio.ts'
+
+const PORT = 4777
+const server = await serveStudio(PORT)
+const browser = await chromium.launch()
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage()
+page.on('pageerror', (e) => console.log('PAGEERROR', e.message))
+await page.goto(`http://127.0.0.1:${PORT}/`)
+await page.waitForTimeout(500)
+await page.evaluate(`document.querySelector('[data-bc-go^="/p/"]').click()`)
+await page.waitForTimeout(700)
+await page.locator('[data-mod="documents"]').hover()
+await page.locator('[data-bc-max="documents"]').click()
+await page.waitForTimeout(110)
+console.log('anims', await page.evaluate(`document.getAnimations().length`))
+await page.screenshot({ path: '.out/ux-anim-open-mid.png' })
+await page.waitForTimeout(700)
+await page.screenshot({ path: '.out/ux-anim-open-end.png' })
+await page.keyboard.press('Escape')
+await page.waitForTimeout(100)
+console.log('closing anims', await page.evaluate(`document.getAnimations().length`))
+await page.screenshot({ path: '.out/ux-anim-close-mid.png' })
+await page.waitForTimeout(600)
+console.log('overlay gone', (await page.locator('.bcexp').count()) === 0)
+await browser.close()
+server.close()

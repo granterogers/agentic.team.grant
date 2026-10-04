@@ -35,6 +35,7 @@ import * as bc from './bc/shell.js'
 import * as bcJump from './bc/jump.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
+import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
 import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
@@ -13485,7 +13486,21 @@ if (typeof window !== 'undefined') {
     */
     const path = e.state?.path ?? addressNow()
     shownPath = path
+    const was = state.bcExpanded
     goToPath(path)
+    /*
+      BACK FROM A MAXIMISED MODULE settles it back towards its card rather than
+      blinking out, exactly as the close button does. Only when the dialog
+      itself is what went away: stepping between two levels is not a close.
+    */
+    if (was && !state.bcExpanded) {
+      state.bcExpanded = was
+      bcExpand.exit(was, () => {
+        state.bcExpanded = null
+        render()
+      })
+      return
+    }
     render()
   })
 }
@@ -13530,6 +13545,7 @@ const bcContext = {
     closing return "naturally to the underlying project homepage".
   */
   openExpanded: (id) => {
+    bcExpand.remember(id)
     state.bcExpanded = id
     render()
   },
@@ -13595,8 +13611,15 @@ const bcContext = {
       render()
       return
     }
-    state.bcExpanded = null
-    render()
+    /*
+      PUT AWAY TOWARDS THE CARD it grew from, then redraw. The animation always
+      calls back, so a close can never wait on motion that does not happen.
+    */
+    const was = state.bcExpanded
+    bcExpand.exit(was, () => {
+      state.bcExpanded = null
+      render()
+    })
   },
   /*
     PROJECT SETTINGS, RENDERED AND WIRED BY ITS OWN MODULE.

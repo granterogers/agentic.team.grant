@@ -345,7 +345,7 @@ const FORBIDDEN = ['chat', 'sources']
   await page.waitForTimeout(150)
   await page.locator('[data-bc-modoff="documents"]').click()
   await page.waitForTimeout(300)
-  await page.locator('[data-bc-arr-reset]').click()
+  await page.locator('[data-bc-viewreset]').click()
   await page.waitForTimeout(300)
   check(
     'putting it back the way it was restores the default page',
