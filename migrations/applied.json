@@ -752,5 +752,7 @@
   "0881_a_person_reads_you_not_their_key.sql": "01ab51f66f2d5e3fa94846cc2eb7f4b5bd1b406708693a8d3f6ba4b5e4fbee1a",
   "0882_the_browser_card_says_what_it_does.sql": "d501a477876700c0476ee25d88aaceb9e1661346e568f097ab8130297a85394e",
   "0883_a_delivery_with_no_job_is_not_the_operators.sql": "73edb4627d7dac6f05b5bcecdb9b602d55576ae1d0ff8a43ad3f2122510957b4",
-  "0884_a_slack_channel_belongs_to_its_workspaces_office.sql": "529ae09abcc7f7acd9760854419c2460694267cffb72a0b1578d452c91ee43ae"
+  "0884_a_slack_channel_belongs_to_its_workspaces_office.sql": "529ae09abcc7f7acd9760854419c2460694267cffb72a0b1578d452c91ee43ae",
+  "0885_a_person_connects_their_own_telegram.sql": "64d77a087aa9da5501ef574c46dbf61add64e35b7257d5651760691a5cd56de8",
+  "0886_a_failed_link_can_be_answered.sql": "503a7d75681d2712754efb4a102ab817e6694bbb4be9f987ff4e81036c1af584"
 }

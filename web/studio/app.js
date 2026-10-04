@@ -6603,7 +6603,51 @@ function channelsTab() {
     return ui.row({ name: String(c.label), desc: `${String(c.says)} ${bits.join('. ')}.`, control: ui.chip(tone, CONVO_WORD[String(c.state)] ?? String(c.state)) })
   })
 
+  /*
+    CONNECTING YOUR OWN TELEGRAM (#410). Only for somebody who is not the operator: the operator's Telegram is the
+    deployment's own and has its own row above. A button, not a code to type - it opens Telegram on a link that is good
+    for ten minutes and once, and tapping Start there is the whole of it. Said nothing until the office has answered.
+  */
+  const linkSection = () => {
+    const t = config.LINK.telegram
+    if (operator || t === null || t === undefined || t.managed_by_operator === true) return ''
+    const pending = config.LINK.pending
+    const bot = t.bot ?? ''
+    let desc = ''
+    let control = ''
+    let chip = ui.chip('off', 'Not connected')
+    if (t.state === 'connected') {
+      chip = ui.chip('ok', 'Connected')
+      desc =
+        'Messages you send our Telegram bot reach your team, and their answers come back to that chat. ' +
+        (t.connected_at ? `Connected ${when.words(t.connected_at)}.` : '')
+      control = ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-link-disconnect': 'telegram' } })
+    } else if (t.state === 'waiting' || pending !== null) {
+      chip = ui.chip('warn', 'Waiting for you')
+      desc = pending
+        ? 'Open Telegram and tap Start. The link works once and for ten minutes.'
+        : 'A link was made but this page no longer has it. Start again to get a new one.'
+      control =
+        (pending ? ui.button({ label: 'Open Telegram', tone: 'primary', href: pending.url }) : '') +
+        ui.button({ label: 'Start again', tone: 'quiet', a: { 'data-link-begin': 'telegram' } })
+    } else if (t.can_connect === false) {
+      return ''
+    } else {
+      desc = bot
+        ? 'Connect your own Telegram so you can message the team from your phone. You will tap a link and press Start; there is nothing to copy or type.'
+        : 'Telegram is not available to connect yet.'
+      control = bot ? ui.button({ label: 'Connect Telegram', tone: 'primary', a: { 'data-link-begin': 'telegram' } }) : ''
+    }
+    return ui.section({
+      title: 'Your Telegram',
+      body: ui.card([
+        ui.row({ name: 'Telegram', desc, status: ` ${chip}`, control, kind: 'wide', wrap: true, said: true }),
+      ]),
+    })
+  }
+
   return [
+    linkSection(),
     chiefB === undefined
       ? ''
       : ui.section({
@@ -6623,7 +6667,7 @@ function channelsTab() {
       title: 'Where you can reach the team',
       note: operator
         ? 'Team Chat is always available inside Team HQ. The others need a connection.'
-        : 'Team Chat is always available inside Team HQ. Telegram and Slack are connected for the whole Team HQ by whoever runs it, and are not set up for your account.',
+        : 'Team Chat is always available inside Team HQ. Slack is connected for the whole Team HQ by whoever runs it and is not set up for your account. You can connect your own Telegram above.',
       body: ui.card(channels.filter((c) => operator || !['telegram', 'slack'].includes(String(c.key))).map(channelRow)),
     }),
     !operator || slackSetupPanel() === '' ? '' : ui.section({ title: 'Reconnect Slack', body: ui.card([slackSetupPanel()]) }),
@@ -7782,7 +7826,91 @@ function settingsSheet() {
     })
   }
 
+  /*
+    Connecting and disconnecting your own Telegram (#410). Begin asks the office for a one-time link (the office stores
+    only a hash, so the page keeps the link it was given); the page then watches for the tap, because nothing else would
+    tell a person it worked. The office decides who and what: the page sends only the channel.
+  */
+  for (const b of v.querySelectorAll('[data-link-begin]')) {
+    b.addEventListener('click', async () => {
+      let outcome = null
+      const done = await attempt(
+        b,
+        'Making a link…',
+        async () => {
+          outcome = await act('channel_link_begin', { p_channel: 'telegram' })
+          return outcome
+        },
+        '',
+      )
+      if (!done) return
+      if (outcome?.ok !== true || !outcome?.token || !outcome?.bot) {
+        say(b, String(outcome?.message ?? 'Could not start. Try again in a moment.'), 'warn')
+        return
+      }
+      config.LINK.pending = {
+        url: `https://t.me/${outcome.bot}?start=link_${outcome.token}`,
+        until: outcome.expires_at,
+      }
+      config.LINK.telegram = { ...(config.LINK.telegram ?? {}), state: 'waiting', waiting_until: outcome.expires_at }
+      settingsSheet()
+      sheet($('#settings'), true)
+      watchLink()
+    })
+  }
+  for (const b of v.querySelectorAll('[data-link-disconnect]')) {
+    b.addEventListener('click', async () => {
+      if (
+        !(await settingsUi.confirmDialog({
+          title: 'Disconnect Telegram?',
+          body:
+            'The team stops messaging you there, and anything you send the bot is ignored until you connect again. ' +
+            'Your projects and history stay.',
+          confirmLabel: 'Disconnect',
+          danger: true,
+        }))
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Disconnecting…', async () => await act('channel_link_disconnect', { p_channel: 'telegram' }), '')
+      if (!done) return
+      config.LINK.pending = null
+      config.LINK.telegram = { ...(config.LINK.telegram ?? {}), state: 'none', connected_at: null, can_connect: true }
+      await afterWrite()
+    })
+  }
+
   wireAppearance(v)
+}
+
+/*
+  Waiting for the tap in Telegram. Asks the office every few seconds, for at most the ten minutes the link lives, and
+  stops the moment the Messaging tab is left. A failed read is not a result: it asks again on the next tick.
+*/
+let linkTimer = null
+function watchLink() {
+  if (linkTimer !== null) clearInterval(linkTimer)
+  const until = Date.now() + 10 * 60 * 1000
+  linkTimer = setInterval(async () => {
+    if (Date.now() > until || state.setting !== 'channels') {
+      clearInterval(linkTimer)
+      linkTimer = null
+      return
+    }
+    try {
+      const d = await read('channel_link')
+      if (d?.telegram?.state === 'connected') {
+        clearInterval(linkTimer)
+        linkTimer = null
+        config.LINK.telegram = d.telegram
+        config.LINK.pending = null
+        settingsSheet()
+        sheet($('#settings'), true)
+      }
+    } catch (e) {
+      /* the next tick asks again */
+    }
+  }, 3000)
 }
 
 /*

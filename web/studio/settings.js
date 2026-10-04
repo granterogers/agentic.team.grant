@@ -403,7 +403,24 @@ export const CONVO_CHANNELS = []
 */
 export const VIEWER = { operator: true }
 
+/*
+  Whether THIS person's Telegram is connected, waiting for a tap, or not connected (#410). `telegram` is null until the
+  office has answered, and the page says nothing in that state rather than guessing. `pending` is the link a person was
+  just given (kept only in this page; the office stores a hash and cannot give it back), so a reload says "waiting" and
+  offers to start again.
+*/
+export const LINK = { telegram: null, pending: null }
+
 export async function hydrateSettings(read) {
+  void read('channel_link')
+    .then((d) => {
+      LINK.telegram = d && typeof d === 'object' && d.telegram ? d.telegram : null
+      if (LINK.telegram?.state === 'connected') LINK.pending = null
+    })
+    .catch(() => {
+      LINK.telegram = null
+    })
+
   void read('conversation_channels')
     .then((rows) => {
       if (Array.isArray(rows)) {

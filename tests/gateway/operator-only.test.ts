@@ -44,6 +44,10 @@ const NOT_OPERATOR: Readonly<Record<string, string>> = {
   browser_session_establish:
     'the person pastes their OWN session for sites they use; per-office data',
   browser_session_forget: 'forgets that same per-office session',
+  channel_link_begin:
+    'a person starts connecting THEIR OWN Telegram; the office is the verified session’s and the operator’s own office is refused by the function',
+  channel_link_disconnect:
+    'a person disconnects THEIR OWN Telegram; scoped to the verified office, and the operator’s office is refused by the function',
   project_staff: 'staffs one project',
   approve_tool:
     'answers a request raised in the caller’s OWN office; the function matches the request on office_id and the answerer must be that office’s own person',

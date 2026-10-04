@@ -440,6 +440,11 @@
         }
       ]
     },
+    "channel_link_challenges": {
+      "class": "OFFICE_CARRIER",
+      "why": "A person's one-time request to connect their own messaging identity; it has no parent row that decides its owner, so it records the office itself, from the verified session.",
+      "cross": []
+    },
     "incidents": {
       "class": "OFFICE_CARRIER",
       "why": "An incident is an office's problem with a service; it has no parent row that decides its owner, so it records the owner itself.",

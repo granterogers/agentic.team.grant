@@ -24,7 +24,13 @@
  */
 
 import type { TelegramUpdate } from './telegram.ts'
-import { secretMatches, senderOf, toCanonicalCommand, UnsupportedUpdateError } from './telegram.ts'
+import {
+  linkTokenOf,
+  secretMatches,
+  senderOf,
+  toCanonicalCommand,
+  UnsupportedUpdateError,
+} from './telegram.ts'
 
 const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') ?? ''
 /**
@@ -204,6 +210,43 @@ Deno.serve(async (request: Request): Promise<Response> => {
     subject = typeof who.subject === 'string' && who.subject !== '' ? who.subject : null
     declaredTest = who.declared_test === true
     officeId = typeof who.office_id === 'string' && who.office_id !== '' ? who.office_id : null
+  }
+  /*
+    A PERSON CONNECTING THEIR OWN TELEGRAM (#410, 0885).
+
+    This is the one message an UNRECOGNISED sender may send, because it is how a recognised one comes to exist: they
+    signed in to Team HQ, asked to connect, and tapped Start on a link carrying a one-time token. It is handled before
+    the stranger check and is the only thing that is. The office comes from the token's row and the actor from the
+    verified sender - nothing in the message chooses either - and the database decides whether the token is good.
+
+    Every refusal is answered with the same sentence, so a guess learns nothing. Anything that is not exactly
+    `/start link_<token>` in a private chat is not a link and falls through to the ordinary checks below.
+  */
+  const linkToken = linkTokenOf(update)
+  if (linkToken !== null && sender !== null && claimedChat !== undefined) {
+    const redeemed = (await rpcOne('channel_link_redeem', {
+      p_channel: 'telegram',
+      p_token: linkToken,
+      p_actor: sender,
+      p_conversation: String(claimedChat.id),
+      p_bot_id: BOT_ID,
+    })) as { ok?: boolean; token?: string | null } | null
+    // A lookup that fails is not a refusal: Telegram retries a 5xx, and the person's tap is not lost.
+    if (redeemed === null) return new Response('link lookup failed', { status: 503 })
+    if (typeof redeemed.token === 'string' && redeemed.token !== '') {
+      await fetch(`https://api.telegram.org/bot${redeemed.token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: String(claimedChat.id),
+          text:
+            redeemed.ok === true
+              ? 'Connected. What you send me here now goes to your team in Team HQ, and their answers come back here.'
+              : 'That link has expired or was already used. In Team HQ, open Settings, then Messaging, and press Connect Telegram for a new one.',
+        }),
+      }).catch(() => undefined)
+    }
+    return Response.json({ ok: true, link: redeemed.ok === true ? 'connected' : 'refused' })
   }
   if ((subject === null && !declaredTest) || officeId === null) {
     return Response.json({ ok: true, ignored: 'unrecognised sender' })

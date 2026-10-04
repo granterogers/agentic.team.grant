@@ -243,6 +243,8 @@ const SECTIONS: Readonly<
   activity: { fn: 'hq_activity', office: true, args: { p_limit: 50 } },
   series: { fn: 'hq_series', office: true, args: { p_days: 30 } },
   connections: { fn: 'hq_connections', office: true },
+  // Whether THIS person's Telegram is connected, waiting for a tap, or not (#410).
+  channel_link: { fn: 'channel_link_status', office: true },
   projects: { fn: 'hq_projects', office: true },
   artifacts: { fn: 'hq_artifacts', office: true },
   settings: { fn: 'hq_settings', office: true },
@@ -746,6 +748,10 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     personBy: 'p_by',
   },
   rename_project: { fn: 'hq_rename_project', office: true, required: ['p_slug', 'p_name'] },
+  // A person connecting their OWN Telegram (#410, 0885). The office is the verified session's; the office key is not in
+  // SERVICE_MAY, so a machine cannot start or end a person's connection.
+  channel_link_begin: { fn: 'channel_link_begin', office: true, required: ['p_channel'] },
+  channel_link_disconnect: { fn: 'channel_link_disconnect', office: true, required: ['p_channel'] },
   // `by`: connecting a Notion database is the yes to writing into it, and only a person's connecting counts (0641).
   attach: {
     fn: 'hq_attach',
