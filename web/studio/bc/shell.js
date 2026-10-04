@@ -1680,6 +1680,27 @@ const teamSurface = (p) => {
  * enforces the idempotency (a partial unique index, 0317 through 0322); this
  * is the page not asking for something it has already been given.
  */
+/*
+  WHAT WAS ASKED, IN WORDS A PERSON USES (closure, 4 October).
+
+  The Team page printed "Asked: office.instruction" and "Asked: office.synthesise" under every result: the name of the job that
+  made it, which is the office's plumbing and means nothing to the person it is shown to. A kind the page knows is said in words;
+  a dotted kind it does not know is left out (nothing is better than the machine's name); and a real sentence is shown as written.
+*/
+const ASKED_IN_WORDS = {
+  'office.instruction': 'your message',
+  'office.synthesise': 'pulling the answers together',
+  'office.provision_channels': 'setting up a channel',
+  'office.pursue': 'working through the steps',
+  'office.extract_tasks': 'reading the project for work to do',
+}
+const askedWords = (ask) => {
+  const said = String(ask ?? '').trim()
+  if (said === '') return ''
+  if (Object.hasOwn(ASKED_IN_WORDS, said)) return ASKED_IN_WORDS[said]
+  return /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/.test(said) ? '' : said
+}
+
 const outputRow = (r) => {
   const done = r.output.imported === true
   const ready = r.state === 'review' && !done
@@ -1710,7 +1731,7 @@ const outputRow = (r) => {
           .filter(Boolean)
           .join(' · '),
       )}</span>
-      ${r.ask ? `<span class="bcitemmeta">Asked: ${esc(r.ask)}${r.from ? ` — ${esc(r.from)}` : ''}</span>` : ''}
+      ${askedWords(r.ask) !== '' ? `<span class="bcitemmeta">Asked: ${esc(askedWords(r.ask))}${r.from ? ` — ${esc(r.from)}` : ''}</span>` : ''}
       ${
         (r.derived ?? []).length === 0
           ? ''

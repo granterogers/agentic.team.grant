@@ -94,16 +94,20 @@ try {
         `${w.padEnd(7)} ${name.padEnd(34)} ${flags.join(' | ') || 'clean'}   «${m.first}»`,
       )
     }
+    // --project <slug> captures that one project's tools only (a smaller, lighter run on a host with little headroom)
+    const only = flag('--project')
     for (const [name, path] of [
       ['home', '/'],
       ['my-tasks', '/tasks'],
       ['activity', '/activity'],
     ] as const) {
+      if (only !== undefined) continue
       await page.goto(`${studio.base}${path}`, { waitUntil: 'domcontentloaded' })
       await settle(page)
       await cap(name)
     }
     for (const slug of slugs) {
+      if (only !== undefined && slug !== only) continue
       for (const tool of TOOLS) {
         if (tool === 'settings') continue
         await page.goto(`${studio.base}/p/${slug}${tool === 'overview' ? '' : `/${tool}`}`, {
