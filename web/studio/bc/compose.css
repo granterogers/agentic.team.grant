@@ -4142,3 +4142,10 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   [data-experience='basecamp'] .bcheadrow .bcworkbar { display: none; }
   [data-experience='basecamp'] .bcphoneonly { display: inline-flex; justify-self: start; min-height: 44px; border: 1px solid color-mix(in srgb, var(--bc-text-muted) 30%, transparent); }
 }
+
+html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-user-select: none !important; }
+[data-experience='basecamp'] .bcmodhead, [data-experience='basecamp'] .bcpostitbar { user-select: none; -webkit-user-select: none; }
+
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcmod--placed [data-bc-tint] { display: none; }
+}

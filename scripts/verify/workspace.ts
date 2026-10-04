@@ -260,6 +260,7 @@ check(
 await page.locator('[data-mod="contacts"]').hover()
 await page.locator('[data-bc-tint="contacts"]').click()
 await page.waitForSelector('.bcpop--tint')
+await page.waitForTimeout(300)
 const swatches = await page.locator('.bcpop--tint .bcswatch[data-tint]').count()
 check(
   'between eight and twelve curated tints plus none',
@@ -339,6 +340,7 @@ check(
 /* --- 11. layouts ------------------------------------------------------- */
 await page.locator('[data-bc-layouts]').click()
 await page.waitForSelector('.bcpop--layouts')
+await page.waitForTimeout(300)
 await shot('08-layouts-1440')
 await page.locator('.bcpop--layouts [data-preset="planning"]').click()
 await page.waitForTimeout(600)
@@ -429,6 +431,72 @@ check(
   Math.abs(k1.x - k0.x + 12) < 2 && Math.abs(k1.y - k0.y + 12) < 2,
   `${String(k1.x - k0.x)}, ${String(k1.y - k0.y)}`,
 )
+
+/* --- 15b. what the retired grid suite still rightly asked ---------------- */
+/*
+  Ported from basecamp-board.ts (retired 4 October with the grid it tested):
+  the properties that were never about the grid. The whole header opens the
+  module; taking a module off offers the way back ON THE PAGE; a pane with more
+  than it can show scrolls internally; the scrollbar treatment exists in both
+  syntaxes.
+*/
+await clean()
+await open()
+{
+  const hd = await page.locator('[data-mod="documents"] .bcmodhead').first().boundingBox()
+  if (hd === null) throw new Error('no documents header')
+  /* Empty header space: right of the title, left of the three hover controls. */
+  await page.mouse.click(hd.x + hd.width - 120, hd.y + hd.height / 2)
+  await page.waitForTimeout(500)
+  check(
+    'pressing empty space in a module header opens that module',
+    (await page.locator('[data-bc-expanded="documents"]').count()) === 1,
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(500)
+  check('and Escape closes it again', (await page.locator('[data-bc-expanded]').count()) === 0)
+  await page.locator('[data-mod="contacts"]').hover()
+  await page.locator('[data-mod="contacts"] [data-bc-modoff]').click()
+  await page.waitForTimeout(300)
+  check(
+    'the cross takes a module off rather than opening it',
+    (await page.locator('[data-mod="contacts"]').count()) === 0 &&
+      (await page.locator('[data-bc-expanded]').count()) === 0,
+  )
+  check(
+    'taking a module off offers the way back on the page, naming it',
+    (await page.locator('[data-bc-arr-on="contacts"]').count()) === 1,
+  )
+  await page.locator('[data-bc-arr-on="contacts"]').click()
+  await page.waitForTimeout(300)
+  check(
+    'pressing it puts the module back',
+    (await page.locator('[data-mod="contacts"]').count()) === 1,
+  )
+  const scrolls = (await page.evaluate(
+    inPage(`const out = []
+      for (const b of document.querySelectorAll('.bcstage .bcmodbody')) {
+        const s = getComputedStyle(b)
+        if (b.scrollHeight > b.clientHeight + 4) out.push({ id: b.closest('[data-mod]').dataset.mod, ov: s.overflowY, sw: s.scrollbarWidth })
+      }
+      return out`),
+  )) as { id: string; ov: string; sw: string }[]
+  check('at least one module holds more than it shows', scrolls.length > 0)
+  check(
+    'and every such module scrolls internally with the thin scrollbar',
+    scrolls.every((s) => s.ov === 'auto' && s.sw === 'thin'),
+    JSON.stringify(scrolls),
+  )
+  const css = (await page.evaluate(
+    inPage(
+      `return [...document.styleSheets].flatMap((s) => { try { return [...s.cssRules].map((r) => r.cssText) } catch { return [] } }).join(' ')`,
+    ),
+  )) as string
+  check(
+    'and the WebKit half of the scrollbar treatment exists too',
+    css.includes('::-webkit-scrollbar-thumb'),
+  )
+}
 
 check('no page errors were thrown', thrown.length === 0, thrown.join(' | '))
 

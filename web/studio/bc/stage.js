@@ -176,6 +176,8 @@ export const wireStage = (root, ctx) => {
       next: start,
     }
     handle.setPointerCapture?.(e.pointerId)
+    /* A drag must never select the text it passes over. */
+    document.documentElement.classList.add('bc-dragging')
   }
 
   const during = (e) => {
@@ -215,6 +217,7 @@ export const wireStage = (root, ctx) => {
     live = null
     board.classList.remove('bcpanes--moving')
     was.el.classList.remove('bcmod--dragging')
+    document.documentElement.classList.remove('bc-dragging')
     drawGuides([])
     if (!was.moved) return
     if (was.isNote) {

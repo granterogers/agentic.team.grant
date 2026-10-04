@@ -702,12 +702,15 @@ const newId = () => `n_${Math.random().toString(36).slice(2, 9)}`
 export const postits = (slug) => {
   const d = doc(slug)
   if (d.postits.length === 0 && !d.seeded) {
+    /* Sized to the free fifth of the stage, so it never covers a module on a narrow window. */
+    const sw = Math.min(POSTIT_DEFAULT.w, Math.max(150, Math.round(stage.w * 0.2) - 14))
     const starter = clampRect(
       {
         id: 'n_starter',
-        x: stage.w - POSTIT_DEFAULT.w - 8,
+        x: stage.w - sw - 8,
         y: 6,
         ...POSTIT_DEFAULT,
+        w: sw,
         z: 1000,
         text: '',
       },
