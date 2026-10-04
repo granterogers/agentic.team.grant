@@ -4140,8 +4140,9 @@ function sources(p) {
           <!--
             Disconnect and Remove are different acts and say so.
 
-            Detaching a connector DISABLES the row and keeps the corpus it fed
-            (ADR-0013), so the word is Disconnect and the documents survive.
+            Detaching a connector DISABLES the row; what it indexed leaves
+            active retrieval and is kept, not deleted (ADR-0013 as amended),
+            so the word is Disconnect and connecting again brings it back.
             A reference holds nothing at all, so removing it is a real delete
             and there is nothing to warn about. One button, two verbs, because
             offering Disconnect on a bookmark implies a corpus that is not
@@ -9984,15 +9985,17 @@ function drawShell() {
         Confirmed, always. Grant: "You should always check before making any
         destructive action with me."
 
-        Nothing is lost by disconnecting — ADR-0013 is explicit that the corpus
-        a connector fed survives the connector being removed — and the sentence
-        says so, because a confirmation that overstates the danger is one people
-        learn to click through.
+        Nothing is deleted by disconnecting, and the sentence says exactly what
+        changes (ADR-0013 as amended 4 October 2026): what the source indexed
+        stops being used in answers until it is connected again, while anything
+        uploaded or imported into Team HQ stays in use. A confirmation that
+        overstates the danger is one people learn to click through, and one that
+        understates it is worse.
       */
       if (
         !(await sure(
-          `Disconnect ${b.dataset.name}? The documents it already gave stay; ` +
-            'nothing new comes in until it is connected again.',
+          `Disconnect ${b.dataset.name}? What it indexed stops being used in answers until you connect it again. ` +
+            'Nothing is deleted, and anything you uploaded or imported into Team HQ stays.',
           'Disconnect',
           { title: 'Disconnect this source?', danger: true },
         ))

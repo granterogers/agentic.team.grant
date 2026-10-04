@@ -181,14 +181,16 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         select
           (select count(*) from public.documents
             where office_id = ${office}
-              and project_id = ${lit(projectId)}::uuid and state <> 'archived')::int as docs,
+              and project_id = ${lit(projectId)}::uuid
+              and app.document_in_play(state, origin, project_id, connector, external_parent_ref))::int as docs,
           (select count(*) from public.tasks
             where office_id = ${office}
               and project_id = ${lit(projectId)}::uuid and state <> 'done')::int as open_tasks,
           (select coalesce(string_agg(t, '; '), '') from (
              select left(title, 70) as t from public.documents
               where office_id = ${office}
-                and project_id = ${lit(projectId)}::uuid and state <> 'archived'
+                and project_id = ${lit(projectId)}::uuid
+                and app.document_in_play(state, origin, project_id, connector, external_parent_ref)
               order by created_at desc limit 8) d)::text as doc_titles,
           (select coalesce(string_agg(t, '; '), '') from (
              select left(title, 70) as t from public.tasks

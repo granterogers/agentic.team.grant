@@ -4510,6 +4510,22 @@ Each of these cost real time. They are here so they cost it once.
   token back once so the gateway can revoke it at Slack; the proof's first draft put the whole result in its check detail, so
   the (made-up) token reached the log. Against production it would have been a real one. The detail now says `[held, not
   printed]`, and the proof's output is grepped for the token prefix in the same run.
+- **A permission count to preserve is a claim about an architecture that has moved.** `anon-surface` asserted `ai_team_app`
+  "keeps what it had" (190+ public functions) and read 37 after 0841. The answer was not to restore the number: the role is
+  NOLOGIN, passwordless and nothing connects as it (the gateway and worker are `service_role` and `postgres`; ARCHITECTURE.md
+  decision 6), so its 37 leftovers, which included a secret writer, a setting writer, roster, MCP registration, project delete and
+  enqueue, were doors nobody used and nobody watched. 0895 revokes them; the proof asserts the property (zero reach, NOLOGIN, no
+  password, no bypass) with a control that counts one deliberate grant. When a role gets a real login its grants are an allow-list
+  with reasons, decided then.
+- **A detach that deletes nothing still decides what an answer may use, and the sentence Grant is shown has to say which.** ADR-0013
+  said a connector "loses the route, never the corpus" and every reader took it as "the corpus stays in every answer for ever".
+  ADR-0066 (0896) separates them: what a source indexed leaves active retrieval while it is disconnected (one predicate,
+  `app.document_in_play`, asked by search, passages, coverage and the brief), and a Team HQ copy (an upload, an imported output) is
+  never tied to a connection. The old Disconnect sentence ("the documents it already gave stay") became false the moment that
+  was decided, which is why the page text changed with the migration. A document no attachment names is left alone: failing to
+  attribute is not a reason to hide.
+- **Disclosed process slip, this window:** one more `sed -i … /dev/null` was typed by reflex (targets no repository file; sed
+  refused it; nothing changed). Every repository edit went through Edit or Write.
 
 ---
 
