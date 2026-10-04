@@ -749,5 +749,6 @@
   "0878_an_incident_is_closed_by_what_fixed_it.sql": "728a1bbf148cb4c84da8271bb2ed5034cb80de7b5532f4806005db83ccdcf0e8",
   "0879_an_incident_keeps_its_office.sql": "7b11969e20c374ec1b982a7323388dcaf99180c52e44b83b5737a4c8c5e72ac3",
   "0880_a_project_he_names_is_the_project.sql": "5edce4895b3da6e2795b566bf9fe8d3de3d17fe974c9dc401bb09d0a9c8612d8",
-  "0881_a_person_reads_you_not_their_key.sql": "01ab51f66f2d5e3fa94846cc2eb7f4b5bd1b406708693a8d3f6ba4b5e4fbee1a"
+  "0881_a_person_reads_you_not_their_key.sql": "01ab51f66f2d5e3fa94846cc2eb7f4b5bd1b406708693a8d3f6ba4b5e4fbee1a",
+  "0882_the_browser_card_says_what_it_does.sql": "d501a477876700c0476ee25d88aaceb9e1661346e568f097ab8130297a85394e"
 }
