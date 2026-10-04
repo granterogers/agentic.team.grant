@@ -22,7 +22,7 @@
  * about, never to do.
  */
 
-import { pageRequest } from './actions.ts'
+import { pageRequest, researchRequest } from './actions.ts'
 import { wantsAnotherGo } from './again.ts'
 import { callsItOff } from './calloff.ts'
 import { connectRequest, populateRequest } from './connect.ts'
@@ -44,6 +44,8 @@ export const entitled = {
   link: (words: HumanWords) => linkRequest(words),
   /** He asked for a page to be opened and read. */
   page: (words: HumanWords) => pageRequest(words),
+  /** He asked for something to be looked up on the web. */
+  research: (words: HumanWords) => researchRequest(words),
   /** He called work off. */
   callsItOff: (words: HumanWords) => callsItOff(words),
   /** He taught a standing rule. */
@@ -72,6 +74,7 @@ export const noneEntitled: typeof entitled = {
   connect: () => null,
   link: () => null,
   page: () => null,
+  research: () => null,
   callsItOff: () => null,
   teaching: () => null,
   correction: () => null,

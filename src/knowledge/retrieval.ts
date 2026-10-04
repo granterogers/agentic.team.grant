@@ -104,6 +104,28 @@ export function citationRef(source: {
 }
 
 /**
+ * A source as a report cites it: the citation (always the saved row) and a label a person can use.
+ *
+ * Both lists in `handlers/artifact.ts` built this object separately, which is how a format gets written in three places
+ * and disagrees. A page the office read from the web carries its ADDRESS in the label, so the sources page of a PDF says
+ * where the page lives and the citation still points at the row that holds what the office actually read: evidence is
+ * retained when research contributes to a report, not merely linked to a URL that may change.
+ */
+export function citedSource(d: {
+  readonly connector: string | null
+  readonly origin?: string | null | undefined
+  readonly id: string
+  readonly title: string
+  readonly url?: string | null | undefined
+}): { readonly label: string; readonly ref: string } {
+  const url = d.connector === 'browser' && d.url ? d.url : null
+  return {
+    label: url === null || d.title.includes(url) ? d.title : `${d.title} (${url})`,
+    ref: citationRef({ connector: d.connector, documentId: d.id, origin: d.origin }),
+  }
+}
+
+/**
  * The documents most relevant to a question.
  *
  * SCOPED TO A PROJECT, ALWAYS (invariant 17). `app.search_documents` reads a null project as "every project", which

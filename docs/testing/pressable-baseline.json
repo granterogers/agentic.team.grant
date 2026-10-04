@@ -16,7 +16,8 @@
     "action:style_set": "MISSING CONTROL, awaiting the Team HQ Style page (sibling UI work, ux-overnight). Written, driven and tested server-side by scripts/isolated/ux-be/04-style-profiles.sql (migration 0923, unapplied). Remove this entry when the page presses it.",
     "action:style_clear": "MISSING CONTROL, awaiting the Team HQ Style page (sibling UI work). Same migration and proof as style_set. Remove when the page presses it.",
     "section:project_search": "MISSING CONTROL, awaiting the Team HQ project search box (sibling UI work); also read by external assistants through the MCP search_project tool. Driven by scripts/isolated/ux-be/02-project-search.sql (migration 0921, unapplied).",
-    "section:project_search_providers": "MISSING CONTROL, awaiting the search filter chips in Team HQ: it tells the page which kinds this database can serve (calendar needs 0897). Remove when the page reads it."
+    "section:project_search_providers": "MISSING CONTROL, awaiting the search filter chips in Team HQ: it tells the page which kinds this database can serve (calendar needs 0897). Remove when the page reads it.",
+    "section:web_sources": "MISSING CONTROL, awaiting the Team HQ project Sources page (sibling UI work): the list of pages and files the web gave a project, with where each came from (url, retrieval time, agent, research task and question, found-via, indexed, screenshot, citing outputs). Read by ?section=web_sources&project=<slug>. Driven by scripts/isolated/ux-be/05-web-sources.sql and scripts/isolated/web-research.ts (migration 0930, unapplied). Remove when the page reads it."
   },
   "unpressed": [
     "action:document_new_version",
@@ -34,6 +35,7 @@
     "section:relations",
     "section:series",
     "section:staff",
-    "section:usage"
+    "section:usage",
+    "section:web_sources"
   ]
 }

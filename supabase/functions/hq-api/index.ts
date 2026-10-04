@@ -746,6 +746,22 @@ const SECTIONS: Readonly<
       { param: 'scope', arg: 'p_scope', values: ['project', 'all', 'google'] },
     ],
   },
+  /*
+    What the web gave a project, and where each piece came from (0930). One entry per saved page or downloaded file with its
+    address, title, retrieval time, the agent and job that fetched it, the research task and question, how it was reached
+    (search rank or the page whose link led to it), whether it is indexed, a screenshot if one was taken, and which outputs
+    cite it. ?project=<slug> (or ?p_slug=) is required; ?limit= bounds the list (default 100, at most 500). Harness
+    traffic is excluded by the reader, not here.
+  */
+  web_sources: {
+    fn: 'hq_project_sources_web',
+    office: true,
+    also: [
+      { param: 'project', arg: 'p_slug' },
+      { param: 'p_slug', arg: 'p_slug' },
+      { param: 'limit', arg: 'p_limit' },
+    ],
+  },
   project_automations: { fn: 'project_automations', office: true, arg: 'p_project_id' },
   /*
     The whole project, as the neutral package §13 names.

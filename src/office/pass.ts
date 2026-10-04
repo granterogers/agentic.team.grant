@@ -77,6 +77,7 @@ import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
 import { synthesiseHandler } from '../handlers/synthesise.ts'
 import { tasksSyncHandler } from '../handlers/tasks-sync.ts'
 import { vaultExportHandler } from '../handlers/vault-export.ts'
+import { webResearchHandler } from '../handlers/web-research.ts'
 import type { Handler, Reviewer } from '../jobs/worker.ts'
 import { drain } from '../jobs/worker.ts'
 import { HttpNotebookAdapter } from '../notebook/http-adapter.ts'
@@ -445,6 +446,11 @@ export const buildPass = async (
       outage.
     */
     browserGatherHandler({ db, projectRef, serviceKey }),
+    /*
+      Searching the open web and keeping what is useful as project sources (web research). Reads only; it shares the
+      browser tier's budget, ledger and no-acting boundary, and refuses a harness job before anything leaves.
+    */
+    webResearchHandler({ db, projectRef, serviceKey }),
     /*
       Running a workflow on demand, under the month's minute ceiling (#17).
 

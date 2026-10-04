@@ -46,6 +46,7 @@
 
 import type { BrowserAdapter, Cookie, GatherRequest, GatherResult } from './adapter.ts'
 import { looksSignedOut, textOf, titleOf } from './cloudflare.ts'
+import { linksOf } from './links.ts'
 
 /**
  * When a 200 is not an answer.
@@ -236,6 +237,7 @@ export class FetchedBrowser implements BrowserAdapter {
     const origin = target.hostname.toLowerCase()
     let status = 0
     let html = ''
+    let hopUrl = target.toString()
     try {
       let hop = target
       for (let n = 0; ; n++) {
@@ -260,6 +262,7 @@ export class FetchedBrowser implements BrowserAdapter {
         if (location === null) {
           status = response.status
           html = await response.text()
+          hopUrl = hop.toString()
           break
         }
         let next: URL
@@ -317,7 +320,13 @@ export class FetchedBrowser implements BrowserAdapter {
       })
     }
 
-    return done({ detail: `http ${String(status)}`, ok: true, text, title: titleOf(html) })
+    return done({
+      detail: `http ${String(status)}`,
+      links: linksOf(html, hopUrl),
+      ok: true,
+      text,
+      title: titleOf(html),
+    })
   }
 }
 
