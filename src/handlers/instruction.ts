@@ -193,6 +193,7 @@ import {
 } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import { currentPerson } from '../office/person.ts'
+import { EnvelopeCeilingError, envelopeDecision } from '../providers/envelope.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import { escapeHtml } from '../telegram/message.ts'
@@ -554,9 +555,6 @@ export async function referentCandidates(
     return { rows: [{ t: { candidates } }] }
   }
 }
-
-/** Misses of the answer envelope one turn may accumulate across its retries before it stops (#412). */
-const ENVELOPE_MISS_CEILING = 4
 
 const NOTHING_TO_STOP = 'There was nothing still running on that, so there is nothing to stop.'
 
@@ -6101,18 +6099,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                         where u.correlation_id = ${lit(job.correlationId)}::uuid
                           and u.outcome = 'malformed_response') as misses`,
             )
-            .then((r) => {
-              const row = r.rows[0] as { on?: boolean; misses?: number | string } | undefined
-              if (row?.on !== true) return false
-              if (Number(row.misses ?? 0) >= ENVELOPE_MISS_CEILING) {
-                throw new Error(
-                  `the model did not follow the answer format ${String(ENVELOPE_MISS_CEILING)} times on this turn, so no reply was released`,
-                )
-              }
-              return true
-            })
+            .then((r) =>
+              envelopeDecision(r.rows[0] as { on?: unknown; misses?: unknown } | undefined),
+            )
             .catch((error: unknown) => {
-              if (error instanceof Error && error.message.includes('answer format')) throw error
+              // Only the ceiling is allowed through; an unreadable setting means off.
+              if (error instanceof EnvelopeCeilingError) throw error
               return false
             })
 

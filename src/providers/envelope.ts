@@ -56,6 +56,37 @@ export function extractAnswer(content: string): Extracted {
   return answer === '' ? { ok: false, reason: 'empty' } : { ok: true, answer }
 }
 
+/** Misses of the answer envelope one turn may accumulate across its retries before it stops. */
+export const ENVELOPE_MISS_CEILING = 4
+
+/** What a turn dies with at the ceiling. It names the cause and carries no model output or reasoning. */
+export class EnvelopeCeilingError extends Error {
+  constructor(readonly ceiling: number) {
+    super(
+      `the model did not follow the answer format ${String(ceiling)} times on this turn, so no reply was released`,
+    )
+    this.name = 'EnvelopeCeilingError'
+  }
+}
+
+/**
+ * Whether this turn's answering call asks for the envelope, from the one settings-and-ledger reading the handler makes:
+ * `on` is the office's flag and `misses` the malformed replies already recorded against the turn's correlation.
+ *
+ *  - not exactly on (or an unreadable row): off, so nothing about an existing caller changes;
+ *  - on and under the ceiling: on;
+ *  - on and AT or over the ceiling: throws, so a retried job cannot start the whole failover chain again for ever. The
+ *    worker's existing out-of-attempts path then tells the person.
+ */
+export function envelopeDecision(
+  row: { readonly on?: unknown; readonly misses?: unknown } | undefined,
+  ceiling: number = ENVELOPE_MISS_CEILING,
+): boolean {
+  if (row?.on !== true) return false
+  if (Number(row.misses ?? 0) >= ceiling) throw new EnvelopeCeilingError(ceiling)
+  return true
+}
+
 /** The reply had no usable envelope. Not a provider failure, so it does not trip the breaker, but it is not an answer. */
 export class NoAnswerEnvelopeError extends Error {
   constructor(

@@ -1,12 +1,16 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import type { SqlExecutor, SqlResult } from '../../src/db/executor.ts'
 import {
   ENVELOPE_INSTRUCTION,
+  ENVELOPE_MISS_CEILING,
+  EnvelopeCeilingError,
+  envelopeDecision,
   extractAnswer,
   NoAnswerEnvelopeError,
   withEnvelope,
 } from '../../src/providers/envelope.ts'
-import { ProviderRouter } from '../../src/providers/router.ts'
+import { AllCandidatesFailedError, ProviderRouter } from '../../src/providers/router.ts'
 
 /*
   The answer envelope (#412). Two things have to be true for it to be worth turning on: every legitimate answer must come out
@@ -38,6 +42,30 @@ const GOLDEN: readonly [string, string][] = [
     'First paragraph.\n\nSecond paragraph, longer, with a colon: and a dash - here.',
   ],
   ['a single word', 'Yes.'],
+  [
+    'json shown to the person',
+    'Here is the payload:\n\n```json\n{"project":"Alpha","open":5,"tags":["a","b"]}\n```',
+  ],
+  ['a bare json object as the whole answer', '{"ok": true, "count": 5}'],
+  [
+    'links, plain and markdown',
+    'See https://example.com/a?b=1&c=2 and [the plan](https://example.com/plan).',
+  ],
+  [
+    'a citation and provenance footer in the shape the product writes',
+    'The deposit is 40 percent.\n\nSources: notion:Pricing page, upload:Budget.xlsx\nConfidence: medium. Nobody has checked this yet.',
+  ],
+  [
+    '"I need to check" as ordinary speech',
+    'I need to check with Daniel before I can confirm that figure.',
+  ],
+  ['a headed document with a quotation', '## Summary\n\n> Revenue was flat.\n\nNext steps follow.'],
+  ['emoji and right-to-left text', 'Done ✅ — שלום — مرحبا 😀'],
+  ['literal angle brackets and ampersands', 'if a < b && c > d then use <b>bold</b> &amp; stop'],
+  [
+    'a very long answer (20,000 characters) is not shortened',
+    `${'Line of ordinary text. '.repeat(900)}The very last sentence.`,
+  ],
 ]
 
 describe('every legitimate answer comes out exactly as written', () => {
@@ -116,6 +144,59 @@ describe('the instruction is added without disturbing what is already there', ()
   })
   it('says nothing that would reach a person or name an issue', () => {
     expect(ENVELOPE_INSTRUCTION).not.toMatch(/#\d|issue|§/i)
+  })
+})
+
+describe('the per-turn retry ceiling', () => {
+  it('is off unless the office flag is exactly true (an unreadable row means off)', () => {
+    for (const row of [
+      undefined,
+      {},
+      { on: false, misses: 99 },
+      { on: 'true', misses: 0 },
+      { on: null },
+    ]) {
+      expect(envelopeDecision(row)).toBe(false)
+    }
+  })
+  it('is on and silent while the turn is under the ceiling', () => {
+    for (const misses of [0, 1, ENVELOPE_MISS_CEILING - 1, '2', undefined]) {
+      expect(envelopeDecision({ on: true, misses })).toBe(true)
+    }
+  })
+  it('stops the turn AT the ceiling and beyond, with a named error that carries no model output', () => {
+    for (const misses of [
+      ENVELOPE_MISS_CEILING,
+      ENVELOPE_MISS_CEILING + 1,
+      String(ENVELOPE_MISS_CEILING),
+      1000,
+    ]) {
+      let caught: unknown
+      try {
+        envelopeDecision({ on: true, misses })
+      } catch (e) {
+        caught = e
+      }
+      expect(caught).toBeInstanceOf(EnvelopeCeilingError)
+      expect((caught as Error).message).toMatch(/did not follow the answer format 4 times/)
+      expect((caught as Error).message).not.toMatch(/#\d|<answer>/)
+    }
+  })
+  it('an off office is never stopped, however many misses are on record', () => {
+    expect(envelopeDecision({ on: false, misses: 500 })).toBe(false)
+  })
+  it('the ceiling is a number of misses on the TURN, so a custom one is honoured', () => {
+    expect(() => envelopeDecision({ on: true, misses: 2 }, 2)).toThrow(EnvelopeCeilingError)
+    expect(envelopeDecision({ on: true, misses: 1 }, 2)).toBe(true)
+  })
+  it('the instruction handler asks the decision and lets ONLY the ceiling error out (wired calls, not names)', () => {
+    const src = readFileSync(new URL('../../src/handlers/instruction.ts', import.meta.url), 'utf8')
+    const at = src.indexOf('envelopeDecision(r.rows[0]')
+    expect(at).toBeGreaterThan(0)
+    const window = src.slice(at, at + 600)
+    expect(window).toMatch(/\.catch\(\(error: unknown\) =>/)
+    expect(window).toMatch(/if \(error instanceof EnvelopeCeilingError\) throw error/)
+    expect(window).toMatch(/return false/)
   })
 })
 
@@ -201,6 +282,52 @@ describe('the router enforces the envelope when asked, and only then', () => {
         answerEnvelope: true,
       }),
     ).rejects.toBeInstanceOf(NoAnswerEnvelopeError)
+  })
+
+  it('a provider reasoning field never reaches the answer, and reasoning alone is not an answer', async () => {
+    const withReasoning = (content: string, reasoning: string): Response =>
+      new Response(
+        JSON.stringify({
+          model: 'a/one:free',
+          choices: [{ message: { content, reasoning, reasoning_details: [{ text: reasoning }] } }],
+          usage: { cost: 0, prompt_tokens: 3, completion_tokens: 2 },
+        }),
+        { status: 200 },
+      )
+    const SECRET_THOUGHT = 'PRIVATE-REASONING-7731 the user wants a count'
+    const good = scripted([() => withReasoning(wrap('Five.'), SECRET_THOUGHT)])
+    const r = await new ProviderRouter(new FakeDb([model('a/one:free')]), 'k', good.impl).complete({
+      messages: MESSAGES,
+      answerEnvelope: true,
+    })
+    expect(r.content).toBe('Five.')
+    expect(JSON.stringify(r)).not.toContain('PRIVATE-REASONING-7731')
+    const bad = scripted([() => withReasoning('', SECRET_THOUGHT)])
+    const failure = await new ProviderRouter(new FakeDb([model('a/one:free')]), 'k', bad.impl)
+      .complete({ messages: MESSAGES, answerEnvelope: true })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      )
+    // reasoning with no content is the router's own "returned no content" failure: still no answer, and the thought is not in it
+    expect(failure).toBeInstanceOf(Error)
+    expect(failure).not.toBeNull()
+    expect(String((failure as Error).message)).not.toContain('PRIVATE-REASONING-7731')
+  })
+
+  it('failover is bounded: five models that all ignore the format cost at most three calls', async () => {
+    const { impl } = scripted([() => reply('x/any:free', 'no tags here')])
+    const models = ['a', 'b', 'c', 'd', 'e'].map((m) => model(`${m}/m:free`))
+    const failure = await new ProviderRouter(new FakeDb(models), 'k', impl)
+      .complete({ messages: MESSAGES, answerEnvelope: true })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      )
+    expect(failure).toBeInstanceOf(AllCandidatesFailedError)
+    expect((failure as AllCandidatesFailedError).candidates).toHaveLength(3)
+    expect((failure as AllCandidatesFailedError).cause).toBeInstanceOf(NoAnswerEnvelopeError)
+    expect((impl as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(3)
   })
 
   it('CONTROL: without the flag nothing is sent or stripped, so every existing caller is unchanged', async () => {
