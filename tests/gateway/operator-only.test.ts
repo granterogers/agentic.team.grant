@@ -48,6 +48,10 @@ const NOT_OPERATOR: Readonly<Record<string, string>> = {
     'a person starts connecting THEIR OWN Telegram; the office is the verified session’s and the operator’s own office is refused by the function',
   channel_link_disconnect:
     'a person disconnects THEIR OWN Telegram; scoped to the verified office, and the operator’s office is refused by the function',
+  slack_link_begin:
+    'a person starts installing Slack into THEIR OWN workspace; the office is the verified session’s, the state is single-use, and the operator’s own office is refused by the function (ADR-0065)',
+  slack_link_disconnect:
+    'a person disconnects THEIR OWN Slack workspace; scoped to the verified office, and the operator’s office is refused by the function',
   project_staff: 'staffs one project',
   approve_tool:
     'answers a request raised in the caller’s OWN office; the function matches the request on office_id and the answerer must be that office’s own person',

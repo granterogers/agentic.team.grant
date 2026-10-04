@@ -6646,8 +6646,59 @@ function channelsTab() {
     })
   }
 
+  /*
+    CONNECTING YOUR OWN SLACK (ADR-0065). Only for somebody who is not the operator. It says what is TRUE: until the Slack
+    app has been opened to other workspaces there is no button at all (a button that cannot work is worse than none), and a
+    connected workspace says plainly whether the team can answer you there or only hears you. The office decides everything;
+    the page sends no office, no workspace and no token - Slack's own page does the consent and the office reads the result.
+  */
+  const slackSection = () => {
+    const s = config.LINK.slack
+    if (operator || s === null || s === undefined || s.managed_by_operator === true) return ''
+    const pending = config.LINK.slackPending
+    const said = config.LINK.slackSaid
+    let desc = ''
+    let control = ''
+    let chip = ui.chip('off', 'Not connected')
+    if (s.state === 'connected') {
+      chip = ui.chip('ok', 'Connected')
+      desc =
+        `Your Slack workspace${s.workspace ? ` “${s.workspace}”` : ''} is connected, and the team hears you there. ` +
+        (s.can_reply === true
+          ? 'Their answers come back to you in Slack. '
+          : 'Their answers appear here in Team HQ for now: replying inside Slack is not switched on for personal accounts yet. ') +
+        (s.connected_at ? `Connected ${when.words(s.connected_at)}.` : '')
+      control = ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-slack-disconnect': '1' } })
+    } else if (s.state === 'waiting' || pending !== null) {
+      chip = ui.chip('warn', 'Waiting for you')
+      desc = pending
+        ? 'Finish in Slack: choose your workspace and press Allow. The link works once and for ten minutes.'
+        : 'A link was made but this page no longer has it. Start again to get a new one.'
+      control =
+        (pending ? ui.button({ label: 'Open Slack', tone: 'primary', href: pending.url }) : '') +
+        ui.button({ label: 'Start again', tone: 'quiet', a: { 'data-slack-begin': '1' } })
+    } else if (s.available !== true) {
+      chip = ui.chip('off', 'Not available yet')
+      desc =
+        'Slack is not switched on for other workspaces yet. It needs the person who runs Team HQ to open the Slack app to them.'
+    } else {
+      desc =
+        'Connect your own Slack workspace so you can message the team from Slack. You will choose the workspace and press Allow in Slack; there is nothing to copy or type.'
+      control = ui.button({ label: 'Connect Slack', tone: 'primary', a: { 'data-slack-begin': '1' } })
+    }
+    const note = said === null || said === undefined ? '' : `<p class="st-desc" role="status" style="margin:6px 0 0">${esc(said)}</p>`
+    return ui.section({
+      title: 'Your Slack',
+      body: ui.card([
+        ui.row({ name: 'Slack', desc: `${desc}`, status: ` ${chip}`, control, kind: 'wide', wrap: true, said: true }),
+        note === '' ? '' : `<div class="st-row">${note}</div>`,
+      ]),
+    })
+  }
+
   return [
     linkSection(),
+    slackSection(),
     chiefB === undefined
       ? ''
       : ui.section({
@@ -6667,7 +6718,7 @@ function channelsTab() {
       title: 'Where you can reach the team',
       note: operator
         ? 'Team Chat is always available inside Team HQ. The others need a connection.'
-        : 'Team Chat is always available inside Team HQ. Slack is connected for the whole Team HQ by whoever runs it and is not set up for your account. You can connect your own Telegram above.',
+        : 'Team Chat is always available inside Team HQ. Your own Telegram and Slack connections are in the sections above.',
       body: ui.card(channels.filter((c) => operator || !['telegram', 'slack'].includes(String(c.key))).map(channelRow)),
     }),
     !operator || slackSetupPanel() === '' ? '' : ui.section({ title: 'Reconnect Slack', body: ui.card([slackSetupPanel()]) }),
@@ -7880,7 +7931,90 @@ function settingsSheet() {
     })
   }
 
+  /*
+    Connecting and disconnecting your own Slack (ADR-0065). Begin asks the office for the one-time consent link and sends
+    nothing else; the page then opens Slack's own page in a new tab and watches for the result, because nothing else would
+    tell a person it worked. Disconnect asks first, and the office revokes the install at Slack.
+  */
+  for (const b of v.querySelectorAll('[data-slack-begin]')) {
+    b.addEventListener('click', async () => {
+      let outcome = null
+      const done = await attempt(
+        b,
+        'Making a link…',
+        async () => {
+          outcome = await act('slack_link_begin', {})
+          return outcome
+        },
+        '',
+      )
+      if (!done) return
+      if (outcome?.ok !== true || typeof outcome?.url !== 'string') {
+        say(b, String(outcome?.message ?? 'Could not start. Try again in a moment.'), 'warn')
+        return
+      }
+      config.LINK.slackPending = { url: outcome.url, until: outcome.expires_at }
+      config.LINK.slackSaid = null
+      config.LINK.slack = { ...(config.LINK.slack ?? {}), state: 'waiting', waiting_until: outcome.expires_at }
+      settingsSheet()
+      sheet($('#settings'), true)
+      watchSlack()
+    })
+  }
+  for (const b of v.querySelectorAll('[data-slack-disconnect]')) {
+    b.addEventListener('click', async () => {
+      if (
+        !(await settingsUi.confirmDialog({
+          title: 'Disconnect Slack?',
+          body:
+            'The team stops hearing you in that Slack workspace, and the connection is removed at Slack. ' +
+            'Your projects and history stay, and you can connect again.',
+          confirmLabel: 'Disconnect',
+          danger: true,
+        }))
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Disconnecting…', async () => await act('slack_link_disconnect', {}), '')
+      if (!done) return
+      config.LINK.slackPending = null
+      config.LINK.slackSaid = null
+      config.LINK.slack = { ...(config.LINK.slack ?? {}), state: 'none', connected_at: null, workspace: null, can_connect: true }
+      await afterWrite()
+    })
+  }
+
   wireAppearance(v)
+}
+
+/*
+  Waiting for the consent in Slack. As watchLink: asks the office every few seconds for at most the ten minutes the link
+  lives, stops when the Messaging tab is left, and treats a failed read as "ask again", never as a result.
+*/
+let slackTimer = null
+function watchSlack() {
+  if (slackTimer !== null) clearInterval(slackTimer)
+  const until = Date.now() + 10 * 60 * 1000
+  slackTimer = setInterval(async () => {
+    if (Date.now() > until || state.setting !== 'channels') {
+      clearInterval(slackTimer)
+      slackTimer = null
+      return
+    }
+    try {
+      const d = await read('slack_link')
+      if (d?.slack?.state === 'connected') {
+        clearInterval(slackTimer)
+        slackTimer = null
+        config.LINK.slack = d.slack
+        config.LINK.slackPending = null
+        settingsSheet()
+        sheet($('#settings'), true)
+      }
+    } catch (e) {
+      /* the next tick asks again */
+    }
+  }, 3000)
 }
 
 /*
@@ -13221,9 +13355,23 @@ function cameBackFromGoogle() {
     state.setting = wanted
     // On a phone a section replaces the menu: land on the section itself, not on the list of sections.
     state.settingsPane = 'detail'
+    /*
+      What the Slack install callback sent back (ADR-0065): one word, used only to say something. Whether Slack IS connected
+      is read from the office when the tab opens, so a typed address cannot make it look connected.
+    */
+    const slackWord = said.get('slack')
+    if (wanted === 'channels' && ['connected', 'refused', 'failed'].includes(slackWord ?? '')) {
+      config.LINK.slackSaid =
+        slackWord === 'connected'
+          ? 'You are back from Slack. The status below is what the office sees.'
+          : slackWord === 'refused'
+            ? 'Slack was not connected. The link may have expired, or that workspace is already connected to another account. Start again to get a new link.'
+            : 'We could not finish connecting Slack just now. Nothing was changed. Try again in a moment.'
+    }
     try {
       const clean = new URL(location.href)
       clean.searchParams.delete('settings')
+      clean.searchParams.delete('slack')
       history.replaceState({}, '', clean.pathname + clean.search)
     } catch {
       /* A page opened from a file has no history to write to. */

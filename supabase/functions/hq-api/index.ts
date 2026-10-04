@@ -40,6 +40,7 @@
 
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
 import { fileText } from './file-text.ts'
+import { authorizeUrl, revokeToken } from './oauth.ts'
 
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -248,6 +249,8 @@ const SECTIONS: Readonly<
   connections: { fn: 'hq_connections', office: true },
   // Whether THIS person's Telegram is connected, waiting for a tap, or not (#410).
   channel_link: { fn: 'channel_link_status', office: true },
+  // Whether THIS person's own Slack workspace is installed, waiting for the consent, or not, and what it can do (ADR-0065).
+  slack_link: { fn: 'slack_link_status', office: true },
   projects: { fn: 'hq_projects', office: true },
   artifacts: { fn: 'hq_artifacts', office: true },
   settings: { fn: 'hq_settings', office: true },
@@ -755,6 +758,10 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // SERVICE_MAY, so a machine cannot start or end a person's connection.
   channel_link_begin: { fn: 'channel_link_begin', office: true, required: ['p_channel'] },
   channel_link_disconnect: { fn: 'channel_link_disconnect', office: true, required: ['p_channel'] },
+  // A person installing Slack into their OWN workspace (ADR-0065, 0891). Both are handled in the gateway's own branch below
+  // (the link is composed here; the bot token is revoked here), so `fn` names the database half. Not in SERVICE_MAY.
+  slack_link_begin: { fn: 'slack_link_begin', office: true, required: [] },
+  slack_link_disconnect: { fn: 'slack_link_disconnect', office: true, required: [] },
   // `by`: connecting a Notion database is the yes to writing into it, and only a person's connecting counts (0641).
   attach: {
     fn: 'hq_attach',
@@ -2588,6 +2595,55 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (!done.ok) {
       console.error(`hq-api ${actionName}: upstream ${String(done.status)}`)
       return json({ error: 'the action failed' }, 502)
+    }
+
+    /*
+      Slack, ADR-0065. The database half has answered; the two things only the gateway can do are done here.
+
+      BEGIN: compose Slack's authorise link from the one-time state and the app's public settings. The state reaches ONLY the
+      signed-in person's own browser (inside the link) and is single use.
+
+      DISCONNECT: the database retired everything and handed back the bot token, once, so it can be revoked at Slack. The
+      token is used for that one call and is not in the reply, a log line or an error message.
+    */
+    if (actionName === 'slack_link_begin' || actionName === 'slack_link_disconnect') {
+      const said = (await done.json().catch(() => null)) as Record<string, unknown> | null
+      if (said === null) return json({ error: 'the action failed' }, 502)
+      if (actionName === 'slack_link_begin') {
+        if (said.ok !== true) return json({ action: actionName, result: said })
+        const settings = await fetch(`${DB_URL}/rest/v1/rpc/slack_link_client`, {
+          method: 'POST',
+          headers: {
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: '{}',
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null)
+        const link = authorizeUrl({
+          clientId: String(said.client_id ?? ''),
+          redirectUri: `${DB_URL}/functions/v1/slack-oauth`,
+          state: String(said.state ?? ''),
+          scopes: typeof settings?.scopes === 'string' ? settings.scopes : null,
+        })
+        return json({
+          action: actionName,
+          result: { ok: true, url: link, expires_at: said.expires_at },
+        })
+      }
+      const token = typeof said.bot_token === 'string' ? said.bot_token : ''
+      const revoked = token === '' ? null : await revokeToken(fetch, token)
+      return json({
+        action: actionName,
+        result: {
+          ok: said.ok === true,
+          removed: said.removed ?? 0,
+          revoked_at_slack: revoked,
+          message: said.message,
+        },
+      })
     }
     // After the write succeeded, never before: a kick for an action that was
     // refused would start a pass for work that does not exist.

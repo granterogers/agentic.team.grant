@@ -409,9 +409,19 @@ export const VIEWER = { operator: true }
   just given (kept only in this page; the office stores a hash and cannot give it back), so a reload says "waiting" and
   offers to start again.
 */
-export const LINK = { telegram: null, pending: null }
+export const LINK = { telegram: null, pending: null, slack: null, slackPending: null, slackSaid: null }
 
 export async function hydrateSettings(read) {
+  // Whether THIS person's own Slack workspace is installed (ADR-0065). Null until the office has answered.
+  void read('slack_link')
+    .then((d) => {
+      LINK.slack = d && typeof d === 'object' && d.slack ? d.slack : null
+      if (LINK.slack?.state === 'connected') LINK.slackPending = null
+    })
+    .catch(() => {
+      LINK.slack = null
+    })
+
   void read('channel_link')
     .then((d) => {
       LINK.telegram = d && typeof d === 'object' && d.telegram ? d.telegram : null

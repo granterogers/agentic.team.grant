@@ -34,6 +34,12 @@ form.append(
     type: 'application/typescript',
   }),
 )
+form.append(
+  'file',
+  new File([await readFile('src/slack/oauth.ts', 'utf8')], 'oauth.ts', {
+    type: 'application/typescript',
+  }),
+)
 const deployed = await fetch(
   `https://api.supabase.com/v1/projects/${ref}/functions/deploy?slug=hq-api`,
   { method: 'POST', headers: { Authorization: `Bearer ${supabaseToken}` }, body: form },

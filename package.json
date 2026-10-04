@@ -149,6 +149,7 @@
     "textures:sheet": "tsx scripts/verify/texture-sheet.ts",
     "deploy:hq": "npm run config:site && tsx scripts/deploy/hq.ts",
     "deploy:hq-api": "tsx scripts/deploy/hq-function.ts",
+    "deploy:slack-oauth": "tsx scripts/deploy/slack-oauth.ts",
     "deploy:voice": "tsx scripts/deploy/voice.ts",
     "slack:tidy": "tsx scripts/slack/tidy-channels.ts",
     "slack:backfill": "tsx scripts/slack/backfill.ts",

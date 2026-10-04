@@ -73,6 +73,14 @@ form.append(
   }),
 )
 
+// And the Slack install helpers it imports as ./oauth.ts (ADR-0065).
+form.append(
+  'file',
+  new File([await readFile('src/slack/oauth.ts', 'utf8')], 'oauth.ts', {
+    type: 'application/typescript',
+  }),
+)
+
 const deployed = await fetch(`${api}/functions/deploy?slug=hq-api`, {
   method: 'POST',
   headers: { Authorization: `Bearer ${supabaseToken}` },
