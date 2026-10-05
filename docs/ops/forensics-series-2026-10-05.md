@@ -1,6 +1,6 @@
 # Metrics series from the kept raw scrapes (generated)
 
-27 raw samples, 20 intervals of 20 to 150 s. All values DERIVED from counters.
+28 raw samples, 20 intervals of 20 to 150 s. All values DERIVED from counters.
 
 **Intervals with temp-file writes:** 19 of 20 (07:39:37: 10022414 B in 3 files; 07:40:39: 10022414 B in 3 files; 07:41:45: 10022414 B in 3 files; 07:42:47: 10022414 B in 3 files; 07:43:48: 10022414 B in 3 files; 07:44:50: 10022414 B in 3 files; 07:45:52: 10022414 B in 3 files; 08:48:02: 4040136 B in 1 files; 08:49:04: 10026290 B in 3 files; 08:50:05: 10026290 B in 3 files; 08:51:07: 10026290 B in 3 files; 08:52:08: 10026290 B in 3 files; 08:53:14: 14066426 B in 4 files; 08:54:19: 10026290 B in 3 files; 09:31:28: 10029898 B in 3 files; 09:32:34: 10029898 B in 3 files; 09:33:36: 10029898 B in 3 files; 09:34:39: 10029898 B in 3 files; 09:35:43: 14071486 B in 4 files)
 

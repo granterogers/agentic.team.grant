@@ -3667,6 +3667,7 @@ const notLive = () => {
   return `<div class="bcnotlive${s.tone === '' ? '' : ' bcnotlive--bad'}" role="status">
     <b>${esc(s.label)}</b>
     <span>${esc(s.say)}</span>
+    ${canRetry && typeof source.why === 'string' && source.why !== '' ? `<span data-bc-why>${esc(source.why)}</span>` : ''}
     ${canRetry ? button('Try again', { 'data-bc-retry-office': '1' }) : ''}
     <!--
       SIGNING IN, and there is no office token in it anywhere.

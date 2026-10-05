@@ -239,8 +239,9 @@ Raw: `evidence/2026-10-05/logs/win-tempfiles-*`. 41 temp-file lines in the windo
   spill is **not** a plausible consumer of the disk IO budget. The system volume is the large user: at idle it did 128 reads/s and 29 writes/s (157 IOPS, 63% of the
   250 IOPS baseline), from swap (section 5). The spill is still the biggest recorded write source on the data volume, and the exporter is the first role to time
   out in an episode (198 of 336 timeouts after 17:00), so it is a victim and a small contributor, not a cause.
-* **Fix available but not applied (needs Grant's approval):** `pg_stat_statements.max` (5,000 entries, 4,911 used, 101 evictions) or `pg_stat_statements.track_utility` are
-  settings that would shrink the materialised result; both are configuration changes and were not made.
+* **Decided after independent review (5 October, late): the exporter temp-file finding is treated as substantially resolved, and cumulative `temp_bytes` is
+  demoted as an outage hypothesis.** No change is to be made to `pg_stat_statements.max`, `track_utility`, `work_mem` or any other setting to address the
+  exporter spill. Section 12 supersedes the earlier suggestion here.
 
 ## 9b. Restarts and recoveries (new)
 
@@ -306,3 +307,184 @@ MEASURED: two paging bursts 70.5 minutes apart in the kept scrapes. n = 2, so no
 3. **Paid:** more compute, only after (1) or the Disk IO % consumed chart separates the mechanisms.
 4. **Deployment queue: held.** The latest instruction says not to deploy unrelated product work, and steps 6 to 9 (browser acceptance suites, gate parts, the
    Sample tour) are the same kind of burst that preceded E1, E2 and E4. The migrations and deploys themselves are light. Decision needed from Grant.
+   Section 12.5 now gives the recommendation for steps 1 to 5.
+
+## 12. After the independent review (5 October, late): what the new evidence says
+
+### 12.1 The cron canary: a per-minute record of the host that the database keeps itself (MEASURED, new)
+
+`cron.job_run_details` holds one row per pg_cron run: start, end, status. Job 1 (`worker-heartbeat`, `select app.kick_worker()`) is a tiny function that
+runs every minute and posts to the worker. Before 15:00 on 4 October its runs take 0.07 to 0.25 s on average and none fail. It is an independent, free,
+per-minute probe of **how fast the host can start a new backend and run one trivial statement**, it does not depend on the log pipeline or on the gateway,
+and it ran through every episode. Raw: `evidence/2026-10-05/db/` (10-minute series 28 Sep to 5 Oct, and every anomalous run).
+
+Two different failure modes appear, and the earlier notes ran them together:
+
+| Mode | What the table shows | Where it occurs |
+|---|---|---|
+| **Launcher stall** | runs per 10 minutes fall from 10 to 0 to 6: pg_cron did not start the job at all | at idle, 1 to 2 h long: 2 Oct 14:30 to 16:09, 17:30 to 18:20, 18:30 to 19:09; 3 Oct 11:00 to 13:09 and 17:10 to 17:49; 4 Oct 14:20 to 14:59 |
+| **Startup timeout** | 10 runs per 10 minutes, but each takes 10 to 156 s and 32 to 53 of 61 an hour end `failed` with the message **"job startup timeout"** (617 rows in E4) | the persistent phases: 2 Oct 19:13 to 3 Oct 01:41; 3 Oct 19:12 to 4 Oct 06:02; 4 Oct 16:23 to 5 Oct 07:26 |
+
+* **MEASURED, and a correction.** In the persistent phases pg_cron **never stopped launching**: 10 runs in every 10-minute bucket from 15:00 on 4 October to 10:40 on
+  5 October. What failed was **starting a new backend within the time allowed**. Running processes kept ticking; the creation of a new one did not complete.
+  The earlier statement that "cron starts fall" in persistent phases came from the log pipeline, which under-counts: for 3 Oct 19:30 to 20:30 the log
+  showed 3 to 7 missing starts in each 10 minutes and the database shows 10 in every bucket. The log pipeline loses lines under pressure; the table does not.
+  Launcher stalls are confirmed by both.
+* **INFERRED:** "a new process cannot start in time while existing ones run" is what memory starvation looks like (a new backend must fault in code, catalogs and
+  its own stack from swap or disk), and it is what an IO envelope that is pinned at baseline looks like. It is not what a CPU-credit throttle looks like (CPU was
+  94 to 96% idle at healthy idle and a credit throttle would slow running processes too). It does not distinguish memory from IO.
+* **MEASURED:** the canary is not an earlier warning than the gateway in the persistent phases (both start within about a minute of each other), but a **launcher
+  stall is**: it begins 40 to 60 minutes before the first gateway failure in E2 and E4. See 12.3.
+
+### 12.2 Temp files: demoted
+
+The exporter's spill (section 9a) is about 83 KB/s, 1.6% of the baseline throughput, and writes to the data volume while the heavy IO is on the system volume. It is
+a victim and a small contributor, not a cause of episodes. Decision recorded: no tuning of `pg_stat_statements.max`, `track_utility`, `work_mem` or anything else for it.
+
+### 12.3 Did host degradation begin before the bursts? (MEASURED at one-minute resolution; the reading is INFERRED)
+
+One-minute joins of gateway requests, Postgres timeouts and the canary, per episode (raw: `evidence/2026-10-05/logs/win-m1-*`, `db/kick-*`):
+
+| Episode | Last traffic before | First sign of degradation | Burst that "caused" it | Order |
+|---|---|---|---|---|
+| **E1**, 2 Oct | 07:00 to 07:04, 30 to 200 requests a minute, host healthy | **07:21**, one minute after the burst started at 07:20 (335 and 346 requests a minute): 8 gateway 5xx at 07:21, 11 Postgres timeouts at 07:22 | 07:20 | **burst, then degradation, inside a minute** |
+| **E2**, 3 Oct | burst 13:10 to 14:19, a last 170 requests at 14:40, then 2 h 20 min (14:50 to 17:09) at essentially zero, cron healthy | **17:11**: launcher stall, 29 of 40 minutes with no run, at **zero traffic** | burst begins **17:50** (3,039 requests in 10 min) | **degradation first, then burst**; persistent phase begins 19:12 inside a second burst (18:50 to 19:30) |
+| **E4**, 4 Oct | burst 13:40 to 13:47 (about 3,200 requests), then idle | **14:20 to 14:59**: launcher stall (4, 4, 5, 8 runs per 10 min) at 0 to 8 requests a minute | burst begins **15:22** (about 300 a minute for an hour) | **degradation first, then burst**; first timeouts 15:35; persistent phase from 16:23 as traffic ends at 16:30 |
+| Also, 3 Oct | burst 08:30 to 10:20 (1 to 3 k per 10 min) | **11:00 to 13:09**: launcher stall for 2 h 10 min at 0 to 100 requests per 10 min | none in the window; it ended at 13:10 as a burst of 2,673 began | **degradation at idle, with no burst inside it** |
+
+**Answer.** The evidence **supports "host degradation first, burst second" for the transient launcher stalls in E2 and E4**, and for the 3 Oct 11:00 stall, which happened with
+no burst inside it at all. It does **not** support it for E1, where the host was healthy until the burst (INFERRED: one minute of 335 requests a minute tipped it). For the
+**persistent** phases the onset is during or just after heavy traffic (E2 19:12 inside a burst; E4 16:23 at the end of an hour of about 300 requests a minute). The picture is
+therefore: **a host that is intermittently unwell at idle, hours after earlier bursts, and that collapses into the persistent state when load arrives on top of it.**
+Three cautions, none of which is resolved:
+
+1. Each stall followed an earlier burst by 36 minutes to about 2.5 hours (E4 14:20 after 13:47; 3 Oct 11:00 after 10:20; E2 17:11 after the 14:40 requests). A delayed consequence of earlier
+   load (a budget, a cache, a swap state) is not excluded by "no traffic in the minutes before".
+2. The bursts are largely our own verification traffic, and one page load costs about 25 gateway requests (12.6), so 3,000 requests in ten minutes is on the order of a hundred
+   page loads. The E2 and E4 bursts were run **against a host that was already stalled**.
+3. A gateway request count is not total load. The worker and the exporter reach the database without the gateway.
+
+### 12.4 Refining the leading model: memory starvation feeding root-volume IO, amplified by the Nano IO envelope
+
+The two are not treated as exclusive. The coupled model, with what each part predicts and whether the evidence has it:
+
+| Prediction | Evidence | State |
+|---|---|---|
+| Memory pressure makes the **system volume** carry heavy IO at idle | 128 reads/s and 29 writes/s on the root volume, 120 swap-in pages/s, 199 major faults/s, 551 to 613 MiB swapped, `shared_buffers` 224 MB of 434 MiB | MEASURED |
+| That IO sits **near the baseline envelope** (250 IOPS), leaving little headroom | 157 IOPS = 63% of baseline at idle | MEASURED (DERIVED ratio) |
+| Extra demand therefore queues, and **new** process starts suffer first | persistent phases: runs launch on time, "job startup timeout" on 617 of them; running processes keep ticking | MEASURED |
+| In an episode, root-volume IOPS is pinned at about 250 and latency and iowait rise | no episode-time reading exists (the scrape returns 500 in every episode) | UNKNOWN |
+| In an episode, MemAvailable is near zero and swap/major-fault rates rise above the idle level | none | UNKNOWN |
+| The envelope's burst budget (if this host has one) is exhausted at onset and refills afterwards | needs the Disk IO % consumed chart | UNKNOWN |
+| A launcher stall at idle is the same mechanism at lower intensity | no instrument covers a stall; the launcher runs in the postmaster's child and wakes on a latch | UNKNOWN |
+
+**What would separate memory from the envelope** (they may both be true): memory starvation predicts high swap and major-fault rates with the envelope not pinned; envelope
+saturation predicts IOPS pinned at the baseline with latency rising whatever the swap rate. Both need one reading taken **inside** an episode. The only way to get one without
+creating an episode is to take readings continuously and wait for a natural one; the scrape route fails when the host is sick, so the dashboard charts (memory with swap, root
+IOPS, Disk IO % consumed) are the instrument.
+
+### 12.5 Deployment queue: can steps 1 to 5 run separately from the heavy acceptance work? (recommendation only; nothing has been run)
+
+Read from the migrations and scripts:
+
+* Migrations 0892 to 0896 are `create or replace function` and `revoke`, with no table rewrite, no `alter table`, no lock held for longer than a catalog update. The only
+  loop is 0894's re-index of documents whose chunks are whitespace-only (the database holds 5,444 chunks over 149 documents, 355 MB in all); it touches only affected documents.
+* Steps 4 and 5 upload three edge functions and a static page delta. The probes make a handful of gateway requests.
+* The earlier trap (an `ACCESS EXCLUSIVE` lock deadlocking a live suite) does not apply: nothing here is `alter table`.
+
+**Recommendation: yes, steps 1 to 5 can be executed serially while healthy, separately from steps 6 to 9, which stay held.** Conditions, none of which has been met by being written down:
+
+1. **Grant's explicit go.** His standing instruction to hold deployment has not been lifted, and this recommendation does not lift it.
+2. **Abort rule, using the canary as the live signal:** before each step read health and the last five canary runs (all succeeded, each under 1 s) and the runs-per-10-minutes (10);
+   after each step read them again. Stop at any `job startup timeout`, any canary run over 1.5 s, any missing run, any statement timeout in the log, any health label other than
+   ACTIVE_HEALTHY, or any gateway section over its usual latency.
+3. **A launcher stall can start on its own at idle** (six windows in the three days 2 to 4 October). If one begins during a step it is indistinguishable from an effect of the step, so the abort rule
+   applies and the step is repeated later, not argued about.
+4. **Add the sign-in fix as a step after 5, only after review:** `deploy:signin` (the function) and the page delta carrying `net.js`. It is new code written today, covered by 12 unit
+   tests and the hang harness, and not yet read by anyone else.
+5. Scrape before and after each step is kept, as asked; `forensics:metrics` plus one `cron.job_run_details` read are cheap.
+
+### 12.6 The sign-in path is a V1 blocker (MEASURED unless stated)
+
+**Where the deployed login hangs.** On the deployed page (`https://ai-team-hq.vercel.app`, run 11:07 UTC 5 October, platform healthy, with the sign-in request held in the browser so
+nothing reached the service): the page sat on the "Loading your office" skeleton for the full 30 s with no message, **held at `ui -> signin:refresh`**. The same shape holds at the other two
+sign-in boundaries (verified against a copy of the page from before the fix, `verify:auth-hang -- --root`): the link request leaves the form on "Sending…" with a disabled button, and the
+first-office call leaves "Setting up your office…" forever.
+
+**Why.** (1) Every request on the sign-in path had no deadline: the refresh and link requests in `session.js`, every office read and write in `office.js`, and the first-office call in
+`bc/account.js`. The studio payload (10 s) and pulse (8 s) had one; the path in front of them did not. (2) The boot sequence awaits the refresh **before** asking for the studio payload, so the
+10 s deadline was never reached. (3) The sign-in function called Auth with no deadline either. (4) **A second defect the hang hid:** the function's `refresh` mapped *every* Auth failure,
+including a timeout or a 5xx, to `{ok:false, reason:'expired'}`, and the page deletes the stored session on "expired": a returning person was signed out *because Auth was down*.
+(5) **Natural evidence of the stall on the live system:** on 5 October at 06:14:50 UTC one sign-in invocation took **59,096 ms** (preflight 06:13:51), and Auth returned `/otp` 500 after
+22,448 ms at 06:15:37, during the last hour of E4. UNKNOWN whether that was Grant's attempt: the function log keeps no body, only time and status. Please say when it was.
+
+**Why no suite saw it.** `verify:offline` answers every URL that is not the gateway with an empty 200 (so the sign-in function never hung) and signs in with the legacy office key, which has no refresh.
+`verify:account-ui` answers the sign-in function itself. Before today no suite had ever called the real function.
+
+**Healthy deployed path, one disposable person (`verify:auth-acceptance`; production-heavy class, run with stated intent; 17 of 19 checks):**
+
+| Boundary | Time | Note |
+|---|---|---|
+| page HTML | 0.1 to 0.7 s | |
+| sign-in function: whoami / refresh / refresh with a bad token | 557 / 510 / 477 ms | a bad token is reported `expired` and an outage is not |
+| session adopted and office resolved (studio read, 403 `no_office`) | 4.4 s | |
+| first office made (`create_office`) | 3.3 s | |
+| reload keeps the session | 2.3 s | |
+| sign out, then sign in again, same office | 12 s | |
+
+The two failures: the hang above (a real defect, expected), and the "first-run screen" check, which expected `.bcfirst`. The deployed page lands a new person on the project board with the
+catch-all project "Conversations"; whether the held page delta draws the first-run screen instead is UNKNOWN. The check now accepts either and reports which.
+
+**Request fan-out (MEASURED):** every page load issues about 25 gateway reads, 11 of them to a person who has no office yet (all answered 403), each taking 1.3 to 4.7 s on a healthy
+platform, and `pulse` hit its 8 s deadline once. Three loads in the acceptance run made about 75 requests. This is the main component of the request counts in the bursts above.
+
+**What changed in the working tree (not deployed):** `web/studio/net.js` (bounded requests, a boundary trace in `window.__hqTrace` and `hq.trace`), the five unbounded paths moved onto it,
+a visible reason and Try again on the strip, `signin` with a 12 s deadline on every upstream call and `unavailable` (503) instead of `expired` for an outage. `verify:auth-hang`: **14 of 14 on the
+fixed page, 5 of 14 on the pre-fix page** (the detector fails when the defect is present); `tests/web/sign-in-path-ends.test.ts`: 12 tests, each source property with a control.
+**Not exercised, deliberately:** the email leg (a link request spends the project's hourly email budget and could lock the owner out of his own sign-in). **Still unbounded:** the chat turn
+and voice requests (`chat.js`, `call.js`), which are long by design and need a different bound.
+
+### 12.7 Would a one-tier compute increase now be a useful controlled experiment? (an opinion, INFERRED; it needs Grant's decision and cost approval)
+
+Vendor figures (current page): Nano 0.5 GB, 5 MB/s and 250 IOPS baseline; **Micro 1 GB, 11 MB/s and 500 IOPS**; same 261 MB/s and 11,800 IOPS maximum; Micro about $10 a month; a change
+takes under two minutes of downtime, "can take longer"; Nano cannot be launched on a paid plan, so the project must be on a paid plan.
+
+* **As a mitigation: plausibly yes.** It doubles memory and doubles the baseline IO envelope, which is exactly where the coupled model says the margin is thin (63% of baseline at idle).
+* **As an experiment: yes, with two named limits.** It tests the family {memory, IO envelope} against {provider event, application} directly. If launcher stalls and startup timeouts stop for a
+  pre-registered window, the envelope family is supported; if they continue at the same rate, memory and IO baseline are weakened a long way, and the provider-event and application hypotheses
+  rise. **Limit one:** it changes memory and IO baseline together, so it cannot say which. **Limit two (important):** a tier change replaces the host, so it also resets any host-specific condition;
+  it cannot separate the envelope family from "this particular host was unlucky". Say so before the result, not after.
+* **How to make it scientifically clean:** change nothing else in the same window (no tuning, no deploy of unrelated work); fix the outcome metrics beforehand, all of which are free and
+  already collected (launcher-stall minutes per day, startup-timeout runs per day, gateway 5xx per day, and the exporter-visible host rates from scrape); observe for at least 7 days of natural use,
+  because the pre-change episodes occurred on 3 of 4 days; keep the observation traffic natural, with no artificial load.
+* **What should come first, if possible:** the Disk IO % consumed chart that Grant is capturing. If it shows the budget at 0% during an episode, the case for the tier is made without spending.
+  If it shows plenty of budget during an episode, the IO-envelope half of the model is wrong and the tier is a gamble on memory alone.
+* **Rank today:** worth doing as the next controlled step after the chart is in hand, and a reasonable operational choice even without it, **if Grant accepts the paid-plan cost**. I am not recommending it
+  over reading the chart first, and it is not something to do while the deployment of steps 1 to 5 is under way.
+
+### 12.8 The sign-in reliability fix is deployed (5 October, 11:43 to 11:49 UTC) - and nothing else was
+
+Grant's instruction: review, deploy and prove only this fix. Nothing in the held queue (migrations 0892 to 0896, `hq-api`, `slack-oauth`, `worker`, the rest of the page delta) was applied.
+
+* **Review (one correction).** The function and the page were read line by line. One gap was found and fixed before deploying: `session.js` cleared the stored session on any refresh answer that
+  was not a success, so a reply in a shape the page did not know (a 4xx about something else, a body that did not parse) would also have signed a person out. It now clears the session **only on
+  an explicit `reason: 'expired'`**; anything else leaves it in place and reports that the service did not answer. The gateway (`hq-api`) was checked and already answers 503, not 401, when it
+  cannot reach Auth, so the page's 401-clears-session rule cannot fire during an Auth outage. No authentication logic, office resolution or fallback changed; no secret appears in any new response.
+* **Function:** `signin` v122 (the pre-fix source, confirmed against the deployed bundle) to **v124**, by `npm run deploy:signin`. That script also re-sets the same two function secrets from the vault
+  (`HQ_API_TOKEN`, `SIGNIN_ALLOWED_ORIGIN`); values unchanged, nothing printed. Rollback: redeploy `supabase/functions/signin/index.ts` from commit `ca8845b7`.
+* **Page:** `dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M` to **`dpl_8QwvvES1oRridjeokGzu2MMGdEYm`**. `hq-page-delta` ships the whole working-tree page, which differs from the live page in thirteen files and includes unrelated queued
+  changes (confirmation dialogs, the Slack card). So the deployed page was **built from the live bytes plus only the sign-in diff** (a three-way merge with the pre-fix commit as base; the other
+  six differing files were put back to their live bytes) and checked three ways: it parses, the stand-in harness scores 21/21 on it, and after deployment the live page differs from the previous live page in
+  exactly `app.js`, `bc/account.js`, `bc/shell.js`, `data.js`, `office.js`, `session.js` and the new `net.js`, each equal to the staged copy. Rollback: promote `dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M`.
+* **Healthy path, on the deployed page, one disposable person (`npm run suite -- auth-acceptance --production`): 19 of 19.** Existing session adopted from the address fragment and the fragment removed; the person with
+  no office resolved to the set-up screen; first office made (2.9 s); reload keeps the session; sign out clears it; sign in again reaches the same office; teardown left no active office. An earlier run of the
+  same pass failed one check (18 of 19) because **my check** matched the page's own copy too early and the next step aborted the in-flight request; the check was tightened and the pass re-run, not the product changed.
+* **Degraded path, without degrading production:** with the sign-in request held in the browser (nothing sent to Supabase) the deployed page ends the wait and says the sign-in service did not answer after
+  **16.2 s** (it used to wait without end). The stand-in harness (`verify:auth-hang`) covers the rest: 21 of 21 on the fixed page and **6 of 21 on the pre-fix page** (the control that shows the detector fails on the old
+  defect): a timeout ends inside its deadline and names the step; a 503 "unavailable" is reported as unavailable, not expired; an unrecognised answer keeps the session; a genuine "expired" still signs out; the form
+  leaves "Sending" and "Setting up"; Try again works and replaces the old session once the stand-in is back.
+* **Residual risk (UNKNOWN frequency, not new):** if Auth consumes a single-use refresh token and its reply is lost, the old token is spent. Auth's short reuse window mitigates a quick retry; it cannot be removed from the page.
+* **Health before and after:** every service `ACTIVE_HEALTHY` at 11:42, 11:49; the cron canary 60 of 60 and 90 of 90 runs succeeded in the surrounding hour and a half, longest 0.25 s. No launcher stall, no startup timeout, no
+  Postgres timeout in the window.
+* **Still held, as instructed:** migrations 0892 to 0896, `hq-api`, `slack-oauth`, `worker`, the rest of the page delta, the compute-tier decision, any `pg_stat_statements` or `log_temp_files` change (the latter is `-1`).
+  Issue #422 records the page fan-out (about 25 reads a page load, 11 before an office exists); #407 is untouched.

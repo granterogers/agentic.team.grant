@@ -91,6 +91,19 @@ const corsFor = (request: Request): Record<string, string> => {
   }
 }
 
+/*
+  EVERY CALL TO THE AUTH SERVICE ENDS.
+
+  On 5 October at 06:14 UTC one invocation of this function took 59,096 ms and a call to Auth behind it answered 500
+  after 22,448 ms: a fetch with no deadline waits for as long as the service behind it does, and the page waiting on this
+  function had no deadline either. The function now gives up first, with a sentence, so the page can say what happened.
+  The page's own deadline (web/studio/net.js) is longer than this one on purpose, so the answer that arrives is this
+  function's, with a reason, rather than the browser's.
+*/
+const UPSTREAM_MS = 12_000
+const upstream = (url: string, init: RequestInit = {}): Promise<Response> =>
+  fetch(url, { ...init, signal: AbortSignal.timeout(UPSTREAM_MS) })
+
 const json = (body: unknown, status: number, request: Request): Response =>
   new Response(JSON.stringify(body), {
     status,
@@ -138,7 +151,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const back = String(body.back ?? '')
     const redirect = ALLOWED_ORIGINS.some((o) => back.startsWith(o)) ? back : origin
 
-    const asked = await fetch(`${DB_URL}/auth/v1/otp`, {
+    const asked = await upstream(`${DB_URL}/auth/v1/otp`, {
       method: 'POST',
       headers: { apikey: ANON, 'content-type': 'application/json' },
       body: JSON.stringify({ email, create_user: true, redirect_to: redirect }),
@@ -203,7 +216,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const email = String(body.email ?? '')
       .trim()
       .toLowerCase()
-    const member = await fetch(`${DB_URL}/rest/v1/rpc/office_member`, {
+    const member = await upstream(`${DB_URL}/rest/v1/rpc/office_member`, {
       method: 'POST',
       headers: {
         apikey: SERVICE_KEY,
@@ -243,7 +256,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const redirect = ALLOWED_ORIGINS.some((o) => back.startsWith(o))
       ? back
       : (ALLOWED_ORIGINS[0] ?? '')
-    const made = await fetch(`${DB_URL}/auth/v1/admin/generate_link`, {
+    const made = await upstream(`${DB_URL}/auth/v1/admin/generate_link`, {
       method: 'POST',
       headers: {
         apikey: SERVICE_KEY,
@@ -278,12 +291,22 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (action === 'refresh') {
     const refresh = String(body.refresh_token ?? '')
     if (refresh === '') return json({ error: 'refresh_token' }, 400, request)
-    const swapped = await fetch(`${DB_URL}/auth/v1/token?grant_type=refresh_token`, {
+    const swapped = await upstream(`${DB_URL}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
       headers: { apikey: ANON, 'content-type': 'application/json' },
       body: JSON.stringify({ refresh_token: refresh }),
     }).catch(() => null)
-    if (swapped === null || !swapped.ok) {
+    /*
+      AN OUTAGE IS NOT AN EXPIRED SESSION. This branch used to answer "expired" for every failure, including Auth timing
+      out or answering 5xx, and the page signs a person out on "expired": somebody returning during an Auth incident lost a
+      perfectly good session because the service that checks it was down. Only an answer from Auth that says the token is
+      no good (a 4xx other than a rate limit) is "expired". No answer, a 5xx and a 429 are "unavailable": the page keeps
+      the session, says so, and tries again later.
+    */
+    if (swapped === null || swapped.status >= 500 || swapped.status === 429) {
+      return json({ ok: false, reason: 'unavailable' }, 503, request)
+    }
+    if (!swapped.ok) {
       // Expired or revoked. The page signs itself out rather than retrying, and
       // saying which is not useful to anybody holding a dead token.
       return json({ ok: false, reason: 'expired' }, 200, request)
@@ -308,10 +331,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (action === 'whoami') {
     const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
     if (presented === '') return json({ ok: false, reason: 'nothing presented' }, 200, request)
-    const who = await fetch(`${DB_URL}/auth/v1/user`, {
+    const who = await upstream(`${DB_URL}/auth/v1/user`, {
       headers: { apikey: ANON, Authorization: `Bearer ${presented}` },
     }).catch(() => null)
-    if (who === null || !who.ok) return json({ ok: false, reason: 'not a session' }, 200, request)
+    if (who === null || who.status >= 500) {
+      return json({ ok: false, reason: 'unavailable' }, 503, request)
+    }
+    if (!who.ok) return json({ ok: false, reason: 'not a session' }, 200, request)
     const user = (await who.json()) as { email?: string }
     return json({ ok: true, email: user.email ?? '' }, 200, request)
   }

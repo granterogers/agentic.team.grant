@@ -15017,8 +15017,18 @@ async function refresh() {
     reading that contradicts the row it sits in.
   */
   for (const k of Object.keys(progress)) delete progress[k]
+  let fresh = ''
+  try {
+    fresh = await presentedFresh()
+  } catch (e) {
+    // The sign-in service did not answer: say so on the strip and stop. The session is untouched (net.js).
+    source.state = source.at === null ? 'unreachable' : 'stale'
+    source.why = e instanceof Error ? e.message : 'the sign-in service did not answer'
+    render()
+    return
+  }
   await Promise.all([
-    hydrate(API, await presentedFresh()),
+    hydrate(API, fresh),
     // Both, together. Settings is a separate payload because it is a separate
     // screen and most visits never open it — but a write can change either, so
     // a refresh re-reads both rather than leaving one stale behind a tab.
@@ -15312,7 +15322,22 @@ async function live() {
     panel to explain it. The seam is `office.js`, which knows about both and
     refreshes a session that is nearly out.
   */
-  const token = await presentedFresh()
+  let token = ''
+  try {
+    token = await presentedFresh()
+  } catch (e) {
+    /*
+      THE SIGN-IN SERVICE DID NOT ANSWER, and that is a different thing from having no session (net.js). The refresh
+      exchange runs BEFORE the studio payload is asked for, so a stuck Auth service used to leave the page on a blank
+      screen for as long as the browser cared to wait. Now it ends: the session stays where it is, the strip says which
+      step stopped and for how long, and Try again is offered (the same retry the studio payload has).
+    */
+    source.state = source.at === null ? 'unreachable' : 'stale'
+    source.why = e instanceof Error ? e.message : 'the sign-in service did not answer'
+    arrivalPending = false
+    render()
+    return
+  }
   if (token === '') {
     /*
       Not a failure, and it must not read as one (#119). `state` stays

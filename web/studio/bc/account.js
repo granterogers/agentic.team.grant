@@ -30,6 +30,7 @@
 
 import { act, attempt, canWrite } from '../office.js'
 import { source } from '../data.js'
+import { bounded } from '../net.js'
 import * as session from '../session.js'
 import { signOut } from '../signout.js'
 import { esc } from './parts.js'
@@ -216,11 +217,17 @@ const looksLikeEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
 export async function createOffice(name) {
   const token = await session.presentable()
   if (token === '') throw new Error('You are signed out. Sign in again.')
-  const r = await fetch(session.apiUrl(), {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ action: 'create_office', name }),
-  })
+  // Setting up an office writes several rows, so it may wait longer than a read, but it ends and says where it stopped.
+  const r = await bounded(
+    'office:create',
+    session.apiUrl(),
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create_office', name }),
+    },
+    40_000,
+  )
   const body = await r.json().catch(() => ({}))
   const result = body.result ?? body
   if (!r.ok || result.ok === false || typeof result.error === 'string') {

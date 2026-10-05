@@ -29,6 +29,7 @@
 */
 
 import { HQ_API as API, UNCONFIGURED } from './backend.js'
+import { bounded } from './net.js'
 import * as session from './session.js'
 
 /*
@@ -164,14 +165,20 @@ const refuseUnconfigured = () => {
 export async function act(action, args = {}) {
   refuseUnconfigured()
   const began = session.epoch()
-  const r = await fetch(API, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${await toPresent()}`,
-      'Content-Type': 'application/json',
+  // A change waits longer than a read (it can touch several tables) but it still ends, and says which step it stopped at.
+  const r = await bounded(
+    `office:act:${action}`,
+    API,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${await toPresent()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action, args }),
     },
-    body: JSON.stringify({ action, args }),
-  })
+    30_000,
+  )
   const body = await r.json().catch(() => ({}))
   if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
   if (r.status === 401) {
@@ -237,9 +244,12 @@ export async function read(section, id, extra) {
     }
   }
   const began = session.epoch()
-  const r = await fetch(`${API}?${parts.join('&')}`, {
-    headers: { Authorization: `Bearer ${await toPresent()}` },
-  })
+  const r = await bounded(
+    `office:read:${section}`,
+    `${API}?${parts.join('&')}`,
+    { headers: { Authorization: `Bearer ${await toPresent()}` } },
+    20_000,
+  )
   if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
   if (r.status === 401) {
     session.forget()
