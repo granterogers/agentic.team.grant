@@ -2944,6 +2944,24 @@ const documentRecord = (p) => {
     String(d.id ?? '') !== '' &&
     (d.fromOffice === true ? d.import_available === true && d.import_state !== 'imported' : ['drive', 'notebook', 'notion', 'web'].includes(e.src) && d.imported !== true)
   const importPending = d.import_state === 'pending'
+  /*
+    READ ON DEMAND, OR IMPORTED. An external document Team HQ holds no file of is read from its source when this opens
+    (the gateway decides what that means for the format); an imported one is Team HQ's own copy. Neither is the other,
+    and the line under the title says which, quietly, so a person is never left guessing whether a copy exists.
+  */
+  const onDemand =
+    d.fromOffice === true &&
+    d.imported !== true &&
+    d.hasFile !== true &&
+    String(d.id ?? '') !== '' &&
+    ['drive', 'notebook', 'notion', 'web'].includes(e.src)
+  const sourceName = docsrc.nameOfSource(e.src)
+  const provenanceLine =
+    d.imported === true && d.fromOffice === true
+      ? '<p class="bcpvline" data-bc-pvline="imported">Imported copy · kept in Team HQ, whatever happens to the original</p>'
+      : onDemand
+        ? `<p class="bcpvline" data-bc-pvline="ondemand">${esc(e.src === 'drive' ? 'Read from Google Drive on demand' : `Text indexed from ${sourceName}`)} · not copied to Team HQ</p>`
+        : ''
   return `<div class="bcrecordhead">
       <h1>${esc(d.title ?? 'Document')}</h1>
       <span class="bcactions">
@@ -2951,8 +2969,13 @@ const documentRecord = (p) => {
         ${canImport ? (importPending ? importWaiting(d) : button('Import to Team HQ', { 'data-bc-docimport': esc(String(d.id)) })) : ''}
       </span>
     </div>
+    ${provenanceLine}
     <div class="bcdocgrid">
-      <div class="bcdocpreview" role="region" tabindex="0" aria-label="${esc(`Preview of ${d.title ?? 'the document'}`)}" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-doctitle="${esc(d.title ?? '')}">
+      <div class="bcdocpreview" role="region" tabindex="0" aria-label="${esc(`Preview of ${d.title ?? 'the document'}`)}" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-doctitle="${esc(d.title ?? '')}"${
+        onDemand && !isAudio
+          ? ` data-bc-docmode="ondemand" data-bc-docid="${esc(String(d.id))}" data-bc-docproject="${esc(String(p.slug ?? ''))}" data-bc-docsourcename="${esc(sourceName)}" data-bc-docsourceurl="${esc(sourceHref)}" data-bc-docimportable="${canImport && !importPending ? '1' : ''}"`
+          : ''
+      }>
         ${
           isAudio && file !== ''
             ? `<div class="bcplayer">

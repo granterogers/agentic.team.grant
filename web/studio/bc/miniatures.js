@@ -983,7 +983,7 @@ export const thumbFace = (d, i, extra = '') => {
   const ref = docRef(d)
   const tone = object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`
   return `<span class="bcthumb${tone}${extra === '' ? '' : ` ${esc(extra)}`}"
-    data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
+    data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}" data-bc-thumbmod="${esc(String(d.modified ?? ''))}">
     ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9, extra === 'bcrowthumb') : (GLYPH[object.glyph] ?? '')}
   </span>`
 }

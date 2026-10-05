@@ -26,9 +26,10 @@
   Comments inside any template literal in this file use plain words.
 */
 
-import { act, read } from '../office.js'
+import { act, read, readFile } from '../office.js'
 import * as pdf from '../pdf.js'
 import * as docsrc from './docsources.js'
+import * as thumbs from './docthumbs.js'
 import { esc } from './parts.js'
 
 const TEXT_LIMIT = 9000
@@ -99,6 +100,171 @@ const paintPreview = async (host, fileFor) => {
   as v5 (approved)") would go with the old DOM, so it is kept here until the next time this document's history is drawn.
 */
 const rolled = { key: '', text: '' }
+
+
+/*
+  AN EXTERNAL DOCUMENT, READ ON DEMAND (0990). Not an import.
+
+  The viewer asks the gateway for the preview and draws whichever of five states comes back, each in words: it is
+  loading, it is ready, it could not be read (with the reason, and a press to try again only when trying again could
+  help), it is a format Team HQ cannot show (with the honest alternatives: open the source, or import a copy), or what
+  it shows may be older than the source (said above the content, never silently). A PDF or an image is streamed from the
+  source into this page and is never stored by Team HQ; this page keeps only a small thumbnail of it on this device.
+  Importing is the separate press in the header and is never started from here except by the person pressing it.
+*/
+const ON_DEMAND_TEXT_LIMIT = 40000
+
+const pvBox = (state, head, body, buttons = '') =>
+  `<div class="bcpvstate bcpvstate--${state}" data-bc-pvstate="${state}" role="${state === 'failed' ? 'alert' : 'status'}">
+    <p class="bcpvhead">${esc(head)}</p>
+    ${body === '' ? '' : `<p class="bcpmeta bcpvwhy">${esc(body)}</p>`}
+    ${buttons === '' ? '' : `<div class="bcrow bcdocacts">${buttons}</div>`}
+  </div>`
+
+const pvOpenLink = (href) =>
+  href === ''
+    ? ''
+    : `<a class="bcbtn bcbtn--outline" href="${esc(href)}" target="_blank" rel="noopener" data-bc-pvopen>Open source</a>`
+
+const paintOnDemand = async (host, ctx) => {
+  const id = host.dataset.bcDocid ?? ''
+  const slug = host.dataset.bcDocproject ?? ctx.state.project ?? ''
+  const name = host.dataset.bcDocsourcename ?? 'the source'
+  const sourceHref = host.dataset.bcDocsourceurl ?? ''
+  const importable = host.dataset.bcDocimportable === '1'
+  const title = host.dataset.bcDoctitle ?? 'Document'
+  const again = () => void paintOnDemand(host, ctx)
+
+  host.innerHTML = pvBox('loading', `Reading from ${name}…`, 'Team HQ is fetching this on demand. Nothing is being copied.')
+  host.setAttribute('aria-busy', 'true')
+
+  let out = null
+  try {
+    out = await read('document_preview', id, slug === '' ? undefined : { project: slug })
+  } catch (e) {
+    out = {
+      state: 'failed',
+      reason: String(e?.message ?? e),
+      retryable: true,
+      alternatives: ['retry', 'open_source'],
+    }
+  }
+  host.removeAttribute('aria-busy')
+  host.dataset.bcPvstate = String(out?.state ?? 'failed')
+  const href = String(out?.source?.url ?? '') || sourceHref
+  const alts = Array.isArray(out?.alternatives) ? out.alternatives : []
+  const buttons = (retry, offerImport = false) =>
+    [
+      retry && alts.includes('retry') ? '<button type="button" class="bcbtn bcbtn--outline" data-bc-pvretry>Try again</button>' : '',
+      alts.includes('open_source') ? pvOpenLink(href) : '',
+      offerImport && alts.includes('import') && importable ? '<button type="button" class="bcbtn bcbtn--outline" data-bc-pvimport>Import to Team HQ</button>' : '',
+    ].join('')
+  const wireButtons = () => {
+    host.querySelector('[data-bc-pvretry]')?.addEventListener('click', again)
+    host.querySelector('[data-bc-pvimport]')?.addEventListener('click', () => {
+      /* The one import press is the header's; this only presses it, so there is a single path to a copy. */
+      host.closest('.bcdocgrid')?.parentElement?.querySelector('[data-bc-docimport]')?.click()
+    })
+  }
+
+  if (out?.state === 'failed') {
+    host.innerHTML = pvBox('failed', `Could not read this from ${name}`, String(out.reason ?? 'Something went wrong.'), buttons(true))
+    wireButtons()
+    return
+  }
+  if (out?.state === 'unsupported') {
+    const gone = out.reason_code === 'source_disconnected'
+    if (gone) {
+      /* A source that is switched off is not read, so the page stops offering what would need to read it. */
+      const page = host.closest('.bcdocgrid')?.parentElement
+      const imp = page?.querySelector('[data-bc-docimport]')
+      if (imp) imp.hidden = true
+      const line = page?.querySelector('[data-bc-pvline]')
+      if (line) line.textContent = 'Source switched off · nothing is read from it'
+    }
+    host.innerHTML = pvBox(
+      'unsupported',
+      gone ? `This source is switched off` : 'Team HQ cannot show this here',
+      String(out.reason ?? ''),
+      buttons(false, true),
+    )
+    wireButtons()
+    return
+  }
+  if (out?.state === 'ready' && out.kind === 'held') {
+    /* Team HQ holds it: the ordinary viewer path. */
+    host.dataset.bcDocmode = ''
+    void paintPreview(host, ctx.fileFor)
+    return
+  }
+
+  const stale = out?.state === 'stale'
+  const lead = stale
+    ? `<div class="bcpvnotice bcpvnotice--stale" data-bc-pvstate="stale" role="status"><p>${esc(String(out.reason ?? 'This may be older than the source.'))}</p>${out.retryable === true ? '<button type="button" class="bcbtn bcbtn--outline" data-bc-pvretry>Try again</button>' : ''}</div>`
+    : typeof out?.notice === 'string' && out.notice !== ''
+      ? `<p class="bcpvnotice" data-bc-pvnotice role="status">${esc(out.notice)}</p>`
+      : ''
+  const modified = out?.source?.modified ?? null
+
+  if (out?.payload?.type === 'text') {
+    const text = String(out.payload.text ?? '')
+    const cut = text.length > ON_DEMAND_TEXT_LIMIT
+    host.innerHTML = `${lead}<pre class="bcdoctext" tabindex="0" aria-label="Text of the document">${esc(cut ? `${text.slice(0, ON_DEMAND_TEXT_LIMIT)}…` : text)}</pre>${
+      cut || out.payload.truncated
+        ? `<p class="bcpmeta">That is the beginning. ${out.payload.truncated ? 'The text is long, so only the start is searchable. ' : 'The whole text is searchable. '}Open the source for the rest.</p>`
+        : ''
+    }${out.payload.note ? `<p class="bcpmeta">${esc(String(out.payload.note))}</p>` : ''}`
+    wireButtons()
+    return
+  }
+
+  if (out?.payload?.type === 'stream') {
+    host.innerHTML = `${lead}<div data-bc-pvstream>${pvBox('loading', `Loading the ${out.kind === 'pdf' ? 'PDF' : 'image'}…`, '')}</div>`
+    wireButtons()
+    const target = host.querySelector('[data-bc-pvstream]')
+    let blob = null
+    try {
+      blob = await readFile('document_preview_file', id, slug === '' ? undefined : { project: slug })
+    } catch (e) {
+      target.innerHTML = pvBox('failed', `Could not read this from ${name}`, String(e?.message ?? e), buttons(true))
+      wireButtons()
+      host.dataset.bcPvstate = 'failed'
+      return
+    }
+    const url = URL.createObjectURL(blob)
+    try {
+      if (out.kind === 'pdf') {
+        const { pages, total } = await pdf.pages(url, 760, 6)
+        target.innerHTML = `<div class="bcdocpages">${pages
+          .map((p, i) => `<img class="bcdocpage" alt="${esc(`Page ${String(i + 1)} of ${String(total)}`)}" src="${esc(p.src)}" loading="lazy">`)
+          .join('')}</div>${total > pages.length ? `<p class="bcpmeta">${esc(`Showing the first ${String(pages.length)} of ${String(total)} pages. Open the source for the rest.`)}</p>` : ''}`
+        if (pages[0] !== undefined) await keepThumb(id, modified, pages[0].src, ctx)
+      } else {
+        target.innerHTML = `<img class="bcdocimage" alt="${esc(title)}" src="${esc(url)}">`
+        const img = target.querySelector('img')
+        await img.decode().catch(() => {})
+        await keepThumb(id, modified, url, ctx)
+      }
+    } catch {
+      target.innerHTML = pvBox('unsupported', 'Team HQ could not draw this file', 'The file was fetched but this browser could not render it. Open the source instead.', buttons(false))
+      wireButtons()
+      host.dataset.bcPvstate = 'unsupported'
+    }
+    return
+  }
+  host.innerHTML = pvBox('unsupported', 'Team HQ cannot show this here', 'Open the source instead.', pvOpenLink(href))
+}
+
+/** A small picture of the first page, kept on this device only. Never throws. */
+const keepThumb = async (id, modified, src, ctx) => {
+  try {
+    if (thumbs.get(id, modified) !== null) return
+    const small = await thumbs.shrink(src, 220)
+    if (thumbs.put(id, modified, small)) docsrc.forgetList(ctx.state.project)
+  } catch {
+    /* No thumbnail is better than a failed preview. */
+  }
+}
 
 /** The version history, drawn only when the office has one to show. */
 const paintVersions = async (host, ctx) => {
@@ -258,7 +424,12 @@ const paintStyle = async (host, ctx) => {
 
 export const wire = (root, ctx, fileFor) => {
   /* --- the preview, and the versions beside it */
-  for (const host of root.querySelectorAll('[data-bc-docpreview]')) void paintPreview(host, fileFor)
+  for (const host of root.querySelectorAll('[data-bc-docpreview]')) {
+    if (host.dataset.bcDocmode === 'ondemand') {
+      /* Handed on so the held path can be used when the gateway says Team HQ holds it. */
+      void paintOnDemand(host, Object.create(ctx, { fileFor: { value: fileFor } }))
+    } else void paintPreview(host, fileFor)
+  }
   for (const host of root.querySelectorAll('[data-bc-docversions]')) void paintVersions(host, ctx)
   for (const host of root.querySelectorAll('[data-bc-docstyle]')) void paintStyle(host, ctx)
 

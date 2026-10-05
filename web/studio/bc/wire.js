@@ -36,6 +36,7 @@ import {
 import * as compose from './compose.js'
 import * as cal from './calendar.js'
 import * as docview from './docview.js'
+import * as docthumbs from './docthumbs.js'
 import * as styleForm from './style.js'
 import * as expand from './expand.js'
 import { wireStage } from './stage.js'
@@ -2089,6 +2090,26 @@ const dressObject = (host, face) => {
 }
 
 const paintThumb = async (host, ref) => {
+  /*
+    A THUMBNAIL KEPT ON THIS DEVICE (docthumbs.js): the viewer made it from the first page or the picture while the
+    document was open, keyed to the source's modified time. It is checked first, so a tile for an external document that
+    Team HQ does not hold needs no request at all, and a source that changed shows none rather than an old one.
+  */
+  if (ref.startsWith('id:')) {
+    const kept = docthumbs.get(ref.slice(3), host.dataset.bcThumbmod ?? '')
+    if (kept !== null) {
+      const img = document.createElement('img')
+      img.className = 'realpage'
+      img.alt = ''
+      img.decoding = 'async'
+      img.src = kept
+      await img.decode().catch(() => {})
+      host.classList.remove('bcthumb--object', 'bcthumb--i')
+      host.replaceChildren(img)
+      host.classList.add('has-real')
+      return
+    }
+  }
   const file = await fileFor(ref)
   if (file === null) return
   const face = bcMini.faceFor(file.mime ?? '', file.url === '' ? (file.title ?? '') : file.url)
