@@ -5,7 +5,15 @@
  *      parser is shown to fail on a script with a line removed);
  *   3. every key the deploy scripts send to Vercel is one the fingerprint knows (a new key fails until somebody decides).
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -408,13 +416,9 @@ describe('an unpinned dependency is reported, not hidden', () => {
 
 const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf8')
 
-/** Pairs `add('<deployment path>', '<repository path>')` in the delta script. */
-const deltaFixedFiles = (src: string): string[] =>
-  [...src.matchAll(/await add\('([^']+)', '([^']+)'\)/g)].map((m) => `${m[1]} <- ${m[2]}`).sort()
-
-/** The `file: '<deployment path>'` entries in the full deploy's files array. */
-const fullFixedFiles = (src: string): string[] =>
-  [...src.matchAll(/\{ file: '([^']+)', data: [a-zA-Z]+ \}/g)].map((m) => String(m[1])).sort()
+/** Code with line and block comments removed, so a name that only a comment mentions is not mistaken for a call. */
+const code = (src: string): string =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
 /** The top-level keys of the object literal passed to JSON.stringify for the v13 deployment request. */
 const deploymentBodyKeys = (src: string): string[] => {
@@ -443,39 +447,159 @@ const deploymentBodyKeys = (src: string): string[] => {
 }
 
 describe('the fingerprint reads the file set the deploy scripts upload', () => {
-  const delta = read('scripts/deploy/hq-page-delta.ts')
-  const full = read('scripts/deploy/hq.ts')
-  const fixed = FIXED_PAGE_FILES.map(([name, path]) => `${name} <- ${path}`).sort()
-  const fixedNames = FIXED_PAGE_FILES.map(([name]) => name).sort()
-
-  it('deploy:hq-page uploads exactly the fixed files, from the same repository paths', () => {
-    expect(deltaFixedFiles(delta)).toEqual(fixed)
-  })
-
-  it('deploy:hq lists exactly the same fixed deployment paths', () => {
-    // it also uploads `...studioFiles` and, after `index.html`, nothing the shared set lacks
-    expect(fullFixedFiles(full)).toEqual(fixedNames)
-  })
+  const delta = code(read('scripts/deploy/hq-page-delta.ts'))
+  const full = code(read('scripts/deploy/hq.ts'))
+  /** A script takes its file set from the shared module and keeps no list or walk of its own. */
+  const usesSharedSet = (src: string): boolean =>
+    // The page-delta script may also pass a staged studio folder (`--root=`); the repository root is always '.'.
+    /collectPageFiles\('\.'(, ROOT)?\)/.test(src) &&
+    !/readdir\(/.test(src) &&
+    !/await add\(/.test(src) &&
+    !/\{ file: '/.test(src)
 
   it.each([
     ['deploy:hq-page', delta],
     ['deploy:hq', full],
   ])(
-    '%s skips the same directory and uploads each studio file at the root except index.html',
+    '%s builds its upload from collectPageFiles and has no file list or walk of its own',
     (_n, src) => {
-      expect(src).toContain("new Set(['raw'])")
-      expect(src).toMatch(/rel !== 'index\.html'/)
-      expect(src).toContain("'web/studio'")
+      expect(usesSharedSet(src)).toBe(true)
     },
   )
 
-  it('the parsers can fail: a script with a line removed no longer matches', () => {
-    const broken = delta.replace(/await add\('requirements\.txt'[^\n]*\n/, '')
-    expect(broken).not.toBe(delta)
-    expect(deltaFixedFiles(broken)).not.toEqual(fixed)
-    const brokenFull = full.replace(/\{ file: 'vercel\.json', data: vercelConfig \},\n/, '')
-    expect(brokenFull).not.toBe(full)
-    expect(fullFixedFiles(brokenFull)).not.toEqual(fixedNames)
+  it('the shared set holds the fixed files and skips raw/, each studio file at the root except index.html', async () => {
+    expect(FIXED_PAGE_FILES.map(([name]) => name).sort()).toEqual([
+      'api/notebook-act.py',
+      'api/notebook.py',
+      'index.html',
+      'requirements.txt',
+      'scripts/notebook/act.py',
+      'vercel.json',
+    ])
+    expect(SKIP_DIRS.has('raw')).toBe(true)
+  })
+
+  it('deploy:hq-page sends the digests of the very list it fingerprints, and hq encodes the same files', () => {
+    expect(delta).toMatch(/const list = toUploadList\(files\)/)
+    expect(delta).toMatch(/files: list,/)
+    expect(full).toMatch(/\[\.\.\.pageFiles\]\.map\(/)
+    expect(full).toMatch(/files: encoded,/)
+  })
+
+  it('the checks can fail: a script that brings its own walk or list is refused', () => {
+    expect(usesSharedSet(`${delta}\nawait add('x', 'y')`)).toBe(false)
+    expect(usesSharedSet(`${full}\nconst w = await readdir('web')`)).toBe(false)
+    expect(usesSharedSet(`${full}\nconst f = { file: 'a.js', data: x }`)).toBe(false)
+    expect(usesSharedSet(delta.replace("collectPageFiles('.')", "collectPageFiles('web')"))).toBe(
+      false,
+    )
+  })
+})
+
+describe('the skip decision is wired into both deploy scripts, in front of the deployment request', () => {
+  const delta = code(read('scripts/deploy/hq-page-delta.ts'))
+  const full = code(read('scripts/deploy/hq.ts'))
+  const requestAt = (src: string): number => src.search(/api\.vercel\.com\/v13\/deployments['`]/)
+  const assessedFirst = (src: string): boolean => {
+    const a = src.indexOf('await assessPageDeploy(')
+    return a > 0 && requestAt(src) > a
+  }
+
+  it.each([
+    ['deploy:hq-page', delta],
+    ['deploy:hq', full],
+  ])(
+    '%s assesses before it creates a deployment, passes --force, and records the fingerprint',
+    (_n, src) => {
+      expect(assessedFirst(src)).toBe(true)
+      expect(src).toMatch(/process\.argv\.includes\('--force'\)/)
+      expect(src).toMatch(
+        /\bforce,?\n\s*\}\)|force: process\.argv\.includes\('--force'\),\n\s*\}\)/,
+      )
+      expect(src).toMatch(/\.\.\.deploymentMeta\(assessment\)/)
+    },
+  )
+
+  it('deploy:hq-page returns before the request when the decision is to skip (and not on a dry run first)', () => {
+    const skipAt = delta.indexOf('if (assessment.decision.skip) {')
+    expect(skipAt).toBeGreaterThan(0)
+    expect(skipAt).toBeLessThan(requestAt(delta))
+    expect(delta.slice(skipAt, skipAt + 300)).toContain('process.exit(0)')
+  })
+
+  it('deploy:hq makes the request only when the decision is not to skip', () => {
+    expect(full).toMatch(/const deployment = skipped\s*\? null\s*: await fetch\(/)
+    expect(full).toMatch(/const skipped = assessment\.decision\.skip/)
+  })
+
+  it('both scripts read the deployment fields once and send the same ones they fingerprint', () => {
+    for (const src of [delta, full]) {
+      expect(src).toMatch(/deployment: DEPLOYMENT,/)
+      expect(src).toMatch(/name: DEPLOYMENT\.name,/)
+      expect(src).toMatch(/target: DEPLOYMENT\.target,/)
+      expect(src).toMatch(/projectSettings: DEPLOYMENT\.projectSettings,/)
+    }
+  })
+
+  it('every environment variable deploy:hq sets on the project is one it tells the fingerprint it supplies', () => {
+    const upserted = [...full.matchAll(/key: '([A-Z_]+)'/g)].map((m) => m[1])
+    const supplied = [...full.matchAll(/supplied: \{ ([A-Z_]+): /g)].map((m) => m[1])
+    expect(upserted).toEqual(['NOTEBOOK_READER_SECRET'])
+    expect(supplied).toEqual(upserted)
+  })
+
+  it('deploy:hq-page sets no environment variable and says so (supplied is empty)', () => {
+    expect(delta).toMatch(/supplied: \{\}/)
+    expect(delta).not.toMatch(/\/env/)
+  })
+
+  it('the checks can fail: removing the assessment, the force flag or the meta is detected', () => {
+    expect(delta.replace('await assessPageDeploy(', 'await somethingElse(')).not.toContain(
+      'await assessPageDeploy(',
+    )
+    const noMeta = full.replace('...deploymentMeta(assessment)', '')
+    expect(noMeta).not.toMatch(/\.\.\.deploymentMeta\(assessment\)/)
+    const early = `fetch('https://api.vercel.com/v13/deployments', {})\n${full}`
+    expect(assessedFirst(full)).toBe(true)
+    expect(assessedFirst(early)).toBe(false)
+    expect(assessedFirst(full.replace('await assessPageDeploy(', 'await other('))).toBe(false)
+  })
+})
+
+describe('every Vercel deployment a script in scripts/deploy creates is wired or deliberately not', () => {
+  const dir = 'scripts/deploy'
+  const creators = readdirSync(dir)
+    .filter((f) => f.endsWith('.ts'))
+    .filter((f) => /api\.vercel\.com\/v13\/deployments[?'`]/.test(read(`${dir}/${f}`)))
+    .sort()
+
+  /** Why each script that is not the page deploy does not use the skip: stated, and checked below. */
+  const NOT_WIRED: Record<string, string> = {
+    'site.ts':
+      'a different project (agentic-team-hq-basecamp); VERCEL_PREVIEW=1 makes previews, which have no live deployment to compare with',
+    'ux-review-preview.ts':
+      'a throwaway review deployment of a different project, meant to be created every time',
+    'vercel.ts':
+      'the static voice page (ai-team-hq-voice): no functions, no environment, no bundle to protect',
+  }
+
+  it('finds the creators (the check is not vacuous)', () => {
+    expect(creators).toEqual(
+      ['hq-page-delta.ts', 'hq.ts', 'site.ts', 'ux-review-preview.ts', 'vercel.ts'].sort(),
+    )
+  })
+
+  it.each(creators)('%s imports the guard, or is named with a reason', (file) => {
+    const src = read(`${dir}/${file}`)
+    const wired = /page-deploy-guard\.ts/.test(src)
+    if (file === 'hq.ts' || file === 'hq-page-delta.ts') expect(wired).toBe(true)
+    else {
+      expect(wired).toBe(false)
+      expect(
+        NOT_WIRED[file],
+        `${file} creates a deployment and is neither wired nor explained`,
+      ).toBeTruthy()
+    }
   })
 })
 
@@ -489,8 +613,8 @@ describe('every key a deploy script sends to Vercel is an input the fingerprint 
 
   it('the parser can fail: a body with an extra key is reported', () => {
     const src = read('scripts/deploy/hq-page-delta.ts').replace(
-      'projectSettings: { framework: null },\n    }),',
-      "projectSettings: { framework: null },\n      env: { A: 'b' },\n    }),",
+      'projectSettings: DEPLOYMENT.projectSettings,\n',
+      "projectSettings: DEPLOYMENT.projectSettings,\n      env: { A: 'b' },\n",
     )
     expect(src).not.toBe(read('scripts/deploy/hq-page-delta.ts'))
     expect(deploymentBodyKeys(src).filter((k) => !known.has(k))).toEqual(['env'])

@@ -35,9 +35,22 @@ export interface UploadFile {
  * Every file a page deployment uploads, keyed by its path in the deployment. Each studio file goes up twice (under `studio/`
  * and at the root, because the page is served at `/`), except `index.html`, which is already a fixed entry at the root.
  */
-export async function collectPageFiles(root = '.'): Promise<Map<string, Buffer>> {
+export async function collectPageFiles(
+  root = '.',
+  /**
+   * The studio folder to send, when it is not `web/studio` under `root`: a STAGED tree (the live bytes plus one change, which
+   * `hq-page-delta.ts --root=` takes) is named here. It replaces the folder, including `index.html`, and nothing else.
+   */
+  studioDir?: string,
+): Promise<Map<string, Buffer>> {
+  const studio = studioDir ?? join(root, STUDIO_ROOT)
   const files = new Map<string, Buffer>()
-  for (const [name, path] of FIXED_PAGE_FILES) files.set(name, await readFile(join(root, path)))
+  for (const [name, path] of FIXED_PAGE_FILES) {
+    files.set(
+      name,
+      await readFile(name === 'index.html' ? join(studio, 'index.html') : join(root, path)),
+    )
+  }
   const walk = async (dir: string): Promise<void> => {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name)
@@ -45,13 +58,13 @@ export async function collectPageFiles(root = '.'): Promise<Map<string, Buffer>>
         if (!SKIP_DIRS.has(entry.name)) await walk(full)
         continue
       }
-      const rel = relative(join(root, STUDIO_ROOT), full).split('\\').join('/')
+      const rel = relative(studio, full).split('\\').join('/')
       const body = await readFile(full)
       files.set(`studio/${rel}`, body)
       if (rel !== 'index.html') files.set(rel, body)
     }
   }
-  await walk(join(root, STUDIO_ROOT))
+  await walk(studio)
   return files
 }
 
