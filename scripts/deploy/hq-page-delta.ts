@@ -12,11 +12,15 @@
  *
  * It refuses to deploy when its file NAMES differ from the live deployment's, because a
  * different set is a different page. The previous deployment is printed as the rollback point.
+ *
+ * It also fingerprints every input (lib/page-fingerprint.ts) and compares it with the one recorded on the live production
+ * deployment (`meta.pageFingerprint`). It skips ONLY when that deployment is READY and recorded exactly this fingerprint;
+ * no recorded fingerprint, any error reading Vercel, a changed input or `--force` all deploy. The first deploy after this
+ * was added therefore deploys, and records the fingerprint. Run `npm run config:site` first (its output is an input).
  */
 import '../../src/safety/require-production-writes.ts'
-import { createHash } from 'node:crypto'
-import { readdir, readFile } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { assessPageDeploy, deploymentMeta, makeVercelReader } from './lib/page-deploy-guard.ts'
+import { collectPageFiles, toUploadList } from './lib/page-files.ts'
 
 const token = process.env.VERCEL_TOKEN ?? ''
 if (token === '') {
@@ -24,35 +28,20 @@ if (token === '') {
   process.exit(2)
 }
 const go = process.argv.includes('--go')
+// --force: deploy even when every input matches the live deployment (a platform incident, a suspect deployment).
+const force = process.argv.includes('--force')
 const auth = { Authorization: `Bearer ${token}` }
-const BINARY = new Set(['.woff2', '.pdf', '.png', '.jpg', '.jpeg', '.ico', '.webp'])
-const SKIP_DIRS = new Set(['raw'])
 
-const files = new Map<string, Buffer>()
-const add = async (name: string, path: string) => files.set(name, await readFile(path))
-await add('index.html', 'web/studio/index.html')
-await add('api/notebook.py', 'api/notebook.py')
-await add('api/notebook-act.py', 'api/notebook-act.py')
-await add('scripts/notebook/act.py', 'scripts/notebook/act.py')
-await add('requirements.txt', 'requirements.txt')
-await add('vercel.json', 'vercel.json')
-const walk = async (dir: string): Promise<void> => {
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name)
-    if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name)) await walk(full)
-      continue
-    }
-    const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase()
-    void BINARY.has(ext) // bytes are read raw either way; the set documents which are not text
-    const rel = relative('web/studio', full).split('\\').join('/')
-    await add(`studio/${rel}`, full)
-    if (rel !== 'index.html') await add(rel, full)
-  }
-}
-await walk('web/studio')
-const sha = (b: Buffer) => createHash('sha1').update(b).digest('hex')
-const list = [...files].map(([file, body]) => ({ file, sha: sha(body), size: body.length }))
+// The upload set is defined once, in lib/page-files.ts, and the fingerprint below is computed over exactly these bytes.
+// Run `npm run config:site` first: the generated web/studio/config.js is part of what is uploaded and so of the fingerprint.
+const files = await collectPageFiles('.')
+const list = toUploadList(files)
+/** The non-file fields of the deployment request. The request and the fingerprint both read these, so they cannot differ. */
+const DEPLOYMENT = {
+  name: 'ai-team-hq',
+  target: 'production',
+  projectSettings: { framework: null },
+} as const
 console.log(
   `${String(list.length)} files, ${(list.reduce((n, f) => n + f.size, 0) / 1e6).toFixed(1)} MB`,
 )
@@ -101,8 +90,31 @@ if (onlyMine.length > 0 || onlyLive.length > 0) {
     process.exit(1)
   }
 }
+
+// Would this deployment change anything? Read-only GETs; fails open (any doubt means deploy).
+const assessment = await assessPageDeploy(makeVercelReader(token), {
+  projectName: 'ai-team-hq',
+  deployment: DEPLOYMENT,
+  supplied: {}, // this script supplies no environment value
+  force,
+})
+console.log(
+  `fingerprint: ${assessment.fingerprint === null ? 'not computed' : assessment.fingerprint.slice(0, 16)}; ` +
+    `${assessment.decision.skip ? 'SKIP' : 'deploy'} (${assessment.decision.reason})`,
+)
+if (assessment.unpinned.length > 0)
+  console.log(
+    `requirements.txt has unpinned dependencies (a new release is not an input here): ${assessment.unpinned.join(', ')}`,
+  )
 if (!go) {
   console.log('dry run: nothing deployed')
+  process.exit(0)
+}
+if (assessment.decision.skip) {
+  console.log(
+    'nothing to deploy: the live production deployment was built from exactly these inputs',
+  )
+  console.log('pass --force to deploy anyway')
   process.exit(0)
 }
 
@@ -111,10 +123,11 @@ const create = async () =>
     method: 'POST',
     headers: { ...auth, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: 'ai-team-hq',
-      target: 'production',
+      name: DEPLOYMENT.name,
+      target: DEPLOYMENT.target,
       files: list,
-      projectSettings: { framework: null },
+      projectSettings: DEPLOYMENT.projectSettings,
+      ...deploymentMeta(assessment),
     }),
   })
 let response = await create()

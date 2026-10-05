@@ -8,15 +8,21 @@
  * cannot serve a web page at all (ADR-0011, measured five ways). JSON is fine,
  * which is why the split falls where it does — API on Supabase, HTML on Vercel.
  *
+ * The page step fingerprints every input (lib/page-fingerprint.ts) and compares it with the one recorded on the live
+ * production deployment. It skips creating a new deployment ONLY when that deployment is READY and recorded exactly this
+ * fingerprint; no recorded fingerprint, any error reading Vercel, a changed input or `--force` all deploy, and the new
+ * deployment records the fingerprint in `meta.pageFingerprint`. The reader and writer probes still run against production.
+ *
  * The access token is generated once and stored in the vault. On every deploy
  * after that the existing one is reused, because rotating a token nobody asked
  * to rotate would silently lock Grant's phone out of the dashboard.
  */
 import '../../src/safety/require-production-writes.ts'
 import { randomBytes } from 'node:crypto'
-import { readdir, readFile } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { assessPageDeploy, deploymentMeta, makeVercelReader } from './lib/page-deploy-guard.ts'
+import { collectPageFiles } from './lib/page-files.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 const vercelToken = process.env.VERCEL_TOKEN
@@ -253,7 +259,6 @@ if (project === undefined) {
   Grant's bookmark is the root, so the studio serves there. `/studio/` keeps
   working, because a URL that has been handed out is a URL somebody has open.
 */
-const html = await readFile('web/studio/index.html', 'utf8')
 
 /*
   The studio prototype, at /studio/.
@@ -291,76 +296,69 @@ const BINARY = new Set(['.woff2', '.pdf', '.png', '.jpg', '.jpeg', '.ico', '.web
   re-tuned — gitignored, and it would otherwise be uploaded twice (once at the
   root and once under `studio/`) on every deploy, for nothing.
 */
-const SKIP_DIRS = new Set(['raw'])
-const studioFiles: { file: string; data: string; encoding?: 'base64' }[] = []
-const walk = async (dir: string): Promise<void> => {
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name)
-    if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name)) await walk(full)
-      continue
-    }
-    const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase()
-    const rel = relative('web/studio', full).split('\\').join('/')
-    const at = `studio/${rel}`
-    studioFiles.push(
-      BINARY.has(ext)
-        ? { file: at, data: (await readFile(full)).toString('base64'), encoding: 'base64' }
-        : { file: at, data: await readFile(full, 'utf8') },
-    )
-    /*
-      And at the root, because the page is served there now.
+/*
+  The file set is defined ONCE, in `lib/page-files.ts` (it skips `raw/`, uploads every
+  studio file under `studio/` and again at the root, except `index.html`, and adds the
+  reader, the writer, `act.py`, `requirements.txt` and `vercel.json`). The fingerprint
+  below is computed over exactly these bytes; they are only ENCODED here, the way this
+  script always has: base64 for the extensions in BINARY, UTF-8 text for the rest.
 
-      Two copies of each asset rather than a rewrite rule: this is a static
-      deployment with no routing layer, `index.html` asks for `./app.js`, and a
-      relative path from `/` and from `/studio/` are different files as far as
-      the host is concerned. Thirty-one small files twice is cheaper than a
-      config that only one person understands.
-    */
-    if (rel !== 'index.html') {
-      studioFiles.push(
-        BINARY.has(ext)
-          ? { file: rel, data: (await readFile(full)).toString('base64'), encoding: 'base64' }
-          : { file: rel, data: await readFile(full, 'utf8') },
-      )
-    }
-  }
-}
-await walk('web/studio')
-console.log(`  studio: ${String(studioFiles.length)} files`)
-const reader = await readFile('api/notebook.py', 'utf8')
-// The write side, and the script it spawns. `act.py` ships as a plain file
-// rather than being reimplemented in the function: fourteen actions with a
-// docstring per mistake already made, and two copies would drift on the first
-// library update.
-const writer = await readFile('api/notebook-act.py', 'utf8')
-const actScript = await readFile('scripts/notebook/act.py', 'utf8')
-const requirements = await readFile('requirements.txt', 'utf8')
-const vercelConfig = await readFile('vercel.json', 'utf8')
-const deployment = await fetch('https://api.vercel.com/v13/deployments', {
-  method: 'POST',
-  headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    name: 'ai-team-hq',
-    target: 'production',
-    files: [
-      { file: 'index.html', data: html },
-      { file: 'api/notebook.py', data: reader },
-      { file: 'api/notebook-act.py', data: writer },
-      { file: 'scripts/notebook/act.py', data: actScript },
-      { file: 'requirements.txt', data: requirements },
-      { file: 'vercel.json', data: vercelConfig },
-      ...studioFiles,
-    ],
-    projectSettings: { framework: null },
-  }),
+  `act.py` ships as a plain file rather than being reimplemented in the function:
+  fourteen actions with a docstring per mistake already made, and two copies would
+  drift on the first library update.
+*/
+const pageFiles = await collectPageFiles('.')
+const encoded: { file: string; data: string; encoding?: 'base64' }[] = [...pageFiles].map(
+  ([file, body]) =>
+    BINARY.has(file.slice(file.lastIndexOf('.')).toLowerCase())
+      ? { file, data: body.toString('base64'), encoding: 'base64' as const }
+      : { file, data: body.toString('utf8') },
+)
+console.log(`  page files: ${String(encoded.length)}`)
+
+/** The non-file fields of the deployment request. The request and the fingerprint both read these. */
+const DEPLOYMENT = {
+  name: 'ai-team-hq',
+  target: 'production',
+  projectSettings: { framework: null },
+} as const
+// Would this deployment change anything? Read-only GETs; fails open (any doubt means deploy), and `--force` deploys anyway.
+// `npm run config:site` has already run (the `deploy:hq` script), so the generated config.js is part of the fingerprint.
+const assessment = await assessPageDeploy(makeVercelReader(vercelToken), {
+  projectName: 'ai-team-hq',
+  deployment: DEPLOYMENT,
+  supplied: { NOTEBOOK_READER_SECRET: readerSecret },
+  force: process.argv.includes('--force'),
 })
-const page = (await deployment.json()) as {
+const skipped = assessment.decision.skip
+console.log(
+  `  fingerprint: ${assessment.fingerprint === null ? 'not computed' : assessment.fingerprint.slice(0, 16)}; ` +
+    `${skipped ? 'SKIP the page deployment' : 'deploy'} (${assessment.decision.reason})`,
+)
+if (assessment.unpinned.length > 0)
+  console.log(
+    `  requirements.txt has unpinned dependencies (a new release is not an input): ${assessment.unpinned.join(', ')}`,
+  )
+const deployment = skipped
+  ? null
+  : await fetch('https://api.vercel.com/v13/deployments', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: DEPLOYMENT.name,
+        target: DEPLOYMENT.target,
+        files: encoded,
+        projectSettings: DEPLOYMENT.projectSettings,
+        ...deploymentMeta(assessment),
+      }),
+    })
+// On a skip the live production deployment IS the page, so the checks below run against it.
+const page = (deployment === null ? { url: 'ai-team-hq.vercel.app' } : await deployment.json()) as {
   id?: string
   url?: string
   error?: { message?: string }
 }
-if (!deployment.ok) {
+if (deployment !== null && !deployment.ok) {
   console.error(`page deploy failed: ${JSON.stringify(page.error ?? page).slice(0, 200)}`)
   process.exit(1)
 }
