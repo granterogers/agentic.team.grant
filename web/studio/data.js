@@ -599,7 +599,7 @@ export const SOURCE_STATE = {
   },
   unreachable: {
     label: 'The office did not answer',
-    say: 'Showing example projects until it is back — none of this is your office’s own data.',
+    say: 'Your projects could not be loaded, so none are shown. Nothing here is made up.',
     tone: 'bad',
   },
   stale: {
@@ -831,6 +831,10 @@ export async function hydrate(endpoint, token) {
       // A session the office has refused outright (401) is not worth keeping: the page says it was cleared, so clear it.
       if (e.status === 401) sessionEpoch.forget()
     } else {
+      // A signed-in person whose first read failed has never seen their own office, and the prototype's invented projects
+      // are not a stand-in for it (#426): nothing is drawn but the strip that says so, with Try again. Once the office has
+      // answered, 'stale' keeps the last real answer on screen instead.
+      if (source.at === null) PROJECTS.length = 0
       source.state = source.at === null ? 'unreachable' : 'stale'
       source.why =
         e instanceof Error && e.name === 'TimeoutError'

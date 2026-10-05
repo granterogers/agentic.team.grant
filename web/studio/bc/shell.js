@@ -789,6 +789,11 @@ const listed = () => PROJECTS.filter((p) => p.slug !== 'unnamed' || filedUnder(p
 const portfolio = () => {
   // A signed-in person whose office has nothing in it yet is shown the one next step, not an empty list.
   if (listed().length === 0 && source.live === true && canWrite()) return account.firstRun()
+  // A read that failed is not an office with nothing in it: say so, and offer to try again (#426).
+  if (listed().length === 0 && source.state === 'unreachable') {
+    return `<h1 class="bcsectiontitle">Your projects</h1>
+      ${errorState('Your projects could not be loaded just now.', button('Try again', { 'data-bc-retry-office': '1' }))}`
+  }
   if (listed().length === 0) {
     return `<h1 class="bcsectiontitle">Your projects</h1>
       ${empty(
@@ -3204,7 +3209,7 @@ const myTasks = () => {
                     aria-label="${esc(`${t.state === 'done' ? 'Completed' : 'Not completed'}: ${t.title}`)}">
                   <div class="bcitembody">
                     <span class="bcitemtitle">${esc(t.title)}</span>
-                    <span class="bcitemmeta">${esc([bcMini.dueWords(t), t.project].filter(Boolean).join(' · '))}</span>
+                    <span class="bcitemmeta">${esc([bcMini.dueWords(t), typeof t.project === 'string' ? t.project : (t.project?.name ?? '')].filter(Boolean).join(' · '))}</span>
                   </div>
                   <span></span>
                 </div>`,

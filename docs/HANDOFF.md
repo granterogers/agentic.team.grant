@@ -1,3 +1,15 @@
+> ## 2026-10-05 (later) - SAMPLE SHOWCASE LAYER (branch `claude/multi-user-p4`) - PARTIAL, PAUSED ON PLATFORM HEALTH
+>
+> The Sample now shows the TEAM, not only a project list: real delegation (Claire to Grace to Daniel), real agent-made work (a
+> status report, a caption, a costs report), a tool request waiting for a decision (Settings, Requests), two recorded decisions,
+> a Monday automation, a date-keeping daily job. Migrations **0899 to 0905** (0900 also fixes a latent `''::uuid` defect that
+> broke hand-off delegation for everybody; #428 was a database cast, not a worker defect). Page `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x`
+> (My Tasks project name, #426 failed-read, Settings notice; rollback chain in PUBLIC-SAMPLE.md). Nothing held was deployed.
+> Account, limits and the capability matrix: `docs/multi-user/PUBLIC-SAMPLE.md`. **Paused:** Supabase auth, rest and storage read
+> UNHEALTHY and sign-in answered 503, so the final desktop and phone walkthroughs (`npm run sample:public-showcase-ui -- --only=...`)
+> were NOT completed on the final build; run them when the health API reads healthy. Open: #425 (the team's identity and its
+> own Activity), #424 (dates: solved for tasks by 0902; close once the daily job has been seen to run).
+>
 > ## 2026-10-05 - PUBLIC SAMPLE OFFICE LIVE (branch `claude/multi-user-p4`)
 >
 > A logged-out visitor can Explore a read-only Sample Office (a made-up café) with no email, link or password, and still chat

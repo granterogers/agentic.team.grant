@@ -26,8 +26,10 @@ what an ordinary customer sees. It is not the public Sample and the two never sh
    address it is sent. A banner then reads "Sample Office, a made-up café, so changes are not saved" with **Create your own
    office** and **Sign in** always in reach, and the header's sign-out reads **Leave sample**. Neither route traps.
 3. **Inside**, everything is the real Team HQ reading real rows: three projects (Riverside Café Launch, Autumn Menu Research,
-   Winter Market Pop-up), their to-dos, documents, contacts, schedule, activity and the team. Opening a project, a document or a
-   module works exactly as it does for a person.
+   Winter Market Pop-up), their to-dos and sub-tasks, documents, contacts, activity and the team. A document opens in a new tab
+   through a signed link (a PDF, a Markdown note and a CSV were each opened in production; the first two read in the browser, the
+   CSV downloads). **Schedule** in Team HQ means *dated work*: tasks with due and start dates. There is no calendar and no events
+   table, and the Sample has no Google Calendar, so nothing here is called a calendar.
 4. **Talk to the team.** The dock's chat works. One real model turn costs one inference, is answered by the real worker (for the
    test question on 5 October, the finance director) from the Sample's own papers, and never reaches anybody outside the page.
 5. **What is refused, in words.** Any change (adding a task, making a project) is refused by the gateway with the sentence "This
@@ -79,8 +81,77 @@ A visitor who is stopped is told why and pointed at **create your own office**.
 Visitors cannot change the Sample, so there is nothing to restore. The two things they can write, their own chat turns, are scoped
 to their visitor id and never read by another visitor. A visitor who clears their storage simply starts a new thread.
 
-Known drift that *does* need an operator: the seeded dates are relative to the day it was seeded, so the story ages. See the
-follow-up issues at the end.
+Dates used to age (the story was dated relative to the day it was seeded). Since 0902 a daily job (`sample-dates`, 03:23 UTC)
+moves the Sample's task due dates and start dates forward by the whole days since the last run, so the shape of the week is kept
+(see "The showcase layer" below). Closed work keeps its completion time, and the Activity history is derived from real row
+times, so it ages truthfully rather than being rewritten.
+
+## The showcase layer (migrations 0899 to 0904, 5 October 2026)
+
+The first Sample was a project list with a chat. The showcase layer makes it show the *team*: real work, done by the real worker
+in the café's world, then sealed. Nothing a visitor reads there was written by hand.
+
+| Capability | What a visitor finds |
+|---|---|
+| Delegation | Ask Grace to check the launch budget: Claire hands it on, Grace asks two pieces of the work, Daniel answers, a synthesis comes back |
+| Agent-made work | Oliver's caption draft; a Riverside status report (PDF, approved, in Docs & Files) |
+| Needs you | A Winter Market costs report made as a *draft*, waiting for review (Add to project). The blocker list is empty on purpose: a visitor cannot decide anything |
+| Approvals / tools | Settings, Requests: Oliver asks for `gmail.send`, with the reason; the office key cannot approve it and neither can a visitor |
+| Decisions | Two recorded decisions (floor, builder) on "What it has learned" |
+| Automations | A Monday-morning duty on Riverside; its scheduled runs are hidden because they are plumbing |
+| Lessons | Two plain-language rules, shown to every visitor |
+| Search / questions | Search finds tasks, documents, people, sources; the team answers from the papers (see the limits above) |
+
+What changed to make that visible: `app.studio_requests` and `app.sample_conversation` (0899) show a visitor the Sample's *own*
+seeded work and thread (a visitor's own turns stay hidden from everyone but them); 0900 fixed a latent defect that made delegation
+fail (an empty `command_id` cast to uuid inside `harness_job`); 0901 and 0903 and 0904 leave out failed attempts and any seeded
+turn flagged `showcase_hidden`, which hides and never deletes; 0902 keeps dates believable.
+
+**Undo.** There are no undo offers a visitor can see (the overview count is 0) and the `undo` action is refused with
+`403 sample_readonly` (checked in production). The 44 rows that exist belong to the seeding and were already expired.
+
+**What is deliberately absent, and why.** Voice calls (metered), Slack, Telegram, Gmail, Calendar, Drive, Notion (they need a real
+private connection, which the Sample must never hold), and Settings changes (read-only). Each says so in a sentence.
+
+## Capability matrix (5 October 2026)
+
+Nothing is marked complete by inference. "Tested" says what was pressed or read as a visitor, in a real browser against the
+deployed page unless stated. The final desktop and phone walkthroughs (`sample:public-showcase-ui`) were **not completed on the
+final build**: the platform health API read auth, rest and storage UNHEALTHY and sign-in answered 503, so production contact
+stopped. The last full desktop walk before that passed 72 of 73 checks; the one failure was an assertion about the Requests pane
+that has since been corrected and has not been re-run.
+
+| Capability | Classification | Sample content | Interactive? | Tested | Notes |
+|---|---|---|---|---|---|
+| Three projects, board, docs, people, sources, activity | DEMONSTRATED WITH SYNTHETIC DATA | 3 projects, 48 tasks, 7 contacts, 17 documents | yes, read-only | desktop surveyed and walked; phone walked in part | a deep link to a project works signed in |
+| My Tasks (today, overdue, project named) | DEMONSTRATED WITH SYNTHETIC DATA | 5 personal tasks, one overdue | read-only | yes (the `[object Object]` project name was found and fixed) | |
+| Sub-tasks, labels | DEMONSTRATED WITH SYNTHETIC DATA | parent and child tasks, labels | read-only | surveyed | |
+| Stuck drill-down | DEMONSTRATED WITH SYNTHETIC DATA | alcohol licence, blocked on the council | read-only | surveyed | |
+| Documents opened | FULLY DEMONSTRATED | Markdown, CSV, three made reports | opens in a tab | yes: served as text, reads correctly | CSV opens as text, it does not download |
+| Contacts: Save and Remove | SAFE READ-ONLY DEMONSTRATION | the card opens | refused | **NOT TESTED** | the gateway refuses every write; not pressed |
+| Search and command bar | FULLY DEMONSTRATED | tasks, documents, people | yes | yes: search found a task; the bar listed a project | the bar lists projects, tools and records; Shift+Enter searches everything |
+| Delegation | FULLY DEMONSTRATED | Claire to Grace to Daniel and back, a synthesis | read-only | yes (chat and Agentic Team) | answers carry the product's own quirks (see Known limits) |
+| Agent-made work | FULLY DEMONSTRATED | caption (Oliver), status report, costs report | read-only | yes | a made report is a PDF document |
+| Needs You (a question waiting on a decision) | REMAINING GAP | none: the blocker list is empty | n/a | yes (empty state reads "Nothing is waiting on a decision from you") | no real blocker could be produced without hand-writing one; a draft awaiting review exists but Team HQ lists only accepted work |
+| Approvals and tool requests | SAFE READ-ONLY DEMONSTRATION | Oliver asks for Sending email | Approve and Decline refused in a sentence | yes | the office key and a visitor can approve nothing |
+| Decisions, lessons | DEMONSTRATED WITH SYNTHETIC DATA | 2 decisions, 3 lessons | read-only | yes | |
+| Automations (duties) | DEMONSTRATED WITH SYNTHETIC DATA | a Monday-morning duty | read-only | surveyed earlier; **not re-tested** on the final build | its runs are hidden |
+| Calendar | EXPLAINED | none | n/a | yes | not a released feature of Team HQ; Schedule is dated work. The team answers "no calendar entries" |
+| Skills | NOT ASSESSED | none | n/a | **NOT TESTED** | not confirmed whether Team HQ shows them as their own page |
+| Notifications, briefings | REQUIRES REAL ACCOUNT | none | n/a | n/a | delivered through Telegram, Slack or voice, which the Sample never holds |
+| Settings (all tabs) | SAFE READ-ONLY DEMONSTRATION | read-only; a line says it is the Sample | refused changes answer in a sentence | yes: Autonomy, Requests, Learned, Services, Messaging; Appearance is local only | only connections, channels and health deep-link |
+| Services and connections | EXPLAINED | all "Not connected" | the cards open Settings | yes | nothing is shown as connected |
+| Undo | EXPLAINED | no offers | the action is refused | yes (403 `sample_readonly`, 0 offers) | |
+| Chat with the team | DEMONSTRATED WITH SYNTHETIC DATA | seeded thread plus the visitor's own | yes, capped | yes: six real questions asked and read | "what am I waiting on" and "what is stuck" answer well; see limits |
+| Voice | REQUIRES REAL ACCOUNT | none | refused | earlier session | metered |
+| Failed read | FULLY DEMONSTRATED | no invented names; Try again | yes | yes (refused at the network, then recovered) | #426 |
+| Dates | DEMONSTRATED WITH SYNTHETIC DATA | a daily job (0902) | n/a | proved on a replica (11 of 11) | the first scheduled run has **not been observed** |
+| The team knows this is the Sample | DEMONSTRATED WITH SYNTHETIC DATA | two lessons say so | n/a | yes, in answers | the worker identity stays neutral (#425, held) |
+| Phone | NOT COMPLETED | | | partial | final-build phone walk not completed |
+
+**Remaining concrete gaps:** the final desktop and phone walkthroughs; a Needs You example; contact Save and Remove and the
+Automations tab pressed as a visitor on the final build; Skills unassessed; the first run of the dates job unobserved; the team's
+awareness of its own Activity (#425).
 
 ## Is the Sample clean rather than test debris?
 
@@ -112,7 +183,8 @@ npm run sample:public-transition     # visitor -> real person -> sign out -> vis
 | `hq-api` | v891 | v890 is commit `7f858c9c`; recovered live source is the base of the staged copy |
 | `signin` | v126 | the `sample` action is new and additive; v124 before this work |
 | `voice`, `voice-token`, `mcp` | v656, v685, v661 | the guest refusal rides in `src/auth/speaker.ts` |
-| Page | `dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3` | original `dpl_8QwvvES1oRridjeokGzu2MMGdEYm` (before this work); then `dpl_DrHpy8xh…`, `dpl_3E7t94dY…`, `dpl_2z4wvtNQ…` |
+| Migrations 0899 to 0904 (showcase layer, empty command id, completed work only, dates, hidden turns) | applied | additive reader changes; each has an isolated proof |
+| Page | `dpl_2VgoidAKu95AcMjLieCocWr6bWxv` (My Tasks project name, #426 chat fallback, Settings notice) | previous `dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3`; original `dpl_8QwvvES1oRridjeokGzu2MMGdEYm` (before this work); then `dpl_DrHpy8xh…`, `dpl_3E7t94dY…`, `dpl_2z4wvtNQ…` |
 
 **Nothing held was deployed.** Function and page deploys were built from the *live bytes* plus only this change, never from the
 working tree (which carries the held Slack self-service and polish work). The page deploy tool uploaded 7, 1, 1 and 1 files; the
@@ -147,12 +219,24 @@ function deploy tool refuses a staged file the live bundle does not have. `scrip
 
 ## Known limits (recorded, not hidden)
 
-- **Static dates age.** Open an issue-sized refresh duty before the Sample reads as stale (see the issue list).
-- **The team's wording is neutral.** The worker (held) builds the prompt identity from the office owner; for a non-person office it
-  says "the person you work for", and the Sample's context arrives as three office-scoped lessons. A sample-aware identity is a worker
-  change and is queued behind the held release.
-- **If the gateway read fails** (or a proxy answers with an HTML page), the page falls back to its built-in invented example
-  projects and says so in a strip: "none of this is your office's own data". It is honest, and those example projects carry names
-  that echo the prototype's. This happened several times *in the build sandbox* where the proxy sometimes answers 502 with no
-  `x-vercel-id`; it was not seen from the product itself (see the harness diagnostic in `public-ui.ts`).
+- **Dates are kept believable by a daily job, not by a scheduler.** 0902, whole days only, task dates only (#424).
+- **The team's wording is neutral (#425, still open).** The worker (held) builds the prompt identity from the office owner; for a
+  non-person office it says "the person you work for", and the Sample's context arrives as office-scoped lessons ("What it has
+  learned"). That gives the team the facts (this is a demonstration, nothing is saved, creating your own office is the way to do it
+  for real) without a worker change. A sample-aware identity is a worker change and is queued behind the held release.
+- **The team does not know its own Activity history or its earlier chat.** Asked "what happened on Riverside this week?" or "what
+  has the team produced?", a visitor is honestly told there is no record: those answers are read from documents, tasks and the
+  asker's own thread, and the Activity feed is derived for the page. A specialist's conclusion is findable only once it has been
+  filed in the project as a document (Daniel's budget check was, with the product's own *Add to project* press, after this was
+  found by asking).
+- **Some real answers are untidy.** The seeded answers are real, not written, so they carry the product's own quirks: a first line
+  such as "I have not done this yet, and nothing has been changed" before a report that was then made, a second specialist adding
+  "I have no record" beside a good answer, and a duplicate relay when the same question is asked twice. Each is a worker or
+  prompt behaviour and not a Sample defect; the worst seeded turns were left out of the demonstration (flagged, never deleted).
+- **If the gateway read fails** (or a proxy answers with an HTML page) while signed out, the page falls back to its built-in
+  invented example projects and says so in a strip. A *signed-in* visitor no longer sees those names in a chat that failed to load
+  (#426): they see their own messages only. This happened several times in the build sandbox where the proxy sometimes answers
+  502 with no `x-vercel-id`; it was not seen from the product itself.
 - **Voice is not offered.** A visitor is told it needs their own office.
+- **Nothing real is connected, and none is shown as connected.** Services read "Not connected / Not checked"; Messaging offers
+  *Connect Telegram* and answers with the sample sentence; Settings carries a line saying so.

@@ -79,7 +79,9 @@ const seeded = (slug) =>
 export const thread = (slug) => {
   const theirs = office.get(slug)
   const mine = all()[slug] ?? []
-  if (theirs === undefined) return mine.length === 0 ? seeded(slug) : mine
+  // The prototype's invented conversations are for somebody with no session. A signed-in person (a Sample visitor included)
+  // whose read has not landed or failed sees only their own messages, never another office's invented names (#426).
+  if (theirs === undefined) return mine.length === 0 && !session.signedIn() ? seeded(slug) : mine
   return [...theirs, ...mine.filter((m) => m.inflight === true)]
 }
 
