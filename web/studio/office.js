@@ -261,6 +261,37 @@ export async function read(section, id, extra) {
 }
 
 /**
+ * A section that answers with a FILE rather than JSON (the on-demand document preview, 0990): its bytes, as a Blob.
+ *
+ * The same door as `read`: one credential, the same 401 handling, the same words for a refusal. A gateway that answers a
+ * refusal in JSON is read for its words, and the bytes are never kept by this module.
+ */
+export async function readFile(section, id, extra) {
+  refuseUnconfigured()
+  const parts = [`section=${encodeURIComponent(section)}`]
+  if (id !== undefined) parts.push(`id=${encodeURIComponent(id)}`)
+  for (const [k, v] of Object.entries(extra ?? {})) {
+    if (v !== undefined && v !== null && v !== '') parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+  }
+  const began = session.epoch()
+  const r = await fetch(`${API}?${parts.join('&')}`, {
+    headers: { Authorization: `Bearer ${await toPresent()}` },
+  })
+  if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
+  if (r.status === 401) {
+    session.forget()
+    token.clear()
+    throw new Error('You are not signed in any more.')
+  }
+  if (!r.ok) {
+    const answered = await r.json().catch(() => ({}))
+    const said = typeof answered?.error === 'string' ? answered.error.trim() : ''
+    throw new Error(said === '' ? `The server returned ${r.status}` : said)
+  }
+  return await r.blob()
+}
+
+/**
  * Say what happened, next to the thing that caused it.
  *
  * `el` is the control that was pressed. The sentence goes into the nearest

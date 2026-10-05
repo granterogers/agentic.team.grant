@@ -41,6 +41,13 @@
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
 import { fileText } from './file-text.ts'
 import { authorizeUrl, revokeToken } from './oauth.ts'
+import {
+  driveProvider,
+  type Failure,
+  type PreviewPlan,
+  previewDocument,
+  streamDocument,
+} from './preview.ts'
 
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -2985,6 +2992,152 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // fetch of `/rpc/undefined` with the service key. Nothing came back and
   // nothing leaked — but the comment above says "a section not named here does
   // not exist", and until now that was not true.
+  /*
+    PREVIEWING AN EXTERNAL DOCUMENT ON DEMAND (0990). Not an import.
+
+    `document_preview` answers one of five states (ready, loading, failed, unsupported, stale) for a document id; the
+    decisions live in `src/documents/preview.ts`, uploaded beside this file, and the facts in `public.hq_document_preview_plan`.
+    `document_preview_file` streams the bytes of a PDF or an image from Drive to the browser in the response and keeps
+    NOTHING: no Storage write, no path, no URL. Only derived text and the source's version markers are recorded, through
+    `public.hq_document_preview_record`, so agents can search the text.
+
+    The office is the verified session's, never a caller-named one, and the document must belong to it (and to the project
+    the page says it is looking at). Reaching Drive uses the same short-lived token as the browse above, so it is the
+    operator's act until an office holds a Google connection of its own (#400); anyone else gets a plain `failed` that
+    cannot be retried, and still sees what is held for a connected source.
+  */
+  if (name === 'document_preview' || name === 'document_preview_file') {
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const id = url.searchParams.get('id') ?? ''
+    const projectSlug = (url.searchParams.get('project') ?? '').trim()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return json({ error: 'that section needs a valid id', section: name }, 400)
+    }
+    if (projectSlug !== '' && !/^[a-z0-9][a-z0-9-]{0,80}$/i.test(projectSlug)) {
+      return json({ error: 'project must be a project slug', section: name }, 400)
+    }
+    const callPreviewRpc = async (fn: string, body: Record<string, unknown>): Promise<unknown> => {
+      const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+      if (!r.ok) throw new Error(`${fn} ${String(r.status)}`)
+      return await r.json()
+    }
+    let plan: PreviewPlan
+    try {
+      plan = (await callPreviewRpc('hq_document_preview_plan', {
+        p_office: office,
+        p_document_id: id,
+        p_project_slug: projectSlug === '' ? null : projectSlug,
+      })) as PreviewPlan
+    } catch {
+      return json({
+        data: {
+          state: 'failed',
+          reason_code: 'unavailable',
+          reason: 'Team HQ could not look this document up just now. Try again shortly.',
+          retryable: true,
+          alternatives: ['retry'],
+        },
+      })
+    }
+    const providerFor = async () => {
+      if (
+        !(
+          kind === 'person' &&
+          principal !== null &&
+          principal !== '' &&
+          (await isOperator(principal))
+        )
+      ) {
+        return {
+          code: 'operator_required',
+          retryable: false,
+          message:
+            "The Drive connection here is the deployment operator's own, so only they can read from it. Open the source instead.",
+        } satisfies Failure
+      }
+      const access = await googleToken(String(principal), office)
+      if ('error' in access) {
+        return {
+          code: access.error.startsWith('Google is not connected')
+            ? 'not_connected'
+            : 'unauthorised',
+          retryable: false,
+          message: access.error,
+        } satisfies Failure
+      }
+      return driveProvider(access.token)
+    }
+    const extractText = async (bytes: Uint8Array, mime: string, fileName: string) => {
+      const read = await fileText(bytes, mime, fileName)
+      return read.text === null ? { text: null, why: read.why } : { text: read.text }
+    }
+    const record = async (a: {
+      meta: {
+        modifiedTime: string | null
+        mime: string
+        version: string | null
+        size: number | null
+      }
+      kind: 'text' | 'pdf' | 'image'
+      text: string | null
+      truncated: boolean
+    }): Promise<boolean> => {
+      const done = (await callPreviewRpc('hq_document_preview_record', {
+        p_office: office,
+        p_document_id: id,
+        p_meta: {
+          modifiedTime: a.meta.modifiedTime,
+          mime: a.meta.mime,
+          version: a.meta.version,
+          size: a.meta.size,
+        },
+        p_kind: a.kind,
+        p_text: a.text,
+        p_truncated: a.truncated,
+      })) as { ok?: boolean }
+      return done?.ok === true
+    }
+
+    if (name === 'document_preview') {
+      const result = await previewDocument({
+        plan,
+        provider: providerFor,
+        extractText,
+        record,
+        now: Date.now(),
+      })
+      return json({ data: result })
+    }
+
+    const made = await providerFor()
+    if (!('describe' in made)) return json({ error: made.message }, 403)
+    const streamed = await streamDocument({ plan, provider: made, extractText, record })
+    if (!streamed.ok) return json({ error: streamed.failure.message }, streamed.status)
+    const safeName = streamed.name.replace(/[^\w. -]+/g, '_').slice(0, 120) || 'document'
+    return new Response(streamed.bytes, {
+      status: 200,
+      headers: {
+        'content-type': streamed.mime,
+        'content-length': String(streamed.bytes.byteLength),
+        'content-disposition': `inline; filename="${safeName}"`,
+        // Short-lived by construction: nothing keeps this, and nothing downstream may either.
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; sandbox",
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'authorization, content-type',
+      },
+    })
+  }
+
   /*
     BROWSING GOOGLE DRIVE.
 

@@ -165,6 +165,18 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       }
 
       /*
+        A real read replaces any text a PREVIEW derived on demand (0990): the material is now held, so an Import request
+        can be completed from it. A database without 0990 has no preview to supersede; nothing else is lost by that.
+      */
+      try {
+        await deps.db.execute(
+          `select app.document_preview_mark_read(app.job_office(${lit(job.jobId)}::uuid), ${lit(doc.document)}::uuid)`,
+        )
+      } catch {
+        // No preview cache on this database.
+      }
+
+      /*
         An explicit import request (0900, `app.hq_document_import`) waits for exactly this: the material to be held.
         `document_import_fulfil` does nothing unless a person's request is recorded for this very document, so reading
         a file never imports one that nobody asked for. A failure is said, not swallowed: the request stays pending.

@@ -155,3 +155,27 @@
 /* The project a document is in, said only under "All projects". */
 [data-experience='basecamp'] .bcdocproj { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 12px; line-height: 18px; color: var(--bc-text); background: color-mix(in srgb, var(--bc-accent) 14%, transparent); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 [data-experience='basecamp'] .bcdoc figcaption .bcdocproj { display: block; width: fit-content; margin: 3px 0 0; }
+
+/* ======================================================================== *
+ * An external document read on demand (0990): the line that says whether a copy exists, and the five preview states.
+ * Phone rules are at the end of this block, after the base rules they override.
+ * ======================================================================== */
+[data-experience='basecamp'] .bcpvline { margin: 0 0 14px; font-size: 12.5px; line-height: 1.4; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcpvline::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; vertical-align: 1px; background: var(--bc-accent); }
+[data-experience='basecamp'] .bcpvline[data-bc-pvline='imported']::before { background: transparent; border: 1.5px solid var(--bc-accent); }
+[data-experience='basecamp'] .bcpvstate { display: grid; gap: 8px; padding: 22px 18px; border-radius: 10px; border: 1px dashed color-mix(in srgb, var(--bc-text-muted) 40%, transparent); }
+[data-experience='basecamp'] .bcpvstate--failed { border-style: solid; border-color: color-mix(in srgb, #f0907e 55%, transparent); }
+[data-experience='basecamp'] .bcpvstate--unsupported { border-style: solid; }
+[data-experience='basecamp'] .bcpvhead { margin: 0; font-weight: 600; color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcpvstate .bcdocacts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+[data-experience='basecamp'] .bcpvnotice .bcbtn { flex: 0 0 auto; }
+[data-experience='basecamp'] .bcpvwhy { margin: 0; overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcpvnotice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.4; color: var(--bc-text); border: 1px solid color-mix(in srgb, var(--bc-accent) 35%, transparent); background: color-mix(in srgb, var(--bc-accent) 10%, transparent); }
+[data-experience='basecamp'] .bcpvnotice p { margin: 0; flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcpvnotice--stale { border-color: color-mix(in srgb, #e0b66a 55%, transparent); background: color-mix(in srgb, #e0b66a 10%, transparent); }
+
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpvstate .bcbtn,
+  [data-experience='basecamp'] .bcpvnotice .bcbtn { min-height: 44px; }
+  [data-experience='basecamp'] .bcpvstate { padding: 18px 14px; }
+}

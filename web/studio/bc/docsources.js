@@ -321,6 +321,8 @@ export const fromItem = (it) => ({
   external_ref: it.external_ref ?? '',
   external_url: it.external_url ?? '',
   mime: it.mime ?? '',
+  /* Team HQ holds a stored file for it (an import, an upload, or a file a real read brought in). */
+  hasFile: it.has_file === true,
   size_bytes: it.size_bytes ?? null,
   imported: it.imported === true,
   import_available: it.import_available === true,

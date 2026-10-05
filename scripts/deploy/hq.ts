@@ -81,6 +81,14 @@ form.append(
   }),
 )
 
+// The on-demand document preview (0990): one source in src/, uploaded beside the entrypoint as ./preview.ts.
+form.append(
+  'file',
+  new File([await readFile('src/documents/preview.ts', 'utf8')], 'preview.ts', {
+    type: 'application/typescript',
+  }),
+)
+
 const deployed = await fetch(`${api}/functions/deploy?slug=hq-api`, {
   method: 'POST',
   headers: { Authorization: `Bearer ${supabaseToken}` },
