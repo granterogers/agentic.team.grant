@@ -43,6 +43,7 @@ export const GATE_MODULES = [
   'src/safety/require-production-site.ts',
   'src/safety/require-production-if-targeted.ts',
   'src/safety/require-production-unless-replica.ts',
+  'src/safety/require-production-when-live.ts',
   'src/db/executor.ts',
   'src/db/pg-executor.ts',
 ]

@@ -59,6 +59,7 @@
     "slack:repair-refs",
     "slack:rotate",
     "slack:tidy",
+    "staging:posture",
     "step",
     "sync",
     "team:hello",
