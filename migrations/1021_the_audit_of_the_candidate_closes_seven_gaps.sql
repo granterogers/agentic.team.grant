@@ -16,6 +16,8 @@
 --      matches existed.
 --   7. app.mcp_add_document and app.mcp_enqueue checked only that the client was enabled, not that it holds the write
 --      scope (the edge enforces it; the database now does too).
+--   8. app.mcp_start_research asked the research director to research "this" without saying "on the web", the words the
+--      instruction handler needs to start a web lookup, so an assistant's 'start research' only ever produced a chat answer.
 -- And the calendar-event-sync duty ships switched OFF, like drive-index: enable it once the worker that handles it is deployed.
 --
 -- Every function is spliced from its LIVE definition and each edit is asserted to have landed.
@@ -428,6 +430,38 @@ begin
 end;
 $function$;
 
+
+CREATE OR REPLACE FUNCTION app.mcp_start_research(p_office uuid, p_client_id text, p_project text, p_topic text, p_url text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_via text; v_project uuid; v_decision jsonb; v_text text; v_url text := nullif(btrim(coalesce(p_url, '')), '');
+begin
+  v_via := app.mcp_write_client(p_office, p_client_id);
+  if v_via is null then return jsonb_build_object('error', 'no such client, or it is read-only'); end if;
+  v_project := app.mcp_project_id(p_office, p_project);
+  if v_project is null then return jsonb_build_object('error', format('no active project with slug %L', p_project)); end if;
+  if nullif(btrim(coalesce(p_topic, '')), '') is null then return jsonb_build_object('error', 'say what to research'); end if;
+  if v_url is not null and (v_url !~* '^https://[^[:space:]]+$' or length(v_url) > 1900) then
+    return jsonb_build_object('error', 'a research url must be an https address');
+  end if;
+  v_decision := app.authorize_effect(p_office => p_office, p_project => v_project, p_tool => 'web.read');
+  if coalesce(v_decision ->> 'verdict', 'ask') <> 'proceed' then
+    return jsonb_build_object(
+      'status', case when v_decision ->> 'verdict' = 'refuse' then 'refused' else 'needs_approval' end,
+      'because', coalesce(v_decision ->> 'because', 'The policy did not say why, so it asks.'),
+      'note', 'nothing was started; the owner decides in Team HQ');
+  end if;
+  -- 'on the web' is what the instruction handler recognises as a web lookup (researchRequest); without it the question
+  -- reached the research director as chat and nothing was searched.
+  v_text := 'Research this on the web for the project and report what you find, with sources: ' || btrim(p_topic)
+            || case when v_url is not null then E'\nStart from this page: ' || v_url else '' end;
+  return app.mcp_ask_team(p_office, p_client_id, p_project, v_text, 'research-director');
+end
+$function$;
 
 update public.responsibilities set enabled = false
  where slug = 'calendar-event-sync' and enabled;

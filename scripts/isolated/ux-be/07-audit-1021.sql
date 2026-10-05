@@ -85,6 +85,14 @@ begin
   r := app.mcp_enqueue(a, ro, 'zz-1021-a', 'notebook.ask', '{}');
   if r ? 'error' then raise exception '7.4 control: asking the notebook is a read: %', r; end if;
 
+  -- 8. an assistant's 'start research' produces the words the instruction handler turns into a web lookup
+  r := app.mcp_start_research(a, w, 'zz-1021-a', 'churn benchmarks for SaaS');
+  if r ? 'error' or (r ->> 'status') in ('refused', 'needs_approval') then raise exception '8.1 start_research did not start: %', r; end if;
+  if not exists (select 1 from public.inbound_commands where office_id = a and instruction like '%on the web%churn benchmarks%') then
+    raise exception '8.2 the research instruction does not say on the web'; end if;
+  r := app.mcp_start_research(a, ro, 'zz-1021-a', 'x');
+  if not (r ? 'error') then raise exception '8.3 a read-only client started research'; end if;
+
   -- the duties that must ship off
   if exists (select 1 from public.responsibilities where slug in ('drive-index', 'calendar-event-sync') and enabled) then
     raise exception '8 a duty that ships switched off is on'; end if;
