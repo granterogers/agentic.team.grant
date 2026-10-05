@@ -152,3 +152,31 @@ describe('the module chooses its size', () => {
     expect(C.sizeOf(200, 600)).toBe('small')
   })
 })
+
+describe('a clock change inside an event', () => {
+  it('an hour that repeats keeps its hour, not a half-hour guess', () => {
+    const was = process.env.TZ
+    process.env.TZ = 'America/New_York'
+    try {
+      // 01:30 EDT to 01:30 EST: the same wall-clock time at both ends, a real hour apart.
+      const e = C.norm({
+        id: 'e',
+        title: 'Fall back',
+        starts_at: '2026-11-01T05:30:00Z',
+        ends_at: '2026-11-01T06:30:00Z',
+      })
+      expect(e.endMin - e.startMin).toBe(60)
+      // control: an event with no span at all still gets the half hour
+      const z = C.norm({
+        id: 'z',
+        title: 'Zero',
+        starts_at: '2026-11-01T15:00:00Z',
+        ends_at: '2026-11-01T15:00:00Z',
+      })
+      expect(z.endMin - z.startMin).toBe(30)
+    } finally {
+      if (was === undefined) delete process.env.TZ
+      else process.env.TZ = was
+    }
+  })
+})

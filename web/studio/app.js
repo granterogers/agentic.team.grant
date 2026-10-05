@@ -6535,7 +6535,7 @@ function connectionsTab() {
     const [tone, word] = on.length === googleRows.length ? (degraded || dead ? ['warn', 'Needs attention'] : ['ok', 'Connected']) : on.length > 0 ? ['warn', 'Partly connected'] : dead ? ['bad', 'Needs reconnecting'] : ['off', 'Not connected']
     const head = ui.row({
       name: 'Google',
-      desc: 'One sign-in covers Drive, Calendar and Gmail. Notebook is separate: Google offers it no way in.',
+      desc: 'One sign-in covers Drive, Calendar and Gmail. Notebook is connected separately and is not covered by this sign-in.',
       kind: 'stack',
       control: `<span data-google-summary>${ui.chip(tone, word)}</span>
         ${on.length < googleRows.length && op ? ui.button({ label: dead ? 'Reconnect Google' : 'Connect Google', tone: 'primary', a: { 'data-google-connect': true } }) : ''}

@@ -148,7 +148,12 @@ export const norm = (e) => {
     const endsAtMidnight = en.getHours() === 0 && en.getMinutes() === 0 && en > s
     endDay = endsAtMidnight ? addDays(isoDay(en), -1) : isoDay(en)
     endMin = endsAtMidnight ? 1440 : en.getHours() * 60 + en.getMinutes()
-    if (endDay === startDay && endMin <= startMin) endMin = Math.min(1440, startMin + 30)
+    if (endDay === startDay && endMin <= startMin) {
+      // Same wall-clock time at both ends is a real span across a clock change (a fall-back hour), not a zero-length event:
+      // take the span from the instants when they differ, and a half hour only for an event that really has none.
+      const real = Math.round((en.getTime() - s.getTime()) / 60000)
+      endMin = Math.min(1440, startMin + (real > 0 ? real : 30))
+    }
   }
   return {
     id: String(e.id),
