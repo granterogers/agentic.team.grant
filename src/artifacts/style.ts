@@ -329,15 +329,11 @@ export function styleSnapshot(
  */
 export function styleVoice(profile: StyleProfile | null): string {
   if (profile === null) return ''
+  // Control characters become spaces by code (a regex for them is a lint error, and a line break is one of them).
+  const flat = (v: string): string =>
+    [...v].map((c) => (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 ? ' ' : c)).join('')
   const one = (v: unknown, max: number): string =>
-    typeof v === 'string'
-      ? // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are exactly what is removed
-        v
-          .replace(/[\u0000-\u001f\u007f]+/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, max)
-      : ''
+    typeof v === 'string' ? flat(v).replace(/\s+/g, ' ').trim().slice(0, max) : ''
   const lines: string[] = []
   if (one(profile.tone, 200) !== '') lines.push(`Tone: ${one(profile.tone, 200)}`)
   if (one(profile.audience, 200) !== '') lines.push(`Audience: ${one(profile.audience, 200)}`)
