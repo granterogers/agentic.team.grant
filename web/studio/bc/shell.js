@@ -2643,7 +2643,7 @@ const scheduleSurface = (p) => {
       <span class="bcactions">${button('The list instead', { kind: 'outline', 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      When this project's to-dos are due. Anything without a date is listed at the foot.
+      This project's events and the to-dos that fall due, by day, week or month. To-dos without a date are listed at the foot.
     </p>
     ${cal.block(p, { full: true })}
     ${
