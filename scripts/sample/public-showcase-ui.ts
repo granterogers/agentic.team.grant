@@ -9,6 +9,9 @@
  * a visitor must answer in a sentence. Run `npm run trust:proxy-ca` first in a sandbox. Each half is a long walk (every surface is
  * a full page load against a small host): run one half per call, and never while the platform is unhealthy.
  */
+// A browser walk of the DEPLOYED page contacts production: it reads, and the only writes it makes are ones the gateway must refuse.
+// Gated like every other command that reaches production (production-gate-coverage; added when the Sample's script met the stricter guard).
+import '../../src/safety/require-production-checks.ts'
 import { chromium, type Page } from 'playwright'
 
 const PAGE =

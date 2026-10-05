@@ -66,8 +66,10 @@ describe('the office key is a machine (#385)', () => {
     )
     // The gate: a person may do everything; the key only SERVICE_MAY; a TEST member SERVICE_MAY plus
     // the decisions whose database function enforces the test-principal rule (the ones that carry `by`).
+    // The public Sample's guest (0897) is the one kind added since: it may do exactly what GUEST_MAY lists and nothing else, and the
+    // clause says so. Every other term is unchanged.
     expect(source).toMatch(
-      /const mayDo =\s*kind === 'person' \|\|\s*SERVICE_MAY\.has\(actionName\) \|\|\s*\(kind === 'harness' && action\.by !== undefined\)/,
+      /const mayDo =\s*kind === 'person' \|\|(?:\s*\/\/[^\n]*)*\s*\(kind === 'guest' && GUEST_MAY\.has\(actionName\)\) \|\|\s*SERVICE_MAY\.has\(actionName\) \|\|\s*\(kind === 'harness' && action\.by !== undefined\)/,
     )
     expect(source).toMatch(/if \(!mayDo\) \{/)
     // A session that names nobody cannot reach a function that would default its principal.
@@ -86,7 +88,10 @@ describe('the office key is a machine (#385)', () => {
   })
 
   it('a member whose kind the database did not say is treated as a test member, never a person', () => {
-    expect(source).toMatch(/rows\[0\]\?\.kind === 'person' \? 'person' : 'harness'/)
+    // 'guest' is chosen only when the database says guest (0897); anything else it did not name is still a test member.
+    expect(source).toMatch(
+      /rows\[0\]\?\.kind === 'person' \? 'person' : rows\[0\]\?\.kind === 'guest' \? 'guest' : 'harness'/,
+    )
   })
 })
 
