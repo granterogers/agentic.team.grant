@@ -301,6 +301,34 @@ export async function readFile(
   return { bytes: new Uint8Array(buffer), text: null, mime: outMime, error: null }
 }
 
+/**
+ * What Drive says a file is, without downloading it.
+ *
+ * Needed by an explicit Import of a file Team HQ only holds a reference to: the reference row has no mime type, and
+ * what a file is decides whether it is exported (Google formats) or downloaded. Asks for three fields and nothing
+ * else; it does not request a thumbnail link.
+ */
+export async function fileMeta(
+  access: GoogleAccess,
+  fileId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{
+  readonly mimeType: string | null
+  readonly name: string | null
+  readonly error: string | null
+}> {
+  const r = await fetchImpl(
+    `${API}/files/${encodeURIComponent(fileId)}?fields=${encodeURIComponent('id,name,mimeType')}&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${access.accessToken}` } },
+  )
+  if (!r.ok) {
+    const detail = (await r.text().catch(() => '')).slice(0, 200)
+    return { mimeType: null, name: null, error: `drive ${String(r.status)}: ${detail}` }
+  }
+  const body = (await r.json()) as { mimeType?: string; name?: string }
+  return { mimeType: body.mimeType ?? null, name: body.name ?? null, error: null }
+}
+
 /** A person's description of a Drive mime type. */
 export function describeKind(mime: string): string {
   if (mime === 'application/vnd.google-apps.folder') return 'folder'

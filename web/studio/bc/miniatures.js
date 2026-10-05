@@ -949,8 +949,19 @@ export const glyphFor = (face) => (face === undefined ? '' : (GLYPH[face.glyph] 
 export const docRef = (d) =>
   d?.file ?? (d?.id ? `id:${d.id}` : `d:${d?.title ?? ''}`)
 
-/** The drawn page, from the document's own line lengths where it has them. */
-const drawnPage = (d, most = 9) => {
+/**
+ * The drawn page, from the document's own line lengths where it has them.
+ *
+ * A document the office holds the text of carries a cached excerpt of it (0960: the first words, derived in the database
+ * and never written). On a tile that is shown as the page's own first words rather than invented lines, so a thumbnail
+ * of an external file is a real glimpse of it without the file having been copied. A row thumbnail is too small to read
+ * words on, so it keeps the drawn lines. The excerpt is text, always escaped, never markup.
+ */
+const drawnPage = (d, most = 9, small = false) => {
+  const excerpt = typeof d.excerpt === 'string' ? d.excerpt.trim() : ''
+  if (excerpt !== '' && !small) {
+    return `<span class="bcpage bcxpage" aria-hidden="true"><span class="bcxpagetext">${esc(excerpt)}</span></span>`
+  }
   const lines = (Array.isArray(d.lines) && d.lines.length > 0 ? d.lines : [92, 100, 96, 84, 98, 70, 90]).slice(0, most)
   return `<span class="bcpage" aria-hidden="true">
     ${lines
@@ -973,7 +984,7 @@ export const thumbFace = (d, i, extra = '') => {
   const tone = object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`
   return `<span class="bcthumb${tone}${extra === '' ? '' : ` ${esc(extra)}`}"
     data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
-    ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9) : (GLYPH[object.glyph] ?? '')}
+    ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9, extra === 'bcrowthumb') : (GLYPH[object.glyph] ?? '')}
   </span>`
 }
 
