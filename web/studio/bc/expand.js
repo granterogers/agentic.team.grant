@@ -22,6 +22,11 @@
 const EASE_OUT = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
 const EASE_IN = 'cubic-bezier(0.4, 0, 0.8, 0.4)'
 
+/* A picture of a view that has just closed is a ghost; a view that opens while one is still settling clears it first, so two copies of one screen never coexist. */
+const clearGhosts = () => {
+  for (const g of document.querySelectorAll('[data-bc-ghost]')) g.remove()
+}
+
 const calm = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
 
 let from = null
@@ -92,6 +97,8 @@ export const play = (root) => {
   const card = stale ? null : from
   from = null
   const box = root.querySelector('.bcexp .bcexpbox')
+  // A view that has just opened clears any ghost of one that has just closed; the redraw after a close has no box and leaves it be.
+  if (box !== null) clearGhosts()
   if (box === null || card === null || calm() || typeof box.animate !== 'function') return
   const to = box.getBoundingClientRect()
   if (to.width < 8) return
@@ -136,6 +143,7 @@ export const flyBack = (box, card, done) => {
   const to = box.getBoundingClientRect()
   const ghost = box.cloneNode(true)
   ghost.setAttribute('aria-hidden', 'true')
+  ghost.setAttribute('data-bc-ghost', '')
   ghost.removeAttribute('role')
   for (const el of ghost.querySelectorAll('[id]')) el.removeAttribute('id')
   Object.assign(ghost.style, {
@@ -199,6 +207,7 @@ const uniform = (box, target, reverse) => {
   return reverse ? [b, a] : [a, b]
 }
 export const growFrom = (box, target, ms = 260) => {
+  clearGhosts()
   if (box === null || target === null || calm() || typeof box.animate !== 'function') return
   const frames = uniform(box, target, false)
   if (frames !== null) box.animate(frames, { duration: ms, easing: EASE_OUT })
@@ -208,6 +217,7 @@ export const settleOnto = (box, target) => {
   const to = box.getBoundingClientRect()
   const ghost = box.cloneNode(true)
   ghost.setAttribute('aria-hidden', 'true')
+  ghost.setAttribute('data-bc-ghost', '')
   for (const el of ghost.querySelectorAll('[id]')) el.removeAttribute('id')
   Object.assign(ghost.style, {
     position: 'fixed', left: `${String(to.x)}px`, top: `${String(to.y)}px`, width: `${String(to.width)}px`,

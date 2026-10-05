@@ -436,6 +436,8 @@ const drive = async (
     (await page.locator('[data-bc-pvretry]').count()) === 1,
   )
   if (touch) {
+    // the viewer grows out of its tile (a transform): measure once it has settled, not mid-flight
+    await page.waitForTimeout(600)
     const box = await page.locator('[data-bc-pvretry]').boundingBox()
     check(
       `[${label}] the press is a 44px touch target`,
