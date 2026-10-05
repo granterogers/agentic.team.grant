@@ -999,7 +999,7 @@ export const thumbFace = (d, i, extra = '') => {
   The label is visually hidden rather than absent: "Custom" on its own tells
   somebody reading the page aloud nothing about what it orders.
 */
-export const sortControl = (slug, how, where) => `<span class="bcdocsort">
+export const sortControl = (slug, how, where, allProjects = false) => `<span class="bcdocsort">
     <!--
       A VISIBLE WORD before the value. The select said only "Custom", which
       names a value and not the question; the full label stays for a screen
@@ -1009,7 +1009,7 @@ export const sortControl = (slug, how, where) => `<span class="bcdocsort">
     <label class="bcvh" for="bc-docsort-${esc(where)}-${esc(slug)}">Order these documents by</label>
     <select class="bcdocsortpick" id="bc-docsort-${esc(where)}-${esc(slug)}"
       data-bc-docsort="${esc(slug)}">
-      ${docorder.MODES.map(
+      ${docorder.MODES.filter((m) => m.id !== 'project' || allProjects).map(
         (m) =>
           `<option value="${esc(m.id)}"${m.id === how ? ' selected' : ''}>${esc(m.name)}</option>`,
       ).join('')}
@@ -1036,7 +1036,7 @@ const thumb = (d, i) => {
     a title is not unique.
   */
   return `<figure class="bcdoc bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-doc-title="${esc(d.title ?? '')}"
-    data-bc-dochay="${esc(docsrc.hay(d))}" data-bc-docid="${esc(String(d.id ?? ''))}" draggable="true">
+    data-bc-dochay="${esc(docsrc.hay(d))}" data-bc-docid="${esc(String(d.id ?? ''))}" data-bc-docproject="${esc(String(d.project ?? ''))}" draggable="true">
     <button type="button" class="bcdocpress" data-bc-doc-open="${esc(ref)}"
       aria-label="${esc(`Open ${d.title ?? 'document'}`)}">
       ${thumbFace(d, i)}
@@ -1044,7 +1044,7 @@ const thumb = (d, i) => {
       <figcaption>
         <span class="bcdoctitle">${esc(d.title)}</span>
         <span class="bcdocmeta">${esc([kindWordOf(d), d.size].filter(Boolean).join(' · '))}</span>
-        ${docsrc.versionChip(d, esc)}
+        ${docsrc.versionChip(d, esc)}${docsrc.projectChip(d, esc)}
       </figcaption>
     </button>
   </figure>`

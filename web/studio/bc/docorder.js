@@ -58,6 +58,8 @@ export const MODES = [
   { id: 'size', name: 'Size', hint: 'largest first' },
   { id: 'type', name: 'Type', hint: 'by kind of file' },
   { id: 'source', name: 'Source', hint: 'by where it came from' },
+  // Offered only while the list spans several projects (sortControl): inside one project every row has the same one.
+  { id: 'project', name: 'Project', hint: 'by project, then name' },
 ]
 
 export const isMode = (id) => MODES.some((m) => m.id === id)
@@ -241,6 +243,7 @@ export const ordered = (slug, docs, which) => {
   if (how === 'size') return list.sort(then(bySize))
   if (how === 'type') return list.sort(then(byWord('typeKey')))
   if (how === 'source') return list.sort(then(byWord('src')))
+  if (how === 'project') return list.sort(then(byWord('projectName')))
 
   /*
     CUSTOM. The stored list decides, and anything absent from it is newer than

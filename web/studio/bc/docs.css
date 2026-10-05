@@ -151,3 +151,7 @@
 /* Named by shell.js: the kind filter's label and the version list's host. */
 [data-experience='basecamp'] .bcdoctype { display: inline-flex; align-items: center; gap: 6px; }
 [data-experience='basecamp'] .bcdocversions { margin-top: 12px; }
+
+/* The project a document is in, said only under "All projects". */
+[data-experience='basecamp'] .bcdocproj { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 12px; line-height: 18px; color: var(--bc-text); background: color-mix(in srgb, var(--bc-accent) 14%, transparent); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+[data-experience='basecamp'] .bcdoc figcaption .bcdocproj { display: block; width: fit-content; margin: 3px 0 0; }

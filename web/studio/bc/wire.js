@@ -2001,6 +2001,7 @@ const wireDocs = (root) => {
       void openDoc(
         b.dataset.bcDocOpen ?? '',
         b.dataset.bcDocTitle ?? fig?.dataset.bcDocTitle ?? 'document',
+        fig?.dataset.bcDocproject ?? '',
       )
     })
   }
@@ -2014,7 +2015,7 @@ const wireDocs = (root) => {
     if (ref === '') continue
     fig.addEventListener('click', (e) => {
       if (e.target.closest('[data-bc-doc-open]') !== null) return
-      void openDoc(ref, fig.dataset.bcDocTitle ?? 'document')
+      void openDoc(ref, fig.dataset.bcDocTitle ?? 'document', fig.dataset.bcDocproject ?? '')
     })
   }
 
@@ -2144,7 +2145,7 @@ const openInTab = (href) => {
   a.remove()
 }
 
-const openDoc = async (ref, title) => {
+const openDoc = async (ref, title, project = '') => {
   /*
     EVERY PRESS OPENS THE DOCUMENT HERE (4 October). Routine viewing must not
     send a person to Google Drive: the record draws the preview, the details and
@@ -2152,6 +2153,11 @@ const openDoc = async (ref, title) => {
     the file - are buttons on it. What used to be here opened a new tab (and, for
     a Drive document, Drive itself); that is now a choice rather than the default.
   */
+  /*
+    A document listed under ALL PROJECTS belongs to the project named on it, and the record is drawn for the project
+    you are in. So a press on another project's document goes to that project first, then opens the record there.
+  */
+  if (project !== '' && project !== ctx.state.project) ctx.go?.(`/p/${project}/documents`)
   ctx.openDocDetail?.(ref, title)
 }
 

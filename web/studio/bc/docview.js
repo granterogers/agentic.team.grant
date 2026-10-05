@@ -274,6 +274,12 @@ export const wire = (root, ctx, fileFor) => {
       ctx.render()
     })
   }
+  for (const s of root.querySelectorAll('[data-bc-docscope]')) {
+    s.addEventListener('change', () => {
+      docsrc.setFilter(slug, { scope: s.value === 'all' ? 'all' : 'project' })
+      ctx.render()
+    })
+  }
   for (const s of root.querySelectorAll('[data-bc-doctype]')) {
     s.addEventListener('change', () => {
       docsrc.setFilter(slug, { type: s.value })

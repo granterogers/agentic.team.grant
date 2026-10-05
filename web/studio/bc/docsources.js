@@ -151,12 +151,13 @@ const mem = new Map()
 export const filterOf = (slug) => {
   let f = mem.get(slug)
   if (f === undefined) {
-    f = { source: 'all', type: 'all', q: '' }
+    f = { source: 'all', type: 'all', q: '', scope: 'project' }
     try {
       const raw = JSON.parse(globalThis.localStorage?.getItem(KEY(slug)) ?? 'null')
       if (raw !== null && typeof raw === 'object') {
         if (raw.source === 'all' || SOURCES.some((s) => s.id === raw.source)) f.source = raw.source
         if (raw.type === 'all' || TYPES.some((t) => t.id === raw.type)) f.type = raw.type
+        if (raw.scope === 'all') f.scope = 'all'
       }
     } catch {
       /* Defaults are fine. */
@@ -170,7 +171,7 @@ export const setFilter = (slug, patch) => {
   const f = { ...filterOf(slug), ...patch }
   mem.set(slug, f)
   try {
-    globalThis.localStorage?.setItem(KEY(slug), JSON.stringify({ source: f.source, type: f.type }))
+    globalThis.localStorage?.setItem(KEY(slug), JSON.stringify({ source: f.source, type: f.type, scope: f.scope }))
   } catch {
     /* A browser that cannot remember still filters. */
   }
@@ -203,7 +204,7 @@ export const counts = (docs) => {
 
 /** The words a search matches on, lower-cased once. */
 export const hay = (d) =>
-  `${String(d?.title ?? '')} ${String(d?.origin ?? '')} ${(d?.tags ?? []).join(' ')} ${nameOfSource(d?.src ?? sourceOf(d))}`.toLowerCase()
+  `${String(d?.title ?? '')} ${String(d?.origin ?? '')} ${(d?.tags ?? []).join(' ')} ${nameOfSource(d?.src ?? sourceOf(d))} ${String(d?.projectName ?? '')}`.toLowerCase()
 
 /* ------------------------------------------------------------- indicators --- */
 
@@ -230,6 +231,13 @@ export const mark = (d, esc) => {
   const also = (d.alsoIn ?? []).length > 0 ? ` and ${(d.alsoIn ?? []).map(nameOfSource).join(', ')}` : ''
   return `<span class="bcdocsrc bcdocsrc--${esc(id)}" title="${esc(`${nameOfSource(id)}${also}`)}" role="img" aria-label="${esc(`Source: ${nameOfSource(id)}${also}`)}">${inner}</span>`
 }
+
+/**
+ * WHICH PROJECT A DOCUMENT BELONGS TO, said only while the list spans several projects ("All projects" scope), so a
+ * single-project list stays as quiet as it was. The name is the project's own; nothing is inferred.
+ */
+export const projectChip = (d, esc) =>
+  d?.projectName ? `<span class="bcdocproj" title="${esc(`In ${d.projectName}`)}">${esc(d.projectName)}</span>` : ''
 
 /**
  * APPROVAL BELONGS TO A VERSION. A document with a draft revision is one logical item that says both things: the

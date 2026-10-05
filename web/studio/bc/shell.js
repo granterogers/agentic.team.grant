@@ -1820,7 +1820,7 @@ const docRow = (d, i) => {
   /* Draggable for the same reason the tile is, and with the same separation:
      the row carries the drag, the control inside it carries the press. */
   return `<div class="bcitem bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-dochay="${esc(docsrc.hay(d))}"
-    data-bc-docid="${esc(String(d.id ?? ''))}" draggable="true"
+    data-bc-docid="${esc(String(d.id ?? ''))}" data-bc-docproject="${esc(String(d.project ?? ''))}" draggable="true"
     data-bc-doc-title="${esc(d.title ?? '')}">
     <!--
       THE SAME DRAWING THE GALLERY USES. This row drew four lines of text
@@ -1832,7 +1832,7 @@ const docRow = (d, i) => {
     <div class="bcitembody">
       <button type="button" class="bcitemtitle bcitemlink" data-bc-doc-open="${esc(ref)}"
         data-bc-doc-title="${esc(d.title ?? '')}">${esc(d.title)}</button>
-      <span class="bcitemmeta">${docsrc.mark(d, esc)}${esc([bcMini.kindWordOf(d), d.origin, d.size, d.when].filter(Boolean).join(' · '))}${docsrc.versionChip(d, esc)}</span>
+      <span class="bcitemmeta">${docsrc.mark(d, esc)}${esc([bcMini.kindWordOf(d), d.origin, d.size, d.when].filter(Boolean).join(' · '))}${docsrc.versionChip(d, esc)}${docsrc.projectChip(d, esc)}</span>
     </div>
     <span class="bcpmeta">${esc(opensAs(d))}</span>
   </div>`
@@ -1884,6 +1884,15 @@ const docFilterBar = (p, every, f) => {
       ${present.map((s) => chip(s.id, s.short, by.get(s.id))).join('')}
     </span>
     ${
+      (listed().length > 1)
+        ? `<label class="bcdoctype"><span class="bcvh">Which projects</span>
+            <select class="bcdocsortpick" data-bc-docscope aria-label="Which projects">
+              <option value="project"${f.scope === 'all' ? '' : ' selected'}>This project</option>
+              <option value="all"${f.scope === 'all' ? ' selected' : ''}>All projects</option>
+            </select></label>`
+        : ''
+    }
+    ${
       types.length > 1
         ? `<label class="bcdoctype"><span class="bcvh">Kind of file</span>
             <select class="bcdocsortpick" data-bc-doctype aria-label="Kind of file">
@@ -1903,9 +1912,19 @@ const documentsSurface = (p) => {
     rather than two implementations of it -- which is §30's requirement stated
     as an architecture rather than as a promise.
   */
-  const how = bcDocOrder.mode(p.slug)
-  const every = bcMini.docsOf(p)
   const f = docsrc.filterOf(p.slug)
+  /*
+    ALL PROJECTS (HQ-DOC-015: sort and filter by project). The same logical list, assembled from every project's own
+    documents, each carrying its project's name. Nothing is merged across projects: the same Drive file in two
+    projects is two items, because a project is part of what a document in Team HQ belongs to.
+  */
+  const several = listed().length > 1
+  const scopeAll = several && f.scope === 'all'
+  const every = scopeAll
+    ? listed().flatMap((q) => bcMini.docsOf(q).map((d) => ({ ...d, project: q.slug, projectName: q.name })))
+    : bcMini.docsOf(p)
+  // A custom order is one project's arrangement; across projects the honest default is by project.
+  const how = scopeAll && bcDocOrder.mode(p.slug) === 'custom' ? 'project' : bcDocOrder.mode(p.slug)
   const docs = bcDocOrder.ordered(p.slug, docsrc.applyFilter(every, f), how)
   const view = docsView()
   return `${crumbFor(p, 'documents')}
@@ -1925,7 +1944,7 @@ const documentsSurface = (p) => {
           ${button('Thumbnails', { 'data-bc-docview': 'wall', 'aria-pressed': view === 'wall' ? 'true' : 'false' })}
           ${button('List', { 'data-bc-docview': 'list', 'aria-pressed': view === 'list' ? 'true' : 'false' })}
         </span>
-        ${bcMini.sortControl(p.slug, how, 'full')}
+        ${bcMini.sortControl(p.slug, how, 'full', scopeAll)}
         ${button('Add a file', { kind: 'primary', 'data-bc-upload': '1' })}
       </span>
     </div>

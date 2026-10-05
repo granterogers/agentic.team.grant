@@ -296,13 +296,22 @@ await p2.route('**/*', async (route) => {
   }
   const section = parsed.searchParams.get('section') ?? ''
   calls.push({ section, args: Object.fromEntries(parsed.searchParams) })
-  if (section === 'project_documents')
+  if (section === 'project_documents') {
+    // Another project holds one document of its own, so the "All projects" scope has something to span.
+    const mine = String(parsed.searchParams.get('slug') ?? '') === 'legacy-coaching-course'
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
       headers,
-      body: JSON.stringify({ data: { documents: docs } }),
+      body: JSON.stringify({
+        data: {
+          documents: mine
+            ? docs
+            : [item({ id: 'x1', title: 'Another project plan', source: 'upload' })],
+        },
+      }),
     })
+  }
   if (section === 'document_versions')
     return route.fulfill({
       status: 200,
@@ -485,6 +494,65 @@ check('and the phone page does not scroll sideways', Number(sideways) <= 0, Stri
 await p2.locator('.bcdocs--wall').scrollIntoViewIfNeeded()
 await p2.locator('.bcxpagetext').first().scrollIntoViewIfNeeded()
 await p2.screenshot({ path: '.out/ux-docs-wall-excerpt-390.png' })
+/* --- ALL PROJECTS: sort and filter by project (HQ-DOC-015) --------------- */
+await p2.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })
+await p2.waitForSelector('[data-bc-docscope]')
+await p2.waitForTimeout(1500)
+check(
+  'with more than one project the filter bar offers "This project / All projects"',
+  (await p2.locator('[data-bc-docscope] option').allTextContents()).join('|') ===
+    'This project|All projects',
+)
+const dflt = [
+  await p2.locator('.bcdocs--wall [data-bc-doc]').count(),
+  await p2.locator('.bcdocproj').count(),
+  await p2.locator('[data-bc-docscope]').inputValue(),
+  (await p2.locator('.bcdocs--wall .bcdoctitle').allTextContents()).join('|'),
+]
+check(
+  'by default only this project is listed, with no project label',
+  dflt[2] === 'project' &&
+    dflt[1] === 0 &&
+    !String(dflt[3]).includes('Another project plan') &&
+    Number(dflt[0]) >= 2,
+  JSON.stringify(dflt),
+)
+await p2.locator('[data-bc-docscope]').selectOption('all')
+await p2.waitForTimeout(900)
+const allTitles = await p2.locator('.bcdocs--wall [data-bc-doc] .bcdoctitle').allTextContents()
+check(
+  "All projects lists every project's documents, each tile saying which project it is in",
+  allTitles.length >= 3 &&
+    allTitles.some((t) => t.includes('Another project plan')) &&
+    (await p2.locator('.bcdocproj').count()) >= 3,
+  allTitles.join(' | '),
+)
+check(
+  'Order by Project is offered only now and groups the tiles by project name',
+  (await p2.locator('[data-bc-docsort] option[value="project"]').count()) === 1,
+)
+await p2.locator('[data-bc-docsort]').selectOption('project')
+await p2.waitForTimeout(400)
+const projectsInOrder = await p2.locator('.bcdocs--wall .bcdocproj').allTextContents()
+check(
+  'and the project labels come out in project order, never interleaved',
+  JSON.stringify(projectsInOrder) ===
+    JSON.stringify([...projectsInOrder].sort((a, b) => a.localeCompare(b, 'en'))),
+  projectsInOrder.join(' | '),
+)
+await p2.screenshot({ path: '.out/ux-docs-all-projects.png' })
+await p2
+  .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Another project plan' })
+  .first()
+  .locator('[data-bc-doc-open]')
+  .click()
+await p2.waitForTimeout(900)
+check(
+  "pressing another project's document goes to that project and opens its record",
+  /\/p\/(?!legacy-coaching-course)[a-z-]+\/documents/.test(p2.url()) &&
+    (await p2.locator('.bcdocgrid').count()) === 1,
+  p2.url(),
+)
 await ctx2.close()
 /* the saved web pages, on the Sources surface */
 const ctx3 = await browser.newContext({ viewport: { width: 1440, height: 900 } })
