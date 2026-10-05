@@ -161,9 +161,53 @@ export const clampRect = (m, st) => {
   return { ...m, x, y, w, h }
 }
 
+const crossing = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+const anyCrossing = (list) => list.some((a, i) => list.slice(i + 1).some((b) => crossing(a, b)))
+
+/**
+ * A GIVEN arrangement that does not fit the stage, laid out again so that it does.
+ *
+ * Clamping a rectangle to its minimum width is right for a module the person has made small; it is wrong for the
+ * arrangement the page starts with, because the thirds are fractions of a stage and a narrow stage (a tablet, a window
+ * dragged in) cannot hold three columns of 240px. The clamp then pushed each module into its neighbour and the default
+ * page opened overlapping itself. Overlap is something a person chooses (HQ-LAYOUT-005), never something the page starts
+ * with, so a start that cannot fit is wrapped into rows in reading order, each module keeping its own size, and the
+ * rows share the stage's height if they are too tall for it.
+ */
+export const flowFit = (rects, st) => {
+  const list = [...rects].sort((a, b) => a.y - b.y || a.x - b.x)
+  const out = []
+  let x = 0
+  let y = 0
+  let rowH = 0
+  for (const m of list) {
+    const w = Math.min(m.w, st.w)
+    if (x > 0 && x + w > st.w) {
+      x = 0
+      y += rowH + GAP
+      rowH = 0
+    }
+    out.push({ ...m, x, y, w })
+    x += w + GAP
+    rowH = Math.max(rowH, m.h)
+  }
+  const bottom = y + rowH
+  if (bottom > st.h && out.length > 0) {
+    const rows = [...new Set(out.map((m) => m.y))].sort((a, b) => a - b)
+    const room = Math.max(0, st.h - GAP * (rows.length - 1))
+    const each = Math.max(MIN.h, Math.floor(room / rows.length))
+    for (const m of out) {
+      const row = rows.indexOf(m.y)
+      m.y = row * (each + GAP)
+      m.h = Math.min(m.h, each)
+    }
+  }
+  return out
+}
+
 /** A fractional layout as pixels for this stage, with a gap between neighbours. */
-export const fromFractions = (frac, st) =>
-  Object.entries(frac).map(([id, [fx, fy, fw, fh]], i) =>
+export const fromFractions = (frac, st) => {
+  const placed = Object.entries(frac).map(([id, [fx, fy, fw, fh]], i) =>
     clampRect(
       {
         id,
@@ -177,6 +221,9 @@ export const fromFractions = (frac, st) =>
       st,
     ),
   )
+  // The fractions never overlap each other; if the clamp made them, the stage is too small for this arrangement.
+  return anyCrossing(placed) ? flowFit(placed, st).map((m) => clampRect(m, st)) : placed
+}
 
 /* ------------------------------------------------------ alignment guides --- */
 
@@ -702,20 +749,29 @@ const newId = () => `n_${Math.random().toString(36).slice(2, 9)}`
 export const postits = (slug) => {
   const d = doc(slug)
   if (d.postits.length === 0 && !d.seeded) {
-    /* Sized to the free fifth of the stage, so it never covers a module on a narrow window. */
-    const sw = Math.min(POSTIT_DEFAULT.w, Math.max(150, Math.round(stage.w * 0.2) - 14))
-    const starter = clampRect(
-      {
-        id: 'n_starter',
-        x: stage.w - sw - 8,
-        y: 6,
-        ...POSTIT_DEFAULT,
-        w: sw,
-        z: 7,
-        text: '',
-      },
-      stage,
-    )
+    /*
+      Put where nothing is. The first draft assumed the thirds leave a free fifth on the right, which a tablet's three
+      240px columns do not: the blank note opened on top of Docs & Files. So: beside the modules if there is room for it,
+      else underneath them, and when neither exists the page simply has no starter (the Note button adds one): an empty
+      note is never worth covering somebody's documents for.
+    */
+    // Judged against the arrangement the page is GIVEN, not the one a person has since made: a note that vanished the moment
+    // somebody rearranged their modules would be stranger than one that was never offered.
+    const mods = fromFractions(THIRDS, stage)
+    const right = mods.reduce((n, m) => Math.max(n, m.x + m.w), 0)
+    const bottom = mods.reduce((n, m) => Math.max(n, m.y + m.h), 0)
+    const beside = stage.w - right - GAP - 8
+    let spot
+    if (mods.length === 0 || beside >= POSTIT_MIN.w + 20) {
+      const sw = Math.min(POSTIT_DEFAULT.w, Math.max(150, Math.round(stage.w * 0.2) - 14), mods.length === 0 ? 999 : beside)
+      spot = { x: stage.w - sw - 8, y: 6, w: sw, h: POSTIT_DEFAULT.h }
+    } else if (stage.h - bottom - GAP >= POSTIT_MIN.h + 10) {
+      spot = { x: stage.w - POSTIT_DEFAULT.w - 8, y: bottom + GAP, w: POSTIT_DEFAULT.w, h: Math.min(POSTIT_DEFAULT.h, stage.h - bottom - GAP) }
+    } else {
+      // Nowhere clear: no starter. The Note button in the toolbar still adds one, wherever its owner puts it.
+      return []
+    }
+    const starter = clampRect({ id: 'n_starter', ...spot, z: 7, text: '' }, stage)
     return [{ ...starter, starter: true }]
   }
   return d.postits.map((n) => clampRect(n, stage))

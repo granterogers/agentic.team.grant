@@ -51,6 +51,11 @@ describe('the default', () => {
       { w: 1200, h: 620 },
       { w: 900, h: 500 },
       { w: 1800, h: 900 },
+      // A tablet or a window dragged in: three columns of 240px cannot fit, and the page must not open overlapping itself.
+      { w: 666, h: 560 },
+      { w: 760, h: 600 },
+      { w: 540, h: 700 },
+      { w: 500, h: 900 },
     ]) {
       L.setStage(st.w, st.h)
       const list = L.layout('p') as Rect[]
@@ -64,6 +69,64 @@ describe('the default', () => {
         for (let j = i + 1; j < list.length; j += 1)
           expect(overlaps(list[i] as Rect, list[j] as Rect)).toBe(false)
     }
+  })
+})
+
+describe('a start that cannot fit the stage is wrapped, not piled up', () => {
+  it('every preset overlaps nothing at tablet widths, keeping every module at least its minimum', () => {
+    for (const st of [
+      { w: 666, h: 560 },
+      { w: 760, h: 600 },
+    ]) {
+      for (const key of Object.keys(L.PRESETS)) {
+        L.setStage(st.w, st.h)
+        L.applyPreset('p', key)
+        const list = L.layout('p') as Rect[]
+        for (const m of list) {
+          expect(m.w, `${key} ${m.id} width`).toBeGreaterThanOrEqual(L.MIN.w)
+          expect(m.x + m.w, `${key} ${m.id} right edge`).toBeLessThanOrEqual(st.w)
+        }
+        for (let i = 0; i < list.length; i += 1)
+          for (let j = i + 1; j < list.length; j += 1)
+            expect(overlaps(list[i] as Rect, list[j] as Rect), `${key} ${st.w}`).toBe(false)
+      }
+    }
+  })
+
+  it('CONTROL: a person who drags one module onto another still gets the overlap they asked for', () => {
+    L.setStage(666, 560)
+    const [a, b] = L.layout('p') as Rect[] as [Rect, Rect]
+    L.place('p', a.id, { x: b.x + 10, y: b.y + 10, w: a.w, h: a.h })
+    const list = L.layout('p') as Rect[]
+    const A = list.find((m) => m.id === a.id) as Rect
+    const B = list.find((m) => m.id === b.id) as Rect
+    expect(overlaps(A, B)).toBe(true)
+  })
+})
+
+describe('the starter note never covers a module', () => {
+  it('sits clear of every module at every stage, or is not offered', () => {
+    for (const st of [
+      { w: 1800, h: 900 },
+      { w: 1200, h: 620 },
+      { w: 780, h: 640 },
+      { w: 666, h: 560 },
+      { w: 540, h: 700 },
+    ]) {
+      L.forgetAll()
+      L.setStage(st.w, st.h)
+      const mods = L.layout('s') as Rect[]
+      const notes = L.postits('s') as (Rect & { starter?: boolean })[]
+      expect(notes.length).toBeLessThanOrEqual(1)
+      for (const n of notes)
+        for (const m of mods) expect(overlaps(n, m), `${st.w}x${st.h} ${m.id}`).toBe(false)
+    }
+  })
+
+  it('CONTROL: on a wide stage there is one, so the check above is not passing on an empty list', () => {
+    L.forgetAll()
+    L.setStage(1800, 900)
+    expect((L.postits('s') as Rect[]).length).toBe(1)
   })
 })
 
