@@ -4181,3 +4181,8 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
   [data-experience='basecamp'] .bcmodhead .bcsplit2 { min-width: 0; flex: 0 1 auto; }
   [data-experience='basecamp'] .bcmodhead .bcsplitbtn { white-space: nowrap; padding: 6px 8px; }
 }
+
+/* The record header's secondary action ("The list instead") is a real outlined button, left-aligned under the title on a phone. */
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcrecordhead .bcactions { justify-content: flex-start; }
+}

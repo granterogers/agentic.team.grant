@@ -2568,7 +2568,7 @@ const boardSurface = (p) => {
   return `${crumbFor(p, 'board')}
     <div class="bcrecordhead">
       <h1>${esc(toolById('board')?.name ?? 'Card Table')}</h1>
-      <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
+      <span class="bcactions">${button('The list instead', { kind: 'outline', 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       The same to-dos, by stage. Drag a card to another column, or choose its stage on the card.
@@ -2621,7 +2621,7 @@ const scheduleSurface = (p) => {
   return `${crumbFor(p, 'schedule')}
     <div class="bcrecordhead">
       <h1>${esc(toolById('schedule')?.name ?? 'Schedule')}</h1>
-      <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
+      <span class="bcactions">${button('The list instead', { kind: 'outline', 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       When this project's to-dos are due. Anything without a date is listed at the foot.

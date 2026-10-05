@@ -601,10 +601,14 @@ export const block = (p, { full = false } = {}) => {
   const loading = ev.state === 'loading' ? '<p class="bccal2status" role="status">Loading events…</p>' : ''
   const failed = ev.state === 'error' ? `<p class="bccal2status bccal2status--bad" role="alert">${esc(`Could not load the events: ${ev.error ?? 'unknown error'}`)}</p>` : ''
   const size = full ? 'large' : (sizes.get(p.slug) ?? 'small')
+  /* A month of three-letter chips is unreadable in 340px (each cell shows one letter). On a narrow screen the full month is the dense grid (a dot per busy day) with the selected day's agenda under it, which is what the medium module already does. */
+  const narrow = full && (globalThis.matchMedia?.('(max-width: 560px)')?.matches ?? false)
   return `<div class="bccal2 ${full ? 'bccal2--full' : ''}" data-bc-cal="${esc(p.slug)}" data-size="${size}" data-view="${esc(s.view)}">
     ${size === 'large' ? `<div class="bccal2large">
       ${toolbar(s, ev.mode)}${loading}${failed}
-      ${s.view === 'month' ? monthBody(list, s, false) : timeGrid(list, days, s)}
+      ${s.view === 'month' ? (narrow ? `${monthBody(list, s, true)}<div class="bccal2day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>
+        ${selected.length === 0 ? '<p class="bccal2empty">Nothing on this day.</p>' : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')}
+      </div>` : monthBody(list, s, false)) : timeGrid(list, days, s)}
     </div>` : ''}
     ${size === 'medium' ? `<div class="bccal2medium">
       <div class="bccal2minibar">
