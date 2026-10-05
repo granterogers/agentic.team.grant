@@ -24,6 +24,7 @@
  * `src/safety/arm.ts` all ask it; nothing else decides.
  */
 
+import { type ProductionBudget, productionBudget } from './request-budget.ts'
 import {
   type Attestation,
   bindingProblem,
@@ -284,7 +285,11 @@ const methodOf = (input: unknown, init: unknown): string => {
  * Wrap a fetch so a request to production is refused BEFORE it is made. `getEnv` is read on every call so a test (or a
  * person) changing the flag takes effect without re-wrapping.
  */
-export const guardFetch = (inner: FetchLike, getEnv: () => Env | null = processEnv): FetchLike => {
+export const guardFetch = (
+  inner: FetchLike,
+  getEnv: () => Env | null = processEnv,
+  getBudget: () => ProductionBudget | null = productionBudget,
+): FetchLike => {
   const guarded: FetchLike & { productionGuarded?: true } = async (input, init) => {
     const env = getEnv()
     if (env !== null) {
@@ -294,6 +299,8 @@ export const guardFetch = (inner: FetchLike, getEnv: () => Env | null = processE
         const what = `${methodOf(input, init)} ${safeOrigin(url)}`
         if (level === 'writes') assertProductionWritesAllowed(what, env, url)
         else assertProductionChecksAllowed(what, env, url)
+        // Volume, after intent: a request refused above was never sent and is not counted; one that gets here is.
+        await getBudget()?.admit(what)
       }
     }
     return await inner(input, init)

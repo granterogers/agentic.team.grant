@@ -17,6 +17,7 @@
 
 import '../safety/arm.ts'
 import { assertProductionChecksAllowed, isProductionUrl } from '../safety/production-gate.ts'
+import { admitProductionRequest } from '../safety/request-budget.ts'
 import { assertMayTouchProduction } from './suite-guard.ts'
 
 export interface SqlResult {
@@ -150,6 +151,13 @@ export class ManagementApiExecutor implements SqlExecutor {
     assertMayTouchProduction()
     let response!: Response
     for (let attempt = 0; ; attempt += 1) {
+      // The fetch guard counts this request against the production budget. If something replaced `fetch` after the guard
+      // was installed, the request would go uncounted, so count it here: one per attempt, retries included.
+      if (
+        (globalThis.fetch as { productionGuarded?: true }).productionGuarded !== true &&
+        isProductionUrl(this.endpoint)
+      )
+        await admitProductionRequest(`POST ${this.endpoint.replace(/\?.*$/, '')}`)
       response = await fetch(this.endpoint, {
         method: 'POST',
         headers: {
