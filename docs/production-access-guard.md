@@ -606,6 +606,30 @@ p4's forensics collectors reached this guard AFTER it was written, with `SUPABAS
 targets production by default; the guard then refuses it without the flag, which is the intended failure. For staging, the
 variable must be set explicitly (the staging preflight, `npm run staging:preflight`, refuses an unset ref).
 
+### Request budget and canary (5 October 2026, a PROPOSAL)
+
+The flags say a person asked; they say nothing about how much. Verification traffic of 2,300 to 3,000 gateway requests in ten
+minutes preceded every persistent degradation episode of the Nano host (`docs/ops/supabase-forensics-2026-10-05.md` sections 3 and
+12.3), and one page load is about 25 gateway requests. Four additions, none of which removes a refusal:
+
+* **A request budget** (`src/safety/request-budget.ts`), installed where the fetch guard already intercepts: every request to a
+  production host the guard lets through, every Management API query attempt and every remote Postgres statement counts, and a
+  browser script's page requests count through `accountPage` (`src/safety/page-accounting.ts`). Class defaults: smoke 100, sample 250,
+  disposable multi-user 400, production-heavy 200, p4 browser scripts 500, unclassified 150. `HQ_PRODUCTION_REQUEST_BUDGET=<n>` may
+  lower it; raising it needs `HQ_PRODUCTION_BUDGET_REASON="<why>"`, printed. Past the budget the process aborts with the budget, the
+  count and the class, runs the harness's registered teardown, and refuses every later production request. A request the gate refused
+  is not counted; localhost and a replica never are.
+* **A canary precondition** (`src/safety/canary.ts`): all services healthy, the last 5 heartbeat runs succeeded under 1.0 s, 10 runs in
+  10 minutes, no `job startup timeout` in the hour. It fails closed; `--skip-canary-because="<reason>"` covers only a canary that could
+  not be read. `scripts/suite.ts` uses it, and no longer starts a production-class run when the access token is unset.
+* **`scripts/p4`, `p5` and `p6` are under the suite guard** (`src/db/suite-guard.ts`, `src/safety/require-suite-intent.ts`): they need
+  `HQ_PRODUCTION_INTENT=1` like a verify suite, unless the manifest classes them sample, smoke or local.
+* The proposal, the per-class table (requests, disposable people, jobs, page loads, cool-down, preconditions), the global rules and the
+  known ways it can still fail open are in `docs/testing/production-test-budgets.md`.
+
+Every new script that can contact production still puts a gate module first; one with no SQL executor that is a suite in a p-stream
+also imports `require-suite-intent.ts`.
+
 ### Staging binding (5 October 2026)
 
 The flags cannot tell staging from production. In a shell with `TARGET_ENVIRONMENT=staging`, `npm run staging:preflight` writes
