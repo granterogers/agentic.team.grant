@@ -490,9 +490,9 @@ describe('the fingerprint reads the file set the deploy scripts upload', () => {
     expect(usesSharedSet(`${delta}\nawait add('x', 'y')`)).toBe(false)
     expect(usesSharedSet(`${full}\nconst w = await readdir('web')`)).toBe(false)
     expect(usesSharedSet(`${full}\nconst f = { file: 'a.js', data: x }`)).toBe(false)
-    expect(usesSharedSet(delta.replace("collectPageFiles('.')", "collectPageFiles('web')"))).toBe(
-      false,
-    )
+    expect(
+      usesSharedSet(delta.replace("collectPageFiles('.', ROOT)", "collectPageFiles('web')")),
+    ).toBe(false)
   })
 })
 
