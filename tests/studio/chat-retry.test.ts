@@ -22,7 +22,9 @@ vi.mock('../../web/studio/backend.js', async (real) => ({
   VOICE: 'https://office.test/functions/v1/voice',
   UNCONFIGURED: 'no office configured',
 }))
-vi.mock('../../web/studio/session.js', () => ({ forget: () => undefined }))
+// `signedIn` is read by the thread (a signed-out visitor sees the seeded example; a signed-in person never does, #426). These tests
+// are about a person who is signed in, so it answers true. The mock lacked it when the Sample added that read, on its own branch too.
+vi.mock('../../web/studio/session.js', () => ({ forget: () => undefined, signedIn: () => true }))
 
 type Row = Record<string, unknown>
 type Chat = {
