@@ -195,7 +195,13 @@ export async function act(action, args = {}) {
     )
   }
   if (!r.ok) throw new Error(body.error ?? `The server returned ${r.status}`)
-  if (body.result?.error) throw new Error(body.result.error)
+  if (body.result?.error) {
+    // A typed refusal keeps its code so a page can speak for it (SOURCE_DISCONNECTED, 1010); the sentence stays the fallback.
+    const refused = new Error(body.result.error)
+    if (typeof body.result.error_code === 'string') refused.code = body.result.error_code
+    if (typeof body.result.reason === 'string') refused.reason = body.result.reason
+    throw refused
+  }
   // Only on the way out, and only after both refusal checks: an action that was
   // refused changed nothing, and offering to take back nothing is a lie.
   try {

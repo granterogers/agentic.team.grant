@@ -35,7 +35,9 @@ import { esc } from './parts.js'
 const TEXT_LIMIT = 9000
 
 const say = (host, text, tone = '') => {
-  const el = host.closest('.bcdocgrid')?.querySelector('[data-bc-docsay]')
+  /* The Import press lives in the header, which is a sibling of the grid, not inside it: a press there said nothing for as long as the header existed. */
+  const grid = host.closest('.bcdocgrid') ?? host.closest('.bcrecordhead')?.parentElement?.querySelector('.bcdocgrid')
+  const el = grid?.querySelector('[data-bc-docsay]')
   if (el === null || el === undefined) return
   el.textContent = text
   el.dataset.tone = tone
@@ -447,6 +449,22 @@ export const wire = (root, ctx, fileFor) => {
         b.remove()
         ctx.render?.()
       } catch (e) {
+        /*
+          The server refuses a new import when the source is switched off or Google is disconnected (SOURCE_DISCONNECTED).
+          The press stays disabled, because pressing it again cannot succeed until something is reconnected, and the
+          sentence says which thing: the page never decided this, it is only translating the answer.
+        */
+        if (e?.code === 'SOURCE_DISCONNECTED') {
+          b.dataset.bcSourceDisconnected = e.reason ?? ''
+          say(
+            b,
+            e.reason === 'provider_disconnected'
+              ? 'Reconnect Google Drive to import this file. Settings > Services has Connect Google.'
+              : 'This source is switched off, so this file cannot be imported. Turn it back on to import it.',
+            'bad',
+          )
+          return
+        }
         b.disabled = false
         say(b, String(e?.message ?? e), 'bad')
       }

@@ -52,6 +52,8 @@ interface Payload {
   readonly document_id?: string
   readonly mime_type?: string
   readonly title?: string
+  /** True when the job was queued for an Import press (1010 asks the gate before reading). */
+  readonly import_request?: boolean
 }
 
 export function driveReadHandler(deps: DriveReadDeps): Handler {
@@ -101,6 +103,37 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
           }
         }
         return said(body, false)
+      }
+
+      /*
+        A read that an Import press asked for is a NEW operation that needs the provider, so a closed source is refused
+        here too: the job may have been queued before the source was switched off, or by somebody who never went through
+        the press (1010). Asked of the database, which decides; a database that does not have the function yet has no
+        gate on the press either, and the read goes on as it always did. Any other failure refuses: unknown is not open.
+      */
+      if (p.import_request === true && importDoc !== '') {
+        try {
+          const g = await deps.db.execute(
+            `select app.document_import_gate(app.job_office(${lit(job.jobId)}::uuid), ${lit(importDoc)}::uuid) as g`,
+          )
+          const raw = (g.rows[0] as { g?: unknown } | undefined)?.g
+          const gate = (typeof raw === 'string' ? JSON.parse(raw) : raw) as
+            | { ok?: boolean; error?: string; error_code?: string }
+            | undefined
+          if (gate?.ok !== true) {
+            return failed(
+              `${gate?.error_code ?? 'SOURCE_DISCONNECTED'}: ${gate?.error ?? 'this source cannot be read.'}`,
+            )
+          }
+        } catch (e) {
+          const missing =
+            /document_import_gate/.test(e instanceof Error ? e.message : String(e)) &&
+            /does not exist/.test(e instanceof Error ? e.message : String(e))
+          if (!missing)
+            return failed(
+              'SOURCE_DISCONNECTED: the source could not be checked, so it was not read.',
+            )
+        }
       }
 
       const fileId = String(p.file_id ?? '').trim()

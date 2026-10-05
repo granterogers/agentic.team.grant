@@ -272,6 +272,7 @@ const docs = [
     import_error: 'I could not read that PDF - drive 404: File not found',
   }),
 ]
+let refuseImport = ''
 await p2.route('**/*', async (route) => {
   const u = route.request().url()
   if (!u.includes('hq-api')) return route.continue()
@@ -289,15 +290,25 @@ await p2.route('**/*', async (route) => {
     }
     calls.push({ action: body.action, args: body.args })
     const result =
-      body.action === 'document_rollback'
+      body.action === 'document_import' && refuseImport !== ''
         ? {
-            ok: true,
-            version: 5,
-            restored_from_version: 3,
-            state: 'approved',
-            said: 'Restored v3 as v5 (approved). The draft that was waiting is kept in the history.',
+            ok: false,
+            error:
+              refuseImport === 'provider_disconnected'
+                ? 'Reconnect Google Drive to import this file.'
+                : 'This source is switched off, so this file cannot be imported. Turn it back on to import it.',
+            error_code: 'SOURCE_DISCONNECTED',
+            reason: refuseImport,
           }
-        : { ok: true, state: 'pending', note: 'Requested.' }
+        : body.action === 'document_rollback'
+          ? {
+              ok: true,
+              version: 5,
+              restored_from_version: 3,
+              state: 'approved',
+              said: 'Restored v3 as v5 (approved). The draft that was waiting is kept in the history.',
+            }
+          : { ok: true, state: 'pending', note: 'Requested.' }
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -520,6 +531,30 @@ check(
   retried.length === before + 1 && retried[retried.length - 1]?.args?.p_document_id === 'd4',
   JSON.stringify(retried),
 )
+/* the server refuses a new import of a disconnected source with a typed answer; the page only speaks it (1010) */
+refuseImport = 'provider_disconnected'
+await p2.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })
+await p2.waitForSelector('.bcdocs--wall [data-bc-doc]')
+await p2
+  .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Drive contract, fetch failed' })
+  .locator('[data-bc-doc-open]')
+  .click()
+await p2.waitForSelector('.bcdocgrid')
+await p2.waitForTimeout(600)
+await p2.waitForSelector('[data-bc-docimport]:not([aria-hidden=true] *)')
+await p2.locator('[data-bc-docimport]:not([aria-hidden=true] *)').click()
+await p2.waitForTimeout(400)
+const refusedText = (await p2.locator('[data-bc-docsay]').first().textContent()) ?? ''
+check(
+  'a SOURCE_DISCONNECTED answer is shown as "Reconnect Google Drive to import this file."',
+  /Reconnect Google Drive to import this file/.test(refusedText),
+  refusedText.replace(/\s+/g, ' ').slice(0, 200),
+)
+check(
+  '...and the press stays disabled, because pressing again cannot succeed',
+  (await p2.locator('[data-bc-docimport]:not([aria-hidden=true] *)').first().isDisabled()) === true,
+)
+refuseImport = ''
 /* the same list on a phone: the excerpt tile is there and nothing pushes the page sideways */
 await p2.setViewportSize({ width: 390, height: 844 })
 await p2.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })

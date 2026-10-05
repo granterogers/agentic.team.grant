@@ -108,6 +108,9 @@ const runJob = async (jobId: string, projectId: string): Promise<string> => {
 }
 
 await q('begin')
+await q(
+  `insert into public.integration_connections (office_id, provider, account_ref, secret_name) values (${lit(OFFICE)}::uuid, 'google', 'primary', 'google.refresh_token') on conflict do nothing`,
+) // a connected Google account: an import of a Drive file needs one (1010)
 try {
   const project = async (slug: string): Promise<string> =>
     String(
