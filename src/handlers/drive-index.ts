@@ -21,9 +21,10 @@
  * the cache, and the file is fetched only when they differ. A failure is written down with its reason and the document is
  * left alone for a back-off; the run's own output says what happened, in numbers, so the failures are not silent.
  */
-import { LIMITS, capText, driveProvider, sourceChanged } from '../documents/preview.ts'
-import type { CacheRow, Failure, SourceMeta } from '../documents/preview.ts'
+
 import type { SqlExecutor } from '../db/executor.ts'
+import type { CacheRow, Failure, SourceMeta } from '../documents/preview.ts'
+import { capText, driveProvider, LIMITS, sourceChanged } from '../documents/preview.ts'
 import { driveAccess } from '../google/drive.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { fileText } from '../text/file-text.ts'
@@ -80,6 +81,7 @@ export function driveIndexHandler(deps: DriveIndexDeps): Handler {
       const budget = deps.budgetMs ?? 100_000
       const office = `app.job_office(${lit(job.jobId)}::uuid)`
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const cfg = (
         await deps.db.execute(
           `select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid`,

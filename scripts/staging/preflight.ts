@@ -78,6 +78,9 @@ if (process.argv.includes('--live')) {
     const { rows } = await db.execute(
       "select key, value::text as v from public.system_config where key in ('duties.paused', 'duties.allow')",
     )
+    const has = (
+      await db.execute("select to_regprocedure('app.duty_allowed(text)') is not null as ok")
+    ).rows[0] as { ok?: boolean } | undefined
     const byKey = new Map((rows as { key: string; v: string }[]).map((r) => [r.key, r.v]))
     const allow = (() => {
       try {
@@ -87,7 +90,13 @@ if (process.argv.includes('--live')) {
         return []
       }
     })()
-    checks.push(workerMayBeDeployed({ paused: byKey.get('duties.paused') === 'true', allow }))
+    checks.push(
+      workerMayBeDeployed({
+        paused: byKey.get('duties.paused') === 'true',
+        allow,
+        honoured: has?.ok === true,
+      }),
+    )
   }
 }
 

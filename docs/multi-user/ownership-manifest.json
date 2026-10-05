@@ -285,6 +285,18 @@
         }
       ]
     },
+    "document_index_state": {
+      "class": "OFFICE_CARRIER",
+      "why": "The background indexer's schedule for a document (HQ-DOC-026): office_id is written with the row; closed to every API role.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_index_state_document_same_office"
+        }
+      ]
+    },
     "document_orders": {
       "class": "OFFICE_DERIVED",
       "path": [

@@ -175,5 +175,7 @@ describe('the staging preflight', () => {
     expect(workerMayBeDeployed({ paused: true, allow: [] }).ok).toBe(true)
     expect(workerMayBeDeployed({ paused: true, allow: ['drive-index'] }).ok).toBe(true)
     expect(workerMayBeDeployed({ paused: false, allow: [] }).ok).toBe(false)
+    // a hold the database does not honour is no hold at all
+    expect(workerMayBeDeployed({ paused: true, allow: [], honoured: false }).ok).toBe(false)
   })
 })

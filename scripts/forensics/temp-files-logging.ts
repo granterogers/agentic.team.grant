@@ -24,8 +24,6 @@
  */
 import '../../src/safety/require-production-writes.ts'
 
-export {}
-
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN ?? ''
 const API = `https://api.supabase.com/v1/projects/${REF}`

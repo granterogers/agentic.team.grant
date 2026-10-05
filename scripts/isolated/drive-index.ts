@@ -16,8 +16,9 @@
  * doubling; a rate limit stops the run; a disconnected or revoked source is not read at all and reading resumes on
  * reconnect; another office's documents are never touched; and held duties (the staging posture) fire only what is allowed.
  */
-import { driveIndexHandler } from '../../src/handlers/drive-index.ts'
+
 import type { SqlExecutor } from '../../src/db/executor.ts'
+import { driveIndexHandler } from '../../src/handlers/drive-index.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'integ_full')
@@ -109,7 +110,7 @@ const withCredential: SqlExecutor = {
     return db.execute(sql)
   },
 } as SqlExecutor
-let tick = Date.now()
+const tick = Date.now()
 const handler = driveIndexHandler({ db: withCredential, fetchImpl: fakeFetch, now: () => tick })
 
 await q('begin')

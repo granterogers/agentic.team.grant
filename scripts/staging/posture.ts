@@ -39,6 +39,17 @@ if (token === '') {
   process.exit(2)
 }
 const db = new ManagementApiExecutor(process.env.SUPABASE_PROJECT_REF ?? '', token)
+if (verb !== 'status') {
+  const has = (
+    await db.execute("select to_regprocedure('app.duty_allowed(text)') is not null as ok")
+  ).rows[0] as { ok?: boolean } | undefined
+  if (has?.ok !== true) {
+    console.error(
+      'REFUSED: this database does not have migration 1020 (app.duty_allowed), so holding duties would change nothing. Apply the migrations first.',
+    )
+    process.exit(1)
+  }
+}
 const put = (k: string, v: string): Promise<unknown> =>
   db.execute(
     `insert into public.system_config (key, value, description, updated_by) values ('${k}', '${v}'::jsonb, 'staging posture: timed duties held until allowed', 'staging-posture')

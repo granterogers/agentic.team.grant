@@ -274,14 +274,23 @@ export const shownValue = (name: string, value: string | undefined): string =>
       ? '(set, not shown)'
       : value
 
-/** The live phase: may a worker be deployed? Only when duties are held. */
+/**
+ * The live phase: may a worker be deployed? Only when timed duties are held AND the database actually honours the hold.
+ * A hold written to a database that has not had migration 1020 changes nothing, and would read as safe.
+ */
 export const workerMayBeDeployed = (config: {
   paused: boolean
   allow: readonly string[]
-}): Check => ({
-  id: 'worker.duties-held',
-  ok: config.paused,
-  detail: config.paused
-    ? `timed duties are held (allowed: ${config.allow.length === 0 ? 'none' : config.allow.join(', ')})`
-    : 'timed duties are NOT held: a staging worker would start Drive, Calendar and chat duties at once. Run staging:posture hold first.',
-})
+  honoured?: boolean
+}): Check => {
+  const honoured = config.honoured !== false
+  return {
+    id: 'worker.duties-held',
+    ok: config.paused && honoured,
+    detail: !honoured
+      ? 'this database does not have migration 1020 (app.duty_allowed), so a hold would not be honoured. Apply the migrations first.'
+      : config.paused
+        ? `timed duties are held (allowed: ${config.allow.length === 0 ? 'none' : config.allow.join(', ')})`
+        : 'timed duties are NOT held: a staging worker would start Drive, Calendar and chat duties at once. Run staging:posture hold first.',
+  }
+}
