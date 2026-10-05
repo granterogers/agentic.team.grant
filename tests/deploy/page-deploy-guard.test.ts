@@ -77,8 +77,8 @@ const world = (over: Partial<FakeWorld> = {}): FakeWorld => ({
   },
   env: {
     envs: [
-      { key: 'NOTEBOOK_READER_SECRET', updatedAt: 1 },
-      { key: 'OTHER_FLAG', updatedAt: 1_760_000_000_000 },
+      { key: 'NOTEBOOK_READER_SECRET', updatedAt: 1, target: ['production'], type: 'encrypted' },
+      { key: 'OTHER_FLAG', updatedAt: 1_760_000_000_000, target: ['production'], type: 'plain' },
     ],
   },
   live: { readyState: 'READY', target: 'production', meta: {} },
@@ -258,11 +258,32 @@ describe('every input class that changes makes a skip impossible (through the re
     expect((await assessPageDeploy(fake(edited), opts())).decision.skip).toBe(false)
   })
 
+  it('the supplied secret re-scoped or retyped by hand (name and value unchanged, update time ignored) still deploys', async () => {
+    const rescoped = await matching()
+    ;(rescoped.env as { envs: Record<string, unknown>[] }).envs[0] = {
+      key: 'NOTEBOOK_READER_SECRET',
+      updatedAt: 1,
+      target: ['production', 'preview'],
+      type: 'encrypted',
+    }
+    expect((await assessPageDeploy(fake(rescoped), opts())).decision.skip).toBe(false)
+    const retyped = await matching()
+    ;(retyped.env as { envs: Record<string, unknown>[] }).envs[0] = {
+      key: 'NOTEBOOK_READER_SECRET',
+      updatedAt: 1,
+      target: ['production'],
+      type: 'plain',
+    }
+    expect((await assessPageDeploy(fake(retyped), opts())).decision.skip).toBe(false)
+  })
+
   it('the supplied secret is NOT affected by its own update time (an upsert of the same value must still skip)', async () => {
     const w = await matching()
-    ;(w.env as { envs: { key: string; updatedAt: number }[] }).envs[0] = {
+    ;(w.env as { envs: Record<string, unknown>[] }).envs[0] = {
       key: 'NOTEBOOK_READER_SECRET',
       updatedAt: 999_999_999_999,
+      target: ['production'],
+      type: 'encrypted',
     }
     expect((await assessPageDeploy(fake(w), opts())).decision.skip).toBe(true)
   })

@@ -106,9 +106,14 @@ export async function assessPageDeploy(
       throw new Error('the environment list is truncated')
     const envNames: string[] = []
     const envStamps: Record<string, number | null> = {}
+    const shapeParts = new Map<string, string[]>()
     for (const e of envReply.envs) {
       if (!isObj(e) || typeof e.key !== 'string') throw new Error('an environment entry had no key')
       if (!envNames.includes(e.key)) envNames.push(e.key)
+      const targets = Array.isArray(e.target)
+        ? e.target.map(String).sort().join('+')
+        : String(e.target)
+      shapeParts.set(e.key, [...(shapeParts.get(e.key) ?? []), `${targets}:${String(e.type)}`])
       if (e.key in supplied) {
         envStamps[e.key] = null // covered by the digest of the value this script supplies
         continue
@@ -126,7 +131,14 @@ export async function assessPageDeploy(
     const fingerprint = pageFingerprint({
       files: toUploadList(files),
       deployment: opts.deployment,
-      project: { settings: pickProjectSettings(project), envNames, envStamps },
+      project: {
+        settings: pickProjectSettings(project),
+        envNames,
+        envStamps,
+        envShapes: Object.fromEntries(
+          [...shapeParts].map(([k, parts]) => [k, [...parts].sort().join('|')]),
+        ),
+      },
       envDigests,
     })
     result = { ...result, fingerprint }
