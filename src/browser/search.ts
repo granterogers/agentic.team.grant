@@ -83,6 +83,11 @@ export function unwrapResultUrl(href: string): string | null {
     } catch {
       return null
     }
+    // The LIVE service wraps an advertisement in the same redirector, so the unwrapped target is itself an engine address
+    // (`duckduckgo.com/y.js?...`): a result is never one of the engine's own pages. (A hand-written fixture had the ad as a
+    // bare /y.js link, which is why this was not seen until the real response was read.)
+    const inner = u.hostname.toLowerCase()
+    if (inner === 'duckduckgo.com' || inner.endsWith('.duckduckgo.com')) return null
   }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return null
   if (isPrivateHost(u.hostname)) return null
@@ -106,6 +111,10 @@ export function parseDuckDuckGoHtml(html: string, limit = 10): readonly SearchRe
   ]
   for (const [index, m] of anchors.entries()) {
     const tag = m[0]
+    // A sponsored result sits in a container whose class says so; it is never an answer.
+    const before = html.slice(Math.max(0, (m.index ?? 0) - 600), m.index ?? 0)
+    const container = [...before.matchAll(/<div\b[^>]*class="([^"]*\bresult\b[^"]*)"/gi)].pop()?.[1]
+    if (container !== undefined && /\bresult--ad\b/.test(container)) continue
     const href = /\bhref\s*=\s*"([^"]*)"/i.exec(tag)?.[1] ?? ''
     const url = unwrapResultUrl(href)
     if (url === null || seen.has(url)) continue

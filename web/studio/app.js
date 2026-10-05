@@ -6380,19 +6380,45 @@ function connectionsTab() {
     }
     if (v.configured === true) {
       const trouble = v.trouble ?? []
+      // The last round's reading of the connection (0981). A down Vikunja is the loudest thing on this card.
+      const h = v.health
+      const down = h !== null && h !== undefined && h.state === 'down'
+      const downChip = {
+        refused: 'Token refused',
+        failed: 'Refused the last round',
+        unreachable: 'Not answering',
+      }
+      const lastOk =
+        h !== null && h !== undefined && h.lastOkAt !== null && h.lastOkAt !== undefined
+          ? ` Last in step ${when.words(h.lastOkAt)}.`
+          : ''
+      const why = down
+        ? h.kind === 'refused'
+          ? 'Vikunja turned the token down. Nothing was changed here and nothing is lost. To fix it, disconnect, then connect again with a fresh token (Vikunja, Settings, API tokens).'
+          : h.kind === 'failed'
+            ? 'Vikunja answered but refused the sync. Nothing was changed here and nothing is lost. Check the address and the project number: disconnect, then connect again.'
+            : 'Vikunja is not answering. Nothing was changed here and nothing is lost. The team tries again every quarter of an hour and this clears itself when it answers.'
+        : ''
       return ui.section({
         title: 'Your tasks in another app',
         body: ui.card([
           ui.row({
             name: title,
-            desc: `Connected to ${String(v.url ?? '')} (project ${String(v.project ?? '')}). ${v.linked} task${v.linked === 1 ? ' is' : 's are'} linked. Your tasks live here; the other app holds a copy, and disconnecting never loses anything.`,
+            desc: `Connected to ${String(v.url ?? '')} (project ${String(v.project ?? '')}). ${v.linked} task${v.linked === 1 ? ' is' : 's are'} linked. Your tasks live here; the other app holds a copy, and disconnecting never loses anything.${lastOk}`,
             wrap: true,
             said: true,
+            // The words are long and the control is a chip plus a button: on a phone the control goes under them.
+            kind: 'wide',
             status: '',
             control:
-              ui.chip(trouble.length === 0 ? 'ok' : 'warn', trouble.length === 0 ? 'In step' : `${trouble.length} to look at`) +
+              (down
+                ? ui.chip('bad', downChip[h.kind] ?? 'Not answering')
+                : ui.chip(trouble.length === 0 ? 'ok' : 'warn', trouble.length === 0 ? 'In step' : `${trouble.length} to look at`)) +
               (canWrite() && operator ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-vikunja-off': true } }) : ''),
           }),
+          ...(down
+            ? [ui.row({ name: 'Why it stopped', desc: `What it said: ${String(h.detail ?? '')}. ${why}`, kind: 'fact', attr: { 'data-tsync-down': h.kind ?? 'unreachable' } })]
+            : []),
           ...trouble.slice(0, 5).map((t) => ui.row({ name: String(t.title ?? ''), desc: String(t.why ?? t.state ?? ''), kind: 'fact' })),
         ]),
       })

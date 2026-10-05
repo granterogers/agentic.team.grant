@@ -636,7 +636,7 @@ begin
                  'title', e.title, 'notes', e.notes, 'location', e.location,
                  'starts_at', e.starts_at, 'ends_at', e.ends_at, 'all_day', e.all_day,
                  'external_calendar_id', e.external_calendar_id, 'external_event_id', e.external_event_id,
-                 'external_etag', e.external_etag, 'authority', e.authority,
+                 'external_etag', e.external_etag, 'external_updated_at', e.external_updated_at, 'authority', e.authority,
                  'project_slug', p.slug, 'project_name', p.name,
                  'updated_at', e.updated_at, 'origin_channel', e.origin_channel) as j,
                e.updated_at as u

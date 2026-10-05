@@ -26,6 +26,7 @@
 import { readCredential } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { outcomeOfError, outcomeOfReport, recordVikunjaHealth } from '../tasks/health.ts'
 import type { TaskProvider } from '../tasks/provider.ts'
 import { type SyncGate, syncOnce } from '../tasks/sync.ts'
 import { VikunjaProvider } from '../tasks/vikunja.ts'
@@ -164,12 +165,24 @@ export function tasksSyncHandler(db: SqlExecutor, deps: TasksSyncDeps = {}): Han
       const office = String(
         (await db.execute(`select app.job_office('${job.jobId}'::uuid) as o`)).rows[0]?.o ?? '',
       )
-      const report = await syncOnce(
-        db,
-        deps.provider === undefined ? new VikunjaProvider(config) : deps.provider(config),
-        gate,
-        { office },
-      )
+      let report: Awaited<ReturnType<typeof syncOnce>>
+      try {
+        report = await syncOnce(
+          db,
+          deps.provider === undefined ? new VikunjaProvider(config) : deps.provider(config),
+          gate,
+          { office },
+        )
+      } catch (error) {
+        /*
+          A round that THROWS (the server answered and refused it: the project is gone) is still a reading Settings must
+          show. Recorded, then re-thrown so the job-failure path says what it always said.
+        */
+        await recordVikunjaHealth(db, office, outcomeOfError(error))
+        throw error
+      }
+      // Settings reads this (0981): an outage must not leave the card green. Recording never fails the round.
+      await recordVikunjaHealth(db, office, outcomeOfReport(report))
       const moved =
         report.pushed +
         report.created +
