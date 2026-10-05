@@ -1033,6 +1033,7 @@ const thumb = (d, i) => {
       <figcaption>
         <span class="bcdoctitle">${esc(d.title)}</span>
         <span class="bcdocmeta">${esc([kindWordOf(d), d.size].filter(Boolean).join(' · '))}</span>
+        ${docsrc.versionChip(d, esc)}
       </figcaption>
     </button>
   </figure>`

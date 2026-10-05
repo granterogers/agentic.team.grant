@@ -240,6 +240,8 @@ const docs = [
     import_available: true,
     version_count: 3,
     current_version: 3,
+    current_state: 'approved',
+    pending_version: { id: 'd1p', state: 'draft', version: 4 },
     kind: 'google-doc',
   }),
   item({ id: 'd2', title: 'Office upload', source: 'upload' }),
@@ -284,9 +286,29 @@ await p2.route('**/*', async (route) => {
       body: JSON.stringify({
         data: {
           versions: [
-            { document_id: 'd1a', version: 1, is_current: false },
-            { document_id: 'd1', version: 3, is_current: true },
-            { document_id: 'd1b', version: 2, is_current: false },
+            {
+              document_id: 'd1a',
+              version: 1,
+              is_current: false,
+              state: 'archived',
+              can_roll_back_to: true,
+            },
+            { document_id: 'd1', version: 3, is_current: true, state: 'approved' },
+            {
+              document_id: 'd1b',
+              version: 2,
+              is_current: false,
+              state: 'archived',
+              can_roll_back_to: true,
+            },
+            { document_id: 'd1p', version: 4, is_current: false, is_pending: true, state: 'draft' },
+            {
+              document_id: 'd1e',
+              version: null,
+              is_current: false,
+              is_earlier_draft: true,
+              state: 'archived',
+            },
           ],
         },
       }),
@@ -311,6 +333,16 @@ check(
   (await p2.locator('.bcdocs--wall [data-bc-doc]').count()) === 2,
   String(await p2.locator('.bcdocs--wall [data-bc-doc]').count()),
 )
+check(
+  'the Documents list keeps the approved document and says "v3 Approved · v4 Draft" on its tile',
+  (
+    await p2
+      .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Office Drive report' })
+      .locator('.bcvchip--draft')
+      .textContent()
+  )?.trim() === 'v3 Approved · v4 Draft',
+)
+await p2.screenshot({ path: '.out/ux-docs-wall-draft-chip.png' })
 await p2
   .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Office Drive report' })
   .locator('[data-bc-doc-open]')
@@ -319,8 +351,31 @@ await p2.waitForSelector('.bcdocgrid')
 await p2.waitForTimeout(800)
 check(
   'a document with history lists its versions, newest first',
-  (await p2.locator('.bcversion .bcvn').allTextContents()).join(',') === 'v3,v2,v1',
+  (await p2.locator('.bcversion .bcvn').allTextContents()).join(',') === 'v4,v3,v2,v1,·',
   (await p2.locator('.bcversion .bcvn').allTextContents()).join(','),
+)
+check(
+  'each version says its own state: v3 Approved is current, v4 is a Draft, the replaced draft is "Earlier draft"',
+  (await p2.locator('.bcversion .bcvstate').allTextContents()).join(',') ===
+    'Draft,Approved,Replaced,Replaced,Earlier draft' &&
+    (await p2.locator('.bcversion.is-current .bcvstate').textContent()) === 'Approved' &&
+    (await p2.locator('.bcversion.is-pending').count()) === 1,
+  (await p2.locator('.bcversion .bcvstate').allTextContents()).join(','),
+)
+check(
+  'the record says "v3 Approved · v4 Draft" - the approved version stays visible beside the draft',
+  (await p2.locator('.bcfact', { hasText: 'Version' }).locator('dd').textContent())?.includes(
+    'v3 Approved · v4 Draft',
+  ) === true,
+)
+await p2.screenshot({ path: '.out/ux-docs-versions-draft.png' })
+await p2.locator('[data-bc-docapprove]').click()
+await p2.waitForTimeout(400)
+const appr = calls.find((c) => c.action === 'document_approve')
+check(
+  'Approve this version sends document_approve for the DRAFT only on the press',
+  appr !== undefined && appr.args?.p_document === 'd1p',
+  JSON.stringify(appr),
 )
 await p2.locator('[data-bc-docimport]').click()
 await p2.waitForTimeout(500)

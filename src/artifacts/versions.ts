@@ -138,6 +138,8 @@ export interface Revised {
   readonly version: number | null
   readonly already: boolean
   readonly error: string | null
+  /** True when the new version is a DRAFT beside an approved one: approval belongs to a version, so it is not current yet. */
+  readonly pending: boolean
 }
 
 /**
@@ -159,6 +161,7 @@ export async function reviseMade(
       already: r.already === true,
       error: null,
       ok: true,
+      pending: typeof r.pending_id === 'string' && r.current_id !== r.pending_id,
       version: typeof r.version === 'number' ? r.version : null,
     }
   }
@@ -166,6 +169,7 @@ export async function reviseMade(
     already: false,
     error: String(r?.error ?? 'the version could not be made'),
     ok: false,
+    pending: false,
     version: null,
   }
 }

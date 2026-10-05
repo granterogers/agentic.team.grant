@@ -107,18 +107,45 @@ const paintVersions = async (host, ctx) => {
   const versions = Array.isArray(out?.versions) ? out.versions : []
   if (versions.length < 2) return
   host.hidden = false
+  /*
+    EACH VERSION SAYS ITS OWN STATE. Approval belongs to a version: the approved one is current, a draft beside it is
+    pending until a person approves it, and an earlier draft that a newer one replaced is kept as history, unnumbered.
+  */
+  const stateOf = (v) => (v.is_earlier_draft ? 'Earlier draft' : v.state === 'approved' ? 'Approved' : v.state === 'review' ? 'In review' : v.state === 'archived' ? 'Replaced' : 'Draft')
   host.innerHTML = `<h2 class="bcsubhead">Versions</h2>
     <ol class="bcversions" reversed>${versions
       .slice()
-      .sort((a, b) => b.version - a.version)
+      .sort((a, b) => (b.version ?? 0.5) - (a.version ?? 0.5))
       .map(
-        (v) => `<li class="bcversion${v.is_current ? ' is-current' : ''}">
-          <span class="bcvn">v${esc(String(v.version))}</span>
+        (v) => `<li class="bcversion${v.is_current ? ' is-current' : ''}${v.is_pending ? ' is-pending' : ''}">
+          <span class="bcvn">${v.version === null || v.version === undefined ? '·' : `v${esc(String(v.version))}`}</span>
+          <span class="bcvstate bcvstate--${esc(v.is_earlier_draft ? 'earlier' : String(v.state ?? ''))}">${esc(stateOf(v))}</span>
           <span class="bcvw">${esc(String(v.updated_at ?? v.created_at ?? '').slice(0, 10))}${v.produced_by ? ` · ${esc(String(v.produced_by))}` : ''}</span>
-          ${v.is_current ? '<span class="bcvcur">current</span>' : `<button type="button" class="bcversionbtn" data-bc-docrestore="${esc(String(v.document_id))}" title="Brings this version back as a new version. Nothing is deleted.">Return to this version</button>`}
+          ${
+            v.is_current
+              ? '<span class="bcvcur">current</span>'
+              : v.is_pending
+                ? `<button type="button" class="bcversionbtn" data-bc-docapprove="${esc(String(v.document_id))}" title="Makes this the current version. The approved version is kept in the history.">Approve this version</button>`
+                : v.can_roll_back_to === false || v.version === null || v.version === undefined
+                  ? ''
+                  : `<button type="button" class="bcversionbtn" data-bc-docrestore="${esc(String(v.document_id))}" title="Brings this version back as a new version. Nothing is deleted.">Return to this version</button>`
+          }
         </li>`,
       )
       .join('')}</ol>`
+  for (const b of host.querySelectorAll('[data-bc-docapprove]')) {
+    b.addEventListener('click', async () => {
+      b.disabled = true
+      try {
+        await act('document_approve', { p_document: b.dataset.bcDocapprove })
+        docsrc.forgetList(ctx.state.project)
+        ctx.render?.()
+      } catch (e) {
+        b.disabled = false
+        say(b, String(e?.message ?? e), 'bad')
+      }
+    })
+  }
   /* Bound here, after the list exists: it is drawn when the office answers, which is after the page was wired. */
   for (const b of host.querySelectorAll('[data-bc-docrestore]')) {
     b.addEventListener('click', async () => {

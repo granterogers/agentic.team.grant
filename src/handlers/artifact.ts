@@ -694,6 +694,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               } | null
               let version = 1
               let versionProblem: string | null = null
+              let versionPending = false
               if (revises !== null && kept.documentId !== null && revises.id !== kept.documentId) {
                 const made = await reviseMade(
                   db,
@@ -703,10 +704,13 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                   already: false,
                   error: String((e as Error).message),
                   ok: false,
+                  pending: false,
                   version: null,
                 }))
-                if (made.ok) version = made.version ?? revises.version + 1
-                else versionProblem = made.error
+                if (made.ok) {
+                  version = made.version ?? revises.version + 1
+                  versionPending = made.pending
+                } else versionProblem = made.error
               }
               return {
                 effectRef: `document:${kept.documentId ?? ''}`,
@@ -716,6 +720,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                   provenanceProblem,
                   styleHash: hash,
                   version,
+                  versionPending,
                   versionProblem,
                   revisedFrom: revises?.title ?? null,
                   pages: verdict.pages,
@@ -886,7 +891,9 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         typeof kept.revisedFrom === 'string'
           ? typeof kept.versionProblem === 'string'
             ? ` I could not link it as a new version of \u201c${kept.revisedFrom}\u201d (${kept.versionProblem}), so it is saved as a separate document.`
-            : ` It is version ${String(kept.version)} of \u201c${kept.revisedFrom}\u201d; the earlier version is kept in its history.`
+            : kept.versionPending === true
+              ? ` It is version ${String(kept.version)} of \u201c${kept.revisedFrom}\u201d, saved as a draft: the approved version stays the current one until you approve this.`
+              : ` It is version ${String(kept.version)} of \u201c${kept.revisedFrom}\u201d; the earlier version is kept in its history.`
           : ''
 
       return {

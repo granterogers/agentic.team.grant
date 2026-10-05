@@ -1832,7 +1832,7 @@ const docRow = (d, i) => {
     <div class="bcitembody">
       <button type="button" class="bcitemtitle bcitemlink" data-bc-doc-open="${esc(ref)}"
         data-bc-doc-title="${esc(d.title ?? '')}">${esc(d.title)}</button>
-      <span class="bcitemmeta">${docsrc.mark(d, esc)}${esc([bcMini.kindWordOf(d), d.origin, d.size, d.when].filter(Boolean).join(' · '))}</span>
+      <span class="bcitemmeta">${docsrc.mark(d, esc)}${esc([bcMini.kindWordOf(d), d.origin, d.size, d.when].filter(Boolean).join(' · '))}${docsrc.versionChip(d, esc)}</span>
     </div>
     <span class="bcpmeta">${esc(opensAs(d))}</span>
   </div>`
@@ -2904,7 +2904,7 @@ const documentRecord = (p) => {
     ['Added', when_(d.uploaded ?? d.added) || (d.when ?? '')],
     ['Modified', when_(e.modified)],
     ['Written', when_(d.created)],
-    ['Version', d.version_count > 1 ? `${String(d.current_version ?? d.version_count)} of ${String(d.version_count)}` : ''],
+    ['Version', d.pending_version ? (docsrc.versionLabel(d)?.text ?? '') : d.version_count > 1 ? `${String(d.current_version ?? d.version_count)} of ${String(d.version_count)}` : ''],
     ['Also held in', (e.alsoIn ?? []).map(docsrc.nameOfSource).join(', ')],
     ['In Team HQ', e.src === 'drive' || e.src === 'notebook' || e.src === 'notion' || e.src === 'web' ? (d.imported === true ? 'A durable copy is kept' : 'Read from the source; no copy kept') : ''],
   ].filter(([, v]) => v !== '' && v !== undefined)

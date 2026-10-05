@@ -423,25 +423,72 @@ try {
     JSON.stringify(foreign),
   )
 
-  // =================================================================== 5. approved head -> version 3 through 0900's own function
+  // =================================================================== 5. approved head -> v3 is a DRAFT beside the approved v2
+  // Approval belongs to a version (Grant, 5 October 2026): v3 made from approved v2 does not inherit v2's approval and
+  // must not make the approved document disappear from Documents.
   await q(`update public.documents set state = 'approved' where document_id = ${lit(m2)}::uuid`)
   const job3 = await asJob('Revise the report so it is more concise')
   nextReply = reply('Customer research report')
   const out3 = await handler.handle(job3, db)
   const vers3 = await call(`app.hq_document_versions(${lit(OFFICE)}::uuid, ${lit(m2)}::uuid)`)
   check(
-    'v3: a revision of an approved head is version 3 of the same logical document',
-    vers3?.version_count === 3 && /version 3/.test(out3.body),
+    'v3: a revision of an approved head is version 3 of the same logical document, saved as a DRAFT',
+    vers3?.version_count === 2 &&
+      vers3.versions.length === 3 &&
+      vers3.versions[2]?.state === 'draft' &&
+      vers3.versions[2]?.version === 3 &&
+      vers3.current_id === m2 &&
+      vers3.pending_id === vers3.versions[2]?.document_id &&
+      /version 3/.test(out3.body) &&
+      /draft/.test(out3.body) &&
+      /approved version stays/.test(out3.body),
     JSON.stringify(vers3).slice(0, 160) + out3.body.slice(0, 100),
   )
+  const m3 = String(vers3?.pending_id)
   const listed = await call(`app.hq_project_documents(${lit(OFFICE)}::uuid, ${lit(SLUG)})`)
   const item = (listed.documents as Row[]).filter(
     (d) => String(d.title).includes('Customer research report') && d.origin === 'made',
   )
   check(
-    'v3: Documents lists ONE item for the logical document, at version 3',
-    item.length === 1 && item[0]?.version_count === 3,
-    JSON.stringify(item.map((d) => [d.title, d.version_count])),
+    'v3: Documents still lists the logical document: v2 Approved is the item, v3 Draft is exposed beside it, v3 is not an item',
+    item.length === 1 &&
+      item[0]?.id === m2 &&
+      item[0]?.version_count === 2 &&
+      item[0]?.current_state === 'approved' &&
+      (item[0]?.pending_version as Row | null)?.id === m3 &&
+      (item[0]?.pending_version as Row | null)?.state === 'draft' &&
+      (item[0]?.pending_version as Row | null)?.version === 3,
+    JSON.stringify(item.map((d) => [d.title, d.version_count, d.pending_version])),
+  )
+  const asked4 = await asJob('Revise the report again with a band title')
+  nextReply = reply('Customer research report')
+  const out4 = await handler.handle(asked4, db)
+  const vers4 = await call(`app.hq_document_versions(${lit(OFFICE)}::uuid, ${lit(m2)}::uuid)`)
+  check(
+    'v3b: a second revision replaces the pending draft (one pending draft, the earlier one kept as history)',
+    vers4?.versions.filter((v: Row) => v.is_pending === true).length === 1 &&
+      vers4.pending_id !== m3 &&
+      vers4.current_id === m2 &&
+      (await q(`select state from public.documents where document_id = ${lit(m3)}::uuid`))[0]
+        ?.state === 'archived' &&
+      /version 3/.test(out4.body),
+    JSON.stringify(vers4?.versions.map((v: Row) => [v.state, v.version])).slice(0, 200),
+  )
+  const m3b = String(vers4?.pending_id)
+  await q(`update public.documents set state = 'approved' where document_id = ${lit(m3b)}::uuid`)
+  const vers5 = await call(`app.hq_document_versions(${lit(OFFICE)}::uuid, ${lit(m2)}::uuid)`)
+  check(
+    'v3c: a person approving the draft makes it the current version and archives v2 (listed as one item at version 3)',
+    vers5?.current_id === m3b &&
+      vers5.pending_id === null &&
+      vers5.version_count === 3 &&
+      (
+        (await call(`app.hq_project_documents(${lit(OFFICE)}::uuid, ${lit(SLUG)})`))
+          .documents as Row[]
+      ).filter(
+        (d) => String(d.title).includes('Customer research report') && d.origin === 'made',
+      )[0]?.id === m3b,
+    JSON.stringify(vers5?.versions.map((v: Row) => [v.state, v.version])).slice(0, 200),
   )
   const rollback = await call(
     `app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(m1)}::uuid, 'back', 'teamhq')`,

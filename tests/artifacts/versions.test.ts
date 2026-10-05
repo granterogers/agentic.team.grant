@@ -88,10 +88,25 @@ describe('the version call', () => {
   it('asks the database to make the new document the next version of the head', async () => {
     const { db, sql } = fake({ ok: true, version: 2 })
     const r = await reviseMade(db, ids, 'a note')
-    expect(r).toEqual({ already: false, error: null, ok: true, version: 2 })
+    expect(r).toEqual({ already: false, error: null, ok: true, pending: false, version: 2 })
     expect(sql[0]).toContain('app.document_revise_made(')
     expect(sql[0]).toContain(ids.headId)
     expect(sql[0]).toContain(ids.newId)
+  })
+
+  it('a draft revision beside an approved head is reported as pending (approval belongs to a version)', async () => {
+    const r = await reviseMade(
+      fake({ current_id: ids.headId, ok: true, pending_id: ids.newId, version: 4 }).db,
+      ids,
+      '',
+    )
+    expect(r.pending).toBe(true)
+    expect(r.version).toBe(4)
+  })
+
+  it('a revision that became current is not pending', async () => {
+    const r = await reviseMade(fake({ current_id: ids.newId, ok: true, version: 2 }).db, ids, '')
+    expect(r.pending).toBe(false)
   })
 
   it('a repeat is reported as already, not as a second version', async () => {

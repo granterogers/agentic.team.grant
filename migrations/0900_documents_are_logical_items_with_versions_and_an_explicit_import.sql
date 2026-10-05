@@ -75,7 +75,7 @@ create table public.document_version_notes (
   document_id          uuid primary key,
   office_id            uuid not null references public.offices (office_id),
   previous_document_id uuid,
-  kind                 text not null check (kind in ('new_version', 'adopted', 'rolled_back')),
+  kind                 text not null check (kind in ('new_version', 'adopted', 'rolled_back', 'draft_revision')),
   rolled_back_to       uuid,
   note                 text,
   channel              text,
@@ -197,26 +197,42 @@ security definer
 set search_path = 'public', 'pg_catalog'
 as $f$
 declare
+  v_base   uuid;
   v_head   uuid;
   v_title  text;
   v_n      integer;
   v_items  jsonb;
+  v_pend   uuid;
 begin
   perform app.require_office(p_office);
   if not exists (select 1 from public.documents d where d.document_id = p_document and d.office_id = p_office) then
     return jsonb_build_object('error', 'there is no document with that id');
   end if;
-  select l.document_id into v_head from app.document_lineage(p_office, p_document) l where l.is_head limit 1;
+  -- Asked about a pending draft, answer for the document it is a revision of.
+  v_base := app.document_base(p_office, p_document);
+  select l.document_id into v_head from app.document_lineage(p_office, v_base) l where l.is_head limit 1;
   -- A legacy cycle has no head. Fall back to the newest so the caller still gets an answer.
   if v_head is null then
     select l.document_id into v_head
-      from app.document_lineage(p_office, p_document) l
+      from app.document_lineage(p_office, v_base) l
       join public.documents d on d.document_id = l.document_id and d.office_id = p_office
      order by d.created_at desc, d.document_id desc limit 1;
   end if;
   select d.title into v_title from public.documents d where d.document_id = v_head and d.office_id = p_office;
-  select count(*)::integer into v_n from app.document_lineage(p_office, p_document);
+  select count(*)::integer into v_n from app.document_lineage(p_office, v_base);
+  select r.document_id into v_pend
+    from app.document_pending_revisions(p_office, v_head) r
+   where r.state in ('draft', 'review') order by r.created_at desc limit 1;
 
+  with vers as (
+    select l.document_id, l.version, false as pending
+      from app.document_lineage(p_office, v_base) l
+    union all
+    select r.document_id,
+           case when r.state in ('draft', 'review') then v_n + 1 else null end,
+           r.state in ('draft', 'review')
+      from app.document_pending_revisions(p_office, v_head) r
+  )
   select coalesce(jsonb_agg(jsonb_build_object(
            'document_id', d.document_id,
            'version', l.version,
@@ -233,22 +249,26 @@ begin
            'connector', d.connector,
            'state', d.state,
            'is_current', d.document_id = v_head,
-           'can_roll_back_to', d.document_id <> v_head and (d.content is not null or d.storage_path is not null),
+           'is_pending', l.pending,
+           'is_earlier_draft', l.version is null,
+           'can_roll_back_to', d.document_id <> v_head and not l.pending and l.version is not null
+                               and (d.content is not null or d.storage_path is not null),
            'note', n.note,
            'how', n.kind,
            'channel', n.channel,
            'created_by', n.created_by,
            'previous_document_id', n.previous_document_id,
            'rolled_back_to', n.rolled_back_to
-         ) order by l.version), '[]'::jsonb)
+         ) order by coalesce(l.version, v_n + 1), d.created_at), '[]'::jsonb)
     into v_items
-    from app.document_lineage(p_office, p_document) l
+    from vers l
     join public.documents d on d.document_id = l.document_id and d.office_id = p_office
     left join public.document_version_notes n on n.document_id = d.document_id and n.office_id = p_office;
 
   return jsonb_build_object(
     'logical_title', v_title,
     'current_id', v_head,
+    'pending_id', v_pend,
     'version_count', v_n,
     'versions', v_items);
 end
@@ -263,8 +283,7 @@ $f$;
 -- is never deleted. Its collection rows are kept too (history), the successor gets copies.
 -- ---------------------------------------------------------------------------------------------------------------------
 
-create or replace function app.document_version_link(
-  p_office uuid, p_head uuid, p_new uuid, p_kind text, p_rolled_back_to uuid, p_note text, p_channel text)
+create or replace function app.document_carry(p_office uuid, p_head uuid, p_new uuid)
 returns void
 language plpgsql
 security definer
@@ -297,6 +316,18 @@ begin
     from public.document_collections c
    where c.document_id = p_head
   on conflict do nothing;
+end
+$f$;
+
+create or replace function app.document_version_link(
+  p_office uuid, p_head uuid, p_new uuid, p_kind text, p_rolled_back_to uuid, p_note text, p_channel text)
+returns void
+language plpgsql
+security definer
+set search_path = 'public', 'pg_catalog'
+as $f$
+begin
+  perform app.document_carry(p_office, p_head, p_new);
   insert into public.document_version_notes
     (document_id, office_id, previous_document_id, kind, rolled_back_to, note, channel, created_by)
   values (p_new, p_office, p_head, p_kind, p_rolled_back_to,
@@ -304,6 +335,122 @@ begin
           app.office_actor(p_office));
 end
 $f$;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- 6b. APPROVAL BELONGS TO A VERSION. Grant's policy (5 October 2026): creating v4 from approved v3 creates v4 as a DRAFT.
+-- It does not inherit v3's approval, and a draft revision must never make the approved document disappear.
+--
+-- So a new version of an approved document is a PENDING revision: a draft attached to the lineage by a note
+-- (kind draft_revision) and by nothing else. v3 stays approved, stays unsuperseded and stays the item the project lists;
+-- the draft is listed beside it. The superseded_by link, the archiving of v3 and the carrying of tags, pin, order and
+-- collections all happen at the one moment a person APPROVES the draft (the trigger below), whichever door the approval
+-- came through (approve_document, decide_output, import_output, a direct update): the writers share one door, so the
+-- rule lives there rather than in each of them.
+-- ---------------------------------------------------------------------------------------------------------------------
+
+-- The approved head a document belongs to: itself, or, for a pending draft revision, the head of the lineage it was
+-- written against (which may have moved on since - a rollback or another approval - so the head is looked up, not stored).
+create or replace function app.document_base(p_office uuid, p_document uuid)
+returns uuid
+language sql
+stable
+security definer
+set search_path = 'public', 'pg_catalog'
+as $f$
+  select coalesce(
+           (select l.document_id from app.document_lineage(p_office, n.previous_document_id) l where l.is_head limit 1),
+           n.previous_document_id)
+    from public.document_version_notes n
+    join public.documents d on d.document_id = n.document_id and d.office_id = p_office
+   where n.document_id = p_document and n.office_id = p_office and n.kind = 'draft_revision'
+     and d.state <> 'approved' and d.superseded_by is null
+  union all
+  select p_document
+   where not exists (select 1
+                       from public.document_version_notes n
+                       join public.documents d on d.document_id = n.document_id and d.office_id = p_office
+                      where n.document_id = p_document and n.office_id = p_office and n.kind = 'draft_revision'
+                        and d.state <> 'approved' and d.superseded_by is null)
+  limit 1
+$f$;
+
+-- Every draft revision written against this lineage that is not itself part of it. Live ones (draft, review) are
+-- "pending"; archived ones are earlier drafts a newer draft replaced, kept as history and never numbered.
+create or replace function app.document_pending_revisions(p_office uuid, p_base uuid)
+returns table (document_id uuid, state text, created_at timestamptz)
+language sql
+stable
+security definer
+set search_path = 'public', 'pg_catalog'
+as $f$
+  select d.document_id, d.state, d.created_at
+    from public.document_version_notes n
+    join public.documents d on d.document_id = n.document_id and d.office_id = p_office
+   where n.office_id = p_office and n.kind = 'draft_revision'
+     and n.previous_document_id in (select l.document_id from app.document_lineage(p_office, p_base) l)
+     and d.state in ('draft', 'review', 'archived')
+     and d.superseded_by is null
+     and d.document_id not in (select l.document_id from app.document_lineage(p_office, p_base) l)
+$f$;
+
+-- Attach a draft as the pending revision of an approved head. A newer draft REPLACES an older pending one (the older is
+-- archived, never deleted), so a lineage has at most one pending draft and "v4 Draft" is never ambiguous.
+create or replace function app.document_pending_attach(
+  p_office uuid, p_head uuid, p_new uuid, p_note text, p_channel text)
+returns void
+language plpgsql
+security definer
+set search_path = 'public', 'pg_catalog'
+as $f$
+begin
+  update public.documents d
+     set state = 'archived'
+   where d.office_id = p_office and d.state in ('draft', 'review') and d.document_id <> p_new
+     and d.document_id in (select r.document_id from app.document_pending_revisions(p_office, p_head) r);
+  insert into public.document_version_notes
+    (document_id, office_id, previous_document_id, kind, note, channel, created_by)
+  values (p_new, p_office, p_head, 'draft_revision',
+          nullif(btrim(coalesce(p_note, '')), ''), nullif(btrim(coalesce(p_channel, '')), ''),
+          app.office_actor(p_office))
+  on conflict (document_id) do nothing;
+end
+$f$;
+
+create or replace function app.draft_revision_approved()
+returns trigger
+language plpgsql
+security definer
+set search_path = 'public', 'pg_catalog'
+as $f$
+declare
+  v_prev uuid;
+  v_head uuid;
+  h      public.documents%rowtype;
+begin
+  select n.previous_document_id into v_prev
+    from public.document_version_notes n
+   where n.document_id = new.document_id and n.office_id = new.office_id and n.kind = 'draft_revision';
+  if v_prev is null then return new; end if;
+  select l.document_id into v_head from app.document_lineage(new.office_id, v_prev) l where l.is_head limit 1;
+  select * into h from public.documents where document_id = coalesce(v_head, v_prev) and office_id = new.office_id;
+  -- A sibling draft that is still pending when its neighbour is approved is no longer the next version of anything.
+  update public.documents d
+     set state = 'archived'
+   where d.office_id = new.office_id and d.state in ('draft', 'review') and d.document_id <> new.document_id
+     and d.document_id in (select r.document_id from app.document_pending_revisions(new.office_id, coalesce(v_head, v_prev)) r);
+  if h.document_id is not null and h.document_id <> new.document_id
+     and h.state = 'approved' and h.superseded_by is null
+     and h.project_id is not distinct from new.project_id then
+    perform app.document_carry(new.office_id, h.document_id, new.document_id);
+  end if;
+  return new;
+end
+$f$;
+
+create trigger documents_draft_revision_approved
+  after update of state on public.documents
+  for each row when (new.state = 'approved' and old.state is distinct from 'approved')
+  execute function app.draft_revision_approved();
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 7. Making the next version: from new text, or by adopting a document that already exists (an artifact job's revised
@@ -353,18 +500,29 @@ begin
   if h.state <> 'approved' then
     return jsonb_build_object('ok', false, 'error', format('only a document in the project (approved) can be versioned; this one is %s', h.state));
   end if;
+  select count(*)::integer into v_ver from app.document_lineage(p_office, h.document_id);
 
   if v_text is not null then
     if h.content_fingerprint = v_fp then
       return jsonb_build_object('ok', false, 'error', 'that is the same content as the current version');
     end if;
+    -- Pressing twice must not make two drafts: the pending draft already carrying this is the answer.
+    select r.document_id into v_new
+      from app.document_pending_revisions(p_office, h.document_id) r
+      join public.documents c on c.document_id = r.document_id and c.office_id = p_office
+     where r.state in ('draft', 'review') and c.content_fingerprint = v_fp limit 1;
+    if v_new is not null then
+      return jsonb_build_object('ok', true, 'already', true, 'document_id', v_new, 'previous_id', h.document_id,
+                                'pending_id', v_new, 'current_id', h.document_id, 'version', v_ver + 1, 'state', 'draft');
+    end if;
+    -- The new text is a DRAFT. It does not inherit the approval of the version it was made from.
     insert into public.documents
       (office_id, project_id, title, doc_type, content, content_fingerprint, content_chars, fetched_at,
        origin, connector, state, added_by, tags, pinned)
     values (p_office, h.project_id, h.title, h.doc_type, p_content, v_fp, length(p_content), app.now_utc(),
-            'yours', null, 'approved', app.office_actor(p_office), '{}', false)
+            'yours', null, 'draft', app.office_actor(p_office), '{}', false)
     returning document_id into v_new;
-    perform app.document_version_link(p_office, h.document_id, v_new, 'new_version', null, p_note, p_channel);
+    perform app.document_pending_attach(p_office, h.document_id, v_new, p_note, p_channel);
   else
     select * into y from public.documents where document_id = p_by_document and office_id = p_office for update;
     if not found then
@@ -379,24 +537,36 @@ begin
     if y.superseded_by is not null or exists (select 1 from public.documents x where x.superseded_by = y.document_id and x.office_id = p_office) then
       return jsonb_build_object('ok', false, 'error', 'that document already has version history of its own');
     end if;
-    if y.state <> 'approved' then
-      if p_approve and y.state in ('draft', 'review') then
-        update public.documents set state = 'approved' where document_id = y.document_id and office_id = p_office;
-      else
-        return jsonb_build_object('ok', false, 'error', format('approve the new version first (it is %s), or ask for it to be approved as part of this', y.state));
-      end if;
+    if y.state = 'approved' then
+      -- Approved on its own account, by a person: it is the next version now.
+      perform app.document_version_link(p_office, h.document_id, y.document_id, 'adopted', null, p_note, p_channel);
+      return jsonb_build_object('ok', true, 'document_id', y.document_id, 'previous_id', h.document_id,
+                                'version', v_ver + 1, 'current_id', y.document_id, 'state', 'approved');
+    end if;
+    if y.state not in ('draft', 'review') then
+      return jsonb_build_object('ok', false, 'error', format('a %s document cannot become a version', y.state));
     end if;
     v_new := y.document_id;
-    perform app.document_version_link(p_office, h.document_id, v_new, 'adopted', null, p_note, p_channel);
+    if not p_approve and exists (select 1 from public.document_version_notes z where z.document_id = v_new and z.office_id = p_office) then
+      return jsonb_build_object('ok', true, 'already', true, 'document_id', v_new, 'previous_id', h.document_id,
+                                'pending_id', v_new, 'current_id', h.document_id, 'version', v_ver + 1, 'state', y.state);
+    end if;
+    perform app.document_pending_attach(p_office, h.document_id, v_new, p_note, p_channel);
   end if;
 
-  select l.version into v_ver from app.document_lineage(p_office, v_new) l where l.document_id = v_new;
-  return jsonb_build_object('ok', true, 'document_id', v_new, 'previous_id', h.document_id, 'version', v_ver, 'current_id', v_new);
+  -- p_approve is a PERSON's yes given together with the request: only then does the new version become current.
+  if p_approve then
+    update public.documents set state = 'approved' where document_id = v_new and office_id = p_office;
+    return jsonb_build_object('ok', true, 'document_id', v_new, 'previous_id', h.document_id, 'version', v_ver + 1,
+                              'current_id', v_new, 'state', 'approved');
+  end if;
+  return jsonb_build_object('ok', true, 'document_id', v_new, 'previous_id', h.document_id, 'version', v_ver + 1,
+                            'pending_id', v_new, 'current_id', h.document_id, 'state', 'draft');
 end
 $f$;
 
 comment on function app.hq_document_new_version(uuid, uuid, text, uuid, text, text, boolean) is
-  'The next version of a document, from new text (p_content) or by adopting an existing approved document in the same project (p_by_document - an artifact job''s revised report). The old head is archived and linked, never deleted; project, tags, pin and its position, and collections carry over. Idempotent for the same content or the same adopted document.';
+  'The next version of an approved document, from new text (p_content) or by adopting an existing document in the same project (p_by_document - an artifact job''s revised report). Approval belongs to a version: unless p_approve (a person''s yes) or the adopted document is already approved, the new version is a DRAFT pending revision; the approved version stays current and listed, and the link, the archiving and the carry-over happen when the draft is approved. Idempotent for the same content or the same adopted document.';
 
 create or replace function app.hq_document_rollback(
   p_office uuid, p_document uuid, p_note text default null, p_channel text default null)
@@ -478,7 +648,7 @@ end
 $f$;
 
 comment on function app.document_adopt_version(uuid, uuid, uuid, text) is
-  'Attach the single document a job produced as the next version of p_head (an artifact job''s revised report). Does not approve: an unapproved output is refused with the reason, because approving is a person''s act.';
+  'Attach the single document a job produced as the next version of p_head (an artifact job''s revised report). Does not approve: an unapproved output becomes a pending DRAFT revision beside the approved head, because approving is a person''s act and approval belongs to a version.';
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 8. Import: an explicit press that turns an external document into a durable Team HQ copy.
@@ -781,6 +951,12 @@ begin
            (select r.state from public.document_import_requests r
              where r.office_id = p_office and r.document_id = i.document_id) as req_state,
            case when i.has_prev then (select count(*)::integer from app.document_lineage(p_office, i.document_id)) else 1 end as vcount,
+           (select jsonb_build_object('id', r.document_id, 'state', r.state, 'created_at', r.created_at,
+                                      'produced_by', pd.produced_by)
+              from app.document_pending_revisions(p_office, i.document_id) r
+              join public.documents pd on pd.document_id = r.document_id and pd.office_id = p_office
+             where r.state in ('draft', 'review')
+             order by r.created_at desc limit 1) as pending,
            a.dups, a.srcs
       from items i left join absorbed a on a.rep = i.document_id
   )
@@ -832,6 +1008,9 @@ begin
            'missing', s.missing_since is not null,
            'version_count', s.vcount,
            'current_version', s.vcount,
+           'current_state', s.state,
+           'pending_version', case when s.pending is null then null
+                                   else s.pending || jsonb_build_object('version', s.vcount + 1) end,
            'also_in', (select coalesce(jsonb_agg(q.x order by q.o), '[]'::jsonb)
                          from (select u.x, min(u.o) as o
                                  from unnest(array[s.src] || coalesce(s.srcs, '{}'::text[])) with ordinality u(x, o)
@@ -862,7 +1041,7 @@ end
 $f$;
 
 comment on function app.hq_project_documents(uuid, text, boolean) is
-  'The unified Documents list for one dashboard project: one item per logical document across Drive, NotebookLM, uploads, generated and web material, with source classification, how it is represented, import and index state, and version count. Collapses only on certain identity (see the migration header); never on a name. Not-approved documents are not listed (the review gate), disconnected sources are not listed unless p_include_disconnected.';
+  'The unified Documents list for one dashboard project: one item per logical document across Drive, NotebookLM, uploads, generated and web material, with source classification, how it is represented, import and index state, and version count. Collapses only on certain identity (see the migration header); never on a name. Not-approved documents are not listed as items (the review gate), but a draft revision of an approved document is reported beside it as pending_version, so the approved version never disappears; disconnected sources are not listed unless p_include_disconnected.';
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 11. Doors. The app functions are closed to everyone; the public wrappers are service_role's (the gateway), and the
@@ -871,6 +1050,8 @@ comment on function app.hq_project_documents(uuid, text, boolean) is
 
 revoke all on function
   app.document_lineage(uuid, uuid), app.hq_document_versions(uuid, uuid),
+  app.document_carry(uuid, uuid, uuid), app.document_base(uuid, uuid), app.document_pending_revisions(uuid, uuid),
+  app.document_pending_attach(uuid, uuid, uuid, text, text), app.draft_revision_approved(),
   app.document_version_link(uuid, uuid, uuid, text, uuid, text, text),
   app.hq_document_new_version(uuid, uuid, text, uuid, text, text, boolean),
   app.hq_document_rollback(uuid, uuid, text, text), app.document_adopt_version(uuid, uuid, uuid, text),

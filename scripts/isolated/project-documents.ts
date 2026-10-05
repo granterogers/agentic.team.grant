@@ -126,14 +126,112 @@ try {
     `insert into public.document_orders (owner, project_id, doc_ids) values ('grant', ${lit(PA)}::uuid, ${lit(JSON.stringify([other, v1]))}::jsonb)`,
   )
   const n2 = await call(
-    `app.hq_document_new_version(${lit(OFFICE)}::uuid, ${lit(v1)}::uuid, ${lit(LONG('v2'))}, null, 'tightened the summary', 'teamhq')`,
+    `app.hq_document_new_version(${lit(OFFICE)}::uuid, ${lit(v1)}::uuid, ${lit(LONG('v2 first draft'))}, null, 'tightened the summary', 'teamhq')`,
   )
   check(
-    'a new version is made from new text',
-    n2.ok === true && n2.version === 2,
+    'a new version of an APPROVED document is made as a DRAFT (approval belongs to a version)',
+    n2.ok === true && n2.version === 2 && n2.state === 'draft' && n2.pending_id === n2.document_id,
     JSON.stringify(n2),
   )
-  const v2 = String(n2.document_id)
+  const draft1 = String(n2.document_id)
+  let v2 = draft1
+  const approve = async (id: string): Promise<void> => {
+    await q(`update public.documents set state = 'approved' where document_id = ${lit(id)}::uuid`)
+  }
+  {
+    const o1 = (
+      await q(
+        `select state, superseded_by::text s, pinned from public.documents where document_id = ${lit(v1)}::uuid`,
+      )
+    )[0]
+    check(
+      'v1 stays APPROVED, unsuperseded, pinned and current while v2 is only a draft',
+      o1?.state === 'approved' && o1?.s === null && o1?.pinned === true && n2.current_id === v1,
+    )
+    const l1 = await list()
+    const it = item(l1, v1)
+    check(
+      'the logical document stays in the project list as v1 Approved, with v2 Draft exposed beside it',
+      it !== undefined &&
+        it.current_state === 'approved' &&
+        it.pending_version?.id === draft1 &&
+        it.pending_version?.state === 'draft' &&
+        it.pending_version?.version === 2 &&
+        item(l1, draft1) === undefined,
+      JSON.stringify(it?.pending_version),
+    )
+    const pv = await versions(v1)
+    check(
+      'versions lists the approved v1 (current) and the draft v2 (pending), and reads the same from the draft',
+      pv.current_id === v1 &&
+        pv.pending_id === draft1 &&
+        pv.versions.map((x: { state: string }) => x.state).join() === 'approved,draft' &&
+        pv.versions.map((x: { is_pending: boolean }) => x.is_pending).join() === 'false,true' &&
+        (await versions(draft1)).current_id === v1 &&
+        pv.versions[1].how === 'draft_revision',
+      JSON.stringify(pv.versions.map((x: { state: string }) => x.state)),
+    )
+    check(
+      'a draft cannot be rolled back to',
+      pv.versions[1].can_roll_back_to === false &&
+        (await call(`app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(draft1)}::uuid)`)).ok ===
+          false,
+    )
+    const pending = await call(
+      `app.hq_document_new_version(${lit(OFFICE)}::uuid, ${lit(v1)}::uuid, ${lit(LONG('v2 first draft'))})`,
+    )
+    check(
+      'pressing again with the same content is idempotent (the same pending draft)',
+      pending.ok === true && pending.already === true && pending.document_id === draft1,
+      JSON.stringify(pending),
+    )
+    const sup = await call(
+      `app.hq_document_new_version(${lit(OFFICE)}::uuid, ${lit(v1)}::uuid, ${lit(LONG('v2'))}, null, 'tightened the summary', 'teamhq')`,
+    )
+    const v2b = String(sup.document_id)
+    const vb = await versions(v1)
+    check(
+      'a newer draft REPLACES the older pending one (older archived, never deleted, listed but not numbered)',
+      sup.ok === true &&
+        sup.state === 'draft' &&
+        (await q(`select state from public.documents where document_id = ${lit(draft1)}::uuid`))[0]
+          ?.state === 'archived' &&
+        vb.pending_id === v2b &&
+        vb.versions.length === 3 &&
+        vb.versions.filter((x: { is_pending: boolean }) => x.is_pending).length === 1 &&
+        vb.versions.find((x: { document_id: string }) => x.document_id === draft1).version ===
+          null &&
+        item(await list(), v1)?.pending_version?.id === v2b,
+      JSON.stringify(
+        vb.versions.map((x: { state: string; version: number | null }) => [x.state, x.version]),
+      ),
+    )
+    // The approval, by whichever door: the one writer-independent trigger links the lineage.
+    const ap = await call(`app.approve_document(${lit(OFFICE)}::uuid, ${lit(v2b)}::uuid)`)
+    check(
+      'a person approves the draft through the ordinary approve door',
+      ap.ok === true,
+      JSON.stringify(ap),
+    )
+    const vc = await versions(v2b)
+    check(
+      'approving v2 makes it the current version: v1 archived and linked, v2 listed as the item, one pending draft gone',
+      vc.current_id === v2b &&
+        vc.pending_id === null &&
+        (
+          await q(
+            `select state, superseded_by::text s from public.documents where document_id = ${lit(v1)}::uuid`,
+          )
+        )[0]?.s === v2b &&
+        item(await list(), v2b)?.pending_version === null &&
+        item(await list(), v1) === undefined &&
+        item(await list(), v2b)?.version_count === 2,
+      JSON.stringify(
+        vc.versions.map((x: { state: string; version: number | null }) => [x.state, x.version]),
+      ),
+    )
+    v2 = v2b
+  }
   const old = (
     await q(
       `select state, superseded_by::text s, pinned from public.documents where document_id = ${lit(v1)}::uuid`,
@@ -203,15 +301,22 @@ try {
     `app.hq_document_new_version(${lit(OFFICE)}::uuid, ${lit(v2)}::uuid, ${lit(LONG('v3'))}, null, null, 'telegram')`,
   )
   const v3 = String(n3.document_id)
+  check(
+    'v3 is a draft too until a person approves it',
+    n3.state === 'draft' && n3.current_id === v2,
+  )
+  await approve(v3)
   const vs = await versions(v3)
+  // the first draft a newer one replaced is kept as history, listed but never numbered
+  const numbered = vs.versions.filter((x: { version: number | null }) => x.version !== null)
   check(
     'hq_document_versions lists v1..v3 oldest first with the current marked',
     vs.version_count === 3 &&
       vs.current_id === v3 &&
-      vs.versions.map((x: { document_id: string }) => x.document_id).join() ===
-        [v1, v2, v3].join() &&
-      vs.versions.map((x: { is_current: boolean }) => x.is_current).join() === 'false,false,true' &&
-      vs.versions.map((x: { version: number }) => x.version).join() === '1,2,3',
+      numbered.map((x: { document_id: string }) => x.document_id).join() === [v1, v2, v3].join() &&
+      numbered.map((x: { is_current: boolean }) => x.is_current).join() === 'false,false,true' &&
+      numbered.map((x: { version: number }) => x.version).join() === '1,2,3' &&
+      vs.versions.length === 4,
     JSON.stringify(vs.versions.map((x: { version: number }) => x.version)),
   )
   check(
@@ -220,10 +325,10 @@ try {
   )
   check(
     '...with the note, the door and the author recorded',
-    vs.versions[1].note === 'tightened the summary' &&
-      vs.versions[1].channel === 'teamhq' &&
-      vs.versions[2].channel === 'telegram' &&
-      vs.versions[1].how === 'new_version',
+    numbered[1].note === 'tightened the summary' &&
+      numbered[1].channel === 'teamhq' &&
+      numbered[2].channel === 'telegram' &&
+      numbered[1].how === 'draft_revision',
   )
   check("...and the logical title is the head's", vs.logical_title === 'Report')
 
@@ -311,8 +416,14 @@ try {
     `app.hq_document_new_version(${lit(OFFICE)}::uuid, ${lit(h)}::uuid, null, ${lit(rev)}::uuid)`,
   )
   check(
-    "adopting an unapproved document is refused (approving is a person's act)",
-    noApprove.ok === false && /approve/.test(String(noApprove.error)),
+    "adopting an unapproved document attaches it as a pending DRAFT (approving is a person's act); the head stays approved",
+    noApprove.ok === true &&
+      noApprove.state === 'draft' &&
+      noApprove.current_id === h &&
+      noApprove.pending_id === rev &&
+      (await q(`select state from public.documents where document_id = ${lit(h)}::uuid`))[0]
+        ?.state === 'approved' &&
+      item(await list(), h)?.pending_version?.id === rev,
     JSON.stringify(noApprove),
   )
   const adopt = await call(
@@ -366,23 +477,28 @@ try {
     `app.document_adopt_version(${lit(OFFICE)}::uuid, ${lit(base2)}::uuid, ${lit(job)}::uuid, 'revised by the report job')`,
   )
   check(
-    'adopt-by-job never approves: an unapproved output is refused with the reason',
-    ad1.ok === false && /approve/.test(String(ad1.error)),
+    'adopt-by-job never approves: an unapproved output becomes a pending draft beside the approved report',
+    ad1.ok === true &&
+      ad1.state === 'draft' &&
+      ad1.current_id === base2 &&
+      ad1.pending_id === made2 &&
+      (await q(`select state from public.documents where document_id = ${lit(base2)}::uuid`))[0]
+        ?.state === 'approved' &&
+      item(await list(), base2)?.pending_version?.id === made2,
     JSON.stringify(ad1),
   )
   await q(`update public.documents set state = 'approved' where document_id = ${lit(made2)}::uuid`)
-  const ad2 = await call(
-    `app.document_adopt_version(${lit(OFFICE)}::uuid, ${lit(base2)}::uuid, ${lit(job)}::uuid, 'revised by the report job')`,
-  )
   check(
-    "once a person has approved it, the job's output becomes v2 of the report",
-    ad2.ok === true && ad2.version === 2 && ad2.document_id === made2,
-    JSON.stringify(ad2),
+    "once a person has approved it, the job's output becomes v2 of the report and the draft is no longer pending",
+    (await versions(base2)).current_id === made2 &&
+      (await versions(base2)).version_count === 2 &&
+      item(await list(), made2)?.version_count === 2 &&
+      item(await list(), made2)?.pending_version === null,
   )
   check(
     '...with provenance (job and note) readable from the versions',
     (await versions(base2)).versions[1].produced_by_job === job &&
-      (await versions(base2)).versions[1].how === 'adopted' &&
+      (await versions(base2)).versions[1].how === 'draft_revision' &&
       (await versions(base2)).versions[1].note === 'revised by the report job',
   )
   check(
@@ -499,6 +615,7 @@ try {
   const same1n = await call(
     `app.hq_document_new_version(${lit(OFFICE)}::uuid, ${lit(same1)}::uuid, ${lit(LONG('shared body v2'))})`,
   )
+  await approve(String(same1n.document_id))
   const same2 = await ins({ project: clean, title: 'History B', content: LONG('shared body v2') })
   l = await L()
   check(

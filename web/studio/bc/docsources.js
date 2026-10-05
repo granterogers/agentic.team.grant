@@ -232,6 +232,30 @@ export const mark = (d, esc) => {
 }
 
 /**
+ * APPROVAL BELONGS TO A VERSION. A document with a draft revision is one logical item that says both things: the
+ * version a person approved (still current, still listed) and the draft beside it. A version number alone would hide
+ * which of the two is the approved one.
+ */
+export const versionLabel = (d) => {
+  const cur = Number(d?.current_version ?? d?.version_count ?? 1)
+  const pend = d?.pending_version ?? null
+  if (pend !== null && pend !== undefined) {
+    const state = pend.state === 'review' ? 'In review' : 'Draft'
+    return { text: `v${String(cur)} Approved · v${String(pend.version ?? cur + 1)} ${state}`, pending: true }
+  }
+  return Number(d?.version_count ?? 1) > 1 ? { text: `v${String(cur)}`, pending: false } : null
+}
+
+export const versionChip = (d, esc) => {
+  const v = versionLabel(d)
+  if (v === null) return ''
+  const title = v.pending
+    ? `Version ${String(d.current_version ?? 1)} is approved and current. The newer version is a draft until a person approves it; the approved one stays here meanwhile.`
+    : `Version ${String(d.current_version ?? 1)}`
+  return `<span class="bcvchip${v.pending ? ' bcvchip--draft' : ''}" title="${esc(title)}">${esc(v.text)}</span>`
+}
+
+/**
  * Where the SOURCE itself can be opened, or '' when it cannot be said safely.
  *
  * A link the office did not give and cannot derive is not guessed: Drive
@@ -295,6 +319,8 @@ export const fromItem = (it) => ({
   import_state: it.import_state ?? 'none',
   version_count: it.version_count ?? 1,
   current_version: it.current_version ?? 1,
+  current_state: it.current_state ?? 'approved',
+  pending_version: it.pending_version ?? null,
   alsoIn: Array.isArray(it.also_in) ? it.also_in : [],
   tags: it.tags ?? [],
   indexed: it.indexed === true,

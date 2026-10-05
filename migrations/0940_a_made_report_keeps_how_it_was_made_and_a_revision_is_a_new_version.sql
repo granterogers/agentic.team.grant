@@ -15,16 +15,18 @@ begin;
 -- updated_at), what design was chosen (the title page, density and charts the deterministic brief picked, with its
 -- reasons), and the sources it cited. `document_provenance` holds one row per made document, written once.
 --
--- ## The honest part about drafts
+-- ## Approval belongs to a version (Grant, 5 October 2026)
 --
--- A document the office makes is a DRAFT (the review gate, #28), and 0900's versioning refuses anything not approved,
--- and the project list shows only approved documents. So a draft report cannot be versioned through
--- hq_document_new_version. `document_revise_made`:
---   - head APPROVED  -> delegates to hq_document_new_version (the new PDF becomes the approved head; the old one is
---     archived and still listed under versions; rollback restores it as a new version),
---   - head still DRAFT -> links the chain with the same document_version_link and leaves the new version a DRAFT:
---     the office never approves its own work that nobody has reviewed. Review still decides what the project shows.
--- Either way nothing is deleted and the call is idempotent on the new document.
+-- A document the office makes is a DRAFT (the review gate, #28). Creating v4 from approved v3 creates v4 as a Draft: it does
+-- not inherit v3's approval, and the draft must never make the approved document vanish from the project. So
+-- `document_revise_made`:
+--   - base APPROVED  -> v4 is attached as a PENDING draft revision (0900: app.document_pending_attach). v3 stays approved,
+--     current and listed; the Documents list shows "v3 Approved" with "v4 Draft" beside it. When a person approves v4 the
+--     0900 trigger makes it the head and archives v3 (still listed under versions; rollback restores it as a new version).
+--     A newer draft replaces an older pending one (the older is archived, never deleted).
+--   - base still DRAFT (nothing was ever approved) -> links the chain the old way and the new version stays a draft: there
+--     is no approved version to keep visible, and the office never approves its own work.
+-- The office never approves anything here. Either way nothing is deleted and the call is idempotent on the new document.
 --
 -- Closed doors: no public wrapper, no grant. The worker calls them as the office (app.require_office).
 -- ---------------------------------------------------------------------------
@@ -121,7 +123,7 @@ stable
 security definer
 set search_path = ''
 as $f$
-declare d public.documents%rowtype; v_ver integer;
+declare d public.documents%rowtype; v_ver integer; v_base uuid;
 begin
   perform app.require_office(p_office);
   select * into d
@@ -131,9 +133,16 @@ begin
    order by x.created_at desc, x.document_id desc
    limit 1;
   if not found then return null; end if;
-  select l.version into v_ver from app.document_lineage(p_office, d.document_id) l where l.document_id = d.document_id;
+  v_base := app.document_base(p_office, d.document_id);
+  if v_base <> d.document_id then
+    -- a pending draft revision: it is the version after the approved head it was written against
+    select count(*)::integer into v_ver from app.document_lineage(p_office, v_base);
+    v_ver := coalesce(v_ver, 1) + 1;
+  else
+    select l.version into v_ver from app.document_lineage(p_office, d.document_id) l where l.document_id = d.document_id;
+  end if;
   return jsonb_build_object('document_id', d.document_id, 'title', d.title, 'state', d.state,
-                            'version', coalesce(v_ver, 1), 'produced_by_job', d.produced_by_job);
+                            'version', coalesce(v_ver, 1), 'produced_by_job', d.produced_by_job, 'base_id', v_base);
 end
 $f$;
 
@@ -145,7 +154,9 @@ set search_path = ''
 as $f$
 declare
   h public.documents%rowtype;
+  b public.documents%rowtype;
   y public.documents%rowtype;
+  v_base uuid;
   v_head uuid;
   v_ver integer;
 begin
@@ -163,27 +174,39 @@ begin
   if h.project_id is distinct from y.project_id then
     return jsonb_build_object('ok', false, 'error', 'the next version must be in the same project');
   end if;
-  if h.superseded_by = y.document_id then
+  -- The head may be a pending draft the last revision made; the revision is written against the approved base it hangs from.
+  v_base := app.document_base(p_office, p_head);
+  select * into b from public.documents where document_id = v_base and office_id = p_office for update;
+  if b.superseded_by = y.document_id then
     select l.version into v_ver from app.document_lineage(p_office, y.document_id) l where l.document_id = y.document_id;
     return jsonb_build_object('ok', true, 'already', true, 'document_id', y.document_id, 'current_id', y.document_id, 'version', v_ver);
   end if;
-  if h.superseded_by is not null then
+  if b.superseded_by is not null then
     select l.document_id into v_head from app.document_lineage(p_office, p_head) l where l.is_head limit 1;
     return jsonb_build_object('ok', false, 'error', 'that is not the latest version of this document', 'current_id', v_head);
   end if;
   if y.superseded_by is not null or exists (select 1 from public.documents x where x.superseded_by = y.document_id and x.office_id = p_office) then
     return jsonb_build_object('ok', false, 'error', 'that document already has version history of its own');
   end if;
+  if exists (select 1 from public.document_version_notes z where z.document_id = y.document_id and z.office_id = p_office) then
+    select count(*)::integer + 1 into v_ver from app.document_lineage(p_office, b.document_id);
+    return jsonb_build_object('ok', true, 'already', true, 'document_id', y.document_id, 'previous_id', b.document_id,
+                              'pending_id', y.document_id, 'current_id', b.document_id, 'version', v_ver, 'state', y.state);
+  end if;
 
-  if h.state = 'approved' then
-    return app.hq_document_new_version(p_office, p_head, null, p_new, p_note, 'job', true);
+  if b.state = 'approved' then
+    -- v4 from approved v3 is a DRAFT beside v3. The office never approves; v3 stays current and listed.
+    select count(*)::integer + 1 into v_ver from app.document_lineage(p_office, b.document_id);
+    perform app.document_pending_attach(p_office, b.document_id, y.document_id, p_note, 'job');
+    return jsonb_build_object('ok', true, 'document_id', y.document_id, 'previous_id', b.document_id, 'version', v_ver,
+                              'pending_id', y.document_id, 'current_id', b.document_id, 'state', y.state);
   end if;
-  if h.state <> 'draft' then
-    return jsonb_build_object('ok', false, 'error', format('a %s document is not revised; it is not the current one', h.state));
+  if b.state <> 'draft' then
+    return jsonb_build_object('ok', false, 'error', format('a %s document is not revised; it is not the current one', b.state));
   end if;
-  perform app.document_version_link(p_office, p_head, p_new, 'adopted', null, p_note, 'job');
-  select l.version into v_ver from app.document_lineage(p_office, p_new) l where l.document_id = p_new;
-  return jsonb_build_object('ok', true, 'document_id', p_new, 'previous_id', p_head, 'version', v_ver, 'current_id', p_new);
+  perform app.document_version_link(p_office, b.document_id, y.document_id, 'adopted', null, p_note, 'job');
+  select l.version into v_ver from app.document_lineage(p_office, y.document_id) l where l.document_id = y.document_id;
+  return jsonb_build_object('ok', true, 'document_id', y.document_id, 'previous_id', b.document_id, 'version', v_ver, 'current_id', y.document_id);
 end
 $f$;
 
