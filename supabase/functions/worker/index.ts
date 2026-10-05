@@ -140,6 +140,14 @@ let capabilities: { transcribe: boolean; subprocess: boolean } | null = null
  * would cost the ten seconds it was meant to save.
  */
 let direct: PostgresExecutor | null | undefined
+/**
+ * When the direct connection last failed. A failure used to be final for the life of the instance, so one refused connection
+ * (a pooler restart, a platform stall) pinned every later pass to the Management API: seventeen seconds an empty pass and the
+ * API's own throttle in the way, for as long as the instance lived. It is retried once the cooldown has passed, never on
+ * every kick (a failed connect costs its ten-second timeout, which is the cost this was written to avoid).
+ */
+let directFailedAt = 0
+const DIRECT_RETRY_AFTER_MS = 5 * 60_000
 
 /**
  * Can this runtime spawn a local process at all?
@@ -258,8 +266,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // See `pg.ts`: this is the difference between an empty pass costing
   // seventeen seconds and costing one, and the fallback means a failure here
   // is slow rather than broken.
-  if (direct === undefined) {
+  if (direct === undefined || (direct === null && Date.now() - directFailedAt > DIRECT_RETRY_AFTER_MS)) {
     direct = await PostgresExecutor.connect(Deno.env.get('SUPABASE_DB_URL') ?? '')
+    if (direct === null) directFailedAt = Date.now()
   }
   const db: SqlExecutor = direct ?? new ManagementApiExecutor(PROJECT_REF, ACCESS_TOKEN)
   try {
