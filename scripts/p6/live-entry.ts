@@ -1,5 +1,6 @@
 /** One look at the DEPLOYED page as a stranger: the entry screen, not the prototype. npx tsx scripts/p6/live-entry.ts [label] */
 import '../../src/safety/require-production-site.ts'
+import '../../src/safety/require-suite-intent.ts'
 import { mkdirSync } from 'node:fs'
 import { chromium } from 'playwright'
 
