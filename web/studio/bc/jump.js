@@ -26,6 +26,8 @@ import { PROJECTS } from '../data.js'
 import * as cal from './calendar.js'
 import * as grid from './layout.js'
 import { esc } from './parts.js'
+import * as todos from './todos.js'
+import * as wscmd from './wscmd.js'
 
 let ctx = null
 let open = false
@@ -112,6 +114,50 @@ const candidates = () => {
       const text = `${name} ${hay ?? ''}`.toLowerCase()
       if (!words.every((w) => text.includes(w))) return
       out.push({ group: 'Do', name, kind, run })
+    }
+    /*
+      WORKSPACE COMMANDS IN WORDS ("Make Documents bigger", "Zoom out", "Save this as Planning"). Offered only when the
+      sentence parses to something this page can carry out; the row says what pressing it will do. The same layout
+      functions as every button below (wscmd.js), so there is one implementation of each.
+    */
+    const wc = wscmd.parse(query)
+    if (wc !== null) {
+      out.push({
+        group: 'Do',
+        name: wscmd.label(wc),
+        kind: 'Workspace',
+        run: () => {
+          home()
+          wscmd.run(grid, slug, wc)
+          ctx.render()
+        },
+      })
+    }
+    /*
+      ADD A TO-DO IN ONE STEP. "add task call the venue" creates the to-do and then opens the To-dos so the person SEES
+      it. Needs the lead word on purpose: a bare phrase typed to search must never create anything. Without an office
+      it goes to the preview's own list exactly as the form does (todos.addLocal), and says so by showing it there.
+    */
+    const made = /^(?:add|new|create)\s+(?:a\s+|an\s+)?(?:to-?do|task)\s*[:\-]?\s*(.{3,120})$/i.exec(query.trim()) ?? /^(?:todo|to-do|task)\s*[:\-]\s*(.{3,120})$/i.exec(query.trim())
+    if (made !== null) {
+      const title = made[1].trim()
+      out.push({
+        group: 'Do',
+        name: `Add to-do: ${title}`,
+        kind: todos.canWrite() ? 'Creates it now' : 'Preview only: not saved to the office',
+        run: () => {
+          void (async () => {
+            try {
+              if (todos.canWrite()) await todos.add({ project: slug, title })
+              else todos.addLocal(slug, { title, list: 'loose', due: '', assignee: '' })
+            } catch {
+              /* the To-dos screen opens either way and shows what exists */
+            }
+            ctx.goAnywhere(at(`/p/${slug}/tasks`))
+            ctx.render()
+          })()
+        },
+      })
     }
     act('New to-do', 'Action', 'new add create task to-do todo', () => {
       ctx.goAnywhere(at(`/p/${slug}/tasks`))
@@ -209,8 +255,19 @@ const candidates = () => {
       name: `Ask the team: ${ask}`,
       kind: 'Sends this to the team',
       run: () => {
+        /*
+          WHAT THE SEND BUTTON DOES, in the same three steps: put the words on screen, repaint both the page and the
+          dock, and ASK THE OFFICE. This row used to call chatSend alone, so the message was stored and nothing was
+          ever asked (found by pressing it in scripts/verify/palette.ts).
+        */
         ctx.openDock?.()
-        void ctx.chatSend(here.slug, ask)
+        const redraw = () => {
+          ctx.render?.()
+          ctx.repaintDock?.()
+        }
+        ctx.chatSend(here.slug, ask)
+        redraw()
+        void Promise.resolve(ctx.chatAsk?.(here.slug, ask, redraw)).then(redraw)
       },
     })
   }

@@ -227,6 +227,117 @@ check(
 )
 await ctx2.close()
 
+/* --- workspace commands in words, one-step to-do, ask the team (HQ-CONV-001/002, HQ-CMD-008/013) ------------- */
+{
+  await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcstage [data-mod]')
+  await page.waitForTimeout(500)
+  const width = async (id: string): Promise<number> =>
+    (await page.evaluate(
+      inPage(
+        `const e = document.querySelector('.bcstage [data-mod="${id}"]'); return e ? e.getBoundingClientRect().width : 0`,
+      ),
+    )) as number
+  const typeIn = async (text: string): Promise<void> => {
+    await page.keyboard.press('Control+k')
+    await page.waitForSelector('#bcjump')
+    await page.keyboard.type(text)
+    await page.waitForTimeout(250)
+  }
+  const w0 = await width('documents')
+  await typeIn('make documents bigger')
+  const doRows = await rows()
+  check(
+    'typing "make documents bigger" offers a Workspace row that says what it will do',
+    doRows[0]?.startsWith('Make Docs & Files bigger') === true && /Workspace/.test(doRows[0] ?? ''),
+    doRows.slice(0, 3).join(' | '),
+  )
+  await page.screenshot({ path: '.out/ux-palette-10-workspace-command.png' })
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(500)
+  const w1 = await width('documents')
+  check(
+    'pressing it grows the Documents module (the same layout operation the handles use)',
+    w1 > w0 + 20,
+    `${String(w0)} -> ${String(w1)}`,
+  )
+  await typeIn('make tasks blue')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(400)
+  const stored = (await page.evaluate(
+    inPage(
+      `return localStorage.getItem('bc.stage.' + ${JSON.stringify(slug.split('/')[2] ?? '')}) ?? ''`,
+    ),
+  )) as string
+  check('"make tasks blue" stores the tint', /"tint":"sky"/.test(stored), stored.slice(0, 160))
+  await typeIn('zoom out')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(400)
+  check(
+    '"zoom out" zooms the stage',
+    /"zoom":0\.9/.test(
+      (await page.evaluate(
+        inPage(
+          `return localStorage.getItem('bc.stage.' + ${JSON.stringify(slug.split('/')[2] ?? '')}) ?? ''`,
+        ),
+      )) as string,
+    ),
+  )
+  await typeIn('hide sources')
+  check(
+    '"hide sources" (not a module on this page) offers no workspace row, rather than guessing',
+    !(await rows()).some((r) => /Workspace/.test(r)),
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(150)
+
+  /* one-step to-do */
+  await typeIn('add task call the venue about parking')
+  const tr = await rows()
+  check(
+    '"add task ..." offers to add that to-do, saying whether it is saved',
+    tr[0]?.startsWith('Add to-do: call the venue about parking') === true &&
+      /Preview only/.test(tr[0] ?? ''),
+    tr.slice(0, 2).join(' | '),
+  )
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(900)
+  check(
+    'pressing it creates the to-do and opens the To-dos so it is SEEN',
+    /\/tasks$/.test(page.url()) &&
+      (await page.locator('body').innerText()).includes('call the venue about parking'),
+    page.url(),
+  )
+  await page.screenshot({ path: '.out/ux-palette-11-added-todo.png' })
+  await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcstage [data-mod]')
+  await typeIn('call the venue')
+  check(
+    'a bare phrase typed to SEARCH never offers to create anything',
+    !(await rows()).some((r) => /^Add to-do/.test(r)),
+  )
+  await page.keyboard.press('Escape')
+
+  /* ask the team: last, and only on a press */
+  await typeIn('docs')
+  const ar = await rows()
+  check(
+    '"Ask the team" is offered last, never first',
+    /^Ask the team: docs/.test(ar[ar.length - 1] ?? '') && !/^Ask the team/.test(ar[0] ?? ''),
+    ar.join(' | '),
+  )
+  await page.locator('#bcjump .bcjumprow', { hasText: 'Ask the team:' }).click()
+  await page.waitForTimeout(900)
+  const before = (await page.locator('body').innerText()).slice(-400)
+  check(
+    'pressing it puts the message in the team conversation and closes the palette',
+    ((await page.locator('#bcjump').count()) === 0 && /(^|\n)docs\s*\n/i.test(before)) ||
+      /\ndocs\b/i.test(before),
+    before.slice(-120),
+  )
+  await page.screenshot({ path: '.out/ux-palette-12-asked.png' })
+}
+
 check('no page errors', thrown.length === 0, thrown.join(' | '))
 console.log(`\n${String(pass)} passed, ${String(fail)} failed`)
 await browser.close()

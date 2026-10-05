@@ -83,7 +83,8 @@ const audit = async (page: Page, where: string): Promise<void> => {
     `axe.run(document, ${OPTIONS}).then(r => r.violations.map(v => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.map(n => ({ target: n.target, html: n.html.slice(0, 140), failureSummary: (n.failureSummary || '').slice(0, 200) })) })))`,
   )) as Violation[]
   for (const v of result)
-    for (const n of v.nodes) found.set(`${v.id}::${n.target.join(' ')}`, { v: { ...v, nodes: [n] }, where })
+    for (const n of v.nodes)
+      found.set(`${v.id}::${n.target.join(' ')}`, { v: { ...v, nodes: [n] }, where })
 }
 
 const WIDTHS: [string, number, number, boolean][] = [
@@ -124,7 +125,11 @@ for (const [label, w, h, touch] of WIDTHS) {
     await page.waitForSelector('.bcexp .bcexpbox')
     await page.waitForTimeout(500)
     for (const mode of ['Month', 'Week', 'Day']) {
-      const b = page.locator('.bcexp [role="group"] button, .bcexp .bccalmode button', { hasText: new RegExp(`^${mode}$`) }).first()
+      const b = page
+        .locator('.bcexp [role="group"] button, .bcexp .bccalmode button', {
+          hasText: new RegExp(`^${mode}$`),
+        })
+        .first()
       if ((await b.count()) > 0) await b.click().catch(() => undefined)
       await page.waitForTimeout(250)
       await audit(page, `${label}: schedule ${mode}`)
@@ -160,12 +165,20 @@ for (const { v, where } of list) {
 }
 console.log(`\naxe: ${String(list.length)} violating node(s) across ${String(byRule.size)} rule(s)`)
 for (const { v, where } of list.filter((x) => x.v.id === 'color-contrast')) {
-  console.log(`  contrast @ ${where}: ${v.nodes[0]?.html ?? ''} :: ${(v.nodes[0]?.failureSummary ?? '').replace(/\n/g, ' ').slice(0, 150)}`)
+  console.log(
+    `  contrast @ ${where}: ${v.nodes[0]?.html ?? ''} :: ${(v.nodes[0]?.failureSummary ?? '').replace(/\n/g, ' ').slice(0, 150)}`,
+  )
 }
 for (const [id, { n, v, first }] of byRule) {
-  console.log(`  ${id} (${v.impact ?? '?'}) x${String(n)} - ${v.help}\n    first: ${first}\n    ${v.nodes[0]?.html ?? ''}\n    ${(v.nodes[0]?.failureSummary ?? '').replace(/\n/g, ' | ')}`)
+  console.log(
+    `  ${id} (${v.impact ?? '?'}) x${String(n)} - ${v.help}\n    first: ${first}\n    ${v.nodes[0]?.html ?? ''}\n    ${(v.nodes[0]?.failureSummary ?? '').replace(/\n/g, ' | ')}`,
+  )
 }
-check('axe (WCAG 2.1 A/AA incl. colour contrast): no violations on any audited state', list.length === 0, `${String(list.length)} node(s)`)
+check(
+  'axe (WCAG 2.1 A/AA incl. colour contrast): no violations on any audited state',
+  list.length === 0,
+  `${String(list.length)} node(s)`,
+)
 
 /* ----------------------------------------------------- a detector that can fail */
 {
@@ -181,7 +194,11 @@ check('axe (WCAG 2.1 A/AA incl. colour contrast): no violations on any audited s
   const out = (await page.evaluate(
     `axe.run(document, ${OPTIONS}).then(r => r.violations.map(v => v.id))`,
   )) as string[]
-  check('control: a nameless low-contrast button IS reported by this audit', out.includes('button-name') && out.includes('color-contrast'), out.join(','))
+  check(
+    'control: a nameless low-contrast button IS reported by this audit',
+    out.includes('button-name') && out.includes('color-contrast'),
+    out.join(','),
+  )
   await close()
 }
 
@@ -191,7 +208,9 @@ check('axe (WCAG 2.1 A/AA incl. colour contrast): no violations on any audited s
   await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.bcstage [data-mod]')
   await page.waitForTimeout(500)
-  await page.evaluate(inPage('document.activeElement && document.activeElement.blur(); return true'))
+  await page.evaluate(
+    inPage('document.activeElement && document.activeElement.blur(); return true'),
+  )
   const stops: { tag: string; name: string; visible: boolean; ring: boolean; key: string }[] = []
   for (let i = 0; i < 90; i += 1) {
     await page.keyboard.press('Tab')
@@ -204,7 +223,11 @@ check('axe (WCAG 2.1 A/AA incl. colour contrast): no violations on any audited s
     if (stops.some((q) => q.key === s.key)) break // the cycle closed
     stops.push(s)
   }
-  check('Tab walks the project home: at least 25 stops before the cycle closes', stops.length >= 25, String(stops.length))
+  check(
+    'Tab walks the project home: at least 25 stops before the cycle closes',
+    stops.length >= 25,
+    String(stops.length),
+  )
   const hidden = stops.filter((s) => !s.visible)
   check(
     'every Tab stop is visible when it has focus (a hover-only control is revealed by focus)',
@@ -212,7 +235,11 @@ check('axe (WCAG 2.1 A/AA incl. colour contrast): no violations on any audited s
     hidden.map((s) => `${s.tag}:${s.name}`).join(' | '),
   )
   const noName = stops.filter((s) => s.name === '' && s.tag !== 'textarea')
-  check('every Tab stop has an accessible name', noName.length === 0, noName.map((s) => s.key).join(' | '))
+  check(
+    'every Tab stop has an accessible name',
+    noName.length === 0,
+    noName.map((s) => s.key).join(' | '),
+  )
   const noRing = stops.filter((s) => !s.ring)
   check(
     'every Tab stop shows a focus indicator',
@@ -221,7 +248,10 @@ check('axe (WCAG 2.1 A/AA incl. colour contrast): no violations on any audited s
   )
   // Shift+Tab walks back the same way (no one-way door)
   await page.keyboard.press('Shift+Tab')
-  check('Shift+Tab moves focus backwards (no trap)', (await page.evaluate(inPage('return document.activeElement !== document.body'))) as boolean)
+  check(
+    'Shift+Tab moves focus backwards (no trap)',
+    (await page.evaluate(inPage('return document.activeElement !== document.body'))) as boolean,
+  )
   await close()
 }
 
@@ -236,14 +266,29 @@ check('axe (WCAG 2.1 A/AA incl. colour contrast): no violations on any audited s
       `const mods = [...document.querySelectorAll('.bcstage [data-mod]')].slice(0, 6); const out = []; for (const m of mods) { for (const b of m.querySelectorAll('.bcmodctl button')) { const cs = getComputedStyle(b); const r = b.getBoundingClientRect(); out.push({ id: m.dataset.mod, what: (b.getAttribute('aria-label') || b.getAttribute('title') || b.className || '').slice(0, 30), op: parseFloat(cs.opacity), w: r.width, h: r.height, coarse: matchMedia('(pointer: coarse)').matches }) } } return out`,
     ),
   )) as { id: string; what: string; op: number; w: number; h: number; coarse: boolean }[]
-  check('the browser reports a coarse pointer (touch emulation is on)', m.length > 0 && m[0]?.coarse === true)
+  check(
+    'the browser reports a coarse pointer (touch emulation is on)',
+    m.length > 0 && m[0]?.coarse === true,
+  )
   const shy = m.filter((x) => x.op < 0.9)
-  check('on touch, module controls are revealed without hover (HQ-CTRL-004)', shy.length === 0, shy.map((x) => `${x.id}:${x.what}:${x.op}`).join(' | '))
+  check(
+    'on touch, module controls are revealed without hover (HQ-CTRL-004)',
+    shy.length === 0,
+    shy.map((x) => `${x.id}:${x.what}:${x.op}`).join(' | '),
+  )
   // a control that is not drawn at all (the colour control is absent from the stacked layout below 860px) has no box
   const drawn = m.filter((x) => x.w > 0 && x.h > 0)
-  check('the maximise control is drawn on a touch tablet', drawn.some((x) => x.what.startsWith('Maximise')), String(drawn.length))
+  check(
+    'the maximise control is drawn on a touch tablet',
+    drawn.some((x) => x.what.startsWith('Maximise')),
+    String(drawn.length),
+  )
   const small = drawn.filter((x) => x.w < 43.5 || x.h < 43.5)
-  check('on touch, module controls are at least 44x44 (HQ-A11Y-005)', small.length === 0, small.map((x) => `${x.id}:${x.what}:${Math.round(x.w)}x${Math.round(x.h)}`).join(' | '))
+  check(
+    'on touch, module controls are at least 44x44 (HQ-A11Y-005)',
+    small.length === 0,
+    small.map((x) => `${x.id}:${x.what}:${Math.round(x.w)}x${Math.round(x.h)}`).join(' | '),
+  )
   await close()
 }
 
@@ -281,7 +326,8 @@ check('axe (WCAG 2.1 A/AA incl. colour contrast): no violations on any audited s
   await page.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.bcdocfilter')
   results.push(await fieldSizes('documents'))
-  for (const r of results) check(`inputs are 16px or more: ${r.where}`, r.bad.length === 0, r.bad.join(' | '))
+  for (const r of results)
+    check(`inputs are 16px or more: ${r.where}`, r.bad.length === 0, r.bad.join(' | '))
   await close()
 }
 

@@ -104,7 +104,9 @@ const rectOfSel = async (page: Page, sel: string): Promise<R | null> =>
   )) as R | null
 const scrub = async (page: Page, f: number): Promise<void> => {
   await page.evaluate(
-    inPage(`for (const x of window.__anims) { x.a.currentTime = ${String(f)} * x.dur } return true`),
+    inPage(
+      `for (const x of window.__anims) { x.a.currentTime = ${String(f)} * x.dur } return true`,
+    ),
   )
 }
 const pct = (f: number): string => String(Math.round(f * 100)).padStart(3, '0')
@@ -154,7 +156,9 @@ const pct = (f: number): string => String(Math.round(f * 100)).padStart(3, '0')
   check(
     'the intermediate frames stay inside the viewport (nothing flies off screen)',
     frames.every((r) => r.x > -2 && r.y > -2 && r.x + r.w < 1442 && r.y + r.h < 902),
-    JSON.stringify(frames.map((r) => [Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h)])),
+    JSON.stringify(
+      frames.map((r) => [Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h)]),
+    ),
   )
 
   // close: Escape. The real dialog goes at once; a ghost settles back onto the card.
@@ -283,7 +287,9 @@ const pct = (f: number): string => String(Math.round(f * 100)).padStart(3, '0')
   await page.waitForTimeout(200)
   const card = await rectOfSel(page, '[data-mod="schedule"]')
   await page.evaluate(inPage('window.__freeze = true; return true'))
-  const opener = page.locator('[data-bc-max="schedule"], [data-mod="schedule"] [data-bc-expand]').first()
+  const opener = page
+    .locator('[data-bc-max="schedule"], [data-mod="schedule"] [data-bc-expand]')
+    .first()
   await opener.click({ force: true })
   await page.waitForSelector('.bcexp .bcexpbox')
   await page.waitForTimeout(120)
@@ -301,7 +307,12 @@ const pct = (f: number): string => String(Math.round(f * 100)).padStart(3, '0')
   const rest = await rectOfSel(page, '.bcexp .bcexpbox')
   check(
     'phone: the entrance also starts from the card and ends in the dialog (inside the 390px viewport)',
-    card !== null && f0 !== null && rest !== null && near(f0, card, 5) && rest.x >= -1 && rest.x + rest.w <= 391,
+    card !== null &&
+      f0 !== null &&
+      rest !== null &&
+      near(f0, card, 5) &&
+      rest.x >= -1 &&
+      rest.x + rest.w <= 391,
     JSON.stringify({ card, f0, rest }),
   )
   await ctx.close()
