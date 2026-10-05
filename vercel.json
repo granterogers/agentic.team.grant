@@ -2,7 +2,11 @@
   "functions": {
     "api/notebook.py": {
       "maxDuration": 60,
-      "memory": 1024
+      "memory": 1024,
+      "excludeFiles": "{*.css,*.html,*.js,studio/**,bc/**,fonts/**,logos/**,samples/**,textures/**,vendor/**}"
+    },
+    "api/notebook-act.py": {
+      "excludeFiles": "{*.css,*.html,*.js,studio/**,bc/**,fonts/**,logos/**,samples/**,textures/**,vendor/**}"
     }
   },
   "rewrites": [
