@@ -135,6 +135,7 @@ export const entry = () => {
  * ------------------------------------------------------------------------ */
 
 let who = ''
+let whoPending = false
 
 export const setup = () => {
   let remembered = form.name
@@ -320,13 +321,21 @@ export function wire(root) {
   }
 
   if (m === 'setup') {
-    if (who === '') {
-      void session.whoami().then((email) => {
-        if (email !== '' && who === '') {
-          who = email
-          redraw()
-        }
-      })
+    if (who === '' && !whoPending) {
+      // One question at a time: this screen draws again while the first answer is still on its way, and each draw used to
+      // ask again. A failed answer still lets a later draw ask once more.
+      whoPending = true
+      void session
+        .whoami()
+        .then((email) => {
+          if (email !== '' && who === '') {
+            who = email
+            redraw()
+          }
+        })
+        .finally(() => {
+          whoPending = false
+        })
     }
     for (const out of root.querySelectorAll('[data-bc-setup-out]')) out.addEventListener('click', () => signOut())
     for (const f of root.querySelectorAll('[data-bc-setup-form]')) {

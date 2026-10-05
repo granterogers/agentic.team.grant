@@ -15062,6 +15062,9 @@ async function refresh() {
     config.hydrateSettings(read),
     hydrateUsage(read),
   ])
+  // The first successful read of an office that did not exist when the page opened (set up just now): start what an
+  // arrival starts. A no-op on every refresh after that, and on a page that arrived at an office.
+  if (source.state === 'live') startOfficeReads(fresh, { settingsAlreadyRead: true })
 
   /*
     And the conversation, when one is on screen (#199).
@@ -15444,6 +15447,31 @@ async function live() {
   arrivalPending = false
   render()
   /*
+    A PERSON WITH NO OFFICE YET HAS NOTHING TO READ.
+
+    The studio payload has just said so (403 no_office) and every read below would be refused the same way: measured at
+    fourteen refused requests on arrival, then a poll refused three times a minute for as long as the tab stayed open, and
+    the set-up screen re-asking who they are after each one (docs/performance, scripts/verify/startup-requests.ts). The reads
+    start when the office exists, through refresh(), which is where setting the office up already lands.
+  */
+  if (source.state === 'no_office') return
+  startOfficeReads(token)
+}
+
+/** Whether the reads that follow a successful arrival have been started. Once per page: signing out reloads it. */
+let officeReadsStarted = false
+
+/**
+ * The reads and the watch that FOLLOW a successful arrival. Idempotent, so the two ways in (an arrival that found an
+ * office, and a refresh that found one for the first time, as when somebody has just set theirs up) cannot start the
+ * poll twice.
+ *
+ * `settingsAlreadyRead` is for the second way in: refresh() has just read settings and usage itself.
+ */
+function startOfficeReads(token, { settingsAlreadyRead = false } = {}) {
+  if (officeReadsStarted) return
+  officeReadsStarted = true
+  /*
     The home board reads what is open and what just happened (#219), and both
     are lazy payloads that used to be fetched only when their own screen was
     opened. The home screen shows them now, so arriving is the trigger.
@@ -15499,15 +15527,18 @@ async function live() {
       if (health.cannotThink.length > 0) { health.cannotThink = []; render() }
     }
   }
-  void readThinking()
+  // Not called here: pulse.watch() below primes itself with an immediate tick, and that tick makes this read first. Calling it
+  // here as well asked the same question twice on every load. A tab that is hidden when it loads reads it when it is shown.
 
   void read('workspace').then((w) => {
     panels.adoptHome(w)
     if (state.view === 'portfolio') render()
   }).catch(() => undefined)
-  void Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
-    render()
-  })
+  if (!settingsAlreadyRead) {
+    void Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
+      render()
+    })
+  }
   // What Settings may OFFER depends on who is looking, which is only known once the settings payload has arrived; if
   // the page is already open it is drawn again.
   document.addEventListener('hq:viewer', () => {

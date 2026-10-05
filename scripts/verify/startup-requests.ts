@@ -1,0 +1,264 @@
+/**
+ * What Team HQ asks the office when it opens, counted in a real browser against a fake gateway. LOCAL ONLY: nothing here
+ * reaches production, holds a credential or needs a flag.
+ *
+ *   npm run verify:startup
+ *
+ * Why this exists (efficiency audit, 5 October 2026): a page load is about fifteen gateway reads. A person who has signed
+ * in and has no office yet got the same fifteen, fourteen of them refused, and then kept polling for ever; and the
+ * `thinking` read was made twice on every load by everybody. None of that fails any other check, because a refused read
+ * that nobody sees has no overflow, no contrast and no dead control. This pins what a load costs as a COUNT, which is a
+ * structural property and not a timing, so it does not flap.
+ *
+ * Three scenarios, each asserted:
+ *   1. an established office: every section is read at most once on load, and the set of sections is the one the page needs
+ *      (so silence cannot satisfy it); the poll runs at its documented cadence;
+ *   2. a signed-in person with no office: ONE read (the studio payload that says so), then nothing, over a minute;
+ *   3. the same person setting their office up: the reads and the poll START when the office exists.
+ *
+ * The fake gateway answers `office.test`; the page is pointed at it with `window.HQ_API`, the seam every harness here uses.
+ */
+import { existsSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { extname, join } from 'node:path'
+import { chromium, type Page } from 'playwright'
+
+/** What an established office's first load is allowed to read. Raising a number here is a decision, not a convenience. */
+const EXPECTED_ON_LOAD = [
+  'studio',
+  'pulse',
+  'portfolio_tasks',
+  'lately',
+  'unseen',
+  'team_work',
+  'thinking',
+  'workspace',
+  'slack_link',
+  'channel_link',
+  'conversation_channels',
+  'studio_settings',
+  'conversation_growth',
+  'usage_overview',
+] as const
+const MAX_PER_SECTION_ON_LOAD = 1
+/** The poll: pulse and thinking every twenty seconds while the tab is visible (`web/studio/pulse.js`, EVERY). */
+const POLL_SECONDS = 20
+const MINUTE_MS = 60_000
+
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.json': 'application/json',
+}
+
+const server = createServer(async (rq, rs) => {
+  let f = join('web/studio', decodeURIComponent((rq.url ?? '/').split('?')[0] ?? '/'))
+  if (existsSync(f) && statSync(f).isDirectory()) f = join(f, 'index.html')
+  // A dotless path is a route, as on the host.
+  if (!existsSync(f) && extname(f) === '') f = join('web/studio', 'index.html')
+  if (!existsSync(f)) {
+    rs.writeHead(404)
+    rs.end('not here')
+    return
+  }
+  rs.writeHead(200, { 'content-type': TYPES[extname(f)] ?? 'application/octet-stream' })
+  rs.end(await readFile(f))
+})
+await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()))
+const origin = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}/`
+
+const browser = await chromium.launch()
+const problems: string[] = []
+const check = (ok: boolean, what: string): void => {
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what}`)
+  if (!ok) problems.push(what)
+}
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Let a visible minute pass on the page's clock, one poll interval at a time with a real pause between. The watcher skips
+ * a tick while the previous one is still in flight, so jumping the whole minute at once would count the guard and not the
+ * cadence (the first version of this harness did exactly that and reported one poll where there are three).
+ */
+async function visibleMinute(page: Page): Promise<void> {
+  for (let i = 0; i < MINUTE_MS / 1000 / POLL_SECONDS; i += 1) {
+    await page.clock.runFor(POLL_SECONDS * 1000)
+    await sleep(700)
+  }
+}
+
+type Scenario = {
+  /** Reads, in order, as `section` (or `POST <action>` for a write). */
+  log: string[]
+  page: Page
+}
+
+async function open(office: boolean): Promise<Scenario> {
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const page = await ctx.newPage()
+  await page.clock.install()
+  const log: string[] = []
+  let exists = office
+  await page.route('http://office.test/**', async (route) => {
+    const req = route.request()
+    const cors = {
+      'access-control-allow-origin': '*',
+      'access-control-allow-headers': '*',
+      'access-control-allow-methods': '*',
+    }
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors })
+    const url = new URL(req.url())
+    if (req.method() === 'POST') {
+      const action = (JSON.parse(req.postData() ?? '{}') as { action?: string }).action ?? 'unknown'
+      log.push(`POST ${action}`)
+      if (action === 'create_office') exists = true
+      return route.fulfill({
+        status: 200,
+        headers: { ...cors, 'content-type': 'application/json' },
+        // whoami answers with the person's address, as the sign-in service does; the set-up screen re-asks until it has one.
+        body: JSON.stringify(
+          action === 'whoami'
+            ? { ok: true, email: 'person@example.test' }
+            : { result: { ok: true } },
+        ),
+      })
+    }
+    const section = url.searchParams.get('section') ?? url.pathname
+    log.push(section)
+    if (!exists) {
+      return route.fulfill({
+        status: 403,
+        headers: { ...cors, 'content-type': 'application/json' },
+        body: JSON.stringify({ error: 'no_office', can_create: true }),
+      })
+    }
+    return route.fulfill({
+      status: 200,
+      headers: { ...cors, 'content-type': 'application/json' },
+      body: JSON.stringify({ data: section === 'studio' ? { projects: [] } : {} }),
+    })
+  })
+  // A string, because these scripts are type-checked without the DOM library. A PERSON's session, as a second person
+  // has one (the office key is Grant's legacy path, and it cannot create an office). Far from expiry on the page's own
+  // clock, so the harness's fake clock never makes it refresh.
+  await page.addInitScript(`
+    window.HQ_API = 'http://office.test/hq-api'
+    try {
+      localStorage.setItem('hq.session', JSON.stringify({
+        access_token: 'local-test-session',
+        refresh_token: 'local-test-refresh',
+        expires_at: Date.now() + 365 * 86400000,
+      }))
+    } catch (e) {}
+  `)
+  await page.goto(origin)
+  // Real time for the load itself: every read is issued within the first second or two.
+  await sleep(4000)
+  return { log, page }
+}
+
+const counts = (log: readonly string[]): Record<string, number> => {
+  const out: Record<string, number> = {}
+  for (const s of log) out[s] = (out[s] ?? 0) + 1
+  return out
+}
+const show = (log: readonly string[]): string =>
+  Object.entries(counts(log))
+    .map(([k, n]) => `${k}${n > 1 ? ` x${String(n)}` : ''}`)
+    .join(', ')
+
+try {
+  // ---- 1. an established office ---------------------------------------------------------------------------------------
+  console.log('1. an established office')
+  const a = await open(true)
+  const load = [...a.log]
+  console.log(`   on load: ${String(load.length)} requests: ${show(load)}`)
+  const c = counts(load)
+  check(
+    Object.values(c).every((n) => n <= MAX_PER_SECTION_ON_LOAD),
+    `no section is read more than ${String(MAX_PER_SECTION_ON_LOAD)} time on load (duplicates: ${
+      Object.entries(c)
+        .filter(([, n]) => n > MAX_PER_SECTION_ON_LOAD)
+        .map(([k, n]) => `${k} x${String(n)}`)
+        .join(', ') || 'none'
+    })`,
+  )
+  check(
+    [...EXPECTED_ON_LOAD].every((s) => (c[s] ?? 0) >= 1) &&
+      Object.keys(c).length === EXPECTED_ON_LOAD.length,
+    `the load reads exactly the ${String(EXPECTED_ON_LOAD.length)} sections the page needs`,
+  )
+  const before = a.log.length
+  await visibleMinute(a.page)
+  const poll = counts(a.log.slice(before))
+  console.log(`   over a visible minute: ${show(a.log.slice(before))}`)
+  const perMinute = MINUTE_MS / 1000 / POLL_SECONDS
+  check(
+    (poll.pulse ?? 0) >= perMinute - 1 && (poll.pulse ?? 0) <= perMinute + 1,
+    `the poll asks for the pulse about ${String(perMinute)} times a minute (saw ${String(poll.pulse ?? 0)})`,
+  )
+  check(
+    Object.keys(poll).every((k) => k === 'pulse' || k === 'thinking'),
+    `and reads nothing else while the office has not changed (saw: ${show(a.log.slice(before)) || 'nothing'})`,
+  )
+
+  // ---- 2. signed in, no office ----------------------------------------------------------------------------------------
+  console.log('2. signed in, no office yet')
+  const b = await open(false)
+  console.log(`   on load: ${String(b.log.length)} requests: ${show(b.log)}`)
+  const reads = b.log.filter((s) => !s.startsWith('POST'))
+  const asks = b.log.filter((s) => s === 'POST whoami').length
+  check(
+    reads.length === 1 && reads[0] === 'studio',
+    `exactly one office read, the studio payload that says so (saw ${String(reads.length)})`,
+  )
+  check(asks <= 1, `and the set-up screen asks who they are at most once (saw ${String(asks)})`)
+  const idle = b.log.length
+  await visibleMinute(b.page)
+  check(
+    b.log.length === idle,
+    `and no more over a minute (saw ${String(b.log.length - idle)} more)`,
+  )
+  check(
+    (await b.page.locator('body').innerText()).includes('set up your office'),
+    'the page still tells them to set up their office',
+  )
+
+  // ---- 3. the transition -----------------------------------------------------------------------------------------------
+  console.log('3. setting the office up')
+  const mark = b.log.length
+  await b.page.fill('#bc-setup-name', 'Test Person')
+  await b.page.click('[data-bc-setup-form] button[type=submit]')
+  await sleep(4000)
+  const after = b.log.slice(mark)
+  console.log(`   after submitting: ${String(after.length)} requests: ${show(after)}`)
+  check(after.includes('POST create_office'), 'the office is created')
+  const opened = counts(after.filter((s) => !s.startsWith('POST')))
+  for (const s of ['studio', 'lately', 'workspace', 'usage_overview', 'studio_settings', 'pulse'])
+    check((opened[s] ?? 0) >= 1, `then the page reads ${s}`)
+  const m2 = b.log.length
+  await visibleMinute(b.page)
+  const polled = counts(b.log.slice(m2))
+  check(
+    (polled.pulse ?? 0) >= 1,
+    `and the poll runs (saw ${String(polled.pulse ?? 0)} pulse reads in a minute)`,
+  )
+  check(
+    (await b.page.locator('body').innerText()).includes('Your office is ready'),
+    'and the page shows the office, not the set-up screen',
+  )
+} finally {
+  await browser.close()
+  server.close()
+}
+
+console.log(
+  problems.length === 0
+    ? '\nstartup budget: PASS'
+    : `\nstartup budget: ${String(problems.length)} FAIL`,
+)
+process.exitCode = problems.length === 0 ? 0 : 1
