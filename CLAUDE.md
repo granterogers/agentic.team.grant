@@ -416,7 +416,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **761 applied** (0891 is the latest applied; 0892 is committed and waits for the platform to recover).
+`npm run migrate` applies plain SQL from `migrations/`. **763 applied** (0898 is the latest applied; 0892 is committed and waits for the platform to recover). 0897/0898 are the public Sample (`docs/multi-user/PUBLIC-SAMPLE.md`).
 
 ## Testing signed in, without Grant's office
 
@@ -4599,6 +4599,24 @@ Each of these cost real time. They are here so they cost it once.
 - **A proof script that does not call `process.exit` hangs behind a pipe and looks like a slow database.** The sabotage helper printed its line and held the connection open for ten minutes; `| tail` hid the line.
 - **Disclosed process slips, this window:** one scratch script written with a heredoc and edited with `sed -i`, both deleted before commit; one `pkill -f` that matched its own shell (exit 144); `biome format --write`
   used on the new proof file instead of hand edits. No repository file other than the proof and docs changed.
+
+- **A sweep that asks every ACTIVE office asks the Sample.** The Slack channel sweep raised "Create the Slack channel #unnamed?"
+  on the public Sample's home screen. Active is not the same as a person's. 0898 filters on `offices.kind = 'person'`; when a
+  duty enumerates offices, ask which kinds it is for. A guest rule that refuses everybody, including the Sample's own owner key,
+  means a stray row there is settled by the operator with a recorded reason, never answered as the Sample.
+- **A harness check that matches text other panels already show passes while the team is still thinking.** The first chat check
+  matched "Harvest Lane" on the page and went green with "They are working on it" on screen. Read the answer from the canonical
+  row (`outputs` for the job) and require the pending state to be gone. And a check that silently skips when its control is
+  absent (the New project button lives on the home screen) is the vacuous control again: a missing control is a FAILURE.
+- **The build sandbox's proxy can break a page load, and the harness has to say which it was.** A 502 `text/plain` with no
+  `x-vercel-id` on a page file, or HTML where JSON was expected, is the proxy, not Vercel and not the product. `public-ui.ts`
+  logs that for every response, which turned four unexplained red runs into one named cause. Re-run, and compare to the log.
+- **A new gateway section or operator tool needs a visible caller the day it ships.** `check:pressable` matches the literal
+  `section=<name>` in `web/`, so building the name through a variable hid a real call; `check:callers` needs an `npm run` entry.
+- **Format by printing, write with Write.** `biome format --stdin-file-path=f < f` to the scratchpad, Write the repo file, then
+  `cmp` the two: byte-identical proves the transcription and keeps the no-in-place-formatter rule.
+- **Deploy from live bytes plus your diff.** The page deploy printed "uploading 7 / 1 / 1 / 1 file(s)", which is the proof only
+  the intended files went out; the working tree carried held work in `office.js` and `shell.js`.
 
 ---
 

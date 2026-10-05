@@ -131,7 +131,9 @@ export const dueWords = (t) => {
   const today = new Date()
   const days = Math.round((d.getTime() - Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())) / 86_400_000)
   const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-  if (days < 0) return `${label} · overdue`
+  // A finished task is not late. isLate() already says so; the words have to agree with it.
+  // A finished task is not late. isLate() already says so; the words have to agree with it.
+  if (days < 0) return isDone(t) ? label : `${label} · overdue`
   if (days === 0) return 'today'
   if (days === 1) return 'tomorrow'
   return label

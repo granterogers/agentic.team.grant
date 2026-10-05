@@ -201,6 +201,16 @@ export async function act(action, args = {}) {
       body.message ?? 'This needs you signed in. The office key cannot decide or speak as a person.',
     )
   }
+  /*
+    A sample visitor is read-only by design. The gateway answers a refused change with a code AND a sentence
+    written for a person; showing the code ("sample_readonly") reads like a fault, so the sentence is shown.
+    The credential is genuine and is not cleared.
+  */
+  if (r.status === 403 && (body.error === 'sample_readonly' || body.error === 'guest_only')) {
+    throw new Error(
+      body.message ?? 'This is a sample office, so changes are not saved. Create your own office to make it yours.',
+    )
+  }
   if (!r.ok) throw new Error(body.error ?? `The server returned ${r.status}`)
   if (body.result?.error) throw new Error(body.result.error)
   // Only on the way out, and only after both refusal checks: an action that was

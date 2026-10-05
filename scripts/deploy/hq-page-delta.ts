@@ -23,13 +23,16 @@ if (token === '') {
   process.exit(2)
 }
 const go = process.argv.includes('--go')
+// The studio folder to send. The default is the working tree; a staged tree (live bytes plus one change) is named here.
+const ROOT =
+  process.argv.find((a) => a.startsWith('--root='))?.slice('--root='.length) ?? 'web/studio'
 const auth = { Authorization: `Bearer ${token}` }
 const BINARY = new Set(['.woff2', '.pdf', '.png', '.jpg', '.jpeg', '.ico', '.webp'])
 const SKIP_DIRS = new Set(['raw'])
 
 const files = new Map<string, Buffer>()
 const add = async (name: string, path: string) => files.set(name, await readFile(path))
-await add('index.html', 'web/studio/index.html')
+await add('index.html', join(ROOT, 'index.html'))
 await add('api/notebook.py', 'api/notebook.py')
 await add('api/notebook-act.py', 'api/notebook-act.py')
 await add('scripts/notebook/act.py', 'scripts/notebook/act.py')
@@ -44,12 +47,12 @@ const walk = async (dir: string): Promise<void> => {
     }
     const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase()
     void BINARY.has(ext) // bytes are read raw either way; the set documents which are not text
-    const rel = relative('web/studio', full).split('\\').join('/')
+    const rel = relative(ROOT, full).split('\\').join('/')
     await add(`studio/${rel}`, full)
     if (rel !== 'index.html') await add(rel, full)
   }
 }
-await walk('web/studio')
+await walk(ROOT)
 const sha = (b: Buffer) => createHash('sha1').update(b).digest('hex')
 const list = [...files].map(([file, body]) => ({ file, sha: sha(body), size: body.length }))
 console.log(

@@ -408,11 +408,11 @@ const topRow = () => {
       ${
         canWrite()
           ? `<button type="button" class="bcbtn bcsignout" data-bc-signout="1"
-        title="Sign out and clear this browser of your work"
-        aria-label="Sign out"><svg class="bcsoicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+        title="${account.leaveWords().title}"
+        aria-label="${account.leaveWords().label}"><svg class="bcsoicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
           stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="M16 8l4 4-4 4"/><path d="M20 12H9"/>
-        </svg><span class="bcsotext">Sign out</span></button>`
+        </svg><span class="bcsotext">${account.leaveWords().text}</span></button>`
           : ''
       }
     </div>
@@ -3637,6 +3637,7 @@ export const html = () => {
 
 const shell = () =>
   `<a class="bcskip" href="#bcmain">Skip to main content</a>
+  ${account.sampleBar()}
   ${topRow()}
   ${notLive()}
   <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>

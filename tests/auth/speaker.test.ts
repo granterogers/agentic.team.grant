@@ -260,3 +260,22 @@ describe('the voice functions are wired to the verifier', () => {
     expect(voice).toMatch(/await resolveSpeaker\(presented,/)
   })
 })
+
+describe('a sample visitor is nobody who may speak aloud (0897)', () => {
+  it('refuses a guest member, and still serves a person and a test member (the controls)', async () => {
+    const guest = world('visitor@example.invalid', {
+      ok: true,
+      owner_key: 'sample-guest',
+      kind: 'guest',
+    })
+    expect(await resolveSpeaker(jwt, env, { fetch: guest.fetcher, cache: fresh() })).toBeNull()
+    const person = world('sam@example.com', { ok: true, owner_key: 'sam', kind: 'person' })
+    expect((await resolveSpeaker(jwt, env, { fetch: person.fetcher, cache: fresh() }))?.kind).toBe(
+      'person',
+    )
+    const test = world('t@example.com', { ok: true, owner_key: 'tester', kind: 'harness' })
+    expect((await resolveSpeaker(jwt, env, { fetch: test.fetcher, cache: fresh() }))?.kind).toBe(
+      'harness',
+    )
+  })
+})
