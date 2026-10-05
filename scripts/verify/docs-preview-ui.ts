@@ -337,6 +337,7 @@ const drive = async (
     await page.waitForSelector('.bcdocgrid')
   }
   const shot = async (name: string): Promise<void> => {
+    await page.waitForTimeout(550) // let the viewer finish growing out of its tile before judging it
     await page.screenshot({ path: `.out/ux-preview-${name}-${label}.png` })
   }
   const state = (): ReturnType<Page['locator']> =>

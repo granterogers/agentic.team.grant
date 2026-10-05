@@ -160,7 +160,7 @@
 [data-experience='basecamp'] .bcversion .bcvn { grid-column: 1; grid-row: 1; }
 [data-experience='basecamp'] .bcversion .bcvstate { grid-column: 2; grid-row: 1; }
 [data-experience='basecamp'] .bcversion .bcvact { grid-column: 3; grid-row: 1 / span 2; display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-[data-experience='basecamp'] .bcversion .bcvw { grid-column: 2; grid-row: 2; min-width: 0; overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcversion .bcvw { grid-column: 1 / 3; grid-row: 2; min-width: 0; overflow-wrap: anywhere; }
 [data-experience='basecamp'] .bcrolledsay { margin: 0 0 8px; color: var(--bc-text); }
 
 /* ======================================================================== *
