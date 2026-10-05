@@ -111,11 +111,15 @@ const sizes = (
 const per = (x: number): number => Math.round((x / N) * 10) / 10
 const statements = 1 + WALK.length + 3
 const tablesAfter = await tableCounters()
-const written: Record<string, { ins_per_job: number; upd_per_job: number; hot_upd_per_job: number }> = {}
+const written: Record<
+  string,
+  { ins_per_job: number; upd_per_job: number; hot_upd_per_job: number }
+> = {}
 for (const [name, a] of tablesAfter) {
   const b = tablesBefore.get(name) ?? [0, 0, 0]
   const d = [a[0] - b[0], a[1] - b[1], a[2] - b[2]] as [number, number, number]
-  if (d[0] + d[1] > 0) written[name] = { ins_per_job: per(d[0]), upd_per_job: per(d[1]), hot_upd_per_job: per(d[2]) }
+  if (d[0] + d[1] > 0)
+    written[name] = { ins_per_job: per(d[0]), upd_per_job: per(d[1]), hot_upd_per_job: per(d[2]) }
 }
 console.log(
   JSON.stringify(
