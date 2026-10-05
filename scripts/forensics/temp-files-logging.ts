@@ -22,6 +22,8 @@
  * Value: `0` logs every temp file. The counter says the average file is about 5.5 MB (383.5 GB over 69,295 files), so a
  * 10 MB threshold would miss most of them; 69,295 files in 31 days is about 1.5 a minute, a trivial log volume.
  */
+import '../../src/safety/require-production-writes.ts'
+
 export {}
 
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'

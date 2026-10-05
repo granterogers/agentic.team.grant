@@ -124,6 +124,7 @@ a `verify:*`/`poc:*`/`e2e`/`gate` verification suite, checks by the choke points
 | Migrations / purge | `migrate`, `migrate:one`, `purge:fixtures` | Management API SQL | writes | entry writes + executor |
 | Operators that send or store | `slack:*`, `telegram:*`, `notebook:*`, `notion:*`, `vault:export`, `mcp:revoke`, `hq:token`, `bootstrap:*`, `backup:store-key|now|notify|rehearse`, `project`, `sample:seed|reset`, `office:second-person`, `step`, `notify`, `team:hello`, `avatars*`, `providers:discover`, `work`, `sync` | SQL, vault, third-party via vault | writes | entry writes + executor |
 | Catalogue and drift checks | `check:callers`, `check:consumed`, `check:gateway-wrappers`, `check:anon-exposure`, `check:icons`, `check:leaks`, `check:answerable`, ... | Management API SQL, hq-api | read | entry checks + executor |
+| Supabase forensics (p4, 5 Oct) | `forensics:capture`, `forensics:logs`, `forensics:usage`, `forensics:metrics` | Management API (collectors, token); `forensics:temp-logging` PUTs a Postgres config override | read; `forensics:temp-logging` **writes** (even its dry run needs both flags: the script can send a config PUT) | entry checks / writes + fetch guard (`common.ts` arms it). `forensics:preserve`, `:timeline` read local evidence files; `:idle-pass`, `:job-cost` run on a marked local replica: none |
 | Ad-hoc queries | `q`, `qq`, `scripts/db-query.sh` | Management API SQL | read (SQL arbitrary) | entry checks / shell guard + executor |
 | Measurement | `measure`, `levels`, `breadth`, `matrix`, `mutate`, `eval`, `replay`, `session`, `delegation*`, `incident:snapshot`, `inventory`, `audit:credentials` | SQL, vault, model providers | read | entry checks + executor |
 | Production suites | `verify:*` (production-heavy 181), `poc:*`, `e2e`, `gate`, `gate:safe` | SQL, hq-api, deployed pages | writes fixtures | executor/fetch (checks) + `suite-guard` (writes) |
@@ -597,3 +598,11 @@ a `verify:*`/`poc:*`/`e2e`/`gate` verification suite, checks by the choke points
 | `verify:policy-live` | suite | Management API (SQL, vault); Management API (admin); deployed gateway/functions | executor / fetch guard (checks) + `suite-guard` (heavy needs writes) |
 | `verify:isolated` | suite | local replica (marked Unix socket) | executor / fetch guard (checks) + `suite-guard` (heavy needs writes) |
 | `verify:run5-live` | suite | Management API (SQL, vault); Management API (admin); deployed gateway/functions; deployed pages / Vercel | executor / fetch guard (checks) + `suite-guard` (heavy needs writes) |
+
+### Integration note (5 October 2026)
+
+p4's forensics collectors reached this guard AFTER it was written, with `SUPABASE_PROJECT_REF` defaulting to the production ref
+(`baujwlzcziasnfhhkchg`) in `common.ts`, `temp-files-logging.ts` and many older scripts. A script run without the variable therefore
+targets production by default; the guard then refuses it without the flag, which is the intended failure. For staging, the
+variable must be set explicitly (the staging preflight, `npm run staging:preflight`, refuses an unset ref).
+

@@ -22,6 +22,7 @@
  * A failed scrape is evidence, not an absence of activity: status, duration, error name and a clipped body are recorded. Nothing
  * is retried, and a watch stops at the first non-200 answer, so a sick host is never hammered.
  */
+import '../../src/safety/require-production-checks.ts'
 import { readdirSync, readFileSync } from 'node:fs'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { redactSecrets } from '../../src/text/secrets.ts'

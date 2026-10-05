@@ -384,6 +384,31 @@ over `cat`, `grep` and `head`.
 
 ---
 
+## Production access is forbidden by default
+
+**Holding production credentials is not permission to use them.** Commands that contact production refuse to run
+(`src/safety/production-gate.ts`, `docs/production-access-guard.md`) unless a person has switched access on:
+
+- `ALLOW_PRODUCTION_CHECKS=1` - read-only contact with production (`check:*`, `q`, `qq`, `forensics:*`, suites aimed at the deployed site).
+- `ALLOW_PRODUCTION_WRITES=1` as well - deploys, migrations, purges, config changes, anything that writes.
+
+Rules, and they bind **sub-agents exactly as they bind you**:
+
+1. **Never set either flag yourself to make a check pass.** `ALLOW_PRODUCTION_CHECKS=1` is used only when Grant has
+   explicitly authorised that production READ; `ALLOW_PRODUCTION_WRITES=1` only for the specific production WRITE he named.
+   Authorisation for one operation is not authorisation for the next.
+2. **A refusal is the guard working. Do not bypass it** (no flag, no editing the guard, no `fetch` of your own, no
+   removing a gate import, no unsetting then re-exporting credentials). Report what verification remains undone and why.
+3. Local replicas (`scripts/isolated/*`) and staging use their own targets and need no production flag. Staging is a
+   separate Supabase project, Vercel preview, OAuth client, bots and storage; if a staging command needs a flag the
+   guard cannot tell staging from production (it recognises Supabase hosts), so check the target first.
+4. Every new script that can contact production must put a gate module first in its imports
+   (`require-production-checks` for reads, `require-production-writes` for writes). `tests/safety` fails if one does not,
+   and fails if a gate import is removed.
+5. Unset `SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_REF SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_URL` when running anything local.
+
+---
+
 ## Before you push
 
 ```bash

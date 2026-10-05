@@ -15,6 +15,7 @@
  * status and the duration, and a one-line summary is appended to the day's evidence file. String values are redacted and clipped.
  */
 
+import '../../src/safety/require-production-checks.ts'
 import { readFileSync, writeFileSync } from 'node:fs'
 import {
   clean,
