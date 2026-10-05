@@ -244,3 +244,8 @@
   [data-experience='basecamp'] .bccal2allday,
   [data-experience='basecamp'] .bccal2body { grid-template-columns: 34px repeat(var(--cols), minmax(0, 1fr)); }
 }
+
+/* Hook classes the markup names: defined so the class audit (basecamp-classes) can tell a hook from a typo. */
+[data-experience='basecamp'] .bccal2dn { display: inline; }
+[data-experience='basecamp'] .bccal2ag { display: block; }
+[data-experience='basecamp'] .bccal2time { min-width: 0; }

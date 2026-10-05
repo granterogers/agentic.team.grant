@@ -4145,7 +4145,8 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 
 [data-experience='basecamp'] .bcphoneonly { display: none; }
 @media (max-width: 860px) {
-  [data-experience='basecamp'] .bcheadrow .bcworkbar { display: none; }
+  /* The desktop dock is not drawn on a phone, but its put-back chips are: a module taken off the page must be restorable where it was taken off (basecamp-touch). */
+  [data-experience='basecamp'] .bcheadrow .bcworkbar .bcdock { display: none; }
   [data-experience='basecamp'] .bcphoneonly { display: inline-flex; justify-self: start; min-height: 44px; border: 1px solid color-mix(in srgb, var(--bc-text-muted) 30%, transparent); }
 }
 

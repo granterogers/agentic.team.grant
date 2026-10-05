@@ -206,7 +206,10 @@ const draggables = (await page.evaluate(
          wired:
            el.hasAttribute('draggable') ||
            el.hasAttribute('data-bc-resize') ||
-           el.closest('[data-mod]') !== null,
+           el.closest('[data-mod]') !== null ||
+           // A Post-it is the other kind of thing on the freeform stage that drags and resizes (4 October); its bar and
+           // corner are wired in bc/stage.js and driven by scripts/verify/workspace.ts, so a cursor there is honest.
+           el.closest('[data-bc-note-id]') !== null,
        })
      }
      return out`),
