@@ -317,3 +317,53 @@ export function styleSnapshot(
     formatting: { ...formatting, density: choice.density, title_page: choice.titlePage },
   }
 }
+
+/**
+ * The words of a house style, put in front of the model that drafts the report: tone, audience, terminology, preferred
+ * sections and standing instructions. The look (palette, type, title page, density) is drawn by the renderer; these are the
+ * parts of a style only the WRITER can honour, and until now were stored and never read.
+ *
+ * They are the owner's own text but still text: flattened to single lines, bounded, and introduced as notes about HOW to
+ * write, below an explicit statement that they never change what the material says (a style cannot supply a fact, and
+ * cannot loosen "use only what the material says"). Pure; an empty or absent style gives an empty string.
+ */
+export function styleVoice(profile: StyleProfile | null): string {
+  if (profile === null) return ''
+  const one = (v: unknown, max: number): string =>
+    typeof v === 'string'
+      ? // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are exactly what is removed
+        v
+          .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, max)
+      : ''
+  const lines: string[] = []
+  if (one(profile.tone, 200) !== '') lines.push(`Tone: ${one(profile.tone, 200)}`)
+  if (one(profile.audience, 200) !== '') lines.push(`Audience: ${one(profile.audience, 200)}`)
+  const terms = Object.entries(profile.terminology ?? {})
+    .map(([from, to]) => [one(from, 60), one(to, 60)] as const)
+    .filter(([from, to]) => from !== '' && to !== '')
+    .slice(0, 20)
+  if (terms.length > 0) {
+    lines.push(
+      `Terminology: ${terms.map(([from, to]) => `say "${to}" rather than "${from}"`).join('; ')}`,
+    )
+  }
+  const sections = (profile.structure?.sections ?? [])
+    .map((x) => one(x, 60))
+    .filter((x) => x !== '')
+    .slice(0, 12)
+  if (sections.length > 0)
+    lines.push(
+      `Preferred sections, in this order where the material supports them: ${sections.join(', ')}`,
+    )
+  if (one(profile.instructions, 600) !== '')
+    lines.push(`Standing instructions: ${one(profile.instructions, 600)}`)
+  if (lines.length === 0) return ''
+  return (
+    '\n\nHouse style notes (how to write; they never change what the material says, and they do not permit ' +
+    'a claim the material does not support):\n' +
+    lines.map((l) => `- ${l}`).join('\n')
+  )
+}

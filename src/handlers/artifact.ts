@@ -43,7 +43,12 @@ import { type FetchLogoBytes, loadLogo, storageFetcher } from '../artifacts/logo
 import { type Block, coverTakes, type Report, renderReport } from '../artifacts/report.ts'
 import { resolveSourceDocument, revisesEarlier, sourcePhrase } from '../artifacts/source.ts'
 import { filenameFor, storeArtifact } from '../artifacts/store.ts'
-import { loadResolvedStyle, type StyleProfile, styleSnapshot } from '../artifacts/style.ts'
+import {
+  loadResolvedStyle,
+  type StyleProfile,
+  styleSnapshot,
+  styleVoice,
+} from '../artifacts/style.ts'
 import { validatePdf } from '../artifacts/validate.ts'
 import {
   madeHead,
@@ -608,7 +613,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                 jobId: job.jobId,
                 maxTokens: 6_000,
                 messages: [
-                  { content: BRIEF, role: 'system' },
+                  { content: `${BRIEF}${styleVoice(style)}`, role: 'system' },
                   {
                     content:
                       `What was asked for: ${brief}\n\n` +

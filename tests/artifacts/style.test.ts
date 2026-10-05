@@ -197,3 +197,37 @@ describe('readProfile reads a database column defensively', () => {
     })
   })
 })
+
+describe('styleVoice: the words of a house style reach the writer', () => {
+  it('is empty without a style or with only a look', async () => {
+    const { styleVoice } = await import('../../src/artifacts/style.ts')
+    expect(styleVoice(null)).toBe('')
+    expect(
+      styleVoice({ palette: { primary: '#123456' }, formatting: { density: 'compact' } }),
+    ).toBe('')
+  })
+  it('carries tone, audience, terminology, sections and instructions, flattened and bounded', async () => {
+    const { styleVoice } = await import('../../src/artifacts/style.ts')
+    const v = styleVoice({
+      tone: 'Plain and warm.\nNever hype.',
+      audience: 'Founders',
+      terminology: { clients: 'members' },
+      structure: { sections: ['Summary', 'What we learned'] },
+      instructions: `Keep it short. ${'x'.repeat(2000)}`,
+    })
+    expect(v).toContain('Tone: Plain and warm. Never hype.')
+    expect(v).toContain('Audience: Founders')
+    expect(v).toContain('say "members" rather than "clients"')
+    expect(v).toContain('Summary, What we learned')
+    expect(v.length).toBeLessThan(1500)
+    expect(v).toMatch(/never change what the material says/)
+  })
+})
+
+describe('the draft step is given the style voice', () => {
+  it('the system message is the brief followed by styleVoice(style)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync('src/handlers/artifact.ts', 'utf8')
+    expect(src).toMatch(/content: `\$\{BRIEF\}\$\{styleVoice\(style\)\}`, role: 'system'/)
+  })
+})
