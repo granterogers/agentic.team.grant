@@ -12,6 +12,7 @@
  * while Supabase reports itself unhealthy: a degraded platform is not something to add load to.
  */
 
+import '../src/safety/arm.ts'
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 

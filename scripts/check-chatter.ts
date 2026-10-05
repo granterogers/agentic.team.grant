@@ -40,6 +40,7 @@
  * control comes back quiet, the query has stopped working.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

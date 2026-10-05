@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+# A person dispatches this workflow, which is the intent src/safety/production-gate.ts asks for (docs/production-access-guard.md).
+env:
+  ALLOW_PRODUCTION_CHECKS: '1'
+
 jobs:
   doctor:
     runs-on: ubuntu-latest

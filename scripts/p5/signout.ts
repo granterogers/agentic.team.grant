@@ -11,6 +11,7 @@
  * Every scan has a PLANTED CANARY control (it must see a canary before sign-out) and the device preferences must survive.
  * Nothing here sends a message or starts a job: it reads and signs in/out only.
  */
+import '../../src/safety/require-production-if-targeted.ts'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'

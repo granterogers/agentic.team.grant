@@ -11,6 +11,7 @@
  * resolve under a nested path — because both fail as a blank page that a
  * screenshot of the right size makes look plausible.
  */
+import '../../src/safety/arm.ts'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'

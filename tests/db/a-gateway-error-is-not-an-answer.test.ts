@@ -66,10 +66,16 @@ async function run(responses: Response[]): Promise<{ calls: number; threw: strin
 }
 
 describe('what the executor treats as worth asking again', () => {
+  // fetch is stubbed here, so nothing leaves the process; the production gate is opened only so the executor can be
+  // constructed against its default host (the gate itself is pinned in tests/safety/production-gate.test.ts).
+  const savedFlag = process.env.ALLOW_PRODUCTION_CHECKS
   beforeEach(() => {
+    process.env.ALLOW_PRODUCTION_CHECKS = '1'
     vi.useFakeTimers()
   })
   afterEach(() => {
+    if (savedFlag === undefined) delete process.env.ALLOW_PRODUCTION_CHECKS
+    else process.env.ALLOW_PRODUCTION_CHECKS = savedFlag
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })

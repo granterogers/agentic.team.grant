@@ -1,4 +1,5 @@
 /* Activity filters and channel provenance in a real browser. npx tsx scripts/verify/activity-ui.ts */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

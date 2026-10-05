@@ -38,6 +38,7 @@
  * is retired by status, and its ledger history stays attributable. Nulling
  * `notebook_ref` also frees the notebook so a real project can claim it later.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 /**

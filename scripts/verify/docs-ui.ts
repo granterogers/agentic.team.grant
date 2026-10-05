@@ -5,6 +5,7 @@
  * sort modes, a small indicator on every document, and the in-app viewer with
  * its metadata. Screenshots go to .out/ux-docs-*.png.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

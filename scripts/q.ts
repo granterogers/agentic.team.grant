@@ -9,6 +9,7 @@
  * the wrapper rather than on the query. This is the same executor every suite
  * uses, with no wrapper in the way.
  */
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 const sql = process.argv.slice(2).join(' ')

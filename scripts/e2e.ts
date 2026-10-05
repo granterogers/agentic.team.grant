@@ -39,6 +39,7 @@
  * their own section rather than folding them into the failures.
  */
 
+import '../src/safety/require-production-writes.ts'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'

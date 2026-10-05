@@ -15,6 +15,7 @@
  * moves. Grant saw this as "the link just opens a text file", which is exactly
  * what a browser does with `text/plain` under `nosniff`.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 
 const token = process.env.VERCEL_TOKEN

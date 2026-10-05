@@ -29,6 +29,7 @@
  * produced it.
  */
 
+import '../../src/safety/require-production-checks.ts'
 import { recordDecision, route, scanForDuplicates } from '../../src/agents/router.ts'
 import { combinedNotifier, pagerChannel } from '../../src/channels/notify.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'

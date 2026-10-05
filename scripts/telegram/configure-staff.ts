@@ -17,6 +17,7 @@
  * revoked token must not leave the other five unconfigured.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { avatarBaseUrl } from '../../src/staff/presentation.ts'
 import { roster } from '../../src/telegram/roster.ts'

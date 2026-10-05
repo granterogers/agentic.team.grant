@@ -8,6 +8,7 @@
  * moved on to a row per service. A function nobody can redeploy from the
  * repository is a function that drifts from the code describing it.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

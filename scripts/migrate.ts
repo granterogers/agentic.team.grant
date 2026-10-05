@@ -8,6 +8,7 @@
  * Postgres (ADR-0007). Writes migrations/applied.json afterwards so CI can
  * enforce that applied history is never edited.
  */
+import '../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

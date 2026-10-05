@@ -11,6 +11,7 @@
  * TLS verification stays on. Behind the agent proxy Node needs NODE_USE_ENV_PROXY=1 and NODE_EXTRA_CA_CERTS.
  */
 
+import '../../src/safety/arm.ts'
 import { downloadFile } from '../../src/browser/download.ts'
 import { FetchedBrowser } from '../../src/browser/fetched.ts'
 import { termsOf } from '../../src/browser/links.ts'

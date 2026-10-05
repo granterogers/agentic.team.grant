@@ -15,6 +15,7 @@
  * Nothing leaves this machine. Every property is read from what the page
  * actually POSTED, never from what the screen says.
  */
+import '../../src/safety/arm.ts'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { createServer } from 'node:http'

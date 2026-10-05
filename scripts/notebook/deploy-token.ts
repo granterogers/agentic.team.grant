@@ -38,6 +38,7 @@
  * to repeat, the fix is not to be more careful with it — it is to find the
  * version of the step that is cheap to repeat.
  */
+import '../../src/safety/require-production-writes.ts'
 import { execFile } from 'node:child_process'
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'

@@ -27,6 +27,7 @@
  * need a chat id it has no way to obtain.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const go = process.argv.includes('--go')

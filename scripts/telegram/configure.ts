@@ -17,6 +17,7 @@
  * URL that does not exist yet, and registering a webhook pointing nowhere would
  * make Telegram queue updates against a dead endpoint.
  */
+import '../../src/safety/require-production-writes.ts'
 import { randomBytes } from 'node:crypto'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

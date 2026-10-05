@@ -15,6 +15,7 @@
  * The comparison's own controls are unit tests (tests/sample/plan.test.ts: it names the office and table that changed, and
  * sees one appear or vanish), and the gate FAILS CLOSED if it cannot read the result: an unparseable report is not "no change".
  */
+import '../src/safety/require-production-writes.ts'
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 

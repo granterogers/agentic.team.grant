@@ -15,6 +15,7 @@
  * secret, a `vault_secret` call, a run-time name, a name nobody classified - and ACCEPTS the two it must (an
  * infrastructure read, and a human name that appears only in a comment).
  */
+import '../src/safety/require-production-checks.ts'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {

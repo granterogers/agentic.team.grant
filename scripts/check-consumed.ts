@@ -35,6 +35,7 @@
  *      no writer in `src/` and holds no rows; a mechanism for a state that never
  *      occurs is `app.suppress_delivery`'s case, not a forgotten mouth.
  */
+import '../src/safety/require-production-checks.ts'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ManagementApiExecutor } from '../src/db/executor.ts'

@@ -18,6 +18,7 @@
  * script reports what is free to know and stops.
  */
 
+import '../../src/safety/require-production-checks.ts'
 import { spawnSync } from 'node:child_process'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

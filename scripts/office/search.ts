@@ -14,6 +14,7 @@
  * a caller would have to report as "no results".
  */
 
+import '../../src/safety/require-production-checks.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

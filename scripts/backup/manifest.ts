@@ -10,6 +10,7 @@
  * Prints JSON on stdout. Contains counts only — no data, so it is safe to store
  * alongside the dump and safe to print in a workflow log.
  */
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

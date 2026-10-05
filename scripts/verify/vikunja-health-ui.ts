@@ -13,6 +13,7 @@
  * time, the Disconnect control still present, and that nothing overflows a 390px phone. The healthy state is the control:
  * the same page with no health reading, and with an ok one, must NOT draw a failure.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

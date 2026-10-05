@@ -18,6 +18,7 @@
  * This is the same rule ADR-0010 set for the telegram adapter — the running
  * code IS the tested code — applied to a graph instead of a file.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { bundlePath, walk } from './lib/bundle.ts'
 

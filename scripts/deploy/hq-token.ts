@@ -14,6 +14,7 @@
  * afterwards.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { DeliveryService } from '../../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'

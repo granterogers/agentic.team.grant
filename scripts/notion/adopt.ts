@@ -34,6 +34,7 @@
  * silently becoming wrong when he has three.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { NotionClient } from '../../src/notion/api.ts'
 import { listDataSources, schemaOf } from '../../src/notion/structure.ts'

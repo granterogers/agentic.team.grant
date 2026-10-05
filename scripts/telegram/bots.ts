@@ -21,6 +21,7 @@
  * and it does not spend the ceiling one hire at a time on names that a rename
  * would then strand.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import {
   connect,

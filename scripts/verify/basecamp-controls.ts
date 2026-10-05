@@ -25,6 +25,7 @@
  *  - a control that is deliberately inert is listed by name with its reason,
  *    so the allow-list is an argument rather than a silencer.
  */
+import '../../src/safety/arm.ts'
 import { chromium, devices } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

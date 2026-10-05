@@ -33,6 +33,7 @@
  * of what is true right now.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { readdir } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 

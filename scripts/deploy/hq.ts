@@ -12,6 +12,7 @@
  * after that the existing one is reused, because rotating a token nobody asked
  * to rotate would silently lock Grant's phone out of the dashboard.
  */
+import '../../src/safety/require-production-writes.ts'
 import { randomBytes } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
