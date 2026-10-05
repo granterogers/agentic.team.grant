@@ -421,6 +421,164 @@ check('Forward reopens it', (await page.locator('[data-bc-expanded="schedule"]')
 await page.goBack()
 await page.waitForTimeout(500)
 
+/* --- 14b. closing is Back; the history holds no stale 'open' entry ------- */
+{
+  const home = page.url()
+  const expanded = async (): Promise<number> => await page.locator('[data-bc-expanded]').count()
+  const lenAtHome = (await page.evaluate(inPage('return history.length'))) as number
+  for (let cycle = 1; cycle <= 3; cycle += 1) {
+    await page.locator('[data-mod="schedule"]').hover()
+    await page.locator('[data-bc-max="schedule"]').click()
+    await page.waitForTimeout(600)
+    await page
+      .locator('.bcexpx[data-bc-expclose]')
+      .first()
+      .click()
+    await page.waitForTimeout(700)
+  }
+  check(
+    'three open-and-close cycles end on the dashboard',
+    (await expanded()) === 0 && page.url() === home,
+    page.url(),
+  )
+  const lenAfter = (await page.evaluate(inPage('return history.length'))) as number
+  check(
+    'closing did not add history entries (it went Back)',
+    lenAfter <= lenAtHome + 1,
+    `history ${String(lenAtHome)} -> ${String(lenAfter)}`,
+  )
+  await page.goBack()
+  await page.waitForTimeout(500)
+  check(
+    'Back after Close does NOT reopen the module that was put away',
+    (await expanded()) === 0 && !page.url().includes('/x/'),
+    page.url(),
+  )
+  await page.goForward()
+  await page.waitForTimeout(400)
+  await page.goto(home, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcstage [data-mod]')
+  await page.waitForTimeout(300)
+  // Escape closes too, and is also Back
+  await page.locator('[data-mod="schedule"]').hover()
+  await page.locator('[data-bc-max="schedule"]').click()
+  await page.waitForTimeout(600)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(700)
+  check('Escape closes the maximised module', (await expanded()) === 0)
+  await page.goBack().catch(() => undefined)
+  await page.waitForTimeout(400)
+  check('and Back after Escape does not reopen it', (await expanded()) === 0)
+  await page.goto(home, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcstage [data-mod]')
+  await page.waitForTimeout(300)
+  // a reload while maximised keeps it maximised; a deep link opens it; closing a deep link adds no entry
+  await page.locator('[data-mod="schedule"]').hover()
+  await page.locator('[data-bc-max="schedule"]').click()
+  await page.waitForTimeout(600)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(800)
+  check('reload while maximised keeps the module open', (await expanded()) === 1)
+  await page.goto(home + '/x/schedule', { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(800)
+  check('a deep link to /x/schedule opens it maximised', (await expanded()) === 1)
+  const deepLen = (await page.evaluate(inPage('return history.length'))) as number
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(700)
+  const deepAfter = (await page.evaluate(inPage('return history.length'))) as number
+  check(
+    'closing a deep-linked module adds no history entry',
+    (await expanded()) === 0 && deepAfter <= deepLen,
+    `${String(deepLen)} -> ${String(deepAfter)}`,
+  )
+  await page.goto(home, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcstage [data-mod]')
+  await page.waitForTimeout(300)
+}
+
+/* --- 14c. notes: undo, keyboard, two tabs ------------------------------- */
+{
+  const noteCount = async (pg = page): Promise<number> => await pg.locator('.bcpostit').count()
+  // undo
+  await page.locator('.bcpostit .bcpostittext').first().fill('keep this sentence')
+  await page.waitForTimeout(900)
+  await page.locator('.bcpostit').first().hover()
+  await page.locator('[data-bc-note-del]').first().click()
+  await page.waitForTimeout(400)
+  check(
+    'removing a note with text offers Undo',
+    (await page.locator('.bcpostitundo button').count()) === 1,
+  )
+  await page.locator('.bcpostitundo button').click()
+  await page.waitForTimeout(500)
+  check(
+    'Undo brings the note back with its text',
+    (
+      await page
+        .locator('.bcpostittext')
+        .evaluateAll((els) => els.map((e) => (e as HTMLTextAreaElement).value))
+    ).includes('keep this sentence'),
+  )
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcstage [data-mod]')
+  await page.waitForTimeout(600)
+  check(
+    'and it is still there after a reload',
+    (
+      await page
+        .locator('.bcpostittext')
+        .evaluateAll((els) => els.map((e) => (e as HTMLTextAreaElement).value))
+    ).includes('keep this sentence'),
+  )
+  // keyboard
+  const grip = page.locator('.bcpostit [data-bc-note-grip]').first()
+  const before = await page.locator('.bcpostit').first().boundingBox()
+  await grip.focus()
+  await page.keyboard.press('Alt+ArrowLeft')
+  await page.keyboard.press('Alt+ArrowDown')
+  const after = await page.locator('.bcpostit').first().boundingBox()
+  check(
+    'Alt+arrows move a focused note',
+    before !== null && after !== null && after.x < before.x - 5 && after.y > before.y + 5,
+    JSON.stringify({ before, after }),
+  )
+  await page.keyboard.press('Alt+Shift+ArrowRight')
+  const wider = await page.locator('.bcpostit').first().boundingBox()
+  check(
+    'Alt+Shift+arrows resize it',
+    after !== null && wider !== null && wider.width > after.width + 5,
+  )
+  // two tabs: a note typed in each, neither erased
+  const proj = slug
+  const tabB = await ctx.newPage()
+  await tabB.goto(url(proj), { waitUntil: 'domcontentloaded' })
+  await tabB.waitForSelector('.bcstage [data-mod]')
+  await tabB.waitForTimeout(500)
+  const nA = await noteCount()
+  await page.locator('[data-bc-newnote]').first().click()
+  await page.locator('.bcpostit .bcpostittext').last().fill('typed in tab A')
+  await page.waitForTimeout(900)
+  await tabB.locator('[data-bc-newnote]').first().click()
+  await tabB.locator('.bcpostit .bcpostittext').last().fill('typed in tab B')
+  await tabB.waitForTimeout(900)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcstage [data-mod]')
+  await page.waitForTimeout(600)
+  const values = (await page
+    .locator('.bcpostittext')
+    .evaluateAll((els) => els.map((e) => (e as HTMLTextAreaElement).value))) as string[]
+  check(
+    'two tabs each add a note and neither erases the other',
+    values.includes('typed in tab A') && values.includes('typed in tab B'),
+    JSON.stringify(values),
+  )
+  check(
+    'and the notes already there are still there',
+    values.includes('keep this sentence') && (await noteCount()) >= nA + 1,
+  )
+  await tabB.close()
+}
+
 /* --- 15. keyboard ------------------------------------------------------ */
 await page.locator('[data-mod="contacts"] .bcmodopen').focus()
 const k0 = by(await boxes(), 'contacts')
