@@ -245,6 +245,31 @@ const docs = [
     kind: 'google-doc',
   }),
   item({ id: 'd2', title: 'Office upload', source: 'upload' }),
+  item({
+    id: 'd3',
+    title: 'Drive plan, read not copied',
+    source: 'drive',
+    connector: 'drive',
+    external_ref: 'plan1',
+    mime: '',
+    import_available: true,
+    thumbnail: {
+      available: true,
+      kind: 'excerpt',
+      derived_from: 'extracted_text',
+      excerpt: 'The Q3 plan. Customers want faster onboarding. <b>Pricing</b> is clear.',
+    },
+  }),
+  item({
+    id: 'd4',
+    title: 'Drive contract, fetch failed',
+    source: 'drive',
+    connector: 'drive',
+    external_ref: 'ctr1',
+    import_available: true,
+    import_state: 'pending',
+    import_error: 'I could not read that PDF - drive 404: File not found',
+  }),
 ]
 await p2.route('**/*', async (route) => {
   const u = route.request().url()
@@ -330,9 +355,31 @@ check(
 )
 check(
   'and shows the office list instead of the prototype documents',
-  (await p2.locator('.bcdocs--wall [data-bc-doc]').count()) === 2,
+  (await p2.locator('.bcdocs--wall [data-bc-doc]').count()) === 4,
   String(await p2.locator('.bcdocs--wall [data-bc-doc]').count()),
 )
+const planTile = p2.locator('.bcdocs--wall [data-bc-doc]', {
+  hasText: 'Drive plan, read not copied',
+})
+check(
+  'a tile shows the first words of the cached excerpt instead of invented lines',
+  (await planTile.locator('.bcxpagetext').textContent())?.startsWith(
+    'The Q3 plan. Customers want faster onboarding.',
+  ) === true && (await planTile.locator('.bcpline').count()) === 0,
+)
+check(
+  'CONTROL: the excerpt is text, never markup (a tag in it is shown, not made)',
+  (await planTile.locator('.bcxpagetext b').count()) === 0 &&
+    ((await planTile.locator('.bcxpagetext').textContent()) ?? '').includes('<b>Pricing</b>'),
+)
+check(
+  'CONTROL: a document with no excerpt keeps the drawn page',
+  (await p2
+    .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Office upload' })
+    .locator('.bcxpagetext')
+    .count()) === 0,
+)
+await p2.screenshot({ path: '.out/ux-docs-wall-excerpt-1440.png' })
 check(
   'the Documents list keeps the approved document and says "v3 Approved · v4 Draft" on its tile',
   (
@@ -394,6 +441,50 @@ check(
   rb !== undefined && typeof rb.args?.p_document_id === 'string',
   JSON.stringify(rb),
 )
+/* a requested import whose fetch failed says why and offers the press again */
+await p2.goBack()
+await p2.waitForSelector('.bcdocs--wall [data-bc-doc]')
+await p2
+  .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Drive contract, fetch failed' })
+  .locator('[data-bc-doc-open]')
+  .click()
+await p2.waitForSelector('.bcdocgrid')
+const recordHead = (
+  (await p2.locator('.bcrecordhead', { hasText: 'Drive contract' }).textContent()) ?? ''
+).replace(/\s+/g, ' ')
+check(
+  'a failed fetch is shown with its reason, not as a silent "requested"',
+  recordHead.includes('could not fetch this file yet') &&
+    recordHead.includes('drive 404: File not found'),
+  recordHead,
+)
+check('and the press is offered again', (await p2.locator('[data-bc-docimport]').count()) === 1)
+await p2.screenshot({ path: '.out/ux-docs-import-failed-1440.png' })
+const before = calls.filter((c) => c.action === 'document_import').length
+await p2.locator('[data-bc-docimport]').click()
+await p2.waitForTimeout(400)
+const retried = calls.filter((c) => c.action === 'document_import')
+check(
+  'pressing it sends document_import for that document again',
+  retried.length === before + 1 && retried[retried.length - 1]?.args?.p_document_id === 'd4',
+  JSON.stringify(retried),
+)
+/* the same list on a phone: the excerpt tile is there and nothing pushes the page sideways */
+await p2.setViewportSize({ width: 390, height: 844 })
+await p2.goto(url(`${slug}/documents`), { waitUntil: 'domcontentloaded' })
+await p2.waitForSelector('.bcdocs--wall [data-bc-doc]')
+await p2.waitForTimeout(600)
+check(
+  'on a 390px phone the excerpt tile still shows its words',
+  ((await p2.locator('.bcxpagetext').first().textContent()) ?? '').startsWith('The Q3 plan.'),
+)
+const sideways = await p2.evaluate(
+  inPage('return document.documentElement.scrollWidth - document.documentElement.clientWidth'),
+)
+check('and the phone page does not scroll sideways', Number(sideways) <= 0, String(sideways))
+await p2.locator('.bcdocs--wall').scrollIntoViewIfNeeded()
+await p2.locator('.bcxpagetext').first().scrollIntoViewIfNeeded()
+await p2.screenshot({ path: '.out/ux-docs-wall-excerpt-390.png' })
 await ctx2.close()
 /* the saved web pages, on the Sources surface */
 const ctx3 = await browser.newContext({ viewport: { width: 1440, height: 900 } })

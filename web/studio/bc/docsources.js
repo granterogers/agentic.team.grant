@@ -323,6 +323,10 @@ export const fromItem = (it) => ({
   pending_version: it.pending_version ?? null,
   alsoIn: Array.isArray(it.also_in) ? it.also_in : [],
   tags: it.tags ?? [],
+  /* The cached first words of the extracted text (0960): what a tile shows in place of invented lines. Empty when none is held. */
+  excerpt: it.thumbnail?.available === true && typeof it.thumbnail?.excerpt === 'string' ? it.thumbnail.excerpt : '',
+  /* Why a requested import is still waiting (0960), in words; empty when nothing has failed. */
+  import_error: typeof it.import_error === 'string' ? it.import_error : '',
   indexed: it.indexed === true,
   duplicates: it.duplicates ?? [],
   fromOffice: true,

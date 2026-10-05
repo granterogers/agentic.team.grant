@@ -2864,6 +2864,18 @@ const outputRecord = (p) => {
     }`
 }
 
+/*
+  A requested import that is still waiting. When the office has tried to fetch the file and could not, it says why and
+  offers the press again (the same press: it starts a new fetch only when none is running). When nothing has failed it
+  says the office is fetching, rather than the older "the next time it reads this file", which promised a read nothing
+  had scheduled. Plain words in this comment: it sits near template literals.
+*/
+const importWaiting = (d) =>
+  d.import_error
+    ? `<span class="bcpmeta bcximporterr">The office could not fetch this file yet: ${esc(d.import_error)}</span>
+       ${button('Try the import again', { 'data-bc-docimport': esc(String(d.id)) })}`
+    : '<span class="bcpmeta">Import requested. The office is fetching the file and will keep a copy in Team HQ when it arrives.</span>'
+
 const documentRecord = (p) => {
   const want = state().bcDoc
   const docs = bcMini.docsOf(p)
@@ -2917,7 +2929,7 @@ const documentRecord = (p) => {
       <h1>${esc(d.title ?? 'Document')}</h1>
       <span class="bcactions">
         ${sourceHref === '' ? '' : `<a class="bcbtn bcbtn--outline" href="${esc(sourceHref)}" target="_blank" rel="noopener" data-bc-opensource>Open source</a>`}
-        ${canImport ? (importPending ? '<span class="bcpmeta">Import requested. It completes the next time the office reads this file.</span>' : button('Import to Team HQ', { 'data-bc-docimport': esc(String(d.id)) })) : ''}
+        ${canImport ? (importPending ? importWaiting(d) : button('Import to Team HQ', { 'data-bc-docimport': esc(String(d.id)) })) : ''}
       </span>
     </div>
     <div class="bcdocgrid">

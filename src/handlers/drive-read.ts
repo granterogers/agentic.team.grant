@@ -31,7 +31,7 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import { extensionFor, filePath, putFile } from '../files/store.ts'
-import { describeKind, driveAccess, readFile } from '../google/drive.ts'
+import { describeKind, driveAccess, fileMeta, readFile } from '../google/drive.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { fileText } from '../text/file-text.ts'
 
@@ -48,6 +48,8 @@ interface Payload {
   readonly file_id?: string
   readonly folder_id?: string
   readonly project_id?: string
+  /** Set when an explicit Import press started this read (0960). */
+  readonly document_id?: string
   readonly mime_type?: string
   readonly title?: string
 }
@@ -82,30 +84,59 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       const p = ((rows[0] as { pinned_config?: Payload } | undefined)?.pinned_config ??
         {}) as Payload
 
+      /*
+        A read that an Import press started says why it failed on the request itself (0960), so the page shows the reason
+        and offers the press again instead of staying pending in silence. A read nobody asked to import annotates nothing:
+        the function only touches a pending request. Never throws: a database without 0960 has nowhere to say it.
+      */
+      const importDoc = String(p.document_id ?? '').trim()
+      const failed = async (body: string): Promise<HandlerOutput> => {
+        if (importDoc !== '') {
+          try {
+            await deps.db.execute(
+              `select app.document_import_note_failure(app.job_office(${lit(job.jobId)}::uuid), ${lit(importDoc)}::uuid, ${lit(body)})`,
+            )
+          } catch {
+            // Said nowhere else: the job's own output already carries the reason.
+          }
+        }
+        return said(body, false)
+      }
+
       const fileId = String(p.file_id ?? '').trim()
       const folderId = String(p.folder_id ?? '').trim()
       const projectId = String(p.project_id ?? job.projectId ?? '').trim()
       if (fileId === '' || folderId === '' || projectId === '') {
-        return said(
-          'I need a Drive file, the folder it is in, and a project to file it under.',
-          false,
-        )
+        return failed('I need a Drive file, the folder it is in, and a project to file it under.')
       }
 
       const access = await driveAccess(deps.db, fetchImpl)
       if (!('accessToken' in access)) {
         // The scope story, in its own words. "Drive did not work" would send
         // him to look at the folder; the missing thing is a permission.
-        return said(access.reason, false)
+        return failed(access.reason)
       }
 
-      const mime = String(p.mime_type ?? 'application/octet-stream')
+      /*
+        A reference row has no mime type and a Google format is exported where a binary is downloaded, so an import
+        started from one asks Drive what the file is first. Only then: a read that already knows (drive.watch) pays nothing.
+      */
+      let mime = String(p.mime_type ?? '').trim()
+      let title = String(p.title ?? '').trim()
+      if (mime === '') {
+        const meta = await fileMeta(access, fileId, fetchImpl)
+        if (meta.error !== null || meta.mimeType === null) {
+          return failed(
+            `I could not ask Drive what that file is — ${meta.error ?? 'no type was returned'}`,
+          )
+        }
+        mime = meta.mimeType
+        if (title === '' && meta.name !== null) title = meta.name
+      }
       const got = await readFile(access, fileId, mime, fetchImpl)
       if (got.error !== null) {
-        return said(`I could not read that ${describeKind(mime)} — ${got.error}`, false)
+        return failed(`I could not read that ${describeKind(mime)} — ${got.error}`)
       }
-
-      const title = String(p.title ?? '').trim()
 
       // A PDF or Word file arrives as bytes (#419). Its text is read here, so a Drive file is searchable like an
       // uploaded one; a scan or an unreadable file leaves the text null, which is true, and the bytes are still kept.
@@ -130,7 +161,7 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       ).rows[0] as { r?: { ok?: boolean; document?: string; outcome?: string; error?: string } }
       const doc = recorded.r
       if (doc?.ok !== true || doc.document === undefined) {
-        return said(`I read the file but could not record it — ${String(doc?.error)}`, false)
+        return failed(`I read the file but could not record it — ${String(doc?.error)}`)
       }
 
       /*
@@ -172,7 +203,7 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
 
       const bytes = got.bytes
       if (bytes === null) {
-        return said('Drive returned neither text nor bytes, which should not happen.', false)
+        return failed('Drive returned neither text nor bytes, which should not happen.')
       }
 
       const path = filePath(projectId, 'drive', fileId, extensionFor(got.mime))
@@ -185,10 +216,9 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
         fetchImpl,
       )
       if (!stored.ok) {
-        return said(
+        return failed(
           `I read the file and recorded it, but storing the bytes failed — ${String(stored.error)}. ` +
             'The document is there; the file is not.',
-          false,
         )
       }
 
@@ -200,7 +230,7 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
         `)
       ).rows[0] as { r?: { ok?: boolean; error?: string; already_there?: boolean } }
       if (attached.r?.ok !== true) {
-        return said(`Stored the file but could not attach it — ${String(attached.r?.error)}`, false)
+        return failed(`Stored the file but could not attach it — ${String(attached.r?.error)}`)
       }
 
       const size = `${String(Math.max(1, Math.round(bytes.byteLength / 1024)))} KB`

@@ -4149,3 +4149,21 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
 @media (max-width: 860px) {
   [data-experience='basecamp'] .bcmod--placed [data-bc-tint] { display: none; }
 }
+
+/* A tile shows the first words of the document's extracted text when the office holds them (0960). Phone sizes need no
+   override: the page is a fixed-ratio box and the text is clipped by it. */
+/* The top clears the source mark that sits on the tile's corner. */
+[data-experience='basecamp'] .bcxpage { display: block; padding: 26px 9px 10px; }
+[data-experience='basecamp'] .bcxpagetext {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 7;
+  line-clamp: 7;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--bc-canvas);
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+[data-experience='basecamp'] .bcximporterr { color: var(--bc-text-strong); }
