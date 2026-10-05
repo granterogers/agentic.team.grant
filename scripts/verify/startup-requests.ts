@@ -102,8 +102,23 @@ type Scenario = {
   page: Page
 }
 
-async function open(office: boolean, query = '', refuse = false): Promise<Scenario> {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+async function open(
+  office: boolean,
+  query = '',
+  refuse = false,
+  sample = false,
+): Promise<Scenario> {
+  // STARTUP_PROFILE=phone runs every scenario as an iPhone-sized touch device (the request counts must not depend on the form factor).
+  const ctx = await browser.newContext(
+    process.env.STARTUP_PROFILE === 'phone'
+      ? {
+          viewport: { width: 390, height: 844 },
+          isMobile: true,
+          hasTouch: true,
+          deviceScaleFactor: 3,
+        }
+      : { viewport: { width: 1440, height: 900 } },
+  )
   const page = await ctx.newPage()
   await page.clock.install()
   const log: string[] = []
@@ -164,6 +179,7 @@ async function open(office: boolean, query = '', refuse = false): Promise<Scenar
         access_token: 'local-test-session',
         refresh_token: 'local-test-refresh',
         expires_at: Date.now() + 365 * 86400000,
+        sample: ${String(sample)},
       }))
     } catch (e) {}
   `)
@@ -263,6 +279,21 @@ try {
   check(
     (await b.page.locator('body').innerText()).includes('set up your office'),
     'the page still tells them to set up their office',
+  )
+
+  // ---- 2a. a public Sample visitor (a guest session) -----------------------------------------------------------------------
+  console.log('2a. a public Sample visitor')
+  const g = await open(true, '', false, true)
+  const cg = counts(g.log)
+  console.log(`   on load: ${String(g.log.length)} requests: ${show(g.log)}`)
+  check(
+    Object.keys(cg).length === EXPECTED_ON_LOAD.length &&
+      [...EXPECTED_ON_LOAD].every((x) => (cg[x] ?? 0) === 1),
+    `a visitor's load reads exactly the ${String(EXPECTED_ON_LOAD.length)} sections, once each (saw: ${show(g.log)})`,
+  )
+  check(
+    (await g.page.locator('body').innerText()).includes('Sample Office'),
+    'and the page says it is the Sample Office (the visitor knows where they are)',
   )
 
   // ---- 2b. a credential the office refuses --------------------------------------------------------------------------------
