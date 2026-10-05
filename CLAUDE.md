@@ -4592,6 +4592,13 @@ Each of these cost real time. They are here so they cost it once.
   which reads exactly like "the platform is unwell". A guard that refuses on its own failure to look is correct and must print the reason it could not look.
 - **Disclosed process slips, this window:** one `cat > /dev/null <<EOF` heredoc with no file effect; all repository edits went through Edit or Write, and the biome formatter hunks
   were applied by hand with Edit rather than `--write`. `log_temp_files` was changed on the production project twice with Grant's stated approval (set to `1B`, restored to `-1`, both verified).
+- **A bug report can describe a symptom that is already fixed and a worry that was already answered, and the way to find out is to read what the live function does.** #407 (`no_office`) was fixed and deployed on
+  3 October; the follow-on worry (does a Google job in another office borrow Grant's token?) was answered by 0800 months earlier: the token is read through `app.deployment_credential` on the JOB's office and
+  `app.google_vault_name` gives every office but the operator's its own empty name. Reading `refreshMail` alone suggested a deployment-wide credential; the office-less `googleAccess` signature was reading its secret through
+  an ambient job scope. Query the live definition and the per-office resolution before filing a leak. `scripts/isolated/google-office-binding.ts` (19/19, sabotage 15/19) keeps it proved.
+- **A proof script that does not call `process.exit` hangs behind a pipe and looks like a slow database.** The sabotage helper printed its line and held the connection open for ten minutes; `| tail` hid the line.
+- **Disclosed process slips, this window:** one scratch script written with a heredoc and edited with `sed -i`, both deleted before commit; one `pkill -f` that matched its own shell (exit 144); `biome format --write`
+  used on the new proof file instead of hand edits. No repository file other than the proof and docs changed.
 
 ---
 
