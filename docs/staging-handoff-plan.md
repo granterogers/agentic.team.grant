@@ -184,3 +184,13 @@ p4 has advanced to `39e2f247`; it was NOT merged.
 4. A test Vikunja server and token; Telegram test bot and Slack test workspace/app (or mark them unused).
 5. ChatGPT and Claude connector configuration against the staging MCP endpoint.
 6. Visual judgement of VIS-001 and VIS-003; approval for any merge into p4.
+
+
+## T. CHANGE OF PLAN (5 October 2026): no separate staging infrastructure
+
+Grant: no second Supabase project, no second Vercel project, no staging credentials. Everything under S above that asked for
+them is WITHDRAWN and is not a blocker. The staging tooling already built (`staging:preflight`, `staging:posture`,
+`staging:replay`, the attestation binding) is kept: it is safe, it refuses production, and it costs nothing if unused.
+
+What replaced it is `docs/testing/final-audit-2026-10-05.md`: a full local audit against the original brief, with the
+remaining real-service verifications listed as post-deployment checks rather than as a gate.
