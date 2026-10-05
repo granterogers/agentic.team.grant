@@ -187,8 +187,12 @@ type Office = {
   which verifies a person's token; `signin`, which mints links and exchanges
   refresh tokens; and the voice function, which carries a turn.
 */
-const open = async (office: Office, init = '') => {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 950 } })
+const open = async (office: Office, init = '', phone = false) => {
+  const ctx = await browser.newContext(
+    phone
+      ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }
+      : { viewport: { width: 1440, height: 950 } },
+  )
   if (init !== '') await ctx.addInitScript(init)
   const seen: string[] = []
   const good = (auth: string): boolean => office.accept.some((t) => auth === `Bearer ${t}`)
@@ -313,13 +317,26 @@ const slug = await (async (): Promise<string> => {
     (await field.getAttribute('type')) === 'email',
     (await field.getAttribute('type')) ?? '(no field)',
   )
-  check(
-    'and at least 16px, so iOS does not zoom the page on it',
-    ((await page.evaluate(
-      inPage(`const el = document.querySelector('#bc-email')
+  /*
+    16px is a property of a TOUCH device (iOS zooms the page on focus), so it is measured on one. On a desktop with a mouse
+    the sign-in strip is deliberately a thin line with a 13px field (docs.css, "quiet sign-in/out controls", Grant 4 Oct);
+    that rule is scoped to (min-width: 861px) and (pointer: fine) and never reaches a phone. The first draft of this check
+    measured the desktop field and was red when the strip was made quiet: it asserted the artefact, not the property.
+  */
+  {
+    const phone = await open({ accept: [] }, '', true)
+    await phone.page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+    await phone.page.waitForSelector('#bc-email')
+    await phone.page.waitForTimeout(500)
+    check(
+      'and at least 16px on a touch phone, so iOS does not zoom the page on it',
+      ((await phone.page.evaluate(
+        inPage(`const el = document.querySelector('#bc-email')
          return el === null ? 0 : Number.parseFloat(getComputedStyle(el).fontSize)`),
-    )) as number) >= 16,
-  )
+      )) as number) >= 16,
+    )
+    await phone.ctx.close()
+  }
   /*
     THE CORRECTION, ASSERTED.
 
