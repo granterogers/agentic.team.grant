@@ -79,7 +79,9 @@ const seeded = (slug) =>
 export const thread = (slug) => {
   const theirs = office.get(slug)
   const mine = all()[slug] ?? []
-  if (theirs === undefined) return mine.length === 0 ? seeded(slug) : mine
+  // The prototype's invented conversations are for somebody with no session. A signed-in person (a Sample visitor included)
+  // whose read has not landed or failed sees only their own messages, never another office's invented names (#426).
+  if (theirs === undefined) return mine.length === 0 && !session.signedIn() ? seeded(slug) : mine
   return [...theirs, ...mine.filter((m) => m.inflight === true)]
 }
 
@@ -129,7 +131,11 @@ export async function load(slug, projectId, token) {
   if (!projectId || !token) return null
   const began = session.epoch()
   try {
-    const r = await fetch(`${API()}?section=conversation&id=${encodeURIComponent(projectId)}`, {
+    // A visitor reads only their own thread, never the office's ordinary conversation (which is empty for a sample).
+    const url = session.isSample()
+      ? `${API()}?section=sample_conversation&id=${encodeURIComponent(projectId)}&visitor=${encodeURIComponent(session.visitorId())}`
+      : `${API()}?section=conversation&id=${encodeURIComponent(projectId)}`
+    const r = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!r.ok) return null
@@ -418,7 +424,13 @@ export async function ask(slug, text, context, token, to, also, onState) {
       page that had nowhere to reach.
     */
     if (TURN() === '') throw new Error(UNCONFIGURED)
-    const r = await fetch(`${TURN()}/turn`, {
+    /*
+      A SAMPLE VISITOR ASKS THROUGH THE OFFICE'S OWN DOOR FOR VISITORS, not the voice function. `/turn` speaks as a person
+      and refuses a guest by design (a realtime or spoken turn is a metered thing); `sample_say` is rate-limited, files the
+      question in the visitor's own thread, and answers with the job to follow, the same way a delegated turn does.
+    */
+    const guest = session.isSample()
+    const r = await fetch(guest ? API() : `${TURN()}/turn`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'application/json' },
       /*
@@ -441,16 +453,23 @@ export async function ask(slug, text, context, token, to, also, onState) {
         translate and may not decide. 0410's trigger is what drops a name that
         is real here and retired in the office, and the office says so.
       */
-      body: JSON.stringify({
-        said: text,
-        session: SESSION,
-        // The thread's project, so the office files it there and nowhere else.
-        project: projectIdOf(slug),
-        to: staffSlug(to),
-        also: (Array.isArray(also) ? also : [])
-          .map((x) => staffSlug(x))
-          .filter((x) => x !== null && x !== undefined && x !== ''),
-      }),
+      body: JSON.stringify(
+        guest
+          ? {
+              action: 'sample_say',
+              args: { p_project_id: projectIdOf(slug), p_text: text, p_visitor: session.visitorId() },
+            }
+          : {
+              said: text,
+              session: SESSION,
+              // The thread's project, so the office files it there and nowhere else.
+              project: projectIdOf(slug),
+              to: staffSlug(to),
+              also: (Array.isArray(also) ? also : [])
+                .map((x) => staffSlug(x))
+                .filter((x) => x !== null && x !== undefined && x !== ''),
+            },
+      ),
     })
     const body = await r.json()
     /*
@@ -485,10 +504,24 @@ export async function ask(slug, text, context, token, to, also, onState) {
       }
       throw new Error('This browser is not signed in to the office. Sign in and try again.')
     }
-    if (!r.ok) throw new Error(body.error ?? `the office returned ${r.status}`)
-    reply = { text: body.speak, did: body.did, job: body.job_id ?? null }
+    if (guest) {
+      // The gateway answers a refusal as { error, message } and a done thing as { result }. A limit says so in words.
+      const said = body.result ?? body
+      if (!r.ok || said.ok !== true) {
+        // Already a sentence for a person (a limit, or "create your own office"): shown as it is, not as a network fault.
+        throw Object.assign(new Error(said.error ?? body.message ?? `the office returned ${r.status}`), { plain: true })
+      }
+      reply = {
+        text: 'Your question is with the sample team. The answer will appear here in a moment.',
+        did: 'delegated',
+        job: said.job ?? null,
+      }
+    } else {
+      if (!r.ok) throw new Error(body.error ?? `the office returned ${r.status}`)
+      reply = { text: body.speak, did: body.did, job: body.job_id ?? null }
+    }
   } catch (e) {
-    reply = { text: `I could not reach the office: ${e.message}`, failed: true }
+    reply = { text: e.plain === true ? e.message : `I could not reach the office: ${e.message}`, failed: true }
   }
   settled = true
   clearTimeout(late)

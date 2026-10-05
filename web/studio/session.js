@@ -97,8 +97,8 @@ export const apiUrl = () => API
   answer that normally arrives is the function's, with a reason; the browser's deadline is the backstop for a function
   that does not answer at all. The names are the boundaries in the trace.
 */
-const BOUNDARY = { link: 'auth:link', refresh: 'auth:refresh', whoami: 'auth:whoami' }
-const DEADLINE = { link: 20_000, refresh: 16_000, whoami: 16_000 }
+const BOUNDARY = { link: 'auth:link', refresh: 'auth:refresh', whoami: 'auth:whoami', sample: 'auth:sample' }
+const DEADLINE = { link: 20_000, refresh: 16_000, whoami: 16_000, sample: 20_000 }
 
 const post = async (body, auth = '') => {
   const headers = { 'content-type': 'application/json' }
@@ -188,6 +188,8 @@ export const presentable = async () => {
           access_token: body.access_token,
           refresh_token: body.refresh_token ?? s.refresh_token,
           expires_at: Date.now() + Math.max(60, Number(body.expires_in ?? 3600)) * 1000,
+          // A visitor stays a visitor across a refresh; only signing out or in changes that.
+          ...(s.sample === true ? { sample: true } : {}),
         })
         return body.access_token
       }
@@ -215,6 +217,54 @@ export const presentable = async () => {
  * on the next request either way.
  */
 export const heldToken = () => read()?.access_token ?? ''
+
+/*
+  THE SAMPLE OFFICE (0897). A visitor with no account is given a real session for a read-only guest of the public Sample
+  Office, and this page remembers only that fact about it (`sample`), so it can say where the visitor is. What the session
+  may do is decided by the office, never by this flag: a flag that is wrong changes a banner, not what is allowed.
+*/
+export const isSample = () => read()?.sample === true
+
+/*
+  The label on a visitor's own questions, so their conversation is theirs and nobody else's. Random, kept in this browser
+  only, and cleared when they leave (signing out clears every key that is not a device preference). It is not a
+  credential: the office checks its shape and uses it to separate threads, nothing more.
+*/
+const VISITOR_KEY = 'hq.visitor'
+export const visitorId = () => {
+  try {
+    const have = localStorage.getItem(VISITOR_KEY) ?? ''
+    if (/^[a-z0-9]{24,64}$/.test(have)) return have
+    const bytes = crypto.getRandomValues(new Uint8Array(20))
+    const made = Array.from(bytes, (b) => (b % 36).toString(36)).join('') + Date.now().toString(36)
+    localStorage.setItem(VISITOR_KEY, made)
+    return made
+  } catch {
+    // Storage blocked: a label that lasts for this page only is still a label.
+    if (memoryVisitor === '') {
+      memoryVisitor = Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => (b % 36).toString(36)).join('')
+    }
+    return memoryVisitor
+  }
+}
+let memoryVisitor = ''
+
+/** Open the Sample Office: no address, no link, no password. Resolves true once the session is held. */
+export async function startSample() {
+  const { status, body } = await post({ action: 'sample' })
+  if (status >= 500 || body.reason === 'unavailable') throw unreachable('auth:sample', 0)
+  if (body.ok !== true || typeof body.access_token !== 'string' || body.access_token === '') {
+    throw new Error(String(body.said ?? 'The sample office is not open at the moment. You can still create your own office.'))
+  }
+  note('sample:start')
+  write({
+    access_token: body.access_token,
+    refresh_token: body.refresh_token ?? '',
+    expires_at: Date.now() + Math.max(60, Number(body.expires_in ?? 3600)) * 1000,
+    sample: true,
+  })
+  return true
+}
 
 /** Ask the office to email a link. It answers the same way for any address. */
 export async function askForLink(email) {

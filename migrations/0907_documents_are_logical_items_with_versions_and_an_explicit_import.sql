@@ -1,4 +1,5 @@
--- 0900 - Documents is one VIEW over every source: logical items, real versions, and an import that is only ever a press.
+-- 0907 (written as 0900; renumbered on 6 October 2026 because the public Sample's 0900 collides with it and the Sample's is
+-- already applied in production; nothing in this file changed but its number and this note) - Documents is one VIEW over every source: logical items, real versions, and an import that is only ever a press.
 --
 -- What Grant asked for (the Documents module requirements, 4 October 2026): Documents is not "what is in Supabase
 -- storage". It is a unified view over Drive references, NotebookLM material, uploads and what the team generated.

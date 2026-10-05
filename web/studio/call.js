@@ -1,5 +1,6 @@
 import { projectIdOf } from './chat.js'
 import { presented } from './office.js'
+import * as visitor from './session.js'
 /*
   The voice call, moved out of the page it is replacing.
 
@@ -533,6 +534,15 @@ const onEvent = (ev) => {
 
 export async function startCall() {
   if (onCall) return
+  /*
+    A SAMPLE VISITOR DOES NOT PLACE CALLS. A call is a metered realtime session minted for a signed-in person, and the
+    office refuses to mint one for a visitor. It is said here, before anything is asked, because the refusal below clears
+    the stored session, which would sign the visitor out of the sample in the middle of looking around.
+  */
+  if (visitor.isSample()) {
+    say('Calling the team needs your own office. Create one to try it for real.')
+    return
+  }
   onCall = true
   const mine = ++gen
   // True the moment this connect stops being the current one — because the

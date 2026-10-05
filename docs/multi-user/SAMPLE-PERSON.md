@@ -3,6 +3,10 @@
 Written 3 October 2026. This supersedes the "design only" status of `SAMPLE-ACCOUNT-DESIGN.md` for what is built; that
 document remains the reference for what a later, richer sample could add.
 
+> **Not the public Sample.** On 5 October 2026 a separate, public, read-only Sample Office was added for logged-out visitors
+> (`docs/multi-user/PUBLIC-SAMPLE.md`, office kind `sample`, guest members, migration 0897). The Sample Person below is still the
+> way to test what an ordinary signed-in customer sees; the two share no data.
+
 ## What it is
 
 The Sample Person is **not a demo mode**. It is the existing P4 second person: a real `auth.users` login with its own

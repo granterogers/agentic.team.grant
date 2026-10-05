@@ -1,4 +1,5 @@
--- 0897 - every dashboard project has its own calendar (UX overnight, project calendars: backend).
+-- 0906 (written as 0897; renumbered on 6 October 2026 because the public Sample's 0897 is already applied in production and an
+-- applied migration is immutable; nothing in this file changed but its number and this note) - every dashboard project has its own calendar (UX overnight, project calendars: backend).
 --
 -- A dashboard project is a row in public.projects. This gives each one a calendar:
 --

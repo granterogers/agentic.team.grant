@@ -46,6 +46,8 @@
   can be READ by a check rather than believed.
 */
 
+import * as session from '../session.js'
+
 /** How loud, on a 0..1 scale, a recording must get to be worth sending. */
 const HEARD_FLOOR = 0.035
 
@@ -273,6 +275,10 @@ export const cancel = () => {
  * does not send anything to anybody.
  */
 export async function words(blob, { endpoint, token, vocabulary = [] }) {
+  // The office will not transcribe for a sample visitor (a speech service is metered), so do not ask it to.
+  if (session.isSample()) {
+    throw new Error('Voice notes need your own office. Create one and the team will listen.')
+  }
   const form = new FormData()
   const ext = blob.type.includes('mp4')
     ? 'mp4'

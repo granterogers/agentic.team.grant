@@ -10,6 +10,8 @@
   few places that need a composed control and says so by its name.
 */
 
+import { isSample } from './session.js'
+
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
@@ -72,6 +74,11 @@ export function frame({ groups, current, pane, tabTitle, lead, body, backLabel }
       <div class="stg-heading">
         <h1>Settings</h1>
         <p class="stg-scope">Applies to your whole Team HQ. For one project, open it and choose Project settings.</p>
+        ${
+          isSample()
+            ? '<p class="stg-scope"><b>You are looking at the Sample Office.</b> Everything here is shown so you can see what it does; changes are not saved, and no service is connected. Create your own office to connect Google, Slack, Telegram or Notion.</p>'
+            : ''
+        }
       </div>
     </header>
     <div class="stg-body">

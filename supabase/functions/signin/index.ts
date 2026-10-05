@@ -288,6 +288,114 @@ Deno.serve(async (request: Request): Promise<Response> => {
     )
   }
 
+  /*
+    EXPLORE THE SAMPLE OFFICE: a visitor with no account (0897).
+
+    Takes no credential and no address. It asks the database whose login the public Sample Office is (answered only while
+    the office is sealed, so a visitor can never be handed an office that is open for seeding), has Auth make a one-time
+    link for that login, and spends the link here, server side, so the visitor receives a session and never the link.
+
+    What that session is worth is decided at the gateway, not here: its member is a guest, which may read the Sample
+    Office and ask its team a question, and nothing else. Nothing in this branch can name any other login, and nothing
+    in the request is read except the action.
+  */
+  if (action === 'sample') {
+    const door = await upstream(`${DB_URL}/rest/v1/rpc/sample_login`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    }).catch(() => null)
+    if (door === null || !door.ok) {
+      return json(
+        {
+          ok: false,
+          reason: 'unavailable',
+          said: 'The sample office could not be opened just now. Try again in a moment.',
+        },
+        503,
+        request,
+      )
+    }
+    const asked = (await door.json().catch(() => ({}))) as { ok?: boolean; email?: string }
+    if (asked.ok !== true || typeof asked.email !== 'string' || asked.email === '') {
+      return json(
+        {
+          ok: false,
+          reason: 'closed',
+          said: 'The sample office is not open at the moment. You can still create your own office.',
+        },
+        200,
+        request,
+      )
+    }
+    const made = await upstream(`${DB_URL}/auth/v1/admin/generate_link`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ type: 'magiclink', email: asked.email }),
+    }).catch(() => null)
+    const link =
+      made?.ok === true
+        ? ((await made.json().catch(() => ({}))) as {
+            hashed_token?: string
+            properties?: { hashed_token?: string }
+          })
+        : {}
+    const hashed = link.hashed_token ?? link.properties?.hashed_token ?? ''
+    if (hashed === '') {
+      return json(
+        {
+          ok: false,
+          reason: 'unavailable',
+          said: 'The sample office could not be opened just now. Try again in a moment.',
+        },
+        503,
+        request,
+      )
+    }
+    const spent = await upstream(`${DB_URL}/auth/v1/verify`, {
+      method: 'POST',
+      headers: { apikey: ANON, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'magiclink', token_hash: hashed }),
+    }).catch(() => null)
+    const session =
+      spent?.ok === true
+        ? ((await spent.json().catch(() => ({}))) as {
+            access_token?: string
+            refresh_token?: string
+            expires_in?: number
+          })
+        : {}
+    if (typeof session.access_token !== 'string' || session.access_token === '') {
+      return json(
+        {
+          ok: false,
+          reason: 'unavailable',
+          said: 'The sample office could not be opened just now. Try again in a moment.',
+        },
+        503,
+        request,
+      )
+    }
+    return json(
+      {
+        ok: true,
+        access_token: session.access_token,
+        refresh_token: session.refresh_token ?? '',
+        expires_in: session.expires_in ?? 3600,
+      },
+      200,
+      request,
+    )
+  }
+
   if (action === 'refresh') {
     const refresh = String(body.refresh_token ?? '')
     if (refresh === '') return json({ error: 'refresh_token' }, 400, request)

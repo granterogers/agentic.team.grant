@@ -7,6 +7,28 @@
 > the local replica. Inventory, switches, residuals: `docs/production-access-guard.md`; manifest `docs/testing/production-access.json`;
 > tests `tests/safety/`. Every command that touches production now needs the flag on its own command line, including the ones in
 > "Asking the office about itself" in `CLAUDE.md` (`npm run q`, `check:*`, `measure`, ...), which that file does not yet say.
+
+> ## 2026-10-05 (later) - SAMPLE SHOWCASE LAYER (branch `claude/multi-user-p4`) - PARTIAL, PAUSED ON PLATFORM HEALTH
+>
+> The Sample now shows the TEAM, not only a project list: real delegation (Claire to Grace to Daniel), real agent-made work (a
+> status report, a caption, a costs report), a tool request waiting for a decision (Settings, Requests), two recorded decisions,
+> a Monday automation, a date-keeping daily job. Migrations **0899 to 0905** (0900 also fixes a latent `''::uuid` defect that
+> broke hand-off delegation for everybody; #428 was a database cast, not a worker defect). Page `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x`
+> (My Tasks project name, #426 failed-read, Settings notice; rollback chain in PUBLIC-SAMPLE.md). Nothing held was deployed.
+> Account, limits and the capability matrix: `docs/multi-user/PUBLIC-SAMPLE.md`. **Paused:** Supabase auth, rest and storage read
+> UNHEALTHY and sign-in answered 503, so the final desktop and phone walkthroughs (`npm run sample:public-showcase-ui -- --only=...`)
+> were NOT completed on the final build; run them when the health API reads healthy. Open: #425 (the team's identity and its
+> own Activity), #424 (dates: solved for tasks by 0902; close once the daily job has been seen to run).
+>
+> ## 2026-10-05 - PUBLIC SAMPLE OFFICE LIVE (branch `claude/multi-user-p4`)
+>
+> A logged-out visitor can Explore a read-only Sample Office (a made-up café) with no email, link or password, and still chat
+> with the team under caps (6/hour, 15/day per visitor, 250/day overall), with no voice and no outside reach. Migrations 0897,
+> 0898; `hq-api` v891; `signin` v126; page `dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3` (original `dpl_8QwvvES1oRridjeokGzu2MMGdEYm`).
+> Held Slack/polish work was NOT deployed. Production acceptance passed on desktop and phone, including one real chat turn and a
+> real-person sign-in/sign-out round trip. Operating it: `npm run sample:public`, `sample:public-ui`, `sample:public-transition`.
+> Full account and rollback points: `docs/multi-user/PUBLIC-SAMPLE.md`. Follow-ups: #424 (dates age), #425 (sample-aware worker
+> identity, held), #426 (failed read shows prototype names).
 >
 > ## 2026-10-04 (later) - TELEGRAM SELF-SERVICE, DELIVERY OFFICE, TALK, GATE (branch `claude/multi-user-p4`)
 >
