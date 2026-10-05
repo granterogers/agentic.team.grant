@@ -11,7 +11,7 @@
  * the problem the predicate raised. A control that raised nothing fails the whole check: a clean result from a
  * predicate that cannot fire says nothing.
  */
-import '../src/safety/require-production-checks.ts'
+import '../src/safety/require-production-unless-replica.ts'
 import { execFileSync } from 'node:child_process'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import {
@@ -144,7 +144,11 @@ export const controls = (
     raised: added({ ...cat, officeParams: [...cat.officeParams, 'hq_anything(p_office)'] }),
   })
 
-  const carrier = cat.officeColumns[0]?.table
+  // A carrier by CLASS, not whichever table the catalogue happens to list first (that was `offices` on one database and a
+  // carrier on another, and the predicate only looks at carriers).
+  const carrier = cat.officeColumns.find(
+    (c) => manifest.tables[c.table]?.class === 'OFFICE_CARRIER',
+  )?.table
   if (carrier !== undefined)
     out.push({
       name: `put the compatibility bridge back on ${carrier}`,
