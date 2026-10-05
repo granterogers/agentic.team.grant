@@ -911,8 +911,10 @@ export const restorePostit = (slug, note) => {
   const d = doc(slug)
   if (d.postits.some((n) => n.id === note.id)) return false
   const gone = { ...d.gone }
+  // Strictly newer than the removal it undoes, even inside the same millisecond.
+  const at = Math.max(Date.now(), (gone[note.id] ?? 0) + 1)
   delete gone[note.id]
-  commit(slug, { ...d, postits: [...d.postits, cleanPostit({ ...note, at: Date.now() })], gone, seeded: true })
+  commit(slug, { ...d, postits: [...d.postits, cleanPostit({ ...note, at })], gone, seeded: true })
   return true
 }
 
