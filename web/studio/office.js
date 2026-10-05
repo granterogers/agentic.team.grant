@@ -290,9 +290,13 @@ export async function readFile(section, id, extra) {
     if (v !== undefined && v !== null && v !== '') parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
   }
   const began = session.epoch()
-  const r = await fetch(`${API}?${parts.join('&')}`, {
-    headers: { Authorization: `Bearer ${await toPresent()}` },
-  })
+  // The deadline covers the exchange up to the headers; a large file's body is read afterwards (src/net.js).
+  const r = await bounded(
+    `office:file:${section}`,
+    `${API}?${parts.join('&')}`,
+    { headers: { Authorization: `Bearer ${await toPresent()}` } },
+    60_000,
+  )
   if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
   if (r.status === 401) {
     session.forget()
