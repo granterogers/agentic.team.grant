@@ -1,5 +1,10 @@
 # Efficiency run, 5 to 6 October 2026: what was changed, measured, rejected and left
 
+> **Numbers superseded 6 October 2026 by `efficiency-reconciliation-2026-10-06.md`.** The measurements below were taken on a replica whose
+> `jobs` heap was 14 MB; production's is about 94 MB. The reconciled re-measurement (production-sized heap, on the product base completed with
+> the public Sample) is authoritative, and it did not reproduce the worker idle-pass saving (migration 1026, not carried). The method, the
+> root cause and the rejections stand.
+
 **NO PRODUCTION CHANGES WERE MADE.** Nothing here is applied, deployed or configured in production. Migrations 1023 to 1028 were
 applied to the isolated local replica only. No production query was run in this run.
 
