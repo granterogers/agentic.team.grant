@@ -13610,6 +13610,10 @@ const bcContext = {
     and closing is a repaint rather than a navigation - which is what makes
     closing return "naturally to the underlying project homepage".
   */
+  /* An object (a tile, a row) that is about to become a detailed view remembers where it was, so the view grows from it. */
+  rememberOrigin: (el) => {
+    bcExpand.rememberEl(el)
+  },
   openExpanded: (id) => {
     bcExpand.remember(id)
     state.bcExpanded = id

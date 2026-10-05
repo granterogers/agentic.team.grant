@@ -289,7 +289,13 @@ await p2.route('**/*', async (route) => {
     calls.push({ action: body.action, args: body.args })
     const result =
       body.action === 'document_rollback'
-        ? { ok: true, version: 5, restored_from_version: 3, state: 'approved', said: 'Restored v3 as v5 (approved). The draft that was waiting is kept in the history.' }
+        ? {
+            ok: true,
+            version: 5,
+            restored_from_version: 3,
+            state: 'approved',
+            said: 'Restored v3 as v5 (approved). The draft that was waiting is kept in the history.',
+          }
         : { ok: true, state: 'pending', note: 'Requested.' }
     return route.fulfill({
       status: 200,
@@ -331,7 +337,13 @@ await p2.route('**/*', async (route) => {
               state: 'archived',
               can_roll_back_to: true,
             },
-            { document_id: 'd1', version: 3, is_current: true, state: 'approved', can_roll_back_to: true },
+            {
+              document_id: 'd1',
+              version: 3,
+              is_current: true,
+              state: 'approved',
+              can_roll_back_to: true,
+            },
             {
               document_id: 'd1b',
               version: 2,
@@ -463,12 +475,15 @@ check(
 await p2.waitForSelector('[data-bc-rolledsay]')
 check(
   'after a rollback the page says what happened: "Restored v3 as v5 (approved)" and that the waiting draft is kept',
-  /Restored v3 as v5 \(approved\)/.test((await p2.locator('[data-bc-rolledsay]').textContent()) ?? '') &&
-    /kept in the history/.test((await p2.locator('[data-bc-rolledsay]').textContent()) ?? ''),
+  /Restored v3 as v5 \(approved\)/.test(
+    (await p2.locator('[data-bc-rolledsay]').textContent()) ?? '',
+  ) && /kept in the history/.test((await p2.locator('[data-bc-rolledsay]').textContent()) ?? ''),
 )
 check(
   'a version that was made by returning says which one it was restored from',
-  (await p2.locator('.bcversion', { hasText: 'v5' }).first().textContent())?.includes('restored from v3') === true,
+  (await p2.locator('.bcversion', { hasText: 'v5' }).first().textContent())?.includes(
+    'restored from v3',
+  ) === true,
 )
 await p2.screenshot({ path: '.out/ux-docs-rollback.png' })
 /* a requested import whose fetch failed says why and offers the press again */
@@ -488,7 +503,12 @@ check(
     recordHead.includes('drive 404: File not found'),
   recordHead,
 )
-check('and the press is offered again', (await p2.locator('[data-bc-docimport]').count()) === 1)
+await p2.waitForSelector('[data-bc-docimport]', { timeout: 5000 }).catch(() => undefined)
+/* a closing view leaves an aria-hidden picture of itself for a moment (the spatial ghost); it is not a second button */
+check(
+  'and the press is offered again',
+  (await p2.locator('[data-bc-docimport]:not([aria-hidden=true] *)').count()) === 1,
+)
 await p2.screenshot({ path: '.out/ux-docs-import-failed-1440.png' })
 const before = calls.filter((c) => c.action === 'document_import').length
 await p2.locator('[data-bc-docimport]').click()

@@ -339,7 +339,10 @@ try {
   )
   check(
     'rollback writes the old content as a NEW version (v5: v1..v4 exist)',
-    rb.ok === true && rb.version === 5 && rb.rolled_back_to === v1 && rb.restored_from_version === 1,
+    rb.ok === true &&
+      rb.version === 5 &&
+      rb.rolled_back_to === v1 &&
+      rb.restored_from_version === 1,
     JSON.stringify(rb),
   )
   const v4 = String(rb.document_id)
@@ -411,11 +414,17 @@ try {
       JSON.stringify(item(lb, r3)?.pending_version),
     )
     const eventsBefore = Number(
-      (await q(`select count(*)::int n from public.events where action_type = 'document.rolled_back'`))[0]?.n,
+      (
+        await q(
+          `select count(*)::int n from public.events where action_type = 'document.rolled_back'`,
+        )
+      )[0]?.n,
     )
     // The suite's operator is named verify-operator, which the Activity reader (rightly) treats as harness traffic. For
     // the one question "does Activity show a rollback" the operator is a real-looking person; this all rolls back.
-    await q(`update public.office_members set owner_key = 'grant-proof' where owner_key = 'verify-operator'`)
+    await q(
+      `update public.office_members set owner_key = 'grant-proof' where owner_key = 'verify-operator'`,
+    )
     const back = await call(
       `app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(r3)}::uuid, null, 'teamhq')`,
     )
@@ -439,7 +448,10 @@ try {
     const a5 = after.find((x) => x.id === v5)
     check(
       'v3 is NOT mutated (same content and fingerprint; only archived and linked to v5)',
-      a3?.content === r3before?.content && a3?.fp === r3before?.fp && a3?.sup === v5 && a3?.state === 'archived',
+      a3?.content === r3before?.content &&
+        a3?.fp === r3before?.fp &&
+        a3?.sup === v5 &&
+        a3?.state === 'archived',
     )
     check(
       'v4 is NOT deleted or changed: still a draft with its own content',
@@ -458,7 +470,9 @@ try {
         byNo(3).document_id === r3 &&
         byNo(4).document_id === r4 &&
         byNo(5).document_id === v5,
-      JSON.stringify(vz.versions.map((x: { version: number; state: string }) => [x.version, x.state])),
+      JSON.stringify(
+        vz.versions.map((x: { version: number; state: string }) => [x.version, x.state]),
+      ),
     )
     check(
       'provenance: v5 says it was restored from v3, how it was made and by which door',
@@ -483,7 +497,8 @@ try {
         item(lc, v5)?.current_state === 'approved' &&
         item(lc, v5)?.pending_version?.version === 4 &&
         item(lc, r3) === undefined &&
-        (lc.documents as { title: string }[]).filter((d) => d.title === 'Rollback subject').length === 1,
+        (lc.documents as { title: string }[]).filter((d) => d.title === 'Rollback subject')
+          .length === 1,
     )
     const ev = await q(
       `select actor, trigger, rationale_summary r, after_state a from public.events where action_type = 'document.rolled_back' and rationale_summary like '%restored from v3 as v5%' limit 1`,
@@ -491,13 +506,20 @@ try {
     check(
       'Activity/audit records the rollback in the ledger (document.rolled_back, who, what was restored)',
       Number(
-        (await q(`select count(*)::int n from public.events where action_type = 'document.rolled_back'`))[0]?.n,
-      ) === eventsBefore + 1 &&
+        (
+          await q(
+            `select count(*)::int n from public.events where action_type = 'document.rolled_back'`,
+          )
+        )[0]?.n,
+      ) ===
+        eventsBefore + 1 &&
         /restored from v3 as v5/.test(String(ev[0]?.r)) &&
         /waiting draft is kept/.test(String(ev[0]?.r)),
       JSON.stringify(ev[0]),
     )
-    const proj = String((await q(`select project_id::text p from public.projects where slug = ${lit(SLUG)}`))[0]?.p)
+    const proj = String(
+      (await q(`select project_id::text p from public.projects where slug = ${lit(SLUG)}`))[0]?.p,
+    )
     const act = await call(`app.studio_activity(${lit(proj)}::uuid, 30)`)
     check(
       'and the project Activity feed shows it (category: documents)',
@@ -518,13 +540,16 @@ try {
     const lone = await ins({ project: PA, title: 'Rollback lone', content: LONG('lone') })
     check(
       'returning to the current version when no draft waits is still refused',
-      (await call(`app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(lone)}::uuid)`)).ok === false,
+      (await call(`app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(lone)}::uuid)`)).ok ===
+        false,
     )
     check(
-      'another office cannot return to this office\'s version',
+      "another office cannot return to this office's version",
       (await call(`app.hq_document_rollback(${lit(OTHER)}::uuid, ${lit(r2)}::uuid)`)).ok === false,
     )
-    const back2 = await call(`app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(r2)}::uuid, 'older still', 'telegram')`)
+    const back2 = await call(
+      `app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(r2)}::uuid, 'older still', 'telegram')`,
+    )
     check(
       'returning to an OLDER version (v2) makes v6; v5 stays in history; v4 still waits',
       back2.ok === true &&

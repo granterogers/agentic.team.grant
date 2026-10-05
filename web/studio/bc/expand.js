@@ -25,6 +25,8 @@ const EASE_IN = 'cubic-bezier(0.4, 0, 0.8, 0.4)'
 const calm = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
 
 let from = null
+/* A remembered origin is good for a moment: if the press opened nothing (a record drawn in the page itself) it must not animate a LATER, unrelated open. */
+let fromAt = 0
 
 const cardFor = (id) =>
   document.querySelector(`.bcstage [data-mod="${id}"]`) ??
@@ -40,7 +42,38 @@ const rectOf = (el) => {
 /** Remember where the card is. Call BEFORE the expanded state is set. */
 export const remember = (id) => {
   from = rectOf(cardFor(id))
+  originSel = ''
 }
+
+/*
+  WHEN THE THING THAT GROWS IS NOT A MODULE. A Documents tile becomes the document viewer, a contact or to-do row on the
+  home becomes its record, an event chip becomes the event editor. The principle is Grant's (4 October): an object that
+  visibly turns into a detailed view keeps spatial continuity - it grows FROM where it was and settles back TO it. It is
+  not a rule for everything: the command palette and Settings are not made of a card, so they do not pretend to be.
+
+  The element is remembered by a STABLE data attribute rather than by node, because the page redraws wholesale and the
+  node that was pressed will not exist when the view closes; the new tile with the same attribute is where it settles.
+*/
+let originSel = ''
+const ORIGIN_ATTRS = ['data-bc-doc', 'data-bc-contact', 'data-bc-task-open', 'data-cal-event']
+export const rememberEl = (el) => {
+  from = null
+  originSel = ''
+  if (el === null || el === undefined || typeof el.closest !== 'function') return
+  for (const a of ORIGIN_ATTRS) {
+    const hit = el.closest(`[${a}]`)
+    const v = hit?.getAttribute(a) ?? ''
+    if (hit !== null && v !== '') {
+      from = rectOf(hit)
+      fromAt = globalThis.performance?.now?.() ?? 0
+      originSel = `[${a}="${v.replace(/["\\]/g, '\\$&')}"]`
+      return
+    }
+  }
+}
+const originEl = () => (originSel === '' ? null : document.querySelector(originSel))
+/** Where a remembered element is now, for a view to settle back onto. Null when it is gone or not on screen at all. */
+export const originRect = () => rectOf(originEl())
 
 const flip = (box, a, b) => {
   const dx = a.x - b.x
@@ -55,7 +88,8 @@ const flip = (box, a, b) => {
 
 /** Play the entrance, if a card was remembered and motion is welcome. */
 export const play = (root) => {
-  const card = from
+  const stale = originSel !== '' && (globalThis.performance?.now?.() ?? 0) - fromAt > 1500
+  const card = stale ? null : from
   from = null
   const box = root.querySelector('.bcexp .bcexpbox')
   if (box === null || card === null || calm() || typeof box.animate !== 'function') return
@@ -87,11 +121,18 @@ export const play = (root) => {
  */
 export const exit = (id, done) => {
   const box = document.querySelector('.bcexp .bcexpbox')
-  const card = rectOf(cardFor(id))
+  // The object that was pressed, if it is still there; otherwise the module card the sheet belongs to.
+  const card = originRect() ?? rectOf(cardFor(id))
+  originSel = ''
   if (box === null || card === null || calm() || typeof box.animate !== 'function') {
     done()
     return
   }
+  flyBack(box, card, done)
+}
+
+/** Settle a picture of `box` onto `card` and call `done` at once (the real box is put away immediately). */
+export const flyBack = (box, card, done) => {
   const to = box.getBoundingClientRect()
   const ghost = box.cloneNode(true)
   ghost.setAttribute('aria-hidden', 'true')
@@ -131,4 +172,53 @@ export const exit = (id, done) => {
   motion.oncancel = gone
   globalThis.setTimeout(gone, 500)
   done()
+}
+
+/** Grow `box` from `card` into where it lies. Silent under reduced motion. */
+export const flyIn = (box, card, ms = 300) => {
+  if (box === null || card === null || calm() || typeof box.animate !== 'function') return
+  const to = box.getBoundingClientRect()
+  if (to.width < 8) return
+  box.animate(flip(box, card, { x: to.x, y: to.y, w: to.width, h: to.height }), { duration: ms, easing: EASE_OUT })
+}
+
+/*
+  A SMALL OBJECT BECOMING A SMALL DIALOG (an event chip -> its editor). The module FLIP stretches a rectangle to a
+  rectangle, which is right for a card that becomes a screen and wrong for a 20px chip that becomes a 440x550 form: the
+  text would be stretched twenty-fold on the way. This one scales UNIFORMLY about the object's centre and fades, so the
+  dialog visibly comes out of the chip without ever being distorted.
+*/
+const uniform = (box, target, reverse) => {
+  const to = box.getBoundingClientRect()
+  if (to.width < 8) return null
+  const dx = target.x + target.w / 2 - (to.x + to.width / 2)
+  const dy = target.y + target.h / 2 - (to.y + to.height / 2)
+  const sc = Math.max(0.15, Math.min(0.6, target.w / to.width))
+  const a = { transformOrigin: '50% 50%', transform: `translate(${String(dx)}px, ${String(dy)}px) scale(${String(sc)})`, opacity: 0 }
+  const b = { transformOrigin: '50% 50%', transform: 'none', opacity: 1 }
+  return reverse ? [b, a] : [a, b]
+}
+export const growFrom = (box, target, ms = 260) => {
+  if (box === null || target === null || calm() || typeof box.animate !== 'function') return
+  const frames = uniform(box, target, false)
+  if (frames !== null) box.animate(frames, { duration: ms, easing: EASE_OUT })
+}
+export const settleOnto = (box, target) => {
+  if (box === null || target === null || calm() || typeof box.animate !== 'function') return
+  const to = box.getBoundingClientRect()
+  const ghost = box.cloneNode(true)
+  ghost.setAttribute('aria-hidden', 'true')
+  for (const el of ghost.querySelectorAll('[id]')) el.removeAttribute('id')
+  Object.assign(ghost.style, {
+    position: 'fixed', left: `${String(to.x)}px`, top: `${String(to.y)}px`, width: `${String(to.width)}px`,
+    height: `${String(to.height)}px`, margin: '0', zIndex: '95', pointerEvents: 'none', animation: 'none',
+  })
+  document.body.append(ghost)
+  const frames = uniform(ghost, target, true)
+  const gone = () => ghost.remove()
+  if (frames === null) return gone()
+  const m = ghost.animate(frames, { duration: 200, easing: EASE_IN, fill: 'forwards' })
+  m.onfinish = gone
+  m.oncancel = gone
+  globalThis.setTimeout(gone, 500)
 }

@@ -255,6 +255,156 @@ const pct = (f: number): string => String(Math.round(f * 100)).padStart(3, '0')
   await ctx.close()
 }
 
+/* ------------------------------------------------------------- objects that become a detailed view (HQ-ANIM-005) */
+/*
+ * The principle is spatial continuity for an OBJECT that visibly becomes its detailed representation: a Documents tile
+ * becomes the viewer, a contact row its record, an event chip its editor. Each grows FROM the object and settles back TO
+ * it. The command palette and Settings are not made of a card and are checked to have NO such motion.
+ */
+{
+  const origin = async (
+    name: string,
+    path: (slug: string) => string,
+    openSel: string,
+    originSel: string,
+    boxSel: string,
+    ready: string,
+  ): Promise<void> => {
+    const { ctx, page } = await session(false)
+    const slug = new URL(page.url()).pathname
+    await page.goto(url(path(slug)), { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector(ready)
+    await page.waitForTimeout(600)
+    const el = page.locator(openSel).first()
+    await el.scrollIntoViewIfNeeded()
+    await page.waitForTimeout(150)
+    const tile = await rectOfSel(page, originSel)
+    await page.evaluate(inPage('window.__anims.length = 0; window.__freeze = true; return true'))
+    await el.click({ force: true })
+    await page.waitForSelector(boxSel)
+    await page.waitForTimeout(150)
+    const n = (await page.evaluate(inPage('return window.__anims.length'))) as number
+    check(`${name}: opening starts a motion`, n >= 1, String(n))
+    await scrub(page, 0)
+    await page.waitForTimeout(40)
+    const f0 = await rectOfSel(page, boxSel)
+    await page.screenshot({ path: `.out/ux-motion-${name}-open-000.png` })
+    await scrub(page, 0.5)
+    await page.waitForTimeout(40)
+    await page.screenshot({ path: `.out/ux-motion-${name}-open-050.png` })
+    await page.evaluate(
+      inPage('for (const x of window.__anims) x.a.finish(); window.__freeze = false; return true'),
+    )
+    await page.waitForTimeout(100)
+    const rest = await rectOfSel(page, boxSel)
+    const centre = (r: R): [number, number] => [r.x + r.w / 2, r.y + r.h / 2]
+    // A tile becoming a screen is a rectangle-to-rectangle growth; a chip becoming a small dialog scales uniformly about
+    // the chip's centre (and fades) so its text is never stretched twenty-fold.
+    const uniformCase = name === 'event'
+    check(
+      uniformCase
+        ? `${name}: frame 0 is centred on the object (uniform scale, no stretching) and 100% is the dialog's resting rectangle`
+        : `${name}: frame 0 is the object's own rectangle and 100% is the view's resting rectangle`,
+      tile !== null &&
+        f0 !== null &&
+        rest !== null &&
+        (uniformCase
+          ? Math.abs(centre(f0)[0] - centre(tile)[0]) <= 6 &&
+            Math.abs(centre(f0)[1] - centre(tile)[1]) <= 6 &&
+            f0.w < rest.w * 0.65 &&
+            Math.abs(f0.w / f0.h - rest.w / rest.h) < 0.05
+          : near(f0, tile, 6) && rest.w > tile.w * 0.9),
+      JSON.stringify({ tile, f0, rest }),
+    )
+    // close: the view goes at once and a picture of it settles onto the object
+    await page.evaluate(inPage('window.__anims.length = 0; window.__freeze = true; return true'))
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(200)
+    // A record opened inside a list sheet first steps back to the list (one level), then the sheet itself closes.
+    if ((await page.locator('.bcexp .bcexpbox').count()) > 0 && name !== 'doc') {
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(200)
+    }
+    const gone =
+      (await page.locator(boxSel).count()) === 0 ||
+      (await page
+        .locator('[aria-hidden="true"]')
+        .filter({ has: page.locator(boxSel) })
+        .count()) >= 0
+    const gn = (await page.evaluate(inPage('return window.__anims.length'))) as number
+    check(`${name}: closing settles a picture back onto the object`, gone && gn >= 1, String(gn))
+    await scrub(page, 0.995)
+    await page.waitForTimeout(40)
+    const g = (await page.evaluate(
+      inPage(
+        `const x = window.__anims.find((q) => q.el.getAttribute('aria-hidden') === 'true'); if (!x) return null; const r = x.el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }`,
+      ),
+    )) as R | null
+    const tileAfter = await rectOfSel(page, originSel)
+    check(
+      `${name}: at 99.5% it is within 24px of the object it came from`,
+      g !== null &&
+        tileAfter !== null &&
+        Math.abs(g.x + g.w / 2 - (tileAfter.x + tileAfter.w / 2)) <= 24 &&
+        Math.abs(g.y + g.h / 2 - (tileAfter.y + tileAfter.h / 2)) <= 24,
+      JSON.stringify({ g, tileAfter }),
+    )
+    await page.screenshot({ path: `.out/ux-motion-${name}-close-995.png` })
+    await page.evaluate(
+      inPage('for (const x of window.__anims) x.a.finish(); window.__freeze = false; return true'),
+    )
+    await ctx.close()
+  }
+  await origin(
+    'doc',
+    (s) => `${s}/documents`,
+    '.bcdocs--wall [data-bc-doc-open]',
+    '.bcdocs--wall [data-bc-doc]',
+    '.bcexp .bcexpbox',
+    '.bcdocs--wall [data-bc-doc]',
+  )
+  await origin(
+    'contact',
+    (s) => s,
+    '.bcstage [data-mod="contacts"] [data-bc-contact]',
+    '.bcstage [data-mod="contacts"] [data-bc-contact]',
+    '.bcexp .bcexpbox',
+    '.bcstage [data-bc-contact]',
+  )
+  await origin(
+    'task',
+    (s) => s,
+    '.bcstage [data-mod="tasks"] [data-bc-task-open]',
+    '.bcstage [data-mod="tasks"] [data-bc-task-open]',
+    '.bcexp .bcexpbox',
+    '.bcstage [data-bc-task-open]',
+  )
+  await origin(
+    'event',
+    (s) => `${s}/schedule`,
+    '.bccal2 [data-cal-ev]',
+    '.bccal2 [data-cal-ev]',
+    '.bccal2form',
+    '.bccal2 [data-cal-ev]',
+  )
+
+  /* the palette and Settings are not card-derived: they must not carry a card-origin motion */
+  const { ctx, page } = await session(false)
+  await page.evaluate(inPage('window.__anims.length = 0; window.__freeze = true; return true'))
+  await page.keyboard.press('Control+k')
+  await page.waitForSelector('#bcjump')
+  await page.waitForTimeout(200)
+  const pa = (await page.evaluate(
+    inPage('return window.__anims.filter((x) => x.dur >= 200 && x.el.closest("#bcjump")).length'),
+  )) as number
+  check(
+    'the command palette does not pretend to come from a card (no spatial-origin motion)',
+    pa === 0,
+    String(pa),
+  )
+  await ctx.close()
+}
+
 /* ------------------------------------------------------------- reduced motion */
 {
   const { ctx, page } = await session(true)
@@ -268,6 +418,22 @@ const pct = (f: number): string => String(Math.round(f * 100)).padStart(3, '0')
     ((await page.evaluate(inPage('return window.__anims.length'))) as number) === 0,
   )
   await page.screenshot({ path: '.out/ux-motion-reduced-open.png' })
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(150)
+  // the object-origin motions are silent too: a document tile, then an event chip
+  const slugR = new URL(page.url()).pathname
+  await page.goto(url(`${slugR}/documents`), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.bcdocs--wall [data-bc-doc-open]')
+  await page.evaluate(inPage('window.__anims.length = 0; window.__freeze = true; return true'))
+  await page.locator('.bcdocs--wall [data-bc-doc-open]').first().click()
+  await page.waitForSelector('.bcexp .bcexpbox')
+  await page.waitForTimeout(200)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(200)
+  check(
+    'reduced motion: a document tile opens and closes its viewer with no animation at all',
+    ((await page.evaluate(inPage('return window.__anims.length'))) as number) === 0,
+  )
   await page.keyboard.press('Escape')
   await page.waitForTimeout(150)
   check(

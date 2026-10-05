@@ -48,6 +48,7 @@
 */
 
 import { act, canWrite, read } from '../office.js'
+import { growFrom, settleOnto } from './expand.js'
 import { esc } from './parts.js'
 import * as todos from './todos.js'
 
@@ -645,7 +646,19 @@ const minOfInput = (v) => {
 }
 
 let dialog = null
+/* The chip an editor grew from (HQ-ANIM-005): the editor settles back onto it when it closes. A New-event press has no chip. */
+let dialogOrigin = ''
+const chipRect = (sel) => {
+  const el = sel === '' ? null : document.querySelector(sel)
+  if (el === null) return null
+  const r = el.getBoundingClientRect()
+  return r.width < 8 || r.height < 8 ? null : { x: r.x, y: r.y, w: r.width, h: r.height }
+}
 const closeDialog = () => {
+  const form = dialog?.querySelector('.bccal2form') ?? null
+  const target = chipRect(dialogOrigin)
+  dialogOrigin = ''
+  if (form !== null && target !== null) settleOnto(form, target)
   dialog?.remove()
   dialog = null
   document.removeEventListener('keydown', onDialogKey, true)
@@ -658,8 +671,10 @@ const onDialogKey = (e) => {
 }
 
 /** The event editor: a dialog on the body, so no module's clipping can hide it. */
-const openEditor = (p, existing, seed) => {
+const openEditor = (p, existing, seed, fromEl = null) => {
   closeDialog()
+  const chipSel = fromEl?.dataset?.calEv ? `[data-cal-ev="${String(fromEl.dataset.calEv).replace(/["\\]/g, '\\$&')}"]` : ''
+  const originRect = chipSel === '' ? null : chipRect(chipSel)
   const slug = p.slug
   const projects = ctx?.projects?.() ?? []
   const e = existing
@@ -720,6 +735,12 @@ const openEditor = (p, existing, seed) => {
       </div>
     </form>`
   document.body.append(dialog)
+  dialogOrigin = chipSel
+  if (originRect !== null) {
+    const f = dialog.querySelector('.bccal2form')
+    f.style.animation = 'none'
+    growFrom(f, originRect, 260)
+  }
   document.addEventListener('keydown', onDialogKey, true)
   const form = dialog.querySelector('form')
   const err = dialog.querySelector('.bccal2err')
@@ -868,7 +889,7 @@ export const wire = (root) => {
       b.addEventListener('click', (e) => {
         e.stopPropagation()
         const found = eventsFor(slug).list.find((x) => x.id === b.dataset.calEv)
-        if (found !== undefined) openEditor(p, found, null)
+        if (found !== undefined) openEditor(p, found, null, b)
       })
     }
     /* Pressing an empty hour in Day or Week starts an event at that hour. */

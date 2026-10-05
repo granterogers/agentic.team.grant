@@ -1687,6 +1687,8 @@ const saidIn = (el, words) => {
 const wireContacts = (root) => {
   for (const b of root.querySelectorAll('[data-bc-contact]')) {
     b.addEventListener('click', () => {
+      // A contact row on the home grows into its record; inside an open Contacts sheet it is a step, not a growth.
+      if (!ctx.state.bcExpanded) ctx.rememberOrigin?.(b)
       ctx.openContact(b.dataset.bcContact)
     })
   }
@@ -2002,6 +2004,7 @@ const wireDocs = (root) => {
         b.dataset.bcDocOpen ?? '',
         b.dataset.bcDocTitle ?? fig?.dataset.bcDocTitle ?? 'document',
         fig?.dataset.bcDocproject ?? '',
+        fig ?? b,
       )
     })
   }
@@ -2015,7 +2018,7 @@ const wireDocs = (root) => {
     if (ref === '') continue
     fig.addEventListener('click', (e) => {
       if (e.target.closest('[data-bc-doc-open]') !== null) return
-      void openDoc(ref, fig.dataset.bcDocTitle ?? 'document', fig.dataset.bcDocproject ?? '')
+      void openDoc(ref, fig.dataset.bcDocTitle ?? 'document', fig.dataset.bcDocproject ?? '', fig)
     })
   }
 
@@ -2145,7 +2148,7 @@ const openInTab = (href) => {
   a.remove()
 }
 
-const openDoc = async (ref, title, project = '') => {
+const openDoc = async (ref, title, project = '', from = null) => {
   /*
     EVERY PRESS OPENS THE DOCUMENT HERE (4 October). Routine viewing must not
     send a person to Google Drive: the record draws the preview, the details and
@@ -2157,7 +2160,11 @@ const openDoc = async (ref, title, project = '') => {
     A document listed under ALL PROJECTS belongs to the project named on it, and the record is drawn for the project
     you are in. So a press on another project's document goes to that project first, then opens the record there.
   */
-  if (project !== '' && project !== ctx.state.project) ctx.go?.(`/p/${project}/documents`)
+  const elsewhere = project !== '' && project !== ctx.state.project
+  if (elsewhere) ctx.go?.(`/p/${project}/documents`)
+  // A tile that is on THIS page grows into the viewer and the viewer settles back onto it; a document from another
+  // project has no tile here, so it simply opens.
+  if (!elsewhere && !ctx.state.bcExpanded) ctx.rememberOrigin?.(from)
   ctx.openDocDetail?.(ref, title)
 }
 
@@ -2659,6 +2666,7 @@ const wireTasks = (root) => {
 
   for (const b of root.querySelectorAll('[data-bc-task-open]')) {
     b.addEventListener('click', () => {
+      if (!ctx.state.bcExpanded) ctx.rememberOrigin?.(b)
       ctx.openTask(b.dataset.bcTaskOpen)
     })
   }
