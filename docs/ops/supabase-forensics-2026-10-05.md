@@ -461,3 +461,30 @@ takes under two minutes of downtime, "can take longer"; Nano cannot be launched 
   If it shows plenty of budget during an episode, the IO-envelope half of the model is wrong and the tier is a gamble on memory alone.
 * **Rank today:** worth doing as the next controlled step after the chart is in hand, and a reasonable operational choice even without it, **if Grant accepts the paid-plan cost**. I am not recommending it
   over reading the chart first, and it is not something to do while the deployment of steps 1 to 5 is under way.
+
+### 12.8 The sign-in reliability fix is deployed (5 October, 11:43 to 11:49 UTC) - and nothing else was
+
+Grant's instruction: review, deploy and prove only this fix. Nothing in the held queue (migrations 0892 to 0896, `hq-api`, `slack-oauth`, `worker`, the rest of the page delta) was applied.
+
+* **Review (one correction).** The function and the page were read line by line. One gap was found and fixed before deploying: `session.js` cleared the stored session on any refresh answer that
+  was not a success, so a reply in a shape the page did not know (a 4xx about something else, a body that did not parse) would also have signed a person out. It now clears the session **only on
+  an explicit `reason: 'expired'`**; anything else leaves it in place and reports that the service did not answer. The gateway (`hq-api`) was checked and already answers 503, not 401, when it
+  cannot reach Auth, so the page's 401-clears-session rule cannot fire during an Auth outage. No authentication logic, office resolution or fallback changed; no secret appears in any new response.
+* **Function:** `signin` v122 (the pre-fix source, confirmed against the deployed bundle) to **v124**, by `npm run deploy:signin`. That script also re-sets the same two function secrets from the vault
+  (`HQ_API_TOKEN`, `SIGNIN_ALLOWED_ORIGIN`); values unchanged, nothing printed. Rollback: redeploy `supabase/functions/signin/index.ts` from commit `ca8845b7`.
+* **Page:** `dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M` to **`dpl_8QwvvES1oRridjeokGzu2MMGdEYm`**. `hq-page-delta` ships the whole working-tree page, which differs from the live page in thirteen files and includes unrelated queued
+  changes (confirmation dialogs, the Slack card). So the deployed page was **built from the live bytes plus only the sign-in diff** (a three-way merge with the pre-fix commit as base; the other
+  six differing files were put back to their live bytes) and checked three ways: it parses, the stand-in harness scores 21/21 on it, and after deployment the live page differs from the previous live page in
+  exactly `app.js`, `bc/account.js`, `bc/shell.js`, `data.js`, `office.js`, `session.js` and the new `net.js`, each equal to the staged copy. Rollback: promote `dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M`.
+* **Healthy path, on the deployed page, one disposable person (`npm run suite -- auth-acceptance --production`): 19 of 19.** Existing session adopted from the address fragment and the fragment removed; the person with
+  no office resolved to the set-up screen; first office made (2.9 s); reload keeps the session; sign out clears it; sign in again reaches the same office; teardown left no active office. An earlier run of the
+  same pass failed one check (18 of 19) because **my check** matched the page's own copy too early and the next step aborted the in-flight request; the check was tightened and the pass re-run, not the product changed.
+* **Degraded path, without degrading production:** with the sign-in request held in the browser (nothing sent to Supabase) the deployed page ends the wait and says the sign-in service did not answer after
+  **16.2 s** (it used to wait without end). The stand-in harness (`verify:auth-hang`) covers the rest: 21 of 21 on the fixed page and **6 of 21 on the pre-fix page** (the control that shows the detector fails on the old
+  defect): a timeout ends inside its deadline and names the step; a 503 "unavailable" is reported as unavailable, not expired; an unrecognised answer keeps the session; a genuine "expired" still signs out; the form
+  leaves "Sending" and "Setting up"; Try again works and replaces the old session once the stand-in is back.
+* **Residual risk (UNKNOWN frequency, not new):** if Auth consumes a single-use refresh token and its reply is lost, the old token is spent. Auth's short reuse window mitigates a quick retry; it cannot be removed from the page.
+* **Health before and after:** every service `ACTIVE_HEALTHY` at 11:42, 11:49; the cron canary 60 of 60 and 90 of 90 runs succeeded in the surrounding hour and a half, longest 0.25 s. No launcher stall, no startup timeout, no
+  Postgres timeout in the window.
+* **Still held, as instructed:** migrations 0892 to 0896, `hq-api`, `slack-oauth`, `worker`, the rest of the page delta, the compute-tier decision, any `pg_stat_statements` or `log_temp_files` change (the latter is `-1`).
+  Issue #422 records the page fan-out (about 25 reads a page load, 11 before an office exists); #407 is untouched.

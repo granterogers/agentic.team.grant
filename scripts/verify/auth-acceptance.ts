@@ -317,7 +317,15 @@ try {
   await page.locator('[data-bc-setup-form] button[type=submit]').click()
   // Either the first-run screen (the working tree's page) or the project board with the office's catch-all project (the
   // deployed page, 5 October): both are a person inside a working office, and which one appeared is reported, not assumed.
-  const first = await wait('.bcfirst, :text("Your projects")', 30_000)
+  // Wait for the set-up form to GO AWAY (the office exists and the page moved on), never for text that the set-up screen's
+  // own copy might contain: an earlier version matched "Your projects" at once and let the next step abort the request.
+  let first: number | null = null
+  try {
+    await page.waitForSelector('[data-bc-setup-form]', { state: 'detached', timeout: 30_000 })
+    first = Date.now() - t0
+  } catch {
+    first = null
+  }
   const which = (await page.locator('.bcfirst').count()) > 0 ? 'first-run screen' : 'project board'
   check(
     'the office is made and the person lands inside it',

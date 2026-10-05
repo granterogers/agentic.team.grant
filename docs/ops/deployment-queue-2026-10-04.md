@@ -17,7 +17,14 @@ Provider health read all ok and the metrics scrape answered 200 from 07:37 UTC; 
    deploys, a page delta) are light. **Decision needed:** run steps 1 to 5 now with a scrape before and after each and an abort at the first timeout or
    cron dip, and hold 6 to 9 until the controlled-ramp experiment (report, section 11) has said what burst the host tolerates, or run everything now.
 
-## Update, 5 October 11:30 UTC: still HELD; steps 1 to 5 assessed as separable; the sign-in fix is a new candidate step
+## Update, 5 October 11:50 UTC: ONLY the sign-in fix has been deployed
+
+By Grant's instruction: `signin` function v122 to v124, and a page built from the **live bytes plus the sign-in diff only** (`dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M` to `dpl_8QwvvES1oRridjeokGzu2MMGdEYm`).
+Everything else in this file is **still not applied or deployed**. Warning for whoever runs step 5 later: `hq-page-delta.ts` ships the whole working-tree page, which now also differs from live in
+`bc/compose.css`, `project-settings.js`, `settings-ui.css`, `settings-ui.js`, `settings.js` and `undo.js` (the queued confirmation-dialog and Slack-card changes); the Slack card needs 0892/0893 and the
+`hq-api` change first. Details and rollback points: `supabase-forensics-2026-10-05.md` section 12.8.
+
+## Earlier update, 5 October 11:30 UTC: still HELD; steps 1 to 5 assessed as separable; the sign-in fix was a candidate step
 
 Grant's latest instruction keeps steps 6 to 9 held, asks for a recommendation on steps 1 to 5 before anything runs, and makes the sign-in path a V1 blocker.
 **Nothing has been applied or deployed.** The assessment is in `supabase-forensics-2026-10-05.md` section 12.5: steps 1 to 5 are light (catalog-only SQL, three function
