@@ -70,6 +70,14 @@ const $ = (sel, root = document) => root.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
+/*
+  Whether the Settings and Usage payloads have been asked for (see needSettings). Declared at the top because a Settings
+  deep link opens the sheet during module evaluation, before any declaration further down has run: a let below the call
+  is a temporal-dead-zone throw that the page recovers from and never reports.
+*/
+let settingsAsked = null
+/** Whether the office's other reads and the poll have been started (false while signed in with no office yet). */
+let officeStarted = false
 
 /*
   Payloads that belong to one screen rather than to the whole shell.
@@ -4054,6 +4062,8 @@ function activeJobs(p) {
   broken Notion connection look like a bookmark.
 */
 function sources(p) {
+  // The "does not need" buttons below name the connectors the settings payload lists.
+  void needSettings()
   const list = p.sources ?? []
   if (list.length === 0) {
     return `<div class="tabbody">${emptyState({
@@ -7005,6 +7015,8 @@ function importSheet(p) {
 
 function settingsSheet() {
   const v = $('#settings')
+  // Opening Settings is what asks the office for it (see needSettings); the draw below says so until it answers.
+  void needSettings()
   // An old id (governance, setup) resolves to the tab that now holds what it held.
   state.setting = config.tabId(state.setting)
   const tabs = config.TABS
@@ -15020,6 +15032,24 @@ async function needTasks() {
   render()
 }
 
+/*
+  The Settings and Usage payloads, read when something that draws them is first drawn, not on every page load.
+
+  They were read at startup and again on every refresh, ten requests each time, for a screen most visits never open. The
+  consumers are the Settings sheet (every pane) and the Sources tab's "does not need" buttons, which name the connectors the
+  settings payload lists; each calls this. Memoised: the first call starts the read and every later one is the same promise.
+  Once asked, `refresh` keeps them current as it always did (see below), so a person who has opened Settings sees the same
+  freshness as before. A person who never does costs the office none of the ten reads.
+*/
+function needSettings() {
+  if (settingsAsked !== null || !canWrite()) return settingsAsked
+  settingsAsked = Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
+    render()
+    if (!$('#settings').hidden) settingsSheet()
+  })
+  return settingsAsked
+}
+
 async function needLately() {
   if (latest.lately !== null) return
   try {
@@ -15055,12 +15085,16 @@ async function refresh() {
     return
   }
   await Promise.all([
-    hydrate(API, fresh),
-    // Both, together. Settings is a separate payload because it is a separate
-    // screen and most visits never open it — but a write can change either, so
-    // a refresh re-reads both rather than leaving one stale behind a tab.
-    config.hydrateSettings(read),
-    hydrateUsage(read),
+    hydrate(API, fresh).then(async () => {
+      // The office was created since the page opened (the set-up screen's refresh): start what live() held back.
+      if (!officeStarted && source.state !== 'no_office' && source.state !== 'refused' && source.state !== 'unreachable') {
+        await startOfficeReads(fresh)
+      }
+    }),
+    // Both, together, and only once something has asked for them (needSettings): a visit that never opened Settings or the
+    // Sources tab has nothing of theirs to keep fresh. A write can change either, so once asked a refresh re-reads both
+    // rather than leaving one stale behind a tab.
+    ...(settingsAsked === null ? [] : [config.hydrateSettings(read), hydrateUsage(read)]),
   ])
 
   /*
@@ -15397,6 +15431,21 @@ async function live() {
   */
   await hydrate(API, token)
   /*
+    Signed in with no office yet: the studio payload has just said so and every other read would be refused, then polled for
+    ever. Stop here; the page shows the set-up screen. When the office is created `refresh` sees the state change and starts
+    the rest (startOfficeReads), so nothing is lost, only not asked in advance.
+  */
+  if (source.state === 'no_office') {
+    arrivalPending = false
+    render()
+    return
+  }
+  await startOfficeReads(token)
+}
+
+async function startOfficeReads(token) {
+  officeStarted = true
+  /*
     How he chose to have it look, from the office (#124, ADR-0021).
 
     After the payload and before the redraw: the page has already applied this
@@ -15499,15 +15548,14 @@ async function live() {
       if (health.cannotThink.length > 0) { health.cannotThink = []; render() }
     }
   }
-  void readThinking()
+  // No read here: `pulse.watch` below primes with an immediate tick, and that tick runs this. Reading it here as well made
+  // the same request twice on every load.
 
   void read('workspace').then((w) => {
     panels.adoptHome(w)
     if (state.view === 'portfolio') render()
   }).catch(() => undefined)
-  void Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
-    render()
-  })
+  // The Settings and Usage payloads are NOT read here any more: see needSettings, called by what draws them.
   // What Settings may OFFER depends on who is looking, which is only known once the settings payload has arrived; if
   // the page is already open it is drawn again.
   document.addEventListener('hq:viewer', () => {
