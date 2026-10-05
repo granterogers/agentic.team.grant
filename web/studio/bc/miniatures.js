@@ -286,7 +286,7 @@ export const mineAndTeam = (p) => {
       )}</button>`
   return `<span class="bcsplit2">
     ${half('mine', mine, 'yours')}
-    ${half('theirs', open.length - mine, "the team's")}
+    ${half('theirs', open.length - mine, "team's")}
   </span>`
 }
 
