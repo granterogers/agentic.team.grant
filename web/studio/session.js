@@ -183,16 +183,22 @@ export const presentable = async () => {
       */
       const { status, body } = await post({ action: 'refresh', refresh_token: s.refresh_token })
       if (status >= 500 || body.reason === 'unavailable') throw unreachable('auth:refresh', 0)
-      if (body.ok !== true || typeof body.access_token !== 'string') {
-        forget()
-        return ''
+      if (body.ok === true && typeof body.access_token === 'string') {
+        write({
+          access_token: body.access_token,
+          refresh_token: body.refresh_token ?? s.refresh_token,
+          expires_at: Date.now() + Math.max(60, Number(body.expires_in ?? 3600)) * 1000,
+        })
+        return body.access_token
       }
-      write({
-        access_token: body.access_token,
-        refresh_token: body.refresh_token ?? s.refresh_token,
-        expires_at: Date.now() + Math.max(60, Number(body.expires_in ?? 3600)) * 1000,
-      })
-      return body.access_token
+      /*
+        ONLY AN EXPLICIT "EXPIRED" SIGNS A PERSON OUT. Anything else that is not a success (an answer in a shape this page
+        does not know, a 4xx that is not about the token, a body that did not parse) is a service that did not say the
+        token was bad, so the session stays and the person is told the service did not answer.
+      */
+      if (body.reason !== 'expired') throw unreachable('auth:refresh', 0)
+      forget()
+      return ''
     })().finally(() => {
       refreshing = null
     })

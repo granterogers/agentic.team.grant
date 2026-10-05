@@ -80,7 +80,7 @@ const check = (what: string, detail: string, ok: boolean): void => {
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what} - ${detail}`)
 }
 
-type Mode = 'ok' | 'hang' | 'down' | 'expired'
+type Mode = 'ok' | 'hang' | 'down' | 'expired' | 'weird'
 type World = {
   refresh: Mode
   link: Mode
@@ -153,6 +153,8 @@ const open = async (
       if (world.refresh === 'hang') return stop()
       if (world.refresh === 'down') return json(route, 503, { ok: false, reason: 'unavailable' })
       if (world.refresh === 'expired') return json(route, 200, { ok: false, reason: 'expired' })
+      // An answer in a shape the page does not know: not a refusal of the token, so not a reason to sign anybody out.
+      if (world.refresh === 'weird') return json(route, 502, { unexpected: true })
       return json(route, 200, {
         ok: true,
         access_token: 'fresh-access',
@@ -394,6 +396,68 @@ console.log(`auth path against ${ROOT}\n`)
       ended && STOPPED.test(said),
     )
   }
+  await o.close()
+}
+
+// 7. An answer the page does not recognise (a 502 with an unknown body) must not clear a valid session.
+{
+  console.log('7. the sign-in service answers in a shape the page does not know')
+  const o = await open(
+    { refresh: 'weird', link: 'ok', studio: 'ok', create: 'ok' },
+    { access: 'old-access', refresh: 'old-refresh', expiresInMs: -1000 },
+  )
+  await o.page.goto(BASE)
+  const secs = await until(o.page, STOPPED, 8_000)
+  check(
+    'the page says the service did not answer',
+    secs === null ? 'no message' : `after ${secs} s`,
+    secs !== null,
+  )
+  const kept = await stored(o.page)
+  check('the session is kept', String(kept), kept)
+  await o.close()
+}
+
+// 8. Recovery: the service is down, the person sees the message, the service comes back, Try again works.
+{
+  console.log('8. recovery: the service comes back and Try again signs the person straight in')
+  const world: World = { refresh: 'down', link: 'ok', studio: 'no_office', create: 'ok' }
+  const o = await open(world, {
+    access: 'old-access',
+    refresh: 'old-refresh',
+    expiresInMs: -1000,
+  })
+  await o.page.goto(BASE)
+  const down = await until(o.page, STOPPED, 8_000)
+  check(
+    'while it is down the page says so',
+    down === null ? 'no message' : `after ${down} s`,
+    down !== null,
+  )
+  world.refresh = 'ok'
+  const retry = o.page.locator('[data-bc-retry-office]')
+  const offered = (await retry.count()) > 0
+  check('a Try again control is offered', String(offered), offered)
+  if (offered) await retry.first().click()
+  await o.page.waitForSelector('[data-bc-setup-form]', { timeout: 10_000 }).catch(() => undefined)
+  const arrived = (await o.page.locator('[data-bc-setup-form]').count()) > 0
+  check('Try again reaches the office once the service is back', String(arrived), arrived)
+  const token = await o.page.evaluate(() => {
+    try {
+      return (
+        (JSON.parse(localStorage.getItem('hq.session') ?? '{}') as { access_token?: string })
+          .access_token ?? ''
+      )
+    } catch {
+      return ''
+    }
+  })
+  check(
+    'and the refreshed session replaced the old one',
+    token === 'fresh-access' ? 'refreshed' : `held ${token}`,
+    token === 'fresh-access',
+  )
+  check('no page error', o.errors.join(' | ') || 'none', o.errors.length === 0)
   await o.close()
 }
 

@@ -104,6 +104,19 @@ describe('the sign-in path makes no request without a deadline', () => {
     })
   }
 
+  it('the page clears a stored session only on an explicit expired answer', () => {
+    const c = code(read('web/studio/session.js'))
+    const refresh = c.slice(c.indexOf("action: 'refresh'"), c.indexOf('export const heldToken'))
+    // Everything that is not a success or an explicit expired throws before the forget() that signs a person out.
+    const guard = refresh.indexOf("body.reason !== 'expired'")
+    const forget = refresh.indexOf('forget()', guard)
+    expect(guard).toBeGreaterThan(-1)
+    expect(forget).toBeGreaterThan(guard)
+    expect(refresh.slice(guard, forget)).toMatch(/throw unreachable\('auth:refresh', 0\)/)
+    // And nothing forgets the session before that guard inside the refresh exchange.
+    expect(refresh.slice(0, guard)).not.toMatch(/forget\(\)/)
+  })
+
   it('control: the detector fires on a bare fetch and not on a method or a comment', () => {
     expect(bareFetches(`const r = await fetch(url)`)).toBe(1)
     expect(bareFetches(`const r = await client.fetch(url)`)).toBe(0)
