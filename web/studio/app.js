@@ -6276,7 +6276,7 @@ function slackSetupPanel() {
 }
 
 /** One connection: logo, words, state, next step. `detail` is shown when it adds something. */
-function serviceRow(c, { showDetail = true } = {}) {
+function serviceRow(c, { showDetail = true, sub = false } = {}) {
   const ui = settingsUi
   const [tone, word] = copy.state[c.state] ?? ['off', c.state]
   const route = config.routeFor(c.key)
@@ -6303,7 +6303,9 @@ function serviceRow(c, { showDetail = true } = {}) {
   } else if (route.how === 'tab' && route.to !== 'setup') {
     action = ui.button({ label: 'Manage', tone: 'quiet', a: { 'data-goto-setting': route.to } })
   }
-  const unreachable = !connected && action === ''
+  // A part of the one Google card: the card has the one Connect and the one Disconnect, so a part carries none.
+  if (sub) action = ''
+  const unreachable = !connected && action === '' && !sub
   const whyNot = !op && route.how === 'oauth' ? 'Connected by whoever runs this Team HQ.' : route.why
   // An expired permission is not a missing one: say so, and say that nothing already read is lost.
   const expiredNote = expired
@@ -6332,7 +6334,9 @@ function serviceRow(c, { showDetail = true } = {}) {
 function connectionsTab() {
   const ui = settingsUi
   const all = config.services()
-  const main = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key))
+  const isGoogleSvc = (c) => config.routeFor(c.key).family === 'google'
+  const main = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key) && !isGoogleSvc(c))
+  const googleRows = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key) && isGoogleSvc(c))
   const machinery = all.filter((c) => MACHINERY_KEYS.has(c.key))
   const attention = main.filter((c) => ['degraded', 'dead'].includes(String(c.state)))
   const working = main.filter((c) => !attention.includes(c) && config.isConnected(c.state))
@@ -6489,23 +6493,38 @@ function connectionsTab() {
     list.length === 0 ? '' : ui.section({ title, note, count: list.length, body: ui.card(list.map((c) => serviceRow(c))) })
 
   /*
-    ONE GOOGLE, NOT THREE (4 October). Drive, Calendar and Gmail are one
-    connection made by one consent screen, so the page says it once: a single
-    line with a tick for each service that works. The three rows below it remain
-    because each can be in a different state (a revoked scope) and the person
-    needs to see which. NotebookLM is not part of this line: Google offers no
+    ONE GOOGLE, NOT THREE (4 October; made a single card on 5 October). Drive, Calendar and Gmail are one connection
+    made by one consent screen, and all three rows already pointed at the SAME disconnect ("google"), so three rows
+    with three Connect buttons were one account presented as three onboardings. There is now one card: one Connect
+    (or Reconnect), one Disconnect, and under it the state of each part, because each can be in a different state (a
+    scope withdrawn). The parts carry no buttons of their own. NotebookLM is not part of this card: Google offers no
     API for it, so it is set up separately and is never ticked here.
   */
-  const googleRows = [...attention, ...working, ...idle].filter((c) => config.routeFor(c.key).family === 'google')
-  const googleLine =
-    googleRows.length === 0
-      ? ''
-      : `<p class="st-desc st-googleline" data-google-summary>
-          <b>Google</b> — ${googleRows.some((c) => config.isConnected(c.state)) ? 'Connected' : 'Not connected'}
-          ${googleRows
-            .map((c) => `<span class="st-gtick${config.isConnected(c.state) ? ' is-on' : ''}">${esc(c.name)} ${config.isConnected(c.state) ? '&#10003;' : '&ndash;'}</span>`)
-            .join(' ')}
-        </p>`
+  const googleCard = (() => {
+    if (googleRows.length === 0) return ''
+    const on = googleRows.filter((c) => config.isConnected(c.state))
+    const dead = googleRows.some((c) => c.state === 'dead')
+    const degraded = googleRows.some((c) => c.state === 'degraded')
+    const op = config.VIEWER.operator
+    const [tone, word] = on.length === googleRows.length ? (degraded || dead ? ['warn', 'Needs attention'] : ['ok', 'Connected']) : on.length > 0 ? ['warn', 'Partly connected'] : dead ? ['bad', 'Needs reconnecting'] : ['off', 'Not connected']
+    const head = ui.row({
+      name: 'Google',
+      desc: 'One sign-in covers Drive, Calendar and Gmail. Notebook is separate: Google offers it no way in.',
+      kind: 'stack',
+      control: `<span data-google-summary>${ui.chip(tone, word)}</span>
+        ${on.length < googleRows.length && op ? ui.button({ label: dead ? 'Reconnect Google' : 'Connect Google', tone: 'primary', a: { 'data-google-connect': true } }) : ''}
+        ${on.length > 0 && canWrite() && op ? ui.button({ label: 'Disconnect Google', tone: 'quiet', a: { 'data-disconnect': 'google', 'data-service': 'Google' } }) : ''}
+        ${on.length < googleRows.length && !op ? '<span class="st-meta">Connected by whoever runs this Team HQ.</span>' : ''}`,
+    })
+    return ui.section({
+      title: 'Google',
+      body: ui.card([
+        head,
+        ...googleRows.map((c) => serviceRow(c, { sub: true })),
+      ]),
+    })
+  })()
+  const googleLine = googleCard
   return [
     said,
     googleLine,
