@@ -61,7 +61,18 @@ const stat = async (): Promise<{ blks_hit: number; blks_read: number; tup_update
   }
 }
 
+/** Per-table write counters, so the cost can be attributed: which table, how many inserts and updates, how many updates were HOT. */
+const tableCounters = async (): Promise<Map<string, [number, number, number]>> => {
+  const out = new Map<string, [number, number, number]>()
+  for (const r of await q(
+    `select relname, n_tup_ins, n_tup_upd, n_tup_hot_upd from pg_stat_user_tables where schemaname = 'public'`,
+  )) {
+    out.set(String(r.relname), [Number(r.n_tup_ins), Number(r.n_tup_upd), Number(r.n_tup_hot_upd)])
+  }
+  return out
+}
 await q('select pg_stat_force_next_flush()').catch(() => undefined)
+const tablesBefore = await tableCounters()
 const before = await stat()
 const l0 = await lsn()
 const t0 = Date.now()
@@ -99,6 +110,13 @@ const sizes = (
 )[0] as Record<string, unknown>
 const per = (x: number): number => Math.round((x / N) * 10) / 10
 const statements = 1 + WALK.length + 3
+const tablesAfter = await tableCounters()
+const written: Record<string, { ins_per_job: number; upd_per_job: number; hot_upd_per_job: number }> = {}
+for (const [name, a] of tablesAfter) {
+  const b = tablesBefore.get(name) ?? [0, 0, 0]
+  const d = [a[0] - b[0], a[1] - b[1], a[2] - b[2]] as [number, number, number]
+  if (d[0] + d[1] > 0) written[name] = { ins_per_job: per(d[0]), upd_per_job: per(d[1]), hot_upd_per_job: per(d[2]) }
+}
 console.log(
   JSON.stringify(
     {
@@ -114,6 +132,7 @@ console.log(
       tuples_updated_per_job: per(after.tup_updated - before.tup_updated),
       jobs_indexes: Number(sizes.n_idx),
       jobs_index_bytes_per_job: per(Number(sizes.idx)),
+      tables_written_per_job: written,
     },
     null,
     1,
