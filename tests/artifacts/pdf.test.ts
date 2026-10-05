@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { WIDTHS, widthOf } from '../../src/artifacts/metrics.ts'
-import { A4, assemble, Page, rgb } from '../../src/artifacts/pdf.ts'
+import { A4, assemble, Page, pdfString, rgb } from '../../src/artifacts/pdf.ts'
 import { layout, type Report, renderReport, wrap } from '../../src/artifacts/report.ts'
 import { validatePdf } from '../../src/artifacts/validate.ts'
 
@@ -244,5 +244,16 @@ describe('the validator, shown things it must reject', () => {
     const verdict = validatePdf(stub)
     expect(verdict.ok).toBe(false)
     expect(verdict.problems.join(' ')).toContain('too small to be a report')
+  })
+})
+
+describe('characters WinAnsi has a slot for', () => {
+  it('maps the euro sign and the other 0x80-0x9f letters instead of printing a question mark', () => {
+    const bytes = [...pdfString('€50 Žižek Šuput † ‰ ƒ')]
+    expect(bytes).not.toContain(0x3f)
+    expect(bytes).toContain(0x80)
+    expect(bytes).toContain(0x8e)
+    // control: a character with no slot and no stand-in is still visibly a question mark, never silently dropped
+    expect([...pdfString('日')]).toContain(0x3f)
   })
 })

@@ -131,6 +131,26 @@ describe('the real renderer', () => {
     }
   })
 
+  it('a source with a very long address is broken across lines and the report still passes (it used to be thrown away)', () => {
+    const url = `https://example.com/${'research/segment-'.repeat(8)}end?utm=1&ref=abcdefghijklmnop`
+    const long = {
+      ...SAMPLE,
+      blocks: [
+        ...SAMPLE.blocks,
+        {
+          kind: 'paragraph' as const,
+          text: `Source: Market study (${url}) and a second line of ordinary words.`,
+        },
+      ],
+    }
+    expect(url.length).toBeGreaterThan(100)
+    for (const style of [null, { formatting: { title_page: 'band' } }]) {
+      const out = renderReport(long, style)
+      expect(out.problems).toEqual([])
+      expect(validatePdf(out.bytes, { layoutProblems: out.problems }).ok).toBe(true)
+    }
+  })
+
   it('layout() reports collisions among its problems, so a defective cover cannot be stored', () => {
     // The wiring, asserted on the call that matters rather than on a name appearing in the file.
     const src = readFileSync('src/artifacts/report.ts', 'utf8')

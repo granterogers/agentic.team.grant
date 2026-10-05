@@ -340,10 +340,11 @@ class Flow {
     indent = 0,
     where = 'body',
   ): void {
-    const { broke, lines } = wrap(text, face, size, COLUMN - indent)
-    for (const w of broke) {
-      this.problems.push(`a word too wide for the column had to be broken in ${where}: "${w}"`)
-    }
+    // A word too wide for the column (a long address) is broken at the character that stops fitting, every line is drawn
+    // inside the column, and nothing collides: that is a handled case, not a failed layout. It used to be reported as a
+    // problem, which threw the whole report away (nothing stored) for any source with a URL of a hundred characters.
+    const { lines } = wrap(text, face, size, COLUMN - indent)
+    void where
     for (const line of lines) {
       this.need(lead)
       this.y -= lead

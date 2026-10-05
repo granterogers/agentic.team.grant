@@ -59,6 +59,18 @@ const enc = new TextEncoder()
 const WIN_ANSI: Readonly<Record<number, number>> = {
   338: 0x8c,
   339: 0x9c,
+  352: 0x8a, // S caron
+  353: 0x9a,
+  376: 0x9f,
+  381: 0x8e, // Z caron
+  382: 0x9e,
+  402: 0x83, // florin
+  710: 0x88, // modifier circumflex
+  732: 0x98, // small tilde
+  8224: 0x86, // dagger
+  8225: 0x87,
+  8240: 0x89, // per mille
+  8364: 0x80, // euro sign
   8211: 0x96, // en dash
   8212: 0x97, // em dash
   8216: 0x91,
@@ -102,7 +114,7 @@ const STANDS_IN: Readonly<Record<number, number>> = {
   65279: 0x20, // byte order mark
 }
 
-const pdfString = (text: string): Uint8Array => {
+export const pdfString = (text: string): Uint8Array => {
   const out: number[] = [0x28] // (
   for (const ch of text) {
     const cp = ch.codePointAt(0) ?? 32
