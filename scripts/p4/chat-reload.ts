@@ -25,6 +25,7 @@ import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { type BrowserContext, chromium, type Page } from 'playwright'
+import { accountPage } from '../../src/safety/page-accounting.ts'
 import {
   check,
   db,
@@ -112,6 +113,7 @@ const open = async (): Promise<{ ctx: BrowserContext; page: Page }> => {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   await ctx.addInitScript(`window.HQ_API = ${JSON.stringify(ENDPOINT)}`)
   const page = await ctx.newPage()
+  accountPage(page) // counts the page's production requests and loads against the run's budget
   page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 160)))
   return { ctx, page }
 }
