@@ -218,8 +218,8 @@ const run = async (label: string, phone: boolean): Promise<void> => {
   // Search and the command bar.
   const search = await go('/search')
   check(search.length > 200, 'Search: opens')
-  await page.locator('input').first().fill('espresso')
-  await page.locator('input').first().press('Enter')
+  await page.locator('input:visible').first().fill('espresso')
+  await page.locator('input:visible').first().press('Enter')
   await page.waitForTimeout(3500)
   check(/Order the espresso machine/.test(await text()), 'Search: finds a task by a word in it')
   await go('/', 'Autumn Menu Research')
@@ -249,7 +249,7 @@ const run = async (label: string, phone: boolean): Promise<void> => {
     await tab.waitForLoadState('domcontentloaded').catch(() => null)
     await tab.waitForTimeout(2500)
     // What the tab was sent is read directly: a signed link served with the wrong type downloads or prints mojibake.
-    await tab.waitForURL(/^https?:/, { timeout: 15000 }).catch(() => null)
+    await tab.waitForURL(/^https?:/, { timeout: 40000 }).catch(() => null)
     const served = await ctx.request.get(tab.url()).catch(() => null)
     const body = served === null ? '' : await served.text()
     const kind = served?.headers()['content-type'] ?? 'none'
@@ -269,7 +269,33 @@ const run = async (label: string, phone: boolean): Promise<void> => {
       .innerText()
       .catch(() => '')
   ).replace(/\s+/g, ' ')
-  check(/Sample Office/.test(services), 'Settings: it says this is the Sample')
+  // On a phone Settings is two panes: a deep link opens the detail pane, and the heading (with the Sample line) belongs to the
+  // index pane, which the back control reaches. A desktop shows both at once.
+  const backToIndex = async (): Promise<void> => {
+    if (!phone) return
+    if (
+      (await page
+        .locator('#settings [data-setting="behaviour"]')
+        .first()
+        .isVisible()
+        .catch(() => false)) === true
+    )
+      return
+    await page
+      .locator('#settings [data-stg-back]')
+      .first()
+      .click({ force: true })
+      .catch(() => null)
+    await page.waitForTimeout(1200)
+  }
+  await backToIndex()
+  const indexText = (
+    await page
+      .locator('#settings')
+      .innerText()
+      .catch(() => '')
+  ).replace(/\s+/g, ' ')
+  check(/Sample Office/.test(indexText), 'Settings: it says this is the Sample')
   check(
     /Not connected/.test(services) &&
       !/\bConnected\b(?! by)/.test(services.replace(/Connected by whoever/g, '')),
@@ -278,6 +304,7 @@ const run = async (label: string, phone: boolean): Promise<void> => {
   clean(services, 'Settings (Services)')
   // Only connections, channels and health deep-link; the rest are opened by pressing their name, as a person does.
   const settingsTab = async (name: string, marker?: string): Promise<string> => {
+    await backToIndex()
     await page.waitForSelector('#settings [data-setting]', { timeout: 20000 }).catch(() => null)
     let why = ''
     let clicked = false
@@ -340,7 +367,13 @@ const run = async (label: string, phone: boolean): Promise<void> => {
   await page
     .locator('#settings button', { hasText: 'Act, then show me' })
     .first()
-    .click()
+    .click({ force: true })
+    .catch(() => null)
+  // Raising autonomy asks first, in the page's own dialog (never a browser dialog); the visitor says yes and is then refused.
+  await page
+    .getByRole('button', { name: /^Yes, let it$/ })
+    .first()
+    .click({ timeout: 5000, force: true })
     .catch(() => null)
   await page.waitForTimeout(1800)
   check(
