@@ -113,12 +113,20 @@ export const exit = (id, done) => {
     ghost.remove()
   }
   const motion = ghost.animate(
-    [...flip(ghost, card, { x: to.x, y: to.y, w: to.width, h: to.height })].reverse().map((f, i) => ({
-      ...f,
-      opacity: i === 0 ? 1 : 0.2,
-    })),
+    [...flip(ghost, card, { x: to.x, y: to.y, w: to.width, h: to.height })].reverse(),
     { duration: 240, easing: EASE_IN, fill: 'forwards' },
   )
+  /*
+    OPAQUE UNTIL IT HAS ARRIVED. The first version faded the ghost from the start, so halfway back the dashboard showed
+    through it and two pages of text overprinted each other (seen in the 50% frame, .out/ux-motion-close-050.png). The
+    ghost now stays solid while it travels and fades only over the last third, when it is already on the card it is
+    about to reveal.
+  */
+  ghost.animate([{ opacity: 1 }, { opacity: 1, offset: 0.65 }, { opacity: 0 }], {
+    duration: 240,
+    easing: 'linear',
+    fill: 'forwards',
+  })
   motion.onfinish = gone
   motion.oncancel = gone
   globalThis.setTimeout(gone, 500)
