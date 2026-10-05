@@ -4620,6 +4620,24 @@ Each of these cost real time. They are here so they cost it once.
 - **Disclosed process slips, this window:** one `cat > /dev/null <<EOF` heredoc with no file effect; all repository edits went through Edit or Write, and the biome formatter hunks
   were applied by hand with Edit rather than `--write`. `log_temp_files` was changed on the production project twice with Grant's stated approval (set to `1B`, restored to `-1`, both verified).
 
+- **A structural check that is refused for the wrong reason reads as "the structure is red".** `check:office-edges` documents a
+  `--replica` mode and imported the production-only guard, so for as long as the guard has existed the replica run was refused,
+  and the mutation proof read the refusal as a failing check and "passed" its sabotages for the wrong reason. Corrected, it found
+  a composite-key gap in a table the UX work had added. When a check has a mode that must run without a flag, run it in that mode
+  once and read the first line it prints.
+- **A control that picks "the first" of an unordered list is two different controls on two databases.** The bridge control took
+  `officeColumns[0]`, which was a carrier in one catalogue and `offices` (not a carrier) in another, so it "did not fire". Pick by
+  class, not by position.
+- **One stored document with several authors is last-writer-wins, and a Post-it is somebody's writing.** The workspace is stored as one
+  document, so a second tab, a second device or an offline session erased notes. Merge by item with a timestamp and record removals
+  (`gone`), or the next save is a delete.
+- **A stricter rule can break the fixture that modelled the loose one.** 1021 made a replacement document have to be approved and
+  a revoked login refuse an import of held text; two existing proofs failed because their fixtures were drafts. Change the fixture
+  deliberately and say why; never relax the rule to the fixture.
+- **A tolerated error list must be bounded by WHAT may be skipped as well as by the message.** `src/migrations/fresh.ts` skips a
+  statement only if it is a `do` self-check or a seed `insert`; a failing `create` or `alter` is never skippable, whatever the list
+  says. Prove replay parity with a catalogue fingerprint (`scripts/isolated/schema-fingerprint.sql`), not by "it applied".
+
 ---
 
 ## Visual standard
