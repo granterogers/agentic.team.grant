@@ -97,6 +97,11 @@ interface GoogleEventBody {
   status?: string
   error?: { message?: string; errors?: { reason?: string }[] }
   items?: { id?: string; etag?: string; updated?: string }[]
+  summary?: string
+  description?: string
+  location?: string
+  start?: { date?: string; dateTime?: string }
+  end?: { date?: string; dateTime?: string }
   extendedProperties?: { private?: Record<string, string> }
 }
 
@@ -332,4 +337,80 @@ export async function deleteEvent(
     return refusal(got.status, got.json, 'could not delete the event', token)
   }
   return { ok: true, kind: 'deleted', externalId, etag: null, updated: null }
+}
+
+/** What Google holds for one event right now, in the vocabulary of a native project event. */
+export interface RemoteEvent {
+  readonly title: string
+  readonly notes: string | null
+  readonly location: string | null
+  readonly startsAt: string
+  readonly endsAt: string
+  readonly allDay: boolean
+  readonly etag: string | null
+  readonly updated: string | null
+  /** Whether the event carries OUR id, so a conflict is never resolved against somebody else's event. */
+  readonly ours: boolean
+}
+
+export type ReadOutcome =
+  | { readonly ok: true; readonly gone: true }
+  | { readonly ok: true; readonly gone: false; readonly event: RemoteEvent }
+  | { readonly ok: false; readonly retryable: boolean; readonly message: string }
+
+const stampOf = (v: { date?: string; dateTime?: string } | undefined): string | null =>
+  v?.dateTime !== undefined
+    ? new Date(v.dateTime).toISOString()
+    : v?.date !== undefined
+      ? new Date(`${v.date}T00:00:00.000Z`).toISOString()
+      : null
+
+/**
+ * Read one event back, to resolve a 412: what Google has now, with the etag to send next. A deleted or cancelled event is
+ * `gone`, which is a real answer. Anything else that goes wrong is a typed, scrubbed failure.
+ */
+export async function readEvent(
+  token: string,
+  calendarId: string,
+  externalId: string,
+  ourId: string,
+  options: WriteOptions = {},
+): Promise<ReadOutcome> {
+  const got = await send('GET', eventUrl(calendarId, externalId), token, {
+    fetchImpl: options.fetchImpl,
+  })
+  if ('out' in got) {
+    return got.out.ok
+      ? { ok: false, retryable: true, message: 'no answer' }
+      : { ok: false, retryable: got.out.retryable, message: got.out.message }
+  }
+  if (got.status === 404 || got.status === 410) return { ok: true, gone: true }
+  if (got.status < 200 || got.status >= 300) {
+    const r = refusal(got.status, got.json, 'could not read the event back', token)
+    return r.ok
+      ? { ok: false, retryable: true, message: 'no answer' }
+      : { ok: false, retryable: r.retryable, message: r.message }
+  }
+  const j = got.json
+  if (j.status === 'cancelled') return { ok: true, gone: true }
+  const startsAt = stampOf(j.start)
+  const endsAt = stampOf(j.end) ?? startsAt
+  if (startsAt === null || endsAt === null) {
+    return { ok: false, retryable: false, message: 'Google returned an event with no start time' }
+  }
+  return {
+    ok: true,
+    gone: false,
+    event: {
+      title: (j.summary ?? '').trim(),
+      notes: j.description ?? null,
+      location: j.location ?? null,
+      startsAt,
+      endsAt,
+      allDay: j.start?.date !== undefined,
+      etag: j.etag ?? null,
+      updated: j.updated ?? null,
+      ours: j.extendedProperties?.private?.[EVENT_TAG] === ourId,
+    },
+  }
 }

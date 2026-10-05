@@ -18,11 +18,28 @@
  * question leaves those rows pending rather than writing into his diary on an agent's say-so. The person's rows in the
  * same pass are still sent: one agent's open question does not hold his own edits hostage.
  *
- * ## Conflicts
+ * ## Conflicts (optimistic concurrency)
  *
- * Last writer wins, by timestamp, and an override either way is written down: on the row (`sync_error`) and as an
- * Activity event whose channel is `google_sync`. See `app.project_events_pull`. An update that finds the event gone in
- * Google counts as Google's deletion winning.
+ * Every update and delete of a linked event sends `If-Match` with the etag recorded by the last successful push, so a
+ * change somebody made in Google since then is a 412 and is NEVER overwritten silently. A row with no recorded etag (linked
+ * before etags were kept, or adopted) is sent without the header and falls back to the pull's rule below.
+ *
+ * On a 412 the event is read back and ONE rule applies, the same one `app.project_events_pull` applies to a change the
+ * pull finds: **the later writer wins, and the override is written down** (the row's `sync_error` begins "conflict:", and
+ * an Activity event on the channel `google_sync` names the winner).
+ *
+ *   - Google has nothing newer than the stamp the sides last agreed on (the etag was merely stale, e.g. after the pull
+ *     absorbed a change): re-send once with the fresh etag, no conflict.
+ *   - UPDATE, local edit later: re-sent ONCE with the fresh etag, then noted. Second 412: left pending, retried next pass.
+ *   - UPDATE, Google later: Google's content (title, notes, place, time) is applied here; the local edit is dropped, noted.
+ *   - DELETE, the delete later: re-sent once with the fresh etag. Google edited the event AFTER the delete: the event is
+ *     restored here with Google's content and the delete is not sent, noted. (Deleting an event somebody just edited
+ *     elsewhere is the one silent loss this refuses.)
+ *   - Google deleted it (404 / cancelled): Google's deletion wins, as before.
+ *
+ * There is no field-level merge: nothing records the common ancestor, so which fields "each side changed" cannot be
+ * known; the whole event goes to the later writer. Timestamps are Google's `updated` against this row's `updated_at`
+ * (content only; a sync never moves it).
  *
  * ## Quiet
  *
@@ -52,6 +69,9 @@ import {
   deleteEvent,
   type EventDraft,
   patchEvent,
+  type ReadOutcome,
+  type RemoteEvent,
+  readEvent,
   type WriteOutcome,
 } from '../google/calendar-events.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
@@ -74,6 +94,8 @@ export interface WorkRow {
   readonly external_calendar_id: string | null
   readonly external_event_id: string | null
   readonly external_etag: string | null
+  /** Google's own `updated` stamp the last time the two sides agreed (null for a row linked before it was recorded). */
+  readonly external_updated_at?: string | null
   readonly authority: 'person' | 'agent'
   readonly project_slug: string
   readonly project_name: string
@@ -136,6 +158,131 @@ const readWork = async (db: SqlExecutor, office: string): Promise<WorkRow[]> =>
   ((await db.execute(`select app.project_events_sync_work(${lit(office)}::uuid, 50) as w`)).rows[0]
     ?.w ?? []) as WorkRow[]
 
+type Settled =
+  /** The conflict was fully handled here (Google's content was kept, or Google deleted it). */
+  | { readonly done: true; readonly pushed: boolean; readonly notes: string[] }
+  /** The write must be recorded by the caller: `out` is the re-send's outcome, `note` the sentence to keep. */
+  | { readonly done: false; readonly out: WriteOutcome; readonly note: string | null }
+  /** Nothing could be decided; leave the row pending (retryable) or parked. */
+  | {
+      readonly done: false
+      readonly out: null
+      readonly message: string
+      readonly retryable: boolean
+    }
+
+const stamp = (v: string | null | undefined): number => {
+  const n = v === null || v === undefined ? Number.NaN : Date.parse(v)
+  return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY
+}
+
+/**
+ * Google refused an update or delete with 412: it holds a change we have not seen. Read it back and apply the rule in the
+ * header. Never overwrites a newer remote change, and re-sends at most once.
+ */
+async function resolveConflict(
+  db: SqlExecutor,
+  office: string,
+  token: string,
+  row: WorkRow,
+  draft: EventDraft,
+  calendar: string,
+  fetchImpl: typeof fetch | undefined,
+): Promise<Settled> {
+  const externalId = row.external_event_id ?? ''
+  const looked: ReadOutcome = await readEvent(token, calendar, externalId, row.event_id, {
+    fetchImpl,
+  })
+  if (!looked.ok) {
+    return { done: false, out: null, message: looked.message, retryable: looked.retryable }
+  }
+  if (looked.gone) {
+    // Google deleted it since: its deletion wins for an update, and is simply what a delete wanted.
+    if (row.op === 'delete') {
+      await db.execute(
+        `select app.project_event_sync_done(${lit(office)}::uuid, ${lit(row.event_id)}::uuid, 'delete', ${lit(row.updated_at)}::timestamptz)`,
+      )
+      return { done: true, pushed: true, notes: [] }
+    }
+    await db.execute(
+      `select app.project_event_gone(${lit(office)}::uuid, ${lit(row.event_id)}::uuid)`,
+    )
+    return {
+      done: true,
+      pushed: false,
+      notes: [`"${row.title}" was deleted in Google, so it came off the project calendar`],
+    }
+  }
+  const remote: RemoteEvent = looked.event
+  if (!remote.ours) {
+    return {
+      done: false,
+      out: null,
+      message: `event ${externalId} is not one we made - left alone`,
+      retryable: false,
+    }
+  }
+  const remoteAt = stamp(remote.updated)
+  const sideAgreedAt = stamp(row.external_updated_at)
+  const localAt = stamp(row.updated_at)
+  // Nothing in Google newer than what we already absorbed: the etag was stale, the content is not in dispute.
+  const merelyStale = remote.updated !== null && remoteAt <= sideAgreedAt
+  const localWins = merelyStale || localAt >= remoteAt
+
+  if (localWins) {
+    const retry =
+      row.op === 'delete'
+        ? await deleteEvent(token, calendar, externalId, row.event_id, {
+            fetchImpl,
+            ifMatch: remote.etag,
+          })
+        : await patchEvent(token, calendar, externalId, draft, { fetchImpl, ifMatch: remote.etag })
+    if (!retry.ok && retry.kind === 'conflict' && retry.status === 412) {
+      return {
+        done: false,
+        out: null,
+        message: `"${row.title}" changed in Google again while it was being resolved; it will be tried again`,
+        retryable: true,
+      }
+    }
+    if (!retry.ok && retry.kind === 'not_found') {
+      return { done: false, out: retry, note: null }
+    }
+    return {
+      done: false,
+      out: retry,
+      note: merelyStale
+        ? null
+        : row.op === 'delete'
+          ? 'deleted here after the last change in Google, so the delete was sent'
+          : 'a newer change in Google was overridden by this later edit',
+    }
+  }
+
+  // Google's change is later: it is kept, here, and the local edit (or delete) is not sent.
+  const note =
+    row.op === 'delete'
+      ? 'the event was changed in Google after it was deleted here, so it is back and the delete was not sent'
+      : 'a pending edit here was overridden by a newer change in Google'
+  const took = (
+    await db.execute(
+      `select app.project_event_take_remote(${lit(office)}::uuid, ${lit(row.event_id)}::uuid, ${lit(row.updated_at)}::timestamptz,
+         ${lit(remote.title)}, ${nul(remote.notes)}, ${nul(remote.location)}, ${lit(remote.startsAt)}::timestamptz,
+         ${lit(remote.endsAt)}::timestamptz, ${String(remote.allDay)}, ${nul(remote.etag)}, ${nul(remote.updated)}::timestamptz,
+         ${String(row.op === 'delete')}, ${lit(note)}) as r`,
+    )
+  ).rows[0]?.r as { raced?: boolean; error?: string } | undefined
+  if (took?.error !== undefined) {
+    return { done: false, out: null, message: took.error, retryable: false }
+  }
+  // `raced`: a person edited the row again mid-sync. That edit is newer than both, stays pending, and meets Google next pass.
+  return {
+    done: true,
+    pushed: false,
+    notes: took?.raced === true ? [] : [`"${row.title}": ${note}`],
+  }
+}
+
 /** Carry the work out. Exported so a suite can drive it without a job. */
 export async function syncProjectEvents(
   db: SqlExecutor,
@@ -157,13 +304,49 @@ export async function syncProjectEvents(
           ? { ok: true, kind: 'already_gone', externalId: '', etag: null, updated: null }
           : await deleteEvent(token, calendar, row.external_event_id, row.event_id, {
               fetchImpl: options.fetchImpl,
+              ifMatch: row.external_etag,
             })
     } else if (row.op === 'update' && row.external_event_id !== null) {
       out = await patchEvent(token, calendar, row.external_event_id, draft, {
         fetchImpl: options.fetchImpl,
+        ifMatch: row.external_etag,
       })
     } else {
       out = await createEvent(token, calendar, draft, { fetchImpl: options.fetchImpl })
+    }
+
+    let conflictNote: string | null = null
+    if (
+      !out.ok &&
+      out.kind === 'conflict' &&
+      out.status === 412 &&
+      row.external_event_id !== null &&
+      row.op !== 'create'
+    ) {
+      const settled = await resolveConflict(
+        db,
+        office,
+        token,
+        row,
+        draft,
+        calendar,
+        options.fetchImpl,
+      )
+      if (settled.done) {
+        notes.push(...settled.notes)
+        if (settled.pushed) pushed += 1
+        continue
+      }
+      if (settled.out === null) {
+        failed += 1
+        notes.push(settled.message)
+        await db.execute(
+          `select app.project_event_sync_failed(${lit(office)}::uuid, ${lit(row.event_id)}::uuid, ${lit(settled.message)}, ${String(settled.retryable)})`,
+        )
+        continue
+      }
+      out = settled.out
+      conflictNote = settled.note
     }
 
     if (out.ok) {
@@ -174,6 +357,14 @@ export async function syncProjectEvents(
              ${nul(out.etag)}, ${nul(out.updated)}::timestamptz)`,
         )
         pushed += 1
+        if (conflictNote !== null && row.op !== 'delete') {
+          await db.execute(
+            `select app.project_event_conflict_note(${lit(office)}::uuid, ${lit(row.event_id)}::uuid, ${lit(conflictNote)})`,
+          )
+          notes.push(`"${row.title}": ${conflictNote}`)
+        } else if (conflictNote !== null) {
+          notes.push(`"${row.title}": ${conflictNote}`)
+        }
       } catch (error) {
         /*
           Google has it and we could not record that. Say so on the row rather than aborting the pass for every event
