@@ -34,8 +34,9 @@
  * measure, and the headings step by roughly 1.3.
  */
 
+import { fit, type PdfImage } from './image.ts'
 import type { Face } from './metrics.ts'
-import { A4, assemble, type DocumentInfo, Page, widthOf } from './pdf.ts'
+import { A4, assemble, type DocumentInfo, Page, type Rgb, rgb, widthOf } from './pdf.ts'
 import { layoutCollisions } from './qa.ts'
 import { DEFAULT_THEME, resolveTheme, type StyleProfile, type Theme } from './style.ts'
 
@@ -267,6 +268,8 @@ export function wrap(
 class Flow {
   readonly pages: Page[] = []
   readonly problems: string[] = []
+  /** The headings the cover's contents lists, with the page each landed on (known only as the pages are laid). */
+  readonly outline: { level: number; text: string; page: number }[] = []
   private page: Page
   private y = 0
 
@@ -298,6 +301,11 @@ class Flow {
    */
   forceBreak(): void {
     this.page = this.fresh()
+  }
+
+  /** The 1-based number of the page being drawn on. */
+  pageNumber(): number {
+    return this.pages.indexOf(this.page) + 1
   }
 
   /** Does `height` fit below the cursor? */
@@ -390,84 +398,280 @@ class Flow {
   }
 }
 
-/** The cover. Deliberately not a heading on page one. */
-function cover(flow: Flow, report: Report): void {
+/** What a report may be drawn with beyond its words: the logo, already read from bytes (see `image.ts`). */
+export interface ReportAssets {
+  readonly logo?: PdfImage | null
+  /** Why a logo the style asked for is not here, in a sentence. Becomes a note, never a failure. */
+  readonly logoProblem?: string
+}
+
+const mixRgb = (a: Rgb, b: Rgb, t: number): Rgb =>
+  rgb(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t)
+
+/** Cut a line at a word to fit, ending in an ellipsis. A cell that stops at a word reads as a summary. */
+function clip(text: string, face: Face, size: number, width: number): string {
+  if (widthOf(text, face, size) <= width) return text
+  let out = text
+  while (out.length > 1 && widthOf(`${out}…`, face, size) > width) {
+    const cut = out.replace(/\s*\S+$/, '')
+    out = cut === '' ? out.slice(0, -1) : cut
+  }
+  return `${out.trimEnd()}…`
+}
+
+/** The cover's fixed geometry, in points. The field's height is not fixed: it follows the masthead and the title. */
+const COVER = {
+  /** The facts strip sits directly under the field: the rule, the label, the value, then a hairline. */
+  factsHeight: 64,
+  /** Where the contents may not go below: the foot's rule is at 120. */
+  contentsFloor: 150,
+} as const
+
+/**
+ * The cover, in two passes.
+ *
+ * It is COMPOSED rather than set at the top of an empty page: a colour field carrying a masthead (the logo, the
+ * kicker) and the title anchored to its foot; a strip of the facts a person picking the document up wants (date,
+ * sections, sources, pages); the report's own opening as a summary; and a contents list. The first pass draws what is
+ * known before the body is laid out. `coverFinish` draws the facts and contents once the page numbers exist, which is
+ * why a contents list on a cover is possible at all: nothing before the end knows what page a section landed on.
+ *
+ * The field is as tall as its title needs, not a fixed 260: a one-line title leaves the room to the summary and
+ * contents instead of to empty colour. Still deterministic and still the house style: the colours, the faces and the
+ * band/standard treatment are the theme's, and nothing here reads a model.
+ */
+function cover(
+  flow: Flow,
+  report: Report,
+  assets: ReportAssets | undefined,
+): { readonly factsY: number; readonly nextY: number } {
   const page = flow.current()
-  // A band is the field in the primary colour with the type reversed out of it; the standard cover is the wash.
   const band = T.titlePage === 'band'
-  page.rect(0, A4.height - 260, A4.width, 260, band ? T.primary : T.wash)
-  page.rect(0, A4.height - 264, A4.width, 4, T.accent)
   const onField = band ? T.paper : null
+  const inkOn = onField ?? T.ink
+  const quiet = onField === null ? T.rule : mixRgb(T.primary, T.paper, 0.35)
 
-  const kicker = report.author.toUpperCase()
-  page.text(kicker, MARGIN.left, A4.height - 120, T.type.h1.face, 9, onField ?? T.primary)
-
-  /*
-    A title that needs a third line is set a size smaller instead: at 30 points three lines left the date jammed
-    against the last of them (seen in the rendered capture), and the field is a fixed height. One or two lines are
-    exactly as before.
-  */
+  // --- the title's shape first, because it decides how tall the field is
   let titleSize = 30
   let titleLead = 36
-  let { lines } = wrap(report.title, T.type.h1.face, titleSize, COLUMN)
+  let lines = wrap(report.title, T.type.h1.face, titleSize, COLUMN).lines
   if (lines.length > 2) {
     titleSize = 25
     titleLead = 30
     lines = wrap(report.title, T.type.h1.face, titleSize, COLUMN).lines
   }
-  let y = A4.height - 160
-  let lastBaseline = y
-  for (const line of lines.slice(0, 3)) {
-    page.text(line, MARGIN.left, y, T.type.h1.face, titleSize, onField ?? T.ink)
-    lastBaseline = y
-    y -= titleLead
+  if (lines.length > 3) {
+    lines = [
+      ...lines.slice(0, 2),
+      clip(lines.slice(2).join(' '), T.type.h1.face, titleSize, COLUMN),
+    ]
   }
-  const when = report.created.toISOString().slice(0, 10)
-  /*
-    Under the LAST title line, not at a fixed height. A three-line title ends at A4.height - 232 and the date used to
-    sit at -240, eight points below it: the layout check (qa.ts) found the date printed over the third line. Two lines
-    or fewer still put it at -240, so no existing document moves.
-  */
-  page.text(
-    when,
+
+  // --- the masthead: the logo (on a paper plate where the field is dark) and the kicker, over a hairline
+  const topEdge = A4.height - 46
+  const logo = assets?.logo ?? null
+  const kicker = report.author.toUpperCase()
+  let mastBottom = topEdge - 28
+  const place: { logo?: { x: number; y: number; w: number; h: number; plate: boolean } } = {}
+  if (logo !== null) {
+    const box = fit(logo, 150, 52)
+    const pad = band ? 9 : 0
+    place.logo = { h: box.h, plate: band, w: box.w, x: MARGIN.left + pad, y: topEdge - box.h - pad }
+    mastBottom = topEdge - box.h - pad * 2
+  }
+  const ruleY = mastBottom - 16
+  const fieldH = A4.height - ruleY + 40 + (lines.length - 1) * titleLead + titleSize + 15 + 48
+  const fieldBottom = A4.height - fieldH
+  page.rect(0, fieldBottom, A4.width, fieldH, band ? T.primary : T.wash)
+  page.rect(0, fieldBottom - 4, A4.width, 4, T.accent)
+
+  if (place.logo !== undefined && logo !== null) {
+    const l = place.logo
+    const padPlate = l.plate ? 9 : 0
+    if (l.plate)
+      page.rect(MARGIN.left, l.y - padPlate, l.w + padPlate * 2, l.h + padPlate * 2, T.paper)
+    page.image(logo, l.x, l.y, l.w, l.h)
+    const room = COLUMN - (l.w + padPlate * 2) - 28
+    const text = clip(kicker, T.type.h1.face, 9, room)
+    page.text(
+      text,
+      A4.width - MARGIN.right - widthOf(text, T.type.h1.face, 9),
+      l.y + l.h / 2 - 3,
+      T.type.h1.face,
+      9,
+      onField ?? T.primary,
+    )
+  } else {
+    page.text(
+      clip(kicker, T.type.h1.face, 9, COLUMN),
+      MARGIN.left,
+      topEdge - 14,
+      T.type.h1.face,
+      9,
+      onField ?? T.primary,
+    )
+  }
+  page.line(MARGIN.left, ruleY, A4.width - MARGIN.right, ruleY, 0.6, quiet)
+
+  // --- the title, anchored to the foot of the field: a short title sits low, a long one grows upward
+  const lastBaseline = fieldBottom + 48
+  const firstBaseline = lastBaseline + (lines.length - 1) * titleLead
+  page.rect(MARGIN.left, firstBaseline + titleSize + 10, 54, 3, onField ?? T.primary)
+  for (const [i, line] of lines.entries()) {
+    page.text(line, MARGIN.left, firstBaseline - i * titleLead, T.type.h1.face, titleSize, inkOn)
+  }
+
+  // --- the summary: the document's own opening, below the facts where there is room to read it
+  const factsY = fieldBottom - 4
+  let y = factsY - COVER.factsHeight - 38
+  const sub = wrap(report.subtitle, T.type.lead.face, T.type.lead.size, COLUMN)
+  if (sub.lines.length > 0 && report.subtitle.trim() !== '') {
+    page.text('SUMMARY', MARGIN.left, y, T.type.h1.face, 8, T.primary)
+    y -= 10
+    /*
+      The SAME measure `coverTakes` uses, deliberately: when the cover has taken the whole opening paragraph the body
+      omits it, so the cover must draw every line of it. A larger size here would wrap to more lines than coverTakes
+      counted and lose words from the document.
+    */
+    const shown =
+      sub.lines.length > COVER_LINES + 2
+        ? [
+            ...sub.lines.slice(0, COVER_LINES + 1),
+            clip(
+              sub.lines.slice(COVER_LINES + 1).join(' '),
+              T.type.lead.face,
+              T.type.lead.size,
+              COLUMN,
+            ),
+          ]
+        : sub.lines
+    for (const line of shown) {
+      y -= T.type.lead.lead + 1
+      page.text(line, MARGIN.left, y, T.type.lead.face, T.type.lead.size, T.ink)
+    }
+  }
+  flow.forceBreak()
+  return { factsY, nextY: y }
+}
+
+/** The second pass: the facts strip and the contents, drawn on the cover once the page numbers exist. */
+function coverFinish(
+  flow: Flow,
+  report: Report,
+  where: { readonly factsY: number; readonly nextY: number },
+  pageCount: number,
+): void {
+  const page = flow.pages[0]
+  if (page === undefined) return
+
+  // --- the facts strip: what a person picking this up wants to know before reading a word
+  const date = new Date(`${report.created.toISOString().slice(0, 10)}T00:00:00Z`)
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ]
+  const nice = `${String(date.getUTCDate())} ${months[date.getUTCMonth()] ?? ''} ${String(date.getUTCFullYear())}`
+  const sections = flow.outline.filter((o) => o.level === 1).length
+  const facts: [string, string][] = [
+    ['DATE', nice],
+    ...(sections > 0 ? ([['SECTIONS', String(sections)]] as [string, string][]) : []),
+    ['SOURCES', String(report.sources.length)],
+    ['PAGES', String(pageCount)],
+  ]
+  const first = 0.38
+  const rest = (1 - first) / Math.max(1, facts.length - 1)
+  let x = MARGIN.left
+  for (const [i, [label, value]] of facts.entries()) {
+    const w = COLUMN * (i === 0 ? first : rest)
+    page.text(label, x, where.factsY - 24, T.type.h1.face, 7.5, T.ink3)
+    page.text(
+      clip(value, T.type.h1.face, 15, w - 10),
+      x,
+      where.factsY - 46,
+      T.type.h1.face,
+      15,
+      T.ink,
+    )
+    x += w
+  }
+  page.line(
     MARGIN.left,
-    Math.min(A4.height - 240, lastBaseline - 20),
-    T.type.caption.face,
-    9.5,
-    onField ?? T.ink2,
+    where.factsY - COVER.factsHeight,
+    A4.width - MARGIN.right,
+    where.factsY - COVER.factsHeight,
+    0.5,
+    T.rule,
   )
 
-  // The subtitle sits BELOW the field, in the body face, because it is prose
-  // and the title is not.
-  const sub = wrap(report.subtitle, T.type.lead.face, T.type.lead.size, COLUMN)
-  let sy = A4.height - 310
-  for (const line of sub.lines) {
-    page.text(line, MARGIN.left, sy, T.type.lead.face, T.type.lead.size, T.ink2)
-    sy -= T.type.lead.lead
+  // --- contents: what the report is made of, and where
+  const h1 = flow.outline.filter((o) => o.level === 1)
+  const entries = h1.length > 0 ? h1 : flow.outline.filter((o) => o.level === 2)
+  const sourcesAt = flow.outline.find((o) => o.level === 0)
+  const rows = [...entries, ...(sourcesAt === undefined ? [] : [sourcesAt])]
+  const ROW = 23
+  let y = where.nextY - 34
+  if (rows.length > 0 && y > COVER.contentsFloor + ROW * 2) {
+    page.text('IN THIS REPORT', MARGIN.left, y, T.type.h1.face, 8, T.primary)
+    y -= 8
+    const room = Math.max(1, Math.floor((y - COVER.contentsFloor) / ROW))
+    // When the list does not fit, the last entry (Sources) stays and the middle is summarised in a line.
+    const listed =
+      rows.length > room ? [...rows.slice(0, Math.max(0, room - 2)), ...rows.slice(-1)] : rows
+    const hidden = rows.length - listed.length
+    for (const [i, row] of listed.entries()) {
+      if (hidden > 0 && i === listed.length - 1) {
+        y -= ROW
+        page.text(
+          `and ${String(hidden)} more sections`,
+          MARGIN.left,
+          y + 7,
+          T.type.caption.face,
+          9,
+          T.ink3,
+        )
+        page.line(MARGIN.left, y, A4.width - MARGIN.right, y, 0.4, T.rule)
+      }
+      y -= ROW
+      const label = String(row.page)
+      const w = widthOf(label, T.type.h1.face, 10)
+      page.text(
+        clip(row.text, 'Helvetica', 10.5, COLUMN - w - 28),
+        MARGIN.left,
+        y + 7,
+        'Helvetica',
+        10.5,
+        T.ink,
+      )
+      page.text(label, A4.width - MARGIN.right - w, y + 7, T.type.h1.face, 10, T.primary)
+      page.line(MARGIN.left, y, A4.width - MARGIN.right, y, 0.4, T.rule)
+    }
   }
-  /*
-    A foot on the cover, so the lower two thirds are deliberate space rather
-    than a page that ran out of things to say.
-  */
+
+  // --- the foot: what the page says about itself, once, on a rule
   page.line(MARGIN.left, 120, A4.width - MARGIN.right, 120, 0.8, T.rule)
   /*
-    The author is NOT repeated here.
-
-    The kicker at the top of this same page is the author, in the accent, in
-    small caps. Printing the name again eight inches below it is the same
-    sentence twice on one page — visible in the first render of this cover and
-    in nothing else, because a repetition is not overflow, not low contrast and
-    not a dead control.
-
-    What stays is the provenance line, which the kicker does not say and which
-    is the one thing a person picking the document up needs to know about where
-    it came from. It moves to the left, where the eye starts, now that it is
-    alone on the rule.
+    The author is NOT repeated here. The kicker at the top of this same page is the author; printing the name again
+    below it is the same sentence twice on one page (found in the first render of the earlier cover). What stays is the
+    provenance line, which the kicker does not say.
   */
-  const foot = 'Generated by the office from project material. Sources are listed at the end.'
-  page.text(foot, MARGIN.left, 100, 'Helvetica', 8.5, T.ink3)
-
-  flow.forceBreak()
+  page.text(
+    'Generated by the office from project material. Sources are listed at the end.',
+    MARGIN.left,
+    100,
+    'Helvetica',
+    8.5,
+    T.ink3,
+  )
 }
 
 function table(flow: Flow, block: Extract<Block, { kind: 'table' }>): void {
@@ -604,19 +808,23 @@ function chart(flow: Flow, block: Extract<Block, { kind: 'chart' }>): void {
 }
 
 /** Lay the whole thing out. */
-export function layout(report: Report, style?: StyleProfile | null): Laid {
-  const resolved = resolveTheme(style)
+export function layout(report: Report, style?: StyleProfile | null, assets?: ReportAssets): Laid {
+  const resolved = resolveTheme(style, assets)
   T = resolved.theme
   try {
-    return layoutWith(report, resolved.unapplied)
+    return layoutWith(report, resolved.unapplied, assets)
   } finally {
     T = DEFAULT_THEME
   }
 }
 
-function layoutWith(report: Report, notes: readonly string[]): Laid {
+function layoutWith(
+  report: Report,
+  notes: readonly string[],
+  assets: ReportAssets | undefined,
+): Laid {
   const flow = new Flow(report.title)
-  cover(flow, report)
+  const covered = cover(flow, report, assets)
 
   /*
     The paragraph the cover already printed, so the body does not print it
@@ -657,6 +865,7 @@ function layoutWith(report: Report, notes: readonly string[]): Laid {
           it.
         */
         if (!flow.room(t.lead + T.type.body.lead * 2)) flow.break_()
+        flow.outline.push({ level: block.level, page: flow.pageNumber(), text: block.text })
         flow.paragraph(block.text, t.face, t.size, t.lead, T.ink, 0, 'a heading')
         if (block.level === 1) {
           /*
@@ -761,6 +970,8 @@ function layoutWith(report: Report, notes: readonly string[]): Laid {
   */
   flow.gap(18)
   if (!flow.room(120)) flow.break_()
+  // Level 0 is the Sources heading: it is not a section of the argument, but it is somewhere a reader may want to go.
+  flow.outline.push({ level: 0, page: flow.pageNumber(), text: 'Sources' })
   flow.paragraph(
     'Sources',
     T.type.h2.face,
@@ -806,6 +1017,7 @@ function layoutWith(report: Report, notes: readonly string[]): Laid {
   }
 
   flow.finish()
+  coverFinish(flow, report, covered, flow.pages.length)
   return { notes, pages: flow.pages, problems: [...flow.problems, ...layoutCollisions(flow.pages)] }
 }
 
@@ -813,8 +1025,9 @@ function layoutWith(report: Report, notes: readonly string[]): Laid {
 export function renderReport(
   report: Report,
   style?: StyleProfile | null,
+  assets?: ReportAssets,
 ): { bytes: Uint8Array; problems: readonly string[]; notes: readonly string[] } {
-  const laid = layout(report, style)
+  const laid = layout(report, style, assets)
   const info: DocumentInfo = {
     author: report.author,
     created: report.created,

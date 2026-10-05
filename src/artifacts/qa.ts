@@ -14,11 +14,13 @@
  *
  * ## What it does not claim
  *
- * It compares text with text and text with the page edge. It does not see text against a filled rectangle (a band
- * reverses type out of one on purpose) or judge whether a page looks good - opening the rendered image still does that.
+ * It compares text with text and text with the page edge, and (as images became drawable) an image with the page
+ * edge, with text and with another image: type printed over a logo is a collision, where type reversed out of a
+ * filled rectangle is not. It does not see text against a filled rectangle (a band reverses type out of one on
+ * purpose) or judge whether a page looks good - opening the rendered image still does that.
  */
 
-import type { Page, TextBox } from './pdf.ts'
+import type { ImageBox, Page, TextBox } from './pdf.ts'
 
 /** Ascender and descender as fractions of the type size: a box a Helvetica or Times line actually occupies. */
 const ABOVE = 0.76
@@ -44,6 +46,17 @@ const rectOf = (b: TextBox): Rect => ({
   y0: b.y - b.size * BELOW,
   y1: b.y + b.size * ABOVE,
 })
+
+const rectOfImage = (b: ImageBox): Rect => ({
+  x0: b.x,
+  x1: b.x + b.width,
+  y0: b.y,
+  y1: b.y + b.height,
+})
+
+const meet = (a: Rect, b: Rect): boolean =>
+  Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > MIN_WIDTH &&
+  Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > MIN_WIDTH
 
 const shown = (text: string): string => (text.length > 40 ? `${text.slice(0, 37)}...` : text)
 
@@ -72,6 +85,27 @@ export function layoutCollisions(pages: readonly Page[]): readonly string[] {
         if (h > shorter * MIN_DEPTH_SHARE) {
           problems.push(`text overlaps text on ${label}: "${shown(a.text)}" and "${shown(b.text)}"`)
         }
+      }
+    }
+  }
+  return [...problems, ...imageProblems(pages)]
+}
+
+/** An image off the page, over text, or over another image. Split out so the text check above is unchanged. */
+function imageProblems(pages: readonly Page[]): readonly string[] {
+  const problems: string[] = []
+  for (const [index, page] of pages.entries()) {
+    const label = `page ${String(index + 1)}`
+    const pics = page.imageBoxes().map(rectOfImage)
+    for (const [i, r] of pics.entries()) {
+      if (r.x0 < -EDGE || r.x1 > page.width + EDGE || r.y0 < -EDGE || r.y1 > page.height + EDGE)
+        problems.push(`an image runs off ${label}`)
+      for (const b of page.boxes()) {
+        if (meet(r, rectOf(b)))
+          problems.push(`text overlaps an image on ${label}: "${shown(b.text)}"`)
+      }
+      for (const other of pics.slice(i + 1)) {
+        if (meet(r, other)) problems.push(`an image overlaps another image on ${label}`)
       }
     }
   }

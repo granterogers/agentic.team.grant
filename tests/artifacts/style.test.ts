@@ -27,8 +27,15 @@ import { SAMPLE } from './sample-report.ts'
 const sha = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex')
 const text = (b: Uint8Array): string => Buffer.from(b).toString('latin1')
 
-// Recorded from the renderer as it stood BEFORE style profiles (git: src/artifacts/report.ts at 20b98706).
-const BASELINE_SHA = '14290231f6124fee84186c1ca96cb17dd68f3c7a3eae1ecb19107915947bea1f'
+/*
+  Recorded from the renderer as it stands AFTER the cover was redesigned on purpose (HQ-PDF-006/007/014: masthead,
+  title anchored to the field's foot, facts strip, summary, contents list, optional logo). The previous pin,
+  14290231f6124fee84186c1ca96cb17dd68f3c7a3eae1ecb19107915947bea1f, was the cover that was two thirds empty, and it was
+  retired deliberately, not by accident: the byte-for-byte guarantee below is "no profile gives the default look, and a
+  profile never leaks into the next render", which is unchanged. Pages 2 onward are unchanged by the redesign (the
+  body-pages test in cover.test.ts pins that against the old layout rules).
+*/
+const BASELINE_SHA = '83b55b49480d97981cbea7f10b77936f746af7ad73504c3df3c097f827c4a7b7'
 
 describe('(a) no profile: the default look, byte for byte', () => {
   it('is unchanged when no profile is passed, or a null, or an empty one', () => {

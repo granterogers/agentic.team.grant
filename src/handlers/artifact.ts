@@ -38,10 +38,11 @@
 
 import { howComposed } from '../agents/provenance.ts'
 import { applyDesign, type Design, designBrief, effectiveStyle } from '../artifacts/design.ts'
+import { type FetchLogoBytes, loadLogo, storageFetcher } from '../artifacts/logo.ts'
 import { type Block, coverTakes, type Report, renderReport } from '../artifacts/report.ts'
 import { resolveSourceDocument, revisesEarlier, sourcePhrase } from '../artifacts/source.ts'
 import { filenameFor, storeArtifact } from '../artifacts/store.ts'
-import { loadStyle, type StyleProfile } from '../artifacts/style.ts'
+import { loadResolvedStyle, type StyleProfile, styleSnapshot } from '../artifacts/style.ts'
 import { validatePdf } from '../artifacts/validate.ts'
 import {
   madeHead,
@@ -74,6 +75,8 @@ export interface ArtifactDeps {
   readonly router: ProviderRouter | null
   readonly projectRef: string
   readonly serviceKey: string
+  /** How a logo's bytes are had. Tests inject a fixture; production reads the project's storage. */
+  readonly fetchLogoBytes?: FetchLogoBytes
 }
 
 /** More than this is a model padding, not a report. */
@@ -354,7 +357,8 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
       */
       const projectId: string = job.projectId
       // The house style (0923): the office's, with this project's fields over it. Fails open to the default look.
-      const style = await loadStyle(db, job.jobId, projectId)
+      const resolvedStyle = await loadResolvedStyle(db, job.jobId, projectId)
+      const style = resolvedStyle.profile
       const where = (
         await db.execute(
           `select app.job_office(${lit(job.jobId)}::uuid)::text as office,
@@ -365,6 +369,16 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
       ).rows[0] as { office?: string; slug?: string } | undefined
       const office = String(where?.office ?? '')
       const projectSlug = String(where?.slug ?? '')
+      /*
+        The style's logo, as bytes, or the reason it is not here. Loaded once: both renders (the stored file and the
+        re-render for delivery) draw the same logo. Never fails the report.
+      */
+      const assets = await loadLogo(
+        db,
+        { office },
+        style,
+        deps.fetchLogoBytes ?? storageFetcher(deps.projectRef, deps.serviceKey),
+      )
 
       /*
         Run as checkpointed steps (#263).
@@ -641,7 +655,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                 subtitle: coverTakes(composed.blocks).line,
                 title: String(draft.title ?? 'Report'),
               }
-              const { bytes, problems } = renderReport(report, composed.style)
+              const { bytes, problems, notes } = renderReport(report, composed.style, assets)
               const verdict = validatePdf(bytes, { layoutProblems: problems })
               if (!verdict.ok) {
                 return { outcome: { failed: verdict.problems.slice(0, 2) } }
@@ -680,6 +694,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                         jobId: job.jobId,
                         sources,
                         styleHash: hash,
+                        styleSnapshot: styleSnapshot(resolvedStyle.raw, composed.design.choice),
                         styleUpdatedAt: stamped,
                       },
                     ).catch((e: unknown) => String((e as Error).message))
@@ -719,6 +734,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                   documentId: kept.documentId,
                   provenanceProblem,
                   styleHash: hash,
+                  logoNote: notes.find((x) => x.startsWith('the logo was not drawn')) ?? null,
                   version,
                   versionPending,
                   versionProblem,
@@ -886,7 +902,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         subtitle: coverTakes(recomposed.blocks).line,
         title: String(drafted.title ?? 'Report'),
       }
-      const again = renderReport(finalReport, recomposed.style)
+      const again = renderReport(finalReport, recomposed.style, assets)
       const versionLine =
         typeof kept.revisedFrom === 'string'
           ? typeof kept.versionProblem === 'string'
@@ -922,7 +938,11 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         body:
           `${finalReport.title} — ${String(kept.pages)} pages, from ${String(
             finalReport.sources.length,
-          )} source(s).${versionLine} It is in the project’s documents as well, so you can open it ` +
+          )} source(s).${versionLine}${
+            typeof kept.logoNote === 'string'
+              ? ` The style asks for a logo and I left it off: ${kept.logoNote.replace(/^the logo was not drawn: /, '')}.`
+              : ''
+          } It is in the project’s documents as well, so you can open it ` +
           'from the dashboard or ask me to send it anywhere else.',
         evidence: 'verified',
         model: String(drafted.model ?? '') || null,

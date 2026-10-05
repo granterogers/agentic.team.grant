@@ -2942,6 +2942,7 @@ const documentRecord = (p) => {
         </div>
         <p class="bcpmeta" data-bc-docsay role="status"></p>
         <div class="bcdocversions" data-bc-docversions="${esc(String(d.id ?? ''))}" hidden></div>
+        ${e.src === 'generated' && String(d.id ?? '') !== '' ? `<div class="bcdocstyle" data-bc-docstyle="${esc(String(d.id))}" data-bc-docproject="${esc(String(p.slug ?? ''))}" hidden></div>` : ''}
       </aside>
     </div>`
 }
