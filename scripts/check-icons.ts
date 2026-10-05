@@ -16,6 +16,7 @@
  * importing it, because it is a browser module and this is Node; a key list is
  * all that is wanted and a regex over a generated file is honest about that.
  */
+import '../src/safety/require-production-checks.ts'
 import { readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 

@@ -2,6 +2,7 @@
  * One-off capture of Team HQ at a given address and viewport, for visual QA.
  *   npx tsx scripts/verify/ux-shot.ts <path> <WxH> <out.png> [js-to-run-first]
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

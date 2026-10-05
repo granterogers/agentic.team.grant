@@ -5,6 +5,7 @@
  * one Connect (or Reconnect), one Disconnect, and the state of each part beneath it. Three scenarios are rendered at
  * 1440 and 390: everything connected, one part dead, nothing connected. Screenshots: .out/ux-google-*.png
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

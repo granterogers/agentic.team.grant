@@ -27,6 +27,7 @@
  * them, and reports each.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { SlackApiError, SlackClient } from '../../src/slack/api.ts'
 import { channelNameFor, channelPrefixFor } from '../../src/slack/provision.ts'

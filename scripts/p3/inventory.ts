@@ -17,6 +17,7 @@
  *   SYSTEM                   touches only deployment infrastructure
  *   LEGACY_UNSCOPED          touches owned data, can be reached from outside, and names no office - THE DEBT
  */
+import '../../src/safety/require-production-checks.ts'
 import { execSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'

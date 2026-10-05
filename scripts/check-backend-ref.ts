@@ -42,6 +42,7 @@
  * one, and CLAUDE.md records four separate occasions where an enumeration was
  * asserted where a property was meant.
  */
+import '../src/safety/arm.ts'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 

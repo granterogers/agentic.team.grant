@@ -9,6 +9,7 @@
  * the script confirms the length and the last four characters and nothing
  * more, which is enough to tell a paste error from a wrong key.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN

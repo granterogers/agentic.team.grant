@@ -6,6 +6,7 @@
  * with the project and the document and NO confirmation; a style already in place is asked about first (Keep sends
  * nothing, Replace sends p_confirm); a report with no recorded style says so; the page has no overflow at 1440 and 390.
  */
+import '../../src/safety/arm.ts'
 import { chromium, type Page } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

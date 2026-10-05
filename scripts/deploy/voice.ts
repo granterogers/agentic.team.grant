@@ -8,6 +8,7 @@
  * second thing to lose.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { bundleForm } from './lib/bundle.ts'
 

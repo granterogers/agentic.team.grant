@@ -12,6 +12,7 @@
  * unit tests drive — rather than from a copy. A copy would drift, and then the
  * tested code and the running code would be different code.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

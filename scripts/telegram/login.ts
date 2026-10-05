@@ -28,6 +28,7 @@
  * and this script never prints it, never logs it, and has no flag that would.
  * The only output is whether a step worked.
  */
+import '../../src/safety/require-production-writes.ts'
 import { Api } from 'teleproto'
 import type { StringSession } from 'teleproto/sessions/index.js'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'

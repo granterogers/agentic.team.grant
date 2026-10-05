@@ -10,6 +10,7 @@
  * against a stubbed office for the `office` adapter, so the gateway contract
  * the UI speaks is asserted too. Screenshots go to .out/ux-cal-*.png.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

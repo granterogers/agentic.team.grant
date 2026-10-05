@@ -24,6 +24,7 @@
  * Proving it against the production office is recorded as HUMAN_BLOCKED in
  * docs/basecamp/RUN-LEDGER.md and needs one credential, not more work.
  */
+import '../../src/safety/arm.ts'
 import { createServer } from 'node:http'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'

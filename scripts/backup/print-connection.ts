@@ -4,6 +4,7 @@
  * The caller MUST mask the output — it contains the database password. The
  * workflow does so with `::add-mask::` before the value is used anywhere.
  */
+import '../../src/safety/require-production-checks.ts'
 import { buildPoolerUri, fetchPoolerConfig } from './resolve-connection.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

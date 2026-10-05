@@ -14,6 +14,7 @@
  * precisely when you have just cut something off.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN

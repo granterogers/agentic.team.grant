@@ -8,6 +8,7 @@
  * `notion/adopt.ts` has to `office.notion_adopt`.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { notionImportHandler } from '../../src/handlers/notion-import.ts'
 import { ProviderRouter } from '../../src/providers/router.ts'

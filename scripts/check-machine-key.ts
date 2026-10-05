@@ -20,6 +20,7 @@
  * Its own controls: an injected unpinned reach is refused, an injected stale pin is refused, and the scan finds
  * the pinned ones - so "clean" cannot mean "found nothing".
  */
+import '../src/safety/require-production-checks.ts'
 import { readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 

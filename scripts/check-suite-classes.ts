@@ -9,6 +9,7 @@
  * 3. CONTROL: the classifier must call a suite whose source plainly uses the Management API production-heavy, or a
  *    classifier that has stopped seeing anything would report "everything local" and read as clean.
  */
+import '../src/safety/arm.ts'
 import { readFileSync } from 'node:fs'
 import { classify, suites } from './suite.ts'
 

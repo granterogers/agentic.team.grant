@@ -23,6 +23,7 @@
  * credential, no new cost.
  */
 
+import '../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { ManagementApiExecutor } from '../src/db/executor.ts'

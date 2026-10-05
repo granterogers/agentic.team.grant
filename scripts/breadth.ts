@@ -34,6 +34,7 @@
  * tier's honest size is however much can finish in the foreground.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../src/db/executor.ts'

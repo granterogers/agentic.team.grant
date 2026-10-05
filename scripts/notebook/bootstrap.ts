@@ -11,6 +11,7 @@
  * with no browser whenever `__Secure-1PSIDTS` rotates. A cookie export cannot,
  * which is why the export path died within the hour.
  */
+import '../../src/safety/require-production-writes.ts'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'

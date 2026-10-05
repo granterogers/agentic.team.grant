@@ -10,6 +10,7 @@
  * row of thumbnails. `collisions()` reports clashes; the sheet is how a human
  * (or a screenshot) sees them together.
  */
+import '../../src/safety/require-production-writes.ts'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { ROLE_SLUGS } from '../../src/agents/router.ts'
 import { avatarFor, featuresFor, identityKey } from '../../src/staff/avatar.ts'

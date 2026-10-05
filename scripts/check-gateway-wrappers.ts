@@ -29,6 +29,7 @@
  * It reads the deployed function's SOURCE for the names and the DATABASE for
  * what exists, so it cannot pass by agreeing with itself.
  */
+import '../src/safety/require-production-checks.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 

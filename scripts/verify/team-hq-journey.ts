@@ -15,6 +15,7 @@
  * Unnamed, a fake sign-in function and a recorded conversation door. Nothing
  * leaves this machine: no Telegram, no Slack, no real office.
  */
+import '../../src/safety/arm.ts'
 import { createServer } from 'node:http'
 import { type BrowserContext, chromium, devices, type Page } from 'playwright'
 import { serveStudio } from './serve-studio.ts'

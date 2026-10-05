@@ -12,6 +12,8 @@
  * no import to resolve.
  */
 
+import { assertProductionWritesAllowed } from '../safety/production-gate.ts'
+
 type Manifest = {
   sample: string[]
   smoke: string[]
@@ -47,8 +49,9 @@ export const assertMayTouchProduction = (): void => {
   decided = null
   const proc = (globalThis as { process?: NodeJS.Process }).process
   const entry = proc?.argv?.[1]
-  if (proc === undefined || entry === undefined || proc.env?.HQ_PRODUCTION_INTENT === '1') return
+  if (proc === undefined || entry === undefined) return
   if (!SUITE_DIR.test(entry)) return
+  const intent = proc.env?.HQ_PRODUCTION_INTENT === '1'
   const fs = proc.getBuiltinModule?.('node:fs')
   if (fs === undefined) return
   let heavy = true
@@ -64,6 +67,16 @@ export const assertMayTouchProduction = (): void => {
     // An unreadable manifest is not permission: a suite that cannot be classified is treated as heavy.
   }
   if (!heavy) return
+  if (intent) {
+    // Intent was stated, but a production-heavy suite WRITES fixtures into the real office, so it also needs the second,
+    // stronger confirmation (src/safety/production-gate.ts). Not memoised as a refusal: setting the flag then works.
+    decided = undefined
+    assertProductionWritesAllowed(
+      `the production-heavy suite ${entry.replace(/^.*\/(scripts\/)/, '$1')}`,
+    )
+    decided = null
+    return
+  }
   decided =
     'REFUSED: this is a production-heavy suite, which writes into or presses on the real office. ' +
     'Run it as `npm run suite -- <name> --production` (see docs/testing/SUITE-CLASSES.md), or use a sample-class suite.'

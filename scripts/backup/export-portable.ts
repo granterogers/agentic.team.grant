@@ -30,6 +30,7 @@
  * than the one it solves. The manifest lists what would need re-entering.
  */
 
+import '../../src/safety/require-production-checks.ts'
 import { writeFile } from 'node:fs/promises'
 import { buildArchive } from '../../src/backup/portable.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'

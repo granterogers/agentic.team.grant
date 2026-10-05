@@ -17,6 +17,7 @@
  * back with `getWebhookInfo` rather than assumed from the call that set it.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { roster } from '../../src/telegram/roster.ts'
 

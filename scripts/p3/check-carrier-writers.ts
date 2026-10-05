@@ -10,6 +10,7 @@
  * A trigger that fills the office from the row's own parent is a legitimate alternative to naming it, so a table whose
  * insert is covered by a BEFORE INSERT trigger other than the removed bridge is listed with its triggers rather than failed.
  */
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 /** The pure predicate, exported so the control below can drive it with a defect. */

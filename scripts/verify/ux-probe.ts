@@ -1,4 +1,5 @@
 /* Print boxes for selectors on a Team HQ project page. npx tsx scripts/verify/ux-probe.ts 1440x900 '.bchome' '.bcpanes' */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

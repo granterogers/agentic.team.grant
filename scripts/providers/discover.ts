@@ -14,6 +14,7 @@
  * even if the registry is wrong.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { FORCED_PROVIDER_OPTIONS, isZeroPriced, NEVER_CALL } from '../../src/providers/guards.ts'

@@ -40,6 +40,7 @@
  * tell apart, which is the exact failure the avatars exist to prevent.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { recordUsage } from '../../src/inference/record.ts'

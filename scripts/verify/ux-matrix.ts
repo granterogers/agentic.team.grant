@@ -7,6 +7,7 @@
  * page errors, nothing under the 12px type floor in the new surfaces, and that
  * reduced motion really removes the maximise animation.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { seedAppearance } from './seed-appearance.ts'
 import { serveStudio } from './serve-studio.ts'

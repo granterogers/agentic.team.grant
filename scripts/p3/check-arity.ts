@@ -12,6 +12,7 @@
  *   npx tsx scripts/p3/check-arity.ts                            # against production (read only)
  */
 
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
 import { PgExecutor } from '../../src/db/pg-executor.ts'
 

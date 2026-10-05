@@ -13,6 +13,7 @@
  * prove the delivery works and nothing about the voice, which is the half he
  * actually asked about.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { ProviderRouter } from '../../src/providers/router.ts'
 

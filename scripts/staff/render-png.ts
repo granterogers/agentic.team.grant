@@ -20,6 +20,7 @@
  * this adds no dependency and no credential. 512px because Slack downscales
  * and a 256px source looks soft on a retina sidebar.
  */
+import '../../src/safety/require-production-checks.ts'
 import { spawn } from 'node:child_process'
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

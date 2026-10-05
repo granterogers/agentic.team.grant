@@ -22,6 +22,7 @@
  * what it changed. Running it twice changes nothing the second time.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

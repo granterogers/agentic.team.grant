@@ -9,6 +9,7 @@
  * that saw a red run every ten minutes during an outage would train everyone
  * to ignore it.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { operatorOffice } from '../../src/db/office.ts'
 import { UnavailableNotebookAdapter } from '../../src/notebook/adapter.ts'

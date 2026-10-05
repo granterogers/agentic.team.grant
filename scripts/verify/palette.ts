@@ -4,6 +4,7 @@
  * Cmd/Ctrl+K opens Team HQ's own palette (not the classic studio's bar), which
  * finds project content across stores and performs workspace actions.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

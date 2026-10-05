@@ -14,6 +14,7 @@
  *   - A DETECTOR THAT CAN FAIL: a deliberately inaccessible control is injected and must be reported.
  * Browser code travels as a string: tsconfig has no DOM lib on purpose.
  */
+import '../../src/safety/arm.ts'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'

@@ -20,6 +20,7 @@
  *   - reduced motion: no animation is created at all and the dialog is simply there
  * Browser code travels as a string: tsconfig has no DOM lib on purpose.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

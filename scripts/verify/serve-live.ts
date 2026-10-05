@@ -12,6 +12,7 @@
  * way), so no amount of CA work reaches https://…vercel.app from here. The
  * distinction is kept in the report rather than blurred.
  */
+import '../../src/safety/arm.ts'
 import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { extname, join } from 'node:path'

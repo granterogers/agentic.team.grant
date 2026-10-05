@@ -15,6 +15,7 @@
  * that turned out to be an auth wall; the rule since then is that a status code
  * is not a verification.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { computeSignature } from '../../src/slack/signature.ts'

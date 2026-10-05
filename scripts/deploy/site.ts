@@ -16,6 +16,7 @@
  * It targets `agentic-team-hq-basecamp`, which is NOT `ai-team-hq`. The
  * production site is not reachable from here by design.
  */
+import '../../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'

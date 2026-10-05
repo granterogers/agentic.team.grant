@@ -11,6 +11,7 @@
  * the problem the predicate raised. A control that raised nothing fails the whole check: a clean result from a
  * predicate that cannot fire says nothing.
  */
+import '../src/safety/require-production-checks.ts'
 import { execFileSync } from 'node:child_process'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import {

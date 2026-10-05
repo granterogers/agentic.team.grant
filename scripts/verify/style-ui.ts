@@ -1,4 +1,5 @@
 /* The document style form against a stubbed gateway. npx tsx scripts/verify/style-ui.ts */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

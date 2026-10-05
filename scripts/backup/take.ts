@@ -11,6 +11,7 @@
  * restore.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { backupHandler } from '../../src/handlers/backup.ts'
 

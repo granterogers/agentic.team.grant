@@ -37,6 +37,7 @@
  * repeats the original's nouns can be deleted on sight.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import { ProviderRouter } from '../src/providers/router.ts'
 import { CORPUS, type Form } from './corpus/routing.ts'
