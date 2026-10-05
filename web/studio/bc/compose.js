@@ -592,7 +592,7 @@ const offChips = (p) => {
 /** One Post-it: a rectangle, a grip, and a text area that saves as you type. */
 export const note = (n) => `<div class="bcpostit" data-bc-note-id="${esc(n.id)}"
     style="left:${String(n.x)}px;top:${String(n.y)}px;width:${String(n.w)}px;height:${String(n.h)}px;z-index:${String(n.z ?? 1)}">
-    <div class="bcpostitbar" data-bc-note-grip>
+    <div class="bcpostitbar" data-bc-note-grip tabindex="0" role="group" aria-label="Note handle: Alt and the arrow keys move this note, Alt Shift and the arrow keys resize it" aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown">
       <button type="button" class="bcpostitx" data-bc-note-del="${esc(n.id)}" aria-label="Remove this note" title="Remove this note">
         <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor"
           stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>

@@ -906,6 +906,16 @@ export const movePostit = (slug, id, rect) => {
   return id
 }
 
+/** Put a removed note back exactly as it was (the Undo beside the removal). Its removal record is cleared, and it is newer than that record. */
+export const restorePostit = (slug, note) => {
+  const d = doc(slug)
+  if (d.postits.some((n) => n.id === note.id)) return false
+  const gone = { ...d.gone }
+  delete gone[note.id]
+  commit(slug, { ...d, postits: [...d.postits, cleanPostit({ ...note, at: Date.now() })], gone, seeded: true })
+  return true
+}
+
 /** Remove a note. This is the only thing in this module that deletes content, and it is explicit. */
 export const removePostit = (slug, id) => {
   const d = doc(slug)

@@ -634,6 +634,24 @@ export const wireStage = (root, ctx) => {
 
   /* ---------------------------------------------------------------- notes */
 
+  const offerUndo = (gone) => {
+    stageEl.querySelector('.bcpostitundo')?.remove()
+    const bar = document.createElement('div')
+    bar.className = 'bcpostitundo'
+    bar.setAttribute('role', 'status')
+    bar.innerHTML = '<span>Note removed.</span> <button type="button" class="bcpostitundobtn">Undo</button>'
+    stageEl.append(bar)
+    const clear = globalThis.setTimeout(() => {
+      bar.remove()
+    }, 7000)
+    bar.querySelector('button').addEventListener('click', () => {
+      globalThis.clearTimeout(clear)
+      grid.restorePostit(slug, gone)
+      bar.remove()
+      ctx.render()
+    })
+  }
+
   const wireNote = (el) => {
     const grip = el.querySelector('[data-bc-note-grip]')
     const text = el.querySelector('.bcpostittext')
@@ -646,6 +664,39 @@ export const wireStage = (root, ctx) => {
       begin('move', grip, e, el)
     })
     bind(grip)
+    /*
+      THE KEYBOARD MOVES AND RESIZES A NOTE TOO, the same keys as a module (Alt and an arrow; Alt Shift to resize), so a
+      note is not the one object on the page only a mouse can place.
+    */
+    grip.addEventListener('keydown', (e) => {
+      if (!e.altKey) return
+      const unit = e.ctrlKey ? 90 : 12
+      const step = {
+        ArrowLeft: [-unit, 0],
+        ArrowRight: [unit, 0],
+        ArrowUp: [0, -unit],
+        ArrowDown: [0, unit],
+      }[e.key]
+      if (step === undefined) return
+      e.preventDefault()
+      const id = el.dataset.bcNoteId
+      const now = grid.postits(slug).find((n) => n.id === id)
+      if (now === undefined) return
+      const want = e.shiftKey
+        ? { x: now.x, y: now.y, w: now.w + step[0], h: now.h + step[1] }
+        : { x: now.x + step[0], y: now.y + step[1], w: now.w, h: now.h }
+      const next = grid.movePostit(slug, id, want)
+      if (next !== id) {
+        el.dataset.bcNoteId = next
+        el.querySelector('.bcpostittext').dataset.bcNoteText = next
+      }
+      const moved = grid.postits(slug).find((n) => n.id === next)
+      if (moved === undefined) return
+      el.style.left = `${String(moved.x)}px`
+      el.style.top = `${String(moved.y)}px`
+      el.style.width = `${String(moved.w)}px`
+      el.style.height = `${String(moved.h)}px`
+    })
     rz.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || stacked()) return
       e.stopPropagation()
@@ -666,7 +717,11 @@ export const wireStage = (root, ctx) => {
       }
     })
     el.querySelector('[data-bc-note-del]').addEventListener('click', () => {
+      // Taken off the page at once, and given back for a few seconds: a note is somebody's writing, and one stray press
+      // on a 20px control must not be the end of it.
+      const gone = grid.postits(slug).find((n) => n.id === el.dataset.bcNoteId)
       grid.removePostit(slug, el.dataset.bcNoteId)
+      if (gone !== undefined && gone.text.trim() !== '') offerUndo(gone)
       el.classList.add('bcpostit--leaving')
       globalThis.setTimeout(
         () => {

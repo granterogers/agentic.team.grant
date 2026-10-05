@@ -4187,3 +4187,37 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
 @media (max-width: 860px) {
   [data-experience='basecamp'] .bcrecordhead .bcactions { justify-content: flex-start; }
 }
+
+/* A removed note can be taken back for a few seconds; and the note's handle is a real tab stop. */
+[data-experience='basecamp'] .bcpostitbar:focus-visible { outline: 2px solid #5a4a00; outline-offset: -2px; }
+[data-experience='basecamp'] .bcpostitundo {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-radius: 10px;
+  background: var(--bc-ink, #1d2230);
+  color: var(--bc-paper, #fff);
+  font-size: 13px;
+  box-shadow: 0 10px 24px -12px rgb(0 0 0 / 60%);
+}
+[data-experience='basecamp'] .bcpostitundobtn {
+  appearance: none;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcpostitundobtn:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 2px; }
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcpostitundobtn { min-height: 44px; min-width: 44px; }
+}

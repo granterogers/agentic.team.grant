@@ -124,3 +124,23 @@ describe('the length limit', () => {
     expect(m.doc('p').postits[0]?.text.length).toBe(m.NOTE_MAX)
   })
 })
+
+describe('Undo for a removed note', () => {
+  it('gives the note back, with its text, and clears the removal record', async () => {
+    const m = (await load('u1')) as Mod & {
+      restorePostit: (s: string, n: object) => boolean
+      postits: (s: string) => { id: string; text: string }[]
+    }
+    const n = m.addPostit('p')
+    m.setPostit('p', n.id, { text: 'do not lose me' })
+    const kept = m.postits('p').find((x) => x.id === n.id)
+    m.removePostit('p', n.id)
+    expect(texts(m)).toEqual([])
+    expect(m.restorePostit('p', kept as object)).toBe(true)
+    expect(texts(m)).toEqual(['do not lose me'])
+    // and another tab that still holds the old copy cannot take it away again
+    expect(texts(await load('u2'))).toEqual(['do not lose me'])
+    // control: restoring a note that is already there does nothing
+    expect(m.restorePostit('p', kept as object)).toBe(false)
+  })
+})

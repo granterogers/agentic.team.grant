@@ -299,7 +299,7 @@ const draw = () => {
       <input class="bcinput" id="bcjumpq" autocomplete="off" role="combobox"
         aria-expanded="true" aria-controls="bcjumplist" aria-autocomplete="list"
         ${rows.length > 0 ? `aria-activedescendant="bcjr${String(picked)}"` : ''}
-        value="${esc(query)}" placeholder="Search this project, or type an action">
+        value="${esc(query)}" placeholder="Search everything, or type an action">
     </div>
     <div class="bcjumpresults" id="bcjumplist" role="listbox" aria-labelledby="bcjumptitle">
       ${
@@ -411,6 +411,14 @@ export const composing = (target) => {
   return tag === 'input' || tag === 'textarea' || tag === 'select'
 }
 
+/**
+ * Cmd+K on a Mac, Ctrl+K elsewhere. On a Mac Ctrl+K is "delete to end of line" in a text field, so Ctrl does not open the
+ * palette there; the browser's own platform answer decides, and a missing one counts as not a Mac.
+ */
+const isMac = () => /Mac|iPhone|iPad/i.test(globalThis.navigator?.platform ?? '')
+const paletteChord = (e) =>
+  (e.metaKey || (e.ctrlKey && !isMac())) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k'
+
 /** The keyboard map of §7.3, plus the global Shift+J of §7.1. */
 export const onKey = (e) => {
   if (!open) {
@@ -419,13 +427,13 @@ export const onKey = (e) => {
       show()
     }
     /* Cmd+K on a Mac, Ctrl+K elsewhere: from anywhere, including inside a text field, as a palette is. */
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+    if (paletteChord(e)) {
       e.preventDefault()
       show()
     }
     return
   }
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+  if (paletteChord(e)) {
     e.preventDefault()
     close()
     return
