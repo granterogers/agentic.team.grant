@@ -8,7 +8,8 @@ contact in this phase was one health read (all four services UNHEALTHY, so Q1-Q4
 
 | Gate | State |
 |---|---|
-| Q1-Q4 (read-only growth set) | NOT RUN: the canary read NO-GO (auth, db, rest, storage all UNHEALTHY). No retry, no polling. Run once when one fresh health reading is GO. |
+| Q1-Q4 (read-only growth set) | NOT RUN: two single canary readings (5 Oct, the second at 20:46 UTC) both NO-GO (auth, db, rest, storage all UNHEALTHY). No retry, no polling. Run once when one fresh health reading is GO. |
+| Tooling base | `claude/multi-user-p4` has NO `src/safety` (the production-access guard and canary library were built on the integration line). The canary CLI and Q1-Q4 therefore run from a checkout of `claude/efficiency-reconciliation` (`scripts/forensics/canary-check.ts`), and `npm run migrate` / `deploy:*` on the stabilisation branch are UNGUARDED: use only the explicit per-step commands authorised, from a reviewed command line, never a wholesale `migrate`. |
 | Dependency graph | COMPLETE (section 1). |
 | Replica at production's true schema | Rebuilt: 0891 + 0897-0905, seeded to 22.6k jobs / 94 MB heap. |
 | Equivalence, sabotage and isolation proofs on it | PASS (section 3). |
