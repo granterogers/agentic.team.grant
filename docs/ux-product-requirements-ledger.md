@@ -490,7 +490,7 @@ Group A = implementation incomplete. B = implemented, needs a real external serv
 - Real Vikunja: HQ-VIC-003, 007.
 - Real ChatGPT / Claude connectors: HQ-EXT-003 .. 013.
 
-**C. NEEDS GRANT'S VISUAL JUDGEMENT:** HQ-VIS-001, HQ-VIS-003. The audit re-captured home, calendar, documents and activity at 1440, 1280, 1024, 900, 768 and 390 and found no objective defect; whether it feels luxurious and unmistakably Team HQ is his call.
+**C. POST-DEPLOYMENT USER ACCEPTANCE (requires Grant to use the interactive interface):** HQ-VIS-001, HQ-VIS-003. Grant, 5 October 2026: these are NOT merge or deployment blockers; he cannot judge the interface from screenshots and will use the real interactive Team HQ after the multi-user stream is finished and the combined system is safely deployed. The current visual implementation is PROVISIONALLY ACCEPTED for integration and deployment on the strength of the existing browser and functional QA. They are NOT marked TESTED or fully accepted, and no visual redesign cycle is run now; any change he wants becomes a later UX refinement cycle. The audit re-captured home, calendar, documents and activity at 1440, 1280, 1024, 900, 768 and 390 and found no objective defect; whether it feels luxurious and unmistakably Team HQ is his call.
 
 **D. DELIBERATELY LIMITED:** HQ-DOC-028 (NotebookLM, Notion and web-page documents have no on-demand reader: their content IS the indexed text, shown labelled not-live; Grant may prefer otherwise); HQ-ISO-003 (historical and permanent: before the guard existed two sub-agents each ran a read-only catalogue query against production; HQ-GUARD-001 is the prevention).
 
