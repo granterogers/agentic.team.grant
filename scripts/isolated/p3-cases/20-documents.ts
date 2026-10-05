@@ -500,6 +500,10 @@ export async function cases(c: Ctx): Promise<void> {
     'and the undo of the move puts it back',
     '',
   )
+  // Since 1021 a replacement must be an approved document in the same project (a draft never makes the approved one vanish).
+  await c.db.execute(
+    `update public.documents set state = 'approved' where document_id = '${a.doc1}'`,
+  )
   const sup = (await svc(
     `select public.hq_document_supersede(${q(A)}, '${a.doc2}', '${a.doc1}')`,
   )) as { superseded?: boolean; undo?: string }
