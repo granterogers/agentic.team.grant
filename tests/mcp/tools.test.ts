@@ -234,3 +234,26 @@ describe('what a model sends is bounded and shaped before it reaches the databas
     expect(spec?.args({ query: 'x', limit: 5000 }, 'c')).toMatchObject({ p_limit: 50 })
   })
 })
+
+describe('a date that was sent and cannot be read is refused, not dropped', () => {
+  it('names the field', async () => {
+    const { badValue } = await import('../../supabase/functions/mcp/tools.ts')
+    expect(badValue({ starts_at: 'next tuesday' })).toMatch(/^starts_at is not a date/)
+    expect(badValue({ due_on: '2026-02-31' })).toMatch(/^due_on/)
+    expect(badValue({ ends_at: '2026-10-05T10:00:00Z', due_on: '2026-10-05' })).toBeNull()
+    // control: nothing sent, nothing to refuse
+    expect(badValue({})).toBeNull()
+    expect(badValue({ starts_at: null, due_on: '' })).toBeNull()
+  })
+})
+
+describe('the edge consults the check before it calls the database', () => {
+  it('badValue(input) is called and its answer returned before spec.fn is invoked', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync('supabase/functions/mcp/index.ts', 'utf8')
+    const at = src.indexOf('const unreadable = badValue(input)')
+    expect(at).toBeGreaterThan(0)
+    expect(src.slice(at, at + 160)).toMatch(/if \(unreadable !== null\) return rpcError\(/)
+    expect(at).toBeLessThan(src.indexOf('await rpc(spec.fn, rpcArgs('))
+  })
+})

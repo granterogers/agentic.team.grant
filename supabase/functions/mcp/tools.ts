@@ -593,6 +593,28 @@ export const toolNamed = (name: string): ToolSpec | undefined =>
   Object.hasOwn(TOOLS, name) ? TOOLS[name] : undefined
 
 /**
+ * A date or time the caller SENT and the tool cannot read. `isoDate`/`isoInstant` turn an unreadable value into null, which
+ * the database reads as "not supplied", so `update_event` with a garbage start used to succeed and quietly change nothing
+ * else. A value that was sent and is unreadable is refused by name instead.
+ */
+const DATE_FIELDS: readonly [string, (v: unknown) => string | null][] = [
+  ['due_on', isoDate],
+  ['from', isoInstant],
+  ['to', isoInstant],
+  ['starts_at', isoInstant],
+  ['ends_at', isoInstant],
+]
+export const badValue = (input: Record<string, unknown>): string | null => {
+  for (const [field, read] of DATE_FIELDS) {
+    const v = input[field]
+    if (v === undefined || v === null || v === '') continue
+    if (read(v) === null)
+      return `${field} is not a date or time this tool can read: ${String(v).slice(0, 40)}`
+  }
+  return null
+}
+
+/**
  * The arguments an RPC receives. The office is written by the CALLER from the client's credential and is placed
  * FIRST so nothing in the model's input can override it; a model-supplied `p_office` (or any key the tool does not
  * declare) never reaches the database, because every mapper reads named fields only.

@@ -39,7 +39,7 @@
  */
 
 import { resolveSpeaker } from '../../../src/auth/speaker.ts'
-import { rpcArgs, scopeRefusal, toolNamed, visibleTools } from './tools.ts'
+import { badValue, rpcArgs, scopeRefusal, toolNamed, visibleTools } from './tools.ts'
 
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -527,6 +527,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
         }).catch(() => undefined)
         return rpcError(id, -32_602, `${name} needs the write scope; this client is read-only`)
       }
+
+      const unreadable = badValue(input)
+      if (unreadable !== null) return rpcError(id, -32_602, unreadable)
 
       // The OFFICE is the client's own - resolved from the token, never from anything the model sent.
       const result = await rpc(spec.fn, rpcArgs(spec, clientOffice, client.client_id, input))
