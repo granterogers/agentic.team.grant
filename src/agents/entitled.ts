@@ -30,6 +30,7 @@ import { readCorrection } from './correction.ts'
 import { linkRequest } from './links.ts'
 import { readPlan } from './plan.ts'
 import { spokenAnswer } from './spoken-answer.ts'
+import { styleKeepRequest } from './style-keep.ts'
 import { readTeaching } from './teaching.ts'
 import type { HumanWords, Turn } from './turn.ts'
 
@@ -57,6 +58,8 @@ export const entitled = {
   anotherGo: (words: HumanWords) => wantsAnotherGo(words),
   /** He answered a question the office asked. */
   answer: (words: HumanWords) => spokenAnswer(words),
+  /** He asked for a report's style to be kept as the project's (HQ-STYLE-018). */
+  keepStyle: (words: HumanWords) => styleKeepRequest(words),
 } as const
 
 /**
@@ -80,6 +83,7 @@ export const noneEntitled: typeof entitled = {
   correction: () => null,
   anotherGo: () => null,
   answer: () => null,
+  keepStyle: () => null,
 }
 
 /**

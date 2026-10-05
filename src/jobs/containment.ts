@@ -100,6 +100,7 @@ export const REACH: Readonly<Record<string, KindReach>> = {
   'office.prune_job_traces': { reach: 'internal' },
   'office.pursue': { reach: 'internal' },
   'office.synthesise': { reach: 'internal' },
+  'style.adopt': { reach: 'internal' },
   'tasks.remind': { reach: 'internal' },
 }
 

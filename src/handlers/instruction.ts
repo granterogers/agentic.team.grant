@@ -208,6 +208,7 @@ import {
   VoiceNoteError,
 } from '../voice/inbound.ts'
 import { allowance, describe, officeOfJob } from './meter.ts'
+import { keepStyle } from './style-keep.ts'
 
 /**
  * The host, for saying out loud. Never the whole url.
@@ -3917,6 +3918,37 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         a substitution, so this can only ever store a rule it would have stored
         anyway.
       */
+      /*
+        "USE THIS REPORT'S STYLE FOR THIS PROJECT" (HQ-STYLE-018).
+
+        Read from his own words through `entitled` (a forwarded message and the model's paraphrase are both silent), and
+        BEFORE the teaching reader below: "use it for future reports in this project" has the shape of a standing rule,
+        and storing it as one would put a sentence in every prompt for ever instead of saving a style. The write is the
+        viewer button's own function, reached through `keepStyle`; a style the project already has is asked about, and
+        which report is meant is asked about whenever it is not one.
+      */
+      const styleKeep = isBranch ? null : entitled.keepStyle(turn.kept)
+      if (styleKeep !== null) {
+        const kept = await keepStyle(deps.db, {
+          jobId: job.jobId,
+          projectId: job.projectId === null ? null : String(job.projectId),
+          commandId: typeof payload.command_id === 'string' ? payload.command_id : null,
+          channel: typeof payload.origin_channel === 'string' ? payload.origin_channel : null,
+          staffSlug: who.slug,
+          request: styleKeep,
+        })
+        return {
+          body: kept.body,
+          confidence: 'high',
+          // A statement about a record the code just read or wrote.
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: await howComposed(deps.db, job.jobId),
+          model: null,
+          ...(kept.blockerId === undefined ? {} : { asksBlocker: kept.blockerId }),
+        } satisfies HandlerOutput
+      }
       const asRules = understood.surviving.filter((r) => r.kind === 'preference').map((r) => r.text)
       const teaching =
         /*
