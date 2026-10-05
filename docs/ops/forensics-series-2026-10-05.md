@@ -1,10 +1,10 @@
 # Metrics series from the kept raw scrapes (generated)
 
-21 raw samples, 15 intervals of 20 to 150 s. All values DERIVED from counters.
+27 raw samples, 20 intervals of 20 to 150 s. All values DERIVED from counters.
 
-**Intervals with temp-file writes:** 14 of 15 (07:39:37: 10022414 B in 3 files; 07:40:39: 10022414 B in 3 files; 07:41:45: 10022414 B in 3 files; 07:42:47: 10022414 B in 3 files; 07:43:48: 10022414 B in 3 files; 07:44:50: 10022414 B in 3 files; 07:45:52: 10022414 B in 3 files; 08:48:02: 4040136 B in 1 files; 08:49:04: 10026290 B in 3 files; 08:50:05: 10026290 B in 3 files; 08:51:07: 10026290 B in 3 files; 08:52:08: 10026290 B in 3 files; 08:53:14: 14066426 B in 4 files; 08:54:19: 10026290 B in 3 files)
+**Intervals with temp-file writes:** 19 of 20 (07:39:37: 10022414 B in 3 files; 07:40:39: 10022414 B in 3 files; 07:41:45: 10022414 B in 3 files; 07:42:47: 10022414 B in 3 files; 07:43:48: 10022414 B in 3 files; 07:44:50: 10022414 B in 3 files; 07:45:52: 10022414 B in 3 files; 08:48:02: 4040136 B in 1 files; 08:49:04: 10026290 B in 3 files; 08:50:05: 10026290 B in 3 files; 08:51:07: 10026290 B in 3 files; 08:52:08: 10026290 B in 3 files; 08:53:14: 14066426 B in 4 files; 08:54:19: 10026290 B in 3 files; 09:31:28: 10029898 B in 3 files; 09:32:34: 10029898 B in 3 files; 09:33:36: 10029898 B in 3 files; 09:34:39: 10029898 B in 3 files; 09:35:43: 14071486 B in 4 files)
 
-**Paging bursts (swap in + out above 236.7 pages/s):** spacing in minutes 70.5
+**Paging bursts (swap in + out above 384.6 pages/s):** spacing in minutes 70.5, 39.3
 
 | time (UTC) | s | swap in/s | swap out/s | major faults/s | root reads/s | root writes/s | data writes/s | iowait % | steal % | temp bytes | temp files | ckpt buffers |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -23,3 +23,8 @@
 | 10-05 08:52:08 | 62 | 14.5 | 0 | 76.3 | 24.5 | 1.3 | 0.3 | 0.4 | 0 | 10026290 | 3 | 0 |
 | 10-05 08:53:14 | 65 | 43 | 86.2 | 172.6 | 224.4 | 32 | 1.5 | 4.9 | 0 | 14066426 | 4 | 0 |
 | 10-05 08:54:19 | 65 | 455.9 | 366.1 | 458.4 | 461.4 | 173.1 | 0.9 | 9.4 | 0.1 | 10026290 | 3 | 0 |
+| 10-05 09:31:28 | 62 | 65.5 | 35.1 | 198.3 | 111.4 | 17.9 | 2.7 | 1.4 | 0 | 10029898 | 3 | 67 |
+| 10-05 09:32:34 | 65 | 12.4 | 13.4 | 81.3 | 52.6 | 9.7 | 1.4 | 1.2 | 0 | 10029898 | 3 | 0 |
+| 10-05 09:33:36 | 63 | 267.7 | 210.2 | 493.3 | 429.6 | 91 | 1.6 | 10 | 0 | 10029898 | 3 | 0 |
+| 10-05 09:34:39 | 62 | 112.5 | 38.1 | 215.4 | 142.7 | 23.9 | 2.2 | 2.4 | 0 | 10029898 | 3 | 0 |
+| 10-05 09:35:43 | 64 | 120.3 | 52.9 | 199.1 | 127.8 | 29.1 | 3.3 | 2 | 0.1 | 14071486 | 4 | 177 |
