@@ -443,7 +443,7 @@ Legend for the Status column: see above. "Evidence" cites files / tests / captur
 
 "Before" column: A = already satisfied, B = partial, C = extend existing, D = missing (from reconnaissance).
 
-**Spec checkpoints.** The specification was re-read against this ledger at roughly the 4-hour mark, the 8-hour mark and at the end. Rows added afterwards: none were found missing; the checks found three behaviours that needed fixing rather than tracking (the 22 Sept header-click and new-tab tests colliding with the new layout and viewer, calendar variants duplicating controls, and a tombstoned event leaking into search).
+**Spec checkpoints.** The specification was re-read against this ledger at roughly the 4-hour mark, the 8-hour mark and at the end. Rows added afterwards in the first run: none; the completion pass of 5 October (below) did find omissions and a weakened row. The first-run checks found three behaviours that needed fixing rather than tracking (the 22 Sept header-click and new-tab tests colliding with the new layout and viewer, calendar variants duplicating controls, and a tombstoned event leaking into search).
 
 ### Spec checkpoints
 - 4-hour and 8-hour re-reads: recorded in the earlier run (three behaviours needed fixing, none missing).
