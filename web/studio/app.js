@@ -15320,6 +15320,16 @@ async function live() {
     render()
     return
   }
+  /*
+    A credential the office refused outright (hydrate has already cleared it): every other read would be refused the same way,
+    and the poll would ask again every twenty seconds with a token that will never work. Say so and stop; signing in again
+    reloads the page and starts fresh.
+  */
+  if (source.state === 'refused') {
+    arrivalPending = false
+    render()
+    return
+  }
   await startOfficeReads(token)
 }
 
