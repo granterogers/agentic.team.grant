@@ -4549,6 +4549,27 @@ Each of these cost real time. They are here so they cost it once.
   said not to poll. No SQL, no write, no retry; it produced real evidence (all four services UNHEALTHY, read-only mode off, the metrics scrape
   500 after 10.4 s). Test a tool's argument handling with the token unset, which is what the other check in the same command did. One more
   `sed -i … /dev/null` was typed by reflex and refused.
+- **A limit per query is not a retention period.** The logs endpoint caps a RANGE at 24 hours, and two notes here said the stream "expires after 24 hours"
+  and drove a rush to capture. One probe (`--start`/`--end` older than the window) found rows from 25 September, ten days back, which turned an outage
+  into a controlled comparison: the same hourly panel over baseline days showed the stalls pre-date multi-user work (28 to 30 September) and that the
+  "first outage" of 3 October was the fourth episode. Test the retention by asking for older data before writing that it expires.
+- **A guard that requires the wrong success code refuses a healthy host, and looks exactly like the safety rule working.** `--db` required HTTP 200;
+  the read-only query endpoint is a POST and answers 201. The probe came back in 951 ms and was refused as "not functionally healthy". It is one named,
+  tested predicate now (`answered`). Read the status AND the time in the refusal line, as the "12 of 6" lesson says.
+- **A catalogue file and the live exposition can disagree about what is exported.** The metric list in the vendor's example repository had no `pg_*`
+  series; the live scrape had 51 Postgres families and 306 in all, and no pressure-stall series. Count what the live endpoint returns before writing
+  that something is or is not available, and keep the raw sample so the answer can be checked again.
+- **A token can list a credential and not reveal it.** `GET api-keys` answers 200 with the key names; `?reveal=true` answers 403 for this access token,
+  and `/v1/profile` says it is not a user-scoped token. The documented route to the customer Metrics API therefore needs a secret this token cannot read;
+  the collector uses the Management scrape and records the route. Do not work around it (no new key, no legacy key in its place).
+- **The instrument fails exactly when it is needed.** The Management metrics scrape answered 500 on 5 of 5 readings during episodes and 200 on 11 of 11
+  when healthy, because the exporter's own database queries time out in a stall. A capture plan that depends on a scrape during an episode has no data for it.
+- **A plan cost is the outer node.** `select app.defer_over_budget()` shows `Result (cost=0.00..0.26)` and took 100 s: the cost is the call, the work is
+  inside a PL/pgSQL body that reads tables. Using it as evidence of a pure CPU stall was wrong; the genuine CPU-only datum is a `generate_series` count.
+- **A hypothesis can be refuted by one column.** The 12 GB a day of temp files looked like the platform exporter materialising `pg_stat_statements`
+  (5.5 MB a file matched the text size, and 1 440 scrapes a day matched the file rate); the exporter's role shows 0 temp blocks. Written down as refuted.
+- **Disclosed process slips, this window:** one scratch script was created with a shell heredoc inside the repository (deleted, never committed), against
+  the File editing rule; and a long foreground command was killed by a worker restart mid-capture (the partial output was kept and the missing queries re-run).
 
 ---
 

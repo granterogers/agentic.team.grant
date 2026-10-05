@@ -77,8 +77,14 @@ const start =
     : flag('start') === undefined
       ? new Date(end.getTime() - hours * 3600 * 1000)
       : new Date(flag('start') ?? '')
+// --tag=<name> names the run directory for a window captured around a known transition (win-<name>).
+const tag = flag('tag')
 const run =
-  dayFlag === undefined ? end.toISOString().replace(/[:.]/g, '-').slice(0, 16) : `day-${dayFlag}`
+  tag !== undefined
+    ? `win-${tag}`
+    : dayFlag === undefined
+      ? end.toISOString().replace(/[:.]/g, '-').slice(0, 16)
+      : `day-${dayFlag}`
 // The service allows about one query a minute. The spacing is enforced across RUNS too, through a stamp file, so two commands
 // started back to back cannot add up to a burst.
 const STAMP = `${evidenceDir}/.last-log-query`

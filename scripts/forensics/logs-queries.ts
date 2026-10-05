@@ -99,6 +99,10 @@ export const LOG_SETS: Record<string, LogQuery> = {
     why: 'statements the server itself logged as slow (duration lines, with the plan header when auto_explain is on): when, how long, which statement',
     sql: `select timestamp, toFloat64OrZero(extract(event_message, 'duration: ([0-9.]+) ms')) as ms, substring(replaceRegexpAll(substring(event_message, position(event_message, 'Query Text:') + 11, 400), '[[:space:]]+', ' '), 1, 160) as q from logs where source = 'postgres_logs' and event_message like 'duration:%' order by ms desc limit 40`,
   },
+  pg_slow_first: {
+    why: 'the FIRST slow statements in a window, in time order, with the statement text: what was already slow when a transition began',
+    sql: `select timestamp, toFloat64OrZero(extract(event_message, 'duration: ([0-9.]+) ms')) as ms, log_attributes['parsed.application_name'] as app, substring(replaceRegexpAll(substring(event_message, position(event_message, 'Query Text:') + 11, 400), '[[:space:]]+', ' '), 1, 140) as q from logs where source = 'postgres_logs' and event_message like 'duration:%' order by timestamp asc limit 25`,
+  },
   pg_slow_by_hour: {
     why: 'how many slow-statement lines per hour and the slowest, to see whether slow statements exist at idle',
     sql: `select toStartOfHour(timestamp) as h, count() as n, max(toFloat64OrZero(extract(event_message, 'duration: ([0-9.]+) ms'))) as max_ms from logs where source = 'postgres_logs' and event_message like 'duration:%' group by h order by h`,

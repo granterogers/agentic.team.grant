@@ -6,6 +6,20 @@ migrations, no deploys, no production suites, no model calls, no queue changes. 
 first; if it disagrees with a chat, this wins. Checkpoint: branch `claude/multi-user-p4`, last pushed commit before this file
 `596eb079`.
 
+## Update, 5 October 08:30 UTC: the platform recovered; the queue is HELD, and why
+
+Provider health read all ok and the metrics scrape answered 200 from 07:37 UTC; the guarded database probe completed (28 statements).
+**Nothing in this file has been applied or deployed.** Two reasons, both from `supabase-forensics-2026-10-05.md`:
+
+1. Grant's latest instruction says not to deploy unrelated product work while the forensic investigation runs.
+2. Steps 6 to 9 below (browser acceptance suites, `gate:safe` parts, the Sample tour) are the same kind of burst that preceded the persistent
+   onsets of 2, 3 and 4 October, each followed by 10 to 19 hours of unavailability at zero traffic. Steps 1 to 5 (five small migrations, three function
+   deploys, a page delta) are light. **Decision needed:** run steps 1 to 5 now with a scrape before and after each and an abort at the first timeout or
+   cron dip, and hold 6 to 9 until the controlled-ramp experiment (report, section 11) has said what burst the host tolerates, or run everything now.
+
+Capture around the deployment now uses: `npm run forensics:metrics` (one raw scrape, rates against the previous one), `npm run forensics:logs`,
+`npm run forensics:usage`, `npm run forensics:capture -- --db` (its guard now accepts the endpoint's HTTP 201), `npm run forensics:preserve`.
+
 ## What is waiting
 
 | Item | State | Why it matters |

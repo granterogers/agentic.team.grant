@@ -1,5 +1,8 @@
 # Supabase instability forensics and capture protocol, 4 October 2026
 
+> **Superseded in part, 5 October: see `supabase-forensics-2026-10-05.md`.** Log retention is at least 10 days (not 24 h), the first outage was not the first
+> episode, "CPU credit unsupported" is withdrawn, and the dashboard-screenshot request is reduced to one chart.
+
 Written while the platform was UNHEALTHY. Nothing here changed production: no migration, deploy, suite, model call, queue change,
 configuration change, upgrade, resize or retry. The one production contact in this pass is disclosed under "What touched production".
 Every time is UTC. The report keeps three lists apart, as asked: **MEASURED** (a number read from an instrument, with its source),
