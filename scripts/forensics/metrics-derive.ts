@@ -148,7 +148,7 @@ const per = (v: number | null, seconds: number, digits = 1): number | null =>
   v === null || seconds <= 0 ? null : Math.round((v / seconds) * 10 ** digits) / 10 ** digits
 
 const PG_COUNTERS =
-  /^(pg_stat_database_(temp_bytes|temp_files|xact_commit|xact_rollback|blks_read|blks_hit|deadlocks|conflicts|tup_(inserted|updated|deleted|fetched|returned))|pg_stat_bgwriter_\w+_total|pg_stat_checkpointer_\w+|pg_stat_wal_\w+|pg_wal_\w+_total|pg_stat_archiver_\w+_total)$/
+  /^(pg_stat_database_(temp_bytes|temp_files|xact_commit|xact_rollback|blks_read|blks_hit|deadlocks|conflicts|tup_(inserted|updated|deleted|fetched|returned))(_total)?|pg_stat_bgwriter_\w+_total|pg_stat_checkpointer_\w+|pg_stat_wal_\w+|pg_wal_\w+_total|pg_stat_archiver_\w+_total|pg_stat_statements_total_(queries|time_seconds))$/
 
 export const derive = (
   a: readonly Sample[],

@@ -405,6 +405,7 @@
     "forensics:temp-logging": "tsx scripts/forensics/temp-files-logging.ts",
     "forensics:preserve": "tsx scripts/forensics/preserve.ts",
     "forensics:timeline": "tsx scripts/forensics/timeline.ts",
+    "forensics:series": "tsx scripts/forensics/series.ts",
     "forensics:idle-pass": "tsx scripts/forensics/idle-pass-cost.ts",
     "forensics:job-cost": "tsx scripts/forensics/job-lifecycle-cost.ts",
     "check:answerable": "tsx scripts/check-answerable.ts",

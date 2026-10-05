@@ -99,6 +99,18 @@ export const LOG_SETS: Record<string, LogQuery> = {
     why: 'statements the server itself logged as slow (duration lines, with the plan header when auto_explain is on): when, how long, which statement',
     sql: `select timestamp, toFloat64OrZero(extract(event_message, 'duration: ([0-9.]+) ms')) as ms, substring(replaceRegexpAll(substring(event_message, position(event_message, 'Query Text:') + 11, 400), '[[:space:]]+', ' '), 1, 160) as q from logs where source = 'postgres_logs' and event_message like 'duration:%' order by ms desc limit 40`,
   },
+  pg_tempfiles: {
+    why: 'every temp-file line while log_temp_files was on: time, size, backend pid, role, application and the statement that spilled',
+    sql: `select timestamp, toUInt64OrZero(extract(event_message, 'size ([0-9]+)')) as bytes, log_attributes['parsed.process_id'] as pid, log_attributes['parsed.user_name'] as usr, log_attributes['parsed.application_name'] as app, substring(replaceRegexpAll(event_message, '[[:space:]]+', ' '), 1, 420) as msg from logs where source = 'postgres_logs' and event_message ilike '%temporary file%' order by timestamp asc limit 400`,
+  },
+  pg_tempfile_context: {
+    why: 'every log line from the backends that wrote temp files in the window (a STATEMENT or context line, if the provider keeps one), to name the statement',
+    sql: `select timestamp, log_attributes['parsed.process_id'] as pid, log_attributes['parsed.error_severity'] as sev, substring(replaceRegexpAll(event_message, '[[:space:]]+', ' '), 1, 500) as msg from logs where source = 'postgres_logs' and log_attributes['parsed.process_id'] in (select log_attributes['parsed.process_id'] from logs where source = 'postgres_logs' and event_message ilike '%temporary file%') order by timestamp asc limit 120`,
+  },
+  pg_tempfiles_by_role: {
+    why: 'temp-file lines grouped by role and application: who spills, how many files, how many bytes',
+    sql: `select log_attributes['parsed.user_name'] as usr, log_attributes['parsed.application_name'] as app, count() as n, sum(toUInt64OrZero(extract(event_message, 'size ([0-9]+)'))) as bytes from logs where source = 'postgres_logs' and event_message ilike '%temporary file%' group by usr, app order by bytes desc limit 30`,
+  },
   pg_slow_first: {
     why: 'the FIRST slow statements in a window, in time order, with the statement text: what was already slow when a transition began',
     sql: `select timestamp, toFloat64OrZero(extract(event_message, 'duration: ([0-9.]+) ms')) as ms, log_attributes['parsed.application_name'] as app, substring(replaceRegexpAll(substring(event_message, position(event_message, 'Query Text:') + 11, 400), '[[:space:]]+', ' '), 1, 140) as q from logs where source = 'postgres_logs' and event_message like 'duration:%' order by timestamp asc limit 25`,

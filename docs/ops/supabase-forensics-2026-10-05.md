@@ -202,11 +202,89 @@ section 11. That request is optional; the Disk IO % consumed one is the required
 
 ## 9. log_temp_files
 
-`npm run forensics:temp-logging` now prints a requirements check. **STATUS: WAITING (platform was not healthy when last run; now healthy) and
-READY FOR APPROVAL once healthy.** MEASURED: the key is in the documented request body; the access-control table gives database configuration
-updates to Owner and Administrator; this token is not a user-scoped token and is refused when revealing the secret key, which is evidence of a
-role or scope below Administrator. Whether the PUT is allowed is UNKNOWN until it is made, and a 403 would refuse cleanly. The value is `0`. Nothing was
-applied. To apply: `GRANT_APPROVED_DB_CONFIG=log_temp_files npm run forensics:temp-logging -- --apply`.
+**Outcome (MEASURED, 5 October, platform healthy, Grant's approval stated, preflight passed, nothing else changed).** The PUT was sent three times with
+`0`, `0B` and `0kB`. Each answered **HTTP 400** `Invalid size: <value>. Allowed values: >= -1024B <= 2TB.` The API's validator rejects zero in every
+spelling. It is a validation error, **not a permission refusal**, so it says nothing against this token's role. The setting was read back and is
+unchanged (`-1`, off). The attempts are recorded as `config_attempt` rows in the capture log. Per the instruction, the refusal is recorded and the setting
+left alone.
+
+**Second attempt, with Grant's approval: `1B` was accepted (HTTP 200).** MEASURED: the database reported `log_temp_files = 0` (the setting's unit is kB,
+so 1 byte rounds to "log every file"); no restart (postmaster start time unchanged, 2 September 17:46); only this setting was sent. It was on from about
+09:29:42 to 09:50:45 UTC on 5 October, then **restored**: the override was removed, the config endpoint reads `{}` again and the database reports
+`log_temp_files = -1`. Both verified.
+
+## 9a. Who writes the unexplained temp files (the bounded `log_temp_files` experiment, 09:29 to 09:51 UTC, 5 October)
+
+Raw: `evidence/2026-10-05/logs/win-tempfiles-*`. 41 temp-file lines in the window. Nothing else wrote one.
+
+* **MEASURED (conclusive on WHO):** all 41 lines are role `supabase_admin`, application `postgres_exporter`, from **one long-lived backend (pid 670393)**,
+  except one line from my own controlled read (below). No Team HQ application role, no worker, no PostgREST, Auth or Storage backend wrote a temp file.
+* **MEASURED:** every exporter cycle is **3 files**: 1,946,722 B (or 1,947,013 B later) and two of 4,041,588 B (or 4,042,254 B later), about **10.03 MB**.
+  The sizes repeat to the byte across cycles and drift by a few hundred bytes as the statement store changes.
+* **MEASURED, our scraping versus the platform's.** Phase A, my Management scrape every ~63 s (09:30:25 to 09:35:44, six scrapes): six bursts, at 09:30:28,
+  09:31:29, 09:32:35, 09:33:38, 09:34:41, 09:35:44, **one per scrape of mine, each within ~3 s of it**. Phase B, no scraping from me (09:35:44 to 09:48): bursts at
+  09:37:40, 09:38:40, 09:40:40, 09:42:40, 09:44:42, 09:46:40, 09:48:41, so the **platform's own baseline is one burst about every 120 s** (the
+  09:37:40 and 09:38:40 pair is one minute apart and not explained). One extra 4 MB file at 09:34:41 is a platform cycle landing on mine.
+* **DERIVED:** the baseline is 10.03 MB per 120 s = **5.0 MB a minute = about 7.2 GB a day, 1.5 files a minute**. Each scrape of mine adds the same 10.03 MB, so
+  1/min scraping would add 14 GB a day; the 12.4 GB a day average since 25 August (389.6 GB over 31.5 days) is the platform baseline plus extra, and I did
+  not measure the earlier extra, so that gap (about 5 GB a day) is **UNKNOWN**. This corrects the earlier "5 MB and 1.5 files per scrape": it is 10 MB and 3 files per
+  scrape, and the platform scrapes every other minute at the spill level.
+* **MEASURED, and the statement:** the provider's log does not keep the STATEMENT line (the lines are bare), so the text is not logged. A controlled single
+  read of `extensions.pg_stat_statements` selecting the query text, as `supabase_read_only_user` at 09:48:38, wrote **a temp file of exactly 4,041,588 bytes**,
+  the same size as the exporter's two large files. So the large files are **the materialised `pg_stat_statements` result with query text (a function
+  result larger than `work_mem`'s 2.1 MB)**. MEASURED as a byte-for-byte match, INFERRED as an identity. The **1.95 MB file's statement is UNKNOWN** (a second
+  projection of the same store is plausible, not shown). A second read of mine that sorted all rows by `query` at 09:49:24 produced no temp-file line, which I
+  cannot explain (a different plan, or a log lag at the time I looked): UNKNOWN, not resolved.
+* **DERIVED, why this matters for the IO question:** 5.0 MB a minute is about 83 KB/s against a 5 MB/s baseline throughput, 1.6%, on the data volume. The exporter's
+  spill is **not** a plausible consumer of the disk IO budget. The system volume is the large user: at idle it did 128 reads/s and 29 writes/s (157 IOPS, 63% of the
+  250 IOPS baseline), from swap (section 5). The spill is still the biggest recorded write source on the data volume, and the exporter is the first role to time
+  out in an episode (198 of 336 timeouts after 17:00), so it is a victim and a small contributor, not a cause.
+* **Fix available but not applied (needs Grant's approval):** `pg_stat_statements.max` (5,000 entries, 4,911 used, 101 evictions) or `pg_stat_statements.track_utility` are
+  settings that would shrink the materialised result; both are configuration changes and were not made.
+
+## 9b. Restarts and recoveries (new)
+
+* MEASURED: host booted 2 September 17:44 UTC, Postgres up since 2 September, Auth since 15 September. **No restart, reboot or counter reset at any
+  recovery.** A recovery is therefore not a restart.
+
+## 9c. Vendor documentation, checked 5 October 2026, and whether the recovery timing fits
+
+* **Supabase (MEASURED from the page text):** Nano is listed at baseline 5 MB/s and 250 IOPS, maximum 261 MB/s and 11,800 IOPS. "Compute sizes up to 2XL can burst above
+  their baseline for short periods of time, drawing on a disk IO budget"; "once the budget is exhausted, performance returns to baseline". The troubleshooting page
+  gives the symptoms (response times, CPU rising from IO wait, backups and autovacuum disrupted, unresponsive instance). **Neither page says how the budget is
+  refilled or how long it lasts, and neither describes CPU credits for Nano.** I could not find a Supabase statement of a refill period.
+* **AWS, instance-level EBS burst (AWS Compute Blog, EBS-optimized instance burst capability):** the burst gives "at least 30 minutes each day"; "we top off the
+  burst buckets every 24 hours"; "the refill rate for a burst bucket is the difference between the baseline rate and the instance I/O activity". That is a documented
+  24-hour top-off plus a continuous refill that is zero when activity is at baseline. It is the only documented fixed period I found. Whether this host's budget IS that
+  mechanism is not stated by Supabase: **UNKNOWN**.
+* **AWS, CPU credits (EC2 burstable instances guide):** for t4g.nano, 2 vCPU, 6 credits earned an hour, baseline 5% per vCPU, balance capped at 144 (24 hours of earning),
+  credits earned **continuously**; T4g is **Unlimited by default**, where exhaustion is billed rather than throttled; only Standard mode throttles to baseline. So a CPU-credit
+  recovery would be continuous, not a clock event, and throttling needs Standard mode, which is unknown for Supabase. This host (2 CPUs, 433.9 MiB) matches a t4g.nano
+  only circumstantially (INFERRED); Supabase does not say which instance Nano is.
+* **Does the observed timing fit?** Recoveries (clock, from 10-minute buckets, about plus or minus 10 min): 1 Oct 14:40 (E0), 3 Oct 01:37, 4 Oct 06:00, 4 Oct 09:00 (E3), 5 Oct 07:15.
+  Spacing 28.4 h, then 25.3 h (E2 to E4), or 22.3 h from E3 to E4. A fixed daily top-off would put recoveries at one clock time; they span 01:37 to 07:15, 5.6 hours, far
+  more than the timing error. Durations 18.3, 10.8, 15.8 h are not equal. **So a fixed 24-hour top-off phase is not supported by three events; a rolling mechanism (24 hours
+  since the last top-off or exhaustion, or a continuous refill that depends on activity) is not excluded.** I do not infer a refill period from n = 3.
+
+## 9d. The five hypotheses, kept separate (all INFERRED unless a line says MEASURED)
+
+| # | Hypothesis | For | Against | Signature it predicts | In our evidence? | The one measurement that discriminates |
+|---|---|---|---|---|---|---|
+| 1 | Disk IO burst exhaustion and refill | MEASURED: system volume at 157 IOPS (63% of the 250 baseline) at idle, so little headroom; vendor symptoms match; budget is documented; idle recovery fits a refill when activity drops below baseline | no budget reading; the swap traffic is real and constant, so idle activity never falls to zero; the documented 24 h top-off does not match the 5.6 h clock spread | root volume IOPS pinned at about 250 with rising latency and iowait during an episode; Disk IO % consumed falls to 0 at onset and rises at recovery | **no**: IOPS and latency at healthy idle only; no episode-time reading (the scrape returned 500 in every episode) | the **Disk IO % consumed chart** across an episode (dashboard only) |
+| 2 | CPU credit exhaustion and refill | nano-class CPU, near-baseline credit economics would throttle to about 10% of two vCPUs; continuous refill would give a gradual, activity-dependent recovery | MEASURED: CPU 94 to 96% idle and steal 0 to 0.1% at healthy idle; T4g defaults to Unlimited, which does not throttle; Supabase documents the burst as disk IO | steal rising and user CPU capped at about 10% of total across both vCPUs during an episode, with load high | **no**: only healthy-state CPU | CPU steal and per-mode utilisation during an episode (dashboard CPU chart, or one scrape that answers in an episode) |
+| 3 | Provider or shared-host event without restart | stalls at zero traffic before bursts; all services fail together; abrupt recoveries at idle with no restart (MEASURED: boot 2 Sep, no counter reset) | nothing in our evidence can show it; a purely external cause predicts no relation to our bursts, but onsets follow bursts in E1, E2, E4 | healthy host metrics (no steal, no IO pinning, memory normal) while the database is unresponsive | **no** | a provider incident record for the host, or episode-time host metrics showing nothing abnormal (also needs a support request) |
+| 4 | Memory and swap thrashing | MEASURED: 551 to 613 MiB swapped, 120 swap-in pages/s and 199 major faults/s at healthy idle; `shared_buffers` 224 MB on 434 MiB; the exporter and worker time out first | recovery is a step at idle, not a drain; thrash alone does not say why the host leaves it | MemAvailable near zero, swap pinned, major faults and swap I/O far above idle, runnable queue long | **partly**: the healthy baseline is already paging; no episode reading | MemAvailable, swap and major-fault rate during an episode (dashboard memory chart) |
+| 5 | Application backlog or workload | onsets follow verification bursts (2,300 to 3,000 requests per 10 min) and our own migration work (E0) | MEASURED: 13 h at zero gateway requests; cron starts fall to 0 to 4 per 10 minutes, which is Postgres-internal; stalls on 28 to 30 Sep at 3 to 5 k requests a day; the worker's real jobs are flat | many active backends, lock waits, a long queue draining through the episode | **partly**: bursts precede onsets (a trigger); no signature of work being done during the episode | `pg_stat_activity` and statement counts during an episode (not obtainable while the database is down; the statement store before and after is) |
+
+**Revised ranking (INFERRED, confidence low to moderate):** (a) hypotheses 1 and 4 acting together are the best fit: constant paging puts the system volume at about two thirds of
+its baseline at idle, any burst pushes it over, a budget (if the host has one) runs out, and the host stays pinned until activity falls and the allowance refills; (b) the
+provider event, 3, cannot be excluded and cannot be tested by us; (c) CPU credit, 2, is weakest: healthy CPU idle and steal show no pressure, the AWS default does not throttle, and
+Supabase does not describe it; (d) application workload, 5, is the **trigger** and not the cause; the temp-file spill is **not** a candidate cause (about 1.6% of baseline throughput).
+Nothing here is proven. The same missing measurement, one episode-time reading of the host, separates 1, 2, 3 and 4.
+
+## 9e. Paging bursts
+
+MEASURED: two paging bursts 70.5 minutes apart in the kept scrapes. n = 2, so no period is claimed.
 
 ## 10. Corrections to earlier statements
 
@@ -219,9 +297,11 @@ applied. To apply: `GRANT_APPROVED_DB_CONFIG=log_temp_files npm run forensics:te
 
 ## 11. Next experiments, and what is decided
 
-1. **Free, most informative:** a **controlled ramp** of the verification burst (500, 1,000, 2,000 requests per ten minutes through the Sample office), with a
-   scrape every minute and the Database Health chart open, aborting at the first statement timeout or cron dip (both are visible in logs within a minute). It
-   reproduces the pre-onset window under observation. It may start a 10 to 19 hour outage, so it needs Grant's decision.
+0. **Decided by Grant, 5 October: the controlled 500/1000/2000 ramp is NOT to be run** (it risks another 10 to 19 hour outage), and artificial load is not
+   to be generated to provoke an outage. The office stays in forensic observation: one low-impact scrape and health reading per check, raw samples kept,
+   and a naturally occurring onset captured from logs and usage. If the platform becomes unhealthy, database access stops and only control-plane and log
+   evidence is collected.
+1. ~~Controlled ramp~~ (vetoed, kept here so the reasoning is not lost): it would reproduce the pre-onset window under observation.
 2. **Free, configuration:** lower `shared_buffers` (224 MB on a 434 MiB host). Needs a restart and is a tuning change, so it needs approval.
 3. **Paid:** more compute, only after (1) or the Disk IO % consumed chart separates the mechanisms.
 4. **Deployment queue: held.** The latest instruction says not to deploy unrelated product work, and steps 6 to 9 (browser acceptance suites, gate parts, the

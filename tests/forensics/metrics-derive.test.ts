@@ -95,6 +95,15 @@ describe('disk roles come from the mountpoints in the same scrape', () => {
   })
 })
 
+describe('the live family names carry a _total suffix the vendor catalogue lacks', () => {
+  it('derives a temp-bytes delta from pg_stat_database_temp_bytes_total, summed over databases', () => {
+    const t = (v: number, w: number): string =>
+      `pg_stat_database_temp_bytes_total{datname="postgres"} ${String(v)}\npg_stat_database_temp_bytes_total{datname="other"} ${String(w)}`
+    const d = derive(parseAll(t(100, 5)), parseAll(t(1100, 5)), 60)
+    expect(d.pgDeltas.pg_stat_database_temp_bytes_total).toBe(1000)
+  })
+})
+
 describe('memory reading', () => {
   it('derives swap used and the available share without inventing values for absent series', () => {
     const m = memory(parseAll(scrape(base)))
