@@ -36,6 +36,7 @@
  * parses to nothing is a failure rather than an empty PDF with a cover on it.
  */
 
+import { mayAct } from '../agents/approval.ts'
 import { howComposed } from '../agents/provenance.ts'
 import { applyDesign, type Design, designBrief, effectiveStyle } from '../artifacts/design.ts'
 import { type FetchLogoBytes, loadLogo, storageFetcher } from '../artifacts/logo.ts'
@@ -335,6 +336,25 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         return say(
           'I cannot write a report just now — the office has no model to think with. ' +
             'Nothing was created.',
+        )
+      }
+
+      /*
+        THE DIAL. Making a document is the office acting inside the project, which Observe does not allow; asked for the tool
+        this job IS (document.create) through the one approval function, before a model is spent. Anything but a plain yes
+        stops here, and an unreadable answer is not a yes. Emailing or publishing the result is a different tool and is never
+        done by this handler.
+      */
+      const dial = await mayAct(db, {
+        audience: 'office',
+        jobAskedFor: job.jobId,
+        projectId: job.projectId,
+        tool: 'document.create',
+      })
+      if (dial.verdict !== 'proceed') {
+        return say(
+          'Autonomy for this project does not let me create documents yet, so nothing was created. ' +
+            'Raise it above Observe in Settings and ask again.',
         )
       }
 

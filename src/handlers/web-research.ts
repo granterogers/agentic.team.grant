@@ -40,6 +40,7 @@
 
 import type { BrowserAdapter } from '../browser/adapter.ts'
 import { CloudflareBrowser } from '../browser/cloudflare.ts'
+import { mayAct } from '../agents/approval.ts'
 import { downloadFile } from '../browser/download.ts'
 import { FetchedBrowser } from '../browser/fetched.ts'
 import { normalise, type PageLink, termsOf } from '../browser/links.ts'
@@ -136,6 +137,25 @@ export function webResearchHandler(deps: WebResearchDeps): Handler {
       }
       if (projectId === null) {
         return say('I can only research on behalf of a dashboard project, and this job has none.')
+      }
+
+      /*
+        THE DIAL. Reading the web is not consequential, so nothing here asks anybody; but "Observe" means the office does
+        not act, even internally, and saving pages as project documents is acting. The policy is the one architecture
+        (app.authorize_effect through mayAct), asked for the tool this job IS (web.read). Anything but a plain yes stops
+        before the first search, and an unreadable answer is not a yes.
+      */
+      const policy = await mayAct(db, {
+        audience: 'office',
+        jobAskedFor: job.jobId,
+        projectId,
+        tool: 'web.read',
+      })
+      if (policy.verdict !== 'proceed') {
+        return say(
+          'Autonomy for this project does not let me read the web yet, so I have not searched or opened anything and saved nothing. ' +
+            'Raise it above Observe in Settings and ask again.',
+        )
       }
 
       const budget = jsonOf(

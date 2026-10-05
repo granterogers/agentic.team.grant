@@ -171,10 +171,15 @@ describe('no approval is needed to make, save or version; sending anywhere else 
 
   it('the whole path imports nothing that can send or publish outside the office', () => {
     const imports = [...all.matchAll(/from '([^']+)'/g)].map((m) => m[1] ?? '')
-    const bad = imports.filter((i) =>
-      /slack|telegram|gmail|google|notion|voice|pager|channels|approval|mail\//.test(i),
-    )
+    // The policy QUESTION (mayAct: may the office make a document at this dial) is the one thing from the approval module
+    // the path may import; nothing that asks a person, raises a blocker or sends is. It is asserted to be used as that.
+    const bad = imports
+      .filter((i) => i !== '../agents/approval.ts')
+      .filter((i) =>
+        /slack|telegram|gmail|google|notion|voice|pager|channels|approval|mail\//.test(i),
+      )
     expect(bad).toEqual([])
+    expect(all).toMatch(/await mayAct\(db, \{[^}]*tool: 'document\.create'/s)
   })
 
   it("the only database functions it calls are reads, the office's own writes and the checkpoint", () => {

@@ -32,8 +32,11 @@ const base =
   (cands: unknown[], adopt: unknown): Answer =>
   (sql) => {
     if (sql.includes('select slug from public.projects')) return [{ slug: 'p' }]
+    if (sql.includes('select project_id::text as id')) return [{ id: PROJECT }]
     if (sql.includes('style_source_candidates')) return [{ c: cands }]
     if (sql.includes('command_principal')) return [{ p: 'grant' }]
+    if (sql.includes('authorize_effect'))
+      return [{ d: { action_level: 1, because: 'dial', tool: 'style.save', verdict: 'proceed' } }]
     if (sql.includes('app.style_adopt_from_document')) return [{ r: adopt }]
     return undefined
   }

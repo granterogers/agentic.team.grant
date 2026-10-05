@@ -8,6 +8,7 @@
  *
  * Both callers - the conversation, asking, and the `style.adopt` job, performing a confirmed replacement - use this.
  */
+import { mayAct } from '../agents/approval.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -45,6 +46,25 @@ export async function adoptStyleFromDocument(
 ): Promise<AdoptResult> {
   if (!UUID.test(req.jobId) || !UUID.test(req.documentId)) {
     return { error: 'that is not a report I can find' }
+  }
+  /*
+    THE DIAL. Saving a style writes to the project, so Observe stops it. Asked for the tool this job IS (style.save), through
+    the one approval function; anything but a plain yes is a refusal, and an unreadable answer is not a yes.
+  */
+  const project = (
+    await db.execute(
+      `select project_id::text as id from public.projects
+        where slug = ${lit(req.slug)} and office_id = app.job_office(${lit(req.jobId)}::uuid)`,
+    )
+  ).rows[0] as { id?: string } | undefined
+  const dial = await mayAct(db, {
+    audience: 'office',
+    jobAskedFor: req.jobId,
+    projectId: project?.id ?? null,
+    tool: 'style.save',
+  })
+  if (dial.verdict !== 'proceed') {
+    return { error: 'Autonomy for this project does not let me save a style yet.' }
   }
   const channel =
     req.channel !== undefined && req.channel !== null && WORD.test(req.channel) ? req.channel : null

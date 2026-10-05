@@ -75,10 +75,15 @@ describe('(a) reading is autonomous', () => {
     for (const v of composed) expect(check).toContain(`'${v}'`)
   })
 
-  it('consults no approval, because it needs none: it imports and calls neither mayAct nor governEffect', () => {
-    expect(handlerSource).not.toMatch(/\bmayAct\s*\(/)
+  it('asks nobody for permission to read, but reads the dial: mayAct for web.read only, never governEffect or a blocker', () => {
+    expect(handlerSource).toMatch(/\bconst policy = await mayAct\(db, \{[^}]*tool: 'web\.read'/s)
+    expect(handlerSource).toMatch(/policy\.verdict !== 'proceed'/)
     expect(handlerSource).not.toMatch(/\bgovernEffect\s*\(/)
     expect(handlerSource).not.toMatch(/raiseBlocker\s*\(/)
+    // and the dial is read BEFORE the first search: the refusal precedes every adapter and provider use in the file
+    const dial = handlerSource.indexOf('policy.verdict !== ')
+    expect(dial).toBeGreaterThan(0)
+    expect(dial).toBeLessThan(handlerSource.indexOf('provider.search'))
   })
 
   it('the runtime that ships can only GET: asked to "click" it still issues a bodiless GET and nothing else', async () => {
@@ -257,5 +262,57 @@ describe('(c) a harness or fixture job never reaches a real destination', () => 
     expect(gate).toBeLessThan(firstStep)
     expect(gate).toBeLessThan(firstSearch)
     expect(handlerSource).toMatch(/app\.harness_browsing\(job_id, project_id\) as harness/)
+  })
+})
+
+describe('(d) the autonomy dial is read before the web is touched', () => {
+  const run = async (verdict: 'proceed' | 'refuse' | 'ask' | 'unreadable') => {
+    const touched: string[] = []
+    const boom = (what: string) => async () => {
+      touched.push(what)
+      return { detail: 'x', ms: 1, ok: false }
+    }
+    const db = {
+      execute: async (sql: string) => {
+        if (sql.includes('authorize_effect')) {
+          return {
+            rows: [
+              verdict === 'unreadable'
+                ? { d: null }
+                : { d: { action_level: 1, because: 'dial', tool: 'web.read', verdict } },
+            ],
+          }
+        }
+        if (sql.includes('browser_budget')) return { rows: [{ r: { exhausted: true } }] }
+        return {
+          rows: [
+            { harness: false, pinned_config: { question: 'what do widgets cost' }, project: 'p' },
+          ],
+        }
+      },
+    } as unknown as SqlExecutor
+    const out = await webResearchHandler({
+      adapter: { gather: boom('gather') as never, name: 'spy' },
+      db,
+      projectRef: 'x',
+      search: {
+        name: 'spy',
+        search: boom('search') as never,
+        urlFor: () => 'https://spy.invalid/',
+      },
+      serviceKey: '',
+    }).handle({ jobId: 'j1' } as unknown as Job, {} as never)
+    return { out, touched }
+  }
+  for (const v of ['refuse', 'ask', 'unreadable'] as const) {
+    it(`${v}: stops with a plain sentence before the budget, search or any page`, async () => {
+      const { out, touched } = await run(v)
+      expect(out.body).toMatch(/Autonomy for this project does not let me read the web/)
+      expect(touched).toEqual([])
+    })
+  }
+  it('control: a plain yes goes on to the next step (here the budget, which this fixture has spent)', async () => {
+    const { out } = await run('proceed')
+    expect(out.body).toMatch(/browser-minutes/)
   })
 })
