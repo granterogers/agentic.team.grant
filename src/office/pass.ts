@@ -48,6 +48,7 @@ import { briefingHandler } from '../handlers/briefing.ts'
 import { browserGatherHandler } from '../handlers/browser-gather.ts'
 import { buildShotsHandler } from '../handlers/build-shots.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
+import { calendarEventsHandler } from '../handlers/calendar-events.ts'
 import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { channelsHandler } from '../handlers/channels.ts'
@@ -72,10 +73,12 @@ import { pursueHandler } from '../handlers/pursue.ts'
 import { remindersHandler } from '../handlers/reminders.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
+import { styleAdoptHandler } from '../handlers/style-adopt.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
 import { synthesiseHandler } from '../handlers/synthesise.ts'
 import { tasksSyncHandler } from '../handlers/tasks-sync.ts'
 import { vaultExportHandler } from '../handlers/vault-export.ts'
+import { webResearchHandler } from '../handlers/web-research.ts'
 import type { Handler, Reviewer } from '../jobs/worker.ts'
 import { drain } from '../jobs/worker.ts'
 import { HttpNotebookAdapter } from '../notebook/http-adapter.ts'
@@ -423,9 +426,13 @@ export const buildPass = async (
       and the parked token would sit there with no job that can reach it.
     */
     googleRevokeHandler(db),
+    // HQ-STYLE-018. The performance of a yes to "replace the project style"; only ever enqueued by that answer.
+    styleAdoptHandler(db),
     // The other direction: dated tasks into the diary (#94, ADR-0020). Off
     // until `calendar.sync_tasks` is turned on.
     calendarTasksHandler(db),
+    // Project calendars both ways: a project's own events to Google, and Google's edits back (0897).
+    calendarEventsHandler(db),
     jobTracesHandler(db),
     /*
       #21. The build diary pruned its rows and kept its pictures — 38 orphans
@@ -442,6 +449,11 @@ export const buildPass = async (
       outage.
     */
     browserGatherHandler({ db, projectRef, serviceKey }),
+    /*
+      Searching the open web and keeping what is useful as project sources (web research). Reads only; it shares the
+      browser tier's budget, ledger and no-acting boundary, and refuses a harness job before anything leaves.
+    */
+    webResearchHandler({ db, projectRef, serviceKey }),
     /*
       Running a workflow on demand, under the month's minute ceiling (#17).
 

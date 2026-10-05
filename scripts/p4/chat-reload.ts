@@ -20,6 +20,7 @@
  *   9. Grant's data absent (ids, names, address) from DOM, localStorage, sessionStorage, IndexedDB contents, Cache storage;
  *      zero page errors
  */
+import '../../src/safety/require-production-if-targeted.ts'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'

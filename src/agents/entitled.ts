@@ -22,7 +22,7 @@
  * about, never to do.
  */
 
-import { pageRequest } from './actions.ts'
+import { pageRequest, researchRequest } from './actions.ts'
 import { wantsAnotherGo } from './again.ts'
 import { callsItOff } from './calloff.ts'
 import { connectRequest, populateRequest } from './connect.ts'
@@ -30,6 +30,7 @@ import { readCorrection } from './correction.ts'
 import { linkRequest } from './links.ts'
 import { readPlan } from './plan.ts'
 import { spokenAnswer } from './spoken-answer.ts'
+import { styleKeepRequest } from './style-keep.ts'
 import { readTeaching } from './teaching.ts'
 import type { HumanWords, Turn } from './turn.ts'
 
@@ -44,6 +45,8 @@ export const entitled = {
   link: (words: HumanWords) => linkRequest(words),
   /** He asked for a page to be opened and read. */
   page: (words: HumanWords) => pageRequest(words),
+  /** He asked for something to be looked up on the web. */
+  research: (words: HumanWords) => researchRequest(words),
   /** He called work off. */
   callsItOff: (words: HumanWords) => callsItOff(words),
   /** He taught a standing rule. */
@@ -55,6 +58,8 @@ export const entitled = {
   anotherGo: (words: HumanWords) => wantsAnotherGo(words),
   /** He answered a question the office asked. */
   answer: (words: HumanWords) => spokenAnswer(words),
+  /** He asked for a report's style to be kept as the project's (HQ-STYLE-018). */
+  keepStyle: (words: HumanWords) => styleKeepRequest(words),
 } as const
 
 /**
@@ -72,11 +77,13 @@ export const noneEntitled: typeof entitled = {
   connect: () => null,
   link: () => null,
   page: () => null,
+  research: () => null,
   callsItOff: () => null,
   teaching: () => null,
   correction: () => null,
   anotherGo: () => null,
   answer: () => null,
+  keepStyle: () => null,
 }
 
 /**

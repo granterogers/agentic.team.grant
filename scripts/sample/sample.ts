@@ -18,6 +18,7 @@
  * states are always true. Everything is fictional; `.invalid` addresses cannot receive mail. Nothing here contacts a
  * person: there is no send, no booking and no external call, and the Sample has no Slack, Telegram or Google binding.
  */
+import '../../src/safety/require-production-writes.ts'
 import { diffFingerprints, otherOffices } from './fingerprint.ts'
 import { gateway, lit, PERSONA, result, rows, sampleOffice, session } from './lib.ts'
 import {

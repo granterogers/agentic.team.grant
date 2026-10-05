@@ -30,6 +30,7 @@
  * real work, and this one causes real work by design.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor, type SqlExecutor } from '../src/db/executor.ts'
 import { direction, makeComparer } from '../src/eval/judge.ts'
 import { ProviderRouter } from '../src/providers/router.ts'

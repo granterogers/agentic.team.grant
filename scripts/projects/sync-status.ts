@@ -8,6 +8,7 @@
  * this dependency to break in undocumented ways, and "when did it last work?"
  * is the first question — a log showing only the failing run cannot answer it.
  */
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

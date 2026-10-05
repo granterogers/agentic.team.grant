@@ -1,3 +1,4 @@
+import '../../src/safety/require-production-checks.ts'
 import { execSync } from 'node:child_process'
 /**
  * Run a session, or score what has been run.

@@ -9,6 +9,7 @@
  *   npm run check:office-gateway                 # against production (read only)
  *   P3_DB=p3_attack npx tsx scripts/check-office-gateway.ts [--fix]   # against a clone; --fix marks the entries
  */
+import '../src/safety/require-production-checks.ts'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { ManagementApiExecutor, type SqlExecutor } from '../src/db/executor.ts'
 import { PgExecutor } from '../src/db/pg-executor.ts'

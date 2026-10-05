@@ -32,6 +32,7 @@
  * not simply revoke everything from everybody), and that a synthetic exposed
  * row is refused by the same predicate.
  */
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 export type FnReach = {

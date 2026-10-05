@@ -29,7 +29,8 @@
  */
 
 import { redactSecrets } from '../text/secrets.ts'
-import type { BrowserAdapter, Cookie, GatherRequest, GatherResult } from './adapter.ts'
+import type { BrowserAdapter, Cookie, GatherRequest, GatherResult, PageLink } from './adapter.ts'
+import { linksOf } from './links.ts'
 
 const API = 'https://api.cloudflare.com/client/v4'
 
@@ -163,6 +164,7 @@ export class CloudflareBrowser implements BrowserAdapter {
     let title: string | null = null
     let shot: Uint8Array | null = null
     let signedOut = false
+    let links: readonly PageLink[] | undefined
 
     try {
       if (wantsText) {
@@ -181,6 +183,7 @@ export class CloudflareBrowser implements BrowserAdapter {
         const html = htmlOf(got)
         text = textOf(html)
         title = titleOf(html)
+        links = linksOf(html, request.url)
         signedOut = looksSignedOut(got.status, text)
       }
 
@@ -245,6 +248,7 @@ export class CloudflareBrowser implements BrowserAdapter {
       stopped: false,
       text,
       title,
+      ...(links === undefined ? {} : { links }),
     }
   }
 }

@@ -10,6 +10,7 @@
  * echoing a command cannot leak a credential. Emitting the mask afterwards
  * would leave a window, and that window is exactly where these things escape.
  */
+import '../../src/safety/require-production-checks.ts'
 import { appendFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

@@ -337,7 +337,7 @@ const ARTIFACT_NOUN =
 
 /** Asking for it to be MADE, as opposed to asking about one that exists. */
 const MAKE_IT =
-  /\b(write|create|produce|draft|generate|put\s+together|prepare|make|compile|pull\s+together)\b/i
+  /\b(write|create|produce|draft|generate|put\s+together|prepare|make|compile|pull\s+together|revise|redo|re-do|rework|redesign|regenerate|remake|convert|turn\s[^.!?]{0,120}?\binto)\b/i
 
 /*
   Asking for one WITHOUT a making verb, which is how people mostly ask.
@@ -544,4 +544,59 @@ export function pageRequest(text: string): PageRequest | null {
   }
 
   return READ_IT.test(said) ? { because: said, url, why: 'asked' } : null
+}
+
+/**
+ * Asking the office to LOOK SOMETHING UP ON THE WEB (web research).
+ *
+ * Two signals, both required, for the reason `pageRequest` gives about links: a research verb alone ("research the
+ * pricing") is about this office's own material and answering it by searching the internet would spend a free budget and
+ * send his sentence to a search engine; a web word alone ("the web page needs fixing") is not a request. Together
+ * ("search the web for ...", "look this up online", "google ...") they are. A sentence that carries a link is
+ * `pageRequest`'s, and one that only mentions or forbids it ("don't search the web") starts nothing.
+ */
+export interface ResearchRequest {
+  /** What to find out, as he put it. */
+  readonly question: string
+}
+
+const WEB_WORD =
+  /\b(on\s+the\s+(?:web|internet)|online|on\s+google|web\s+search|google|the\s+web|the\s+internet)\b/i
+const RESEARCH_VERB =
+  /\b(search|research|look\s+(?:it\s+|this\s+|that\s+)?up|look\s+into|find\s+out|find\s+sources?|dig\s+into|google)\b/i
+
+export function researchRequest(text: string): ResearchRequest | null {
+  const said = text.trim()
+  if (said === '' || FIRST_URL.test(said)) return null
+  if (mentionsWithoutAsking(said)) return null
+  if (!WEB_WORD.test(said) || !RESEARCH_VERB.test(said)) return null
+  /*
+    `mentionsWithoutAsking` knows making verbs only, so the same three shapes are asked here about the research verb:
+    a prohibition ("do not google them"), advice ("should I search the web?") and somebody else's words relayed
+    ("Kevin said to search the web"). A missed lookup costs him one sentence; a search nobody asked for sends his words to
+    a third party, so the expensive direction is the false positive.
+  */
+  const verb = String.raw`(?:search|research|look|find|dig|google)`
+  if (
+    new RegExp(
+      String.raw`\b(?:don'?t|do\s+not|never|stop|no\s+need\s+to|no\s+point)\s+(?:\w+\s+){0,2}?${verb}`,
+      'i',
+    ).test(said)
+  )
+    return null
+  if (
+    new RegExp(
+      String.raw`^\s*(?:should|shall|do|would)\s+(?:i|we)\b[^?]*\b${verb}[^?]*\?`,
+      'i',
+    ).test(said)
+  )
+    return null
+  if (
+    new RegExp(
+      String.raw`\b(?:said|says|told\s+(?:me|us)|suggested|wrote|mentioned|reckons?)\b[^.!?]{0,40}?\b${verb}`,
+      'i',
+    ).test(said)
+  )
+    return null
+  return { question: said.slice(0, 500) }
 }

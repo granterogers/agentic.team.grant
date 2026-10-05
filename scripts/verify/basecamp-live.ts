@@ -33,6 +33,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import '../../src/safety/require-production-site.ts'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'

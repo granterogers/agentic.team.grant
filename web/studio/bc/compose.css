@@ -3766,3 +3766,424 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
      (52px became about 85px at 320, measured). The mark returns above 360px. */
   [data-experience='basecamp'] .bcjump--in .bcjumpmark { display: none; }
 }
+
+/* ======================================================================== *
+ * THE FREEFORM WORKSPACE (4 October 2026)
+ *
+ * Replaces the twelve-column grid that `.bcpanes` used to be. This block is at
+ * the END of the stylesheet on purpose: CLAUDE.md records that a rule written
+ * above the base rule it overrides loses to source order, and every phone rule
+ * here has to beat the older 1180px and 860px grid rules above it.
+ *
+ * Comments in this block are plain words. They are not inside a template
+ * literal, but the habit is cheaper than the next backtick.
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcpanes {
+  display: block;
+  position: relative;
+  grid-template-columns: none;
+  grid-template-rows: none;
+  min-height: 420px;
+  margin-top: 2px;
+}
+[data-experience='basecamp'] .bcstage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+[data-experience='basecamp'] .bcstage--zooming { transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+[data-experience='basecamp'] .bcstage--glide .bcmod--placed,
+[data-experience='basecamp'] .bcstage--glide .bcpostit {
+  transition:
+    left 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    top 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* A module on the stage: absolutely placed, dense, thin-edged. */
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed {
+  position: absolute;
+  max-height: none;
+  min-width: 0;
+  padding: 8px 11px 10px;
+  --v2-edge: 1px solid color-mix(in srgb, var(--bc-text-muted) 24%, transparent);
+  --v2-edge-hover: 1px solid color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
+}
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead {
+  margin: -2px -5px 5px;
+  padding: 3px 5px 5px;
+  padding-right: 92px;
+  min-height: 0;
+}
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead h2,
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodopen { font-size: 12.5px; }
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodbody { font-size: 13px; }
+[data-experience='basecamp'] .bcmod--placed .bcmodctl { right: 1px; top: 0; gap: 0; }
+[data-experience='basecamp'] .bcmod--placed .bcmodbtn { width: 24px; height: 24px; border-radius: 7px; }
+[data-experience='basecamp'] .bcmod--placed .bcresize { right: 0; bottom: 0; width: 18px; height: 18px; }
+[data-experience='basecamp'] .bcmod--placed .bcresize svg { width: 11px; height: 11px; }
+[data-experience='basecamp'] .bcmod--dragging { transform: none; box-shadow: 0 18px 40px -12px rgb(0 0 0 / 55%); }
+[data-experience='basecamp'] .bcpanes--moving .bcmod--placed:not(.bcmod--dragging) { pointer-events: none; }
+
+/* A tinted module: the hue washes the face, the edge and the top line. */
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--tinted {
+  --bc-mod: var(--bc-tint);
+  --bc-mod-ink: color-mix(in srgb, var(--bc-tint) 78%, transparent);
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--bc-tint) 13%, transparent), color-mix(in srgb, var(--bc-tint) 13%, transparent)),
+    var(--v2-face);
+  border-color: color-mix(in srgb, var(--bc-tint) 38%, transparent);
+}
+
+/* Alignment guides. */
+[data-experience='basecamp'] .bcguides { position: absolute; inset: 0; pointer-events: none; z-index: 1999; }
+[data-experience='basecamp'] .bcguide { position: absolute; background: var(--bc-accent); opacity: 0.75; }
+[data-experience='basecamp'] .bcguide--x { top: 0; width: 1px; }
+[data-experience='basecamp'] .bcguide--y { left: 0; height: 1px; }
+
+/* The dock: one small pill at the corner, outside the scaled stage. */
+[data-experience='basecamp'] .bcworkspace { position: relative; }
+[data-experience='basecamp'] .bcdock {
+  position: relative;
+  z-index: 2000;
+  width: max-content;
+  margin: 0 0 7px auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bc-surface) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 26%, transparent);
+  box-shadow: var(--v2-lift);
+  backdrop-filter: blur(8px);
+}
+[data-experience='basecamp'] .bczoom { display: flex; align-items: center; margin-left: 4px; padding-left: 4px; border-left: 1px solid color-mix(in srgb, var(--bc-text-muted) 26%, transparent); }
+[data-experience='basecamp'] .bcdockbtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bc-text-muted);
+  font: 500 12px/1 var(--bc-font);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, opacity 140ms ease;
+}
+[data-experience='basecamp'] .bcdockbtn:hover,
+[data-experience='basecamp'] .bcdockbtn:focus-visible,
+[data-experience='basecamp'] .bcdockbtn[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--bc-text) 12%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcdockbtn:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
+/* Quiet means a quieter COLOUR, not a lower opacity: opacity .55 measured 3.07:1 (axe, scripts/verify/ux-a11y.ts), the muted token measures well above 4.5. */
+[data-experience='basecamp'] .bcdockbtn[data-quiet] { color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcdockbtn[data-quiet]:hover,
+[data-experience='basecamp'] .bcdockbtn[data-quiet]:focus-visible { color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcdockicon { width: 28px; padding: 0; justify-content: center; font-size: 16px; }
+[data-experience='basecamp'] .bczoomval { min-width: 46px; justify-content: center; padding: 0 4px; font-variant-numeric: tabular-nums; }
+
+/* Popovers: layouts and colours. */
+[data-experience='basecamp'] .bcpop {
+  position: absolute;
+  z-index: 3000;
+  width: 264px;
+  padding: 10px 12px 12px;
+  background: var(--bc-surface);
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 32%, transparent);
+  border-radius: 12px;
+  box-shadow: 0 18px 44px -14px rgb(0 0 0 / 60%), 0 2px 6px rgb(0 0 0 / 30%);
+  font-size: 13px;
+  animation: bc-pop-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes bc-pop-in { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
+[data-experience='basecamp'] .bcpop--tint { width: auto; }
+[data-experience='basecamp'] .bcpoplabel { margin: 8px 0 5px; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcpoplabel:first-child { margin-top: 0; }
+[data-experience='basecamp'] .bcpopnone,
+[data-experience='basecamp'] .bcpopnote { margin: 0 0 6px; font-size: 12px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcpopgrid { display: flex; flex-wrap: wrap; gap: 5px; }
+[data-experience='basecamp'] .bcpopbtn {
+  appearance: none;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 30%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bc-text);
+  font: 500 12.5px/1 var(--bc-font);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcpopbtn:hover,
+[data-experience='basecamp'] .bcpopbtn:focus-visible { background: var(--bc-surface-selected); color: var(--bc-text-strong); border-color: color-mix(in srgb, var(--bc-accent) 55%, transparent); }
+[data-experience='basecamp'] .bcpoprow { display: flex; gap: 5px; align-items: center; margin: 0 0 5px; }
+[data-experience='basecamp'] .bcpopname { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-experience='basecamp'] .bcpopmini { appearance: none; border: 0; background: transparent; color: var(--bc-text-muted); font: 12px/1 var(--bc-font); padding: 6px 4px; cursor: pointer; border-radius: 6px; }
+[data-experience='basecamp'] .bcpopmini:hover,
+[data-experience='basecamp'] .bcpopmini:focus-visible { color: var(--bc-text-strong); background: color-mix(in srgb, var(--bc-text) 10%, transparent); }
+[data-experience='basecamp'] .bcpopinput {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 34%, transparent);
+  border-radius: 8px;
+  background: var(--bc-canvas);
+  color: var(--bc-text-strong);
+  font: 13px/1 var(--bc-font);
+}
+[data-experience='basecamp'] .bcswatches { display: grid; grid-template-columns: repeat(7, 26px); gap: 7px; }
+[data-experience='basecamp'] .bcswatch {
+  appearance: none;
+  position: relative;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--bc-text) 18%, transparent);
+  background: var(--sw, transparent);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcswatch[data-tint='']::after { content: ''; position: absolute; inset: 3px 10px; background: color-mix(in srgb, var(--bc-text-muted) 70%, transparent); transform: rotate(45deg); border-radius: 2px; }
+[data-experience='basecamp'] .bcswatch.is-on { border-color: var(--bc-text-strong); box-shadow: 0 0 0 2px var(--bc-surface), 0 0 0 3px var(--bc-text-strong); }
+[data-experience='basecamp'] .bcswatch:hover { transform: scale(1.1); }
+[data-experience='basecamp'] .bcswatch:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 2px; }
+[data-experience='basecamp'] .bcswatch--custom { background: conic-gradient(#e57a6a, #e8a04a, #d2b36a, #6cc08b, #5aa9e6, #9a82e0, #e57a6a); overflow: hidden; }
+[data-experience='basecamp'] .bcswatch--custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+
+/* Post-its: yellow, plain, a little soft. No novelty skeuomorphism. */
+[data-experience='basecamp'] .bcpostit {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 3px 3px 12px 3px;
+  background: linear-gradient(165deg, #fbea8c 0%, #f5da63 100%);
+  color: #3a3000;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 18%), 0 12px 20px -12px rgb(60 45 0 / 55%);
+}
+[data-experience='basecamp'] .bcpostitbar {
+  flex: none;
+  height: 20px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 3px;
+  cursor: grab;
+  touch-action: none;
+  background: linear-gradient(rgb(0 0 0 / 7%), transparent);
+}
+[data-experience='basecamp'] .bcpostitx {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 18px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #5a4a00;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 140ms ease;
+}
+[data-experience='basecamp'] .bcpostit:hover .bcpostitx,
+[data-experience='basecamp'] .bcpostit:focus-within .bcpostitx { opacity: 0.85; }
+[data-experience='basecamp'] .bcpostitx:hover { background: rgb(0 0 0 / 10%); opacity: 1; }
+[data-experience='basecamp'] .bcpostitx:focus-visible { outline: 2px solid #5a4a00; opacity: 1; }
+[data-experience='basecamp'] .bcpostittext {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  padding: 2px 11px 12px;
+  background: transparent;
+  color: inherit;
+  font: 500 15px/1.4 var(--bc-font);
+  scrollbar-width: thin;
+}
+[data-experience='basecamp'] .bcpostittext::placeholder { color: rgb(58 48 0 / 48%); }
+[data-experience='basecamp'] .bcpostit:focus-within { box-shadow: 0 0 0 2px rgb(58 48 0 / 35%), 0 14px 24px -12px rgb(60 45 0 / 60%); }
+[data-experience='basecamp'] .bcpostitresize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 55%, rgb(0 0 0 / 22%) 56%, rgb(0 0 0 / 22%) 62%, transparent 63%, transparent 72%, rgb(0 0 0 / 22%) 73%, rgb(0 0 0 / 22%) 79%, transparent 80%);
+}
+[data-experience='basecamp'] .bcpostit--new { animation: bc-pull 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+[data-experience='basecamp'] .bcpostit--leaving { opacity: 0; transform: scale(0.94) rotate(2deg); transition: opacity 150ms ease, transform 150ms ease; pointer-events: none; }
+@keyframes bc-pull { from { opacity: 0; transform: translateY(-16px) rotate(-3deg) scale(0.9); } }
+
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcdockbtn { height: 44px; padding: 0 14px; }
+  [data-experience='basecamp'] .bcdockicon { width: 44px; }
+  [data-experience='basecamp'] .bcpostittext { font-size: 16px; }
+  [data-experience='basecamp'] .bcpostitx { opacity: 0.85; width: 44px; height: 20px; }
+  /* A placed module's controls were 24px on a touch tablet: .bcmod--placed .bcmodbtn is more specific than the plain rule
+     and won. Named here so the 44px floor applies where the controls really are. */
+  [data-experience='basecamp'] .bcmodbtn,
+  [data-experience='basecamp'] .bcmod--placed .bcmodbtn { width: 44px; height: 44px; }
+  [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead { padding-right: 140px; }
+  [data-experience='basecamp'] .bcmodctl { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcstage--zooming,
+  [data-experience='basecamp'] .bcstage--glide .bcmod--placed,
+  [data-experience='basecamp'] .bcstage--glide .bcpostit,
+  [data-experience='basecamp'] .bcpop,
+  [data-experience='basecamp'] .bcpostit--new,
+  [data-experience='basecamp'] .bcpostit--leaving { animation: none; transition: none; }
+}
+
+/* THE PHONE: no stage. Modules stack in order and the notes follow them. */
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpanes { height: auto !important; min-height: 0; }
+  [data-experience='basecamp'] .bcstage {
+    position: static;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+    display: grid;
+    gap: 14px;
+  }
+  [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed,
+  [data-experience='basecamp'] .bcpostit {
+    position: relative;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: 62vh;
+    min-height: 140px;
+  }
+  [data-experience='basecamp'] .bcpostit { height: 180px !important; }
+  [data-experience='basecamp'] .bcmod--placed .bcresize,
+  [data-experience='basecamp'] .bcpostitresize,
+  [data-experience='basecamp'] .bcguides,
+  [data-experience='basecamp'] .bcdock [data-bc-tidy],
+  [data-experience='basecamp'] .bcdock [data-bc-layouts],
+  [data-experience='basecamp'] .bcdock [data-bc-viewreset],
+  [data-experience='basecamp'] .bczoom { display: none; }
+  [data-experience='basecamp'] .bcdock { margin: 14px auto 0 0; order: 2; }
+  [data-experience='basecamp'] .bcworkspace { display: flex; flex-direction: column; }
+  [data-experience='basecamp'] .bcworkspace .bcpanes { order: 1; }
+  [data-experience='basecamp'] .bcpostitbar,
+  [data-experience='basecamp'] .bcmod--placed .bcmodhead { cursor: default; }
+}
+
+/* Placed module header: one quiet line, never wrapping into the edge. */
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed { padding-top: 11px; }
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  margin-bottom: 7px;
+}
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodtitle { flex: none; margin: 0; }
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodmeta {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+/* The maximised module takes nearly the whole usable screen (4 October). */
+[data-experience='basecamp'] .bcexp { padding: 14px; }
+[data-experience='basecamp'] .bcexpbox {
+  width: min(1680px, 100%);
+  max-height: calc(100vh - 28px);
+  height: calc(100vh - 28px);
+  padding: 22px 26px 26px;
+}
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcexp { padding: 0; }
+  [data-experience='basecamp'] .bcexpbox { height: 100vh; max-height: none; border-radius: 0; padding: 18px 14px 22px; }
+}
+/* The workspace owns its stacking so nothing in it can float above a dialog. */
+[data-experience='basecamp'] .bcworkspace { isolation: isolate; }
+[data-experience='basecamp'] .bcdock { z-index: 5; }
+
+[data-experience='basecamp'] .bcworkbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 7px; min-height: 34px; }
+[data-experience='basecamp'] .bcworkbar .bcdock { margin: 0 0 0 auto; }
+[data-experience='basecamp'] .bcoffrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+[data-experience='basecamp'] .bcofflabel { font-size: 12px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcoffchip { border: 1px solid color-mix(in srgb, var(--bc-text-muted) 30%, transparent); background: transparent; }
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcworkbar { flex-direction: column; align-items: flex-start; }
+  [data-experience='basecamp'] .bcworkbar .bcdock { margin: 0; }
+  [data-experience='basecamp'] .bcoffchip { min-height: 44px; }
+}
+
+/* The dock now lives in the head row, so it takes no height of its own. */
+[data-experience='basecamp'] .bcheadrow .bcworkbar { flex: 1 1 auto; min-height: 0; margin: 0; justify-content: flex-end; }
+[data-experience='basecamp'] .bcheadrow .bcworkbar .bcdock { margin: 0; }
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcheadrow .bcworkbar { order: 3; flex-basis: 100%; }
+}
+
+[data-experience='basecamp'] .bcphoneonly { display: none; }
+@media (max-width: 860px) {
+  /* The desktop dock is not drawn on a phone, but its put-back chips are: a module taken off the page must be restorable where it was taken off (basecamp-touch). */
+  [data-experience='basecamp'] .bcheadrow .bcworkbar .bcdock { display: none; }
+  [data-experience='basecamp'] .bcphoneonly { display: inline-flex; justify-self: start; min-height: 44px; border: 1px solid color-mix(in srgb, var(--bc-text-muted) 30%, transparent); }
+}
+
+html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-user-select: none !important; }
+[data-experience='basecamp'] .bcmodhead, [data-experience='basecamp'] .bcpostitbar { user-select: none; -webkit-user-select: none; }
+
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcmod--placed [data-bc-tint] { display: none; }
+}
+
+/* A tile shows the first words of the document's extracted text when the office holds them (0960). Phone sizes need no
+   override: the page is a fixed-ratio box and the text is clipped by it. */
+/* The top clears the source mark that sits on the tile's corner. */
+[data-experience='basecamp'] .bcxpage { display: block; padding: 26px 9px 10px; }
+[data-experience='basecamp'] .bcxpagetext {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 7;
+  line-clamp: 7;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--bc-canvas);
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+[data-experience='basecamp'] .bcximporterr { color: var(--bc-text-strong); }
+
+/* Touch phone / portrait tablet: the stacked layout draws two module controls (no colour control), so reserve two
+   44px targets rather than three, or the Mine/Team pill in the header is clipped mid-word. */
+@media (pointer: coarse) and (max-width: 860px) {
+  [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead { padding-right: 100px; }
+  [data-experience='basecamp'] .bcmodhead .bcsplit2 { min-width: 0; flex: 0 1 auto; }
+  [data-experience='basecamp'] .bcmodhead .bcsplitbtn { white-space: nowrap; padding: 6px 8px; }
+}
+
+/* The record header's secondary action ("The list instead") is a real outlined button, left-aligned under the title on a phone. */
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcrecordhead .bcactions { justify-content: flex-start; }
+}

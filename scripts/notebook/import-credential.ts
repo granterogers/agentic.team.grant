@@ -25,6 +25,7 @@
  *   - The script warns loudly if the account looks personal, because the check
  *     costs nothing and the mistake is expensive.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { operatorOffice } from '../../src/db/office.ts'

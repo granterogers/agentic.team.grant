@@ -42,6 +42,7 @@
  * it verified.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { recordUsage } from '../../src/inference/record.ts'

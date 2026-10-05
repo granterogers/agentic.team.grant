@@ -34,6 +34,7 @@
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
 
+import '../../src/safety/require-production-site.ts'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { officeKey } from './lib/sign-in.ts'

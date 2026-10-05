@@ -8,6 +8,7 @@
  * and reads come from the Postgres cache, so a full pass over every project
  * costs nothing in money and nothing in Notebook quota.
  */
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { trustedOffice } from '../../src/office/context.ts'
 import { generateBrief, NoSourcesError } from '../../src/projects/brief.ts'

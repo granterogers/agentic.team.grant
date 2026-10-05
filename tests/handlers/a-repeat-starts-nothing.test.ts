@@ -80,6 +80,7 @@ describe('and nothing new starts work without deciding about this', () => {
     'office.notion_adopt',
     'office.notion_import',
     'office.pursue',
+    'web.research',
   ])
 
   it('the child kinds it can start are the ones that have been thought about', async () => {

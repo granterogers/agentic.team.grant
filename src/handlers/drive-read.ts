@@ -31,7 +31,7 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import { extensionFor, filePath, putFile } from '../files/store.ts'
-import { describeKind, driveAccess, readFile } from '../google/drive.ts'
+import { describeKind, driveAccess, fileMeta, readFile } from '../google/drive.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { fileText } from '../text/file-text.ts'
 
@@ -48,8 +48,12 @@ interface Payload {
   readonly file_id?: string
   readonly folder_id?: string
   readonly project_id?: string
+  /** Set when an explicit Import press started this read (0960). */
+  readonly document_id?: string
   readonly mime_type?: string
   readonly title?: string
+  /** True when the job was queued for an Import press (1010 asks the gate before reading). */
+  readonly import_request?: boolean
 }
 
 export function driveReadHandler(deps: DriveReadDeps): Handler {
@@ -82,30 +86,90 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       const p = ((rows[0] as { pinned_config?: Payload } | undefined)?.pinned_config ??
         {}) as Payload
 
+      /*
+        A read that an Import press started says why it failed on the request itself (0960), so the page shows the reason
+        and offers the press again instead of staying pending in silence. A read nobody asked to import annotates nothing:
+        the function only touches a pending request. Never throws: a database without 0960 has nowhere to say it.
+      */
+      const importDoc = String(p.document_id ?? '').trim()
+      const failed = async (body: string): Promise<HandlerOutput> => {
+        if (importDoc !== '') {
+          try {
+            await deps.db.execute(
+              `select app.document_import_note_failure(app.job_office(${lit(job.jobId)}::uuid), ${lit(importDoc)}::uuid, ${lit(body)})`,
+            )
+          } catch {
+            // Said nowhere else: the job's own output already carries the reason.
+          }
+        }
+        return said(body, false)
+      }
+
+      /*
+        A read that an Import press asked for is a NEW operation that needs the provider, so a closed source is refused
+        here too: the job may have been queued before the source was switched off, or by somebody who never went through
+        the press (1010). Asked of the database, which decides; a database that does not have the function yet has no
+        gate on the press either, and the read goes on as it always did. Any other failure refuses: unknown is not open.
+      */
+      if (p.import_request === true && importDoc !== '') {
+        try {
+          const g = await deps.db.execute(
+            `select app.document_import_gate(app.job_office(${lit(job.jobId)}::uuid), ${lit(importDoc)}::uuid) as g`,
+          )
+          const raw = (g.rows[0] as { g?: unknown } | undefined)?.g
+          const gate = (typeof raw === 'string' ? JSON.parse(raw) : raw) as
+            | { ok?: boolean; error?: string; error_code?: string }
+            | undefined
+          if (gate?.ok !== true) {
+            return failed(
+              `${gate?.error_code ?? 'SOURCE_DISCONNECTED'}: ${gate?.error ?? 'this source cannot be read.'}`,
+            )
+          }
+        } catch (e) {
+          const missing =
+            /document_import_gate/.test(e instanceof Error ? e.message : String(e)) &&
+            /does not exist/.test(e instanceof Error ? e.message : String(e))
+          if (!missing)
+            return failed(
+              'SOURCE_DISCONNECTED: the source could not be checked, so it was not read.',
+            )
+        }
+      }
+
       const fileId = String(p.file_id ?? '').trim()
       const folderId = String(p.folder_id ?? '').trim()
       const projectId = String(p.project_id ?? job.projectId ?? '').trim()
       if (fileId === '' || folderId === '' || projectId === '') {
-        return said(
-          'I need a Drive file, the folder it is in, and a project to file it under.',
-          false,
-        )
+        return failed('I need a Drive file, the folder it is in, and a project to file it under.')
       }
 
       const access = await driveAccess(deps.db, fetchImpl)
       if (!('accessToken' in access)) {
         // The scope story, in its own words. "Drive did not work" would send
         // him to look at the folder; the missing thing is a permission.
-        return said(access.reason, false)
+        return failed(access.reason)
       }
 
-      const mime = String(p.mime_type ?? 'application/octet-stream')
+      /*
+        A reference row has no mime type and a Google format is exported where a binary is downloaded, so an import
+        started from one asks Drive what the file is first. Only then: a read that already knows (drive.watch) pays nothing.
+      */
+      let mime = String(p.mime_type ?? '').trim()
+      let title = String(p.title ?? '').trim()
+      if (mime === '') {
+        const meta = await fileMeta(access, fileId, fetchImpl)
+        if (meta.error !== null || meta.mimeType === null) {
+          return failed(
+            `I could not ask Drive what that file is — ${meta.error ?? 'no type was returned'}`,
+          )
+        }
+        mime = meta.mimeType
+        if (title === '' && meta.name !== null) title = meta.name
+      }
       const got = await readFile(access, fileId, mime, fetchImpl)
       if (got.error !== null) {
-        return said(`I could not read that ${describeKind(mime)} — ${got.error}`, false)
+        return failed(`I could not read that ${describeKind(mime)} — ${got.error}`)
       }
-
-      const title = String(p.title ?? '').trim()
 
       // A PDF or Word file arrives as bytes (#419). Its text is read here, so a Drive file is searchable like an
       // uploaded one; a scan or an unreadable file leaves the text null, which is true, and the bytes are still kept.
@@ -130,21 +194,61 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       ).rows[0] as { r?: { ok?: boolean; document?: string; outcome?: string; error?: string } }
       const doc = recorded.r
       if (doc?.ok !== true || doc.document === undefined) {
-        return said(`I read the file but could not record it — ${String(doc?.error)}`, false)
+        return failed(`I read the file but could not record it — ${String(doc?.error)}`)
+      }
+
+      /*
+        A real read replaces any text a PREVIEW derived on demand (0990): the material is now held, so an Import request
+        can be completed from it. A database without 0990 has no preview to supersede; nothing else is lost by that.
+      */
+      try {
+        await deps.db.execute(
+          `select app.document_preview_mark_read(app.job_office(${lit(job.jobId)}::uuid), ${lit(doc.document)}::uuid)`,
+        )
+      } catch {
+        // No preview cache on this database.
+      }
+
+      /*
+        An explicit import request (0900, `app.hq_document_import`) waits for exactly this: the material to be held.
+        `document_import_fulfil` does nothing unless a person's request is recorded for this very document, so reading
+        a file never imports one that nobody asked for. A failure is said, not swallowed: the request stays pending.
+      */
+      const fulfil = async (document: string): Promise<string> => {
+        try {
+          const done = (
+            await deps.db.execute(
+              `select app.document_import_fulfil(app.job_office(${lit(job.jobId)}::uuid), ${lit(document)}::uuid) as r`,
+            )
+          ).rows[0] as { r?: { fulfilled?: boolean } } | undefined
+          return done?.r?.fulfilled === true
+            ? ' Your import request is done: a Team HQ copy now exists.'
+            : ''
+        } catch (e) {
+          // A database that has not had 0900 yet has no request to complete: say nothing rather than alarm on every read.
+          if (
+            e instanceof Error &&
+            /document_import_fulfil/.test(e.message) &&
+            /does not exist/.test(e.message)
+          )
+            return ''
+          return ` Your import request could not be completed yet (${e instanceof Error ? e.message : String(e)}).`
+        }
       }
 
       if (got.text !== null) {
         const chars = got.text.length
+        const imported = await fulfil(doc.document)
         return said(
           `Read “${title === '' ? fileId : title}” from Drive — ${String(chars)} characters, ` +
-            `${doc.outcome === 'unchanged' ? 'unchanged since last time' : String(doc.outcome)}.`,
+            `${doc.outcome === 'unchanged' ? 'unchanged since last time' : String(doc.outcome)}.${imported}`,
           doc.outcome !== 'unchanged',
         )
       }
 
       const bytes = got.bytes
       if (bytes === null) {
-        return said('Drive returned neither text nor bytes, which should not happen.', false)
+        return failed('Drive returned neither text nor bytes, which should not happen.')
       }
 
       const path = filePath(projectId, 'drive', fileId, extensionFor(got.mime))
@@ -157,10 +261,9 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
         fetchImpl,
       )
       if (!stored.ok) {
-        return said(
+        return failed(
           `I read the file and recorded it, but storing the bytes failed — ${String(stored.error)}. ` +
             'The document is there; the file is not.',
-          false,
         )
       }
 
@@ -172,13 +275,14 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
         `)
       ).rows[0] as { r?: { ok?: boolean; error?: string; already_there?: boolean } }
       if (attached.r?.ok !== true) {
-        return said(`Stored the file but could not attach it — ${String(attached.r?.error)}`, false)
+        return failed(`Stored the file but could not attach it — ${String(attached.r?.error)}`)
       }
 
       const size = `${String(Math.max(1, Math.round(bytes.byteLength / 1024)))} KB`
+      const importedFile = await fulfil(doc.document)
       return said(
         `Brought “${title === '' ? fileId : title}” in from Drive — ${describeKind(mime)}, ` +
-          `${size}. You can read it in the project.`,
+          `${size}. You can read it in the project.${importedFile}`,
         attached.r.already_there !== true,
       )
     },

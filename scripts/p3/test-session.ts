@@ -2,6 +2,8 @@
  * Mint a short-lived session for the TEST office's login (verify.operator) so a live check can drive the deployed
  * gateway as a signed-in member. Never mints for a person office. Prints the access token to stdout only.
  */
+import '../../src/safety/require-production-checks.ts'
+
 const ref = 'baujwlzcziasnfhhkchg'
 const url = `https://${ref}.supabase.co`
 const service = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''

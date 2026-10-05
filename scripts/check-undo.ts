@@ -19,6 +19,7 @@
  * added today has no rows yet, and would be invisible to a check that only
  * looked at what had already happened.
  */
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

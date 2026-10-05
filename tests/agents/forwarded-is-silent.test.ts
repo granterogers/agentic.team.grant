@@ -17,6 +17,7 @@ const SAMPLES = [
   'That is not what I meant at all',
   'Give it another go',
   'yes',
+  "Use this report's style for this project.",
 ]
 describe('noneEntitled', () => {
   it('has exactly the readers entitled has', () => {
@@ -35,6 +36,7 @@ describe('noneEntitled', () => {
       expect(noneEntitled.correction(w, true)).toBeNull()
       expect(noneEntitled.anotherGo(w)).toBeNull()
       expect(noneEntitled.answer(w)).toBeNull()
+      expect(noneEntitled.keepStyle(w)).toBeNull()
     }
   })
   it('the control: the real readers are NOT silent for these samples (the test can fail)', () => {
@@ -50,7 +52,8 @@ describe('noneEntitled', () => {
         entitled.teaching(w) !== null ||
         entitled.correction(w, true) !== null ||
         entitled.anotherGo(w) !== null ||
-        entitled.answer(w) !== null
+        entitled.answer(w) !== null ||
+        entitled.keepStyle(w) !== null
       )
     })
     expect(live.length).toBeGreaterThanOrEqual(5)

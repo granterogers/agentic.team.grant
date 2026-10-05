@@ -63,6 +63,7 @@ export const REACH: Readonly<Record<string, KindReach>> = {
   'office.notion_adopt': { reach: 'external', service: 'Notion' },
   'office.notion_sync': { reach: 'external', service: 'Notion' },
   'google.write_calendar_tasks': { reach: 'external', service: 'Google Calendar' },
+  'calendar.sync_events': { reach: 'external', service: 'Google Calendar' },
   'google.revoke': { reach: 'external', service: 'Google' },
   'ci.dispatch': { reach: 'external', service: 'GitHub' },
   'office.provision_channels': { reach: 'external', service: 'Slack' },
@@ -84,6 +85,7 @@ export const REACH: Readonly<Record<string, KindReach>> = {
   'notebook.collect_artifact': { reach: 'reads' },
   'notebook.list_artifacts': { reach: 'reads' },
   'office.sync': { reach: 'reads' },
+  'web.research': { reach: 'reads' },
 
   // --- internal: this office's own tables, and the delivery layer -----------
   'artifact.report': { reach: 'internal' },
@@ -98,6 +100,7 @@ export const REACH: Readonly<Record<string, KindReach>> = {
   'office.prune_job_traces': { reach: 'internal' },
   'office.pursue': { reach: 'internal' },
   'office.synthesise': { reach: 'internal' },
+  'style.adopt': { reach: 'internal' },
   'tasks.remind': { reach: 'internal' },
 }
 

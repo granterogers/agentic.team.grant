@@ -1,3 +1,13 @@
+> ## 2026-10-05 - PRODUCTION-ACCESS GUARD (branch `claude/ux-closure-guard`)
+>
+> A previous autonomous run touched production (read-only catalogue queries) only because credentials were in its environment.
+> Production access is now **off by default**: `ALLOW_PRODUCTION_CHECKS=1` for any contact, plus `ALLOW_PRODUCTION_WRITES=1` for
+> deploys, migrations, purges, senders and production-heavy suites. One definition (`src/safety/production-gate.ts`), enforced at
+> `ManagementApiExecutor`, `PgExecutor`, a global `fetch` guard, entry modules and `db-query.sh`; inert in Deno (the worker) and for
+> the local replica. Inventory, switches, residuals: `docs/production-access-guard.md`; manifest `docs/testing/production-access.json`;
+> tests `tests/safety/`. Every command that touches production now needs the flag on its own command line, including the ones in
+> "Asking the office about itself" in `CLAUDE.md` (`npm run q`, `check:*`, `measure`, ...), which that file does not yet say.
+>
 > ## 2026-10-04 (later) - TELEGRAM SELF-SERVICE, DELIVERY OFFICE, TALK, GATE (branch `claude/multi-user-p4`)
 >
 > Migrations through **0886**. hq-api **v884**, telegram-webhook **v689**, page `dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M` (rollback

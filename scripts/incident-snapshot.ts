@@ -18,6 +18,7 @@
  *
  * It does not diagnose. Read it beside docs/ops/supabase-incident-2026-10-03.md.
  */
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'

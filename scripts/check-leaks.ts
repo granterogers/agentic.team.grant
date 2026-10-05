@@ -48,6 +48,7 @@
  * is in Grant's Notion workspace and it is his to authorise.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import {
   ADAPTER_SHAPE,

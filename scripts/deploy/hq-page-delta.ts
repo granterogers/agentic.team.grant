@@ -13,6 +13,7 @@
  * It refuses to deploy when its file NAMES differ from the live deployment's, because a
  * different set is a different page. The previous deployment is printed as the rollback point.
  */
+import '../../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'

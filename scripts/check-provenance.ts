@@ -34,6 +34,7 @@
  * asymmetry applies — the absence of a link is not the presence of a defect.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

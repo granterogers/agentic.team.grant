@@ -10,6 +10,7 @@
  * The probe sends no code and no state, so it exchanges nothing and spends nothing: a GET must answer a redirect carrying
  * `slack=refused` and a POST must answer 405.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

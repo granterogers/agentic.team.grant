@@ -32,6 +32,7 @@
  *   - on the portfolio, where no project is loaded, there is no control and no session is requested;
  *   - a project that is not in the person's office has no page and no control, so a slug cannot be injected from the address bar.
  */
+import '../../src/safety/arm.ts'
 import { mkdirSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { type BrowserContext, chromium, devices, type Page } from 'playwright'

@@ -23,6 +23,7 @@
  * dependency on somebody's open window.
  */
 
+import '../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import { buildPass } from '../src/office/pass.ts'
 

@@ -46,6 +46,7 @@
  * where taps are least deliberate.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { NotebookActions } from '../../src/notebook/actions.ts'
 

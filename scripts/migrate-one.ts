@@ -25,6 +25,7 @@
  * machinery cannot express: a branch that is behind on migrations it does not
  * own.
  */
+import '../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

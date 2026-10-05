@@ -32,6 +32,7 @@
  * every time this ran. What each person is FOR is a fact from §9's roster.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { DeliveryService } from '../../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { SlackClient } from '../../src/slack/api.ts'

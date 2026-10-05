@@ -16,6 +16,7 @@
  *    first unreachable selector, because one throw taking twelve captures
  *    with it is how most of a product stops being watched.
  */
+import '../../src/safety/arm.ts'
 import { mkdir } from 'node:fs/promises'
 import { chromium, devices } from 'playwright'
 import { serveStudio } from './serve-studio.ts'

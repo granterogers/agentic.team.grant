@@ -45,6 +45,7 @@
  * level 1.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { execFileSync } from 'node:child_process'
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../src/db/executor.ts'

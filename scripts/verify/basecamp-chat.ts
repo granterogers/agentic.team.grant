@@ -49,6 +49,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import '../../src/safety/arm.ts'
 import { readFile, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { serveLive } from './serve-live.ts'

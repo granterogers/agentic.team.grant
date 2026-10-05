@@ -32,6 +32,7 @@
  * So each endpoint declares its real callers and its real headers, and
  * localhost is reported as informational rather than asserted.
  */
+import '../../src/safety/require-production-site.ts'
 
 /*
   This file imports nothing — it needs only `fetch`, which is global — and a TS

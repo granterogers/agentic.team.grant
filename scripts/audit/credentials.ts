@@ -28,6 +28,7 @@
  * Never prints a secret: name, length, and non-secret metadata from the
  * provider's own response.
  */
+import '../../src/safety/require-production-checks.ts'
 
 // This file has no imports — it talks to providers over fetch and reads
 // process.env — so it needs an explicit marker to be treated as a module,

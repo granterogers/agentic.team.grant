@@ -195,7 +195,13 @@ export async function act(action, args = {}) {
     )
   }
   if (!r.ok) throw new Error(body.error ?? `The server returned ${r.status}`)
-  if (body.result?.error) throw new Error(body.result.error)
+  if (body.result?.error) {
+    // A typed refusal keeps its code so a page can speak for it (SOURCE_DISCONNECTED, 1010); the sentence stays the fallback.
+    const refused = new Error(body.result.error)
+    if (typeof body.result.error_code === 'string') refused.code = body.result.error_code
+    if (typeof body.result.reason === 'string') refused.reason = body.result.reason
+    throw refused
+  }
   // Only on the way out, and only after both refusal checks: an action that was
   // refused changed nothing, and offering to take back nothing is a lie.
   try {
@@ -258,6 +264,37 @@ export async function read(section, id, extra) {
     throw new Error(said === '' ? `The server returned ${r.status}` : said)
   }
   return answered.data
+}
+
+/**
+ * A section that answers with a FILE rather than JSON (the on-demand document preview, 0990): its bytes, as a Blob.
+ *
+ * The same door as `read`: one credential, the same 401 handling, the same words for a refusal. A gateway that answers a
+ * refusal in JSON is read for its words, and the bytes are never kept by this module.
+ */
+export async function readFile(section, id, extra) {
+  refuseUnconfigured()
+  const parts = [`section=${encodeURIComponent(section)}`]
+  if (id !== undefined) parts.push(`id=${encodeURIComponent(id)}`)
+  for (const [k, v] of Object.entries(extra ?? {})) {
+    if (v !== undefined && v !== null && v !== '') parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+  }
+  const began = session.epoch()
+  const r = await fetch(`${API}?${parts.join('&')}`, {
+    headers: { Authorization: `Bearer ${await toPresent()}` },
+  })
+  if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
+  if (r.status === 401) {
+    session.forget()
+    token.clear()
+    throw new Error('You are not signed in any more.')
+  }
+  if (!r.ok) {
+    const answered = await r.json().catch(() => ({}))
+    const said = typeof answered?.error === 'string' ? answered.error.trim() : ''
+    throw new Error(said === '' ? `The server returned ${r.status}` : said)
+  }
+  return await r.blob()
 }
 
 /**

@@ -32,7 +32,12 @@
  * refused task must not stop the other forty.
  */
 import type { SqlExecutor } from '../db/executor.ts'
-import { type CanonicalTask, ProviderDownError, type TaskProvider } from './provider.ts'
+import {
+  type CanonicalTask,
+  ProviderAuthError,
+  ProviderDownError,
+  type TaskProvider,
+} from './provider.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -76,6 +81,8 @@ export interface SyncReport {
   readonly held: number
   /** Set when the provider could not be reached. Nothing else ran. */
   readonly down: string | null
+  /** Why it is down: `refused` is a credential the provider answered and turned away; `unreachable` is everything else. */
+  readonly downKind?: 'unreachable' | 'refused' | null
 }
 
 interface Pushable {
@@ -129,12 +136,29 @@ export async function syncOnce(
     for (const d of deletes) {
       const link = (d.links ?? []).find((l) => l.provider === name)
       const ext = String(link?.external_id ?? '')
-      if (ext === '') continue
+      if (ext === '') {
+        /*
+          Nothing was ever made at the provider (the database does not offer a placeholder as an id), so there is
+          nothing to remove and nothing to ask about: the debt is simply cleared. Leaving it open meant it was listed
+          again on every round for ever.
+        */
+        await db.execute(
+          `select app.task_delete_pushed(${lit(opts.office)}::uuid, ${lit(d.id)}::uuid, ${lit(name)})`,
+        )
+        continue
+      }
       if (!(await gate.mayDelete({ title: d.title, externalId: ext }))) {
         held += 1
         continue
       }
-      await provider.remove(ext)
+      try {
+        await provider.remove(ext)
+      } catch (error) {
+        if (error instanceof ProviderDownError) throw error
+        // One refused delete must not stop the other forty tasks syncing. The tombstone stays, so it is offered again.
+        failed += 1
+        continue
+      }
       await db.execute(
         `select app.task_delete_pushed(${lit(opts.office)}::uuid, ${lit(d.id)}::uuid, ${lit(name)})`,
       )
@@ -195,6 +219,8 @@ export async function syncOnce(
         external_revision: r.externalRevision,
         external_project_id: r.externalProjectId,
       }
+      // The office's own mark, when the provider's copy carries one: how a lost create is told from a stranger's task.
+      if (r.canonicalId !== null && r.canonicalId !== undefined) fields.canonical_id = r.canonicalId
       /*
         A priority the provider did not set is LEFT OUT of the payload, not
         sent as null. `app.task_pulled` only touches a field the payload
@@ -219,7 +245,13 @@ export async function syncOnce(
           held += 1
           continue
         }
-        await provider.remove(r.externalId)
+        try {
+          await provider.remove(r.externalId)
+        } catch (error) {
+          if (error instanceof ProviderDownError) throw error
+          failed += 1
+          continue
+        }
         deleted += 1
         continue
       }
@@ -241,10 +273,22 @@ export async function syncOnce(
         failed,
         held,
         down: error.detail,
+        downKind: error instanceof ProviderAuthError ? 'refused' : 'unreachable',
       }
     }
     throw error
   }
 
-  return { provider: name, pushed, deleted, pulled, created, conflicts, failed, held, down: null }
+  return {
+    provider: name,
+    pushed,
+    deleted,
+    pulled,
+    created,
+    conflicts,
+    failed,
+    held,
+    down: null,
+    downKind: null,
+  }
 }

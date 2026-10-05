@@ -33,6 +33,7 @@
  * "the model changed" from "the code changed".
  */
 
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import { JUDGE_VERSION, makeJudge } from '../src/eval/judge.ts'
 import { ProviderRouter } from '../src/providers/router.ts'
