@@ -6,11 +6,12 @@
  *
  * ## Honest about what it draws
  *
- * The writer sets type in the faces `metrics.ts` has widths for (the Helvetica and Times families) and fills
- * rectangles; it cannot embed an image. So a profile may carry a logo, a tone, terminology and a preferred structure
- * (the drafting prompt reads those), but the renderer applies only: palette, typography, and the title-page
- * treatment. `unapplied` names what a profile asked for that this renderer did not draw, so nobody believes a logo is
- * on a page it is not on.
+ * The writer sets type in the faces `metrics.ts` has widths for (the Helvetica and Times families), fills
+ * rectangles and draws a PNG or JPEG logo it is HANDED as bytes (`image.ts`). A profile may carry a tone, terminology
+ * and a preferred structure (the drafting prompt reads those), but the renderer applies only: palette, typography,
+ * the title-page treatment and the logo. `unapplied` names what a profile asked for that this renderer did not draw
+ * (a logo that was missing, too large or an unsupported format says why), so nobody believes a logo is on a page it
+ * is not on.
  *
  * Nothing here ever fails a render: a profile that cannot be honoured falls back to the default, and says so.
  */
@@ -139,7 +140,10 @@ export interface ResolvedTheme {
  * The primary colour must be legible on the paper too (3:1, the large-text bar the kicker and headings clear), or it
  * is kept off the page and recorded.
  */
-export function resolveTheme(profile: StyleProfile | null | undefined): ResolvedTheme {
+export function resolveTheme(
+  profile: StyleProfile | null | undefined,
+  assets?: { readonly logo?: unknown; readonly logoProblem?: string },
+): ResolvedTheme {
   if (profile === null || profile === undefined) return { theme: DEFAULT_THEME, unapplied: [] }
   const unapplied: string[] = []
   const pal = profile.palette ?? {}
@@ -175,8 +179,13 @@ export function resolveTheme(profile: StyleProfile | null | undefined): Resolved
       unapplied.push(`typography.${role} (${name}) is not a face this renderer can set`)
   }
   const wantBand = profile.formatting?.title_page === 'band'
-  if (profile.logo_document_id !== undefined)
-    unapplied.push('the logo was not drawn: this renderer cannot embed an image yet')
+  if (
+    profile.logo_document_id !== undefined &&
+    (assets?.logo === undefined || assets.logo === null)
+  )
+    unapplied.push(
+      `the logo was not drawn: ${assets?.logoProblem ?? 'no image was supplied to the renderer for it'}`,
+    )
 
   const compact = profile.formatting?.density === 'compact'
   const T = compact
@@ -261,6 +270,21 @@ export async function loadStyle(
   jobId: string,
   projectId: string,
 ): Promise<StyleProfile | null> {
+  return (await loadResolvedStyle(db, jobId, projectId)).profile
+}
+
+/**
+ * The resolved style as the renderer reads it AND as the database holds it. `raw` is the whole resolved profile
+ * (terminology, chart and image settings included, which `readProfile` drops because the renderer does not draw
+ * them): it is what a report records as its style snapshot so that "use this report's style" can copy it back
+ * without losing a field. `source` is removed, because a snapshot is about the look, not about where a profile came
+ * from. Fails open to nothing.
+ */
+export async function loadResolvedStyle(
+  db: { execute(sql: string): Promise<{ rows: readonly Record<string, unknown>[] }> },
+  jobId: string,
+  projectId: string,
+): Promise<{ profile: StyleProfile | null; raw: Record<string, unknown> | null }> {
   try {
     const { rows } = await db.execute(
       `select app.hq_style_get(app.job_office(${lit(jobId)}::uuid),
@@ -268,8 +292,28 @@ export async function loadStyle(
     )
     const raw = rows[0]?.s
     const parsed = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw
-    return isObject(parsed) ? readProfile(parsed.profile) : null
+    if (!isObject(parsed)) return { profile: null, raw: null }
+    const { source: _source, ...whole } = isObject(parsed.profile) ? parsed.profile : {}
+    return {
+      profile: readProfile(parsed.profile),
+      raw: Object.keys(whole).length === 0 ? null : whole,
+    }
   } catch {
-    return null
+    return { profile: null, raw: null }
+  }
+}
+
+/**
+ * What a made report records as its style: the resolved profile with the design choices laid over its formatting,
+ * because that is what the report actually looked like. Pure.
+ */
+export function styleSnapshot(
+  raw: Record<string, unknown> | null,
+  choice: { readonly titlePage: string; readonly density: string },
+): Record<string, unknown> {
+  const formatting = isObject(raw?.formatting) ? raw.formatting : {}
+  return {
+    ...(raw ?? {}),
+    formatting: { ...formatting, density: choice.density, title_page: choice.titlePage },
   }
 }

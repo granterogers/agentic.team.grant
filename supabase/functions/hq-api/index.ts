@@ -310,6 +310,12 @@ const SECTIONS: Readonly<
   // The versions of one logical document, v1..vN, from any one of them (0900). A uuid, so `arg`.
   document_versions: { fn: 'hq_document_versions', office: true, arg: 'p_document_id' },
   /*
+    HOW A MADE REPORT WAS MADE (0940, 0970): whether it has provenance, and whether the style it was set in was recorded
+    (`has_style_snapshot`). The page asks before offering "Use this report's style for the project". A document with no
+    provenance answers `{ has_provenance: false }`, not an error. A uuid, so `arg`.
+  */
+  document_provenance: { fn: 'hq_document_provenance', office: true, arg: 'p_document_id' },
+  /*
     ONE OUTPUT, so the thing the team made can be READ (§19).
 
     The office has written thousands and there has never been a way to open
@@ -832,6 +838,18 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // the database wrapper ('teamhq'), never sent. `personBy` records who; the office key is a machine and styles nothing.
   style_set: { fn: 'hq_style_set', office: true, required: ['p_patch'], personBy: 'p_by' },
   style_clear: { fn: 'hq_style_clear', office: true, required: [], personBy: 'p_by' },
+  /*
+    "I love this report. Save this as this project's report style." (0970). Copies the style a MADE report was recorded
+    with into the project's profile. Nothing is extracted from the PDF. It asks first when the project already has a
+    style (`needs_confirmation`; sent again with `p_confirm: true` it replaces), says so and does nothing for a report
+    made before its style was recorded, and is a person's press only - the office key is a machine and styles nothing.
+  */
+  style_adopt_from_document: {
+    fn: 'hq_style_adopt_from_document',
+    office: true,
+    required: ['p_slug', 'p_document'],
+    personBy: 'p_by',
+  },
   // A person connecting their OWN Telegram (#410, 0885). The office is the verified session's; the office key is not in
   // SERVICE_MAY, so a machine cannot start or end a person's connection.
   channel_link_begin: { fn: 'channel_link_begin', office: true, required: ['p_channel'] },

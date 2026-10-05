@@ -87,7 +87,14 @@
 [data-experience='basecamp'] .bcvstate--review { color: var(--bc-text); }
 [data-experience='basecamp'] .bcversion.is-pending { border-style: dashed; border-color: color-mix(in srgb, var(--bc-accent) 40%, transparent); }
 
+/* Use this report's style for the project (0970): sits under the versions, in the same quiet register. */
+[data-experience='basecamp'] .bcdocstyle { margin-top: 18px; display: grid; gap: 8px; }
+[data-experience='basecamp'] .bcdocstyleask { padding: 10px 12px; border-radius: 8px; border: 1px dashed color-mix(in srgb, var(--bc-accent) 45%, transparent); }
+[data-experience='basecamp'] .bcdocstyle [data-bc-docstylesay][data-tone='good'] { color: var(--bc-accent); }
+[data-experience='basecamp'] .bcdocstyle [data-bc-docstylesay][data-tone='bad'] { color: #f0907e; }
+
 @media (max-width: 860px) {
+  [data-experience='basecamp'] .bcdocstyle .bcversionbtn { min-height: 44px; }
   [data-experience='basecamp'] .bcdocgrid { grid-template-columns: minmax(0, 1fr); }
   [data-experience='basecamp'] .bcdocpreview { max-height: 60vh; }
   [data-experience='basecamp'] .bcdocfind { max-width: none; flex-basis: 100%; }

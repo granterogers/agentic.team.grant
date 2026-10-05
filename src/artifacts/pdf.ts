@@ -31,6 +31,7 @@
  * file that opens in nothing.
  */
 
+import type { PdfImage } from './image.ts'
 import { type Face, widthOf } from './metrics.ts'
 
 /** A colour, 0–1 per channel, because that is what PDF operators take. */
@@ -148,9 +149,18 @@ export interface TextBox {
   readonly width: number
 }
 
+/** Where an image was put, for the layout QA. `y` is the bottom edge. */
+export interface ImageBox {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
 export class Page {
   private readonly ops: string[] = []
   private readonly placed: TextBox[] = []
+  private readonly pictures: { readonly image: PdfImage; readonly box: ImageBox }[] = []
 
   constructor(
     readonly width: number,
@@ -216,6 +226,28 @@ export class Page {
       'f',
     )
     return this
+  }
+
+  /** An image, scaled into the box whose bottom-left is `x`,`y`. The caller keeps the proportions. */
+  image(image: PdfImage, x: number, y: number, w: number, h: number): this {
+    this.pictures.push({ box: { height: h, width: w, x, y }, image })
+    this.ops.push(
+      'q',
+      `${n(w)} 0 0 ${n(h)} ${n(x)} ${n(y)} cm`,
+      `/Im${String(this.pictures.length)} Do`,
+      'Q',
+    )
+    return this
+  }
+
+  /** Every image drawn, with its box, so the layout check can see a picture under text. */
+  imageBoxes(): readonly ImageBox[] {
+    return this.pictures.map((p) => p.box)
+  }
+
+  /** The images this page draws, in the order `/Im1`, `/Im2`... name them. */
+  images(): readonly PdfImage[] {
+    return this.pictures.map((p) => p.image)
   }
 
   private readonly raw: { at: number; value: string }[] = []
@@ -306,9 +338,61 @@ export function assemble(pages: readonly Page[], info: DocumentInfo): Uint8Array
     .map(([k, id]) => `/${k} ${String(id)} 0 R`)
     .join(' ')} >> >>`
 
+  /*
+    Images become XObjects once each, however many pages draw them (a logo is the same object on every page that
+    uses it). A page that draws none gets exactly the resources it always had, so a report with no image is
+    byte-for-byte what it was before images existed.
+  */
+  const imageIds = new Map<PdfImage, number>()
+  const addImage = (img: PdfImage): number => {
+    const known = imageIds.get(img)
+    if (known !== undefined) return known
+    let maskId: number | null = null
+    if (img.smask !== undefined) {
+      maskId = add(
+        join([
+          enc.encode(
+            `<< /Type /XObject /Subtype /Image /Width ${String(img.width)} /Height ${String(img.height)} ` +
+              `/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ${String(img.smask.length)} >>\nstream\n`,
+          ),
+          img.smask,
+          enc.encode('\nendstream'),
+        ]),
+      )
+    }
+    let space: string = `/${img.colorSpace}`
+    if (img.colorSpace === 'Indexed' && img.palette !== undefined) {
+      const hex = [...img.palette].map((b) => b.toString(16).padStart(2, '0')).join('')
+      space = `[/Indexed /DeviceRGB ${String(img.palette.length / 3 - 1)} <${hex}>]`
+    }
+    const id = add(
+      join([
+        enc.encode(
+          `<< /Type /XObject /Subtype /Image /Width ${String(img.width)} /Height ${String(img.height)} ` +
+            `/ColorSpace ${space} /BitsPerComponent 8 /Filter /${img.filter} ` +
+            `${img.extra === '' ? '' : `${img.extra} `}${maskId === null ? '' : `/SMask ${String(maskId)} 0 R `}` +
+            `/Length ${String(img.data.length)} >>\nstream\n`,
+        ),
+        img.data,
+        enc.encode('\nendstream'),
+      ]),
+    )
+    imageIds.set(img, id)
+    return id
+  }
+
   const pageIds: number[] = []
   for (const page of pages) {
     const body = page.stream()
+    const drawn = page.images()
+    const pageResources =
+      drawn.length === 0
+        ? resources
+        : `<< /Font << ${Object.entries(fontIds)
+            .map(([k, id]) => `/${k} ${String(id)} 0 R`)
+            .join(' ')} >> /XObject << ${drawn
+            .map((img, i) => `/Im${String(i + 1)} ${String(addImage(img))} 0 R`)
+            .join(' ')} >> >>`
     const contentId = add(
       join([
         enc.encode(`<< /Length ${String(body.length)} >>\nstream\n`),
@@ -319,7 +403,7 @@ export function assemble(pages: readonly Page[], info: DocumentInfo): Uint8Array
     pageIds.push(
       add(
         `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(page.width)} ${n(page.height)}] ` +
-          `/Resources ${resources} /Contents ${String(contentId)} 0 R >>`,
+          `/Resources ${pageResources} /Contents ${String(contentId)} 0 R >>`,
       ),
     )
   }

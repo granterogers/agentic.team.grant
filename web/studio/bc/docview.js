@@ -162,10 +162,90 @@ const paintVersions = async (host, ctx) => {
   }
 }
 
+/*
+  USE THIS REPORT'S STYLE FOR THE PROJECT (0970).
+
+  Drawn only for a report the office made that has a record of how it was made (the gateway answers has_provenance).
+  Nothing is read out of the PDF: the office kept the style the report was set in, and this copies it into the
+  project's own style. It asks before replacing a style the project already has, and a report made before the style was
+  recorded says so on the press and changes nothing.
+*/
+const paintStyle = async (host, ctx) => {
+  const id = host.dataset.bcDocstyle ?? ''
+  const slug = host.dataset.bcDocproject ?? ''
+  if (id === '' || slug === '') return
+  let prov = null
+  try {
+    prov = await read('document_provenance', id)
+  } catch {
+    return
+  }
+  if (prov?.has_provenance !== true) return
+  host.hidden = false
+  host.innerHTML = `<h2 class="bcsubhead">Style</h2>
+    <p class="bcpmeta">${
+      prov.has_style_snapshot === true
+        ? 'The style this report was set in was kept. You can make it the style for new reports in this project.'
+        : 'This report was made before its style was recorded, so there is no style to keep from it.'
+    }</p>
+    <div class="bcrow bcdocacts"><button type="button" class="bcversionbtn" data-bc-docstyleuse>Use this report's style for the project</button></div>
+    <div class="bcdocstyleask" data-bc-docstyleask hidden></div>
+    <p class="bcpmeta" role="status" data-bc-docstylesay></p>`
+  const sayStyle = (text, tone = '') => {
+    const el = host.querySelector('[data-bc-docstylesay]')
+    el.textContent = text
+    el.dataset.tone = tone
+  }
+  const ask = host.querySelector('[data-bc-docstyleask]')
+  const use = host.querySelector('[data-bc-docstyleuse]')
+  const press = async (confirm) => {
+    use.disabled = true
+    ask.hidden = true
+    sayStyle('Saving the style…')
+    try {
+      const out = await act('style_adopt_from_document', {
+        p_slug: slug,
+        p_document: id,
+        ...(confirm ? { p_confirm: true } : {}),
+      })
+      if (out?.needs_confirmation === true) {
+        sayStyle('')
+        ask.hidden = false
+        ask.innerHTML = `<p class="bcpmeta">${esc(out.message ?? 'This project already has a style of its own. Saving this one replaces it.')}</p>
+          <div class="bcrow bcdocacts">
+            <button type="button" class="bcversionbtn" data-bc-docstylereplace>Replace the project style</button>
+            <button type="button" class="bcversionbtn" data-bc-docstylekeep>Keep the current style</button>
+          </div>`
+        ask.querySelector('[data-bc-docstylereplace]').addEventListener('click', () => void press(true))
+        ask.querySelector('[data-bc-docstylekeep]').addEventListener('click', () => {
+          ask.hidden = true
+          use.disabled = false
+          sayStyle('Nothing was changed.')
+        })
+        ask.querySelector('[data-bc-docstylekeep]').focus()
+        return
+      }
+      const dropped = Array.isArray(out?.dropped) && out.dropped.includes('logo_document_id')
+      sayStyle(
+        out?.unchanged === true
+          ? 'This project already has exactly this style.'
+          : `Done. New reports in this project use this report's style.${dropped ? ' Its logo is not one this project holds, so the logo was left out.' : ''}`,
+        'good',
+      )
+      use.disabled = false
+    } catch (e) {
+      use.disabled = false
+      sayStyle(String(e?.message ?? e), 'bad')
+    }
+  }
+  use.addEventListener('click', () => void press(false))
+}
+
 export const wire = (root, ctx, fileFor) => {
   /* --- the preview, and the versions beside it */
   for (const host of root.querySelectorAll('[data-bc-docpreview]')) void paintPreview(host, fileFor)
   for (const host of root.querySelectorAll('[data-bc-docversions]')) void paintVersions(host, ctx)
+  for (const host of root.querySelectorAll('[data-bc-docstyle]')) void paintStyle(host, ctx)
 
   /* --- import: only ever on a press */
   for (const b of root.querySelectorAll('[data-bc-docimport]')) {

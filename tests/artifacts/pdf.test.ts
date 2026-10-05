@@ -113,7 +113,12 @@ describe('the file', () => {
     expect(laid.pages.length).toBeGreaterThanOrEqual(2)
     const cover = dec.decode(laid.pages[0]?.stream() ?? new Uint8Array())
     expect(cover).toContain('A report')
-    expect(cover).not.toContain('A heading')
+    // The cover now LISTS the headings (a contents list with page numbers), so the heading's words appear on it by
+    // design. What must not appear is the body: the paragraph under the heading is on page two, not the cover.
+    expect(cover).not.toContain('A paragraph with enough words')
+    const body = dec.decode(laid.pages[1]?.stream() ?? new Uint8Array())
+    expect(body).toContain('A heading')
+    expect(body).toContain('A paragraph with enough words')
   })
 
   it('carries the title, author and dates in its metadata, in UTF-16', () => {

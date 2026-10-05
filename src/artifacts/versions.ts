@@ -86,6 +86,8 @@ export interface Provenance {
   readonly styleUpdatedAt: string | null
   readonly design: Record<string, unknown>
   readonly sources: readonly { readonly label: string; readonly ref: string }[]
+  /** The style the report was set in, so it can be adopted as the project's (0970). Absent: none is recorded. */
+  readonly styleSnapshot?: Record<string, unknown>
 }
 
 /** Record how a made document was made. Idempotent (one row per document). Returns an error sentence, or null. */
@@ -99,7 +101,11 @@ export async function recordProvenance(
       p_office => ${lit(where.office)}::uuid, p_document => ${lit(where.documentId)}::uuid,
       p_job => ${lit(p.jobId)}::uuid, p_style_hash => ${lit(p.styleHash)},
       p_style_updated_at => ${p.styleUpdatedAt === null ? 'null' : `${lit(p.styleUpdatedAt)}::timestamptz`},
-      p_design => ${lit(JSON.stringify(p.design))}::jsonb, p_sources => ${lit(JSON.stringify(p.sources))}::jsonb
+      p_design => ${lit(JSON.stringify(p.design))}::jsonb, p_sources => ${lit(JSON.stringify(p.sources))}::jsonb${
+        p.styleSnapshot === undefined
+          ? ''
+          : `,\n      p_style_snapshot => ${lit(JSON.stringify(p.styleSnapshot))}::jsonb`
+      }
     ) as r`)
   const r = parse(rows[0]?.r)
   return r?.ok === true ? null : String(r?.error ?? 'provenance was not recorded')
