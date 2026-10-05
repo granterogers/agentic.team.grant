@@ -663,7 +663,8 @@ const SECTIONS: Readonly<
     slow-moving structural one means re-reading every project to find out
     whether the model provider is answering.
   */
-  thinking: { fn: 'office_health', office: true },
+  // Only the one key the page draws (migration 1028): the whole health reading cost a job census on every tick for a handful of rows.
+  thinking: { fn: 'cannot_think', office: true },
   /*
     Project Settings (#36, migrations 0323-26).
 

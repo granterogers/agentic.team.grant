@@ -107,7 +107,9 @@ const add = (name: string, sql: string): void => {
 
 // ---- Team HQ: what a visible tab asks every 20 seconds, and what a page load asks once ------------------------------------
 add('team_hq.pulse', `select public.hq_pulse('${office}')`)
-add('team_hq.thinking', `select public.office_health('${office}', 24)`)
+// What the gateway's `thinking` section calls (migration 1028); the whole reading stays probed beside it for the other callers.
+add('team_hq.thinking', `select public.cannot_think('${office}')`)
+add('team_hq.health_whole', `select public.office_health('${office}', 24)`)
 add('team_hq.studio', `select public.hq_studio('${office}')`)
 add('team_hq.lately', `select public.hq_studio_lately('${office}', 40)`)
 add('team_hq.portfolio_tasks', `select public.hq_portfolio_tasks('${office}', 200)`)
