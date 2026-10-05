@@ -7,6 +7,7 @@
   at their real lengths, including the awkward ones.
 */
 
+import { note } from './net.js'
 import * as people from './people.js'
 import * as sessionEpoch from './session.js'
 
@@ -790,10 +791,13 @@ export async function hydrate(endpoint, token) {
     source.state = 'live'
     source.why = ''
     source.misses = 0
+    note('hydrate:studio')
     return true
   } catch (e) {
     source.live = false
     source.misses += 1
+    // The boundary the page stopped at, for the trace: a deadline is named as one, anything else is a failure.
+    note('hydrate:studio', e instanceof Error && e.name === 'TimeoutError' ? 'timeout' : 'failed')
     /*
       Unknown, not healthy. The office not answering says nothing about whether
       it is keeping up, and leaving the last good answer on screen would be a

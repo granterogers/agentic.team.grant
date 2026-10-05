@@ -103,6 +103,34 @@ export const LOG_SETS: Record<string, LogQuery> = {
     why: 'every temp-file line while log_temp_files was on: time, size, backend pid, role, application and the statement that spilled',
     sql: `select timestamp, toUInt64OrZero(extract(event_message, 'size ([0-9]+)')) as bytes, log_attributes['parsed.process_id'] as pid, log_attributes['parsed.user_name'] as usr, log_attributes['parsed.application_name'] as app, substring(replaceRegexpAll(event_message, '[[:space:]]+', ' '), 1, 420) as msg from logs where source = 'postgres_logs' and event_message ilike '%temporary file%' order by timestamp asc limit 400`,
   },
+  login_fn_invocations: {
+    why: 'every sign-in, gateway and chat function invocation with status and execution time: where a login that hangs spends its time',
+    sql: `select timestamp, splitByChar('/', log_attributes['request.pathname'])[4] as fn, log_attributes['request.method'] as method, log_attributes['response.status_code'] as status, toFloat64OrZero(log_attributes['execution_time_ms']) as ms from logs where source = 'function_edge_logs' and splitByChar('/', log_attributes['request.pathname'])[4] in ('signin','hq-api','chat') and (toFloat64OrZero(log_attributes['execution_time_ms']) > 3000 or log_attributes['response.status_code'] not in ('200','204','401','403')) order by timestamp asc limit 200`,
+  },
+  m1_cron: {
+    why: 'pg_cron job starts per MINUTE: does the scheduler stall before the application traffic arrives (onset ordering at one-minute resolution)',
+    sql: `select toStartOfInterval(timestamp, INTERVAL 1 minute) as t, count() as starts from logs where source = 'postgres_logs' and event_message ilike 'cron job%starting%' group by t order by t`,
+  },
+  m1_edge: {
+    why: 'gateway requests per MINUTE by family (rest, auth, function name) and 5xx count, with the slowest origin time: when the burst began, who sent it, and whether the first requests already failed',
+    sql: `select toStartOfInterval(timestamp, INTERVAL 1 minute) as t, multiIf(log_attributes['request.path'] ilike '/functions/%', concat('fn:', splitByChar('/', log_attributes['request.path'])[4]), log_attributes['request.path'] ilike '/rest/%','rest', log_attributes['request.path'] ilike '/auth/%','auth', log_attributes['request.path'] ilike '/storage/%','storage', 'other') as fam, count() as n, countIf(toUInt16OrZero(log_attributes['response.status_code']) >= 500) as e5xx, round(max(toFloat64OrZero(log_attributes['response.origin_time']))) as max_origin_ms from logs where source = 'edge_logs' group by t, fam order by t, fam`,
+  },
+  m1_pg_stress: {
+    why: 'Postgres log lines per MINUTE that show distress: slow-statement lines (duration), statement timeouts, and the longest duration',
+    sql: `select toStartOfInterval(timestamp, INTERVAL 1 minute) as t, countIf(event_message like 'duration:%') as slow, countIf(event_message ilike '%statement timeout%') as timeouts, round(maxIf(toFloat64OrZero(extract(event_message, 'duration: ([0-9.]+) ms')), event_message like 'duration:%')) as max_ms from logs where source = 'postgres_logs' group by t having slow > 0 or timeouts > 0 order by t`,
+  },
+  login_signin_rows: {
+    why: 'every invocation of the sign-in function (they are few): time, method, status, execution time, and the page origin that called it',
+    sql: `select timestamp, log_attributes['request.method'] as method, log_attributes['response.status_code'] as status, toFloat64OrZero(log_attributes['execution_time_ms']) as ms, log_attributes['request.headers.origin'] as origin from logs where source = 'function_edge_logs' and splitByChar('/', log_attributes['request.pathname'])[4] = 'signin' order by timestamp asc limit 100`,
+  },
+  login_fn_by_hour: {
+    why: 'sign-in function invocations per hour: count, status mix and slowest execution',
+    sql: `select toStartOfHour(timestamp) as h, log_attributes['response.status_code'] as status, count() as n, round(max(toFloat64OrZero(log_attributes['execution_time_ms']))) as max_ms from logs where source = 'function_edge_logs' and splitByChar('/', log_attributes['request.pathname'])[4] = 'signin' group by h, status order by h`,
+  },
+  auth_login_paths: {
+    why: 'the auth service requests a login uses (otp, token, user, admin generate_link) with status and duration',
+    sql: `select timestamp, log_attributes['path'] as path, log_attributes['method'] as method, log_attributes['status'] as status, round(toFloat64OrZero(log_attributes['duration']) / 1e6) as ms from logs where source = 'auth_logs' and log_attributes['path'] in ('/otp','/token','/user','/admin/generate_link','/verify') and (toFloat64OrZero(log_attributes['duration']) > 2e9 or toUInt16OrZero(log_attributes['status']) >= 500) order by timestamp asc limit 200`,
+  },
   pg_tempfile_context: {
     why: 'every log line from the backends that wrote temp files in the window (a STATEMENT or context line, if the provider keeps one), to name the statement',
     sql: `select timestamp, log_attributes['parsed.process_id'] as pid, log_attributes['parsed.error_severity'] as sev, substring(replaceRegexpAll(event_message, '[[:space:]]+', ' '), 1, 500) as msg from logs where source = 'postgres_logs' and log_attributes['parsed.process_id'] in (select log_attributes['parsed.process_id'] from logs where source = 'postgres_logs' and event_message ilike '%temporary file%') order by timestamp asc limit 120`,

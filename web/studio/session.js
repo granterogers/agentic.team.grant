@@ -43,6 +43,7 @@
 */
 
 import { HQ_API as API, SIGNIN as ENDPOINT } from './backend.js'
+import { bounded, note, unreachable } from './net.js'
 
 const KEY = 'hq.session'
 
@@ -91,14 +92,24 @@ export const signedIn = () => read() !== null
 /** The office's own address, for the one call a person with no office yet makes (bc/account.js). */
 export const apiUrl = () => API
 
+/*
+  Every call here ends (net.js). The deadline is longer than the function's own twelve seconds towards Auth, so the
+  answer that normally arrives is the function's, with a reason; the browser's deadline is the backstop for a function
+  that does not answer at all. The names are the boundaries in the trace.
+*/
+const BOUNDARY = { link: 'auth:link', refresh: 'auth:refresh', whoami: 'auth:whoami' }
+const DEADLINE = { link: 20_000, refresh: 16_000, whoami: 16_000 }
+
 const post = async (body, auth = '') => {
   const headers = { 'content-type': 'application/json' }
   if (auth !== '') headers.authorization = `Bearer ${auth}`
-  const response = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
+  const action = String(body.action ?? '')
+  const response = await bounded(
+    BOUNDARY[action] ?? 'auth:link',
+    ENDPOINT,
+    { method: 'POST', headers, body: JSON.stringify(body) },
+    DEADLINE[action] ?? 20_000,
+  )
   return { status: response.status, body: await response.json().catch(() => ({})) }
 }
 
@@ -128,6 +139,7 @@ export const adopt = () => {
     return false
   }
   const seconds = Number(q.get('expires_in') ?? '3600')
+  note('callback:adopt')
   write({
     access_token: access,
     refresh_token: refresh,
@@ -163,7 +175,14 @@ export const presentable = async () => {
   */
   if (refreshing === null) {
     refreshing = (async () => {
-      const { body } = await post({ action: 'refresh', refresh_token: s.refresh_token })
+      /*
+        A deadline, a 5xx and an "unavailable" are not a refusal. The session stays where it is and the caller is told
+        the service did not answer (an Unreachable error, with the boundary), because forgetting a session over an
+        outage signs a person out for something that is not theirs. Only an answer that says the token is no good
+        clears it.
+      */
+      const { status, body } = await post({ action: 'refresh', refresh_token: s.refresh_token })
+      if (status >= 500 || body.reason === 'unavailable') throw unreachable('auth:refresh', 0)
       if (body.ok !== true || typeof body.access_token !== 'string') {
         forget()
         return ''
@@ -208,8 +227,13 @@ export async function askForLink(email) {
 
 /** Who the office thinks this is, for a page that wants to say so. */
 export async function whoami() {
-  const token = await presentable()
-  if (token === '') return ''
-  const { body } = await post({ action: 'whoami' }, token)
-  return body.ok === true ? String(body.email ?? '') : ''
+  // A page that wants to say who is signed in can do without it: no answer is no name, never an unhandled rejection.
+  try {
+    const token = await presentable()
+    if (token === '') return ''
+    const { body } = await post({ action: 'whoami' }, token)
+    return body.ok === true ? String(body.email ?? '') : ''
+  } catch {
+    return ''
+  }
 }

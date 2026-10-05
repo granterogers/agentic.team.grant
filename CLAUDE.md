@@ -4571,6 +4571,28 @@ Each of these cost real time. They are here so they cost it once.
 - **Disclosed process slips, this window:** one scratch script was created with a shell heredoc inside the repository (deleted, never committed), against
   the File editing rule; and a long foreground command was killed by a worker restart mid-capture (the partial output was kept and the missing queries re-run).
 
+- **The database keeps its own per-minute record of the host, and it was never read.** `cron.job_run_details` holds every pg_cron run; job 1 is a one-line function that
+  runs each minute, so its duration is how long the host takes to start a backend and run one trivial statement, and it kept recording through every episode. Read as a series
+  it separates two modes the notes had run together: a **launcher stall** (runs per ten minutes fall from 10 to 0, at idle, 1 to 2 hours) and a **startup timeout** ("job startup
+  timeout", 617 rows in one episode, while pg_cron kept launching on time). Ask which witnesses survive the failure being studied before building instruments that do not.
+- **A log pipeline that loses lines under pressure produced a false finding, and the table next to it contradicted it.** For 3 Oct 19:30 to 20:30 the log showed 3 to 7 missing
+  cron starts in each ten minutes; the database shows 10 in every bucket. Two witnesses of one fact, one of which is the thing under load: compare them before quoting either.
+- **A test that shims the service it is named for cannot find that service hanging.** `verify:offline` answered every non-gateway URL with an empty 200 and `verify:account-ui`
+  answered the sign-in function itself, so the one function a returning person depends on had never been called by any suite, and "login hung indefinitely" was reported by a person.
+  A harness that hangs the real boundary (`verify:auth-hang`) was shown able to fail on the pre-fix copy (5 of 14) before it was trusted.
+- **An outage mapped to "expired" signs people out for something that is not theirs.** The sign-in function's `refresh` returned `reason: 'expired'` for every Auth failure and the
+  page deletes the session on that word. Distinguish the answer "this token is no good" (4xx) from no answer (timeout, 5xx, 429); only the first clears anything.
+- **A deadline shorter than the thing behind it makes the answer arrive from the right place.** The function waits 12 s for Auth and the browser waits 16 to 20 s for the function, so
+  the sentence that arrives is the function's (with a reason) and the browser's deadline is only the backstop. The same order as a nested transaction: inner first.
+- **A page load is about 25 gateway requests, 11 of them to a person with no office yet.** The request counts in the bursts that preceded onsets are mostly page fan-out from
+  verification browsers, not distinct work: 3,000 requests in ten minutes is on the order of a hundred page loads. Count the cost of a unit before counting the units.
+- **A new suite that writes to production must be classed, not bypassed.** `ManagementApiExecutor` refuses an unclassified `scripts/verify/*` suite with a sentence; the right move is
+  `npm run suite -- <name> --production` (intent stated), and the guard's reason is worth reading once: it had stopped a canary read for a reason that read like a database failure.
+- **A safety check that cannot read must say why, and retry once.** The preflight's canary query returned an empty list on a transient error and the run aborted with a blank detail,
+  which reads exactly like "the platform is unwell". A guard that refuses on its own failure to look is correct and must print the reason it could not look.
+- **Disclosed process slips, this window:** one `cat > /dev/null <<EOF` heredoc with no file effect; all repository edits went through Edit or Write, and the biome formatter hunks
+  were applied by hand with Edit rather than `--write`. `log_temp_files` was changed on the production project twice with Grant's stated approval (set to `1B`, restored to `-1`, both verified).
+
 ---
 
 ## Visual standard

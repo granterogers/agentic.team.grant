@@ -17,6 +17,14 @@ Provider health read all ok and the metrics scrape answered 200 from 07:37 UTC; 
    deploys, a page delta) are light. **Decision needed:** run steps 1 to 5 now with a scrape before and after each and an abort at the first timeout or
    cron dip, and hold 6 to 9 until the controlled-ramp experiment (report, section 11) has said what burst the host tolerates, or run everything now.
 
+## Update, 5 October 11:30 UTC: still HELD; steps 1 to 5 assessed as separable; the sign-in fix is a new candidate step
+
+Grant's latest instruction keeps steps 6 to 9 held, asks for a recommendation on steps 1 to 5 before anything runs, and makes the sign-in path a V1 blocker.
+**Nothing has been applied or deployed.** The assessment is in `supabase-forensics-2026-10-05.md` section 12.5: steps 1 to 5 are light (catalog-only SQL, three function
+uploads, a static page) and can run serially while healthy with the cron canary as the abort signal, **but only with Grant's explicit go**. Candidate step 5b, after review:
+`deploy:signin` plus the page delta carrying `web/studio/net.js` (the bounded-request fix; `verify:auth-hang` 14/14, was 5/14). The live abort signal for every step is
+`cron.job_run_details` for job 1: all of the last five runs `succeeded` in under 1 s, ten runs in the last ten minutes; stop at any "job startup timeout".
+
 Capture around the deployment now uses: `npm run forensics:metrics` (one raw scrape, rates against the previous one), `npm run forensics:logs`,
 `npm run forensics:usage`, `npm run forensics:capture -- --db` (its guard now accepts the endpoint's HTTP 201), `npm run forensics:preserve`.
 

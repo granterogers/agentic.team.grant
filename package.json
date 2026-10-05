@@ -235,6 +235,8 @@
     "verify:pulse": "tsx scripts/verify/pulse.ts",
     "verify:motion": "tsx scripts/verify/motion.ts",
     "verify:offline": "tsx scripts/verify/offline.ts",
+    "verify:auth-hang": "tsx scripts/verify/auth-hang.ts",
+    "verify:auth-acceptance": "tsx scripts/verify/auth-acceptance.ts",
     "verify:design": "tsx scripts/verify/design.ts",
     "gate": "tsx scripts/e2e.ts --gate",
     "gate:safe": "tsx scripts/gate-safe.ts",
