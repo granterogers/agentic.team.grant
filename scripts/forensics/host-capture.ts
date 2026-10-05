@@ -329,6 +329,72 @@ const DB_QUERIES: { name: string; why: string; sql: string }[] = [
     why: 'what occupies the volume and the cache',
     sql: "select relname, pg_total_relation_size(oid)::bigint as bytes from pg_class where relkind in ('r','i','m') and relnamespace in ('public'::regnamespace, 'app'::regnamespace, 'cron'::regnamespace, 'net'::regnamespace) order by 2 desc limit 12",
   },
+  // ---- added 5 October: the questions the provider log analysis raised -----------------------------------------------------
+  {
+    name: 'settings_relevant',
+    why: 'the settings that decide memory use, spill, timeouts, checkpoints and logging, with where each came from',
+    sql: "select name, setting, unit, source, context from pg_settings where name in ('shared_buffers','work_mem','maintenance_work_mem','effective_cache_size','max_connections','statement_timeout','temp_file_limit','log_temp_files','log_min_duration_statement','track_io_timing','checkpoint_timeout','checkpoint_completion_target','max_wal_size','min_wal_size','wal_buffers','autovacuum','autovacuum_naptime','autovacuum_max_workers','random_page_cost','effective_io_concurrency','pg_stat_statements.max','pg_stat_statements.track','pg_stat_statements.track_utility','pg_stat_statements.save','auto_explain.log_min_duration','shared_preload_libraries','idle_in_transaction_session_timeout','log_checkpoints','log_lock_waits','jit') order by name",
+  },
+  {
+    name: 'role_settings',
+    why: 'per-role overrides, notably statement_timeout, which decides which sessions the provider logs as timed out',
+    sql: 'select rolname, rolconfig from pg_roles where rolconfig is not null order by rolname',
+  },
+  {
+    name: 'pgss_footprint',
+    why: 'how big the statistics store is: entries, characters of query text and how many have been evicted. The platform exporter reads all of it on every scrape',
+    sql: 'select (select count(*)::int from pg_stat_statements) as entries, (select coalesce(sum(length(query)), 0)::bigint from pg_stat_statements) as query_chars, (select coalesce(max(length(query)), 0)::int from pg_stat_statements) as longest_query, (select dealloc from extensions.pg_stat_statements_info) as evictions, (select stats_reset from extensions.pg_stat_statements_info) as stats_reset',
+  },
+  {
+    name: 'time_by_role',
+    why: 'who the database spends its time on: total execution seconds, calls and temp blocks by role (the platform exporter is supabase_admin, our app is postgres)',
+    sql: 'select r.rolname, count(*)::int as statements, sum(s.calls)::bigint as calls, round(sum(s.total_exec_time)::numeric / 1000) as total_s, sum(s.temp_blks_written)::bigint as temp_blks_written, sum(s.shared_blks_read)::bigint as shared_blks_read from pg_stat_statements s join pg_catalog.pg_roles r on r.oid = s.userid group by 1 order by total_s desc',
+  },
+  {
+    name: 'timeout_queryids',
+    why: 'the statements behind the query ids that the provider log shows timing out most (the log carries ids, this names them)',
+    sql: "select queryid::text as queryid, calls, round(mean_exec_time::numeric) as mean_ms, round(max_exec_time::numeric) as max_ms, temp_blks_written, shared_blks_read, left(regexp_replace(query, '\\s+', ' ', 'g'), 110) as q from pg_stat_statements where queryid::text in ('-8285757822602875730','5197431765113000632','189633985216629022','-8319712432728059206','-1121979162422898360','-1502055705838882675')",
+  },
+  {
+    name: 'sessions_by_application',
+    why: 'connected sessions by role and application name, which shows the exporter, the pooler, PostgREST, Auth and our worker side by side',
+    sql: 'select usename, application_name, state, count(*)::int as n from pg_stat_activity where pid <> pg_backend_pid() and backend_type = $$client backend$$ group by 1,2,3 order by n desc',
+  },
+  {
+    name: 'database_size',
+    why: 'total database size, to correlate growth with the incident dates',
+    sql: 'select pg_database_size(current_database())::bigint as bytes, now() as at',
+  },
+  {
+    name: 'schema_sizes',
+    why: 'database composition by schema: where the bytes are',
+    sql: "select n.nspname, count(*)::int as relations, sum(pg_total_relation_size(c.oid))::bigint as bytes from pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace where c.relkind in ('r','m') group by 1 order by bytes desc limit 12",
+  },
+  {
+    name: 'autovacuum_tables',
+    why: 'the tables with the most dead tuples and when autovacuum last ran on them',
+    sql: 'select relname, n_live_tup, n_dead_tup, n_tup_upd, n_tup_hot_upd, last_autovacuum, last_autoanalyze, autovacuum_count, autoanalyze_count from pg_stat_user_tables order by n_dead_tup desc limit 10',
+  },
+  {
+    name: 'wal_position',
+    why: 'cumulative WAL bytes written since the cluster began; the difference between two captures is the WAL rate',
+    sql: "select pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0')::bigint as wal_bytes_total, now() as at",
+  },
+  {
+    name: 'queue_state',
+    why: 'work not yet finished by state, with age and how much of it is harness traffic (an idle office should show none)',
+    sql: "select state, count(*)::int as n, min(created_at) as oldest, max(created_at) as newest, count(*) filter (where is_fixture or synthetic)::int as harness from public.jobs where state not in ('complete','cancelled','failed') group by 1 order by n desc",
+  },
+  {
+    name: 'jobs_by_office_kind_72h',
+    why: 'multi-user workload on the same clock: jobs in the last three days by office kind (person, sample, test, system) and how many were harness',
+    sql: "select o.kind, count(distinct j.office_id)::int as offices, count(*)::int as jobs, count(*) filter (where j.is_fixture or j.synthetic)::int as harness from public.jobs j join public.offices o on o.office_id = j.office_id where j.created_at > now() - interval '72 hours' group by 1 order by jobs desc",
+  },
+  {
+    name: 'jobs_by_hour_office_kind',
+    why: 'the same, hour by hour, so multi-user activity can be laid against the outage transitions',
+    sql: "select date_trunc('hour', j.created_at) as hour, o.kind, count(*)::int as jobs from public.jobs j join public.offices o on o.office_id = j.office_id where j.created_at > now() - interval '72 hours' group by 1,2 order by 1,2",
+  },
 ]
 
 /**

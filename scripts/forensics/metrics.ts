@@ -47,8 +47,12 @@ export const WANTED = [
 const LINE = /^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{([^}]*)\})?\s+(\S+)(\s+\d+)?$/
 const LABEL = /([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"/g
 
-/** Parse exposition text into the wanted samples. Comment lines, malformed lines and non-numeric values are skipped. */
-export const parseMetrics = (text: string): Sample[] => {
+/**
+ * Parse exposition text into samples. By default only the WANTED series are kept (the Management API scrape is read for a short
+ * summary). `parseAll` keeps every series, which is what the raw-evidence collector needs. Comment lines, malformed lines and
+ * non-numeric values (NaN, +Inf) are skipped either way: a missing sample is not a zero.
+ */
+const parseWith = (text: string, keep: (name: string) => boolean): Sample[] => {
   const out: Sample[] = []
   for (const raw of text.split('\n')) {
     const line = raw.trim()
@@ -56,7 +60,7 @@ export const parseMetrics = (text: string): Sample[] => {
     const m = LINE.exec(line)
     if (m === null) continue
     const name = m[1] ?? ''
-    if (!WANTED.some((re) => re.test(name))) continue
+    if (!keep(name)) continue
     const value = Number(m[4])
     if (!Number.isFinite(value)) continue
     const labels: Record<string, string> = {}
@@ -64,6 +68,16 @@ export const parseMetrics = (text: string): Sample[] => {
     out.push({ name, labels, value })
   }
   return out
+}
+export const parseMetrics = (text: string): Sample[] =>
+  parseWith(text, (name) => WANTED.some((re) => re.test(name)))
+export const parseAll = (text: string): Sample[] => parseWith(text, () => true)
+
+/** The metric families an exposition declares, with the series count of each (what the endpoint ACTUALLY exports). */
+export const familyCounts = (samples: readonly Sample[]): Record<string, number> => {
+  const c: Record<string, number> = {}
+  for (const s of samples) c[s.name] = (c[s.name] ?? 0) + 1
+  return c
 }
 
 const sumOf = (

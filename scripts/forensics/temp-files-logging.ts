@@ -94,6 +94,68 @@ console.log(
 )
 console.log(`  alter role "postgres" set "${KEY}" to '${value}';`)
 
+/**
+ * What the documented API requires, and what this token has shown, WITHOUT sending the change. Three facts are read live:
+ * the published OpenAPI document (is the key in the PUT body, is a restart part of it), what kind of token this is (a
+ * user-scoped personal access token or something narrower), and whether the platform is healthy right now. None of them
+ * is a GET of the override itself: an empty answer there says nothing about what a PUT may do.
+ */
+const requirements = async (): Promise<string> => {
+  const lines: string[] = []
+  let inBody = false
+  let restartInBody = false
+  try {
+    const r = await fetch('https://api.supabase.com/api/v1-json', {
+      signal: AbortSignal.timeout(30_000),
+    })
+    const spec = (await r.json()) as {
+      components?: {
+        schemas?: { UpdatePostgresConfigBody?: { properties?: Record<string, unknown> } }
+      }
+    }
+    const props = spec.components?.schemas?.UpdatePostgresConfigBody?.properties ?? {}
+    inBody = KEY in props
+    restartInBody = 'restart_database' in props
+    lines.push(
+      `OpenAPI UpdatePostgresConfigBody carries ${KEY}: ${inBody ? 'YES' : 'NO'} (restart_database is an optional flag: ${restartInBody ? 'present, not sent' : 'absent'})`,
+    )
+  } catch {
+    lines.push('OpenAPI document could not be read: the body schema is UNVERIFIED this run')
+  }
+  const profile = await call('GET', '/../../profile')
+  lines.push(
+    `token class: GET /v1/profile -> http ${String(profile.status)} (${profile.status === 403 ? 'not a user-scoped personal access token; it is a narrower credential' : 'user-scoped'})`,
+  )
+  lines.push(
+    'documented requirement: a bearer token allowed to write project configuration; the access-control table gives database configuration updates (pooling, SSL, disk) to Owner and Administrator only, with no Developer tick. The Postgres-config row itself is not in the published table.',
+  )
+  lines.push(
+    'observed on this token: listing API keys is allowed; revealing the secret key is refused ("not the necessary privileges"). That is evidence of a role or scope below Administrator, NOT proof that the PUT is refused.',
+  )
+  const h = await call('GET', '/health?services=auth&services=db&services=rest&services=storage')
+  const healthy =
+    h.status === 200 &&
+    Array.isArray(h.json) &&
+    (h.json as { status: string }[]).every((s) => s.status === 'ACTIVE_HEALTHY')
+  lines.push(
+    `platform health now: ${healthy ? 'all ACTIVE_HEALTHY' : `NOT healthy (health endpoint http ${String(h.status)})`}`,
+  )
+  const approved = process.env.GRANT_APPROVED_DB_CONFIG === KEY
+  lines.push(
+    `explicit approval (GRANT_APPROVED_DB_CONFIG=${KEY}): ${approved ? 'STATED' : 'not stated'}`,
+  )
+  const status = !inBody
+    ? 'BLOCKED: the key is not in the documented request body'
+    : !healthy
+      ? 'WAITING: the platform is not healthy, nothing is changed while it is degraded'
+      : !approved
+        ? 'READY FOR APPROVAL: not applied. Permission for this token is UNKNOWN until the request is made; a 403 would refuse cleanly and change nothing.'
+        : 'APPROVED and healthy: --apply may be run'
+  lines.push(`STATUS: ${status}`)
+  return lines.join('\n  ')
+}
+console.log(`\nrequirements check:\n  ${await requirements()}`)
+
 if (!apply) {
   console.log(
     '\nDRY RUN: nothing was sent. Re-run with --apply and GRANT_APPROVED_DB_CONFIG=log_temp_files once Grant approves.',

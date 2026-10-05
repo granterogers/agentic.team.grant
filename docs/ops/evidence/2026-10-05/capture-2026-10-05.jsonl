@@ -1,0 +1,51 @@
+{"at":"2026-10-05T01:08:16.975Z","kind":"health","body":{"ok":false,"label":"auth=UNHEALTHY db=UNHEALTHY rest=UNHEALTHY storage=UNHEALTHY"}}
+{"at":"2026-10-05T01:08:32.775Z","kind":"context","body":{"project":{"status":"ACTIVE_HEALTHY"},"readonly":"http 544","diskUtil":"http 500"}}
+{"at":"2026-10-05T01:08:42.927Z","kind":"scrape","body":{"ok":false,"status":500,"ms":10152,"series":0,"snapshot":null}}
+{"at":"2026-10-05T03:11:06.729Z","kind":"health","body":{"ok":false,"label":"auth=UNHEALTHY db=ok rest=UNHEALTHY storage=UNHEALTHY"}}
+{"at":"2026-10-05T03:11:15.247Z","kind":"context","body":{"project":{"status":"ACTIVE_HEALTHY"},"readonly":{"enabled":false,"override_enabled":false,"override_active_until":"1970-01-01 00:00:00+00"},"diskUtil":"http 500"}}
+{"at":"2026-10-05T03:11:25.427Z","kind":"scrape","body":{"ok":false,"status":500,"ms":10179,"series":0,"snapshot":null}}
+{"at":"2026-10-05T05:14:14.052Z","kind":"health","body":{"ok":false,"label":"auth=UNHEALTHY db=UNHEALTHY rest=UNHEALTHY storage=UNHEALTHY"}}
+{"at":"2026-10-05T05:14:24.827Z","kind":"context","body":{"project":{"status":"ACTIVE_HEALTHY"},"readonly":{"enabled":false,"override_enabled":false,"override_active_until":"1970-01-01 00:00:00+00"},"diskUtil":{"timestamp":"2026-10-05T05:14:24Z","metrics":{"fs_size_bytes":2077073408,"fs_avail_bytes":1376219136,"fs_used_bytes":700854272}}}}
+{"at":"2026-10-05T05:14:34.993Z","kind":"scrape","body":{"ok":false,"status":500,"ms":10164,"series":0,"snapshot":null}}
+{"at":"2026-10-05T06:16:57.872Z","kind":"logs2","body":{"name":"probe_sources","status":200,"ms":1697,"rows":9,"note":"","file":".out/forensics/logs/2026-10-05T06-16/probe_sources.json"}}
+{"at":"2026-10-05T06:18:12.246Z","kind":"logs2","body":{"name":"probe_attributes","status":200,"ms":9310,"rows":9,"note":"","file":".out/forensics/logs/2026-10-05T06-16/probe_attributes.json"}}
+{"at":"2026-10-05T06:19:31.051Z","kind":"logs2","body":{"name":"pg_events_10min","status":200,"ms":3109,"rows":570,"note":"","file":".out/forensics/logs/2026-10-05T06-19/pg_events_10min.json"}}
+{"at":"2026-10-05T06:20:39.134Z","kind":"logs2","body":{"name":"pg_severity_10min","status":200,"ms":3071,"rows":275,"note":"","file":".out/forensics/logs/2026-10-05T06-19/pg_severity_10min.json"}}
+{"at":"2026-10-05T06:21:50.707Z","kind":"logs2","body":{"name":"pg_error_templates","status":200,"ms":6509,"rows":40,"note":"","file":".out/forensics/logs/2026-10-05T06-19/pg_error_templates.json"}}
+{"at":"2026-10-05T06:22:57.510Z","kind":"logs2","body":{"name":"pg_checkpoints","status":200,"ms":1735,"rows":260,"note":"","file":".out/forensics/logs/2026-10-05T06-19/pg_checkpoints.json"}}
+{"at":"2026-10-05T06:24:07.226Z","kind":"logs2","body":{"name":"pg_timeout_backends","status":200,"ms":4665,"rows":25,"note":"","file":".out/forensics/logs/2026-10-05T06-19/pg_timeout_backends.json"}}
+{"at":"2026-10-05T06:25:14.592Z","kind":"logs2","body":{"name":"pg_timeout_statements","status":200,"ms":2361,"rows":0,"note":"","file":".out/forensics/logs/2026-10-05T06-19/pg_timeout_statements.json"}}
+{"at":"2026-10-05T06:26:23.087Z","kind":"logs2","body":{"name":"pg_lifecycle","status":200,"ms":3432,"rows":80,"note":"","file":".out/forensics/logs/2026-10-05T06-19/pg_lifecycle.json"}}
+{"at":"2026-10-05T06:26:30.736Z","kind":"logs2","body":{"name":"pg_autovacuum","status":200,"ms":3344,"rows":1,"note":"","file":".out/forensics/logs/2026-10-05T06-26/pg_autovacuum.json"}}
+{"at":"2026-10-05T06:27:38.406Z","kind":"logs2","body":{"name":"pg_cron","status":200,"ms":2605,"rows":168,"note":"","file":".out/forensics/logs/2026-10-05T06-26/pg_cron.json"}}
+{"at":"2026-10-05T06:28:45.308Z","kind":"logs2","body":{"name":"edge_families_10min","status":200,"ms":1836,"rows":242,"note":"","file":".out/forensics/logs/2026-10-05T06-26/edge_families_10min.json"}}
+{"at":"2026-10-05T06:29:54.482Z","kind":"logs2","body":{"name":"edge_metrics_scrapes","status":200,"ms":4169,"rows":7,"note":"","file":".out/forensics/logs/2026-10-05T06-26/edge_metrics_scrapes.json"}}
+{"at":"2026-10-05T06:31:02.102Z","kind":"logs2","body":{"name":"edge_slowest","status":200,"ms":2609,"rows":40,"note":"","file":".out/forensics/logs/2026-10-05T06-26/edge_slowest.json"}}
+{"at":"2026-10-05T06:32:09.671Z","kind":"logs2","body":{"name":"fn_edge_10min","status":200,"ms":2531,"rows":316,"note":"","file":".out/forensics/logs/2026-10-05T06-26/fn_edge_10min.json"}}
+{"at":"2026-10-05T06:33:16.975Z","kind":"logs2","body":{"name":"fn_logs_10min","status":200,"ms":2295,"rows":301,"note":"","file":".out/forensics/logs/2026-10-05T06-26/fn_logs_10min.json"}}
+{"at":"2026-10-05T06:33:22.268Z","kind":"logs2","body":{"name":"auth_10min","status":200,"ms":2088,"rows":54,"note":"","file":".out/forensics/logs/2026-10-05T06-33/auth_10min.json"}}
+{"at":"2026-10-05T06:34:30.875Z","kind":"logs2","body":{"name":"auth_errors","status":200,"ms":3571,"rows":5,"note":"","file":".out/forensics/logs/2026-10-05T06-33/auth_errors.json"}}
+{"at":"2026-10-05T06:35:38.061Z","kind":"logs2","body":{"name":"auth_audit_10min","status":200,"ms":2123,"rows":36,"note":"","file":".out/forensics/logs/2026-10-05T06-33/auth_audit_10min.json"}}
+{"at":"2026-10-05T06:36:44.978Z","kind":"logs2","body":{"name":"storage_10min","status":200,"ms":1871,"rows":87,"note":"","file":".out/forensics/logs/2026-10-05T06-33/storage_10min.json"}}
+{"at":"2026-10-05T06:37:51.005Z","kind":"logs2","body":{"name":"postgrest_10min","status":200,"ms":965,"rows":70,"note":"","file":".out/forensics/logs/2026-10-05T06-33/postgrest_10min.json"}}
+{"at":"2026-10-05T06:38:59.261Z","kind":"logs2","body":{"name":"pgbouncer_10min","status":200,"ms":3191,"rows":118,"note":"","file":".out/forensics/logs/2026-10-05T06-33/pgbouncer_10min.json"}}
+{"at":"2026-10-05T06:40:05.820Z","kind":"logs2","body":{"name":"pgbouncer_templates","status":200,"ms":1498,"rows":30,"note":"","file":".out/forensics/logs/2026-10-05T06-33/pgbouncer_templates.json"}}
+{"at":"2026-10-05T06:41:50.895Z","kind":"logs2","body":{"name":"pg_attr_keys","status":200,"ms":2893,"rows":27,"note":"","file":".out/forensics/logs/2026-10-05T06-41/pg_attr_keys.json"}}
+{"at":"2026-10-05T06:43:02.246Z","kind":"logs2","body":{"name":"pg_timeout_query_ids","status":200,"ms":6289,"rows":25,"note":"","file":".out/forensics/logs/2026-10-05T06-41/pg_timeout_query_ids.json"}}
+{"at":"2026-10-05T06:44:09.776Z","kind":"logs2","body":{"name":"pg_lifecycle2","status":200,"ms":2479,"rows":0,"note":"","file":".out/forensics/logs/2026-10-05T06-41/pg_lifecycle2.json"}}
+{"at":"2026-10-05T06:45:18.042Z","kind":"logs2","body":{"name":"pg_fatal_hours","status":200,"ms":3201,"rows":11,"note":"","file":".out/forensics/logs/2026-10-05T06-41/pg_fatal_hours.json"}}
+{"at":"2026-10-05T06:46:25.307Z","kind":"logs2","body":{"name":"pg_slow_statements","status":200,"ms":2202,"rows":40,"note":"","file":".out/forensics/logs/2026-10-05T06-41/pg_slow_statements.json"}}
+{"at":"2026-10-05T06:47:31.303Z","kind":"logs2","body":{"name":"pg_slow_by_hour","status":200,"ms":957,"rows":24,"note":"","file":".out/forensics/logs/2026-10-05T06-41/pg_slow_by_hour.json"}}
+{"at":"2026-10-05T06:48:39.077Z","kind":"logs2","body":{"name":"auth_connect_errors","status":200,"ms":2711,"rows":16,"note":"","file":".out/forensics/logs/2026-10-05T06-41/auth_connect_errors.json"}}
+{"at":"2026-10-05T06:49:46.597Z","kind":"logs2","body":{"name":"fn_error_templates","status":200,"ms":2457,"rows":13,"note":"","file":".out/forensics/logs/2026-10-05T06-41/fn_error_templates.json"}}
+{"at":"2026-10-05T06:50:18.701Z","kind":"logs2","body":{"name":"pg_timeout_by_role","status":200,"ms":1301,"rows":7,"note":"","file":".out/forensics/logs/2026-10-05T06-50/pg_timeout_by_role.json"}}
+{"at":"2026-10-05T06:51:26.035Z","kind":"logs2","body":{"name":"pg_slow_by_role","status":200,"ms":2273,"rows":12,"note":"","file":".out/forensics/logs/2026-10-05T06-50/pg_slow_by_role.json"}}
+{"at":"2026-10-05T06:52:34.075Z","kind":"logs2","body":{"name":"pg_top_query_text","status":200,"ms":2976,"rows":6,"note":"","file":".out/forensics/logs/2026-10-05T06-50/pg_top_query_text.json"}}
+{"at":"2026-10-05T06:53:10.523Z","kind":"usage","body":{"name":"api-counts-1day","status":200,"ms":642,"points":15,"note":"","file":".out/forensics/usage/2026-10-05T06-53/api-counts-1day.json"}}
+{"at":"2026-10-05T06:53:16.189Z","kind":"usage","body":{"name":"api-counts-3day","status":200,"ms":663,"points":47,"note":"","file":".out/forensics/usage/2026-10-05T06-53/api-counts-3day.json"}}
+{"at":"2026-10-05T06:53:22.273Z","kind":"usage","body":{"name":"api-counts-7day","status":200,"ms":1082,"points":8,"note":"","file":".out/forensics/usage/2026-10-05T06-53/api-counts-7day.json"}}
+{"at":"2026-10-05T06:53:27.942Z","kind":"usage","body":{"name":"api-requests-count","status":200,"ms":667,"points":1,"note":"","file":".out/forensics/usage/2026-10-05T06-53/api-requests-count.json"}}
+{"at":"2026-10-05T06:56:05.392Z","kind":"cmetrics_check","body":{"status":200,"keys":[{"name":"anon","type":"legacy","secretLike":false},{"name":"service_role","type":"legacy","secretLike":false},{"name":"default","type":"publishable","secretLike":false},{"name":"default","type":"secret","secretLike":true}]}}
+{"at":"2026-10-05T06:56:10.299Z","kind":"cmetrics","body":{"at":"2026-10-05T06:56:10.299Z","status":-1,"error":"api-keys listing answered http 403"}}
+{"at":"2026-10-05T07:02:49.675Z","kind":"logs2","body":{"name":"pg_top_query_text","status":200,"ms":4600,"rows":6,"note":"","file":".out/forensics/logs/2026-10-05T07-02/pg_top_query_text.json"}}
+{"at":"2026-10-05T07:03:57.217Z","kind":"logs2","body":{"name":"pg_slow_statements","status":200,"ms":2477,"rows":40,"note":"","file":".out/forensics/logs/2026-10-05T07-02/pg_slow_statements.json"}}
