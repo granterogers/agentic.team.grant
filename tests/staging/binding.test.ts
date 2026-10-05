@@ -104,6 +104,7 @@ describe('the binding, as a pure function', () => {
       { STAGING_GATEWAY_URL: 'https://x.example/hq-api' },
       { STAGING_WORKER_URL: 'https://x.example/worker' },
       { STAGING_STORAGE_URL: 'https://x.example/storage' },
+      // secret-scan:allow-shape (a synthetic specimen, not a credential)
       { SUPABASE_DB_URL: 'postgresql://u:p@db.zzzzzzzzzzzzzzzzzzzz.supabase.co/postgres' },
       { STAGING_SITE_URL: 'https://x-other.vercel.app' },
       { STAGING_GOOGLE_CLIENT_ID: 'another' },
@@ -118,6 +119,7 @@ describe('the binding, as a pure function', () => {
   it('a database password is never part of the identity', () => {
     const id = identityOf(
       stagingEnv({
+        // secret-scan:allow-shape (a synthetic specimen, not a credential)
         SUPABASE_DB_URL: `postgresql://postgres:hunter2@db.${STAGING}.supabase.co:5432/postgres`,
       }),
     )
@@ -131,6 +133,7 @@ describe('the binding, as a pure function', () => {
     expect(
       targetProblem(`https://api.supabase.com/v1/projects/${STAGING}/database/query`, id),
     ).toBeNull()
+    // secret-scan:allow-shape (a synthetic specimen, not a credential)
     expect(targetProblem(`postgresql://u:p@db.${STAGING}.supabase.co:5432/postgres`, id)).toBeNull()
     expect(targetProblem('https://team-hq-staging.vercel.app/x', id)).toBeNull()
     expect(targetProblem(`https://${PROD}.supabase.co/functions/v1/hq-api`, id)).toMatch(
@@ -140,6 +143,7 @@ describe('the binding, as a pure function', () => {
       targetProblem(`https://api.supabase.com/v1/projects/${PROD}/database/query`, id),
     ).toMatch(/does not name/)
     expect(targetProblem('https://api.supabase.com/v1/projects', id)).toMatch(/does not name/)
+    // secret-scan:allow-shape (a synthetic specimen, not a credential)
     expect(targetProblem(`postgresql://u:p@db.${PROD}.supabase.co:5432/postgres`, id)).toMatch(
       /not the attested/,
     )
@@ -256,6 +260,7 @@ describe('the choke points', () => {
     writeAttestation(stagingEnv())
     set(envWith())
     expect(
+      // secret-scan:allow-shape (a synthetic specimen, not a credential)
       () => new PgExecutor(`postgresql://postgres:pw@db.${PROD}.supabase.co:5432/postgres`),
     ).toThrow(StagingBindingRefused)
     expect(

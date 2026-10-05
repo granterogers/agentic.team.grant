@@ -372,7 +372,7 @@ export const tidy = (mods, st) => {
 const KEY = (slug) => `bc.stage.${slug}`
 const slugOf = (s) => (typeof s === 'string' ? s : (s?.slug ?? ''))
 
-const emptyDoc = () => ({ mods: null, zoom: 1, layouts: {}, postits: [], seeded: false })
+const emptyDoc = () => ({ mods: null, zoom: 1, layouts: {}, postits: [], gone: {}, seeded: false })
 const clampZoom = (z) => Math.min(ZOOM.max, Math.max(ZOOM.min, z))
 
 let stage = { w: 1200, h: 620 }
@@ -396,6 +396,9 @@ const cleanMod = (m) => ({
   tint: validTint(m.tint) ? (m.tint ?? null) : null,
 })
 
+/** The longest note kept. The textarea says the same (compose.js), so nothing is typed that is not saved. */
+export const NOTE_MAX = 5000
+
 const cleanPostit = (n) => ({
   id: String(n.id),
   x: Number(n.x) || 0,
@@ -403,7 +406,9 @@ const cleanPostit = (n) => ({
   w: Number(n.w) || POSTIT_DEFAULT.w,
   h: Number(n.h) || POSTIT_DEFAULT.h,
   z: Number.isFinite(n.z) ? n.z : 1,
-  text: typeof n.text === 'string' ? n.text.slice(0, 5000) : '',
+  text: typeof n.text === 'string' ? n.text.slice(0, NOTE_MAX) : '',
+  // When this note last changed: what lets two copies of the document be merged note by note rather than overwritten.
+  at: Number.isFinite(n.at) ? n.at : 0,
 })
 
 /** An untrusted stored document, repaired. */
@@ -430,8 +435,37 @@ export const normalise = (raw) => {
       .filter((n) => n && typeof n.id === 'string' && isPostit(n.id))
       .map(cleanPostit)
   }
+  if (raw.gone !== null && typeof raw.gone === 'object') {
+    for (const [id, at] of Object.entries(raw.gone)) {
+      if (isPostit(id) && Number.isFinite(at)) d.gone[id] = at
+    }
+  }
   d.seeded = raw.seeded === true
   return d
+}
+
+/**
+ * Two copies of one project's notes, merged note by note.
+ *
+ * The workspace is stored as ONE document, so a plain overwrite means whichever tab (or device) saved last erases the
+ * notes the other one wrote. A note is kept when it is the newest copy of itself and nothing newer removed it. `gone`
+ * records removals (id -> when) so that a stale copy cannot bring a removed note back.
+ */
+export const mergeNotes = (a, b) => {
+  const gone = { ...a.gone }
+  for (const [id, at] of Object.entries(b.gone ?? {})) gone[id] = Math.max(gone[id] ?? 0, at)
+  const byId = new Map()
+  for (const n of [...a.postits, ...b.postits]) {
+    const have = byId.get(n.id)
+    if (have === undefined || n.at > have.at) byId.set(n.id, n)
+  }
+  const postits = [...byId.values()].filter((n) => !((gone[n.id] ?? -1) >= n.at && n.id in gone))
+  const kept = Object.fromEntries(
+    Object.entries(gone)
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, 200),
+  )
+  return { postits, gone: kept }
 }
 
 /** The document as the array the office stores. */
@@ -444,6 +478,7 @@ export const toPanels = (d) => [
     zoom: d.zoom,
     layouts: d.layouts,
     postits: d.postits,
+    gone: d.gone,
     seeded: d.seeded,
   },
 ]
@@ -458,6 +493,7 @@ export const fromPanels = (panels) => {
     zoom: meta.zoom,
     layouts: meta.layouts,
     postits: meta.postits,
+    gone: meta.gone,
     seeded: meta.seeded,
   })
 }
@@ -467,6 +503,7 @@ const isBlank = (d) =>
   d.mods === null &&
   d.zoom === 1 &&
   d.postits.length === 0 &&
+  Object.keys(d.gone).length === 0 &&
   Object.keys(d.layouts).length === 0 &&
   d.seeded === false
 
@@ -512,8 +549,19 @@ const sendNow = () => {
 }
 
 /** Write the document to the browser now and to the office shortly after. */
-const commit = (slug, d) => {
+const commit = (slug, mine_) => {
   const s = slugOf(slug)
+  /*
+    Another tab may have written notes since this one last read the document. Fold its notes in before writing, or this
+    save erases them (and a blank result would delete the office's copy, notes included).
+  */
+  let d = mine_
+  try {
+    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    if (raw !== '') d = { ...d, ...mergeNotes(d, normalise(JSON.parse(raw))) }
+  } catch {
+    /* Nothing readable to fold in. */
+  }
   cache.set(s, d)
   mine.add(s)
   try {
@@ -535,17 +583,46 @@ export const flush = () => {
   sendNow()
 }
 
+/* A tab closed inside the save delay would otherwise leave the last moments of typing only in this browser. */
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('pagehide', () => flush())
+  globalThis.addEventListener?.('visibilitychange', () => {
+    if (globalThis.document?.visibilityState === 'hidden') flush()
+  })
+}
+
 /** Take the office's copy, unless this session has already changed it. */
 export const adopt = (slug, panels) => {
   const s = slugOf(slug)
   if (s === '' || mine.has(s)) return false
-  const d = fromPanels(panels)
-  if (d === null) return false
+  const theirs = fromPanels(panels)
+  if (theirs === null) return false
+  /*
+    The browser may hold notes the office never received (offline, a tab closed inside the save delay). Taking the office's
+    copy whole would throw them away; fold them in, and send the result when it differs.
+  */
+  let d = theirs
+  let ahead = false
+  try {
+    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    if (raw !== '') {
+      const merged = mergeNotes(theirs, normalise(JSON.parse(raw)))
+      ahead = JSON.stringify(merged.postits) !== JSON.stringify(theirs.postits)
+      d = { ...theirs, ...merged }
+    }
+  } catch {
+    d = theirs
+  }
   cache.set(s, d)
   try {
     globalThis.localStorage?.setItem(KEY(s), JSON.stringify(d))
   } catch {
     /* Cached in memory regardless. */
+  }
+  if (ahead) {
+    pending.set(s, d)
+    if (timer !== null) globalThis.clearTimeout(timer)
+    timer = globalThis.setTimeout(sendNow, 700)
   }
   return true
 }
@@ -789,6 +866,7 @@ export const addPostit = (slug) => {
       ...POSTIT_DEFAULT,
       z,
       text: '',
+      at: Date.now(),
     },
     stage,
   )
@@ -800,13 +878,13 @@ export const addPostit = (slug) => {
 export const setPostit = (slug, id, patch) => {
   const d = doc(slug)
   if (id === 'n_starter' && !d.postits.some((n) => n.id === id)) {
-    const real = cleanPostit({ ...postits(slug)[0], ...patch, id: newId() })
+    const real = cleanPostit({ ...postits(slug)[0], ...patch, id: newId(), at: Date.now() })
     commit(slug, { ...d, postits: [real], seeded: true })
     return real.id
   }
   commit(slug, {
     ...d,
-    postits: d.postits.map((n) => (n.id === id ? cleanPostit({ ...n, ...patch }) : n)),
+    postits: d.postits.map((n) => (n.id === id ? cleanPostit({ ...n, ...patch, at: Date.now() }) : n)),
   })
   return id
 }
@@ -815,13 +893,15 @@ export const movePostit = (slug, id, rect) => {
   const d = doc(slug)
   const z = topZ(d) + 1
   if (id === 'n_starter' && !d.postits.some((n) => n.id === id)) {
-    const real = cleanPostit({ ...postits(slug)[0], ...rect, id: newId(), z })
+    const real = cleanPostit({ ...postits(slug)[0], ...rect, id: newId(), z, at: Date.now() })
     commit(slug, { ...d, postits: [real], seeded: true })
     return real.id
   }
   commit(slug, {
     ...d,
-    postits: d.postits.map((n) => (n.id === id ? clampRect({ ...n, ...rect, id, z }, stage) : n)),
+    postits: d.postits.map((n) =>
+      n.id === id ? cleanPostit({ ...clampRect({ ...n, ...rect, id, z }, stage), at: Date.now() }) : n,
+    ),
   })
   return id
 }
@@ -829,5 +909,10 @@ export const movePostit = (slug, id, rect) => {
 /** Remove a note. This is the only thing in this module that deletes content, and it is explicit. */
 export const removePostit = (slug, id) => {
   const d = doc(slug)
-  commit(slug, { ...d, postits: d.postits.filter((n) => n.id !== id), seeded: true })
+  commit(slug, {
+    ...d,
+    postits: d.postits.filter((n) => n.id !== id),
+    gone: { ...d.gone, [id]: Date.now() },
+    seeded: true,
+  })
 }

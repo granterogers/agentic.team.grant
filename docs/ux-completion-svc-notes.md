@@ -51,7 +51,7 @@ Everything else the real page carried parsed correctly with no change: titles, s
   the first anchor on it is the ad, so the filter had something to refuse; a real results page is not mistaken for a challenge.
 * **Sabotage:** reverting both fixes turned the two ad tests red; restored, green.
 * `scripts/verify/web-live.ts` is the **opt-in live check, in no default gate**. Needs no secret and no database. Run it as
-  `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt npx tsx scripts/verify/web-live.ts`. Run once, 7 of 7:
+  `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=<the proxy CA bundle named in the environment> npx tsx scripts/verify/web-live.ts`. Run once, 7 of 7:
   the search answered with the honest 202 "slow down" (accepted as the honest-failure branch, not a failure); a real page
   (`iana.org/help/example-domains`, 1,515 chars, 26 links) was read through `FetchedBrowser`; `chooseLinks` followed at most 2,
   both public https; a private address (`169.254.169.254`) was refused before any request; an HTML page offered as a

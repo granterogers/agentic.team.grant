@@ -26,9 +26,11 @@ import {
 } from '../../src/safety/production-gate.ts'
 
 const FAKE = {
+  // secret-scan:allow-shape (a synthetic specimen, not a credential)
   SUPABASE_ACCESS_TOKEN: 'sbp_0000000000000000000000000000000000000000',
   SUPABASE_PROJECT_REF: 'baujwlzcziasnfhhkchg',
   SUPABASE_SERVICE_ROLE_KEY: 'fake-service-role',
+  // secret-scan:allow-shape (a synthetic specimen, not a credential)
   SUPABASE_DB_URL: 'postgresql://postgres:fake@db.baujwlzcziasnfhhkchg.supabase.co:5432/postgres',
 }
 const KEYS = [ENV_CHECKS, ENV_WRITES, ...Object.keys(FAKE)]
@@ -85,6 +87,7 @@ describe('refusal is the default, with credentials present and the flag unset', 
 
   it('a remote Postgres connection is refused (the direct database URL included)', () => {
     expect(() => new PgExecutor(FAKE.SUPABASE_DB_URL)).toThrow(ProductionAccessRefused)
+    // secret-scan:allow-shape (a synthetic specimen, not a credential)
     expect(() => new PgExecutor('postgresql://u:p@203.0.113.7:5432/postgres')).toThrow(/REFUSED/)
   })
 

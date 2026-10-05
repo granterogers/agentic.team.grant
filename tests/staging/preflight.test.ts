@@ -22,6 +22,7 @@ const good: Env = {
   STAGING_TELEGRAM_BOT: 'team_hq_staging_bot',
   STAGING_SLACK_TEAM: 'unused',
   STAGING_VIKUNJA_URL: 'https://vikunja.staging.example.org',
+  // secret-scan:allow-shape (a synthetic specimen, not a credential)
   SUPABASE_DB_URL: `postgresql://postgres:pw@db.${REF}.supabase.co:5432/postgres`,
 }
 const deny = mergeDenylists(BUILTIN_DENYLIST, {
@@ -64,6 +65,7 @@ describe('the staging preflight', () => {
     expect(
       failing({
         ...good,
+        // secret-scan:allow-shape (a synthetic specimen, not a credential)
         SUPABASE_DB_URL: `postgresql://postgres:pw@db.${prod}.supabase.co:5432/postgres`,
       }),
     ).toContain('database.host')
@@ -167,6 +169,7 @@ describe('the staging preflight', () => {
     )
     expect(r).not.toContain('SHOULDNOTAPPEAR')
     expect(shownValue('SUPABASE_SERVICE_ROLE_KEY', 'x')).toBe('(set, not shown)')
+    // secret-scan:allow-shape (a synthetic specimen, not a credential)
     expect(shownValue('SUPABASE_DB_URL', 'postgres://u:p@h')).toBe('(set, not shown)')
     expect(shownValue('STAGING_SITE_URL', 'https://s.example')).toBe('https://s.example')
   })

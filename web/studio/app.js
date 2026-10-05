@@ -9009,6 +9009,7 @@ function keepUrl() {
   }
   if (path === shownPath) return
   const first = shownPath === null
+  const before = shownPath
   shownPath = path
   try {
     /*
@@ -9017,8 +9018,20 @@ function keepUrl() {
       a path the host has never heard of.
     */
     const to = REVIEW ? `#${path}` : path
-    if (first) history.replaceState({ path }, '', to)
-    else history.pushState({ path }, '', to)
+    /*
+      Each entry remembers the address it was pushed from, so closing a maximised module can GO BACK to it rather than
+      pushing a second entry (Back after Close used to reopen the module just put away). A page that was OPENED on a
+      module has no earlier entry of its own: closing it replaces the entry instead of adding one.
+    */
+    const deepLinkClosing =
+      !first &&
+      before !== null &&
+      before.includes('/x/') &&
+      !path.includes('/x/') &&
+      history.state?.path === before &&
+      history.state?.from === undefined
+    if (first || deepLinkClosing) history.replaceState({ path }, '', to)
+    else history.pushState({ path, from: before }, '', to)
   } catch {
     /* A page opened from a file has no history to write to. It still works. */
   }
@@ -13686,6 +13699,20 @@ const bcContext = {
       calls back, so a close can never wait on motion that does not happen.
     */
     const was = state.bcExpanded
+    /*
+      If this very dialog was opened by a history entry of ours, closing is Back: the popstate handler plays the same
+      settle-to-card exit, and the history holds no stale 'open' entry for the next Back to land on.
+    */
+    const entry = typeof history === 'undefined' ? null : history.state
+    if (
+      entry?.path === shownPath &&
+      typeof entry?.from === 'string' &&
+      !entry.from.includes('/x/') &&
+      (shownPath ?? '').includes('/x/')
+    ) {
+      history.back()
+      return
+    }
     bcExpand.exit(was, () => {
       state.bcExpanded = null
       render()

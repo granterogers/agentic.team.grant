@@ -392,6 +392,7 @@ describe('Post-its', () => {
   })
   it('holds text and a rectangle and nothing else (no extraction, no conversion)', () => {
     const n = L.addPostit('p')
-    expect(Object.keys(n).sort()).toEqual(['h', 'id', 'text', 'w', 'x', 'y', 'z'])
+    // `at` is when the note last changed, kept only so two copies can be merged note by note; nothing else may be added.
+    expect(Object.keys(n).sort()).toEqual(['at', 'h', 'id', 'text', 'w', 'x', 'y', 'z'])
   })
 })

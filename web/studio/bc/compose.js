@@ -598,7 +598,7 @@ export const note = (n) => `<div class="bcpostit" data-bc-note-id="${esc(n.id)}"
           stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <textarea class="bcpostittext" data-bc-note-text="${esc(n.id)}" aria-label="Note" spellcheck="true"
+    <textarea class="bcpostittext" data-bc-note-text="${esc(n.id)}" aria-label="Note" spellcheck="true" maxlength="${grid.NOTE_MAX}"
       placeholder="Click and type">${esc(n.text)}</textarea>
     <span class="bcpostitresize" data-bc-note-resize="${esc(n.id)}" aria-hidden="true"></span>
   </div>`
