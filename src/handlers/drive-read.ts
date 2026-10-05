@@ -108,31 +108,35 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       /*
         A read that an Import press asked for is a NEW operation that needs the provider, so a closed source is refused
         here too: the job may have been queued before the source was switched off, or by somebody who never went through
-        the press (1010). Asked of the database, which decides; a database that does not have the function yet has no
-        gate on the press either, and the read goes on as it always did. Any other failure refuses: unknown is not open.
+        the press (1010). Asked of the database, which decides.
+
+        FAIL CLOSED. If the answer cannot be had (the function is missing because this worker is newer than the database,
+        or the query failed), the file is NOT fetched: "I could not establish that the source is connected" is not
+        "connected". Only the import-request reads are held back by this, so nothing else in the worker is affected and
+        there is no start-up deadlock: applying the migrations (or the next attempt, once the database answers) lets the
+        read go ahead. The reason is written onto the request, where the page shows it with a press to try again.
       */
       if (p.import_request === true && importDoc !== '') {
+        let gate: { ok?: boolean; error?: string; error_code?: string } | undefined
+        let unanswered = ''
         try {
           const g = await deps.db.execute(
             `select app.document_import_gate(app.job_office(${lit(job.jobId)}::uuid), ${lit(importDoc)}::uuid) as g`,
           )
           const raw = (g.rows[0] as { g?: unknown } | undefined)?.g
-          const gate = (typeof raw === 'string' ? JSON.parse(raw) : raw) as
-            | { ok?: boolean; error?: string; error_code?: string }
-            | undefined
-          if (gate?.ok !== true) {
-            return failed(
-              `${gate?.error_code ?? 'SOURCE_DISCONNECTED'}: ${gate?.error ?? 'this source cannot be read.'}`,
-            )
-          }
+          gate = (typeof raw === 'string' ? JSON.parse(raw) : raw) as typeof gate
         } catch (e) {
-          const missing =
-            /document_import_gate/.test(e instanceof Error ? e.message : String(e)) &&
-            /does not exist/.test(e instanceof Error ? e.message : String(e))
-          if (!missing)
-            return failed(
-              'SOURCE_DISCONNECTED: the source could not be checked, so it was not read.',
-            )
+          const msg = e instanceof Error ? e.message : String(e)
+          unanswered =
+            /document_import_gate/.test(msg) && /does not exist/.test(msg)
+              ? 'this deployment is older than its database expects, so whether the source is connected could not be checked. Apply the migrations, then try again.'
+              : 'whether the source is connected could not be checked just now. Try again in a minute.'
+        }
+        if (unanswered !== '') return failed(`SOURCE_DISCONNECTED: ${unanswered} Nothing was read.`)
+        if (gate?.ok !== true) {
+          return failed(
+            `${gate?.error_code ?? 'SOURCE_DISCONNECTED'}: ${gate?.error ?? 'this source cannot be read.'}`,
+          )
         }
       }
 

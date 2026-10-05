@@ -74,6 +74,7 @@ export const REACH: Readonly<Record<string, KindReach>> = {
 
   // --- reads: fetches from a third party, changes nothing there -------------
   'browser.gather': { reach: 'reads' },
+  'drive.index': { reach: 'reads' },
   'drive.read_file': { reach: 'reads' },
   'drive.watch': { reach: 'reads' },
   'google.read_calendar': { reach: 'reads' },

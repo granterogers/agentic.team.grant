@@ -56,6 +56,7 @@ import { choresHandler } from '../handlers/chores.ts'
 import { ciDispatchHandler } from '../handlers/ci-dispatch.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
+import { driveIndexHandler } from '../handlers/drive-index.ts'
 import { driveReadHandler } from '../handlers/drive-read.ts'
 import { extractTasksHandler } from '../handlers/extract-tasks.ts'
 import { googleRevokeHandler } from '../handlers/google-revoke.ts'
@@ -414,6 +415,8 @@ export const buildPass = async (
     // #96. The other half of what drive.watch asks about: "Add them to the
     // project as source documents" was an option nothing implemented.
     driveReadHandler({ db, projectRef, serviceKey }),
+    // HQ-DOC-026. Reads connected Drive documents in the background and keeps only derived text; never imports.
+    driveIndexHandler({ db }),
     collectHandler({ db, projectRef, serviceKey }),
     calendarHandler(db),
     /*

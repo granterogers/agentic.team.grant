@@ -19,12 +19,11 @@ describe('a new import of a disconnected source is refused by the server', () =>
     expect(ask).toBeGreaterThan(0)
     expect(spend).toBeGreaterThan(ask)
     expect(handler).toMatch(/if \(gate\?\.ok !== true\) \{\s*return failed\(/s)
-    expect(handler).toMatch(/if \(!missing\)\s*return failed\(/)
   })
 
-  it('only a database that does not have the function yet lets the read go on', () => {
-    expect(handler).toMatch(/does not exist/)
-    expect(handler).not.toMatch(/catch \{\s*\}/)
+  it('FAILS CLOSED: a missing or failing gate means the file is not read', () => {
+    expect(handler).toMatch(/unanswered !== ''\)\s*return failed\(/)
+    expect(handler).not.toMatch(/if \(!missing\)/)
   })
 
   it('the migration splices the press, the enqueue and the fulfil, each asserted to have landed', () => {
