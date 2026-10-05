@@ -34,6 +34,12 @@ export interface PdfImage {
   readonly palette?: Uint8Array
   /** Soft mask (8-bit grey, Flate) when the source had alpha. */
   readonly smask?: Uint8Array
+  /**
+   * Alpha PNGs only: what the logo's visible pixels look like, so the cover can tell a white mark that would vanish on
+   * a light field. `mean` is the mean RELATIVE (linear) luminance, 0 black to 1 white, of the pixels that are at least
+   * half opaque; `light` is the share of those pixels with relative luminance of 0.5 or more (a white or pale mark); `opaque` is the share of the image those pixels are.
+   */
+  readonly luma?: { readonly mean: number; readonly light: number; readonly opaque: number }
 }
 
 export type ReadImage =
@@ -64,6 +70,12 @@ const checkSize = (w: number, h: number): string | null => {
     return `the image has ${String(w * h)} pixels, over the ${String(MAX_IMAGE_PIXELS)} limit`
   return null
 }
+
+/** sRGB byte to linear light, once. */
+const LINEAR: number[] = Array.from({ length: 256 }, (_, i) => {
+  const c = i / 255
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+})
 
 const paeth = (a: number, b: number, c: number): number => {
   const p = a + b - c
@@ -208,10 +220,22 @@ function readPng(bytes: Uint8Array): ReadImage {
   const colourChannels = channels - 1
   const colour = new Uint8Array(width * height * colourChannels)
   const alpha = new Uint8Array(width * height)
+  let lumSum = 0
+  let seen = 0
+  let lightN = 0
   for (let i = 0; i < width * height; i += 1) {
     for (let c = 0; c < colourChannels; c += 1)
       colour[i * colourChannels + c] = px[i * channels + c] ?? 0
     alpha[i] = px[i * channels + colourChannels] ?? 255
+    if ((alpha[i] ?? 255) >= 128) {
+      const r = px[i * channels] ?? 0
+      const g = colourChannels === 3 ? (px[i * channels + 1] ?? 0) : r
+      const b = colourChannels === 3 ? (px[i * channels + 2] ?? 0) : r
+      const y = 0.2126 * (LINEAR[r] ?? 0) + 0.7152 * (LINEAR[g] ?? 0) + 0.0722 * (LINEAR[b] ?? 0)
+      lumSum += y
+      if (y >= 0.5) lightN += 1
+      seen += 1
+    }
   }
   return {
     image: {
@@ -220,6 +244,11 @@ function readPng(bytes: Uint8Array): ReadImage {
       extra: '',
       filter: 'FlateDecode',
       height,
+      luma: {
+        light: seen === 0 ? 0 : lightN / seen,
+        mean: seen === 0 ? 0 : lumSum / seen,
+        opaque: seen / (width * height),
+      },
       smask: new Uint8Array(deflateSync(alpha, { level: 9 })),
       width,
     },
