@@ -1,6 +1,6 @@
 # Staging handoff plan - Team HQ UX branch -> integration -> staging
 
-Written 5 October 2026, updated on the integration branch `integration/team-hq-ux-on-p4` (p4 `1c2e0293` + the frozen UX branch `f91c4c1f`). Nothing here has been executed. Production is not touched at any step; staging is a SEPARATE
+Written 5 October 2026, updated on the integration branch `integration/team-hq-ux-on-p4` (p4 `ca8845b7` + the frozen UX branch `f91c4c1f`). Nothing here has been executed. Production is not touched at any step; staging is a SEPARATE
 Supabase project, a SEPARATE Vercel preview, and separate Google / Telegram / Slack / Vikunja credentials.
 
 The purpose of staging is to FIND failures local fakes could not. A row moves PARTIAL -> TESTED / VISUALLY VERIFIED
@@ -11,7 +11,7 @@ vs environment), fixed if code, retested; the row stays PARTIAL until genuinely 
 
 | | |
 |---|---|
-| Integration branch | `integration/team-hq-ux-on-p4`: p4 `1c2e0293` + the frozen UX branch `f91c4c1f` merged `--no-ff` (textually clean) + the integration fixes below. p4 and the UX branch are untouched. |
+| Integration branch | `integration/team-hq-ux-on-p4`: p4 `ca8845b7` + the frozen UX branch `f91c4c1f` merged `--no-ff` (textually clean) + the integration fixes below. p4 and the UX branch are untouched. |
 | Migrations | p4 ends at 0896. This branch adds, in order: 0897 0900 0920 0921 0922 0923 0924 0925 0930 0940 0950 0960 0970 0980 0981 0990 0991 1000 1001 1010 **1020**. No collisions; no renumbering. `scripts/isolated/replica.sh` replayed the whole history, each migration in its own transaction stopping at the first error, through 1020. |
 | Integration fixes (this branch only) | p4 forensics collectors join the production-access guard; CLAUDE.md states the safety contract; DOC-026 background indexing (1020); the Import gate fails closed; staging preflight + held-duties posture; replica proofs no longer import gated commands; the default arrangement no longer overlaps itself on a narrow stage; the grid-era torture suite is rewritten for the freeform model; a stale 16px check is measured on a touch phone. |
 | Failures that are p4\'s own | 42 of 68 canonical `run-all.sh` proofs, and the p2 attack/sabotage/plants set, fail identically on p4 alone (`jobs.office_id` NOT NULL against pre-multi-user fixtures, a replica builder that re-applies 0654). The integration branch matches p4 on all 68 after the one fix above. Not caused by, and not fixed on, this branch. |
