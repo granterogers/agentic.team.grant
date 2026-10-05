@@ -541,6 +541,10 @@
         }
       ]
     },
+    "integration_connections": {
+      "class": "OFFICE_CARRIER",
+      "why": "An office's connection to a provider account (HQ-GOOG-003): office_id is written at creation and write-once, and is the only owner the row has."
+    },
     "job_branches": {
       "class": "OFFICE_DERIVED",
       "path": [

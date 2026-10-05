@@ -73,6 +73,7 @@ import { pursueHandler } from '../handlers/pursue.ts'
 import { remindersHandler } from '../handlers/reminders.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
+import { styleAdoptHandler } from '../handlers/style-adopt.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
 import { synthesiseHandler } from '../handlers/synthesise.ts'
 import { tasksSyncHandler } from '../handlers/tasks-sync.ts'
@@ -425,6 +426,8 @@ export const buildPass = async (
       and the parked token would sit there with no job that can reach it.
     */
     googleRevokeHandler(db),
+    // HQ-STYLE-018. The performance of a yes to "replace the project style"; only ever enqueued by that answer.
+    styleAdoptHandler(db),
     // The other direction: dated tasks into the diary (#94, ADR-0020). Off
     // until `calendar.sync_tasks` is turned on.
     calendarTasksHandler(db),
