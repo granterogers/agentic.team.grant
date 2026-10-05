@@ -121,6 +121,23 @@
       "class": "SYSTEM",
       "why": "The build session log (what Claude is building); describes the developer session, not an office."
     },
+    "calendar_event_projects": {
+      "class": "OFFICE_CARRIER",
+      "why": "Which projects an event is shown in (HQ-CAL-009): office_id is written with the row and is its owner.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["calendar_id", "event_id"],
+          "parent": "calendar_events",
+          "constraint": "calendar_event_projects_event_same_office"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "calendar_event_projects_project_same_office"
+        }
+      ]
+    },
     "calendar_events": {
       "class": "OFFICE_CARRIER",
       "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
@@ -275,6 +292,18 @@
           "columns": ["project_id"],
           "parent": "projects",
           "constraint": "document_orders_project_id_fkey"
+        }
+      ]
+    },
+    "document_previews": {
+      "class": "OFFICE_CARRIER",
+      "why": "The derived, cached preview of an external document (HQ-DOC-029): office_id is written with the row; closed to every API role.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_previews_document_same_office"
         }
       ]
     },
@@ -442,6 +471,18 @@
           "columns": ["resolved_project_id"],
           "parent": "projects",
           "constraint": "inbound_commands_slack_resolved_project_id_fkey"
+        }
+      ]
+    },
+    "project_events": {
+      "class": "OFFICE_CARRIER",
+      "why": "Calendar events of a project (HQ-CAL-001): office_id is written with the row and is its owner.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_events_project_same_office"
         }
       ]
     },
@@ -1205,6 +1246,17 @@
           "columns": ["project_id"],
           "parent": "projects",
           "constraint": "standing_authorizations_project_id_fkey"
+        }
+      ]
+    },
+    "style_profiles": {
+      "class": "OFFICE_CARRIER",
+      "why": "A project's kept report style (HQ-STYLE-013): office_id is written with the row and is its owner.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "style_project_in_same_office"
         }
       ]
     },

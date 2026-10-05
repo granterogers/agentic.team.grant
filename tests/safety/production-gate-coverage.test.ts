@@ -87,6 +87,7 @@ describe('inspection commands need the first confirmation', () => {
             'require-production-checks',
             'require-production-writes',
             'require-production-site',
+            'require-production-unless-replica',
           ),
           `${n}: ${e} first import is ${firstImport(src)}`,
         ).toBe(true)
