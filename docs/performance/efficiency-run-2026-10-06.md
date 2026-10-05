@@ -59,8 +59,10 @@ refused-credential stop in `live()`; `startOfficeReads()` is started by `refresh
 load (the poll's priming tick already runs it); a single-flight on the set-up screen's `whoami`. A TDZ trap (a `let` declared after a
 deep link opens the sheet at module evaluation) was caught by the harness and the declaration moved to the top. The baseline gap in
 row 5 (creating an office never started the poll) is a defect found by this work, not only a saving.
-Not done: adaptive polling (the poll already stops while the tab is hidden; slowing it while idle is a product decision), gateway
-single-flight for the three serial identity round trips (hq-api; needs its own proof).
+Gateway (`hq-api`): concurrent callers of the same credential now share one session resolution (`tests/gateway/session-resolution-single-flight.test.ts`
+runs the shipped wrapper over a stand-in resolver and is sabotage-proved). **DERIVED**, not measured against a real isolate: a load's
+eight parallel reads on a cold isolate made eight three-step resolutions (24 upstream calls) and now make one (3). Not deployed.
+Not done: adaptive polling (the poll already stops while the tab is hidden; slowing it while idle is a product decision).
 
 ## 4. Worker and background
 
