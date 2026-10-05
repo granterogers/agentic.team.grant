@@ -330,7 +330,7 @@ describe('when the order of the two edits cannot be known', () => {
   ] as const) {
     it(`${name} Google stamp keeps Google, sends nothing, and says why`, async () => {
       const t = setup((g) => {
-        const e = g.events.get('g1') as { updated?: string } | undefined
+        const e = g.events.get('g1') as { updated?: string | undefined } | undefined
         if (e) e.updated = value
       })
       const out = await t.go()

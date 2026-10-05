@@ -19,6 +19,7 @@
  * two lists agree.
  */
 
+import { type Resolver, systemResolver, whyResolvesPrivately } from './dns.ts'
 import { MAX_HOPS, whyRefused } from './fetched.ts'
 
 export const DOWNLOAD_MAX_BYTES = 10 * 1024 * 1024
@@ -101,6 +102,8 @@ export type DownloadOutcome =
 
 export interface DownloadDeps {
   readonly fetchImpl?: typeof fetch
+  /** Resolves a name before each hop (src/browser/dns.ts); defaults to the system's when the real fetch is used. */
+  readonly resolve?: Resolver
   readonly timeoutMs?: number
 }
 
@@ -121,6 +124,11 @@ export async function downloadFile(url: string, deps: DownloadDeps = {}): Promis
       if (n > MAX_HOPS) return fail(`refused: more than ${String(MAX_HOPS)} redirects`)
       const why = whyRefused(hop)
       if (why !== null) return fail(`refused: ${why}`)
+      const named = await whyResolvesPrivately(
+        hop.hostname,
+        deps.resolve ?? (deps.fetchImpl === undefined ? systemResolver : undefined),
+      )
+      if (named !== null) return fail(`refused: ${named}`)
       const response = await fetchImpl(hop.toString(), {
         // No cookie, ever.
         headers: {
