@@ -69,6 +69,7 @@ type MutableInputs = {
     settings: Record<string, unknown>
     envNames: string[]
     envStamps: Record<string, number | null>
+    envShapes: Record<string, string>
   }
   envDigests: Record<string, string>
 }
@@ -83,6 +84,7 @@ const baseInputs = async (): Promise<MutableInputs> => ({
     }),
     envNames: ['NOTEBOOK_READER_SECRET', 'OTHER_FLAG'],
     envStamps: { NOTEBOOK_READER_SECRET: null, OTHER_FLAG: 1_760_000_000_000 },
+    envShapes: { NOTEBOOK_READER_SECRET: 'production:encrypted', OTHER_FLAG: 'production:plain' },
   },
   envDigests: { NOTEBOOK_READER_SECRET: envDigest('secret-one') },
 })
@@ -250,6 +252,18 @@ describe('every input changes the fingerprint (mutation per input class)', () =>
       'a variable the script does not supply edited by hand (its update time moves, its name does not)',
       (i) => {
         i.project.envStamps.OTHER_FLAG = 1_760_000_000_001
+      },
+    ],
+    [
+      'the supplied secret re-scoped to another environment (same name, same value)',
+      (i) => {
+        i.project.envShapes.NOTEBOOK_READER_SECRET = 'production+preview:encrypted'
+      },
+    ],
+    [
+      'a variable changing type',
+      (i) => {
+        i.project.envShapes.OTHER_FLAG = 'production:encrypted'
       },
     ],
     [

@@ -18,7 +18,8 @@
  *   - for every environment variable the deploy script does NOT itself supply, the time Vercel last updated it (a value
  *     changed by hand in the dashboard keeps its name and changes this); for a variable the script DOES supply, a salted
  *     digest of its value instead (the notebook reader secret: a rotation changes what the functions accept, and nothing in
- *     the files shows it). The value itself is never in the fingerprint inputs, a log or a request;
+ *     the files shows it). Every variable's environments and type are included too (re-scoping one is a change). The value
+ *     itself is never in the fingerprint inputs, a log or a request;
  *   - the algorithm version, so changing this file forces one redeploy.
  *
  * What it cannot cover, stated so nobody assumes otherwise: a new release of an UNPINNED dependency (`requirements.txt` names
@@ -70,6 +71,8 @@ export interface PageInputs {
     settings: Record<string, unknown>
     envNames: readonly string[]
     envStamps: Readonly<Record<string, number | null>>
+    /** Per variable, the environments it applies to and its type (never its value): re-scoping a variable is a change. */
+    envShapes: Readonly<Record<string, string>>
   }
   /** Digest of each environment value the deploy supplies, by variable name. Never the value. */
   envDigests: Readonly<Record<string, string>>
@@ -112,6 +115,7 @@ export function pageFingerprint(inputs: PageInputs, schema: number = FINGERPRINT
           settings: inputs.project.settings,
           envNames: names,
           envStamps: inputs.project.envStamps,
+          envShapes: inputs.project.envShapes,
         },
         envDigests: inputs.envDigests,
       }),
