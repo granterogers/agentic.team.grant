@@ -33,6 +33,12 @@ import { randomBytes } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { chromium, type Page, type Request } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import {
+  BOUNDARY_LIMIT_MS,
+  fetchProviderHealth,
+  judgeHealth,
+  readLastRunsCanary,
+} from '../../src/safety/canary.ts'
 import { apiKeys } from '../p4/provision-second-person.ts'
 
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
@@ -65,7 +71,7 @@ const clip = (e: unknown): string =>
     .replace(/eyJ[\w-]+\.[\w-]+\.[\w-]+/g, '[jwt]')
     .slice(0, 160)
 
-const LIMIT_MS = 15_000
+const LIMIT_MS = BOUNDARY_LIMIT_MS
 const timings: { boundary: string; ms: number; status: string }[] = []
 const note = (boundary: string, ms: number, status: string): void => {
   timings.push({ boundary, ms, status })
@@ -73,31 +79,10 @@ const note = (boundary: string, ms: number, status: string): void => {
 }
 
 // ---- preflight ---------------------------------------------------------------------------------------------------------
-const health = await fetch(
-  `https://api.supabase.com/v1/projects/${REF}/health?services=auth&services=db&services=rest&services=storage`,
-  { headers: { Authorization: `Bearer ${TOKEN}` }, signal: AbortSignal.timeout(20_000) },
-)
-  .then(async (r) => (await r.json()) as { status: string }[])
-  .catch(() => [] as { status: string }[])
-const healthy = health.length > 0 && health.every((s) => s.status === 'ACTIVE_HEALTHY')
-const canary = async (): Promise<{ ok: boolean; detail: string }> => {
-  // One retry, and the reason on the page: a safety check that cannot read says why, it does not just say no.
-  let why = ''
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      const rows = await q(
-        'select round(extract(epoch from (end_time-start_time))::numeric,2)::float as d, status from cron.job_run_details where jobid = 1 order by start_time desc limit 5',
-      )
-      const good =
-        rows.length === 5 && rows.every((r) => r.status === 'succeeded' && Number(r.d) < 1)
-      return { ok: good, detail: rows.map((r) => `${String(r.d)}s ${String(r.status)}`).join(', ') }
-    } catch (e) {
-      why = `could not read: ${clip(e)}`
-      await sleep(3000)
-    }
-  }
-  return { ok: false, detail: why }
-}
+// The judgement is the shared canary library's (src/safety/canary.ts), the logic this suite had first.
+const health = await fetchProviderHealth(REF, TOKEN)
+const healthy = judgeHealth(health).ok
+const canary = (): Promise<{ ok: boolean; detail: string }> => readLastRunsCanary(q, { sleep })
 const before = healthy ? await canary() : { ok: false, detail: 'not asked' }
 console.log('preflight')
 check('the platform reports every service healthy', healthy, health.map((s) => s.status).join(','))
