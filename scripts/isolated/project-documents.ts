@@ -191,7 +191,7 @@ try {
     const v2b = String(sup.document_id)
     const vb = await versions(v1)
     check(
-      'a newer draft REPLACES the older pending one (older archived, never deleted, listed but not numbered)',
+      'a newer draft REPLACES the older pending one (older archived, never deleted, and it KEEPS its number: v2 stays v2, the new draft is v3)',
       sup.ok === true &&
         sup.state === 'draft' &&
         (await q(`select state from public.documents where document_id = ${lit(draft1)}::uuid`))[0]
@@ -199,8 +199,8 @@ try {
         vb.pending_id === v2b &&
         vb.versions.length === 3 &&
         vb.versions.filter((x: { is_pending: boolean }) => x.is_pending).length === 1 &&
-        vb.versions.find((x: { document_id: string }) => x.document_id === draft1).version ===
-          null &&
+        vb.versions.find((x: { document_id: string }) => x.document_id === draft1).version === 2 &&
+        vb.versions.find((x: { document_id: string }) => x.document_id === v2b).version === 3 &&
         item(await list(), v1)?.pending_version?.id === v2b,
       JSON.stringify(
         vb.versions.map((x: { state: string; version: number | null }) => [x.state, x.version]),
@@ -225,7 +225,8 @@ try {
         )[0]?.s === v2b &&
         item(await list(), v2b)?.pending_version === null &&
         item(await list(), v1) === undefined &&
-        item(await list(), v2b)?.version_count === 2,
+        item(await list(), v2b)?.version_count === 3 &&
+        item(await list(), v2b)?.current_version === 3,
       JSON.stringify(
         vc.versions.map((x: { state: string; version: number | null }) => [x.state, x.version]),
       ),
@@ -307,28 +308,29 @@ try {
   )
   await approve(v3)
   const vs = await versions(v3)
-  // the first draft a newer one replaced is kept as history, listed but never numbered
-  const numbered = vs.versions.filter((x: { version: number | null }) => x.version !== null)
+  // every version is numbered in the order it was MADE, a replaced draft included: v2 stays v2 for ever
   check(
-    'hq_document_versions lists v1..v3 oldest first with the current marked',
-    vs.version_count === 3 &&
+    'hq_document_versions lists every version oldest first with a stable number: v1, the replaced draft v2, v3, v4',
+    vs.version_count === 4 &&
       vs.current_id === v3 &&
-      numbered.map((x: { document_id: string }) => x.document_id).join() === [v1, v2, v3].join() &&
-      numbered.map((x: { is_current: boolean }) => x.is_current).join() === 'false,false,true' &&
-      numbered.map((x: { version: number }) => x.version).join() === '1,2,3' &&
-      vs.versions.length === 4,
+      vs.current_version === 4 &&
+      vs.versions.map((x: { document_id: string }) => x.document_id).join() ===
+        [v1, draft1, v2, v3].join() &&
+      vs.versions.map((x: { is_current: boolean }) => x.is_current).join() ===
+        'false,false,false,true' &&
+      vs.versions.map((x: { version: number }) => x.version).join() === '1,2,3,4',
     JSON.stringify(vs.versions.map((x: { version: number }) => x.version)),
   )
   check(
     '...and reads the same from any version',
-    (await versions(v1)).current_id === v3 && (await versions(v2)).version_count === 3,
+    (await versions(v1)).current_id === v3 && (await versions(v2)).version_count === 4,
   )
   check(
     '...with the note, the door and the author recorded',
-    numbered[1].note === 'tightened the summary' &&
-      numbered[1].channel === 'teamhq' &&
-      numbered[2].channel === 'telegram' &&
-      numbered[1].how === 'draft_revision',
+    vs.versions[2].note === 'tightened the summary' &&
+      vs.versions[2].channel === 'teamhq' &&
+      vs.versions[3].channel === 'telegram' &&
+      vs.versions[2].how === 'draft_revision',
   )
   check("...and the logical title is the head's", vs.logical_title === 'Report')
 
@@ -336,8 +338,8 @@ try {
     `app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(v1)}::uuid, 'back to the first draft', 'teamhq')`,
   )
   check(
-    'rollback writes the old content as a NEW version (v4)',
-    rb.ok === true && rb.version === 4 && rb.rolled_back_to === v1,
+    'rollback writes the old content as a NEW version (v5: v1..v4 exist)',
+    rb.ok === true && rb.version === 5 && rb.rolled_back_to === v1 && rb.restored_from_version === 1,
     JSON.stringify(rb),
   )
   const v4 = String(rb.document_id)
@@ -358,7 +360,7 @@ try {
   const rb2 = await call(`app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(v3)}::uuid)`)
   check(
     'a rollback can itself be rolled back (history is never rewritten)',
-    rb2.ok === true && rb2.version === 5,
+    rb2.ok === true && rb2.version === 6,
   )
   check(
     'the pin and the order position followed the head through both',
@@ -375,6 +377,164 @@ try {
         )[0]?.d,
       ).includes(String(rb2.document_id)),
   )
+
+  // =========================================================== 1b. ROLLBACK SEMANTICS (HQ-DOC-053, decided 5 October)
+  // Approval belongs to a VERSION. v3 Approved + v4 Draft; "Return to this version" on v3 makes v5 Approved restored from
+  // v3. Nothing is mutated, nothing is deleted, the draft stays in history, the logical document stays visible, and the
+  // ledger (Activity) says it.
+  {
+    const RC = LONG('rollback subject v1')
+    const r1 = await ins({ project: PA, title: 'Rollback subject', content: RC })
+    const mk = async (head: string, text: string): Promise<string> => {
+      const r = await call(
+        `app.hq_document_new_version(${lit(OFFICE)}::uuid, ${lit(head)}::uuid, ${lit(LONG(text))}, null, null, 'teamhq')`,
+      )
+      return String(r.document_id)
+    }
+    const r2 = await mk(r1, 'rollback subject v2')
+    await approve(r2)
+    const r3 = await mk(r2, 'rollback subject v3')
+    await approve(r3)
+    const r4 = await mk(r3, 'rollback subject v4 draft')
+    const before = await q(
+      `select document_id::text id, content, content_fingerprint fp, state from public.documents where document_id in (${lit(r3)}::uuid, ${lit(r4)}::uuid)`,
+    )
+    const r3before = before.find((x) => x.id === r3)
+    const r4before = before.find((x) => x.id === r4)
+    const lb = await list()
+    check(
+      'setup: v3 Approved is the item, v4 Draft is pending beside it',
+      item(lb, r3)?.current_version === 3 &&
+        item(lb, r3)?.current_state === 'approved' &&
+        item(lb, r3)?.pending_version?.version === 4 &&
+        r4before?.state === 'draft',
+      JSON.stringify(item(lb, r3)?.pending_version),
+    )
+    const eventsBefore = Number(
+      (await q(`select count(*)::int n from public.events where action_type = 'document.rolled_back'`))[0]?.n,
+    )
+    // The suite's operator is named verify-operator, which the Activity reader (rightly) treats as harness traffic. For
+    // the one question "does Activity show a rollback" the operator is a real-looking person; this all rolls back.
+    await q(`update public.office_members set owner_key = 'grant-proof' where owner_key = 'verify-operator'`)
+    const back = await call(
+      `app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(r3)}::uuid, null, 'teamhq')`,
+    )
+    check(
+      'Return to this version on v3 (with v4 waiting) is allowed and makes v5, APPROVED, restored from v3',
+      back.ok === true &&
+        back.version === 5 &&
+        back.restored_from_version === 3 &&
+        back.state === 'approved' &&
+        back.rolled_back_to === r3 &&
+        back.draft_kept_id === r4 &&
+        /Restored v3 as v5/.test(String(back.said)),
+      JSON.stringify(back),
+    )
+    const v5 = String(back.document_id)
+    const after = await q(
+      `select document_id::text id, content, content_fingerprint fp, state, superseded_by::text sup from public.documents where document_id in (${lit(r3)}::uuid, ${lit(r4)}::uuid, ${lit(v5)}::uuid)`,
+    )
+    const a3 = after.find((x) => x.id === r3)
+    const a4 = after.find((x) => x.id === r4)
+    const a5 = after.find((x) => x.id === v5)
+    check(
+      'v3 is NOT mutated (same content and fingerprint; only archived and linked to v5)',
+      a3?.content === r3before?.content && a3?.fp === r3before?.fp && a3?.sup === v5 && a3?.state === 'archived',
+    )
+    check(
+      'v4 is NOT deleted or changed: still a draft with its own content',
+      a4?.state === 'draft' && a4?.content === r4before?.content && a4?.sup === null,
+    )
+    check(
+      'v5 holds exactly the content of v3, and is approved',
+      a5?.content === r3before?.content && a5?.fp === r3before?.fp && a5?.state === 'approved',
+    )
+    const vz = await versions(v5)
+    const byNo = (n: number) => vz.versions.find((x: { version: number }) => x.version === n)
+    check(
+      'history is intact and numbered v1..v5, in the order they were made',
+      vz.version_count === 5 &&
+        vz.versions.map((x: { version: number }) => x.version).join() === '1,2,3,4,5' &&
+        byNo(3).document_id === r3 &&
+        byNo(4).document_id === r4 &&
+        byNo(5).document_id === v5,
+      JSON.stringify(vz.versions.map((x: { version: number; state: string }) => [x.version, x.state])),
+    )
+    check(
+      'provenance: v5 says it was restored from v3, how it was made and by which door',
+      byNo(5).how === 'rolled_back' &&
+        byNo(5).rolled_back_to === r3 &&
+        byNo(5).restored_from_version === 3 &&
+        byNo(5).channel === 'teamhq' &&
+        byNo(5).previous_document_id === r3,
+    )
+    check(
+      'the rejected draft stays visible in history as a pending Draft (v4), and v5 is the current one',
+      vz.current_id === v5 &&
+        vz.current_version === 5 &&
+        byNo(4).state === 'draft' &&
+        byNo(4).is_pending === true &&
+        byNo(5).is_current === true,
+    )
+    const lc = await list()
+    check(
+      'the logical document stays visible in Documents: one item, v5 Approved, with the v4 Draft still exposed',
+      item(lc, v5)?.current_version === 5 &&
+        item(lc, v5)?.current_state === 'approved' &&
+        item(lc, v5)?.pending_version?.version === 4 &&
+        item(lc, r3) === undefined &&
+        (lc.documents as { title: string }[]).filter((d) => d.title === 'Rollback subject').length === 1,
+    )
+    const ev = await q(
+      `select actor, trigger, rationale_summary r, after_state a from public.events where action_type = 'document.rolled_back' and rationale_summary like '%restored from v3 as v5%' limit 1`,
+    )
+    check(
+      'Activity/audit records the rollback in the ledger (document.rolled_back, who, what was restored)',
+      Number(
+        (await q(`select count(*)::int n from public.events where action_type = 'document.rolled_back'`))[0]?.n,
+      ) === eventsBefore + 1 &&
+        /restored from v3 as v5/.test(String(ev[0]?.r)) &&
+        /waiting draft is kept/.test(String(ev[0]?.r)),
+      JSON.stringify(ev[0]),
+    )
+    const proj = String((await q(`select project_id::text p from public.projects where slug = ${lit(SLUG)}`))[0]?.p)
+    const act = await call(`app.studio_activity(${lit(proj)}::uuid, 30)`)
+    check(
+      'and the project Activity feed shows it (category: documents)',
+      JSON.stringify(act).includes('restored from v3 as v5'),
+      JSON.stringify(act).slice(0, 200),
+    )
+    // negatives
+    check(
+      'a draft cannot be returned to (it was never approved)',
+      (await call(`app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(r4)}::uuid)`)).ok === false,
+    )
+    const again = await call(`app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(r3)}::uuid)`)
+    check(
+      'a second press does not stack a second restored copy (the current version already holds that content)',
+      again.ok === false && /already holds that content/.test(String(again.error)),
+      JSON.stringify(again),
+    )
+    const lone = await ins({ project: PA, title: 'Rollback lone', content: LONG('lone') })
+    check(
+      'returning to the current version when no draft waits is still refused',
+      (await call(`app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(lone)}::uuid)`)).ok === false,
+    )
+    check(
+      'another office cannot return to this office\'s version',
+      (await call(`app.hq_document_rollback(${lit(OTHER)}::uuid, ${lit(r2)}::uuid)`)).ok === false,
+    )
+    const back2 = await call(`app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(r2)}::uuid, 'older still', 'telegram')`)
+    check(
+      'returning to an OLDER version (v2) makes v6; v5 stays in history; v4 still waits',
+      back2.ok === true &&
+        back2.version === 6 &&
+        back2.restored_from_version === 2 &&
+        (await versions(String(back2.document_id))).versions.length === 6 &&
+        (await versions(String(back2.document_id))).pending_id === r4,
+      JSON.stringify(back2),
+    )
+  }
 
   // restore stays the undo of a supersede LINK - and the proof says what that means on a lineage.
   const a = await ins({ project: PA, title: 'Restore subject', content: LONG('ra') })

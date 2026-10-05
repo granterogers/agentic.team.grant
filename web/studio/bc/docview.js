@@ -94,6 +94,12 @@ const paintPreview = async (host, fileFor) => {
   )
 }
 
+/*
+  WHAT A ROLLBACK SAID. A rollback redraws the whole page, and the sentence that explains what just happened ("Restored v3
+  as v5 (approved)") would go with the old DOM, so it is kept here until the next time this document's history is drawn.
+*/
+const rolled = { key: '', text: '' }
+
 /** The version history, drawn only when the office has one to show. */
 const paintVersions = async (host, ctx) => {
   const id = host.dataset.bcDocversions ?? ''
@@ -105,14 +111,21 @@ const paintVersions = async (host, ctx) => {
     return
   }
   const versions = Array.isArray(out?.versions) ? out.versions : []
+  // The logical document's title is the key that survives a rollback (the head's id changes, the title does not).
+  const key = String(out?.logical_title ?? id)
   if (versions.length < 2) return
   host.hidden = false
+  const next = Math.max(...versions.map((x) => Number(x.version ?? 0))) + 1
+  const restoreBtn = (v) =>
+    `<button type="button" class="bcversionbtn" data-bc-docrestore="${esc(String(v.document_id))}" data-bc-docrestore-from="${esc(String(v.version))}"
+      title="${esc(`Makes v${String(next)}: a NEW version with the content of v${String(v.version)}, approved. v${String(v.version)} is not changed and nothing is deleted.`)}">Return to this version</button>`
   /*
     EACH VERSION SAYS ITS OWN STATE. Approval belongs to a version: the approved one is current, a draft beside it is
     pending until a person approves it, and an earlier draft that a newer one replaced is kept as history, unnumbered.
   */
-  const stateOf = (v) => (v.is_earlier_draft ? 'Earlier draft' : v.state === 'approved' ? 'Approved' : v.state === 'review' ? 'In review' : v.state === 'archived' ? 'Replaced' : 'Draft')
+  const stateOf = (v) => (v.is_earlier_draft ? 'Replaced draft' : v.state === 'approved' ? 'Approved' : v.state === 'review' ? 'In review' : v.state === 'archived' ? 'Replaced' : 'Draft')
   host.innerHTML = `<h2 class="bcsubhead">Versions</h2>
+    ${rolled.key === key && rolled.text !== '' ? `<p class="bcpmeta bcrolledsay" role="status" data-bc-rolledsay>${esc(rolled.text)}</p>` : ''}
     <ol class="bcversions" reversed>${versions
       .slice()
       .sort((a, b) => (b.version ?? 0.5) - (a.version ?? 0.5))
@@ -120,16 +133,16 @@ const paintVersions = async (host, ctx) => {
         (v) => `<li class="bcversion${v.is_current ? ' is-current' : ''}${v.is_pending ? ' is-pending' : ''}">
           <span class="bcvn">${v.version === null || v.version === undefined ? '·' : `v${esc(String(v.version))}`}</span>
           <span class="bcvstate bcvstate--${esc(v.is_earlier_draft ? 'earlier' : String(v.state ?? ''))}">${esc(stateOf(v))}</span>
-          <span class="bcvw">${esc(String(v.updated_at ?? v.created_at ?? '').slice(0, 10))}${v.produced_by ? ` · ${esc(String(v.produced_by))}` : ''}</span>
-          ${
+          <span class="bcvw">${esc(String(v.updated_at ?? v.created_at ?? '').slice(0, 10))}${v.produced_by ? ` · ${esc(String(v.produced_by))}` : ''}${v.how === 'rolled_back' && v.restored_from_version ? ` · restored from v${esc(String(v.restored_from_version))}` : ''}</span>
+          <span class="bcvact">${
             v.is_current
-              ? '<span class="bcvcur">current</span>'
+              ? `<span class="bcvcur">current</span>${v.can_roll_back_to ? restoreBtn(v) : ''}`
               : v.is_pending
                 ? `<button type="button" class="bcversionbtn" data-bc-docapprove="${esc(String(v.document_id))}" title="Makes this the current version. The approved version is kept in the history.">Approve this version</button>`
                 : v.can_roll_back_to === false || v.version === null || v.version === undefined
                   ? ''
-                  : `<button type="button" class="bcversionbtn" data-bc-docrestore="${esc(String(v.document_id))}" title="Brings this version back as a new version. Nothing is deleted.">Return to this version</button>`
-          }
+                  : restoreBtn(v)
+          }</span>
         </li>`,
       )
       .join('')}</ol>`
@@ -151,7 +164,9 @@ const paintVersions = async (host, ctx) => {
     b.addEventListener('click', async () => {
       b.disabled = true
       try {
-        await act('document_rollback', { p_document_id: b.dataset.bcDocrestore })
+        const out = await act('document_rollback', { p_document_id: b.dataset.bcDocrestore })
+        rolled.key = key
+        rolled.text = String(out?.said ?? `Restored v${b.dataset.bcDocrestoreFrom ?? ''} as a new version (approved).`)
         docsrc.forgetList(ctx.state.project)
         ctx.render?.()
       } catch (e) {

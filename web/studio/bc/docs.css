@@ -68,7 +68,7 @@
 [data-experience='basecamp'] [data-bc-docsay][data-tone='good'] { color: var(--bc-accent); }
 [data-experience='basecamp'] [data-bc-docsay][data-tone='bad'] { color: #f0907e; }
 [data-experience='basecamp'] .bcversions { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-[data-experience='basecamp'] .bcversion { display: grid; grid-template-columns: 30px auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; }
+[data-experience='basecamp'] .bcversion { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; }
 [data-experience='basecamp'] .bcversion.is-current { background: color-mix(in srgb, var(--bc-accent) 12%, transparent); border-color: color-mix(in srgb, var(--bc-accent) 35%, transparent); }
 [data-experience='basecamp'] .bcvn { font-weight: 600; color: var(--bc-text-strong); font-variant-numeric: tabular-nums; }
 [data-experience='basecamp'] .bcvw { color: var(--bc-text-muted); font-size: 12.5px; }
@@ -155,3 +155,10 @@
 /* The project a document is in, said only under "All projects". */
 [data-experience='basecamp'] .bcdocproj { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 12px; line-height: 18px; color: var(--bc-text); background: color-mix(in srgb, var(--bc-accent) 14%, transparent); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 [data-experience='basecamp'] .bcdoc figcaption .bcdocproj { display: block; width: fit-content; margin: 3px 0 0; }
+
+/* A version row is two lines: number, state and the action on the first; the date, author and "restored from" on the second. */
+[data-experience='basecamp'] .bcversion .bcvn { grid-column: 1; grid-row: 1; }
+[data-experience='basecamp'] .bcversion .bcvstate { grid-column: 2; grid-row: 1; }
+[data-experience='basecamp'] .bcversion .bcvact { grid-column: 3; grid-row: 1 / span 2; display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+[data-experience='basecamp'] .bcversion .bcvw { grid-column: 2; grid-row: 2; min-width: 0; overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcrolledsay { margin: 0 0 8px; color: var(--bc-text); }

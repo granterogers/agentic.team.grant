@@ -81,6 +81,9 @@ create table public.document_version_notes (
   channel              text,
   created_by           text,
   created_at           timestamptz not null default app.now_utc(),
+  -- Insertion order. created_at is the TRANSACTION time, identical for two versions made in one transaction, and a version's
+  -- number must never depend on a coin flip: the number is the position in this order (document_version_set).
+  seq                  bigint generated always as identity,
   -- Each reference is a single-column key (the edge) and a same-office composite twin (its enforcement), the
   -- convention documents_mirrors_document_id_fkey / _same_office set and docs/multi-user/ownership-manifest.json audits.
   constraint document_version_notes_document_id_fkey foreign key (document_id) references public.documents (document_id),
@@ -219,20 +222,11 @@ begin
      order by d.created_at desc, d.document_id desc limit 1;
   end if;
   select d.title into v_title from public.documents d where d.document_id = v_head and d.office_id = p_office;
-  select count(*)::integer into v_n from app.document_lineage(p_office, v_base);
+  select count(*)::integer into v_n from app.document_version_set(p_office, v_base);
   select r.document_id into v_pend
     from app.document_pending_revisions(p_office, v_head) r
    where r.state in ('draft', 'review') order by r.created_at desc limit 1;
 
-  with vers as (
-    select l.document_id, l.version, false as pending
-      from app.document_lineage(p_office, v_base) l
-    union all
-    select r.document_id,
-           case when r.state in ('draft', 'review') then v_n + 1 else null end,
-           r.state in ('draft', 'review')
-      from app.document_pending_revisions(p_office, v_head) r
-  )
   select coalesce(jsonb_agg(jsonb_build_object(
            'document_id', d.document_id,
            'version', l.version,
@@ -249,25 +243,34 @@ begin
            'connector', d.connector,
            'state', d.state,
            'is_current', d.document_id = v_head,
-           'is_pending', l.pending,
-           'is_earlier_draft', l.version is null,
-           'can_roll_back_to', d.document_id <> v_head and not l.pending and l.version is not null
-                               and (d.content is not null or d.storage_path is not null),
+           'is_pending', l.is_pending,
+           -- kept for the pages that drew an unnumbered "earlier draft"; every version is numbered now
+           'is_earlier_draft', d.state = 'archived' and d.superseded_by is null and d.document_id <> v_head
+                               and exists (select 1 from public.document_version_notes z
+                                            where z.document_id = d.document_id and z.office_id = p_office and z.kind = 'draft_revision'),
+           -- A version can be returned to if it was once APPROVED (a lineage member) and holds content. A draft never was.
+           'can_roll_back_to', not l.is_pending
+                               and not (d.state = 'archived' and d.superseded_by is null and d.document_id <> v_head)
+                               and (d.content is not null or d.storage_path is not null)
+                               and (d.document_id <> v_head or v_pend is not null),
            'note', n.note,
            'how', n.kind,
            'channel', n.channel,
            'created_by', n.created_by,
            'previous_document_id', n.previous_document_id,
-           'rolled_back_to', n.rolled_back_to
-         ) order by coalesce(l.version, v_n + 1), d.created_at), '[]'::jsonb)
+           'rolled_back_to', n.rolled_back_to,
+           'restored_from_version', case when n.rolled_back_to is null then null
+                                         else app.document_number(p_office, v_base, n.rolled_back_to) end
+         ) order by l.version), '[]'::jsonb)
     into v_items
-    from vers l
+    from app.document_version_set(p_office, v_base) l
     join public.documents d on d.document_id = l.document_id and d.office_id = p_office
     left join public.document_version_notes n on n.document_id = d.document_id and n.office_id = p_office;
 
   return jsonb_build_object(
     'logical_title', v_title,
     'current_id', v_head,
+    'current_version', app.document_number(p_office, v_base, v_head),
     'pending_id', v_pend,
     'version_count', v_n,
     'versions', v_items);
@@ -416,6 +419,67 @@ begin
 end
 $f$;
 
+-- ---------------------------------------------------------------------------------------------------------------------
+-- 6c. VERSION NUMBERS ARE STABLE AND IMMUTABLE (Grant, 5 October: v3 Approved, v4 Draft; returning to v3 makes v5).
+--
+-- A number is the version's position in the order versions were MADE, counting every version of the logical document -
+-- approved, replaced, still a draft, or an earlier draft a newer one replaced. So v4 stays v4 whatever later happens to
+-- it, a rollback is v5, and nothing is ever renumbered. The order is the notes' insertion sequence (a root version has no
+-- note and sorts first; ties among roots by created_at, id). Derived on read, stored nowhere (0310).
+-- ---------------------------------------------------------------------------------------------------------------------
+create or replace function app.document_version_set(p_office uuid, p_document uuid)
+returns table (document_id uuid, version integer, is_head boolean, is_pending boolean)
+language sql
+stable
+security definer
+set search_path = 'public', 'pg_catalog'
+as $f$
+  with base as (select app.document_base(p_office, p_document) as b),
+  head as (
+    select l.document_id as h
+      from app.document_lineage(p_office, (select b from base)) l
+     where l.is_head
+     limit 1
+  ),
+  members as (
+    select l.document_id from app.document_lineage(p_office, (select b from base)) l
+    union
+    select r.document_id from app.document_pending_revisions(p_office, (select h from head)) r
+  ),
+  ranked as (
+    select m.document_id,
+           (row_number() over (order by (n.seq is not null), n.seq, d.created_at, d.document_id))::integer as version
+      from members m
+      join public.documents d on d.document_id = m.document_id and d.office_id = p_office
+      left join public.document_version_notes n on n.document_id = m.document_id and n.office_id = p_office
+  )
+  select r.document_id, r.version,
+         r.document_id = (select h from head),
+         exists (select 1 from app.document_pending_revisions(p_office, (select h from head)) pr
+                  where pr.document_id = r.document_id and pr.state in ('draft', 'review'))
+    from ranked r
+$f$;
+
+create or replace function app.document_number(p_office uuid, p_in uuid, p_document uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = 'public', 'pg_catalog'
+as $f$
+  select s.version from app.document_version_set(p_office, p_in) s where s.document_id = p_document
+$f$;
+
+create or replace function app.document_next_number(p_office uuid, p_in uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = 'public', 'pg_catalog'
+as $f$
+  select coalesce(max(s.version), 0)::integer + 1 from app.document_version_set(p_office, p_in) s
+$f$;
+
 create or replace function app.draft_revision_approved()
 returns trigger
 language plpgsql
@@ -500,7 +564,7 @@ begin
   if h.state <> 'approved' then
     return jsonb_build_object('ok', false, 'error', format('only a document in the project (approved) can be versioned; this one is %s', h.state));
   end if;
-  select count(*)::integer into v_ver from app.document_lineage(p_office, h.document_id);
+  v_ver := app.document_next_number(p_office, h.document_id) - 1;
 
   if v_text is not null then
     if h.content_fingerprint = v_fp then
@@ -513,7 +577,7 @@ begin
      where r.state in ('draft', 'review') and c.content_fingerprint = v_fp limit 1;
     if v_new is not null then
       return jsonb_build_object('ok', true, 'already', true, 'document_id', v_new, 'previous_id', h.document_id,
-                                'pending_id', v_new, 'current_id', h.document_id, 'version', v_ver + 1, 'state', 'draft');
+                                'pending_id', v_new, 'current_id', h.document_id, 'version', app.document_number(p_office, h.document_id, v_new), 'state', 'draft');
     end if;
     -- The new text is a DRAFT. It does not inherit the approval of the version it was made from.
     insert into public.documents
@@ -549,7 +613,8 @@ begin
     v_new := y.document_id;
     if not p_approve and exists (select 1 from public.document_version_notes z where z.document_id = v_new and z.office_id = p_office) then
       return jsonb_build_object('ok', true, 'already', true, 'document_id', v_new, 'previous_id', h.document_id,
-                                'pending_id', v_new, 'current_id', h.document_id, 'version', v_ver + 1, 'state', y.state);
+                                'pending_id', v_new, 'current_id', h.document_id,
+                                'version', app.document_number(p_office, h.document_id, v_new), 'state', y.state);
     end if;
     perform app.document_pending_attach(p_office, h.document_id, v_new, p_note, p_channel);
   end if;
@@ -557,10 +622,11 @@ begin
   -- p_approve is a PERSON's yes given together with the request: only then does the new version become current.
   if p_approve then
     update public.documents set state = 'approved' where document_id = v_new and office_id = p_office;
-    return jsonb_build_object('ok', true, 'document_id', v_new, 'previous_id', h.document_id, 'version', v_ver + 1,
-                              'current_id', v_new, 'state', 'approved');
+    return jsonb_build_object('ok', true, 'document_id', v_new, 'previous_id', h.document_id,
+                              'version', app.document_number(p_office, v_new, v_new), 'current_id', v_new, 'state', 'approved');
   end if;
-  return jsonb_build_object('ok', true, 'document_id', v_new, 'previous_id', h.document_id, 'version', v_ver + 1,
+  return jsonb_build_object('ok', true, 'document_id', v_new, 'previous_id', h.document_id,
+                            'version', app.document_number(p_office, h.document_id, v_new),
                             'pending_id', v_new, 'current_id', h.document_id, 'state', 'draft');
 end
 $f$;
@@ -581,17 +647,31 @@ declare
   h        public.documents%rowtype;
   v_new    uuid;
   v_ver    integer;
+  v_from   integer;
+  v_pend   uuid;
+  v_by     text;
 begin
   perform app.require_office(p_office);
   select * into t from public.documents where document_id = p_document and office_id = p_office;
   if not found then
     return jsonb_build_object('ok', false, 'error', 'there is no document with that id');
   end if;
+  -- A draft (or a draft a newer one replaced) was never approved: there is nothing to return TO. Approve it instead.
+  if exists (select 1 from app.document_pending_revisions(p_office, p_document) r where r.document_id = t.document_id)
+     or exists (select 1 from public.document_version_notes z
+                 where z.document_id = t.document_id and z.office_id = p_office and z.kind = 'draft_revision'
+                   and t.superseded_by is null and t.state <> 'approved') then
+    return jsonb_build_object('ok', false, 'error', 'that version was never approved, so there is nothing to return to; approve it instead');
+  end if;
   select l.document_id into v_head from app.document_lineage(p_office, p_document) l where l.is_head limit 1;
   if v_head is null then
     return jsonb_build_object('ok', false, 'error', 'that document has no single current version to roll back from');
   end if;
-  if v_head = t.document_id then
+  select r.document_id into v_pend
+    from app.document_pending_revisions(p_office, v_head) r where r.state in ('draft', 'review') limit 1;
+  -- Returning to the version that is already current is pointless, unless a draft is waiting beside it: then "return to
+  -- this one" is a real choice (Grant: v3 Approved, v4 Draft, "Return to this version" on v3 makes v5 Approved).
+  if v_head = t.document_id and v_pend is null then
     return jsonb_build_object('ok', false, 'error', 'that is already the current version');
   end if;
   if t.content is null and t.storage_path is null then
@@ -601,6 +681,16 @@ begin
   if h.state <> 'approved' then
     return jsonb_build_object('ok', false, 'error', format('the current version is %s, not in the project', h.state));
   end if;
+  -- A second press (or a double click) must not stack a second restored copy: if the current version already holds
+  -- exactly the content being returned to, there is nothing to restore.
+  if t.document_id <> v_head
+     and ((t.content_fingerprint is not null and t.content_fingerprint = h.content_fingerprint)
+          or (t.storage_path is not null and t.storage_path = h.storage_path)) then
+    return jsonb_build_object('ok', false, 'error', 'the current version already holds that content', 'current_id', v_head);
+  end if;
+  v_from := app.document_number(p_office, v_head, t.document_id);
+  -- ROLLBACK IS A NEW VERSION. t is not mutated, nothing is deleted, a waiting draft is left exactly as it is, and the
+  -- restored copy is APPROVED: it is a person's explicit act and the content is what was once approved.
   insert into public.documents
     (office_id, project_id, title, doc_type, content, content_fingerprint, content_chars, fetched_at,
      storage_path, mime_type, byte_size, duration_s, origin, connector, state, added_by, tags, pinned)
@@ -610,10 +700,22 @@ begin
           'yours', null, 'approved', app.office_actor(p_office), '{}', false)
   returning document_id into v_new;
   perform app.document_version_link(p_office, h.document_id, v_new, 'rolled_back', t.document_id,
-    coalesce(nullif(btrim(coalesce(p_note, '')), ''), 'Rolled back'), p_channel);
-  select l.version into v_ver from app.document_lineage(p_office, v_new) l where l.document_id = v_new;
+    coalesce(nullif(btrim(coalesce(p_note, '')), ''), format('Restored from v%s', v_from)), p_channel);
+  v_ver := app.document_number(p_office, v_new, v_new);
+  v_by := app.office_actor(p_office);
+  -- The ledger, so Activity says it: "<person> restored <title> v5 from v3" (category: documents).
+  perform app.append_event(
+    p_office, gen_random_uuid(), 'user', v_by, 'document.rollback', 'document.rolled_back', false, h.project_id,
+    jsonb_build_object('current_id', h.document_id, 'version', app.document_number(p_office, v_new, h.document_id)),
+    jsonb_build_object('current_id', v_new, 'version', v_ver, 'restored_from', t.document_id, 'restored_from_version', v_from,
+                       'draft_kept', v_pend),
+    format('%s restored from v%s as v%s (approved); nothing was deleted%s', h.title, v_from, v_ver,
+           case when v_pend is null then '' else '; the waiting draft is kept in history' end));
   return jsonb_build_object('ok', true, 'document_id', v_new, 'previous_id', h.document_id,
-                            'rolled_back_to', t.document_id, 'version', v_ver, 'current_id', v_new);
+                            'rolled_back_to', t.document_id, 'restored_from_version', v_from, 'version', v_ver,
+                            'current_id', v_new, 'state', 'approved', 'draft_kept_id', v_pend,
+                            'said', format('Restored v%s as v%s (approved).%s', v_from, v_ver,
+                                           case when v_pend is null then '' else ' The draft that was waiting is kept in the history.' end));
 end
 $f$;
 
@@ -950,7 +1052,8 @@ begin
              where c.office_id = p_office and c.imported_from_document_id = i.document_id limit 1) as copy_id,
            (select r.state from public.document_import_requests r
              where r.office_id = p_office and r.document_id = i.document_id) as req_state,
-           case when i.has_prev then (select count(*)::integer from app.document_lineage(p_office, i.document_id)) else 1 end as vcount,
+           case when i.has_prev then (select count(*)::integer from app.document_version_set(p_office, i.document_id)) else 1 end as vcount,
+           case when i.has_prev then app.document_number(p_office, i.document_id, i.document_id) else 1 end as vcur,
            (select jsonb_build_object('id', r.document_id, 'state', r.state, 'created_at', r.created_at,
                                       'produced_by', pd.produced_by)
               from app.document_pending_revisions(p_office, i.document_id) r
@@ -1007,10 +1110,10 @@ begin
            'connected', app.source_connected(s.origin, s.project_id, s.connector, s.external_parent_ref),
            'missing', s.missing_since is not null,
            'version_count', s.vcount,
-           'current_version', s.vcount,
+           'current_version', s.vcur,
            'current_state', s.state,
            'pending_version', case when s.pending is null then null
-                                   else s.pending || jsonb_build_object('version', s.vcount + 1) end,
+                                   else s.pending || jsonb_build_object('version', app.document_number(p_office, s.document_id, (s.pending ->> 'id')::uuid)) end,
            'also_in', (select coalesce(jsonb_agg(q.x order by q.o), '[]'::jsonb)
                          from (select u.x, min(u.o) as o
                                  from unnest(array[s.src] || coalesce(s.srcs, '{}'::text[])) with ordinality u(x, o)
@@ -1050,6 +1153,7 @@ comment on function app.hq_project_documents(uuid, text, boolean) is
 
 revoke all on function
   app.document_lineage(uuid, uuid), app.hq_document_versions(uuid, uuid),
+  app.document_version_set(uuid, uuid), app.document_number(uuid, uuid, uuid), app.document_next_number(uuid, uuid),
   app.document_carry(uuid, uuid, uuid), app.document_base(uuid, uuid), app.document_pending_revisions(uuid, uuid),
   app.document_pending_attach(uuid, uuid, uuid, text, text), app.draft_revision_approved(),
   app.document_version_link(uuid, uuid, uuid, text, uuid, text, text),

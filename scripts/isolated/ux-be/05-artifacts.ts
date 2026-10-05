@@ -433,7 +433,7 @@ try {
   const vers3 = await call(`app.hq_document_versions(${lit(OFFICE)}::uuid, ${lit(m2)}::uuid)`)
   check(
     'v3: a revision of an approved head is version 3 of the same logical document, saved as a DRAFT',
-    vers3?.version_count === 2 &&
+    vers3?.version_count === 3 &&
       vers3.versions.length === 3 &&
       vers3.versions[2]?.state === 'draft' &&
       vers3.versions[2]?.version === 3 &&
@@ -453,7 +453,8 @@ try {
     'v3: Documents still lists the logical document: v2 Approved is the item, v3 Draft is exposed beside it, v3 is not an item',
     item.length === 1 &&
       item[0]?.id === m2 &&
-      item[0]?.version_count === 2 &&
+      item[0]?.version_count === 3 &&
+      item[0]?.current_version === 2 &&
       item[0]?.current_state === 'approved' &&
       (item[0]?.pending_version as Row | null)?.id === m3 &&
       (item[0]?.pending_version as Row | null)?.state === 'draft' &&
@@ -471,7 +472,7 @@ try {
       vers4.current_id === m2 &&
       (await q(`select state from public.documents where document_id = ${lit(m3)}::uuid`))[0]
         ?.state === 'archived' &&
-      /version 3/.test(out4.body),
+      /version 4/.test(out4.body),
     JSON.stringify(vers4?.versions.map((v: Row) => [v.state, v.version])).slice(0, 200),
   )
   const m3b = String(vers4?.pending_id)
@@ -481,7 +482,7 @@ try {
     'v3c: a person approving the draft makes it the current version and archives v2 (listed as one item at version 3)',
     vers5?.current_id === m3b &&
       vers5.pending_id === null &&
-      vers5.version_count === 3 &&
+      vers5.version_count === 4 &&
       (
         (await call(`app.hq_project_documents(${lit(OFFICE)}::uuid, ${lit(SLUG)})`))
           .documents as Row[]
@@ -494,8 +495,8 @@ try {
     `app.hq_document_rollback(${lit(OFFICE)}::uuid, ${lit(m1)}::uuid, 'back', 'teamhq')`,
   )
   check(
-    'nothing was deleted: the first version can still be rolled back to (as a new version 4)',
-    rollback?.ok === true && rollback.version === 4,
+    'nothing was deleted: the first version can still be rolled back to (as a new version 5: every version keeps its number, a replaced draft included)',
+    rollback?.ok === true && rollback.version === 5,
     JSON.stringify(rollback).slice(0, 160),
   )
 

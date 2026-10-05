@@ -287,11 +287,15 @@ await p2.route('**/*', async (route) => {
       args: Record<string, unknown>
     }
     calls.push({ action: body.action, args: body.args })
+    const result =
+      body.action === 'document_rollback'
+        ? { ok: true, version: 5, restored_from_version: 3, state: 'approved', said: 'Restored v3 as v5 (approved). The draft that was waiting is kept in the history.' }
+        : { ok: true, state: 'pending', note: 'Requested.' }
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
       headers,
-      body: JSON.stringify({ result: { ok: true, state: 'pending', note: 'Requested.' } }),
+      body: JSON.stringify({ result }),
     })
   }
   const section = parsed.searchParams.get('section') ?? ''
@@ -327,7 +331,7 @@ await p2.route('**/*', async (route) => {
               state: 'archived',
               can_roll_back_to: true,
             },
-            { document_id: 'd1', version: 3, is_current: true, state: 'approved' },
+            { document_id: 'd1', version: 3, is_current: true, state: 'approved', can_roll_back_to: true },
             {
               document_id: 'd1b',
               version: 2,
@@ -338,10 +342,12 @@ await p2.route('**/*', async (route) => {
             { document_id: 'd1p', version: 4, is_current: false, is_pending: true, state: 'draft' },
             {
               document_id: 'd1e',
-              version: null,
+              version: 5,
               is_current: false,
-              is_earlier_draft: true,
               state: 'archived',
+              how: 'rolled_back',
+              restored_from_version: 3,
+              can_roll_back_to: true,
             },
           ],
         },
@@ -407,13 +413,13 @@ await p2.waitForSelector('.bcdocgrid')
 await p2.waitForTimeout(800)
 check(
   'a document with history lists its versions, newest first',
-  (await p2.locator('.bcversion .bcvn').allTextContents()).join(',') === 'v4,v3,v2,v1,·',
+  (await p2.locator('.bcversion .bcvn').allTextContents()).join(',') === 'v5,v4,v3,v2,v1',
   (await p2.locator('.bcversion .bcvn').allTextContents()).join(','),
 )
 check(
-  'each version says its own state: v3 Approved is current, v4 is a Draft, the replaced draft is "Earlier draft"',
+  'each version says its own state: v3 Approved is current, v4 is a Draft, the others Replaced',
   (await p2.locator('.bcversion .bcvstate').allTextContents()).join(',') ===
-    'Draft,Approved,Replaced,Replaced,Earlier draft' &&
+    'Replaced,Draft,Approved,Replaced,Replaced' &&
     (await p2.locator('.bcversion.is-current .bcvstate').textContent()) === 'Approved' &&
     (await p2.locator('.bcversion.is-pending').count()) === 1,
   (await p2.locator('.bcversion .bcvstate').allTextContents()).join(','),
@@ -450,6 +456,21 @@ check(
   rb !== undefined && typeof rb.args?.p_document_id === 'string',
   JSON.stringify(rb),
 )
+check(
+  'the CURRENT version offers the restore too when a draft waits beside it (v3 Approved, v4 Draft)',
+  (await p2.locator('.bcversion.is-current [data-bc-docrestore]').count()) === 1,
+)
+await p2.waitForSelector('[data-bc-rolledsay]')
+check(
+  'after a rollback the page says what happened: "Restored v3 as v5 (approved)" and that the waiting draft is kept',
+  /Restored v3 as v5 \(approved\)/.test((await p2.locator('[data-bc-rolledsay]').textContent()) ?? '') &&
+    /kept in the history/.test((await p2.locator('[data-bc-rolledsay]').textContent()) ?? ''),
+)
+check(
+  'a version that was made by returning says which one it was restored from',
+  (await p2.locator('.bcversion', { hasText: 'v5' }).first().textContent())?.includes('restored from v3') === true,
+)
+await p2.screenshot({ path: '.out/ux-docs-rollback.png' })
 /* a requested import whose fetch failed says why and offers the press again */
 await p2.goBack()
 await p2.waitForSelector('.bcdocs--wall [data-bc-doc]')

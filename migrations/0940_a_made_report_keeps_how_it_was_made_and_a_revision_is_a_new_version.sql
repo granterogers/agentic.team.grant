@@ -136,10 +136,9 @@ begin
   v_base := app.document_base(p_office, d.document_id);
   if v_base <> d.document_id then
     -- a pending draft revision: it is the version after the approved head it was written against
-    select count(*)::integer into v_ver from app.document_lineage(p_office, v_base);
-    v_ver := coalesce(v_ver, 1) + 1;
+    v_ver := app.document_next_number(p_office, v_base);
   else
-    select l.version into v_ver from app.document_lineage(p_office, d.document_id) l where l.document_id = d.document_id;
+    v_ver := app.document_number(p_office, d.document_id, d.document_id);
   end if;
   return jsonb_build_object('document_id', d.document_id, 'title', d.title, 'state', d.state,
                             'version', coalesce(v_ver, 1), 'produced_by_job', d.produced_by_job, 'base_id', v_base);
@@ -178,7 +177,7 @@ begin
   v_base := app.document_base(p_office, p_head);
   select * into b from public.documents where document_id = v_base and office_id = p_office for update;
   if b.superseded_by = y.document_id then
-    select l.version into v_ver from app.document_lineage(p_office, y.document_id) l where l.document_id = y.document_id;
+    v_ver := app.document_number(p_office, y.document_id, y.document_id);
     return jsonb_build_object('ok', true, 'already', true, 'document_id', y.document_id, 'current_id', y.document_id, 'version', v_ver);
   end if;
   if b.superseded_by is not null then
@@ -189,14 +188,14 @@ begin
     return jsonb_build_object('ok', false, 'error', 'that document already has version history of its own');
   end if;
   if exists (select 1 from public.document_version_notes z where z.document_id = y.document_id and z.office_id = p_office) then
-    select count(*)::integer + 1 into v_ver from app.document_lineage(p_office, b.document_id);
+    v_ver := coalesce(app.document_number(p_office, b.document_id, y.document_id), app.document_next_number(p_office, b.document_id));
     return jsonb_build_object('ok', true, 'already', true, 'document_id', y.document_id, 'previous_id', b.document_id,
                               'pending_id', y.document_id, 'current_id', b.document_id, 'version', v_ver, 'state', y.state);
   end if;
 
   if b.state = 'approved' then
     -- v4 from approved v3 is a DRAFT beside v3. The office never approves; v3 stays current and listed.
-    select count(*)::integer + 1 into v_ver from app.document_lineage(p_office, b.document_id);
+    v_ver := app.document_next_number(p_office, b.document_id);
     perform app.document_pending_attach(p_office, b.document_id, y.document_id, p_note, 'job');
     return jsonb_build_object('ok', true, 'document_id', y.document_id, 'previous_id', b.document_id, 'version', v_ver,
                               'pending_id', y.document_id, 'current_id', b.document_id, 'state', y.state);
@@ -205,7 +204,7 @@ begin
     return jsonb_build_object('ok', false, 'error', format('a %s document is not revised; it is not the current one', b.state));
   end if;
   perform app.document_version_link(p_office, b.document_id, y.document_id, 'adopted', null, p_note, 'job');
-  select l.version into v_ver from app.document_lineage(p_office, y.document_id) l where l.document_id = y.document_id;
+  v_ver := app.document_number(p_office, y.document_id, y.document_id);
   return jsonb_build_object('ok', true, 'document_id', y.document_id, 'previous_id', b.document_id, 'version', v_ver, 'current_id', y.document_id);
 end
 $f$;
