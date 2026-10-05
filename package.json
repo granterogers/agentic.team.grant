@@ -417,6 +417,7 @@
     "forensics:idle-pass": "tsx scripts/forensics/idle-pass-cost.ts",
     "forensics:job-cost": "tsx scripts/forensics/job-lifecycle-cost.ts",
     "forensics:probe": "tsx scripts/forensics/resource-probe.ts",
+    "forensics:budget": "tsx scripts/forensics/resource-probe.ts post --budget=scripts/forensics/resource-budget.json",
     "check:answerable": "tsx scripts/check-answerable.ts",
     "check:voice-sessions": "tsx scripts/check-voice-sessions.ts",
     "check:door-origins": "tsx scripts/check-door-origins.ts",

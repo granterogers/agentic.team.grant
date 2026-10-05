@@ -1,0 +1,27 @@
+{
+  "_about": "Structural ceilings for npm run forensics:probe -- post --budget=scripts/forensics/resource-budget.json, set 5 to 6 October 2026 from the replica seeded to production's 5 Oct shape (scripts/isolated/seed-production-scale.sql). Counts, never timings. Each number is the measured value after migrations 1023-1028 with roughly 1.5x headroom; seq-scan ceilings are exact. Raising one is a decision to be argued, not a convenience. Known accepted: model.model_order is O(usage history) (one jobs seq scan, 65k hits), team_hq.studio is dominated by per-output harness checks inside studio_activity (see docs/performance/efficiency-run-2026-10-06.md).",
+  "probes": {
+    "team_hq.pulse": { "jobs_seq_scans": 2, "hit": 20000, "statements": 20 },
+    "team_hq.thinking": { "jobs_seq_scans": 0, "hit": 150, "statements": 12 },
+    "team_hq.health_whole": { "jobs_seq_scans": 0, "hit": 125000, "statements": 1600 },
+    "team_hq.studio": { "jobs_seq_scans": 0, "hit": 1200000, "statements": 28000 },
+    "team_hq.lately": { "jobs_seq_scans": 0, "hit": 35000, "statements": 900 },
+    "team_hq.unseen": { "jobs_seq_scans": 0, "hit": 110000, "statements": 200000 },
+    "team_hq.team_work": { "jobs_seq_scans": 0, "hit": 195000, "statements": 5400 },
+    "team_hq.portfolio_tasks": { "jobs_seq_scans": 0, "hit": 200, "statements": 15 },
+    "worker.requeue_retrying": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
+    "worker.settle_exhausted": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
+    "worker.resume_paused": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
+    "worker.resumable_now": { "jobs_seq_scans": 0, "hit": 150, "statements": 10 },
+    "worker.recover_stalled": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
+    "worker.claim_pending": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
+    "worker.defer_over_budget": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
+    "worker.enqueue_orphans": { "jobs_seq_scans": 0, "hit": 300, "statements": 10 },
+    "worker.dispatch_due": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
+    "worker.provision_channels": { "jobs_seq_scans": 0, "hit": 250, "statements": 18 },
+    "worker.self_improvement_budget": { "jobs_seq_scans": 0, "hit": 3700, "statements": 12 },
+    "worker.fire_pending_signals": { "jobs_seq_scans": 0, "hit": 150, "statements": 12 },
+    "model.model_order": { "jobs_seq_scans": 1, "hit": 100000, "statements": 3200 },
+    "worker.idle_pass": { "jobs_seq_scans": 0, "hit": 4000, "statements": 90 }
+  }
+}
