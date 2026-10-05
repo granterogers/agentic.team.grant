@@ -34,8 +34,11 @@ const text = (b: Uint8Array): string => Buffer.from(b).toString('latin1')
   retired deliberately, not by accident: the byte-for-byte guarantee below is "no profile gives the default look, and a
   profile never leaks into the next render", which is unchanged. Pages 2 onward are unchanged by the redesign (the
   body-pages test in cover.test.ts pins that against the old layout rules).
+
+  Changed again on purpose by HQ-PDF-015: a thin cover now grows its colour field and carries a colophon, and the title
+  steps its size down instead of being cut. Previous pin 83b55b49480d9798...; the guarantees under it are unchanged.
 */
-const BASELINE_SHA = '83b55b49480d97981cbea7f10b77936f746af7ad73504c3df3c097f827c4a7b7'
+const BASELINE_SHA = '4154fea2d242141af8080f1d3b239a0eeb930e37c5194ba7042d357d659d2d97'
 
 describe('(a) no profile: the default look, byte for byte', () => {
   it('is unchanged when no profile is passed, or a null, or an empty one', () => {

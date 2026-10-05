@@ -34,11 +34,12 @@
  * measure, and the headings step by roughly 1.3.
  */
 
-import { fit, type PdfImage } from './image.ts'
+import { logoBox, logoPlate, TITLE_STEPS } from './cover-plan.ts'
+import type { PdfImage } from './image.ts'
 import type { Face } from './metrics.ts'
 import { A4, assemble, type DocumentInfo, Page, type Rgb, rgb, widthOf } from './pdf.ts'
 import { layoutCollisions } from './qa.ts'
-import { DEFAULT_THEME, resolveTheme, type StyleProfile, type Theme } from './style.ts'
+import { contrast, DEFAULT_THEME, resolveTheme, type StyleProfile, type Theme } from './style.ts'
 
 // --- the design system, such as it is ---------------------------------------
 
@@ -405,6 +406,22 @@ export interface ReportAssets {
   readonly logoProblem?: string
 }
 
+/** An honest reading time from the words the report holds, at 200 words a minute. */
+export function readingTime(blocks: readonly Block[]): string {
+  let words = 0
+  for (const b of blocks) {
+    const text =
+      b.kind === 'paragraph' || b.kind === 'quote'
+        ? b.text
+        : b.kind === 'bullets' || b.kind === 'numbers'
+          ? b.items.join(' ')
+          : ''
+    words += text.split(/\s+/).filter((w) => w !== '').length
+  }
+  const min = Math.max(1, Math.round(words / 200))
+  return `About ${String(min)} minute${min === 1 ? '' : 's'}`
+}
+
 const mixRgb = (a: Rgb, b: Rgb, t: number): Rgb =>
   rgb(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t)
 
@@ -417,6 +434,34 @@ function clip(text: string, face: Face, size: number, width: number): string {
     out = cut === '' ? out.slice(0, -1) : cut
   }
   return `${out.trimEnd()}…`
+}
+
+/**
+ * The cover title, as large as it can be and no more lines than it must have.
+ *
+ * It steps down through `TITLE_STEPS` (30, 25, 22, 20 pt) until the wrapped title fits the number of lines that size
+ * allows, and is cut only past the smallest step, at a word, with an ellipsis. The full title is always in the file's
+ * metadata and the page foot, so a cut here loses nothing.
+ */
+export function fitCoverTitle(title: string): {
+  readonly lines: readonly string[]
+  readonly size: number
+  readonly lead: number
+  readonly clipped: boolean
+} {
+  const face = T.type.h1.face
+  for (const [size, lead, most] of TITLE_STEPS) {
+    const lines = wrap(title, face, size, COLUMN).lines
+    if (lines.length <= most) return { clipped: false, lead, lines, size }
+  }
+  const [size, lead, most] = TITLE_STEPS[TITLE_STEPS.length - 1] ?? [20, 24, 5]
+  const lines = wrap(title, face, size, COLUMN).lines
+  return {
+    clipped: true,
+    lead,
+    lines: [...lines.slice(0, most - 1), clip(lines.slice(most - 1).join(' '), face, size, COLUMN)],
+    size,
+  }
 }
 
 /** The cover's fixed geometry, in points. The field's height is not fixed: it follows the masthead and the title. */
@@ -444,7 +489,11 @@ function cover(
   flow: Flow,
   report: Report,
   assets: ReportAssets | undefined,
-): { readonly factsY: number; readonly nextY: number } {
+): {
+  readonly factsY: number
+  readonly nextY: number
+  readonly note?: string
+} {
   const page = flow.current()
   const band = T.titlePage === 'band'
   const onField = band ? T.paper : null
@@ -452,44 +501,76 @@ function cover(
   const quiet = onField === null ? T.rule : mixRgb(T.primary, T.paper, 0.35)
 
   // --- the title's shape first, because it decides how tall the field is
-  let titleSize = 30
-  let titleLead = 36
-  let lines = wrap(report.title, T.type.h1.face, titleSize, COLUMN).lines
-  if (lines.length > 2) {
-    titleSize = 25
-    titleLead = 30
-    lines = wrap(report.title, T.type.h1.face, titleSize, COLUMN).lines
-  }
-  if (lines.length > 3) {
-    lines = [
-      ...lines.slice(0, 2),
-      clip(lines.slice(2).join(' '), T.type.h1.face, titleSize, COLUMN),
-    ]
-  }
+  const title = fitCoverTitle(report.title)
+  const { lines, size: titleSize, lead: titleLead } = title
 
-  // --- the masthead: the logo (on a paper plate where the field is dark) and the kicker, over a hairline
+  // --- the masthead: the logo (on a plate where it would otherwise be lost) and the kicker, over a hairline
   const topEdge = A4.height - 46
-  const logo = assets?.logo ?? null
+  const fieldColour = band ? T.primary : T.wash
+  const logoIn = assets?.logo ?? null
   const kicker = report.author.toUpperCase()
+  let note: string | undefined
+  let logo = logoIn
+  let box = logo === null ? null : logoBox(logo)
+  if (logo !== null && box !== null && box.tooThin) {
+    note = 'The logo is too thin to read at cover size, so it was left off.'
+    logo = null
+    box = null
+  }
+  const plateColour =
+    logo === null
+      ? null
+      : logoPlate(
+          logo,
+          band,
+          fieldColour,
+          T.paper,
+          band || contrast(T.primary, T.paper) < 4.5 ? T.ink : T.primary,
+        ).plate
   let mastBottom = topEdge - 28
-  const place: { logo?: { x: number; y: number; w: number; h: number; plate: boolean } } = {}
-  if (logo !== null) {
-    const box = fit(logo, 150, 52)
-    const pad = band ? 9 : 0
-    place.logo = { h: box.h, plate: band, w: box.w, x: MARGIN.left + pad, y: topEdge - box.h - pad }
+  const place: { logo?: { x: number; y: number; w: number; h: number; plate: Rgb | null } } = {}
+  if (logo !== null && box !== null) {
+    const pad = plateColour !== null ? 9 : 0
+    place.logo = {
+      h: box.h,
+      plate: plateColour,
+      w: box.w,
+      x: MARGIN.left + pad,
+      y: topEdge - box.h - pad,
+    }
     mastBottom = topEdge - box.h - pad * 2
   }
   const ruleY = mastBottom - 16
-  const fieldH = A4.height - ruleY + 40 + (lines.length - 1) * titleLead + titleSize + 15 + 48
+  const baseFieldH = A4.height - ruleY + 40 + (lines.length - 1) * titleLead + titleSize + 15 + 48
+
+  /*
+    A thin cover is composed, not left to trail off. What the cover will carry is known before it is drawn (the
+    headings and the summary are in the report), so the room that would be left empty is estimated here and shared out:
+    part of it goes to a taller colour field, which seats the title lower and gives the page a confident top, and what
+    is still spare at the foot is filled by a colophon in `coverFinish`. A rich cover has no spare room and is
+    untouched.
+  */
+  const sub = wrap(report.subtitle, T.type.lead.face, T.type.lead.size, COLUMN)
+  const hasSummary = sub.lines.length > 0 && report.subtitle.trim() !== ''
+  const shownLines = Math.min(sub.lines.length, COVER_LINES + 2)
+  const headings = report.blocks.filter((b) => b.kind === 'heading')
+  const h1n = headings.filter((b) => b.kind === 'heading' && b.level === 1).length
+  const rowsN = (h1n > 0 ? h1n : headings.length) + 1
+  const summaryH = hasSummary ? 10 + shownLines * (T.type.lead.lead + 1) : 0
+  const contentsH = 34 + 8 + Math.min(rowsN, 9) * 23
+  const natural = baseFieldH + 4 + COVER.factsHeight + 38 + summaryH + contentsH
+  const spare = A4.height - natural - COVER.contentsFloor
+  const grow = spare > 60 ? Math.min(Math.round(spare * 0.55), 170) : 0
+  const fieldH = baseFieldH + grow
   const fieldBottom = A4.height - fieldH
-  page.rect(0, fieldBottom, A4.width, fieldH, band ? T.primary : T.wash)
+  page.rect(0, fieldBottom, A4.width, fieldH, fieldColour)
   page.rect(0, fieldBottom - 4, A4.width, 4, T.accent)
 
   if (place.logo !== undefined && logo !== null) {
     const l = place.logo
-    const padPlate = l.plate ? 9 : 0
-    if (l.plate)
-      page.rect(MARGIN.left, l.y - padPlate, l.w + padPlate * 2, l.h + padPlate * 2, T.paper)
+    const padPlate = l.plate !== null ? 9 : 0
+    if (l.plate !== null)
+      page.rect(MARGIN.left, l.y - padPlate, l.w + padPlate * 2, l.h + padPlate * 2, l.plate)
     page.image(logo, l.x, l.y, l.w, l.h)
     const room = COLUMN - (l.w + padPlate * 2) - 28
     const text = clip(kicker, T.type.h1.face, 9, room)
@@ -524,8 +605,7 @@ function cover(
   // --- the summary: the document's own opening, below the facts where there is room to read it
   const factsY = fieldBottom - 4
   let y = factsY - COVER.factsHeight - 38
-  const sub = wrap(report.subtitle, T.type.lead.face, T.type.lead.size, COLUMN)
-  if (sub.lines.length > 0 && report.subtitle.trim() !== '') {
+  if (hasSummary) {
     page.text('SUMMARY', MARGIN.left, y, T.type.h1.face, 8, T.primary)
     y -= 10
     /*
@@ -551,7 +631,7 @@ function cover(
     }
   }
   flow.forceBreak()
-  return { factsY, nextY: y }
+  return { factsY, nextY: y, ...(note === undefined ? {} : { note }) }
 }
 
 /** The second pass: the facts strip and the contents, drawn on the cover once the page numbers exist. */
@@ -654,6 +734,40 @@ function coverFinish(
       )
       page.text(label, A4.width - MARGIN.right - w, y + 7, T.type.h1.face, 10, T.primary)
       page.line(MARGIN.left, y, A4.width - MARGIN.right, y, 0.4, T.rule)
+    }
+  }
+
+  /*
+    --- the colophon: when the cover is thin the foot would otherwise sit under a stretch of bare paper. A quiet block
+    of two facts that are true of every report (who prepared it, and what it rests on) is drawn above the foot's rule
+    only where the contents ended well clear of it, so a full cover never gets one and nothing is ever drawn over text.
+  */
+  const colophonTop = 214
+  if (y - 24 > colophonTop + 16) {
+    page.rect(MARGIN.left, colophonTop, 54, 3, T.primary)
+    const sourcesPage = sourcesAt?.page
+    const rest = [
+      ['READING TIME', readingTime(report.blocks)],
+      [
+        'BASED ON',
+        report.sources.length === 0
+          ? 'No sources cited'
+          : `${String(report.sources.length)} source${report.sources.length === 1 ? '' : 's'}, listed on page ${String(sourcesPage ?? pageCount)}`,
+      ],
+    ] as const
+    let cx = MARGIN.left
+    for (const [i, [label, value]] of rest.entries()) {
+      const w = COLUMN * (i === 0 ? 0.38 : 0.62)
+      page.text(label, cx, colophonTop - 20, T.type.h1.face, 7.5, T.ink3)
+      page.text(
+        clip(value, 'Helvetica', 10.5, w - 10),
+        cx,
+        colophonTop - 38,
+        'Helvetica',
+        10.5,
+        T.ink,
+      )
+      cx += w
     }
   }
 
@@ -1018,7 +1132,11 @@ function layoutWith(
 
   flow.finish()
   coverFinish(flow, report, covered, flow.pages.length)
-  return { notes, pages: flow.pages, problems: [...flow.problems, ...layoutCollisions(flow.pages)] }
+  return {
+    notes: covered.note === undefined ? notes : [...notes, covered.note],
+    pages: flow.pages,
+    problems: [...flow.problems, ...layoutCollisions(flow.pages)],
+  }
 }
 
 /** Lay the report out and write the file. Throws nothing; problems are returned. */
