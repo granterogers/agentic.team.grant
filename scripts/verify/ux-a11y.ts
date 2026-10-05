@@ -195,20 +195,44 @@ check(
     await page.waitForTimeout(250)
   }
   const rounds: [string, string][][] = [
-    [['tasks', 'blue'], ['card table', 'teal'], ['documents', 'green'], ['calendar', 'olive'], ['contacts', 'yellow'], ['activity', 'orange']],
-    [['tasks', 'red'], ['card table', 'pink'], ['documents', 'purple'], ['calendar', 'navy'], ['contacts', 'grey'], ['activity', 'sky']],
+    [
+      ['tasks', 'blue'],
+      ['card table', 'teal'],
+      ['documents', 'green'],
+      ['calendar', 'olive'],
+      ['contacts', 'yellow'],
+      ['activity', 'orange'],
+    ],
+    [
+      ['tasks', 'red'],
+      ['card table', 'pink'],
+      ['documents', 'purple'],
+      ['calendar', 'navy'],
+      ['contacts', 'grey'],
+      ['activity', 'sky'],
+    ],
   ]
   const before = found.size
   let r = 0
   for (const round of rounds) {
     r += 1
     for (const [who, colour] of round) await say(`make ${who} ${colour}`)
-    const tinted = (await page.evaluate(inPage(`return document.querySelectorAll('.bcstage .bcmod--tinted').length`))) as number
-    check(`tint round ${String(r)}: all six modules are tinted before auditing`, tinted === 6, String(tinted))
+    const tinted = (await page.evaluate(
+      inPage(`return document.querySelectorAll('.bcstage .bcmod--tinted').length`),
+    )) as number
+    check(
+      `tint round ${String(r)}: all six modules are tinted before auditing`,
+      tinted === 6,
+      String(tinted),
+    )
     await audit(page, `tinted modules, round ${String(r)}`)
     await page.screenshot({ path: `.out/ux-a11y-tints-${String(r)}.png` })
   }
-  check('every curated tint keeps text contrast and ARIA clean (no new axe finding with tints applied)', found.size === before, `${String(found.size - before)} new node(s)`)
+  check(
+    'every curated tint keeps text contrast and ARIA clean (no new axe finding with tints applied)',
+    found.size === before,
+    `${String(found.size - before)} new node(s)`,
+  )
   await close()
 }
 
