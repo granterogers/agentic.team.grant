@@ -55,6 +55,7 @@ const result = await runMigrations(
       }
       const r = await applyFresh(file, executor, strict)
       tolerated += r.tolerated.length
+      for (const head of r.skipped) console.log(`  SKIPPED in ${file.name}: ${head}`)
     },
   },
 ).catch((e) => {

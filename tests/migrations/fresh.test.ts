@@ -14,7 +14,7 @@ const fake = (): { ran: string[]; ex: SqlExecutor } => {
   } as unknown as SqlExecutor
   return { ran, ex }
 }
-const sql = 'create table a(x int); select boom; create table b(x int);'
+const sql = 'create table a(x int); do $$ begin perform boom; end $$; create table b(x int);'
 
 describe('applyFresh', () => {
   it('applies a clean file whole, in one request', async () => {
@@ -37,6 +37,26 @@ describe('applyFresh', () => {
     await expect(
       applyFresh({ name: '0100_x.sql', sql }, other.ex, { '0100_x.sql': ['something else'] }),
     ).rejects.toThrow('not on the tolerance list')
+  })
+  it('never tolerates a failing schema statement, even with its message listed', async () => {
+    const { ex } = fake()
+    const ddl =
+      'create table a(x int); create function boom() returns int as $$ select 1 $$ language sql;'
+    await expect(
+      applyFresh({ name: '0100_x.sql', sql: ddl }, ex, { '0100_x.sql': ['boom happened'] }),
+    ).rejects.toThrow('not a self-check')
+  })
+  it('may skip a failing do block or seed insert when listed', async () => {
+    const { ex } = fake()
+    const r = await applyFresh(
+      {
+        name: '0100_x.sql',
+        sql: "-- check\ndo $$ begin perform boom; end $$; insert into t values ('boom');",
+      },
+      ex,
+      { '0100_x.sql': ['boom happened'] },
+    )
+    expect(r.skipped).toHaveLength(2)
   })
   it('is atomic from 0592 on even when listed', async () => {
     const { ran, ex } = fake()

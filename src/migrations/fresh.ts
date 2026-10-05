@@ -14,16 +14,26 @@
  */
 import type { SqlExecutor } from '../db/executor.ts'
 import type { MigrationFile } from './check.ts'
-import { isTransactionControl, splitExecutable } from './split.ts'
+import { isTransactionControl, splitExecutable, withoutLeadingComments } from './split.ts'
 
 /** file name -> message prefixes that may be tolerated in that file. */
 export type Tolerances = Readonly<Record<string, readonly string[]>>
+
+/**
+ * What a tolerated error may cost. The 33 errors tolerated today are all in self-check `do` blocks (assertions that need
+ * production rows) or in seed `insert`s that name production's vault and delivery ids. SCHEMA is never skippable: a
+ * `create`, `alter`, `drop` or `grant` that fails is a divergence from the canonical schema, tolerated message or not.
+ */
+export const skippable = (statement: string): boolean =>
+  /^(do\b|insert\s+into\b)/i.test(withoutLeadingComments(statement).trimStart())
 
 /** The history before this is replayed tolerantly where listed; from here on every file is atomic. */
 export const ATOMIC_FROM = '0592'
 
 export interface FreshResult {
   readonly tolerated: readonly string[]
+  /** The head of each statement that was skipped, so a person can see WHAT a tolerated error cost (never only the message). */
+  readonly skipped: readonly string[]
 }
 
 export async function applyFresh(
@@ -33,7 +43,7 @@ export async function applyFresh(
 ): Promise<FreshResult> {
   try {
     await executor.execute(file.sql)
-    return { tolerated: [] }
+    return { tolerated: [], skipped: [] }
   } catch (whole) {
     const allowed = tolerances[file.name]
     if (allowed === undefined || file.name.slice(0, 4) >= ATOMIC_FROM) throw whole
@@ -41,19 +51,23 @@ export async function applyFresh(
     // Management API each request is its own session and this is a no-op warning.
     await executor.execute('rollback').catch(() => undefined)
     const tolerated: string[] = []
+    const skipped: string[] = []
     for (const statement of splitExecutable(file.sql)) {
       if (isTransactionControl(statement)) continue
       try {
         await executor.execute(statement)
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e)
-        if (allowed.some((prefix) => message.includes(prefix))) {
+        if (allowed.some((prefix) => message.includes(prefix)) && skippable(statement)) {
           tolerated.push(message.slice(0, 160))
+          skipped.push(statement.replace(/\s+/g, ' ').trim().slice(0, 140))
           continue
         }
-        throw new Error(`${file.name}: ${message} (not on the tolerance list for this file)`)
+        throw new Error(
+          `${file.name}: ${message} (not on the tolerance list for this file, or not a self-check/seed statement)`,
+        )
       }
     }
-    return { tolerated }
+    return { tolerated, skipped }
   }
 }
