@@ -909,11 +909,13 @@ $grants$;
 -- Marcus, for the reason he owns calendar-refresh and calendar-task-sync (0109, 0242). Fifteen minutes because a person
 -- who adds an event in Team HQ expects Google to have it quickly; the pass costs nothing when nothing is pending (one
 -- token exchange and one cached read), and it announces nothing unless something failed or came from Google.
-insert into public.responsibilities (slug, staff_id, description, job_kind, period_minutes, office_id)
+-- Switched OFF from birth (like drive-index): a database migrated before its worker would fire handler-less jobs, and
+-- migrations run one after another, so "on until 1021 turns it off" left a window. Enable it once the worker is deployed.
+insert into public.responsibilities (slug, staff_id, description, job_kind, period_minutes, office_id, enabled)
 select 'calendar-event-sync', s.staff_id,
        'Keep project calendars and Google Calendar in step: events made in a project go to Google, and what changes '
        'in Google comes back. Later change wins, and an override is recorded.',
-       'calendar.sync_events', 15, r.office_id
+       'calendar.sync_events', 15, r.office_id, false
   from public.responsibilities r
   join public.staff s on s.slug = 'operations-director'
  where r.slug = 'calendar-refresh'
