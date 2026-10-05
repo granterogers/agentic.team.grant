@@ -35,47 +35,24 @@
 import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
-export type FnReach = {
-  readonly name: string
-  readonly anon: boolean
-  readonly authenticated: boolean
-  readonly public: boolean
-  readonly service: boolean
+import {
+  EXPOSURE_SQL,
+  type FnReach,
+  reachableByAPublicKey,
+  readReach,
+  type TableReach,
+  tableReachableByAPublicKey,
+} from '../src/safety/anon-exposure.ts'
+
+// The command re-exports the helpers so existing importers keep working; new ones import src/safety/anon-exposure.ts.
+export {
+  EXPOSURE_SQL,
+  type FnReach,
+  reachableByAPublicKey,
+  readReach,
+  type TableReach,
+  tableReachableByAPublicKey,
 }
-
-/** THE PREDICATE, named so a control can run an injected row through the same code. */
-export const reachableByAPublicKey = (f: FnReach): boolean => f.anon || f.authenticated || f.public
-
-export const EXPOSURE_SQL = `
-  select p.oid::regprocedure::text as name,
-         has_function_privilege('anon', p.oid, 'execute') as anon,
-         has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
-         exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-                  where a.grantee = 0 and a.privilege_type = 'EXECUTE') as "public",
-         has_function_privilege('service_role', p.oid, 'execute') as service
-    from pg_proc p
-   where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
-   order by 1`
-
-export type TableReach = {
-  readonly name: string
-  readonly rls: boolean
-  readonly anon: boolean
-  readonly authenticated: boolean
-}
-
-/** A table with no row policy that a public key can read or write (0642). */
-export const tableReachableByAPublicKey = (t: TableReach): boolean =>
-  !t.rls && (t.anon || t.authenticated)
-
-export const readReach = (rows: readonly unknown[]): FnReach[] =>
-  (rows as Record<string, unknown>[]).map((r) => ({
-    name: String(r.name),
-    anon: r.anon === true,
-    authenticated: r.authenticated === true,
-    public: r.public === true,
-    service: r.service === true,
-  }))
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const token = process.env.SUPABASE_ACCESS_TOKEN ?? ''
