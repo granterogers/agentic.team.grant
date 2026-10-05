@@ -22,6 +22,7 @@ import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium, type Page } from 'playwright'
+import { accountPage } from '../../src/safety/page-accounting.ts'
 import { check, db, REF, results, SECOND_OFFICE } from '../p4/lib.ts'
 import { apiKeys } from '../p4/provision-second-person.ts'
 
@@ -192,6 +193,7 @@ await context.route(/\/functions\/v1\/signin/, async (route) => {
   })
 })
 const page = await context.newPage()
+accountPage(page) // counts the page's production requests and loads against the run's budget
 page.on('pageerror', (e) => errors.push(e.message))
 
 const text = async (p: Page): Promise<string> =>

@@ -7,8 +7,8 @@
  * production intent stated? It is stated by `--production` through `scripts/suite.ts`, or by `npm run gate` /
  * `npm run e2e`, which set HQ_PRODUCTION_INTENT for the suites they spawn.
  *
- * Nothing here runs inside the worker or an edge function: it acts only when the entry script is under `scripts/verify/`
- * or `scripts/poc/` of a Node process, and it reaches `node:fs` through `process.getBuiltinModule` so the Deno bundle has
+ * Nothing here runs inside the worker or an edge function: it acts only when the entry script is under `scripts/verify/`,
+ * `scripts/poc/` or the multi-user streams `scripts/p4/`, `p5/`, `p6/` of a Node process, and it reaches `node:fs` through `process.getBuiltinModule` so the Deno bundle has
  * no import to resolve.
  */
 
@@ -21,8 +21,14 @@ type Manifest = {
   scripts: Record<string, string>
 }
 
-/** Where a suite lives. Anything else (operator commands, deploys, the worker) is not a suite and is never refused here. */
-const SUITE_DIR = /(?:^|\/)scripts\/(verify|poc)\/[^/]+\.ts$/
+/**
+ * Where a suite lives. Anything else (operator commands, deploys, the worker) is not a suite and is never refused here.
+ * `p4`, `p5` and `p6` are the multi-user acceptance streams: they drive the real office through the real gateway, create
+ * disposable people and press on the host, and until 5 October 2026 they sat outside this guard and so outside its intent
+ * flag (docs/ops/supabase-forensics-2026-10-05.md section 12.3). An unclassified one is production-heavy; one the manifest
+ * names (sample, smoke, local) is let through exactly as a verify suite is.
+ */
+const SUITE_DIR = /(?:^|\/)scripts\/(verify|poc|p4|p5|p6)\/[^/]+\.ts$/
 
 let decided: string | null | undefined
 
@@ -32,7 +38,7 @@ export const isProductionHeavy = (
   npmScripts: Record<string, string>,
   manifest: Manifest,
 ): boolean => {
-  const rel = entry.replace(/^.*?(scripts\/(?:verify|poc)\/[^/]+\.ts)$/, '$1')
+  const rel = entry.replace(/^.*?(scripts\/(?:verify|poc|p4|p5|p6)\/[^/]+\.ts)$/, '$1')
   if (!SUITE_DIR.test(rel)) return false
   const named = new Set([...manifest.sample, ...manifest.smoke, ...manifest.local])
   for (const [name, command] of Object.entries(npmScripts))
@@ -56,7 +62,7 @@ export const assertMayTouchProduction = (): void => {
   if (fs === undefined) return
   let heavy = true
   try {
-    const root = entry.replace(/\/scripts\/(?:verify|poc)\/[^/]+\.ts$/, '')
+    const root = entry.replace(/\/scripts\/(?:verify|poc|p4|p5|p6)\/[^/]+\.ts$/, '')
     const read = (p: string): unknown => JSON.parse(fs.readFileSync(`${root}/${p}`, 'utf8'))
     heavy = isProductionHeavy(
       entry,

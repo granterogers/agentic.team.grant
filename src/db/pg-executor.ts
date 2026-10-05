@@ -8,12 +8,14 @@
  */
 import pg from 'pg'
 import { assertProductionChecksAllowed, isRemotePgTarget } from '../safety/production-gate.ts'
+import { admitProductionRequest } from '../safety/request-budget.ts'
 import type { SqlExecutor, SqlResult } from './executor.ts'
 import { SqlExecutionError } from './executor.ts'
 
 export class PgExecutor implements SqlExecutor {
   readonly kind = 'postgres-wire'
   private readonly client: pg.Client
+  private readonly remote: boolean
 
   /**
    * @param connectionString Omit to use the standard PG* environment variables
@@ -23,7 +25,8 @@ export class PgExecutor implements SqlExecutor {
    */
   constructor(connectionString?: string) {
     // A Unix socket or localhost is never production; any other Postgres host is, and needs the flag (docs/production-access-guard.md).
-    if (isRemotePgTarget(connectionString))
+    this.remote = isRemotePgTarget(connectionString)
+    if (this.remote)
       assertProductionChecksAllowed('a remote Postgres connection', undefined, connectionString)
     this.client =
       connectionString === undefined ? new pg.Client() : new pg.Client({ connectionString })
@@ -38,6 +41,8 @@ export class PgExecutor implements SqlExecutor {
   }
 
   async execute(sql: string): Promise<SqlResult> {
+    // A statement to a remote Postgres is production load like any request (docs/testing/production-test-budgets.md).
+    if (this.remote) await admitProductionRequest('a statement over the remote Postgres connection')
     try {
       // `query` with a multi-statement string uses the simple query protocol,
       // which Postgres wraps in an implicit transaction — matching the

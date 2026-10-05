@@ -15,13 +15,18 @@
 import '../src/safety/arm.ts'
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { fetchProviderHealth } from '../src/safety/canary.ts'
+import { budgetClassFor, preflightSuite, type SuiteClass } from '../src/safety/suite-preflight.ts'
 
-export type SuiteClass = 'local' | 'sample' | 'smoke' | 'production-heavy'
+export type { SuiteClass }
 
 type Manifest = {
   sample: string[]
   smoke: string[]
   local: string[]
+  /** Sample-class suites that create disposable people and offices: they run under the disposable-multi-user budget. */
+  disposable?: string[]
   scripts: Record<string, SuiteClass>
 }
 const manifest = JSON.parse(readFileSync('docs/testing/suite-classes.json', 'utf8')) as Manifest
@@ -61,25 +66,6 @@ export const suites = (): { name: string; command: string; cls: SuiteClass }[] =
     .map(([name, command]) => ({ name, command, cls: classify(name, command) }))
 }
 
-const healthy = async (): Promise<boolean | null> => {
-  const token = process.env.SUPABASE_ACCESS_TOKEN
-  if (token === undefined || token === '') return null
-  const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
-  try {
-    const r = await fetch(
-      `https://api.supabase.com/v1/projects/${ref}/health?services=db,auth,rest`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(15000),
-      },
-    )
-    const b = (await r.json()) as { healthy?: boolean }[]
-    return Array.isArray(b) && b.every((s) => s.healthy === true)
-  } catch {
-    return false
-  }
-}
-
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2)
   const all = suites()
@@ -100,26 +86,26 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error(`no suite called ${name}`)
     process.exit(2)
   }
-  console.log(`${suite.name}: ${suite.cls}`)
-  if (suite.cls === 'production-heavy' && !args.includes('--production')) {
-    console.error(
-      'REFUSED: this suite writes into or presses on the real office. Say so with --production, ' +
-        'or run it against the Sample Person (docs/testing/SUITE-CLASSES.md).',
-    )
-    process.exit(3)
-  }
-  if (suite.cls === 'smoke' || suite.cls === 'production-heavy') {
-    const ok = await healthy()
-    if (ok === false) {
-      console.error(
-        'REFUSED: Supabase does not report itself healthy. Not adding load to a degraded platform.',
-      )
-      process.exit(4)
-    }
-  }
+  const budgetClass = budgetClassFor(suite.cls, suite.name, manifest.disposable ?? [])
+  console.log(`${suite.name}: ${suite.cls} (request budget class: ${budgetClass})`)
+  const token = process.env.SUPABASE_ACCESS_TOKEN
+  const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
+  const start = await preflightSuite({
+    cls: suite.cls,
+    args,
+    token,
+    readHealth: () => fetchProviderHealth(ref, token ?? ''),
+    readRows: async (sql) =>
+      (await new ManagementApiExecutor(ref, token ?? '').execute(sql)).rows as Record<
+        string,
+        unknown
+      >[],
+  })
+  for (const line of start.lines) (start.ok ? console.log : console.error)(line)
+  if (!start.ok) process.exit(start.exit)
   const r = spawnSync('npm', ['run', suite.name], {
     stdio: 'inherit',
-    env: { ...process.env, HQ_PRODUCTION_INTENT: '1' },
+    env: { ...process.env, HQ_PRODUCTION_INTENT: '1', HQ_SUITE_CLASS: budgetClass },
   })
   process.exit(r.status ?? 1)
 }
