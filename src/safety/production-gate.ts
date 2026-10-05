@@ -24,6 +24,14 @@
  * `src/safety/arm.ts` all ask it; nothing else decides.
  */
 
+import {
+  type Attestation,
+  bindingProblem,
+  DEFAULT_ATTESTATION_FILE,
+  isStagingShell,
+  StagingBindingRefused,
+} from './staging-binding.ts'
+
 export const ENV_CHECKS = 'ALLOW_PRODUCTION_CHECKS'
 export const ENV_WRITES = 'ALLOW_PRODUCTION_WRITES'
 
@@ -147,22 +155,65 @@ export const refusalMessage = (what: string, level: 'checks' | 'writes'): string
   )
 }
 
-/** Throws unless production reads were intentionally enabled. No-op in Deno. */
+/**
+ * The attestation a staging preflight wrote, read through the runtime's own module loader so this file stays importable
+ * from Deno (it has no `node:` import). Null when there is none or it cannot be read: a binding with nothing to bind to
+ * refuses, it does not pass.
+ */
+const readAttestation = (env: Env): Attestation | null => {
+  try {
+    const g = globalThis as {
+      process?: { getBuiltinModule?: (id: string) => unknown }
+    }
+    const fs = g.process?.getBuiltinModule?.('node:fs') as
+      | { readFileSync: (p: string, enc: string) => string }
+      | undefined
+    if (fs === undefined) return null
+    const file = (env.STAGING_ATTESTATION_FILE ?? '').trim() || DEFAULT_ATTESTATION_FILE
+    return JSON.parse(fs.readFileSync(file, 'utf8')) as Attestation
+  } catch {
+    return null
+  }
+}
+
+/**
+ * In a shell that says it is staging, a flag is not enough: the attested staging identity must still hold, and what is being
+ * contacted must be that project or site (`src/safety/staging-binding.ts`). A shell that does not say staging is untouched.
+ */
+export const assertStagingBound = (
+  what: string,
+  env: Env | null = processEnv(),
+  target?: string,
+): void => {
+  if (env === null || !isStagingShell(env)) return
+  const why = bindingProblem(env, readAttestation(env), Date.now(), target)
+  if (why !== null) throw new StagingBindingRefused(what, why)
+}
+
+/**
+ * Throws unless production reads were intentionally enabled, then (in a staging shell) unless the attested staging identity
+ * still holds and `target`, when given, is it. No-op in Deno. `bind: false` is for the one command that CREATES the
+ * attestation (staging:preflight --live) and so cannot have one yet.
+ */
 export const assertProductionChecksAllowed = (
   what: string,
   env: Env | null = processEnv(),
+  target?: string,
+  opts: { readonly bind?: boolean } = {},
 ): void => {
-  if (productionChecksAllowed(env)) return
-  throw new ProductionAccessRefused(what, 'checks')
+  if (!productionChecksAllowed(env)) throw new ProductionAccessRefused(what, 'checks')
+  if (opts.bind !== false) assertStagingBound(what, env, target)
 }
 
-/** Throws unless BOTH flags were set. A write needs the stronger, second confirmation. */
+/** Throws unless BOTH flags were set (a write needs the stronger, second confirmation), then the same binding. */
 export const assertProductionWritesAllowed = (
   what: string,
   env: Env | null = processEnv(),
+  target?: string,
+  opts: { readonly bind?: boolean } = {},
 ): void => {
-  if (productionWritesAllowed(env)) return
-  throw new ProductionAccessRefused(what, 'writes')
+  if (!productionWritesAllowed(env)) throw new ProductionAccessRefused(what, 'writes')
+  if (opts.bind !== false) assertStagingBound(what, env, target)
 }
 
 /** Management API paths that change the project rather than read it, whatever the method. */
@@ -241,8 +292,8 @@ export const guardFetch = (inner: FetchLike, getEnv: () => Env | null = processE
       if (isProductionUrl(url, env)) {
         const level = levelForRequest(url, methodOf(input, init))
         const what = `${methodOf(input, init)} ${safeOrigin(url)}`
-        if (level === 'writes') assertProductionWritesAllowed(what, env)
-        else assertProductionChecksAllowed(what, env)
+        if (level === 'writes') assertProductionWritesAllowed(what, env, url)
+        else assertProductionChecksAllowed(what, env, url)
       }
     }
     return await inner(input, init)

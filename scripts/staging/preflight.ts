@@ -10,7 +10,9 @@
  * check and prints which, naming variables and never printing a secret. See docs/staging-handoff-plan.md.
  */
 import '../../src/safety/require-production-when-live.ts'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { attest, DEFAULT_ATTESTATION_FILE } from '../../src/safety/staging-binding.ts'
 import {
   BUILTIN_DENYLIST,
   type Check,
@@ -59,6 +61,35 @@ if (found) {
 const deny = mergeDenylists(BUILTIN_DENYLIST, local)
 const report = evaluate(process.env, deny, { denylistFileFound: found })
 const checks: Check[] = [...report.checks]
+
+/*
+  A PASS IS BOUND TO WHAT WAS CHECKED. When the offline checks pass, the staging identity they examined (project ref, gateway,
+  worker, storage and database hosts, site, OAuth client, bot, workspace, Vikunja: identifiers only, never a secret) is written
+  to the attestation file, and every later command in a staging shell must still match it (src/safety/staging-binding.ts):
+  if the ref or an address changes afterwards, or the attestation expires, they refuse even with the production flags set.
+  A FAILED preflight removes any earlier attestation, so a stale pass cannot outlive a bad edit.
+*/
+const attestFile = process.env.STAGING_ATTESTATION_FILE?.trim() || DEFAULT_ATTESTATION_FILE
+if (report.ok) {
+  if (!process.argv.includes('--no-attest')) {
+    mkdirSync(dirname(attestFile), { recursive: true })
+    writeFileSync(attestFile, `${JSON.stringify(attest(process.env, Date.now()), null, 2)}\n`, {
+      mode: 0o600,
+    })
+    checks.push({
+      id: 'attestation',
+      ok: true,
+      detail: `bound to project ${process.env.SUPABASE_PROJECT_REF ?? ''}; valid for 8 hours (${attestFile})`,
+    })
+  }
+} else if (existsSync(attestFile)) {
+  rmSync(attestFile)
+  checks.push({
+    id: 'attestation',
+    ok: true,
+    detail: 'an earlier attestation was removed because this preflight failed',
+  })
+}
 
 if (process.argv.includes('--live')) {
   // The one contact this command can make, and only when asked: read two config rows from the STAGING project.

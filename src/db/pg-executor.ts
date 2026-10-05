@@ -24,7 +24,7 @@ export class PgExecutor implements SqlExecutor {
   constructor(connectionString?: string) {
     // A Unix socket or localhost is never production; any other Postgres host is, and needs the flag (docs/production-access-guard.md).
     if (isRemotePgTarget(connectionString))
-      assertProductionChecksAllowed('a remote Postgres connection')
+      assertProductionChecksAllowed('a remote Postgres connection', undefined, connectionString)
     this.client =
       connectionString === undefined ? new pg.Client() : new pg.Client({ connectionString })
   }

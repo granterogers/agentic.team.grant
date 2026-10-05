@@ -401,7 +401,9 @@ Rules, and they bind **sub-agents exactly as they bind you**:
    removing a gate import, no unsetting then re-exporting credentials). Report what verification remains undone and why.
 3. Local replicas (`scripts/isolated/*`) and staging use their own targets and need no production flag. Staging is a
    separate Supabase project, Vercel preview, OAuth client, bots and storage; if a staging command needs a flag the
-   guard cannot tell staging from production (it recognises Supabase hosts), so check the target first.
+   guard cannot tell staging from production (it recognises Supabase hosts), so staging commands run in a shell with
+   `TARGET_ENVIRONMENT=staging` that `npm run staging:preflight` has attested: from then on they refuse any target that is
+   not the attested project, flags or not (`src/safety/staging-binding.ts`).
 4. Every new script that can contact production must put a gate module first in its imports
    (`require-production-checks` for reads, `require-production-writes` for writes). `tests/safety` fails if one does not,
    and fails if a gate import is removed.

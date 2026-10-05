@@ -606,3 +606,11 @@ p4's forensics collectors reached this guard AFTER it was written, with `SUPABAS
 targets production by default; the guard then refuses it without the flag, which is the intended failure. For staging, the
 variable must be set explicitly (the staging preflight, `npm run staging:preflight`, refuses an unset ref).
 
+### Staging binding (5 October 2026)
+
+The flags cannot tell staging from production. In a shell with `TARGET_ENVIRONMENT=staging`, `npm run staging:preflight` writes
+`.staging/attestation.json` (identifiers only, 8 hours), and `assertProductionChecksAllowed` / `assertProductionWritesAllowed`
+then also require that the attestation exists, is unexpired, still matches the environment, and that the target actually
+contacted (a `<ref>.supabase.co` host, a Management API `/projects/<ref>` path, a database host, a `*.vercel.app` page) is the
+attested project or site. Enforced at the same choke points as the flags: the executors, the fetch guard and every command entry.
+A shell that does not say staging is not bound. See `src/safety/staging-binding.ts` and `tests/staging/binding.test.ts`.

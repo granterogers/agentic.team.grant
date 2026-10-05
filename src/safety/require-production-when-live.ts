@@ -8,4 +8,10 @@ import { assertProductionChecksAllowed, isScriptEntry } from './production-gate.
 const argv = (globalThis as { process?: { argv?: string[] } }).process?.argv ?? []
 const entry = argv[1] ?? 'this command'
 if (isScriptEntry() && argv.includes('--live'))
-  assertProductionChecksAllowed(`running ${entry.replace(/^.*\/(scripts\/)/, '$1')} --live`)
+  // bind: false - this is the command that writes the attestation, so it cannot have one yet; its executor is bound.
+  assertProductionChecksAllowed(
+    `running ${entry.replace(/^.*\/(scripts\/)/, '$1')} --live`,
+    undefined,
+    undefined,
+    { bind: false },
+  )

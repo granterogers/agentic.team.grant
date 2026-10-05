@@ -1,6 +1,6 @@
 # Staging handoff plan - Team HQ UX branch -> integration -> staging
 
-Written 5 October 2026, updated on the integration branch `integration/team-hq-ux-on-p4` (p4 `ca8845b7` + the frozen UX branch `f91c4c1f`). Nothing here has been executed. Production is not touched at any step; staging is a SEPARATE
+Written 5 October 2026 and kept in step with the integration branch `integration/team-hq-ux-on-p4` as it stood at `39c41fcc` (p4 `ca8845b7` + the frozen UX branch `f91c4c1f`), amended by the staging-binding pass that follows it. Nothing here has been executed. Production is not touched at any step; staging is a SEPARATE
 Supabase project, a SEPARATE Vercel preview, and separate Google / Telegram / Slack / Vikunja credentials.
 
 The purpose of staging is to FIND failures local fakes could not. A row moves PARTIAL -> TESTED / VISUALLY VERIFIED
@@ -28,7 +28,12 @@ Apply in the order above. Hard dependencies: 0991 needs 0900+0960+0990; 1010 nee
 
 1. Grant creates (or confirms) a staging Supabase project; the production ref goes in a local, git-ignored `.staging/production-identifiers.json` with every other production identifier (`{"refs":[],"hosts":[],"identifiers":[]}`: Google client id, bot username, Slack team id, Vikunja host, bucket name).
 2. A dedicated shell exports ONLY staging values (`npm run staging:preflight -- --template` lists them). `npm run staging:preflight` must print `STAGING PREFLIGHT PASSED`. It refuses an unset project ref (scripts default to the production ref), a ref typed two ways that disagree, any address that names another project, a Vercel environment that is not `preview`, a production-named identifier anywhere in the environment, and an integration nobody named. NOTE: the sandbox this was written in exports `NEXT_PUBLIC_SUPABASE_URL` naming production and the preflight correctly refused it.
-3. The production guard is target-agnostic (it recognises Supabase hosts): `ALLOW_PRODUCTION_CHECKS=1` / `ALLOW_PRODUCTION_WRITES=1` open staging AND production alike. The preflight, not the flags, says which one the shell points at.
+3. The production guard is target-agnostic (it recognises Supabase hosts): `ALLOW_PRODUCTION_CHECKS=1` / `ALLOW_PRODUCTION_WRITES=1` open staging AND production alike. So **a passing preflight is bound to the staging identity it checked**:
+   - When the offline checks pass, `staging:preflight` writes `.staging/attestation.json` (git-ignored, mode 0600; override with `STAGING_ATTESTATION_FILE`): the project ref, the gateway, worker, storage and database HOSTS, the site, and the named OAuth client, bot, workspace and Vikunja. Identifiers only; never a token, key or password. It is valid for 8 hours. A FAILED preflight deletes any earlier attestation.
+   - In a shell with `TARGET_ENVIRONMENT=staging`, every contact that the production gate governs (Management API SQL, the fetch guard, the Postgres executor, every command entry in `scripts/`, `staging:posture`, `migrate`, `deploy:*`) refuses, flags or no flags, when (a) there is no attestation, (b) it has expired, (c) the environment no longer names the attested identity (the message lists the drifted FIELD names, never values), or (d) the thing actually being contacted is not the attested project or site: a `<ref>.supabase.co` host, a Management API `/projects/<ref>` path, a database host, or a `*.vercel.app` page. (d) is what stops a script that falls back to the production ref when `SUPABASE_PROJECT_REF` is unset.
+   - The one command that cannot have an attestation yet, `staging:preflight --live`, is exempt only at its entry; its executor is bound like every other.
+   - Proven locally with fake credentials, a fetch spy and a dead proxy, never against production: `tests/staging/binding.test.ts` (20), including a subprocess run of preflight then `staging:posture` with the ref drifted to production and both flags set. Two sabotages (binding disabled; target not passed to the fetch guard) turned it red.
+   - Limits, stated plainly: a shell that does not say `TARGET_ENVIRONMENT=staging` is not bound (that is the explicitly authorised production case); `*.vercel.com` API calls are not tied to a project; third-party APIs reached with their own keys (Google, Slack, Telegram, Vikunja) are not hosts the binding knows, so their staging-ness rests on the named identity fields and on separate credentials.
 
 ## D. Fresh staging database
 
@@ -36,12 +41,17 @@ Replay `migrations/` 0001..1020 into the empty staging project (`npm run migrate
 
 ## E. Deploy, in this order (derived from the code, not from the earlier report)
 
+0. Every command below runs in the shell the preflight attested (`TARGET_ENVIRONMENT=staging`): it is refused, flags or not, if the environment drifts from the attested identity, the attestation (8 hours) expires, or the target it would contact is not the attested project. Re-run `staging:preflight` after any change to the shell.
 1. `npm run staging:posture -- hold` **before any worker exists**. It refuses unless the preflight passes and unless the database has migration 1020 (a hold the database does not honour reads as safe and is not).
 2. `npm run staging:preflight -- --live` (needs `ALLOW_PRODUCTION_CHECKS=1`): the duties are held AND honoured. Only then:
 3. `deploy:worker` -> `deploy:hq` (`hq-api`; its bundle includes the new Deno `preview.ts`, never compiled by a real deploy, so expect the first failure here) -> `deploy:mcp` -> the web page as a Vercel PREVIEW. Telegram, Slack, voice stay undeployed until a test needs them, and then only with separate test bots.
 4. Allow duties one at a time: `npm run staging:posture -- allow calendar-event-sync` and so on. `drive-index` additionally ships switched OFF: `update public.responsibilities set enabled = true where slug = 'drive-index'` for the staging office, then `allow drive-index`.
 
-Version skew, read from the code: a NEW worker on an OLD database is safe (the Import gate fails closed; style-keep says nothing was saved; the preview writes are guarded; `drive.index` has no duty until 1020). An OLD worker on a NEW database is safe (1010 gates the SQL doors, the 1020 duty is off and the hold is honoured by SQL, not by the worker). The only window is a fetch job queued before 1010 and run by an old worker, which the SQL gate at enqueue time makes small. **Migrations first, then the worker.**
+Version skew, read from the code (`src/handlers/drive-read.ts`, migrations 1010 and 1020):
+
+- **New worker, old database (no 1010):** the Import gate FAILS CLOSED. An Import-requested `drive.read_file` job asks `app.document_import_gate`; if that function does not exist, or the query fails for any reason, the file is NOT read, the request records "this deployment is older than its database expects ... Apply the migrations, then try again" (or "could not be checked just now. Try again in a minute"), and the job ends with a refusal. Nothing else in the worker is held back, so there is no start-up deadlock; the next attempt after the migration reads normally. `drive.index` has no duty row until 1020, so it never runs. The style-keep reader says nothing was saved. The preview-mark call before 0990 is guarded because it is bookkeeping, not an authorisation.
+- **Old worker, new database (1010 and 1020 applied):** the SQL doors are gated by the database itself (`hq_document_import`, `document_import_enqueue_fetch`, `document_import_fulfil`), so a closed source is refused whichever worker is running. The 1020 `drive-index` duty ships switched OFF and the duty hold is honoured in SQL (`app.due_responsibilities`), so an old worker neither runs a handler it lacks nor starts held duties. The one residual window: an Import fetch job queued BEFORE 1010 and picked up by an OLD worker, which has no handler-side gate. It is narrow (the enqueue itself is gated from 1010) and is why the order is below.
+- **Order:** migrations, then `staging:posture hold`, then the worker.
 
 ## F. Staging-safe gateway and security checks
 
@@ -62,9 +72,19 @@ the consent. Check migration 1000 live: one `integration_connections` row, `acti
 
 ## I. Google behaviours (CAL-009..019, DOC-027..031, DOC-054)
 
-Calendar: real data; project / all / Google-combined scopes; create, edit, delete both ways; etags stored; If-Match on
-update/delete; provoke a 412 by editing in Google between read and write and confirm "later writer wins, nothing
-overwritten unseen"; timezone and all-day events across a DST boundary; clock skew. Drive: browse a test folder; on-demand
+Calendar: real data; project / all / Google-combined scopes; create, edit, delete both ways; etags stored; If-Match on update/delete; timezone and all-day events across a DST boundary; clock skew.
+
+**Acceptance criterion for a 412 (If-Match failure): it must NEVER silently overwrite a newer remote edit, and an unconditional retry is a failure of the test.** Provoke it by editing the event in Google between our read and our write. Pass requires ALL of:
+- the stale-etag request is answered 412 and the same request is never re-sent with that etag, or with `If-Match` removed;
+- the event is read back (fetch/reconcile) and the Google `updated` time is compared with the local row;
+- Google's edit is NEWER: Google's content is kept, the local edit is not sent, and the loss is surfaced (the row's `sync_error` begins `conflict:` and a `google_sync` Activity event names the winner);
+- the local edit is LATER: it is re-sent once with the fresh etag and the override is surfaced the same way; a second 412 leaves it pending for the next pass (no loop);
+- a delete after a Google edit restores the event instead of deleting it;
+- nothing in the above is quiet: every non-trivial outcome is visible on the page or in Activity.
+
+Known edges to probe, because the current rule is "later writer wins" with `localAt >= remoteAt` (`src/handlers/calendar-events.ts`): an exact timestamp tie, or a Google event with no usable `updated` time, resolves to the LOCAL edit and re-sends once with the fresh etag (surfaced, but it does overwrite). Real Google always returns `updated`, so the second should be unreachable, and clock skew between Google and the database can flip the comparison. If staging shows either edge is reachable, record it as a defect (the safe behaviour there is to surface the conflict and send nothing), fix it, retest, and leave CAL-013/016/017/018 PARTIAL until it is proven.
+
+Drive: browse a test folder; on-demand
 read of a Doc, Sheet, Slide, text, Word, PDF, image; first-page PDF and image thumbnails; quota/403 bodies; a 25 MB PDF
 through the edge function (memory/time limits); CORS for the binary section from the real page origin; Import; stale
 refetch after a source edit. Disconnected-source refusal: switch the folder off and revoke Google, press Import (UI,
@@ -77,9 +97,16 @@ confirm the Settings Services chip and the Reconnect chore with a real outage (s
 
 ## K. External ChatGPT / Claude (EXT-003..013)
 
-Grant adds the staging MCP URL + bearer as a connector in ChatGPT and in Claude. Call each tool for real:
-`search_project, list_tasks, create/update_task, list/create/update_event, inspect_activity, ask_team, start_research,
-generate_artifact`; confirm `delete_event` is absent; confirm a refused import via MCP returns the typed error.
+Grant adds the staging MCP URL + bearer as a connector in ChatGPT and in Claude. Call each tool for real: `search_project, list_tasks, create/update_task, list/create/update_event, inspect_activity, ask_team, start_research, generate_artifact`; confirm `delete_event` is absent.
+
+**Negative authorization cases (each must refuse, and each refusal is evidence that nothing was done: check the database afterwards, not just the reply):**
+
+1. **Invalid bearer.** No `Authorization` header, a malformed one, a revoked token and a token for another office each get HTTP 401 `unauthorized` with the RFC 9728 pointer; no tool runs and no row is written. A bearer for the STAGING office presented to the PRODUCTION address (never done: the address is not contacted) is covered by the binding in section C.
+2. **Cross-office IDs.** With office A's token, call every tool that takes an id (document, task, event, project slug, job) with office B's ids. The answer must be the SAME as for an id that does not exist ("no document with that id"): no probing aid, no field of B's row in the reply or in the error, nothing created, no job for B.
+3. **Forged office identity.** Put an `office_id`, `p_office`, `office` or `office_slug` argument in a tool call, and a forged `x-office`/`x-forwarded-*` header. The office comes only from the verified bearer; the argument is rejected or ignored, and the result is still A's scope. A model-authored prompt that names an office is not an identity.
+4. **Unavailable or non-exposed RPC.** A tool name that does not exist answers JSON-RPC `-32601 no such tool`; a method outside `tools/list`/`tools/call` answers `-32601 unsupported`. A direct PostgREST call with the anon/authenticated key to an `app.*` function, to a `public.*` function that is not a gateway wrapper, or to a table with row security off, is refused (`check:anon-exposure`, `check:gateway-wrappers`). A section that exists in the gateway map but has no `public` wrapper is the 502 class to find BEFORE a person does.
+5. **Disconnected-source access.** Switch the Drive folder off and revoke Google, then ask via MCP for a Drive document, its preview and an import: each returns the typed refusal (`SOURCE_DISCONNECTED` for import; `source_disconnected` for preview, with no text from the disconnected source handed out), no Drive request is made, and an already-imported copy stays readable. Reconnect and repeat: it works.
+6. **An operation that requires human approval.** With the office (machine) key, attempt each of: approve or decline a document, grant or revoke a tool, a standing authorization, answering a blocker, a consequential outbound action (post to a channel, send mail, create a channel), and a destructive delete. Each is refused with `person_required` / `operator_required` (HTTP 403) or raises an approval question and waits; none is performed. The approval stays pending in the queue, and answering it as a signed-in PERSON is the only way it proceeds. The read-only client scope also refuses writes (`needs the write scope`).
 
 ## L. gateway -> SQL -> search -> palette (SEARCH-004, 007..009)
 
@@ -91,10 +118,16 @@ research, chat; per-project and all-project; second office sees none of it.
 One action from each door - Team HQ, ChatGPT, Claude, Telegram, Slack - and confirm the chip on the Activity row.
 Needs separate test bots and a test workspace (see Risks).
 
-## N. Web research in the deployed runtime (WEB-002, 004, 007)
+## N. Web research and the browser, in the deployed runtime (WEB-002, 004, 007)
 
-Run a research job on the deployed worker; expect the honest "slow down" if the search service challenges the address;
-read a page, follow one hop, refuse a private address, safe-download allow-list, Storage write path.
+Run a research job on the deployed worker; expect the honest "slow down" if the search service challenges the address; read a page, follow one hop, refuse a private address, safe-download allow-list, Storage write path.
+
+**One explicit proof that autonomy stops where consequence starts**, in a single conversation on a project, with a registered TEST destination (#381) so that a defect cannot reach a real chat:
+1. Ask the team to research a public question and read two pages. Expected: the research and the reads run WITHOUT any approval question (`blockers` gains no row for them), the job completes, sources are recorded, and the only egress is the allowed reads (worker egress log shows search and page GETs only).
+2. In the same conversation ask it to take a consequential outbound action on the result (post it to a channel, or email it). Expected: the action does NOT happen; an approval question is raised with real options (a `blockers` row, `state` open, `on_answer` or `approval_next` set), `deliveries` for it is zero, and the egress log shows no POST to Slack, Telegram or Google Mail.
+3. Answer NO as a signed-in person: still nothing sent, the question is closed. (Answer YES in a second run: exactly one delivery, to the test destination.)
+4. Re-run (2) with the dial at Observe and at Act: the level-3 floor still asks (`autonomy_policy` can never resolve a level-3 action to proceed).
+Pass is all four. Failing any of them is a code defect, not an environment issue.
 
 ## O. PDF / logo against real storage (PDF-015)
 
@@ -112,24 +145,20 @@ thumbnails), Activity, palette, Settings > Services, maximise/restore, spatial t
 
 ## R. Ledger
 
-Update the 331-row ledger only with evidence from the steps above: PARTIAL -> TESTED / VISUALLY VERIFIED row by row,
+Update the 335-row ledger as of `39c41fcc` (TESTED 201, VISUALLY VERIFIED 77, ALREADY SATISFIED 17, PARTIALLY SATISFIED 39, DEFERRED 1; HQ-STAGE-003 added by the binding pass makes it 336 with TESTED 202) only with evidence from the steps above: PARTIAL -> TESTED / VISUALLY VERIFIED row by row,
 each citing the run. Rows that staging disproves stay PARTIAL with the exact failure recorded.
 
 ## Needs Grant
 
-Staging Supabase project and keys (in its vault); Vercel preview environment variables; a separate Google OAuth client +
-a test Google account and the consent click; a test Vikunja server + token; ChatGPT and Claude connector setup (paid
-plans may be needed); separate Telegram test bot(s) and a Slack test workspace; a decision on DOC-026 (agents reading Drive
-in the background); the visual judgement; approval to merge anything into p4 or main; whether `CLAUDE.md` should
-mention `ALLOW_PRODUCTION_CHECKS` (left untouched).
+Staging Supabase project and keys (in its vault); a local, git-ignored `.staging/production-identifiers.json`; Vercel preview environment variables; a separate Google OAuth client + a test Google account and the consent click; a test Vikunja server + token; ChatGPT and Claude connector setup (paid plans may be needed); separate Telegram test bot(s) and a Slack test workspace (or `unused`); switching the `drive-index` duty on in the staging office when staging is ready for it; the visual judgement (VIS-001, VIS-003); approval to merge anything into p4 or main.
 
 ## What could make staging unsafe
 
-1. The guard flags are target-agnostic: with production credentials exported, `ALLOW_PRODUCTION_CHECKS=1` WILL reach production. Use a dedicated shell with staging values only.
+1. The guard flags are target-agnostic: with production credentials exported, `ALLOW_PRODUCTION_CHECKS=1` WILL reach production in a shell that does not say it is staging. In a shell with `TARGET_ENVIRONMENT=staging` the staging binding (section C) additionally refuses any target that is not the attested project, flags or not. Use a dedicated shell with staging values only, and re-run the preflight after any change to it.
 2. Reusing the production Google OAuth client, Telegram bots or Slack app would change production OAuth or message Grant's real chat. Use separate ones and register test destinations first (#381).
 3. Migration 1000's backfill reads the vault; on staging it must only see staging secrets.
 4. Duties fire on a timer: a deployed staging worker with real credentials runs real Drive/Calendar sync and could message or write. Keep announce channels pointed at test destinations.
 5. Supabase free-tier limits and the p4 forensics findings about idle cost: do not load-test the staging project beyond need.
-6. `hq-api` has never compiled the Deno preview code in a real deploy; `hq_document_import` is now server-gated, but a worker older than 1010 fails open on a missing gate function by design: deploy migrations before the worker.
+6. `hq-api` has never compiled the Deno preview code in a real deploy, so expect the first failure there. (The Import gate is not a deploy-order hazard any more: see the version-skew paragraph in section E. Migrations first is still the order, because the SQL doors and the 1020 hold live in the database.)
 7. Calendar delete tests must use a throwaway calendar.
 8. Do not run `purge:*` or `sample:*` against staging without reading the target first.

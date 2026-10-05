@@ -86,7 +86,7 @@ export class ManagementApiExecutor implements SqlExecutor {
 
   private assertAllowed(): void {
     if (isProductionUrl(this.endpoint))
-      assertProductionChecksAllowed('the Supabase Management API (SQL)')
+      assertProductionChecksAllowed('the Supabase Management API (SQL)', undefined, this.endpoint)
   }
 
   /*
