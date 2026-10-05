@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { parseMetrics, qualify, rates, snapshot } from '../../scripts/forensics/metrics.ts'
+import {
+  answered,
+  parseMetrics,
+  qualify,
+  rates,
+  snapshot,
+} from '../../scripts/forensics/metrics.ts'
+
+describe('answered: the read-only endpoint answers 201 on success', () => {
+  it('accepts 200 and 201 (a POST that ran), and refuses a timeout, a server error and a throttle', () => {
+    expect(answered(201)).toBe(true)
+    expect(answered(200)).toBe(true)
+    expect(answered(0)).toBe(false)
+    expect(answered(500)).toBe(false)
+    expect(answered(429)).toBe(false)
+  })
+})
 
 const MIB = 1024 * 1024
 /** A synthetic exposition shaped like the host's: a small box that pages at rest. */

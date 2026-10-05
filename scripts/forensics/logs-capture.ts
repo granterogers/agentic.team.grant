@@ -15,7 +15,18 @@
  * status and the duration, and a one-line summary is appended to the day's evidence file. String values are redacted and clipped.
  */
 
-import { clean, cleanRow, mgmt, REF, record, requireToken, saveRaw, sleep } from './common.ts'
+import { readFileSync, writeFileSync } from 'node:fs'
+import {
+  clean,
+  cleanRow,
+  evidenceDir,
+  mgmt,
+  REF,
+  record,
+  requireToken,
+  saveRaw,
+  sleep,
+} from './common.ts'
 import { LOG_SETS } from './logs-queries.ts'
 
 requireToken()
@@ -47,16 +58,45 @@ if (unknown.length > 0) {
   process.exit(2)
 }
 
-const end = new Date()
+// --start/--end ask for an explicit window (at most 24 hours, rounded to the minute by the service). It is how retention is tested:
+// a window older than the one already captured either returns rows or does not.
+// --day=YYYY-MM-DD selects that UTC day (00:00 to 24:00, or to now for today). A baseline day is captured with the same panel
+// as an outage day so the two can be compared hour for hour.
+const dayFlag = flag('day')
+const dayStart = dayFlag === undefined ? null : new Date(`${dayFlag}T00:00:00Z`)
+const end =
+  dayStart !== null
+    ? new Date(Math.min(dayStart.getTime() + 24 * 3600 * 1000, Date.now()))
+    : flag('end') === undefined
+      ? new Date()
+      : new Date(flag('end') ?? '')
 end.setSeconds(0, 0)
-const start = new Date(end.getTime() - hours * 3600 * 1000)
-const run = end.toISOString().replace(/[:.]/g, '-').slice(0, 16)
-let first = true
+const start =
+  dayStart !== null
+    ? dayStart
+    : flag('start') === undefined
+      ? new Date(end.getTime() - hours * 3600 * 1000)
+      : new Date(flag('start') ?? '')
+const run =
+  dayFlag === undefined ? end.toISOString().replace(/[:.]/g, '-').slice(0, 16) : `day-${dayFlag}`
+// The service allows about one query a minute. The spacing is enforced across RUNS too, through a stamp file, so two commands
+// started back to back cannot add up to a burst.
+const STAMP = `${evidenceDir}/.last-log-query`
+const waitForTurn = async (): Promise<void> => {
+  let last = 0
+  try {
+    last = Number(readFileSync(STAMP, 'utf8'))
+  } catch {
+    // no earlier query
+  }
+  const wait = last + gap - Date.now()
+  if (wait > 0) await sleep(wait)
+}
 for (const name of names) {
   const q = LOG_SETS[name]
   if (q === undefined) continue
-  if (!first) await sleep(gap)
-  first = false
+  await waitForTurn()
+  writeFileSync(STAMP, String(Date.now()))
   const url = `/v1/projects/${REF}/analytics/endpoints/logs?sql=${encodeURIComponent(q.sql)}&iso_timestamp_start=${start.toISOString()}&iso_timestamp_end=${end.toISOString()}`
   const r = await mgmt(url, 70_000)
   let rows: unknown[] = []

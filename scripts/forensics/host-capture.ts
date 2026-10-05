@@ -25,7 +25,7 @@
  */
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { redactSecrets } from '../../src/text/secrets.ts'
-import { parseMetrics, qualify, rates, snapshot } from './metrics.ts'
+import { answered, parseMetrics, qualify, rates, snapshot } from './metrics.ts'
 
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN ?? ''
@@ -277,7 +277,7 @@ const DB_QUERIES: { name: string; why: string; sql: string }[] = [
   {
     name: 'statements_by_temp_written',
     why: 'which statements spill (cumulative since the statistics reset)',
-    sql: "select calls, temp_blks_written, temp_blks_read, shared_blks_read, blk_read_time, wal_bytes, round(total_exec_time::numeric) as total_ms, left(regexp_replace(query, '\\s+', ' ', 'g'), 120) as q from pg_stat_statements order by temp_blks_written desc limit 15",
+    sql: "select calls, temp_blks_written, temp_blks_read, shared_blks_read, shared_blk_read_time, wal_bytes, round(total_exec_time::numeric) as total_ms, left(regexp_replace(query, '\\s+', ' ', 'g'), 120) as q from pg_stat_statements order by temp_blks_written desc limit 15",
   },
   {
     name: 'statements_by_blocks_read',
@@ -435,7 +435,8 @@ const dbMode = async (): Promise<boolean> => {
   }
   const t0 = Date.now()
   const probe = await readOnly('select 1 as ok', 2000)
-  if (probe.status !== 200) {
+  // The endpoint answers 201 on success; the time limit is the real test (the call itself aborts at 2 s, status 0).
+  if (!answered(probe.status) || Date.now() - t0 > 2000) {
     console.log(
       `REFUSED: a trivial read-only statement did not answer inside 2 s (http ${String(probe.status)}, ${String(Date.now() - t0)} ms). The host is not functionally healthy.`,
     )
@@ -444,7 +445,7 @@ const dbMode = async (): Promise<boolean> => {
   }
   for (const q of DB_QUERIES) {
     const r = await readOnly(qualify(q.sql), 8000)
-    if (r.status === 200) {
+    if (answered(r.status)) {
       let rows: unknown[] = []
       try {
         rows = JSON.parse(r.text) as unknown[]

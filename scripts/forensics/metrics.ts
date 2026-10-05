@@ -19,6 +19,14 @@ export const qualify = (sql: string): string =>
     .replace(/\bfrom (pg_stat_statements)\b/g, 'from extensions.$1')
     .replace(/\bfrom (pg_(?!stat_statements\b|catalog\b)\w+)\b/g, 'from pg_catalog.$1')
 
+/**
+ * Whether a Management API answer to the READ-ONLY query endpoint means the statement ran. That endpoint is a POST and answers
+ * 201 (Created) on success, not 200: the first version of the `--db` guard required exactly 200, so on a healthy host a
+ * `select 1` that came back in under a second was refused as "not functionally healthy". A refusal for the wrong reason looks
+ * exactly like the safety rule working, which is why this is one named, tested predicate and not a literal in two places.
+ */
+export const answered = (status: number): boolean => status === 200 || status === 201
+
 export interface Sample {
   readonly name: string
   readonly labels: Readonly<Record<string, string>>
