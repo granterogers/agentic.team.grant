@@ -1781,7 +1781,28 @@ interface Answer {
   readonly canCreate?: boolean
 }
 
-const sessionAllowed = async (presented: string): Promise<Answer> => {
+/*
+  One resolution at a time per presented credential (efficiency run, October 2026).
+
+  A page load sends about eight reads in parallel with the same token. On a cold isolate none of them found the cache filled,
+  so each one made the full three-step resolution (the identity service, the member lookup, the office lookup): twenty-four
+  upstream calls to learn the same fact eight times. Concurrent callers of the SAME token now share one resolution. Keyed by
+  the whole credential, so one person's answer is never handed to another; the answer is not kept beyond the call (only a 'yes'
+  is cached, as before, by resolveSession), and a refusal or a throttle is shared only with the calls that were already waiting.
+*/
+const resolving = new Map<string, Promise<Answer>>()
+
+const sessionAllowed = (presented: string): Promise<Answer> => {
+  const running = resolving.get(presented)
+  if (running !== undefined) return running
+  const started = resolveSession(presented).finally(() => {
+    resolving.delete(presented)
+  })
+  resolving.set(presented, started)
+  return started
+}
+
+const resolveSession = async (presented: string): Promise<Answer> => {
   const cached = seen.get(presented)
   if (cached !== undefined && cached.until > Date.now()) {
     return {

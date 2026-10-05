@@ -52,12 +52,14 @@ describe('the gateway separates refused from could-not-check', () => {
     expect(SOURCE).toMatch(/type Verdict = 'yes' \| 'no' \| 'unknown'/)
     // 0608: the verdict now travels with who the credential is, in one value.
     expect(SOURCE).toMatch(/interface Answer \{\s*readonly verdict: Verdict/)
-    expect(SOURCE).toMatch(/const sessionAllowed = async \([^)]*\): Promise<Answer>/)
+    // `sessionAllowed` shares one resolution between concurrent callers and delegates to `resolveSession`, which does the asking.
+    expect(SOURCE).toMatch(/const sessionAllowed = \([^)]*\): Promise<Answer>/)
+    expect(SOURCE).toMatch(/const resolveSession = async \([^)]*\): Promise<Answer>/)
     expect(SOURCE).toMatch(/const allowed = async \([^)]*\): Promise<Answer>/)
   })
 
   it('calls a session invalid only when the identity service SAID so', () => {
-    const body = bodyOf('const sessionAllowed = async')
+    const body = bodyOf('const resolveSession = async')
     /*
       401 and 403 are a refusal. Everything else that is not ok -- 429, 5xx, a
       gateway error -- is a failure to answer. Asserted as the shape rather than
@@ -72,7 +74,7 @@ describe('the gateway separates refused from could-not-check', () => {
   })
 
   it('never reads a failure to reach the membership list as not being on it', () => {
-    const body = bodyOf('const sessionAllowed = async')
+    const body = bodyOf('const resolveSession = async')
     const membership = body.slice(body.indexOf('office_member'))
     expect(membership).toMatch(/if \(!membership\.response\.ok\) return \{ verdict: 'unknown'/)
   })
