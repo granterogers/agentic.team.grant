@@ -22,7 +22,7 @@
  * Value: `0` logs every temp file. The counter says the average file is about 5.5 MB (383.5 GB over 69,295 files), so a
  * 10 MB threshold would miss most of them; 69,295 files in 31 days is about 1.5 a minute, a trivial log volume.
  */
-export {}
+import { record } from './common.ts'
 
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN ?? ''
@@ -180,6 +180,8 @@ if (h.status !== 200 || unhealthy) {
 }
 const put = await call('PUT', '/config/database/postgres', desired)
 console.log(`\nPUT answered http ${String(put.status)}${put.status === 200 ? '' : `: ${put.text}`}`)
+// The outcome is evidence whatever it is: a refusal and a validation error say different things about the token.
+record('config_attempt', { key: KEY, value, revert, status: put.status, answer: put.text })
 const after = await call('GET', '/config/database/postgres')
 const got =
   after.json !== null && typeof after.json === 'object'

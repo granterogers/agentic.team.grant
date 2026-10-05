@@ -202,11 +202,54 @@ section 11. That request is optional; the Disk IO % consumed one is the required
 
 ## 9. log_temp_files
 
-`npm run forensics:temp-logging` now prints a requirements check. **STATUS: WAITING (platform was not healthy when last run; now healthy) and
-READY FOR APPROVAL once healthy.** MEASURED: the key is in the documented request body; the access-control table gives database configuration
-updates to Owner and Administrator; this token is not a user-scoped token and is refused when revealing the secret key, which is evidence of a
-role or scope below Administrator. Whether the PUT is allowed is UNKNOWN until it is made, and a 403 would refuse cleanly. The value is `0`. Nothing was
-applied. To apply: `GRANT_APPROVED_DB_CONFIG=log_temp_files npm run forensics:temp-logging -- --apply`.
+**Outcome (MEASURED, 5 October, platform healthy, Grant's approval stated, preflight passed, nothing else changed).** The PUT was sent three times with
+`0`, `0B` and `0kB`. Each answered **HTTP 400** `Invalid size: <value>. Allowed values: >= -1024B <= 2TB.` The API's validator rejects zero in every
+spelling. It is a validation error, **not a permission refusal**, so it says nothing against this token's role. The setting was read back and is
+unchanged (`-1`, off). The attempts are recorded as `config_attempt` rows in the capture log. Per the instruction, the refusal is recorded and the setting
+left alone.
+
+**Option, not applied:** the range text implies a positive threshold such as `1B` (log every file of at least one byte) would be accepted, and is
+effectively "log all". It is a different value from the one approved, so it needs a one-line yes from Grant. UNKNOWN whether it would be accepted.
+
+## 9a. Who writes the unexplained temp files (new this segment)
+
+* MEASURED: database `temp_bytes` 389.6 GB over 71,065 files since 25 August. The deltas are in `forensics-series-2026-10-05.md`: 14 of 15 paired
+  intervals at healthy idle wrote temp files.
+* MEASURED: when I scraped the exporter once a minute the database wrote about 10.0 MB and 3 files a minute (exporter `pg_exporter_scrapes_total` +2 a
+  minute, because each Management scrape triggers one scrape on top of the platform's own); with no scrape from me it wrote about 5.3 to 6.2 MB and 1.6 to
+  1.9 files a minute (+1 scrape a minute).
+* DERIVED: roughly 5.0 MB and 1.5 files **per exporter scrape**. At 1,440 platform scrapes a day that is about 7 GB a day, the same order as the 12 GB a day
+  the counter shows. So the exporter's own queries are the leading producer, not the Team HQ application.
+* MEASURED, and a contradiction: `pg_stat_statements` charges 0 temp blocks to the exporter's role (`supabase_admin`). A `pg_stat_statements` read
+  itself spills about 3.9 MB, charged to the read-only role, so a statement store this large (4,911 of 5,000 entries, 101 evictions) spills when queried.
+  **UNKNOWN: which statement in the scrape spills.** Either the store attributes it to an evicted or merged entry, or the spill belongs to a statement
+  that pgss does not track. `log_temp_files` was the instrument meant to name it; it is unavailable at `0`.
+* INFERRED: the exporter is the source and the victim at once: it spills, then it is the first role to time out (198 of 336 timeouts after 17:00).
+  That makes the 389 GB a measure of monitoring overhead, which matters for the IO budget only if the budget counts data-volume writes. The spill goes to
+  the data volume; the swap traffic goes to the system volume (section 5).
+
+## 9b. Restarts and recoveries (new)
+
+* MEASURED: host booted 2 September 17:44 UTC, Postgres up since 2 September, Auth since 15 September. **No restart, reboot or counter reset at any
+  recovery.** A recovery is therefore not a restart.
+
+## 9c. The abrupt idle recoveries, ranked (INFERRED; nothing here is proven)
+
+Facts (MEASURED): recoveries are step changes with zero gateway traffic, 18.3, about 10.8 and 15.8 hours after onset; spacing between recoveries about
+28.4 and 25.3 hours; n = 3.
+
+| Rank | Hypothesis | Why | What would distinguish it |
+|---|---|---|---|
+| 1 | A token-bucket allowance refilling (IO budget or CPU credit) | step shape at idle, long and unequal durations, onset after bursts | the Disk IO % consumed chart falling to 0 at onset and refilling at recovery; or CPU steal and iowait during an episode |
+| 2 | A provider or host-level event with no restart | stalls at zero traffic, all services fail together, recovery with no cause on our side | no budget signature in the chart, no steal, and the root disk not pinned |
+| 3 | In-guest memory thrash alone | explains the high idle I/O | does not explain a step recovery at idle; would show available memory and swap pinned during the episode, and recovery would need a reclaim event |
+| 4 | Metastable backlog draining | timeouts bound the queue to 120 s | weak: the backlog cannot last 18 hours |
+
+I do **not** assert credit, burst-budget or provider intervention. Three recoveries cannot support a periodicity claim.
+
+## 9d. Paging bursts
+
+MEASURED: two paging bursts 70.5 minutes apart in the kept scrapes. n = 2, so no period is claimed.
 
 ## 10. Corrections to earlier statements
 
@@ -219,9 +262,11 @@ applied. To apply: `GRANT_APPROVED_DB_CONFIG=log_temp_files npm run forensics:te
 
 ## 11. Next experiments, and what is decided
 
-1. **Free, most informative:** a **controlled ramp** of the verification burst (500, 1,000, 2,000 requests per ten minutes through the Sample office), with a
-   scrape every minute and the Database Health chart open, aborting at the first statement timeout or cron dip (both are visible in logs within a minute). It
-   reproduces the pre-onset window under observation. It may start a 10 to 19 hour outage, so it needs Grant's decision.
+0. **Decided by Grant, 5 October: the controlled 500/1000/2000 ramp is NOT to be run** (it risks another 10 to 19 hour outage), and artificial load is not
+   to be generated to provoke an outage. The office stays in forensic observation: one low-impact scrape and health reading per check, raw samples kept,
+   and a naturally occurring onset captured from logs and usage. If the platform becomes unhealthy, database access stops and only control-plane and log
+   evidence is collected.
+1. ~~Controlled ramp~~ (vetoed, kept here so the reasoning is not lost): it would reproduce the pre-onset window under observation.
 2. **Free, configuration:** lower `shared_buffers` (224 MB on a 434 MiB host). Needs a restart and is a tuning change, so it needs approval.
 3. **Paid:** more compute, only after (1) or the Disk IO % consumed chart separates the mechanisms.
 4. **Deployment queue: held.** The latest instruction says not to deploy unrelated product work, and steps 6 to 9 (browser acceptance suites, gate parts, the
