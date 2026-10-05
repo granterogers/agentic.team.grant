@@ -60,6 +60,7 @@
     "slack:rotate",
     "slack:tidy",
     "staging:posture",
+    "staging:replay",
     "step",
     "sync",
     "team:hello",

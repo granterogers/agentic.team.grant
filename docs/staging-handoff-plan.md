@@ -162,3 +162,25 @@ Staging Supabase project and keys (in its vault); a local, git-ignored `.staging
 6. `hq-api` has never compiled the Deno preview code in a real deploy, so expect the first failure there. (The Import gate is not a deploy-order hazard any more: see the version-skew paragraph in section E. Migrations first is still the order, because the SQL doors and the 1020 hold live in the database.)
 7. Calendar delete tests must use a throwaway calendar.
 8. Do not run `purge:*` or `sample:*` against staging without reading the target first.
+
+## S. First staging attempt: what was found offline, and what is still needed (5 October 2026)
+
+The environment that ran this attempt held only production credentials, so NO remote staging operation was performed and
+production was not contacted. Everything below was found and fixed without a staging project.
+
+| Finding | Fix (on this branch) |
+|---|---|
+| `npm run migrate` in a staging shell would have rewritten `migrations/applied.json`, the PRODUCTION ledger | With `TARGET_ENVIRONMENT=staging` it writes `.staging/applied.json` instead |
+| A fresh project cannot take the history one atomic request per file: 29 files before 0592 end in a self-check needing production rows, and the 0584 collision is only recorded in the production ledger | `npm run staging:replay` (src/migrations/fresh.ts): pre-0592 files on `docs/testing/fresh-replay-tolerances.json` are replayed a statement at a time tolerating ONLY the listed messages; 0592 onward is atomic. Proven locally: 787 files, schema identical (pg_dump -s) to the psql-built replica |
+| `hq-api` failed `deno check` (Uint8Array as BodyInit) | Cast at the two Response sites; `deno check` passes |
+| `worker` has 6 type errors under `deno check` | Pre-existing on p4, recorded, not changed |
+
+p4 has advanced to `39e2f247`; it was NOT merged.
+
+### Needs Grant before staging validation can continue
+1. Create the staging Supabase project; add staging-scoped `SUPABASE_PROJECT_REF`, `SUPABASE_ACCESS_TOKEN` and the `STAGING_*` set (`npm run staging:preflight -- --template`) through the cloud environment settings, never in chat; start a NEW session.
+2. A dedicated Vercel project/token for staging previews (the existing token is production's).
+3. A separate Google OAuth client and test account, and the consent click.
+4. A test Vikunja server and token; Telegram test bot and Slack test workspace/app (or mark them unused).
+5. ChatGPT and Claude connector configuration against the staging MCP endpoint.
+6. Visual judgement of VIS-001 and VIS-003; approval for any merge into p4.

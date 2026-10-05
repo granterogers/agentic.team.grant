@@ -398,6 +398,7 @@
     "check:suite-offices": "tsx scripts/p3/check-suite-offices.ts",
     "staging:preflight": "tsx scripts/staging/preflight.ts",
     "staging:posture": "tsx scripts/staging/posture.ts",
+    "staging:replay": "tsx scripts/staging/replay.ts",
     "forensics:capture": "tsx scripts/forensics/host-capture.ts",
     "forensics:logs": "tsx scripts/forensics/logs-capture.ts",
     "forensics:usage": "tsx scripts/forensics/usage-capture.ts",

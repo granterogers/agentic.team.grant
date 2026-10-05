@@ -2505,7 +2505,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           'Content-Type': mime,
           'x-upsert': 'true',
         },
-        body: bytes,
+        body: bytes as unknown as BodyInit, // a typed array is a valid body at runtime; newer Deno typings reject the generic form
       })
       if (!put.ok) {
         console.error(`hq-api contact_photo: storage ${String(put.status)}`)
@@ -2633,7 +2633,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           'Content-Type': mime,
           'x-upsert': 'true',
         },
-        body: bytes,
+        body: bytes as unknown as BodyInit, // a typed array is a valid body at runtime; newer Deno typings reject the generic form
       })
       if (!put.ok) {
         console.error(`hq-api document_upload: storage ${String(put.status)}`)
@@ -3122,7 +3122,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const streamed = await streamDocument({ plan, provider: made, extractText, record })
     if (!streamed.ok) return json({ error: streamed.failure.message }, streamed.status)
     const safeName = streamed.name.replace(/[^\w. -]+/g, '_').slice(0, 120) || 'document'
-    return new Response(streamed.bytes, {
+    return new Response(streamed.bytes as unknown as BodyInit, {
       status: 200,
       headers: {
         'content-type': streamed.mime,

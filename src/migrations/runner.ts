@@ -80,21 +80,35 @@ export async function ledgerExists(executor: SqlExecutor): Promise<boolean> {
  * @param executor Where to run them.
  * @param hash Content hash, matching what CI uses (SHA-256).
  * @param log Progress sink, so callers choose whether this is chatty.
+ * @param options `apply`: how one file reaches the database. The default is one atomic request, which is what every
+ *   environment that has lived through the history wants; `src/migrations/fresh.ts` is the other, for replaying history on
+ *   an empty project. `knownHistory`: checksums of migrations that were applied ELSEWHERE (the repository's own
+ *   `migrations/applied.json`); they are used for the integrity check only, never to skip a file. A fresh project has applied
+ *   nothing, so without them a recorded collision between two branches (0584 has two files) reads as a pending mistake and
+ *   no fresh replay could ever start.
  */
 export async function runMigrations(
   files: readonly MigrationFile[],
   executor: SqlExecutor,
   hash: (content: string) => string,
   log: (message: string) => void = () => {},
+  options: {
+    readonly apply?: (file: MigrationFile, executor: SqlExecutor) => Promise<unknown>
+    readonly knownHistory?: RecordedChecksums
+  } = {},
 ): Promise<RunResult> {
+  const apply = options.apply ?? ((f: MigrationFile, e: SqlExecutor) => e.execute(f.sql))
   const hasLedger = await ledgerExists(executor)
   const applied = hasLedger ? await readApplied(executor) : []
-  const recorded: RecordedChecksums = Object.fromEntries(
-    // 0001 records itself with a placeholder checksum that the runner then
-    // corrects, so it must not be treated as a real recorded hash on the first
-    // pass. Any all-zero checksum is that placeholder.
-    applied.filter((a) => !/^0{64}$/.test(a.checksum)).map((a) => [a.name, a.checksum]),
-  )
+  const recorded: RecordedChecksums = {
+    ...(options.knownHistory ?? {}),
+    ...Object.fromEntries(
+      // 0001 records itself with a placeholder checksum that the runner then
+      // corrects, so it must not be treated as a real recorded hash on the first
+      // pass. Any all-zero checksum is that placeholder.
+      applied.filter((a) => !/^0{64}$/.test(a.checksum)).map((a) => [a.name, a.checksum]),
+    ),
+  }
 
   // Never apply anything CI would reject. Running the same checks here means a
   // migration cannot reach the database by bypassing CI.
@@ -140,7 +154,7 @@ export async function runMigrations(
     log(`applying ${file.name}`)
     const started = Date.now()
     try {
-      await executor.execute(file.sql)
+      await apply(file, executor)
     } catch (error) {
       throw new MigrationError(
         `${file.name} failed and was rolled back: ${(error as Error).message}`,

@@ -10,14 +10,24 @@
  */
 import '../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import type { MigrationFile } from '../src/migrations/check.ts'
 import { ledgerExists, readApplied, runMigrations } from '../src/migrations/runner.ts'
 
 const MIGRATIONS_DIR = 'migrations'
-const APPLIED_LEDGER = join(MIGRATIONS_DIR, 'applied.json')
+/*
+  `migrations/applied.json` is the repository's record of what PRODUCTION has applied, and `check:migrations` refuses any
+  edit to an entry in it. Rewriting it "from what the database reports" is right when the database is production and
+  catastrophic when it is not: a run against staging would write staging's state (0897..1020, applied nowhere else) over the
+  production ledger, and the next production migration check would treat unapplied files as immutable history. In a
+  staging shell the on-disk ledger is therefore a separate, git-ignored file and the production one is never touched.
+*/
+const STAGING = (process.env.TARGET_ENVIRONMENT ?? '').trim() === 'staging'
+const APPLIED_LEDGER = STAGING
+  ? join('.staging', 'applied.json')
+  : join(MIGRATIONS_DIR, 'applied.json')
 const DEFAULT_PROJECT_REF = 'baujwlzcziasnfhhkchg'
 
 const sha256 = (content: string): string =>
@@ -66,6 +76,7 @@ const result = await runMigrations(files, executor, sha256, (m) => {
 // think we just did. If the two ever disagree, the database is right.
 const applied = await readApplied(executor)
 const ledger = Object.fromEntries(applied.map((a) => [a.name, a.checksum]))
+if (STAGING) await mkdir('.staging', { recursive: true })
 await writeFile(APPLIED_LEDGER, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8')
 
 console.log(
