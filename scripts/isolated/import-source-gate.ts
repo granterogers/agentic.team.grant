@@ -292,15 +292,34 @@ try {
     'Text Team HQ holds from an earlier real read.',
   )
   await q(`select app.document_preview_mark_read(${lit(OFFICE)}::uuid, ${lit(d5h)}::uuid)`)
+  const copiesOf = async (d: string): Promise<number> =>
+    Number(
+      (
+        await q(
+          `select count(*) n from public.documents where imported_from_document_id = ${lit(d)}::uuid`,
+        )
+      )[0]?.n,
+    )
   const r5h = await press(d5h)
   check(
-    '...but material Team HQ already holds needs no provider, so it still imports',
-    r5h.ok === true && r5h.state === 'imported',
+    '...and so is material Team HQ already holds: a disconnected source makes no NEW managed copy (1021)',
+    r5h.ok === false && r5h.error_code === 'SOURCE_DISCONNECTED' && (await copiesOf(d5h)) === 0,
     JSON.stringify(r5h),
   )
 
   // 6. A DURABLE COPY SURVIVES DISCONNECTION; so does history ------------------------------------------------------------
-  const copy = String(r5h.copy_id)
+  // The copy is made while the source is connected, then the source goes away.
+  await q(
+    `update public.integration_connections set state = 'active', revoked_at = null where office_id = ${lit(OFFICE)}::uuid and provider = 'google'`,
+  )
+  const made = await press(d5h)
+  check(
+    'with Google reconnected the held document imports',
+    made.ok === true && made.state === 'imported',
+    JSON.stringify(made),
+  )
+  await revoke(OFFICE)
+  const copy = String(made.copy_id)
   await setAttachment(false)
   const again = await press(d5h)
   check(

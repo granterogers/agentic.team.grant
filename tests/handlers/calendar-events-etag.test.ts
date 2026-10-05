@@ -287,3 +287,96 @@ describe('idempotent retry', () => {
     expect(g.events.get('g1')?.summary).toBe('Somebody else, afterwards')
   })
 })
+
+/*
+  THE ORDER MUST BE KNOWN BEFORE THE LOCAL SIDE MAY OVERWRITE GOOGLE.
+  A 412 must never silently overwrite a newer remote edit. A tie, a missing `updated` and an unreadable `updated` do not
+  say the local edit is genuinely later, so Google's content is kept and the override is written down (the first draft
+  treated an unreadable stamp as "merely stale" and re-sent the local copy with no note at all).
+*/
+describe('when the order of the two edits cannot be known', () => {
+  const setup = (patchUpdated: (g: FakeGoogle) => void, over: Partial<WorkRow> = {}) => {
+    const g = new FakeGoogle()
+    const seeded = g.seed('g1')
+    g.remoteEdit('g1', { summary: 'Edited in Google' })
+    patchUpdated(g)
+    const { db, calls } = recorder()
+    const rows = [
+      row({
+        external_etag: seeded.etag,
+        external_updated_at: seeded.updated,
+        updated_at: '2026-10-04T23:00:00.000000+00:00',
+        ...over,
+      }),
+    ]
+    return { g, calls, go: () => run(g, db, rows) }
+  }
+  it('a TIE keeps Google and writes it down', async () => {
+    const t = setup(
+      (g) => {
+        const e = g.events.get('g1')
+        if (e) e.updated = '2026-10-04T23:00:00.000Z'
+      },
+      { updated_at: '2026-10-04T23:00:00.000000+00:00' },
+    )
+    await t.go()
+    expect(mutations(t.g)).toEqual(['PATCH'])
+    expect(t.g.events.get('g1')?.summary).toBe('Edited in Google')
+    expect(t.calls('project_event_take_remote')).toHaveLength(1)
+  })
+  for (const [name, value] of [
+    ['an UNREADABLE', 'not-a-date'],
+    ['a MISSING', undefined],
+  ] as const) {
+    it(`${name} Google stamp keeps Google, sends nothing, and says why`, async () => {
+      const t = setup((g) => {
+        const e = g.events.get('g1') as { updated?: string } | undefined
+        if (e) e.updated = value
+      })
+      const out = await t.go()
+      expect(mutations(t.g)).toEqual(['PATCH'])
+      expect(t.g.events.get('g1')?.summary).toBe('Edited in Google')
+      const took = t.calls('project_event_take_remote')
+      expect(took).toHaveLength(1)
+      expect(took[0]).toContain('did not say when the event last changed')
+      expect(out.notes.join(' ')).toContain('did not say when')
+    })
+  }
+  it('a DELETE against an unreadable stamp restores the event instead of deleting it', async () => {
+    const t = setup(
+      (g) => {
+        const e = g.events.get('g1')
+        if (e) e.updated = 'garbage'
+      },
+      { op: 'delete' },
+    )
+    await t.go()
+    expect(mutations(t.g)).toEqual(['DELETE'])
+    expect(t.g.events.has('g1')).toBe(true)
+    expect(t.calls('project_event_take_remote')[0]).toContain('delete was not sent')
+  })
+})
+
+describe('a description edited in Google that the pull cannot see', () => {
+  it('is not called "merely stale": the override is written down rather than done silently', async () => {
+    const g = new FakeGoogle()
+    const seeded = g.seed('g1')
+    const e = g.events.get('g1')
+    if (e) {
+      e.description = 'Google description'
+      e.updated = '2026-10-04T10:05:00.000Z'
+      e.etag = '"etag-new"'
+    }
+    const { db, calls } = recorder()
+    // The pull advanced external_updated_at to Google's stamp without importing the description.
+    await run(g, db, [
+      row({
+        external_etag: seeded.etag,
+        external_updated_at: '2026-10-04T10:05:00.000Z',
+        notes: 'old local notes',
+        updated_at: '2026-10-04T23:00:00.000000+00:00',
+      }),
+    ])
+    expect(calls('project_event_conflict_note')).toHaveLength(1)
+  })
+})

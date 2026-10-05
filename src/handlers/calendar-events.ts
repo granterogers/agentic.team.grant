@@ -25,7 +25,7 @@
  * before etags were kept, or adopted) is sent without the header and falls back to the pull's rule below.
  *
  * On a 412 the event is read back and ONE rule applies, the same one `app.project_events_pull` applies to a change the
- * pull finds: **the later writer wins, and the override is written down** (the row's `sync_error` begins "conflict:", and
+ * pull finds: **the later writer wins (an unknown order or a tie keeps Google's), and the override is written down** (the row's `sync_error` begins "conflict:", and
  * an Activity event on the channel `google_sync` names the winner).
  *
  *   - Google has nothing newer than the stamp the sides last agreed on (the etag was merely stale, e.g. after the pull
@@ -225,9 +225,24 @@ async function resolveConflict(
   const remoteAt = stamp(remote.updated)
   const sideAgreedAt = stamp(row.external_updated_at)
   const localAt = stamp(row.updated_at)
-  // Nothing in Google newer than what we already absorbed: the etag was stale, the content is not in dispute.
-  const merelyStale = remote.updated !== null && remoteAt <= sideAgreedAt
-  const localWins = merelyStale || localAt >= remoteAt
+  /*
+    A 412 must NEVER silently overwrite a newer remote edit, so the local side wins only when the order is KNOWN:
+      - Google's `updated` is missing or unreadable: unknown, Google's content is kept and the override is noted.
+      - the two stamps are EQUAL: this edit is not genuinely later, so Google's is kept.
+    "Merely stale" (nothing newer than what was absorbed) additionally requires the content Google holds to be what this
+    row holds for the fields the pull cannot see: a description-only edit in Google advances `external_updated_at` without
+    updating `notes`, so timestamps alone would call it stale and re-send the old description over it.
+  */
+  const known = Number.isFinite(remoteAt)
+  const same = (a: string | null | undefined, b: string | null | undefined): boolean =>
+    (a ?? '').trim() === (b ?? '').trim()
+  const merelyStale =
+    known &&
+    Number.isFinite(sideAgreedAt) &&
+    remoteAt <= sideAgreedAt &&
+    same(remote.notes, row.notes) &&
+    same(remote.location, row.location)
+  const localWins = merelyStale || (known && Number.isFinite(localAt) && localAt > remoteAt)
 
   if (localWins) {
     const retry =
@@ -262,8 +277,12 @@ async function resolveConflict(
   // Google's change is later: it is kept, here, and the local edit (or delete) is not sent.
   const note =
     row.op === 'delete'
-      ? 'the event was changed in Google after it was deleted here, so it is back and the delete was not sent'
-      : 'a pending edit here was overridden by a newer change in Google'
+      ? known
+        ? 'the event was changed in Google after it was deleted here, so it is back and the delete was not sent'
+        : 'Google did not say when the event last changed, so it is kept and the delete was not sent'
+      : known
+        ? 'a pending edit here was overridden by a newer change in Google'
+        : 'Google did not say when the event last changed, so its version was kept and this edit was not sent'
   const took = (
     await db.execute(
       `select app.project_event_take_remote(${lit(office)}::uuid, ${lit(row.event_id)}::uuid, ${lit(row.updated_at)}::timestamptz,
