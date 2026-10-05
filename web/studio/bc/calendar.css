@@ -58,6 +58,8 @@
 [data-experience='basecamp'] .bccal2status--bad { color: var(--bc-danger, #f0907e); }
 
 /* ---- month */
+/* A week row of the month grid (ARIA needs rows inside a grid). NOT .bccal2row, which is the event form's two-column row. */
+[data-experience='basecamp'] .bccal2wk { display: contents; }
 [data-experience='basecamp'] .bccal2month {
   flex: 1 1 auto;
   min-height: 0;
@@ -151,7 +153,7 @@
 [data-experience='basecamp'] .bccal2blk:hover,
 [data-experience='basecamp'] .bccal2blk:focus-visible { background: color-mix(in srgb, var(--bc-accent) 36%, var(--bc-surface)); z-index: 3; }
 [data-experience='basecamp'] .bccal2blk--google { border-left-color: #e8a04a; background: color-mix(in srgb, #e8a04a 24%, var(--bc-surface)); }
-[data-experience='basecamp'] .bccal2bt { color: var(--bc-text-muted); margin-right: 4px; font-variant-numeric: tabular-nums; }
+[data-experience='basecamp'] .bccal2bt { color: var(--bc-text); margin-right: 4px; font-variant-numeric: tabular-nums; }
 [data-experience='basecamp'] .bccal2now { position: absolute; left: 0; right: 0; height: 2px; background: #f0907e; z-index: 2; }
 [data-experience='basecamp'] .bccal2now::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 999px; background: #f0907e; }
 
@@ -227,7 +229,7 @@
   [data-experience='basecamp'] .bccal2btn--icon { width: 44px; }
   [data-experience='basecamp'] .bccal2btn--seg { min-height: 40px; }
   [data-experience='basecamp'] .bccal2num { min-width: 32px; height: 30px; }
-  [data-experience='basecamp'] .bccal2scope select { min-height: 44px; }
+  [data-experience='basecamp'] .bccal2scope select { min-height: 44px; font-size: 16px; }
   [data-experience='basecamp'] .bccal2month--dense { grid-template-rows: auto repeat(6, 44px); }
 }
 @media (prefers-reduced-motion: reduce) { .bccal2form { animation: none; } }

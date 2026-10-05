@@ -421,26 +421,33 @@ const monthBody = (list, s, dense) => {
   const today = todayIso()
   const month = s.cursor.slice(0, 7)
   const cells = monthCells(s.cursor)
+  // ARIA: a grid holds rows and a row holds cells, so the days are grouped by week (the rows are display: contents).
+  const weeks = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
   const cap = dense ? 0 : 3
   return `<div class="bccal2month${dense ? ' bccal2month--dense' : ''}" role="grid" aria-label="${esc(`${MONTHS[Number(month.slice(5)) - 1]} ${month.slice(0, 4)}`)}">
-    ${DOW_LONG.map((d) => `<span class="bccal2dow" role="columnheader">${esc(dense ? d.charAt(0) : d.slice(0, 3))}</span>`).join('')}
-    ${cells
-      .map((day) => {
-        const evs = onDay(list, day)
-        const out = day.slice(0, 7) !== month
-        const cls = ['bccal2cell']
-        if (day === today) cls.push('is-today')
-        if (out) cls.push('is-out')
-        if (day === s.sel) cls.push('is-sel')
-        if (evs.length > 0) cls.push('has')
-        const shown = evs.slice(0, cap)
-        const more = evs.length - shown.length
-        return `<div class="${cls.join(' ')}" role="gridcell" data-cal-day="${day}">
+    <div class="bccal2wk" role="row">${DOW_LONG.map((d) => `<span class="bccal2dow" role="columnheader">${esc(dense ? d.charAt(0) : d.slice(0, 3))}</span>`).join('')}</div>
+    ${weeks
+      .map(
+        (week) => `<div class="bccal2wk" role="row">${week
+          .map((day) => {
+            const evs = onDay(list, day)
+            const out = day.slice(0, 7) !== month
+            const cls = ['bccal2cell']
+            if (day === today) cls.push('is-today')
+            if (out) cls.push('is-out')
+            if (day === s.sel) cls.push('is-sel')
+            if (evs.length > 0) cls.push('has')
+            const shown = evs.slice(0, cap)
+            const more = evs.length - shown.length
+            return `<div class="${cls.join(' ')}" role="gridcell" data-cal-day="${day}">
           <button type="button" class="bccal2num" data-cal-pick="${day}" aria-label="${esc(`${dayWords(day)}${evs.length > 0 ? `, ${String(evs.length)} ${evs.length === 1 ? 'item' : 'items'}` : ''}`)}">${String(parseDay(day).getDate())}</button>
           ${dense ? '' : `<div class="bccal2chips">${shown.map((e) => chip(e, day, true)).join('')}${more > 0 ? `<button type="button" class="bccal2more" data-cal-open-day="${day}">+${String(more)} more</button>` : ''}</div>`}
           ${dense && evs.length > 0 ? `<span class="bccal2dots" aria-hidden="true">${evs.slice(0, 3).map((e) => `<i class="bccal2dot bccal2dot--${esc(e.source === 'google' ? 'google' : e.source === 'task' ? 'task' : 'own')}"></i>`).join('')}</span>` : ''}
         </div>`
-      })
+          })
+          .join('')}</div>`,
+      )
       .join('')}
   </div>`
 }

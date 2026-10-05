@@ -438,6 +438,8 @@
     "verify:docs-ui": "tsx scripts/verify/docs-ui.ts",
     "verify:palette": "tsx scripts/verify/palette.ts",
     "verify:activity-ui": "tsx scripts/verify/activity-ui.ts",
+    "verify:ux-motion": "tsx scripts/verify/ux-motion.ts",
+    "verify:ux-a11y": "tsx scripts/verify/ux-a11y.ts",
     "verify:style-ui": "tsx scripts/verify/style-ui.ts",
     "basecamp:shots": "tsx scripts/verify/basecamp-shots.ts",
     "basecamp:measure": "tsx scripts/verify/basecamp-measure.ts",

@@ -2921,7 +2921,7 @@ const documentRecord = (p) => {
       </span>
     </div>
     <div class="bcdocgrid">
-      <div class="bcdocpreview" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-doctitle="${esc(d.title ?? '')}">
+      <div class="bcdocpreview" role="region" tabindex="0" aria-label="${esc(`Preview of ${d.title ?? 'the document'}`)}" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-doctitle="${esc(d.title ?? '')}">
         ${
           isAudio && file !== ''
             ? `<div class="bcplayer">

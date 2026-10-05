@@ -3887,8 +3887,10 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   color: var(--bc-text-strong);
 }
 [data-experience='basecamp'] .bcdockbtn:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
-[data-experience='basecamp'] .bcdockbtn[data-quiet] { opacity: 0.55; }
-[data-experience='basecamp'] .bcdockbtn[data-quiet]:hover { opacity: 1; }
+/* Quiet means a quieter COLOUR, not a lower opacity: opacity .55 measured 3.07:1 (axe, scripts/verify/ux-a11y.ts), the muted token measures well above 4.5. */
+[data-experience='basecamp'] .bcdockbtn[data-quiet] { color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcdockbtn[data-quiet]:hover,
+[data-experience='basecamp'] .bcdockbtn[data-quiet]:focus-visible { color: var(--bc-text-strong); }
 [data-experience='basecamp'] .bcdockicon { width: 28px; padding: 0; justify-content: center; font-size: 16px; }
 [data-experience='basecamp'] .bczoomval { min-width: 46px; justify-content: center; padding: 0 4px; font-variant-numeric: tabular-nums; }
 
@@ -4034,7 +4036,11 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   [data-experience='basecamp'] .bcdockicon { width: 44px; }
   [data-experience='basecamp'] .bcpostittext { font-size: 16px; }
   [data-experience='basecamp'] .bcpostitx { opacity: 0.85; width: 44px; height: 20px; }
-  [data-experience='basecamp'] .bcmodbtn { width: 36px; height: 36px; }
+  /* A placed module's controls were 24px on a touch tablet: .bcmod--placed .bcmodbtn is more specific than the plain rule
+     and won. Named here so the 44px floor applies where the controls really are. */
+  [data-experience='basecamp'] .bcmodbtn,
+  [data-experience='basecamp'] .bcmod--placed .bcmodbtn { width: 44px; height: 44px; }
+  [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead { padding-right: 140px; }
   [data-experience='basecamp'] .bcmodctl { opacity: 1; }
 }
 
