@@ -77,7 +77,9 @@ try {
   // hq_studio_lately is migration 1029 and needs 0920; on production's applied line it is not there to compare.
   const hasLately =
     (await rows(`select to_regproc('app.event_via_label') is not null as ok`))[0]?.ok === true
-  console.log(`  hq_studio_lately ${hasLately ? 'compared (0920 present)' : 'skipped (0920 absent)'}`)
+  console.log(
+    `  hq_studio_lately ${hasLately ? 'compared (0920 present)' : 'skipped (0920 absent)'}`,
+  )
   let compared = 0
   let sawAnswers = 0
   let sawAsked = 0
