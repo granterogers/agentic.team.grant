@@ -1,61 +1,47 @@
 # Staging handoff plan - Team HQ UX branch -> integration -> staging
 
-Written 5 October 2026 against `claude/team-hq-ux-overnight` (feature phase FROZEN) and `claude/multi-user-p4`
-at `1c2e0293`. Nothing here has been executed. Production is not touched at any step; staging is a SEPARATE
+Written 5 October 2026, updated on the integration branch `integration/team-hq-ux-on-p4` (p4 `1c2e0293` + the frozen UX branch `f91c4c1f`). Nothing here has been executed. Production is not touched at any step; staging is a SEPARATE
 Supabase project, a SEPARATE Vercel preview, and separate Google / Telegram / Slack / Vikunja credentials.
 
 The purpose of staging is to FIND failures local fakes could not. A row moves PARTIAL -> TESTED / VISUALLY VERIFIED
 only when the real evidence exists. A failing real-service test is recorded as it happened, diagnosed (code defect
 vs environment), fixed if code, retested; the row stays PARTIAL until genuinely proven. No assertion is weakened.
 
-## 0. State of the two branches (read-only analysis, done)
+## 0. State (integration done locally; nothing deployed)
 
 | | |
 |---|---|
-| p4 HEAD | `1c2e0293` (4 commits past the merge base `5e3eafa6`, all Supabase forensics: docs, `scripts/forensics/*`, tests, 9 `forensics:*` npm scripts) |
-| p4 migrations | end at **0896**; p4 added **none** since the base |
-| UX branch migrations | 20 new files, 0897 .. 1010, all unapplied, none of them numbered on any other remote branch |
-| Number collisions | **none** (no remote branch carries a migration >= 0897 that this branch lacks; `check:migrations` passes on a trial merge) |
-| Textual merge | **clean** (trial merge in a throwaway worktree, then deleted; overlaps `docs/HANDOFF.md` and `package.json` auto-merge) |
-| Semantic conflict | **one**: p4's forensics scripts talk to the Supabase Management API with the access token and carry no production-access gate, so `tests/safety/production-gate-coverage.test.ts` fails 2 tests after the merge (`forensics:capture|logs|usage|metrics|temp-logging` and `scripts/forensics/{common,customer-metrics,host-capture,logs-capture,temp-files-logging,usage-capture}.ts`). tsc passes. |
+| Integration branch | `integration/team-hq-ux-on-p4`: p4 `1c2e0293` + the frozen UX branch `f91c4c1f` merged `--no-ff` (textually clean) + the integration fixes below. p4 and the UX branch are untouched. |
+| Migrations | p4 ends at 0896. This branch adds, in order: 0897 0900 0920 0921 0922 0923 0924 0925 0930 0940 0950 0960 0970 0980 0981 0990 0991 1000 1001 1010 **1020**. No collisions; no renumbering. `scripts/isolated/replica.sh` replayed the whole history, each migration in its own transaction stopping at the first error, through 1020. |
+| Integration fixes (this branch only) | p4 forensics collectors join the production-access guard; CLAUDE.md states the safety contract; DOC-026 background indexing (1020); the Import gate fails closed; staging preflight + held-duties posture; replica proofs no longer import gated commands; the default arrangement no longer overlaps itself on a narrow stage; the grid-era torture suite is rewritten for the freeform model; a stale 16px check is measured on a touch phone. |
+| Failures that are p4\'s own | 42 of 68 canonical `run-all.sh` proofs, and the p2 attack/sabotage/plants set, fail identically on p4 alone (`jobs.office_id` NOT NULL against pre-multi-user fixtures, a replica builder that re-applies 0654). The integration branch matches p4 on all 68 after the one fix above. Not caused by, and not fixed on, this branch. |
 
-## A. Integrate (merge, not rebase; the branch has 77 commits that others may have fetched)
+## A. Integrate
 
-1. `git checkout -b integration/team-hq-ux-on-p4 origin/claude/multi-user-p4`
-2. `git merge --no-ff origin/claude/team-hq-ux-overnight` (expected: no conflicts).
-3. Close the one semantic conflict ON THE INTEGRATION BRANCH (never on p4): first import of each of the five collectors
-   (`host-capture`, `logs-capture`, `usage-capture`, `customer-metrics`, `temp-files-logging`) is
-   `../../src/safety/require-production-checks.ts`; `common.ts` imports `../../src/safety/arm.ts`; classify the nine
-   `forensics:*` commands in `docs/testing/production-access.json` and `docs/production-access-guard.md` (read-only).
-4. Gate on the integration branch: `tsc`, `biome ci`, `check:templates`, `check:migrations`, full vitest (only
-   `weather-is-not-a-failure` may fail), the isolated proofs on a rebuilt replica, the Playwright suites in the closure report.
-5. Push the integration branch. Nothing merges into p4 or main without Grant.
+Done on `integration/team-hq-ux-on-p4`. Nothing merges into p4 or main without Grant. A pull request is opened only when asked.
 
 ## B. Migrations
 
-No renumbering is needed. Order (all 20, ascending): 0897 0900 0920 0921 0922 0923 0924 0925 0930 0940 0950 0960 0970
-0980 0981 0990 0991 1000 1001 1010. Hard dependencies: 0991 needs 0900+0960+0990; 1010 needs 0896+0900+0960+0990+0991+1000;
-1001 needs 0970; 0940 needs 0900. Applied migrations are immutable: if staging exposes a defect in one, fix it with
-a NEW migration (1011+). Re-run `check:migrations` after the merge; `0584` is the one recorded historical collision.
+Apply in the order above. Hard dependencies: 0991 needs 0900+0960+0990; 1010 needs 0896+0900+0960+0990+0991+1000; 1020 needs 1010; 1001 needs 0970; 0940 needs 0900. Applied migrations are immutable; a defect found in staging is fixed with a NEW migration (1021+). `0584` is the one recorded historical collision.
 
-## C. Fresh staging database
+## C. Staging safety, before anything is created or deployed
 
-1. Grant creates (or confirms) a staging Supabase project. Record its ref; record the production ref as a BLOCKLIST value.
-2. Preflight before anything else (shell variables name the staging ref only; assert `SUPABASE_PROJECT_REF != production`).
-   NOTE the guard is target-agnostic: `ALLOW_PRODUCTION_CHECKS=1` opens ANY `*.supabase.co` host, staging included,
-   so the only protection against pointing at production is the environment you export. Use a dedicated shell.
-3. Bootstrap by replaying `migrations/` 0001..1010 into the empty project with `ALLOW_PRODUCTION_CHECKS=1
-   ALLOW_PRODUCTION_WRITES=1 npm run migrate`. Free tier is 500 MB: watch size (p4's forensics work is about
-   degradation under load).
-4. Seed one real office + one second test office (for G/P) through the product's own sign-in path, not SQL.
+1. Grant creates (or confirms) a staging Supabase project; the production ref goes in a local, git-ignored `.staging/production-identifiers.json` with every other production identifier (`{"refs":[],"hosts":[],"identifiers":[]}`: Google client id, bot username, Slack team id, Vikunja host, bucket name).
+2. A dedicated shell exports ONLY staging values (`npm run staging:preflight -- --template` lists them). `npm run staging:preflight` must print `STAGING PREFLIGHT PASSED`. It refuses an unset project ref (scripts default to the production ref), a ref typed two ways that disagree, any address that names another project, a Vercel environment that is not `preview`, a production-named identifier anywhere in the environment, and an integration nobody named. NOTE: the sandbox this was written in exports `NEXT_PUBLIC_SUPABASE_URL` naming production and the preflight correctly refused it.
+3. The production guard is target-agnostic (it recognises Supabase hosts): `ALLOW_PRODUCTION_CHECKS=1` / `ALLOW_PRODUCTION_WRITES=1` open staging AND production alike. The preflight, not the flags, says which one the shell points at.
 
-## D. Apply in dependency order -> E. Deploy in dependency order
+## D. Fresh staging database
 
-Migrations first (all of D), then: worker (`deploy:worker`) -> `hq-api` (`deploy:hq`; its bundle includes the new Deno
-`preview.ts` and has NEVER been compiled by a deploy, so expect the first failure here) -> `mcp` -> web as a Vercel
-PREVIEW deployment pointed at staging (never the production alias). `google-oauth` is unchanged in code. Telegram,
-Slack, voice stay undeployed unless a test needs them, and then only with separate test bots (see Risks).
-Each deploy probes itself and fails when the probe fails; stop at the first failure.
+Replay `migrations/` 0001..1020 into the empty staging project (`npm run migrate` with both flags and the staging environment). Free tier is 500 MB. Seed two test offices through the product\'s own sign-in path.
+
+## E. Deploy, in this order (derived from the code, not from the earlier report)
+
+1. `npm run staging:posture -- hold` **before any worker exists**. It refuses unless the preflight passes and unless the database has migration 1020 (a hold the database does not honour reads as safe and is not).
+2. `npm run staging:preflight -- --live` (needs `ALLOW_PRODUCTION_CHECKS=1`): the duties are held AND honoured. Only then:
+3. `deploy:worker` -> `deploy:hq` (`hq-api`; its bundle includes the new Deno `preview.ts`, never compiled by a real deploy, so expect the first failure here) -> `deploy:mcp` -> the web page as a Vercel PREVIEW. Telegram, Slack, voice stay undeployed until a test needs them, and then only with separate test bots.
+4. Allow duties one at a time: `npm run staging:posture -- allow calendar-event-sync` and so on. `drive-index` additionally ships switched OFF: `update public.responsibilities set enabled = true where slug = 'drive-index'` for the staging office, then `allow drive-index`.
+
+Version skew, read from the code: a NEW worker on an OLD database is safe (the Import gate fails closed; style-keep says nothing was saved; the preview writes are guarded; `drive.index` has no duty until 1020). An OLD worker on a NEW database is safe (1010 gates the SQL doors, the 1020 duty is off and the hold is honoured by SQL, not by the worker). The only window is a fetch job queued before 1010 and run by an old worker, which the SQL gate at enqueue time makes small. **Migrations first, then the worker.**
 
 ## F. Staging-safe gateway and security checks
 
