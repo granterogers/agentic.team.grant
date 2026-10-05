@@ -135,6 +135,8 @@ export const entry = () => {
  * ------------------------------------------------------------------------ */
 
 let who = ''
+/** Whether the address is being asked for right now (see the set-up screen). */
+let whoAsking = false
 
 export const setup = () => {
   let remembered = form.name
@@ -320,8 +322,11 @@ export function wire(root) {
   }
 
   if (m === 'setup') {
-    if (who === '') {
-      void session.whoami().then((email) => {
+    // One question at a time: this runs on every draw of the set-up screen, and two draws before the first answer used to ask twice.
+    if (who === '' && !whoAsking) {
+      whoAsking = true
+      void session.whoami().catch(() => '').then((email) => {
+        whoAsking = false
         if (email !== '' && who === '') {
           who = email
           redraw()
