@@ -107,3 +107,66 @@ describe('drive.read_file for an Import press: the gate fails closed', () => {
     expect(r.sql.some((q) => /google|vault|secret/i.test(q))).toBe(true)
   })
 })
+
+/*
+  A read that no Import press started (the watch's ingest) is also a fetch from the provider. It is stopped when the
+  folder it came from has been switched off since it was queued, and ONLY on an explicit "no": an answer that cannot be
+  had (a database older than the worker) leaves the read going, as it always did.
+*/
+const runWatch = async (answer: 'off' | 'on' | 'missing') => {
+  const fetched: string[] = []
+  const db = {
+    execute: async (q: string) => {
+      if (q.includes('select pinned_config'))
+        return {
+          rows: [
+            {
+              pinned_config: {
+                file_id: 'f1',
+                folder_id: 'fo1',
+                project_id: 'p1',
+                mime_type: 'text/plain',
+              },
+            },
+          ],
+        } as never
+      if (q.includes('app.source_connected(')) {
+        if (answer === 'missing')
+          throw new Error('42883: function app.source_connected does not exist')
+        return { rows: [{ ok: answer === 'on' }] } as never
+      }
+      if (q.includes('google.client_id'))
+        return { rows: [{ client_id: '', client_secret: '', refresh_token: '' }] } as never
+      return { rows: [] } as never
+    },
+  } as unknown as SqlExecutor
+  const handler = driveReadHandler({
+    db,
+    projectRef: 'x',
+    serviceKey: 'y',
+    fetchImpl: (async (u: string | URL) => {
+      fetched.push(String(u))
+      throw new Error('REFUSED: no network in this test')
+    }) as typeof fetch,
+  })
+  const out = (await handler.handle(
+    { jobId: JOB, projectId: 'p1', kind: 'drive.read_file' } as never,
+    {} as never,
+  )) as { body: string }
+  return { out, fetched }
+}
+
+describe('drive.read_file for a watch ingest: a switched-off folder stops the read', () => {
+  it('off: refused with the typed code before any credential is read or Drive asked', async () => {
+    const r = await runWatch('off')
+    expect(r.out.body).toContain('SOURCE_DISCONNECTED')
+    expect(r.out.body).toContain('switched off since the read was queued')
+    expect(r.fetched).toEqual([])
+  })
+  for (const a of ['on', 'missing'] as const) {
+    it(`${a}: not stopped by the gate (it goes on to the ordinary Google steps)`, async () => {
+      const r = await runWatch(a)
+      expect(r.out.body).not.toContain('switched off since the read was queued')
+    })
+  }
+})

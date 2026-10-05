@@ -147,6 +147,29 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
         return failed('I need a Drive file, the folder it is in, and a project to file it under.')
       }
 
+      /*
+        A read nobody pressed Import for (the watch's ingest, queued earlier) is also a fetch from the provider, and the
+        folder it came from may have been switched off since it was queued. Asked of the same predicate the readers use
+        (0896). Here a missing answer is NOT a refusal: this worker can be ahead of a database that lacks the function, and
+        reads that predate it must keep working; only an explicit "no" stops the read. The Import path above fails closed.
+      */
+      if (!(p.import_request === true && importDoc !== '')) {
+        let connected = true
+        try {
+          const c = await deps.db.execute(
+            `select app.source_connected('source', ${lit(projectId)}::uuid, 'drive', ${lit(folderId)}) as ok`,
+          )
+          connected = (c.rows[0] as { ok?: unknown } | undefined)?.ok !== false
+        } catch {
+          connected = true
+        }
+        if (!connected) {
+          return failed(
+            'SOURCE_DISCONNECTED: the folder this file came from has been switched off since the read was queued, so it was not fetched.',
+          )
+        }
+      }
+
       const access = await driveAccess(deps.db, fetchImpl)
       if (!('accessToken' in access)) {
         // The scope story, in its own words. "Drive did not work" would send
