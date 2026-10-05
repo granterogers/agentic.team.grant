@@ -102,7 +102,7 @@ type Scenario = {
   page: Page
 }
 
-async function open(office: boolean, query = ''): Promise<Scenario> {
+async function open(office: boolean, query = '', refuse = false): Promise<Scenario> {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await ctx.newPage()
   await page.clock.install()
@@ -134,6 +134,13 @@ async function open(office: boolean, query = ''): Promise<Scenario> {
     }
     const section = url.searchParams.get('section') ?? url.pathname
     log.push(section)
+    if (refuse) {
+      return route.fulfill({
+        status: 401,
+        headers: { ...cors, 'content-type': 'application/json' },
+        body: JSON.stringify({ error: 'unauthorised' }),
+      })
+    }
     if (!exists) {
       return route.fulfill({
         status: 403,
@@ -256,6 +263,22 @@ try {
   check(
     (await b.page.locator('body').innerText()).includes('set up your office'),
     'the page still tells them to set up their office',
+  )
+
+  // ---- 2b. a credential the office refuses --------------------------------------------------------------------------------
+  console.log('2b. a credential the office refuses')
+  const r = await open(true, '', true)
+  console.log(`   on load: ${String(r.log.length)} requests: ${show(r.log)}`)
+  const rreads = r.log.filter((x) => !x.startsWith('POST'))
+  check(
+    rreads.length === 1 && rreads[0] === 'studio',
+    `one read, the studio payload that is refused (saw ${String(rreads.length)}: ${rreads.join(', ')})`,
+  )
+  const ridle = r.log.length
+  await visibleMinute(r.page)
+  check(
+    r.log.length === ridle,
+    `and nothing over a minute (saw ${String(r.log.length - ridle)} more)`,
   )
 
   // ---- 3. the transition -----------------------------------------------------------------------------------------------
