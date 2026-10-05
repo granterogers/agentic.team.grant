@@ -38,9 +38,9 @@
  * the browsing ledger reader uses, `app.harness_browsing`) is refused before anything is opened.
  */
 
+import { mayAct } from '../agents/approval.ts'
 import type { BrowserAdapter } from '../browser/adapter.ts'
 import { CloudflareBrowser } from '../browser/cloudflare.ts'
-import { mayAct } from '../agents/approval.ts'
 import { downloadFile } from '../browser/download.ts'
 import { FetchedBrowser } from '../browser/fetched.ts'
 import { normalise, type PageLink, termsOf } from '../browser/links.ts'

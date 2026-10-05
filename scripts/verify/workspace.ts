@@ -430,10 +430,7 @@ await page.waitForTimeout(500)
     await page.locator('[data-mod="schedule"]').hover()
     await page.locator('[data-bc-max="schedule"]').click()
     await page.waitForTimeout(600)
-    await page
-      .locator('.bcexpx[data-bc-expclose]')
-      .first()
-      .click()
+    await page.locator('.bcexpx[data-bc-expclose]').first().click()
     await page.waitForTimeout(700)
   }
   check(
@@ -516,7 +513,7 @@ await page.waitForTimeout(500)
     (
       await page
         .locator('.bcpostittext')
-        .evaluateAll((els) => els.map((e) => (e as HTMLTextAreaElement).value))
+        .evaluateAll((els) => els.map((e) => (e as unknown as { value: string }).value))
     ).includes('keep this sentence'),
   )
   await page.reload({ waitUntil: 'domcontentloaded' })
@@ -527,7 +524,7 @@ await page.waitForTimeout(500)
     (
       await page
         .locator('.bcpostittext')
-        .evaluateAll((els) => els.map((e) => (e as HTMLTextAreaElement).value))
+        .evaluateAll((els) => els.map((e) => (e as unknown as { value: string }).value))
     ).includes('keep this sentence'),
   )
   // keyboard
@@ -566,7 +563,7 @@ await page.waitForTimeout(500)
   await page.waitForTimeout(600)
   const values = (await page
     .locator('.bcpostittext')
-    .evaluateAll((els) => els.map((e) => (e as HTMLTextAreaElement).value))) as string[]
+    .evaluateAll((els) => els.map((e) => (e as unknown as { value: string }).value))) as string[]
   check(
     'two tabs each add a note and neither erases the other',
     values.includes('typed in tab A') && values.includes('typed in tab B'),

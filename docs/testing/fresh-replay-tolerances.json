@@ -4,9 +4,7 @@
     "0054_staff_have_their_own_bots.sql": [
       "23514: new row for relation \"telegram_bots\" violates check c"
     ],
-    "0137_work_a_worker_cannot_do.sql": [
-      "42P07: relation \"_dq_probe\" already exists"
-    ],
+    "0137_work_a_worker_cannot_do.sql": ["42P07: relation \"_dq_probe\" already exists"],
     "0167_claire_can_see_the_place.sql": [
       "P0001: voice_state knows of no projects, so a call would kno"
     ],
@@ -64,9 +62,7 @@
     "0572_an_undo_it_offers_it_can_perform.sql": [
       "P0001: no recorded reversals at all - the check above proved"
     ],
-    "0573_the_two_the_rows_could_not_show.sql": [
-      "42809: \"array_agg\" is an aggregate function"
-    ],
+    "0573_the_two_the_rows_could_not_show.sql": ["42809: \"array_agg\" is an aggregate function"],
     "0574_a_suite_that_signs_its_own_messages.sql": [
       "P0001: no suite-signed commands at all - the checks above pr"
     ],
@@ -76,21 +72,15 @@
     "0583_acknowledging_what_the_guard_could_not_see.sql": [
       "P0001: known escapes fell to 0, so the evidence was lost rat"
     ],
-    "0584_a_duty_may_not_say_the_same_thing_every_hour.sql": [
-      "P0001: no subject to drive with"
-    ],
+    "0584_a_duty_may_not_say_the_same_thing_every_hour.sql": ["P0001: no subject to drive with"],
     "0585_two_projects_saying_the_same_thing_are_two_facts.sql": [
       "P0001: no subject to drive with"
     ],
     "0586_his_activity_feed_was_mostly_test_traffic.sql": [
       "P0001: the panel has nothing real left on it"
     ],
-    "0588_a_failure_nobody_can_attribute_is_not_his.sql": [
-      "P0001: no real job to drive with"
-    ],
-    "0589_dedupe_on_what_it_is_about.sql": [
-      "P0001: no subject to drive with"
-    ],
+    "0588_a_failure_nobody_can_attribute_is_not_his.sql": ["P0001: no real job to drive with"],
+    "0589_dedupe_on_what_it_is_about.sql": ["P0001: no subject to drive with"],
     "0590_a_credential_that_administers_is_not_one_that_acts.sql": [
       "P0001: 0590: Slack still reads unreachable on a live bot tok"
     ],
