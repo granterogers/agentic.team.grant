@@ -109,16 +109,17 @@ const slug = `recovery-proof-${run}`
 const projectId = String(
   (
     await one(`
-      insert into public.projects (slug, name, purpose, status)
-      values (${lit(slug)}, ${lit(`Recovery proof ${run}`)},
+      -- Grant's office (#45): a real-looking subject, pressed as the operator.
+      insert into public.projects (office_id, slug, name, purpose, status)
+      values (app.test_office(), ${lit(slug)}, ${lit(`Recovery proof ${run}`)},
               'Removed at the end of this run', 'paused')
       returning project_id::text as id`)
   ).id,
 )
 // Something held, which is what makes it recoverable rather than debris.
 await db.execute(`
-  insert into public.tasks (project_id, title, state)
-  values (${lit(projectId)}::uuid, ${lit(`Something it held ${run}`)}, 'todo')`)
+  insert into public.tasks (office_id, project_id, title, state)
+  values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid), ${lit(projectId)}::uuid, ${lit(`Something it held ${run}`)}, 'todo')`)
 
 /*
   And a source, because ADR-0014 refuses an ACTIVE project with nothing
@@ -424,10 +425,12 @@ check(
   )
   check(
     'and the recovery list is a section the page reads',
-    /archived: \{ fn: 'recoverable_projects' \}/.test(gateway) && /read\('archived'\)/.test(page)
+    /archived: \{ fn: 'recoverable_projects'(, office: true)? \}/.test(gateway) &&
+      /read\('archived'\)/.test(page)
       ? 'bound and read'
       : 'NOT REACHABLE',
-    /archived: \{ fn: 'recoverable_projects' \}/.test(gateway) && /read\('archived'\)/.test(page),
+    /archived: \{ fn: 'recoverable_projects'(, office: true)? \}/.test(gateway) &&
+      /read\('archived'\)/.test(page),
   )
 }
 

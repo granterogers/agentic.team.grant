@@ -26,6 +26,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveLive } from './serve-live.ts'
 import { serveStudio } from './serve-studio.ts'
@@ -122,20 +123,32 @@ const drag = async (
   await page.waitForTimeout(320)
 }
 
-await home()
-await page.evaluate(
-  inPage(`for (const k of Object.keys(localStorage)) {
-   if (k.startsWith('bc.layout.')) localStorage.removeItem(k)
- }
- return true`),
-)
-await home()
+/*
+  THE FREEFORM MODEL (Grant, 4 October 2026; HQ-LAYOUT-005 and 006): a module goes exactly where it is put, overlap is
+  permitted, and nothing else moves. This suite was written for the grid it replaced (22 September: nothing may overlap, a
+  neighbour gives way), which is retired on purpose and not weakened - tests/studio/layout.test.ts says so. What survives
+  here is what a person still notices the moment it is wrong: every module can be moved and resized, nothing collapses or is
+  lost, the controls stay reachable, a press still opens, the arrangement is remembered, and the page STARTS without
+  overlapping itself at every width.
+*/
+const fresh = async (): Promise<void> => {
+  await home()
+  await page.evaluate(
+    inPage(`for (const k of Object.keys(localStorage)) {
+     if (k.startsWith('bc.layout.') || k.startsWith('bc.stage.')) localStorage.removeItem(k)
+   }
+   return true`),
+  )
+  await home()
+}
+await fresh()
 const ALL = (await boxes()).map((b) => b.id)
 check('the board has every module on it to torture', ALL.length >= 6, ALL.join(', '))
 
 /* --- 1. move every module, and check the board after each --------------- */
 let moveTrouble = ''
 for (const id of ALL) {
+  await fresh()
   const before = await boxes()
   const me = before.find((b) => b.id === id)
   const head = await page.locator(`[data-mod="${id}"] .bcmodhead`).first().boundingBox()
@@ -150,18 +163,27 @@ for (const id of ALL) {
     { x: target.x + 60, y: target.y + 30 },
   )
   const after = await boxes()
-  const clash = overlapping(after)
-  if (clash !== '') {
-    moveTrouble = `moving ${id} left ${clash} overlapping`
-    break
-  }
+  const now = after.find((b) => b.id === id) as Box
   if (after.length !== before.length) {
     moveTrouble = `moving ${id} lost a module`
     break
   }
+  if (Math.abs(now.x - me.x) + Math.abs(now.y - me.y) < 60) {
+    moveTrouble = `${id} did not go where it was put (${String(me.x)},${String(me.y)} -> ${String(now.x)},${String(now.y)})`
+    break
+  }
+  const disturbed = after.filter((b) => {
+    if (b.id === id) return false
+    const was = before.find((x) => x.id === b.id) as Box
+    return Math.abs(was.x - b.x) > 2 || Math.abs(was.y - b.y) > 2 || Math.abs(was.w - b.w) > 2
+  })
+  if (disturbed.length > 0) {
+    moveTrouble = `moving ${id} moved ${disturbed.map((d) => d.id).join(', ')} too`
+    break
+  }
 }
 check(
-  'every module can be moved, and nothing overlaps after any of them',
+  'every module can be moved, goes where it is put, and nothing else moves',
   moveTrouble === '',
   moveTrouble,
 )
@@ -175,6 +197,7 @@ const sizes: { name: string; dx: number; dy: number }[] = [
 ]
 let sizeTrouble = ''
 for (const id of ALL) {
+  await fresh()
   for (const s of sizes) {
     await page.locator(`[data-mod="${id}"]`).first().hover()
     await page.waitForTimeout(80)
@@ -188,21 +211,20 @@ for (const id of ALL) {
       { x: grip.x + s.dx, y: grip.y + s.dy },
     )
     const now = await boxes()
-    const clash = overlapping(now)
-    if (clash !== '') {
-      sizeTrouble = `${id} at ${s.name} left ${clash} overlapping`
-      break
-    }
     const me = now.find((b) => b.id === id) as Box
     if (me.w < 150 || me.h < 110) {
       sizeTrouble = `${id} at ${s.name} collapsed to ${String(me.w)}x${String(me.h)}`
+      break
+    }
+    if (me.x + me.w > 1600 + 2) {
+      sizeTrouble = `${id} at ${s.name} ran off the right of the stage (${String(me.x + me.w)})`
       break
     }
   }
   if (sizeTrouble !== '') break
 }
 check(
-  'every module resizes through four sizes without collapsing or overlapping',
+  'every module resizes through four sizes without collapsing or leaving the stage',
   sizeTrouble === '',
   sizeTrouble,
 )
@@ -213,14 +235,7 @@ check(
   out to its maximum: growing something that is already at its ceiling proves
   nothing, and the first run of this reported exactly that as a product defect.
 */
-await home()
-await page.evaluate(
-  inPage(`for (const k of Object.keys(localStorage)) {
-   if (k.startsWith('bc.layout.')) localStorage.removeItem(k)
- }
- return true`),
-)
-await home()
+await fresh()
 const rowsIn = async (id: string): Promise<number> =>
   (await page.evaluate(
     inPage(`const el = document.querySelector('[data-mod="${id}"] .bcmodbody')
@@ -229,7 +244,9 @@ const rowsIn = async (id: string): Promise<number> =>
        let seen = 0
        for (const row of el.querySelectorAll('li, .bcitem, .bcdoc, .bcminicard, .bcagendaitem, .bcmate, .bcevent')) {
          const r = row.getBoundingClientRect()
-         if (r.top >= box.top - 1 && r.bottom <= box.bottom + 1 && r.height > 6) seen += 1
+         /* At least half of it is on show: the module fades the last row out, and a tile tall as a page is still there. */
+         const shown = Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top)
+         if (r.height > 6 && shown >= r.height / 2) seen += 1
        }
        return seen`),
   )) as number
@@ -255,28 +272,15 @@ check(
   `${String(spare)}% of the pane is empty below its content`,
 )
 
-/* --- 3b. a neighbour gives way rather than leaving ----------------------- *
+/* --- 3b. enlarging one module leaves its neighbour exactly where it was ----- *
  *
- * Grant, 23 September: "enlarging one panel can cause the neighbouring panel
- * to jump/move away... the neighbouring panel should intelligently shrink to
- * compensate where possible... Only move a panel to another row when the
- * available width genuinely cannot accommodate both panels at their minimum
- * viable widths."
- *
- * Driven with the real handle rather than through the layout functions,
- * because the question is what the board does under a pointer.
+ * HQ-LAYOUT-006 (4 October 2026). This replaced "the neighbour gives way by shrinking" (23 September), which the freeform
+ * stage retired on purpose: overlap is permitted and does not force a reflow. Driven with the real handle, because the
+ * question is what the board does under a pointer.
  */
-await home()
-await page.evaluate(
-  inPage(`for (const k of Object.keys(localStorage)) {
-   if (k.startsWith('bc.layout.')) localStorage.removeItem(k)
- }
- return true`),
-)
-await home()
+await fresh()
 {
   const before = await boxes()
-  /* A pair that really shares a row: same top, side by side. */
   const rowmates = before.filter((a) =>
     before.some((b) => b.id !== a.id && Math.abs(b.y - a.y) < 8 && b.x !== a.x),
   )
@@ -295,23 +299,6 @@ await home()
       .first()
       .boundingBox()
     if (grip !== null) {
-      /*
-        FAR ENOUGH TO ACTUALLY REACH THE NEIGHBOUR. A first attempt dragged by
-        180px, which the panel absorbed as empty space to its right - so the
-        neighbour had no reason to give way and the check reported correct
-        behaviour as a failure. The drag now ends past the neighbour's left
-        edge, which is the case the requirement is about.
-      */
-      /*
-        ONE COLUMN INTO THE NEIGHBOUR, which is the case the requirement is
-        about: enough that it must give way, not so much that it cannot fit at
-        its minimum and legitimately moves down. Dragging halfway across it
-        asserted "shrinks" and "stays on the row" at a width where only one of
-        them can be true.
-      */
-      const third = before.find(
-        (m) => m.id !== left.id && m.id !== right.id && Math.abs(m.y - left.y) < 8,
-      )
       await drag(
         { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 },
         { x: right.x + 120, y: grip.y + grip.height / 2 },
@@ -325,33 +312,20 @@ await home()
         `${String(left.w)} -> ${String(leftNow.w)}`,
       )
       check(
-        'and its neighbour stays on the same row rather than jumping away',
-        Math.abs(rightNow.y - leftNow.y) < 8,
-        `the neighbour was at y=${String(right.y)} and is now at y=${String(rightNow.y)}`,
+        'and its neighbour is untouched: same place, same size',
+        Math.abs(rightNow.x - right.x) <= 2 &&
+          Math.abs(rightNow.y - right.y) <= 2 &&
+          Math.abs(rightNow.w - right.w) <= 2,
+        `${right.id} was ${String(right.w)}px at ${String(right.x)},${String(right.y)} and is now ${String(rightNow.w)}px at ${String(rightNow.x)},${String(rightNow.y)}`,
       )
+      const rest = before.filter((m) => m.id !== left.id)
       check(
-        'and gives way by shrinking',
-        rightNow.w < right.w,
-        `the neighbour was ${String(right.w)}px wide and is now ${String(rightNow.w)}px`,
+        'and so is every other module',
+        rest.every((m) => {
+          const n = after.find((x) => x.id === m.id) as Box
+          return Math.abs(n.x - m.x) <= 2 && Math.abs(n.y - m.y) <= 2 && Math.abs(n.w - m.w) <= 2
+        }),
       )
-      check(
-        'and nothing overlaps after the negotiation',
-        overlapping(after) === '',
-        overlapping(after),
-      )
-      /*
-        AND NOTHING BEYOND THE NEIGHBOUR MOVED. This is what holding the
-        neighbour's right edge buys: the negotiation is between two panels and
-        the rest of the row never learns about it.
-      */
-      if (third !== undefined) {
-        const thirdNow = after.find((m) => m.id === third.id) as Box
-        check(
-          'and the panel beyond the neighbour did not move at all',
-          Math.abs(thirdNow.x - third.x) <= 2 && Math.abs(thirdNow.y - third.y) <= 2,
-          `${third.id} was at ${String(third.x)},${String(third.y)} and is now at ${String(thirdNow.x)},${String(thirdNow.y)}`,
-        )
-      }
     }
   }
 }
@@ -408,10 +382,12 @@ check(
   Still the right-hand END of the header, which is empty space: pressing the
   title would pass whether or not the whole header is the target.
 */
+await fresh()
 const schedHead = page.locator('[data-mod="schedule"] .bcmodhead').first()
 const headBox = await schedHead.boundingBox()
 if (headBox === null) throw new Error('no schedule header')
-await schedHead.click({ position: { x: headBox.width - 70, y: headBox.height / 2 } })
+/* The header now ends in three small controls (tint, make bigger, take off): 140px in from the right is the empty space before them. */
+await schedHead.click({ position: { x: headBox.width - 140, y: headBox.height / 2 } })
 await page.waitForTimeout(500)
 check(
   'a press on a header that does not move still opens the module',
@@ -546,7 +522,8 @@ for (const [name, width, height] of [
   const small = await browser.newContext({
     viewport: { width, height },
     isMobile: width < 700,
-    hasTouch: width < 700,
+    // A tablet is a touch device: the 44px thumb target is a property of coarse pointers, so it is measured on one.
+    hasTouch: true,
   })
   const sp = await small.newPage()
   await sp.goto(url(slug), { waitUntil: 'domcontentloaded' })
@@ -561,8 +538,8 @@ for (const [name, width, height] of [
        return out`),
   )) as Box[]
   check(
-    `${name}: the desktop arrangement does not leave slivers`,
-    list.every((b) => b.w > width * 0.4),
+    `${name}: the desktop arrangement does not leave slivers (every module at least its 240px minimum)`,
+    list.every((b) => b.w >= 240 || b.w > width * 0.4),
     list.map((b) => `${b.id}:${String(b.w)}`).join(' '),
   )
   check(`${name}: nothing overlaps`, overlapping(list) === '', overlapping(list))

@@ -66,8 +66,8 @@ if (apiToken === '') {
 const projectId = String(
   (
     await one(`
-      insert into public.projects (name, slug, status)
-      values (${lit(`Fixture upload ${run}`)}, ${lit(SLUG)}, 'paused')
+      insert into public.projects (office_id, name, slug, status)
+      values (app.test_office(), ${lit(`Fixture upload ${run}`)}, ${lit(SLUG)}, 'paused')
       returning project_id::text as id`)
   ).id ?? '',
 )
@@ -322,7 +322,7 @@ for (const [what, bytes] of [
 */
 const searchable = await one(`
   select count(*)::int as n
-    from app.search_documents(p_query => ${lit(`not a pdf at all ${run}`)},
+    from app.search_documents(p_office => app.test_office(), p_query => ${lit(`not a pdf at all ${run}`)},
                               p_project => ${lit(projectId)}::uuid, p_limit => 10)`)
 check(
   'and no search can retrieve the rubbish inside one',

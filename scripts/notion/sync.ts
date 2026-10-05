@@ -10,9 +10,11 @@
  * why rather than quietly ignoring the setting.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { NotionClient } from '../../src/notion/api.ts'
 import { CONNECTOR, syncNotion } from '../../src/notion/sync.ts'
+import { officeOfProject } from '../test-office.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const args = process.argv.slice(2)
@@ -69,7 +71,12 @@ if (project === undefined) {
   process.exit(1)
 }
 
-const result = await syncNotion(db, new NotionClient(token), String(project.id))
+const result = await syncNotion(
+  db,
+  await officeOfProject(db, String(project.id)),
+  new NotionClient(token),
+  String(project.id),
+)
 
 console.log(`project: ${String(project.name)} (${String(project.slug)})`)
 console.log(

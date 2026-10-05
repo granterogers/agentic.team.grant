@@ -86,11 +86,14 @@ const TOKEN = `quorlinth${run}`
 console.log('unified project knowledge (#257) —\n')
 
 const project = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values (${lit(SLUG)}, ${lit(`Unified knowledge proof ${run}`)},
+  -- Grant's office on purpose (#45): a real-looking subject, because the readers under test filter fixtures.
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (app.test_office(), ${lit(SLUG)}, ${lit(`Unified knowledge proof ${run}`)},
           'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const projectId = String(project.id)
+// Whose documents: the office of the project this suite makes (every reader is asked of one office).
+const PO = `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
 
 /*
   The document arrives ONLY through the notebook, which is the premise.
@@ -104,9 +107,9 @@ await db.execute(`
   values (${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)},
           'A linked Google Notebook', 'source');
   insert into public.documents
-    (project_id, connector, external_parent_ref, external_ref, title, content,
+    (office_id, project_id, connector, external_parent_ref, external_ref, title, content,
      content_fingerprint, content_chars, fetched_at, state)
-  values (${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)}, ${lit(`src-${run}`)},
+  values (${PO}, ${lit(projectId)}::uuid, 'notebooklm', ${lit(`nb-${run}`)}, ${lit(`src-${run}`)},
           ${lit(`The ${TOKEN} onboarding note`)},
           ${lit(
             `The ${TOKEN} process has three stages. Stage one is a written brief. ` +
@@ -138,11 +141,14 @@ check(
   credential is needed or wanted for that: the contract is the boundary, and
   what sits on the far side of it is Google's problem rather than this index's.
 */
+// The document is recorded inside the office that holds the project (migration 0801).
+const PROJECT_OFFICE = `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
 await db.execute(`
   insert into public.project_attachments (project_id, connector, external_ref, display_name, role)
   values (${lit(projectId)}::uuid, 'drive', ${lit(`folder-${run}`)},
           'A linked Drive folder', 'source');
   select app.record_drive_document(
+    ${PROJECT_OFFICE},
     ${lit(projectId)}::uuid, ${lit(`folder-${run}`)}, ${lit(`file-${run}`)},
     ${lit(`The ${TOKEN} pricing sheet`)},
     ${lit(`Pricing for the ${TOKEN} work is banded. The standard band is the one most clients take.`)},
@@ -150,7 +156,7 @@ await db.execute(`
 `)
 const bothConnectors = await one(`
   select count(distinct connector)::int as n
-    from app.search_documents(${lit(TOKEN)}, ${lit(projectId)}::uuid, 10, 'any')`)
+    from app.search_documents(${PO}, ${lit(TOKEN)},${lit(projectId)}::uuid, 10, 'any')`)
 check(
   'two different connectors feed ONE searchable project memory',
   `${String(bothConnectors.n)} connector(s) answer the same query`,
@@ -190,8 +196,8 @@ interface Answer {
 const askOnce = async (tag: string): Promise<Answer> => {
   const command = await one(`
     insert into public.inbound_commands
-      (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
-    values ('telegram', ${lit(`unified-${run}-${tag}`)}, 'verify-unified', ${lit(ASK)},
+      (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
+    values (${PO}, 'telegram', ${lit(`unified-${run}-${tag}`)}, 'verify-unified', ${lit(ASK)},
             ${lit(`telegram:message:unified-${run}-${tag}`)}, ${lit(projectId)}::uuid)
     returning command_id::text as id`)
   const enqueued = await one(`select app.enqueue_inbound(${lit(String(command.id))}::uuid) as j`)
@@ -403,14 +409,14 @@ check(
   assertion from two sides.
 */
 const other = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values (${lit(`${SLUG}-elsewhere`)}, ${lit(`Unified control ${run}`)},
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (${PO}, ${lit(`${SLUG}-elsewhere`)}, ${lit(`Unified control ${run}`)},
           'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const otherId = String(other.id)
 const leak = await one(`
   select count(*)::int as n
-    from app.search_documents(${lit(TOKEN)}, ${lit(otherId)}::uuid, 5, 'any')`)
+    from app.search_documents(${PO}, ${lit(TOKEN)},${lit(otherId)}::uuid, 5, 'any')`)
 check(
   'CONTROL: another project cannot see this document at all',
   `${String(leak.n)} hit(s) from the other project`,
@@ -418,7 +424,7 @@ check(
 )
 const visible = await one(`
   select count(*)::int as n
-    from app.search_documents(${lit(TOKEN)}, ${lit(projectId)}::uuid, 5, 'any')`)
+    from app.search_documents(${PO}, ${lit(TOKEN)},${lit(projectId)}::uuid, 5, 'any')`)
 check(
   'CONTROL: and its own project can, so the isolation is scope and not silence',
   `${String(visible.n)} hit(s) from its own project`,

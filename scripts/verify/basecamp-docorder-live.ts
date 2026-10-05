@@ -26,6 +26,7 @@
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
 
+import '../../src/safety/require-production-site.ts'
 import type { Page } from 'playwright'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
@@ -355,10 +356,12 @@ try {
 } finally {
   await browser.close()
   if (before.length === 0) {
-    await db.execute(`select app.hq_document_order_reset('${SLUG}')`)
+    await db.execute(
+      `select app.hq_document_order_reset((select office_id from public.projects where slug = '${SLUG}'), '${SLUG}')`,
+    )
   } else {
     await db.execute(
-      `select app.hq_document_order_set('${SLUG}', '${JSON.stringify(before)}'::jsonb)`,
+      `select app.hq_document_order_set((select office_id from public.projects where slug = '${SLUG}'), '${SLUG}', '${JSON.stringify(before)}'::jsonb)`,
     )
   }
   const now = await atTheOffice()

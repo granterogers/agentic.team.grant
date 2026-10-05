@@ -47,6 +47,7 @@
  * that could write directly would be a way around that trigger.
  */
 
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import {
   type Capability,
@@ -91,10 +92,8 @@ export class HttpNotebookAdapter implements NotebookAdapter {
   static async fromVault(db: SqlExecutor, endpoint?: string): Promise<HttpNotebookAdapter | null> {
     const { rows } = await db.execute(`
       select
-        (select decrypted_secret from vault.decrypted_secrets
-          where name = 'notebook.reader_secret') as secret,
-        (select decrypted_secret from vault.decrypted_secrets
-          where name = 'notebook.storage_state') as jar,
+        ${credentialSql('notebook.reader_secret')} as secret,
+        ${credentialSql('notebook.storage_state')} as jar,
         (select value #>> '{}' from public.system_config
           where key = 'notebook.reader_url') as url
     `)

@@ -20,8 +20,8 @@ export async function registerBot(db: PgExecutor): Promise<void> {
     shape of a suite that forgot to declare, and the witness says so.
   */
   const recordChat = () =>
-    db.execute(`insert into public.telegram_chats (chat_id, chat_type, bot_id, subject)
-      values ('${CHAT}', 'private', '${BOT}', 'grant') on conflict do nothing`)
+    db.execute(`insert into public.telegram_chats (office_id, chat_id, chat_type, bot_id, subject)
+      values (app.operator_office(), '${CHAT}', 'private', '${BOT}', 'grant') on conflict do nothing`)
   const exists = await db.execute(`select 1 from public.telegram_bots where bot_id = '${BOT}'`)
   if (exists.rows.length > 0) {
     await recordChat()
@@ -50,8 +50,8 @@ export async function realParent(db: PgExecutor): Promise<string> {
   await registerBot(db)
   const key = realTelegramKey()
   const cmd = await db.execute(`set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values ('telegram', '${CHAT}:${key.split(':').pop() ?? '1'}', '${CHAT}', 'A real turn for an isolated proof', '${key}', 'grant')
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram', '${CHAT}:${key.split(':').pop() ?? '1'}', '${CHAT}', 'A real turn for an isolated proof', '${key}', 'grant')
     returning command_id::text as id`)
   const id = String((cmd.rows[0] as { id: string }).id)
   const enq = await db.execute(`set local application_name = 'PostgREST 14.5';

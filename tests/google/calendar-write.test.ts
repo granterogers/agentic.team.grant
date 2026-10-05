@@ -23,6 +23,10 @@ function fakeDb(opts: {
     calls,
     execute: async (sql: string): Promise<{ rows: Row[] }> => {
       calls.push(sql.replace(/\s+/g, ' ').trim().slice(0, 80))
+      // The office the health row is recorded under: a single-office deployment's only person office.
+      if (sql.includes('sole_person_office')) {
+        return { rows: [{ o: '22222222-2222-4222-8222-222222222222' }] }
+      }
       if (sql.includes('calendar.sync_tasks')) {
         return { rows: [{ on: opts.on ?? true, target: opts.target ?? 'primary' }] }
       }
@@ -68,6 +72,13 @@ function fakeGoogle(handlers: {
   }) as unknown as typeof fetch
 }
 
+/** Whose diary: the plan is the office's own, so every sync names one. */
+const OFFICE = '22222222-2222-4222-8222-222222222222'
+const sync = (
+  db: Parameters<typeof syncTasksToCalendar>[0],
+  options?: Parameters<typeof syncTasksToCalendar>[2],
+) => syncTasksToCalendar(db, { officeId: OFFICE }, options)
+
 const TASK = '11111111-1111-1111-1111-111111111111'
 const ROW = {
   task_id: TASK,
@@ -79,9 +90,28 @@ const ROW = {
 }
 
 describe('syncTasksToCalendar', () => {
+  it('asks for the plan of the office it was given and of no other', async () => {
+    const queries: string[] = []
+    const db = {
+      execute: async (sql: string): Promise<{ rows: Row[] }> => {
+        queries.push(sql)
+        if (sql.includes('calendar.sync_tasks')) return { rows: [{ on: true, target: 'primary' }] }
+        if (sql.includes('google.client_id'))
+          return { rows: [{ client_id: 'cid', client_secret: 'secret', refresh_token: 'refresh' }] }
+        if (sql.includes('calendar_task_plan'))
+          return { rows: [{ p: { create: [], update: [], remove: [] } }] }
+        return { rows: [] }
+      },
+    } as unknown as Parameters<typeof syncTasksToCalendar>[0]
+    await sync(db, { fetchImpl: fakeGoogle({ seen: [] }) })
+    const plan = queries.find((q) => q.includes('calendar_task_plan'))
+    // The office is the FIRST argument of the plan query, as a value the caller named.
+    expect(plan).toMatch(/calendar_task_plan\(\s*'22222222-2222-4222-8222-222222222222'::uuid\s*\)/)
+  })
+
   it('does nothing at all while the switch is off', async () => {
     const seen: { url: string; method: string }[] = []
-    const out = await syncTasksToCalendar(fakeDb({ on: false }), {
+    const out = await sync(fakeDb({ on: false }), {
       fetchImpl: fakeGoogle({ seen }),
     })
     expect(out.ok).toBe(true)
@@ -91,12 +121,9 @@ describe('syncTasksToCalendar', () => {
   })
 
   it('refuses to write with only the read scope, and says which scope is missing', async () => {
-    const out = await syncTasksToCalendar(
-      fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
-      {
-        fetchImpl: fakeGoogle({ scopes: 'https://www.googleapis.com/auth/calendar.readonly' }),
-      },
-    )
+    const out = await sync(fakeDb({ plan: { create: [ROW], update: [], remove: [] } }), {
+      fetchImpl: fakeGoogle({ scopes: 'https://www.googleapis.com/auth/calendar.readonly' }),
+    })
     expect(out.ok).toBe(false)
     expect(out.note).toContain('no calendar write scope')
     expect(out.created).toBe(0)
@@ -124,10 +151,9 @@ describe('syncTasksToCalendar', () => {
       return new Response(JSON.stringify({ id: 'ev-new' }), { status: 200 })
     }) as unknown as typeof fetch
 
-    const out = await syncTasksToCalendar(
-      fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
-      { fetchImpl },
-    )
+    const out = await sync(fakeDb({ plan: { create: [ROW], update: [], remove: [] } }), {
+      fetchImpl,
+    })
     expect(out.created).toBe(1)
     const sent = JSON.parse(bodies[0] ?? '{}') as {
       start: { date: string }
@@ -147,7 +173,7 @@ describe('syncTasksToCalendar', () => {
 
   it('reads an event back before deleting it, and deletes it when the tag matches', async () => {
     const seen: { url: string; method: string }[] = []
-    const out = await syncTasksToCalendar(
+    const out = await sync(
       fakeDb({
         plan: {
           create: [],
@@ -172,7 +198,7 @@ describe('syncTasksToCalendar', () => {
 
   it('REFUSES to delete an event that does not carry our task id', async () => {
     const seen: { url: string; method: string }[] = []
-    const out = await syncTasksToCalendar(
+    const out = await sync(
       fakeDb({
         plan: {
           create: [],
@@ -199,7 +225,7 @@ describe('syncTasksToCalendar', () => {
 
   it('keeps the link when a delete fails, so the next pass tries again', async () => {
     const calls: string[] = []
-    const out = await syncTasksToCalendar(
+    const out = await sync(
       fakeDb({
         calls,
         plan: {
@@ -226,7 +252,7 @@ describe('syncTasksToCalendar', () => {
 
   it('clears the link when the event is already gone at the far end', async () => {
     const calls: string[] = []
-    const out = await syncTasksToCalendar(
+    const out = await sync(
       fakeDb({
         calls,
         plan: {
@@ -243,10 +269,10 @@ describe('syncTasksToCalendar', () => {
 
   it('a dry run reports the plan and calls nothing', async () => {
     const seen: { url: string; method: string }[] = []
-    const out = await syncTasksToCalendar(
-      fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
-      { fetchImpl: fakeGoogle({ seen }), dryRun: true },
-    )
+    const out = await sync(fakeDb({ plan: { create: [ROW], update: [], remove: [] } }), {
+      fetchImpl: fakeGoogle({ seen }),
+      dryRun: true,
+    })
     expect(out.note).toContain('dry run')
     expect(out.created).toBe(1)
     expect(seen).toHaveLength(0)
@@ -257,7 +283,7 @@ describe('a create after a crash between Google and the link (invariant 27)', ()
   it('adopts the event the diary already holds for the task, and posts nothing', async () => {
     const seen: { url: string; method: string }[] = []
     const db = fakeDb({ plan: { create: [ROW], update: [], remove: [] } })
-    const out = await syncTasksToCalendar(db, {
+    const out = await sync(db, {
       fetchImpl: fakeGoogle({
         seen,
         onGet: () => new Response(JSON.stringify({ items: [{ id: 'orphan-1' }] }), { status: 200 }),
@@ -271,27 +297,21 @@ describe('a create after a crash between Google and the link (invariant 27)', ()
 
   it('CONTROL: an empty diary still gets exactly one create', async () => {
     const seen: { url: string; method: string }[] = []
-    const out = await syncTasksToCalendar(
-      fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
-      {
-        fetchImpl: fakeGoogle({
-          seen,
-          onGet: () => new Response(JSON.stringify({ items: [] }), { status: 200 }),
-        }),
-      },
-    )
+    const out = await sync(fakeDb({ plan: { create: [ROW], update: [], remove: [] } }), {
+      fetchImpl: fakeGoogle({
+        seen,
+        onGet: () => new Response(JSON.stringify({ items: [] }), { status: 200 }),
+      }),
+    })
     expect(seen.filter((c) => c.method === 'POST')).toHaveLength(1)
     expect(out.created).toBe(1)
   })
 
   it('a lookup that fails is not proof of an empty diary: nothing is posted, and the pass says so', async () => {
     const seen: { url: string; method: string }[] = []
-    const out = await syncTasksToCalendar(
-      fakeDb({ plan: { create: [ROW], update: [], remove: [] } }),
-      {
-        fetchImpl: fakeGoogle({ seen, onGet: () => new Response('', { status: 503 }) }),
-      },
-    )
+    const out = await sync(fakeDb({ plan: { create: [ROW], update: [], remove: [] } }), {
+      fetchImpl: fakeGoogle({ seen, onGet: () => new Response('', { status: 503 }) }),
+    })
     expect(seen.filter((c) => c.method === 'POST')).toHaveLength(0)
     expect(out.created).toBe(0)
     expect(out.note).toMatch(/could not check the diary/)

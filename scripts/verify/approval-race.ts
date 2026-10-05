@@ -54,7 +54,7 @@ await db.execute(
 const answer = (hold: number) =>
   db
     .execute(
-      `begin; select app.hq_answer_blocker(${lit(blocker)}::uuid, 'Yes', 'grant'); select pg_sleep(${String(hold)}); commit;`,
+      `begin; select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(blocker)}::uuid), app.test_office()), ${lit(blocker)}::uuid, 'Yes', 'grant'); select pg_sleep(${String(hold)}); commit;`,
     )
     .then(() => 'ok')
     .catch((e: unknown) => String((e as Error).message).slice(0, 200))

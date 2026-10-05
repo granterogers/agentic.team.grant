@@ -28,13 +28,13 @@ const child = async (parent: string, kind = 'office.instruction', payload = '{}'
   String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, ${lit(kind)}, ${lit(payload)}::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, ${lit(kind)}, ${lit(payload)}::jsonb)::text as c`,
       )
     ).c,
   )
 const fp = 'c'.repeat(64)
 const blocker = async (job: string) => {
-  const proj = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const proj = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   return String(
     (
       await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
@@ -44,8 +44,11 @@ const blocker = async (job: string) => {
   )
 }
 const answer = async (b: string, by = 'grant') =>
-  (await one(`select app.hq_answer_blocker(${lit(b)}::uuid, 'Yes', ${lit(by)})::text as r`))
-    .r as string
+  (
+    await one(
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, 'Yes', ${lit(by)})::text as r`,
+    )
+  ).r as string
 
 // ---- a system job is never Grant --------------------------------------------------------------------------------
 {
@@ -102,7 +105,11 @@ const root = await realParent(db)
       approval: '00000000-0000-0000-0000-000000000000',
     }),
   )
-  const v = (await one(`select app.approval_verdict(${lit(forged)}::uuid)::text as v`)).v as string
+  const v = (
+    await one(
+      `select app.approval_verdict(app.job_office(${lit(forged)}::uuid), ${lit(forged)}::uuid)::text as v`,
+    )
+  ).v as string
   const fromRoot = await j(kid)
   check(
     'a child carries its root and its trust, and a payload that CLAIMS approval is forged whatever it hangs from',
@@ -136,7 +143,7 @@ const root = await realParent(db)
   )
   const stopped = (
     await one(
-      `select app.stop_conversation_work(${lit(cmd)}::uuid, 'proof: called off')::text as r`,
+      `select app.stop_conversation_work(app.job_office(${lit(stopTurn)}::uuid), ${lit(cmd)}::uuid, 'proof: called off')::text as r`,
     )
   ).r as string
   const after = [await j(parent), await j(a), await j(b)]

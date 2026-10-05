@@ -39,6 +39,7 @@
  * simple, checkable property: nothing in it can change anything.
  */
 
+import { readCredential } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 
 const API = 'https://api.github.com'
@@ -176,15 +177,22 @@ export class GitHubClient {
   private static resolvedFrom: string | null = null
 
   static async fromVault(db: SqlExecutor): Promise<GitHubClient> {
-    const names = GitHubClient.SECRET_NAMES.map((n) => `'${n}'`).join(', ')
+    /*
+      The read token is a human integration and goes through the deployment's one resolver. The dispatch token is
+      CI infrastructure (scoped to this repository, authenticates and sees nothing else) and is the deployment's
+      own, so it keeps its direct read; `github.token` is a legacy personal-token name, a human integration.
+    */
+    const held = new Map<string, string>()
+    for (const name of ['github.read_token', 'github.token'] as const) {
+      const read = await readCredential(db, name)
+      if (read !== null) held.set(name, read)
+    }
     const { rows } = await db.execute(`
       select name, decrypted_secret as t
         from vault.decrypted_secrets
-       where name in (${names})
+       where name = 'github.dispatch_token'
     `)
-    const held = new Map(
-      (rows as { name: string; t: string }[]).map((r) => [String(r.name), String(r.t)]),
-    )
+    for (const r of rows as { name: string; t: string }[]) held.set(String(r.name), String(r.t))
     for (const name of GitHubClient.SECRET_NAMES) {
       const token = held.get(name)
       if (token !== undefined && token !== '') {

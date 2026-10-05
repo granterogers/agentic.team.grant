@@ -36,6 +36,7 @@
 import { remember } from '../../src/agents/remember.ts'
 import type { Teaching } from '../../src/agents/teaching.ts'
 import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
+import { testOffice } from '../test-office.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -46,6 +47,8 @@ const db: SqlExecutor = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
+// Harness traffic belongs to the test office: every lesson this suite stores and reads is the test office's.
+const person = await testOffice(db)
 
 let pass = 0
 let fail = 0
@@ -69,6 +72,7 @@ const say = (body: string): Teaching => ({ kind: 'lesson', body, marked: true })
 const inForce = async (staff: string | null, project: string | null): Promise<string[]> => {
   const { rows } = await db.execute(`
     select f.body from app.lessons_for(
+      app.test_office(),
       ${project === null ? 'null' : `${lit(project)}::uuid`},
       ${staff === null ? 'null' : lit(staff)}, null, 200, true) f
      join public.lessons l on l.lesson_id = f.lesson_id
@@ -83,8 +87,8 @@ const inForce = async (staff: string | null, project: string | null): Promise<st
 */
 const mk = async (name: string): Promise<string> => {
   const { rows } = await db.execute(`
-    insert into public.projects (slug, name, purpose, status)
-    values (${lit(`verify-pref-${name}-${run}`)}, ${lit(`Preference ${name} ${run}`)},
+    insert into public.projects (office_id, slug, name, purpose, status)
+    values (app.test_office(), ${lit(`verify-pref-${name}-${run}`)}, ${lit(`Preference ${name} ${run}`)},
             'Thrown away', 'paused')
     returning project_id::text as id`)
   return String((rows[0] as { id: string }).id)
@@ -106,7 +110,7 @@ const mk = async (name: string): Promise<string> => {
   prefix, so it can never reach a rule anything else owns.
 */
 const swept = await db.execute(`
-  select app.retract_lesson(l.lesson_id, ${lit(BY)}, 'Superseded by a later run of verify:preferences.') as r
+  select app.retract_lesson(coalesce((select zz_o.office_id from public.lessons zz_o where zz_o.lesson_id = l.lesson_id), app.test_office()), l.lesson_id, ${lit(BY)}, 'Superseded by a later run of verify:preferences.') as r
     from public.lessons_live l
    where l.learned_by like 'verify:preferences-%' and l.learned_by <> ${lit(BY)}`)
 console.log(`  (retired ${String(swept.rows.length)} rule(s) left live by an earlier run)`)
@@ -118,7 +122,7 @@ console.log(`\n#310 — the life of a standing instruction  (run ${run})\n`)
 
 // ---------------------------------------------------------------- override
 console.log('  a rule replaced by a later one')
-await remember(db, say('From now on keep your replies short'), BY, null, null, null)
+await remember(db, person, say('From now on keep your replies short'), BY, null, null, null)
 let live = await inForce(null, null)
 ok(
   'the first rule is in force',
@@ -128,6 +132,7 @@ ok(
 
 const second = await remember(
   db,
+  person,
   say('actually, detailed answers are fine from now on'),
   BY,
   null,
@@ -160,6 +165,7 @@ ok('the superseded rule is still on the record', Number((kept.rows[0] as { n: nu
 console.log('\n  a rule withdrawn with nothing in its place')
 await remember(
   db,
+  person,
   say('from now on use bullet points in everything you send me'),
   BY,
   null,
@@ -172,7 +178,7 @@ ok(
   live.some((b) => b.includes('bullet points')),
 )
 
-const dropped = await remember(db, say('do not use bullets anymore'), BY, null, null, null)
+const dropped = await remember(db, person, say('do not use bullets anymore'), BY, null, null, null)
 live = await inForce(null, null)
 ok('it is gone after the withdrawal', !live.some((b) => b.includes('bullet points in everything')))
 ok('and nothing replaced it', !live.some((b) => b.includes('bullets anymore')), live.join(' | '))
@@ -180,6 +186,7 @@ ok('and the office said so', dropped.said.includes('no longer a standing rule'),
 
 const nothingToDrop = await remember(
   db,
+  person,
   say('do not put screenshots in anymore'),
   BY,
   null,
@@ -196,6 +203,7 @@ ok(
 console.log('\n  the same rule said again')
 await remember(
   db,
+  person,
   say('always give your information in the form of clear bullet points'),
   BY,
   null,
@@ -204,6 +212,7 @@ await remember(
 )
 const again = await remember(
   db,
+  person,
   say("I've told you to always give your information in the form of clear bullet points"),
   BY,
   null,
@@ -231,6 +240,7 @@ ok(
 console.log('\n  scope')
 await remember(
   db,
+  person,
   say('on this project never put a due date on anything unless I give you one'),
   BY,
   null,
@@ -247,6 +257,7 @@ ok('and NOT another one', !onBeta.some((b) => b.includes('due date')), onBeta.jo
 
 await remember(
   db,
+  person,
   say('on this project always put a due date on everything'),
   BY,
   null,
@@ -267,8 +278,8 @@ ok(
   `lessons_for`'s specificity ordering is for and what would break if the
   override were implemented by retiring the global rule.
 */
-await remember(db, say('always paste image links into every reply'), BY, null, null, null)
-await remember(db, say('on this project never paste image links'), BY, null, null, beta)
+await remember(db, person, say('always paste image links into every reply'), BY, null, null, null)
+await remember(db, person, say('on this project never paste image links'), BY, null, null, beta)
 const globalStill = await inForce(null, null)
 const betaNow = await inForce(null, beta)
 ok(
@@ -285,6 +296,7 @@ ok(
 console.log('\n  a preference that says how long it lasts')
 const forNow = await remember(
   db,
+  person,
   say('From now on in this conversation, keep every answer to a single short paragraph'),
   BY,
   null,
@@ -323,7 +335,7 @@ ok(
 // ------------------------------------------------------------- containment
 console.log('\n  containment')
 const leaked = await db.execute(`
-  select count(*) as n from app.lessons_for(null, null, null, 500) f
+  select count(*) as n from app.lessons_for(app.test_office(), null, null, null, 500) f
    join public.lessons l on l.lesson_id = f.lesson_id
   where l.learned_by = ${lit(BY)}`)
 ok(

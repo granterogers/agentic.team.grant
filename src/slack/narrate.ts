@@ -45,6 +45,13 @@ import { ChannelProvisioner } from './provision.ts'
 /** Named as a person would name it. */
 export const NARRATION_CHANNEL = 'the_floor'
 
+/**
+ * SQL for the office this workspace belongs to. The floor channel is one office's account of its own day: the sweeps
+ * below read ONLY that office's jobs, because they post a job's words (its instruction, its answer) into the channel.
+ */
+const workspaceOffice = (teamId: string): string =>
+  `(select w.office_id from public.slack_workspaces w where w.team_id = '${teamId.replace(/'/g, "''")}')`
+
 interface Handoff {
   job_id: string
   kind: string
@@ -232,7 +239,8 @@ export async function narrateHandoffs(
       -- The narrator, always. This channel is her account of the day.
       join public.staff chief on chief.slug = 'chief-of-staff'
       left join public.staff taker on taker.slug = r.roster[1]
-     where not exists (
+     where j.office_id = ${workspaceOffice(teamId)}
+       and not exists (
              select 1 from public.deliveries d
               where d.dedupe_key = 'narration:' || r.job_id::text
            )
@@ -376,6 +384,7 @@ const WORK_READS_AS: Record<string, string> = {
   'artifact.report': 'writing it up as a file',
   'browser.gather': 'reading a page',
   'office.extract_tasks': 'pulling out what needs doing',
+  'web.research': 'looking it up on the web',
   'notebook.generate': 'making something in the notebook',
   'notebook.list_artifacts': 'looking through the notebook',
   'notebook.add_source': 'adding a source to the notebook',
@@ -535,7 +544,8 @@ export async function narrateOutcomes(
       from public.jobs j
       join public.staff chief on chief.slug = 'chief-of-staff'
       left join public.staff lead on lead.slug = j.recipient_agent
-     where j.state in ('complete', 'failed', 'cancelled')
+     where j.office_id = ${workspaceOffice(teamId)}
+       and j.state in ('complete', 'failed', 'cancelled')
        /*
          EXISTS, not a join. A retry writes a second routing decision for the
          same job, and joining to the table duplicated the row — two identical

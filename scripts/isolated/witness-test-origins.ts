@@ -36,15 +36,15 @@ const check = (what: string, ok: boolean, detail: string) => {
 const jsonOf = (v: unknown) =>
   (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>
 
-await db.execute(`insert into public.telegram_chats (chat_id, chat_type, bot_id, subject)
-  values (${lit(CHAT)}, 'private', ${lit(BOT)}, 'grant') on conflict do nothing`)
-await db.execute(`insert into public.slack_workspaces (team_id, team_name, bot_user_id)
-  values ('T0ISOLATED', 'Isolated', 'U0BOTUSER') on conflict do nothing`)
+await db.execute(`insert into public.telegram_chats (office_id, chat_id, chat_type, bot_id, subject)
+  values (app.operator_office(), ${lit(CHAT)}, 'private', ${lit(BOT)}, 'grant') on conflict do nothing`)
+await db.execute(`insert into public.slack_workspaces (office_id, team_id, team_name, bot_user_id)
+  values (app.test_office(), 'T0ISOLATED', 'Isolated', 'U0BOTUSER') on conflict do nothing`)
 const REAL_SLACK = 'C0C2DAPDN02'
 const project = String(
   jsonOf(
     (
-      await one(`select app.hq_create_project(${lit(`Witness origin ${run}`)}, 'upload', ${lit(`witorig-${run}`)},
+      await one(`select app.hq_create_project(app.test_office(), ${lit(`Witness origin ${run}`)}, 'upload', ${lit(`witorig-${run}`)},
     ${lit(`Witness origin ${run}`)}, true) as v`)
     ).v,
   ).project_id,
@@ -54,7 +54,20 @@ await db.execute(`insert into public.slack_channel_map (project_id, channel_id, 
 await db.execute(`insert into public.system_config (key, value, description) values ('slack.subject_user_id', '"U0BUNF6AALC"', 'isolated')
   on conflict (key) do update set value = excluded.value`)
 
-const store = async (row: Record<string, unknown>): Promise<string> => {
+/** Where a row's door would have placed it: a Slack channel's mapped project (TEST office), anything else the operator's Unnamed. */
+const place = async (r: Record<string, unknown>): Promise<Record<string, unknown>> => {
+  const slack = r.origin_channel === 'slack'
+  const q = (
+    await db.execute(
+      slack
+        ? `select app.test_office()::text as o, coalesce((select project_id::text from public.slack_channel_map where channel_id = split_part(${lit(String(r.origin_ref))}, ':', 1) limit 1), app.unnamed_project(app.test_office())::text) as p`
+        : `select app.operator_office()::text as o, app.unnamed_project(app.operator_office())::text as p`,
+    )
+  ).rows[0] as Record<string, unknown>
+  return { office_id: q.o, project_id: q.p }
+}
+const store = async (r: Record<string, unknown>): Promise<string> => {
+  const row = { ...r, ...(await place(r)) }
   const cols = Object.keys(row)
   const cmd = await one(`${DOOR}
     insert into public.inbound_commands (${cols.join(', ')})
@@ -137,16 +150,16 @@ const testChild =
   String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(testJob)}::uuid, p_kind => 'office.synthesise', p_payload => '{}'::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(testJob)}::uuid), p_parent => ${lit(testJob)}::uuid, p_kind => 'office.synthesise', p_payload => '{}'::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] ?? ''
 // A suite that drove the door and forgot to declare: a fixture chat and a fixture Slack channel.
 const forgotChat = origins.telegramChat()
 // The webhook records every chat it hears from before deciding anything, so the forgotten chat is known.
-await db.execute(
-  `${DOOR} select public.record_telegram_chat(${lit(forgotChat)}, 'private', ${lit(BOT)}, 'grant')`,
-)
+// (The door now ignores a private chat from a sender nobody knows, so the record is written as the old door wrote it.)
+await db.execute(`insert into public.telegram_chats (office_id, chat_id, chat_type, bot_id, subject)
+  values (app.operator_office(), ${lit(forgotChat)}, 'private', ${lit(BOT)}, 'grant')`)
 const forgotTg = await store(tg(forgotChat, `Forgot to declare ${run}`, '4242'))
 const forgotSlack = await store(
   sl(origins.slackChannel(), 'U0ZTFORGOT', `Forgot to declare ${run}`),
@@ -157,8 +170,8 @@ const grantSlack = await store(sl(REAL_SLACK, 'U0BUNF6AALC', `Grant in Slack ${r
 
 const since = String((await one('select app.now_utc()::text as t')).t)
 const sent = (key: string, job: string, target = CHAT, channel = 'telegram') =>
-  db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
-    values (${lit(channel)}, ${lit(key)}, 'acct', ${lit(target)}, ${lit(job)}::uuid, 'result', 'sent', ${lit(`m-${key}`)}, app.now_utc(), app.now_utc())`)
+  db.execute(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
+    values ((select office_id from public.jobs where job_id = ${lit(job)}::uuid), ${lit(channel)}, ${lit(key)}, 'acct', ${lit(target)}, ${lit(job)}::uuid, 'result', 'sent', ${lit(`m-${key}`)}, app.now_utc(), app.now_utc())`)
 await sent(`result:${run}:t`, testJob)
 await sent(`result:${run}:tc`, testChild, REAL_SLACK, 'slack')
 await sent(`result:${run}:ft`, forgotTg)

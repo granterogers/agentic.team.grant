@@ -23,8 +23,10 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { soleOffice } from '../db/office.ts'
+import type { OfficeId } from '../office/context.ts'
 import { count } from '../text/plain.ts'
-import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
+import { type GoogleAccess, type GoogleProblem, googleAccess, recordGoogleHealth } from './auth.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const nul = (v: string | null | undefined): string =>
@@ -35,10 +37,16 @@ const EXCERPT_CHARS = 300
 
 export interface CalendarOutcome {
   readonly ok: boolean
+  /** Set when `ok` is false: what kind of problem, for the incident layer (#413). */
+  readonly problem?: GoogleProblem
   readonly note: string
   readonly seen: number
   readonly stored: number
   readonly removed: number
+  /** True only when Google was actually asked and answered: the cache is as fresh as this run. Absent otherwise. */
+  readonly refreshed?: true
+  /** The calendar that was refreshed (the cache's `calendar_id`), when `refreshed`. */
+  readonly calendarId?: string
 }
 
 interface GoogleEvent {
@@ -64,10 +72,19 @@ interface GoogleEvent {
  */
 export async function refreshCalendar(
   db: SqlExecutor,
-  options: { readonly days?: number; readonly fetchImpl?: typeof fetch } = {},
+  options: {
+    readonly days?: number
+    readonly fetchImpl?: typeof fetch
+    /**
+     * The office this refresh caches the diary for: the claimed job's. Absent, the deployment's only person office
+     * (a single-office deployment's legacy callers); with two real offices that is `no_office`, never a guess.
+     */
+    readonly officeId?: OfficeId
+  } = {},
 ): Promise<CalendarOutcome> {
   const fetchImpl = options.fetchImpl ?? fetch
   const days = options.days ?? 14
+  const office = options.officeId ?? (await soleOffice(db))
 
   const enabled = (
     await db.execute(`
@@ -88,13 +105,16 @@ export async function refreshCalendar(
   }
 
   const access = await googleAccess(db, fetchImpl)
-  await recordGoogleHealth(db, access)
-  if (!access.ok) return { ok: false, note: access.reason, seen: 0, stored: 0, removed: 0 }
+  await recordGoogleHealth(db, access, office)
+  if (!access.ok) {
+    return { ok: false, problem: access.code, note: access.reason, seen: 0, stored: 0, removed: 0 }
+  }
 
   const granted = access as GoogleAccess
   if (!granted.scopes.some((s) => s.includes('calendar.readonly') || s.includes('auth/calendar'))) {
     return {
       ok: false,
+      problem: 'missing_scope',
       // A scope he unchecked on the consent screen. Named, because the
       // alternative symptom is a 403 from an endpoint that looks fine.
       note: `the connection has no calendar scope — granted: ${granted.scopes.join(' ') || 'none'}`,
@@ -143,6 +163,7 @@ export async function refreshCalendar(
     if (body.error !== undefined) {
       return {
         ok: false,
+        problem: 'api_error',
         note: `Google refused: ${String(body.error.code ?? '')} ${String(body.error.message ?? '')}`.trim(),
         seen: events.length,
         stored: 0,
@@ -170,14 +191,14 @@ export async function refreshCalendar(
     await db.execute(`
       insert into public.calendar_events
         (event_id, calendar_id, summary, excerpt, location, starts_at, ends_at,
-         all_day, attendees, status, html_link, remote_updated_at, fetched_at)
+         all_day, attendees, status, html_link, remote_updated_at, fetched_at, office_id)
       values (${lit(event.id)}, ${lit(calendarId)}, ${nul(event.summary)},
               ${nul(String(event.description ?? '').slice(0, EXCERPT_CHARS) || null)},
               ${nul(event.location)},
               ${lit(startRaw)}::timestamptz, ${lit(endRaw)}::timestamptz,
               ${String(allDay)}, ${String((event.attendees ?? []).length)},
               ${lit(String(event.status ?? 'confirmed'))}, ${nul(event.htmlLink)},
-              ${nul(event.updated)}::timestamptz, app.now_utc())
+              ${nul(event.updated)}::timestamptz, app.now_utc(), ${lit(office)}::uuid)
       on conflict (calendar_id, event_id) do update
         set summary = excluded.summary, excerpt = excluded.excerpt,
             location = excluded.location, starts_at = excluded.starts_at,
@@ -186,6 +207,8 @@ export async function refreshCalendar(
             html_link = excluded.html_link,
             remote_updated_at = excluded.remote_updated_at,
             fetched_at = excluded.fetched_at
+        -- The key is still global (calendar_id, event_id): an event another office holds is never overwritten.
+        where public.calendar_events.office_id = excluded.office_id
     `)
     stored += 1
   }
@@ -198,7 +221,8 @@ export async function refreshCalendar(
   const removed = (
     await db.execute(`
       delete from public.calendar_events
-       where calendar_id = ${lit(calendarId)}
+       where office_id = ${lit(office)}::uuid
+         and calendar_id = ${lit(calendarId)}
          and starts_at >= ${lit(from)}::timestamptz
          and starts_at <= ${lit(to)}::timestamptz
          ${seenIds.length === 0 ? '' : `and event_id <> all(array[${seenIds.map(lit).join(',')}]::text[])`}
@@ -208,6 +232,8 @@ export async function refreshCalendar(
 
   return {
     ok: true,
+    refreshed: true,
+    calendarId,
     note: `${count(stored, 'event', 'events')} over the next ${String(days)} days${
       removed === 0 ? '' : `, and ${count(removed, 'that has', 'that have')} come off the diary`
     }`,

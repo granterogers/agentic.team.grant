@@ -57,7 +57,7 @@ const child = async (parent: string, kind = 'verify.fence', payload = '{}', j?: 
   String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, ${lit(kind)}, ${lit(payload)}::jsonb${j === undefined ? '' : `, interval '0', true, null${callerArgs(j)}`})::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, ${lit(kind)}, ${lit(payload)}::jsonb${j === undefined ? '' : `, interval '0', true, null${callerArgs(j)}`})::text as c`,
       )
     ).c,
   )
@@ -147,7 +147,7 @@ const refused = async (fn: () => Promise<unknown>) => {
   )
   const onceStale = await refused(() =>
     one(
-      `select app.enqueue_child_once(${lit(id)}::uuid, 'verify.fence', 'again', '{}'::jsonb, true, null${callerArgs(stale)})::text`,
+      `select app.enqueue_child_once(app.job_office(${lit(id)}::uuid), ${lit(id)}::uuid, 'verify.fence', 'again', '{}'::jsonb, true, null${callerArgs(stale)})::text`,
     ),
   )
   check(
@@ -172,7 +172,7 @@ const refused = async (fn: () => Promise<unknown>) => {
   const asker = String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, ${lit(KIND)}, '{}'::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, ${lit(KIND)}, '{}'::jsonb)::text as c`,
       )
     ).c,
   )
@@ -270,7 +270,7 @@ const refused = async (fn: () => Promise<unknown>) => {
   // an incomplete caller is refused, not silently unfenced
   const half = await refused(() =>
     one(
-      `select app.enqueue_child(${lit(id)}::uuid, 'verify.fence', '{}'::jsonb, interval '0', true, null, ${lit(id)}::uuid)::text`,
+      `select app.enqueue_child(app.job_office(${lit(id)}::uuid), ${lit(id)}::uuid, 'verify.fence', '{}'::jsonb, interval '0', true, null, ${lit(id)}::uuid)::text`,
     ),
   )
   check(
@@ -298,7 +298,7 @@ const refused = async (fn: () => Promise<unknown>) => {
   const fb = await claim(fid, 'fan-b')
   const staleFan = await refused(() =>
     one(
-      `select app.fan_in_over(${lit(fid)}::uuid, 'objective', '[]'::jsonb, 'office.synthesise', null${callerArgs({ ...fa, leasedBy: fb.leasedBy ?? '' } as Job)})::text`,
+      `select app.fan_in_over(app.job_office(${lit(fid)}::uuid), ${lit(fid)}::uuid, 'objective', '[]'::jsonb, 'office.synthesise', null${callerArgs({ ...fa, leasedBy: fb.leasedBy ?? '' } as Job)})::text`,
     ),
   )
   const groups = Number(

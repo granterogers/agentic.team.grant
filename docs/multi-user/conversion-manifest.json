@@ -1,0 +1,3665 @@
+{
+  "generated": "npm run p3:inventory -- --manifest docs/multi-user/conversion-manifest.json",
+  "functions": {
+    "app.a_document_arriving_is_a_signal": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.action_answer": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.action_in_words": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.active_refusals": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.adapter_key_ok": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.add_project_alias": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.add_project_reference": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.ago": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.alias_is_free_among_active": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.another_pair_of_eyes": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.answer_generation_approval": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.app_base_url": {
+      "class": "SYSTEM",
+      "doors": ["google-oauth"]
+    },
+    "app.append_event": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.approval_binds": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.approval_fingerprint": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.approval_for_delivery": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.approval_material": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.approval_verdict": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.approve_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.approve_tool": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.archive_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.artifacts_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.asset_actions": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "app.attach_drive_folder": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.attach_file_to_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.authority_refusal": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.authorize_effect": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.autonomy_choices": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.autonomy_for": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.autonomy_for_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.awaiting_review": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.backup_health": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.bind_delivery": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.blocker_closes_its_task": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.blocker_makes_a_task": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.branch_outputs": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.bridge_office": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.browser_budget": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.browser_lately": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.browser_note": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.browser_now": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.browser_session_establish": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.browser_session_expired": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.browser_session_forget": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.browser_session_open": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.browser_sessions_for": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.build_shots_orphaned": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.build_step": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.build_step_finish": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.calendar_ahead": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.calendar_link_clear": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.calendar_link_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.calendar_task_plan": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.callback_ack": {
+      "class": "SYSTEM",
+      "doors": ["telegram-webhook", "worker-src"]
+    },
+    "app.cancel_group": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.cancelling_a_question_cancels_its_branches": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.cannot": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.capability_index": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.capability_index_core": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.capacity_limit": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.channel_authority": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.chores_for_backups": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.chores_for_credentials": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.ci_budget": {
+      "class": "SYSTEM",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.ci_expire_stale": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.ci_lately": {
+      "class": "SYSTEM",
+      "doors": ["gateway"]
+    },
+    "app.ci_may_run": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.ci_release": {
+      "class": "SYSTEM",
+      "doors": ["telegram-webhook"]
+    },
+    "app.ci_report": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.ci_reserve": {
+      "class": "SYSTEM",
+      "doors": ["telegram-webhook", "worker-src"]
+    },
+    "app.ci_spent_this_month": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.claim_delivery": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.claim_pending_notification": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.claim_undo": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.classify_failure": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.close_new_public_function": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.command_account": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.command_origin": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.command_principal": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.config_key_is_not_a_schema": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.connector_label": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.connector_purpose": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.connector_sheet": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.consume_channel_authority": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.contact_in_office": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.contact_labels": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.container_refs": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.containers_stored_as_documents": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.conversation_before": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.conversation_channels": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.conversation_extent": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.conversation_growth": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.conversation_history": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.conversation_work": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.create_automation": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.create_temporary_specialist": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.credential_class": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.credential_clean": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.credential_shape": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.current_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.decide_output": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.decide_proposal": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.decide_suggestion": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.decisions_about": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.decisions_so_far": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.declared_test_origin": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.decline_tool": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.default_to_offices_unnamed_project": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.defer_over_budget": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.delegation_health": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.deliverable_to": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.deliveries_blocker_is_written_once": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.delivery_health_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.delivery_office": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.delivery_refusal": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.deployment_credential": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["google-oauth", "worker-src"]
+    },
+    "app.deployment_reader_office": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.dequeue_job": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.discard_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.dispatch_due_responsibilities": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.document_origin": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.drive_folders_to_check": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.drive_reconcile": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.drive_watch_checked": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.due_responsibilities": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.endpoint_in_office": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.enforce_delegation_depth": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.enforce_deterministic_claim": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.enforce_job_transition": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.enforce_notebook_sync_transition": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.enforce_prompt_version": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.enforce_review_gate": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.enforce_specialist_cap": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.enforce_staff_permanence": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.enforce_switch_target_active": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.enqueue_child": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.enqueue_child_once": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.enqueue_inbound": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["slack-events", "telegram-webhook", "voice", "worker-src"]
+    },
+    "app.enqueue_orphans": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.eval_case_dimensions_exist": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.eval_latest": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.eval_run_record": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.eval_set": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.expire_temporary_staff": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.expire_undo_offers": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.export_path": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.failure_seen": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.fan_in_over": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.fan_in_ready": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.fire_pending_signals": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.fire_triggers_for": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.fixture_project": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.folder_id_from": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.forget_mail_before": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.forget_mail_bodies_before": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.free_tier_headroom": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.from_production_ingress": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.github_dispatch": {
+      "class": "SYSTEM",
+      "doors": ["telegram-webhook"]
+    },
+    "app.google_home_office": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.google_revoke_begin": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.google_revoke_finish": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.google_scopes_in_use": {
+      "class": "GLOBAL",
+      "doors": ["google-oauth"]
+    },
+    "app.google_service_scopes": {
+      "class": "GLOBAL",
+      "doors": ["google-oauth"]
+    },
+    "app.google_vault_name": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.grant_standing": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.grant_timezone": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.guess_reach": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.guess_reference_kind": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.guess_reference_title": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.harness_actor": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.harness_author": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.harness_browsing": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.harness_escapes": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.harness_guard_since": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.harness_job": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.harness_label": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.harness_proposal": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.harness_proposal_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.harness_suggestion": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.harness_task": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.harness_voice_session": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.held_for_budget": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_activity": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_answer_blocker": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.hq_appearance": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_appearance_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_artifacts": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_attach": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.hq_autonomy_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_bot_assign": {
+      "class": "SYSTEM",
+      "doors": ["gateway"]
+    },
+    "app.hq_bots": {
+      "class": "SYSTEM",
+      "doors": ["gateway"]
+    },
+    "app.hq_build": {
+      "class": "SYSTEM",
+      "doors": ["gateway"]
+    },
+    "app.hq_connection_choose": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_connections": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_contact_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_contact_archive": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_contact_fields_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_contact_label_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_contact_label_remove": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_contact_label_rename": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_contact_labels_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_contact_photo_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_contact_update": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_cost_per_outcome": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_create_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.hq_dashboard_layout_reset": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_dashboard_layout_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_detach": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_disconnect": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_disconnect_recording": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_document_link": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_document_move": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_document_order_reset": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_document_order_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_document_pin": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_document_restore": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_document_supersede": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_editable_settings": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.hq_forget_google": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_forget_vikunja": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_google": {
+      "class": "SYSTEM",
+      "doors": ["gateway", "google-oauth"]
+    },
+    "app.hq_governance": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_mcp": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_office_chat": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_output": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_overview": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_overview_base": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_plane_layout": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_plane_layout_reset": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_plane_layout_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_portfolio_tasks": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_project_look": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_project_seen": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_projects": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_pulse": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_reattach": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_rename_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_retire_skill": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_routing": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_routing_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_series": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_set_google_credentials": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "app.hq_set_google_secret": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "app.hq_set_setting": {
+      "class": "SYSTEM",
+      "doors": ["gateway"]
+    },
+    "app.hq_set_slack_credentials": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_set_vikunja": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_settings": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_setup": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_setup_services": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_slack_setup": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_staff": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_staff_hire": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "app.hq_staff_procedures": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_staff_retire": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "app.hq_staff_tool_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_staff_tools": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_staff_update": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "app.hq_store_google_refresh": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["google-oauth"]
+    },
+    "app.hq_stranded_work": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_studio": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_studio_core": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.hq_studio_lately": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_studio_settings": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_task_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_task_state": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.hq_task_update": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_team": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_undo": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_usage": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_workspace_layout": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_workspace_layout_reset": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.hq_workspace_layout_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.icon_for_name": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.icon_key_ok": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.impediment_inherits_fixture": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.impediments_tally": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.impediments_tally_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.import_output": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.inbound_addressed_also_is_real": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.inbound_forwarded_is_add_only": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.internal_root_ok": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.job_depth": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.job_forwarded": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.job_held": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.job_inherits_synthetic": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.job_is_stoppable": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.job_may_use_deployment_integration": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.job_office": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.job_origin": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.job_plan": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.job_plan_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.job_plan_text": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.job_progress": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.job_requester": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.job_situation": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.job_steps_are_written_once": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.job_trace": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.job_trace_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.job_trace_prune": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.jobs_origin_is_immutable": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.jobs_parent_is_written_once": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.jobs_stamp_origin": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.jobs_stuck_queued": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.jobs_waiting": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.journal_terminal_failure": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.judge_consultation": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.judge_consultation_on_review": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.kick_worker": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.last_progress": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.learn": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.lessons_for": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.let_job_go": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.link": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.log_job_creation": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.machine_project_ok": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway-inline"]
+    },
+    "app.mail_awaiting": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.mail_bodies_held": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.mail_coverage": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.mail_for_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.mail_recent": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.mail_search": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.mark_telegram_undeliverable": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.may_act": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.may_act_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.may_act_outside": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.mcp_add_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.mcp_client_for": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["mcp"]
+    },
+    "app.mcp_client_name": {
+      "class": "SYSTEM",
+      "doors": ["mcp"]
+    },
+    "app.mcp_code_challenge": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["mcp"]
+    },
+    "app.mcp_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.mcp_enqueue": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.mcp_expire_codes": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.mcp_inventory": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.mcp_issue_code": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["mcp"]
+    },
+    "app.mcp_job_status": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.mcp_projects": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.mcp_recent_work": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.mcp_record_call": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["mcp"]
+    },
+    "app.mcp_redeem_code": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["mcp"]
+    },
+    "app.mcp_redirects_are_safe": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.mcp_register_client": {
+      "class": "SYSTEM",
+      "doors": ["mcp"]
+    },
+    "app.mcp_search": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.mcp_staff": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.model_order": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.model_price_at": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.model_speed": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.morning_briefing_facts": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.my_task_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.my_task_delete": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.my_task_recent": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.my_task_referent": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.my_task_reparent": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.my_task_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.my_tasks": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.my_tasks_counts": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.needs_me_cap": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.needs_me_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.needs_me_pressure": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.normalise_name": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.normalise_reference_url": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.notebook_allowance": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.notebook_chat_allowed": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.notebook_record_refusal": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.notebook_record_spend": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.notice": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.notice_new_document": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.notification_allowed": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.notification_patterns": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.now_utc": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.obligation_key": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.obligation_state": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.obligation_tree": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.offer_mcp_tool": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.office_actor": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.office_backfill_report_is_append_only": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.office_bridge_trigger": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.office_for_auth": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.office_for_sender": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.office_health": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.office_id_is_write_once": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.office_member": {
+      "class": "SYSTEM",
+      "doors": ["gateway-inline", "signin"]
+    },
+    "app.office_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.office_scope": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.office_sees_the_deployment": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.offices_are_never_deleted": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.offices_identity_is_immutable": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.open_approval_for_job": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.open_questions_for_reply": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.operator_chat": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.operator_office": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.operator_offices": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.operator_refusal": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.origin_conversation": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.origin_follows_connector": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.output_author_follows_the_job": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.output_shape_problem": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.output_value_is": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.outputs_match_their_shape": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.over_budget": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.owed_a_word": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.owner_office": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.p2_edge_artifacts": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_branch_groups": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_browser_actions": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_browser_sessions": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_collections": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_consultations": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_contact_label_links": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_contacts": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_dashboard_layouts": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_document_collections": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_document_orders": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_drive_watch": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_duty_said": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_inbound_commands_slack": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_job_branches": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_job_child_slots": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_job_impediments": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_job_pauses": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_job_plans": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_job_state_transitions": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_job_steps": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_job_traces": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_known_escapes": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_legacy_trusted_commands": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_mcp_calls": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_mcp_discovered_tools": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_notebook_budgets": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_outputs": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_plane_layouts": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_project_aliases": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_project_attachments": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_project_briefs": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_project_connector_choices": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_project_references": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_project_seen": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_project_staff": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_relations": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_routing_decisions": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_skill_tools": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_skill_uses": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_slack_channel_authority": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_slack_channel_map": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_task_calendar_links": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_task_links": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_trigger_firings": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.p2_edge_undo_requests": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.page_backup_failure": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.pause_job": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.pause_worker": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.person_provenance": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.principal_kind": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.principal_known": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.principal_refusal": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.project_artifacts": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.project_attention": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.project_automations": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.project_connections": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.project_debris": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.project_delete": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.project_export": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.project_for_slack_channel": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.project_has_an_attachment": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.project_history": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.project_in_office": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.project_instruction_for": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.project_knowledge": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.project_team": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.projects_named_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.proposals_sent": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.proposals_to_send": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.proposals_undeliver": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.propose_standing_procedure": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.propose_standing_rule": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.protect_briefing_body": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.provider_available": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.provision_missing_channels": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.purge_fixture_staff": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.put_in_collection": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.raise_proposals": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.raise_suggestions": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.reach_wanted": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.readings": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.recall_conversation": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.recent_exchange": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.reconcile_vanished": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_browser_page": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_channel_authority": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_connection_health": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.record_consultation": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_decision_made": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.record_delivery_failure": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_delivery_sent": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_destination_authority": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.record_drive_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_file_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "gateway-inline", "worker-src"]
+    },
+    "app.record_mcp_tools": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_notebook_artifact": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_provider_failure": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.record_provider_success": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.record_rehearsal": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.record_signal": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.record_slack_channel_rename": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_slack_history": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.record_slack_membership": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.record_telegram_chat": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["telegram-webhook"]
+    },
+    "app.record_tts_failure": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.recover_stalled_jobs": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.recover_stalled_syncs": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.recoverable_projects": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.recurring_failures": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.references_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.refusal_days": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.register_mcp_provider": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.register_test_origin": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.reject_address_text_on": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.reject_credential_text": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.reject_credential_text_on": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.reject_impediment_credential": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.reject_ledger_mutation": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.relation_endpoint_office": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.relations_of": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.relations_stay_in_one_office": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.release_test_origins": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.remember_a_deleted_origin": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.reminders_due": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.reminders_sent": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.remove_automation": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.remove_project_reference": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.rename_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.renew_lease": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.replays_never_announce": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.request_approval": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.request_carries_no_credential": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.request_generation_approval": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.request_stop": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.request_tool": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.request_undo": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.requeue_retrying": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.require_office": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.reserve_tts_characters": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.resolve_inbound_subject": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.resolve_indeterminate_delivery": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.resolve_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.resolve_project_by_name": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.resolve_secret": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.resumable_now": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.resume_job": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.resume_paused": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.resume_worker": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.retire_skill": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.retire_test_destination": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.retract_lesson": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.retry_delivery": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.retry_job_deliveries": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.revoke_mcp_provider": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.revoke_standing": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.revoke_tool": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.say_in_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.say_once": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.say_schedule": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.search_documents": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.seed_project_aliases": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.self_changes": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.self_improvement_budget": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.self_improvement_headroom": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.self_improvement_spent": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.self_improvement_within_budget": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.send_to_agent": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.set_automation": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.set_project_instruction": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.set_project_staff": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.settle_exhausted_jobs": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.sibling_projects": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.signal_matches": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.skill_carries_no_reach": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.skill_effect": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.skill_used": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.skills_for": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.slack_channel_in_office": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.slack_team_ok": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.sole_person_office": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.spent_today": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.spoken_about_whom": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.spoken_gist": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.spoken_is_a_request": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.staff_behind_job": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.staff_for_bot": {
+      "class": "SYSTEM",
+      "doors": ["telegram-webhook"]
+    },
+    "app.staff_may_use": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.staff_on_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "app.stamp_synthetic_inbound": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.standing_never_covers_level_three": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.standing_now": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.step_begin": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.step_done": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.stop_conversation_work": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.stop_requested": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.store_secret": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.stuck_fixture_projects": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.studio_activity": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.studio_contacts": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.studio_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.studio_documents": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.studio_modules": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.studio_plane": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.studio_requests": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.studio_search": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.studio_sources": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.studio_tasks": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.studio_team_work": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.studio_unseen": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.studio_waiting": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.subject_for": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.suppress_delivery": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.synthetic_is_immutable": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.system_office": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.tag_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.take_out_of_collection": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.task_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.task_answers_blocker": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.task_delete_pushed": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.task_leaves_a_tombstone": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.task_parent_ok": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.task_provider_forget": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.task_pulled": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.task_push_failed": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.task_pushed": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.task_sync_panel": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.task_sync_trouble": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.tasks_repeat_on_done": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.tasks_to_push": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.teach_expertise": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.teach_skill": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.telegram_bot_created": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.telegram_bot_for": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.telegram_capacity": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.telegram_chat_for": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.telegram_chat_origin": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.telegram_office_chat": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.temporary_specialist_slots": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.test_destination_at": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.test_destination_is_not_real": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.test_destinations_lifecycle": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.test_office": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.test_origins_append_only": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.today_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.tool_allowed": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.touch_contacts": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.touch_task": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.touch_updated_at": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.trigger_health": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.tts_characters_this_month": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.unarchive_document": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.unarchive_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.undelivered": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.understood": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["worker-src"]
+    },
+    "app.undo_none": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.undo_offer": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.undo_offers_in": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.undo_tasks_from_job": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.unlearn": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.unnamed_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.unrouted_live_jobs": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "app.unused_capabilities": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.usage_is_harness": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.usage_overview": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "app.validate_vault_refs": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.vault_inventory": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.vault_secret": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "app.vikunja_settings": {
+      "class": "SYSTEM",
+      "doors": ["worker-src"]
+    },
+    "app.voice_answer": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["voice"]
+    },
+    "app.voice_lookup": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["voice", "voice-token"]
+    },
+    "app.voice_refusal": {
+      "class": "SYSTEM",
+      "doors": ["telegram-webhook"]
+    },
+    "app.voice_state": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["voice-token"]
+    },
+    "app.voice_transcriber": {
+      "class": "SYSTEM",
+      "doors": ["voice", "worker-src"]
+    },
+    "app.who_knows_about": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "app.withdraw_notion_authority": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "app.withdraw_refusal": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.withdraw_tool_request": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "app.worker_paused": {
+      "class": "SYSTEM",
+      "doors": []
+    },
+    "app.write_briefing": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["worker-src"]
+    },
+    "public.add_project_reference": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.app_base_url": {
+      "class": "GLOBAL",
+      "doors": ["google-oauth"]
+    },
+    "public.approve_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.archive_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.asset_actions": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.awaiting_review": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.browser_budget": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.browser_lately": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.browser_now": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.browser_session_establish": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.browser_session_forget": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.browser_sessions_for": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.build_step": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "public.build_step_finish": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "public.callback_ack": {
+      "class": "GLOBAL",
+      "doors": ["telegram-webhook", "worker-src"]
+    },
+    "public.chores_for_credentials": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "public.ci_budget": {
+      "class": "GLOBAL",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.ci_lately": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.ci_release": {
+      "class": "GLOBAL",
+      "doors": ["telegram-webhook"]
+    },
+    "public.ci_reserve": {
+      "class": "SYSTEM",
+      "doors": ["telegram-webhook", "worker-src"]
+    },
+    "public.connector_sheet": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "public.conversation_channels": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.conversation_growth": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.conversation_history": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.create_automation": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.decide_output": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.decide_proposal": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.decide_suggestion": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.delegation_health": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.deployment_credential": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["google-oauth", "worker-src"]
+    },
+    "public.deployment_operator": {
+      "class": "SYSTEM",
+      "doors": ["gateway-inline"]
+    },
+    "public.dequeue_job": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "public.discard_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.dispatch_due_responsibilities": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "public.enqueue_inbound": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["slack-events", "telegram-webhook", "voice", "worker-src"]
+    },
+    "public.folder_id_from": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "public.free_tier_headroom": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "public.github_dispatch": {
+      "class": "GLOBAL",
+      "doors": ["telegram-webhook"]
+    },
+    "public.google_oauth_state_consume": {
+      "class": "SYSTEM",
+      "doors": ["google-oauth"]
+    },
+    "public.google_oauth_state_live": {
+      "class": "SYSTEM",
+      "doors": ["google-oauth"]
+    },
+    "public.google_scopes_in_use": {
+      "class": "GLOBAL",
+      "doors": ["google-oauth"]
+    },
+    "public.google_service_scopes": {
+      "class": "GLOBAL",
+      "doors": ["google-oauth"]
+    },
+    "public.harness_proposal": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.hq_activity": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_answer_blocker": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.hq_appearance_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_approve_tool": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_artifacts": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_attach": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.hq_autonomy_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_bot_assign": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.hq_bots": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.hq_build": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.hq_connection_choose": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_connections": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_contact_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_contact_archive": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_contact_fields_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_contact_label_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_contact_label_remove": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_contact_label_rename": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_contact_labels_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_contact_photo_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_contact_update": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_cost_per_outcome": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_create_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.hq_dashboard_layout_reset": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_dashboard_layout_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_decisions": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_decline_tool": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_detach": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_disconnect": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_document_link": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_document_move": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_document_order_reset": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_document_order_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_document_pin": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_document_restore": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_document_supersede": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_forget_google": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_forget_vikunja": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_google": {
+      "class": "GLOBAL",
+      "doors": ["gateway", "google-oauth"]
+    },
+    "public.hq_google_connect_start": {
+      "class": "SYSTEM",
+      "doors": ["gateway"]
+    },
+    "public.hq_governance": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_grant_standing": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_job_plan": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.hq_job_trace": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.hq_mcp": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_output": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_overview": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_plane_layout": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_plane_layout_reset": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_plane_layout_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_portfolio_tasks": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_project_look": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_project_seen": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_projects": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_pulse": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_reattach": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_rename_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_retire_skill": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_revoke_standing": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_revoke_tool": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_routing": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_routing_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_series": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_set_google_credentials": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.hq_set_google_secret": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.hq_set_setting": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.hq_set_slack_credentials": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_set_vikunja": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_settings": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_setup": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_staff": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_staff_hire": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.hq_staff_retire": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.hq_staff_tool_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_staff_update": {
+      "class": "GLOBAL",
+      "doors": ["gateway"]
+    },
+    "public.hq_standing": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_store_google_refresh": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["google-oauth"]
+    },
+    "public.hq_studio": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_studio_lately": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_studio_settings": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_task_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_task_state": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.hq_task_update": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_team": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_undo": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_upload_target": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway-inline"]
+    },
+    "public.hq_usage": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_withdraw_refusal": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_workspace_layout": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_workspace_layout_reset": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.hq_workspace_layout_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.import_output": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.job_cannot": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.job_progress": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.link": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.machine_project_ok": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway-inline"]
+    },
+    "public.may_act": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.mcp_add_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.mcp_client_for": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["mcp"]
+    },
+    "public.mcp_client_name": {
+      "class": "GLOBAL",
+      "doors": ["mcp"]
+    },
+    "public.mcp_code_challenge": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["mcp"]
+    },
+    "public.mcp_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.mcp_enqueue": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.mcp_inventory": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.mcp_issue_code": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["mcp"]
+    },
+    "public.mcp_job_status": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.mcp_projects": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.mcp_recent_work": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.mcp_record_call": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["mcp"]
+    },
+    "public.mcp_redeem_code": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["mcp"]
+    },
+    "public.mcp_register_client": {
+      "class": "GLOBAL",
+      "doors": ["mcp"]
+    },
+    "public.mcp_search": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.mcp_staff": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.model_order": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "public.model_speed": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.my_task_add": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.my_task_delete": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.my_task_reparent": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.my_task_set": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.my_tasks": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.my_tasks_counts": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.offer_mcp_tool": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.office_health": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.office_member": {
+      "class": "GLOBAL",
+      "doors": ["gateway-inline", "signin"]
+    },
+    "public.office_of_operator": {
+      "class": "SYSTEM",
+      "doors": ["google-oauth"]
+    },
+    "public.project_artifacts": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.project_automations": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.project_delete": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.project_export": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.project_history": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.project_team": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.purge_fixture_staff": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.put_in_collection": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.readings": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.record_file_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "gateway-inline", "worker-src"]
+    },
+    "public.record_slack_history": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.record_telegram_chat": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["telegram-webhook"]
+    },
+    "public.recoverable_projects": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.register_mcp_provider": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.relations_of": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.remove_automation": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.remove_project_reference": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.rename_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.request_stop": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.resolve_machine_office": {
+      "class": "GLOBAL",
+      "doors": ["gateway-inline", "mcp", "voice", "voice-token"]
+    },
+    "public.resolve_office": {
+      "class": "GLOBAL",
+      "doors": ["gateway-inline"]
+    },
+    "public.retract_lesson": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.retry_delivery": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": []
+    },
+    "public.retry_job_deliveries": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.revoke_mcp_provider": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.say_in_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.self_changes": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.self_improvement_headroom": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.send_to_agent": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.sender_admitted": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": ["slack-events", "telegram-webhook"]
+    },
+    "public.set_automation": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.set_project_instruction": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.set_project_staff": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.skill_effect": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.slack_ingress_ok": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["slack-events"]
+    },
+    "public.slack_team_ok": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.staff_for_bot": {
+      "class": "GLOBAL",
+      "doors": ["telegram-webhook"]
+    },
+    "public.staff_on_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway", "worker-src"]
+    },
+    "public.stuck_fixture_projects": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.studio_contacts": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.studio_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.studio_modules": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.studio_plane": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.studio_search": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.studio_team_work": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.studio_unseen": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.studio_waiting": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "public.tag_document": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.take_out_of_collection": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.task_sync_panel": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.telegram_capacity": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "public.trigger_health": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.unarchive_project": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.undelivered": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.unlearn": {
+      "class": "OFFICE_TRUSTED_DERIVED",
+      "doors": []
+    },
+    "public.unused_capabilities": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "public.usage_overview": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["gateway"]
+    },
+    "public.vault_inventory": {
+      "class": "GLOBAL",
+      "doors": []
+    },
+    "public.vikunja_settings": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "public.voice_answer": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["voice"]
+    },
+    "public.voice_lookup": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["voice", "voice-token"]
+    },
+    "public.voice_refusal": {
+      "class": "GLOBAL",
+      "doors": ["telegram-webhook"]
+    },
+    "public.voice_state": {
+      "class": "OFFICE_EXPLICIT",
+      "doors": ["voice-token"]
+    },
+    "public.voice_transcriber": {
+      "class": "GLOBAL",
+      "doors": ["voice", "worker-src"]
+    },
+    "public.who_knows_about": {
+      "class": "GLOBAL",
+      "doors": ["worker-src"]
+    },
+    "public.worker_paused": {
+      "class": "GLOBAL",
+      "doors": []
+    }
+  }
+}

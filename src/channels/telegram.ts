@@ -356,6 +356,19 @@ export function toCanonicalCommand(
  * private chat is merely the user's id, and anyone who finds the bot's
  * username can open one (#B1, architecture audit).
  */
+/**
+ * The one-time token in a "connect my Telegram" link (#410): the whole message is `/start link_<36 hex>` (a deep
+ * link puts the payload after /start), in a PRIVATE chat, from a person. Anything else - a group, a longer message,
+ * a different payload, a bot - is not a link and null is returned, so the ordinary path is untouched.
+ * The shape is the one `app.link_begin` writes; the database decides whether the token is real.
+ */
+export function linkTokenOf(update: TelegramUpdate): string | null {
+  const m = update.message
+  if (m === undefined || m.chat.type !== 'private' || m.from?.is_bot === true) return null
+  if (typeof m.text !== 'string') return null
+  return /^\/start(?:@\w+)?[ \t]+link_([0-9a-f]{36})$/.exec(m.text.trim())?.[1] ?? null
+}
+
 export function senderOf(update: TelegramUpdate): string | null {
   const from =
     update.message?.from ?? update.callback_query?.from ?? update.my_chat_member?.from ?? null

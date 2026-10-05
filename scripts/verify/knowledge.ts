@@ -51,8 +51,8 @@ const TOKEN = `zarquon${run}`
 
 const project = await one(`
   with created as (
-    insert into public.projects (slug, name, status)
-    values (${lit(`fixture-knowledge-${run}`)}, 'Fixture: knowledge', 'active')
+    insert into public.projects (office_id, slug, name, status)
+    values (app.test_office(), ${lit(`fixture-knowledge-${run}`)}, 'Fixture: knowledge', 'active')
     returning project_id
   ),
   attached as (
@@ -65,11 +65,13 @@ const project = await one(`
   select project_id::text as id from created
 `)
 const projectId = String(project?.id)
+// Whose documents: the office of the project this suite makes (every reader is asked of one office).
+const PO = `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
 
 const other = await one(`
   with created as (
-    insert into public.projects (slug, name, status)
-    values (${lit(`fixture-knowledge-other-${run}`)}, 'Fixture: knowledge (other)', 'active')
+    insert into public.projects (office_id, slug, name, status)
+    values (app.test_office(), ${lit(`fixture-knowledge-other-${run}`)}, 'Fixture: knowledge (other)', 'active')
     returning project_id
   ),
   attached as (
@@ -101,9 +103,10 @@ const insertDoc = async (input: {
 }): Promise<string> => {
   const r = await one(`
     insert into public.documents
-      (project_id, connector, external_parent_ref, external_ref, title, content,
+      (office_id, project_id, connector, external_parent_ref, external_ref, title, content,
        content_fingerprint, content_chars, fetched_at)
-    values (${lit(input.project)}::uuid, ${lit(input.connector)},
+    values ((select office_id from public.projects where project_id = ${lit(input.project)}::uuid),
+            ${lit(input.project)}::uuid, ${lit(input.connector)},
             ${input.ref === null ? 'null' : lit(input.parent)},
             ${input.ref === null ? 'null' : lit(input.ref)}, ${lit(input.title)},
             ${lit(input.content)}, ${lit(fingerprint(input.ref ?? input.title))},
@@ -126,7 +129,7 @@ const uploaded = await insertDoc({
   project: projectId,
 })
 
-const found = await all(`select * from app.search_documents(${lit(TOKEN)}, null, 10)`)
+const found = await all(`select * from app.search_documents(${PO}, ${lit(TOKEN)}, null, 10)`)
 record(
   'a document reaches search whatever connector fed it in',
   `${String(found.length)} hit(s), connector=${String(found[0]?.connector)}`,
@@ -135,7 +138,9 @@ record(
 
 // CONTROL. Without this, a search function that ignored its argument and
 // returned every row would pass every check above and below it.
-const absent = await all(`select * from app.search_documents(${lit(`absent${run}`)}, null, 10)`)
+const absent = await all(
+  `select * from app.search_documents(${PO}, ${lit(`absent${run}`)}, null, 10)`,
+)
 record(
   'CONTROL: a term in no document returns nothing, so the query is doing the work',
   `${String(absent.length)} hit(s)`,
@@ -153,8 +158,10 @@ await db.execute(`
          content_fingerprint = ${lit(fingerprint(NEW_TOKEN))}
    where document_id = ${lit(uploaded)}::uuid
 `)
-const afterEdit = await all(`select * from app.search_documents(${lit(NEW_TOKEN)}, null, 10)`)
-const staleHit = await all(`select * from app.search_documents(${lit(TOKEN)}, null, 10)`)
+const afterEdit = await all(
+  `select * from app.search_documents(${PO}, ${lit(NEW_TOKEN)}, null, 10)`,
+)
+const staleHit = await all(`select * from app.search_documents(${PO}, ${lit(TOKEN)}, null, 10)`)
 record(
   'editing content re-indexes it, and the OLD text stops matching',
   `new term ${String(afterEdit.length)} hit(s), old term ${String(staleHit.length)} hit(s)`,
@@ -182,7 +189,7 @@ await insertDoc({
   content: `A long aside that happens to mention ${SUBJECT} once, in passing, ${'and then goes on about other matters. '.repeat(20)}`,
   project: projectId,
 })
-const ranked = await all(`select * from app.search_documents(${lit(SUBJECT)}, null, 10)`)
+const ranked = await all(`select * from app.search_documents(${PO}, ${lit(SUBJECT)}, null, 10)`)
 record(
   'a document titled for the subject outranks one that mentions it in passing',
   `${String(ranked.length)} hit(s); first=${String(ranked[0]?.title)}`,
@@ -201,9 +208,9 @@ await insertDoc({
   content: 'Same subject, different project.',
   project: otherId,
 })
-const unfiltered = await all(`select * from app.search_documents(${lit(SUBJECT)}, null, 10)`)
+const unfiltered = await all(`select * from app.search_documents(${PO}, ${lit(SUBJECT)}, null, 10)`)
 const filtered = await all(
-  `select * from app.search_documents(${lit(SUBJECT)}, ${lit(projectId)}::uuid, 10)`,
+  `select * from app.search_documents(${PO}, ${lit(SUBJECT)}, ${lit(projectId)}::uuid, 10)`,
 )
 record(
   'the project filter narrows to that project and not to "the first one"',
@@ -233,7 +240,7 @@ await db.execute(`
    where connector = ${lit(`fixture_${run}`)}
 `)
 const afterDisable = await all(
-  `select * from app.search_documents(${lit(SUBJECT)}, ${lit(projectId)}::uuid, 10)`,
+  `select * from app.search_documents(${PO}, ${lit(SUBJECT)}, ${lit(projectId)}::uuid, 10)`,
 )
 record(
   'disabling a connector does NOT hide the documents it already brought in (§17, ADR-0003)',
@@ -329,10 +336,10 @@ record(
 {
   const question = `What does our note say about the subject of ${SUBJECT}?`
   const anded = await all(
-    `select * from app.search_documents(${lit(question)}, ${lit(projectId)}::uuid, 10, 'all')`,
+    `select * from app.search_documents(${PO}, ${lit(question)}, ${lit(projectId)}::uuid, 10, 'all')`,
   )
   const ored = await all(
-    `select * from app.search_documents(${lit(question)}, ${lit(projectId)}::uuid, 10, 'any')`,
+    `select * from app.search_documents(${PO}, ${lit(question)}, ${lit(projectId)}::uuid, 10, 'any')`,
   )
   record(
     "a whole question finds nothing under 'all' and finds the documents under 'any'",
@@ -352,7 +359,7 @@ record(
   // CONTROL: a question with nothing but stop words yields no tsquery at all,
   // and must return nothing rather than everything.
   const stopWords = await all(
-    `select * from app.search_documents('the and of it', ${lit(projectId)}::uuid, 10, 'any')`,
+    `select * from app.search_documents(app.test_office(), 'the and of it', ${lit(projectId)}::uuid, 10, 'any')`,
   )
   record(
     "CONTROL: a query of only stop words returns nothing under 'any', not everything",
@@ -368,7 +375,7 @@ record(
 let phraseOutcome = ''
 try {
   const phrase = await all(
-    `select * from app.search_documents(${lit(`"note about it" or ${SUBJECT}`)}, ${lit(projectId)}::uuid, 10)`,
+    `select * from app.search_documents(${PO}, ${lit(`"note about it" or ${SUBJECT}`)}, ${lit(projectId)}::uuid, 10)`,
   )
   phraseOutcome = `${String(phrase.length)} hit(s), no error`
 } catch (error) {
@@ -416,8 +423,9 @@ record(
 // so the guards have to be exercised on a project shaped like a real one.
 const realish = await one(`
   with created as (
-    insert into public.projects (slug, name, status)
-    values (${lit(`newsroom-${run}`)}, ${lit(`Newsroom ${run}`)}, 'active')
+    -- Real-looking name only to dodge the fixture-name guards (0107); the office is the TEST office.
+    insert into public.projects (office_id, slug, name, status)
+    values (app.test_office(), ${lit(`newsroom-${run}`)}, ${lit(`Newsroom ${run}`)}, 'active')
     returning project_id
   ),
   attached as (
@@ -571,7 +579,7 @@ console.log('\nwhat the index cannot speak for (#257)')
       ? (JSON.parse(v) as Record<string, unknown>)
       : (v as Record<string, unknown>)
 
-  const gap = await one(`select app.project_knowledge(${lit(projectId)}::uuid) as k`)
+  const gap = await one(`select app.project_knowledge(${PO}, ${lit(projectId)}::uuid) as k`)
   const k = asJson(gap?.k) as {
     blank?: string[]
     complete?: boolean
@@ -604,7 +612,7 @@ console.log('\nwhat the index cannot speak for (#257)')
   await db.execute(`
     delete from public.project_attachments
      where project_id = ${lit(projectId)}::uuid and external_ref = ${lit(`fixture-folder-${run}`)}`)
-  const back = await one(`select app.project_knowledge(${lit(projectId)}::uuid) as k`)
+  const back = await one(`select app.project_knowledge(${PO}, ${lit(projectId)}::uuid) as k`)
   const b = asJson(back?.k) as { blank?: string[]; complete?: boolean }
   record(
     'CONTROL: with nothing attached-but-blank, it says so and names nobody',
@@ -657,7 +665,7 @@ console.log('\nwhat the index cannot speak for (#257)')
   const path = `${projectId}/drive/renamed-${run}.pdf`
   const keep = `${projectId}/drive/steady-${run}.pdf`
   const put = (title: string, storage: string) => `
-    app.record_file_document(${lit(projectId)}::uuid, ${lit(title)}, ${lit(storage)},
+    app.record_file_document(app.test_office(), ${lit(projectId)}::uuid, ${lit(title)}, ${lit(storage)},
       'application/pdf', 2048, null, ${lit(`ext-${run}`)}, null, 'grant', null, 'yours')`
 
   const upstream = await one(`
@@ -680,7 +688,7 @@ console.log('\nwhat the index cannot speak for (#257)')
     begin;
     create temp table rm (k text primary key, v jsonb) on commit drop;
     insert into rm values ('first', ${put(`Plan ${run}.pdf`, path)});
-    select app.rename_document(
+    select app.rename_document(app.test_office(), 
       (select document_id from public.documents where storage_path = ${lit(path)}),
       ${lit(`What I call it ${run}`)});
     insert into rm values ('again', ${put(`Plan ${run} FINAL.pdf`, path)});
@@ -760,7 +768,7 @@ console.log('\none document, one hit, and nothing archived (#257, ADR-0040)')
 
   const hits = await all(`
     select document_id::text as id, connector
-      from app.search_documents(${lit(MIRRORTOK)}, ${lit(projectId)}::uuid, 10, 'any')`)
+      from app.search_documents(${PO}, ${lit(MIRRORTOK)}, ${lit(projectId)}::uuid, 10, 'any')`)
   record(
     'a mirror the office wrote does not come back beside its original',
     `${String(hits.length)} hit(s): ${hits.map((h) => String(h.connector)).join(', ')}`,
@@ -779,7 +787,7 @@ console.log('\none document, one hit, and nothing archived (#257, ADR-0040)')
     `update public.documents set state = 'archived' where document_id = ${lit(original)}::uuid`,
   )
   const afterArchive = await all(`
-    select document_id::text as id from app.search_documents(${lit(MIRRORTOK)}, ${lit(projectId)}::uuid, 10, 'any')`)
+    select document_id::text as id from app.search_documents(${PO}, ${lit(MIRRORTOK)}, ${lit(projectId)}::uuid, 10, 'any')`)
   record(
     'ADR-0040: the archived original leaves ordinary retrieval',
     afterArchive.some((h) => String(h.id) === original) ? 'STILL THERE' : 'gone from search',
@@ -803,7 +811,7 @@ console.log('\none document, one hit, and nothing archived (#257, ADR-0040)')
     `update public.documents set state = 'approved' where document_id = ${lit(original)}::uuid`,
   )
   const restored = await all(`
-    select document_id::text as id from app.search_documents(${lit(MIRRORTOK)}, ${lit(projectId)}::uuid, 10, 'any')`)
+    select document_id::text as id from app.search_documents(${PO}, ${lit(MIRRORTOK)}, ${lit(projectId)}::uuid, 10, 'any')`)
   record(
     'CONTROL: restoring it brings it back, so the filter is the state and not the row',
     restored.some((h) => String(h.id) === original) ? 'back in search' : 'STILL HIDDEN',
@@ -844,23 +852,25 @@ console.log('\nwhat happens when a source vanishes from its listing (ADR-0040)')
     after the rollback finds neither the rows nor the table.
   */
   const parent = `nb-vanish-${run}`
+  // The reconciler runs inside the office that holds the documents (migration 0801): the project's own.
+  const OFFICE_OF = `(select office_id from public.projects where project_id = ${lit(projectId)}::uuid)`
   const asJsonHere = (v: unknown): Record<string, unknown> =>
     (typeof v === 'string' ? JSON.parse(v) : (v ?? {})) as Record<string, unknown>
   const drive = await all(`
     begin;
       create temp table vanish (k text, v jsonb) on commit drop;
       insert into public.documents
-        (project_id, connector, external_parent_ref, external_ref, title, content,
+        (office_id, project_id, connector, external_parent_ref, external_ref, title, content,
          content_fingerprint, content_chars, fetched_at)
-      select ${lit(projectId)}::uuid, 'notebooklm', ${lit(parent)}, r.ref,
+      select ${OFFICE_OF}, ${lit(projectId)}::uuid, 'notebooklm', ${lit(parent)}, r.ref,
              'Vanishing ' || r.ref, 'body ' || r.ref,
              encode(sha256(('body ' || r.ref)::bytea), 'hex'), 6, app.now_utc()
         from (values ('a'), ('b'), ('c'), ('d')) r(ref);
       insert into vanish values
-        ('first',  app.reconcile_vanished('notebooklm', ${lit(parent)}, array['a','b','c'])),
-        ('second', app.reconcile_vanished('notebooklm', ${lit(parent)}, array['a','b','c'])),
-        ('back',   app.reconcile_vanished('notebooklm', ${lit(parent)}, array['a','b','c','d'])),
-        ('wipe',   app.reconcile_vanished('notebooklm', ${lit(parent)}, array[]::text[])),
+        ('first',  app.reconcile_vanished(${OFFICE_OF}, 'notebooklm', ${lit(parent)}, array['a','b','c'])),
+        ('second', app.reconcile_vanished(${OFFICE_OF}, 'notebooklm', ${lit(parent)}, array['a','b','c'])),
+        ('back',   app.reconcile_vanished(${OFFICE_OF}, 'notebooklm', ${lit(parent)}, array['a','b','c','d'])),
+        ('wipe',   app.reconcile_vanished(${OFFICE_OF}, 'notebooklm', ${lit(parent)}, array[]::text[])),
         ('states', (select jsonb_object_agg(external_ref, state) from public.documents
                      where external_parent_ref = ${lit(parent)}));
       select k, v from vanish;

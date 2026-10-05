@@ -61,7 +61,13 @@ const tick = async () => await handler.handle(await w.dutyJob('tasks.sync'), db)
 const BOARD = 'https://tasks.example.test'
 const TOK = `tk_${'a'.repeat(32)}`
 const addTask = async (title: string): Promise<string> => {
-  const r = json((await one(`select app.my_task_add(p_title => ${lit(title)}) as r`)).r)
+  const r = json(
+    (
+      await one(
+        `select app.my_task_add(p_office => app.test_office(), p_title => ${lit(title)}) as r`,
+      )
+    ).r,
+  )
   return String(r.id ?? r.task_id)
 }
 
@@ -81,9 +87,16 @@ const byTest = await w.asTest('vikunja_connect', {
   p_project_id: 7,
   p_api_token: TOK,
 })
+// P1.3 made connecting a board an operator-only act, so the gateway refuses a test member at the door (403, operator_required
+// or person_required) instead of answering 200 with an error inside the result. Any of them is a refusal; what must hold
+// is that it WAS refused and that nothing was minted.
 check(
   'a TEST member cannot connect one either, and mints no authorization',
-  typeof json(byTest.body.result).error === 'string' &&
+  (byTest.status === 403
+    ? ['operator_required', 'person_required'].includes(
+        String((byTest.body as { error?: unknown }).error),
+      )
+    : typeof json(byTest.body.result).error === 'string') &&
     Number(
       (
         await one(
@@ -137,7 +150,7 @@ check(
   `${String(remote.count('create', 'Pay the printer'))} create(s)`,
 )
 await one(
-  `select app.my_task_set(p_task_id => ${lit(t1)}, p_title => ${lit(`Pay the printer, urgently ${w.run}`)}) as r`,
+  `select app.my_task_set(p_office => app.test_office(), p_task_id => ${lit(t1)}, p_title => ${lit(`Pay the printer, urgently ${w.run}`)}) as r`,
 )
 await tick()
 check(
@@ -182,10 +195,11 @@ check(
 )
 
 // ---- 3. create authority cannot delete --------------------------------------------------------------------------
+const deleteJob = (await w.dutyJob('tasks.sync')).jobId
 const decision = json(
   (
     await one(
-      `select app.authorize_effect(p_project => null, p_tool => 'task.board.delete', p_job => ${lit((await w.dutyJob('tasks.sync')).jobId)}::uuid,
+      `select app.authorize_effect(p_office => app.job_office(${lit(deleteJob)}::uuid), p_project => null, p_tool => 'task.board.delete', p_job => ${lit(deleteJob)}::uuid,
          p_fingerprint => 'x', p_scope => ${lit(`vikunja:${BOARD}#7`)}) as d`,
     )
   ).d,
@@ -198,7 +212,7 @@ check(
 const grantDelete = json(
   (
     await one(
-      `select app.grant_standing('task.board.delete', null, 'proof', 'grant', null, ${lit(`vikunja:${BOARD}#7`)}) as r`,
+      `select app.grant_standing(app.test_office(), 'task.board.delete', null, 'proof', 'grant', null, ${lit(`vikunja:${BOARD}#7`)}) as r`,
     )
   ).r,
 )
@@ -206,7 +220,11 @@ check(
   'and no standing yes for delete can be made, with a scope or without (level 3)',
   grantDelete.ok === false &&
     json(
-      (await one(`select app.grant_standing('task.board.delete', null, 'proof', 'grant') as r`)).r,
+      (
+        await one(
+          `select app.grant_standing(app.test_office(), 'task.board.delete', null, 'proof', 'grant') as r`,
+        )
+      ).r,
     ).ok === false,
   String(grantDelete.error).slice(0, 80),
 )
@@ -346,10 +364,11 @@ check(
   live.length === 1 && live[0]?.scope_ref === 'vikunja:https://other.example.test#9',
   JSON.stringify(live),
 )
+const staleJob = (await w.dutyJob('tasks.sync')).jobId
 const staleDecision = json(
   (
     await one(
-      `select app.authorize_effect(p_project => null, p_tool => 'task.board.write', p_job => ${lit((await w.dutyJob('tasks.sync')).jobId)}::uuid,
+      `select app.authorize_effect(p_office => app.job_office(${lit(staleJob)}::uuid), p_project => null, p_tool => 'task.board.write', p_job => ${lit(staleJob)}::uuid,
          p_scope => ${lit(`vikunja:${BOARD}#7`)}) as d`,
     )
   ).d,

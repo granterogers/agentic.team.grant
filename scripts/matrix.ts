@@ -23,7 +23,7 @@
  * the one that does not, and says which is which for every cell:
  *
  *   ADVERTISED    does THIS agent's capability brief claim it? Per agent, from
- *                 `app.capability_index(slug)` — the exact structure the
+ *                 `app.capability_index(office, slug)` — the exact structure the
  *                 prompt is built from, not a restatement of it.
  *   REACHABLE     can a user request reach it at all? Per CAPABILITY, from
  *                 canonical traces, because reachability is a property of the
@@ -44,6 +44,7 @@
  * however complete its implementation.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { execFileSync } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../src/db/executor.ts'
@@ -87,7 +88,7 @@ const grants = new Set(
 /*
   What each agent is ACTUALLY TOLD.
 
-  `app.capability_index(slug)` is the function `capabilityBrief` calls, so this
+  `app.capability_index(office, slug)` is the function `capabilityBrief` calls, so this
   reads the same structure the prompt is built from. Asking `staff_tools`
   instead would test the grant table against itself and miss the whole class of
   defect where a grant exists and the brief does not carry it — which is what
@@ -96,7 +97,7 @@ const grants = new Set(
 const advertised = new Map<string, Set<string>>()
 for (const a of agents) {
   const rows = await all(
-    `select jsonb_array_elements(coalesce(app.capability_index(${lit(a.slug)}) -> 'can', '[]'::jsonb)) ->> 'tool' as tool`,
+    `select jsonb_array_elements(coalesce(app.capability_index(app.operator_office(), ${lit(a.slug)}) -> 'can', '[]'::jsonb)) ->> 'tool' as tool`,
   )
   advertised.set(a.slug, new Set(rows.map((r) => String(r.tool))))
 }
@@ -301,7 +302,7 @@ await writeFile(
     'Most capabilities are **agent-invariant**: `db.read` is performed by the handler,',
     'identically, whoever is speaking, so asking Ruby to read the database tests the',
     'handler twice and Ruby not at all. What genuinely differs per agent is what the',
-    'agent is TOLD — read here from `app.capability_index(slug)`, the same function',
+    'agent is TOLD — read here from `app.capability_index(office, slug)`, the same function',
     '`capabilityBrief` builds the prompt from. Reachability is a property of the',
     'routing and the handler and is proven once per capability, from canonical traces.',
     '',

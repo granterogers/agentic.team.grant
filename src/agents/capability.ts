@@ -42,6 +42,8 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
+import { currentPerson, forThePerson } from '../office/person.ts'
 
 export interface Reach {
   /** How a person would name it: "Notion", "Slack", "Google NotebookLM". */
@@ -124,10 +126,15 @@ export const EMPTY_CAPABILITY: Capability = {
   declined: [],
 }
 
-export async function capabilityNow(db: SqlExecutor, staffSlug?: string): Promise<Capability> {
+export async function capabilityNow(
+  db: SqlExecutor,
+  office: RetrievalOffice,
+  staffSlug?: string,
+): Promise<Capability> {
   const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+  // The reach is the OFFICE'S OWN credentials and grants (connection_health, staff_tools), never the deployment's.
   const { rows } = await db.execute(
-    `select app.capability_index(${staffSlug === undefined ? 'null' : lit(staffSlug)}) as i`,
+    `select app.capability_index(${officeOf(office)}, ${staffSlug === undefined ? 'null' : lit(staffSlug)}) as i`,
   )
   const i = (rows[0] as { i?: Record<string, unknown> } | undefined)?.i
   if (i === undefined) return EMPTY_CAPABILITY
@@ -244,16 +251,17 @@ export function capabilityBrief(cap: Capability): string {
     .map((a) => `${a.tool} — you can ${a.verbs.slice(0, 4).join(', ')}.`)
   const plain = now.filter((a) => a.verbs.length === 0).map((a) => a.tool)
 
-  return (
+  // The registry rows are written once for whoever the office works for; the brief says it for THIS job's person.
+  return forThePerson(
     'What this team can reach right now, as a matter of fact: ' +
-    (can.length === 0 ? 'nothing' : can.join(', ')) +
-    '. ' +
-    (cannotReach.length === 0
-      ? ''
-      : `Not reachable: ${cannotReach.map((r) => `${r.service} (${String(r.detail ?? 'unavailable')})`).join(', ')}. `) +
-    (verbs.length === 0 ? '' : `${verbs.join(' ')} `) +
-    (plain.length === 0 ? '' : `You also hold: ${plain.join(', ')}. `) +
-    /*
+      (can.length === 0 ? 'nothing' : can.join(', ')) +
+      '. ' +
+      (cannotReach.length === 0
+        ? ''
+        : `Not reachable: ${cannotReach.map((r) => `${r.service} (${String(r.detail ?? 'unavailable')})`).join(', ')}. `) +
+      (verbs.length === 0 ? '' : `${verbs.join(' ')} `) +
+      (plain.length === 0 ? '' : `You also hold: ${plain.join(', ')}. `) +
+      /*
       What the office does on a schedule, which is not what you can do now.
 
       Named rather than hidden, for ADR-0018's reason: an agent that does not
@@ -261,14 +269,14 @@ export function capabilityBrief(cap: Capability): string {
       actionable half is in the sentence — give a task a date and the sync
       picks it up — so this reads as a route rather than a refusal.
     */
-    (onTheClock.length === 0
-      ? ''
-      : `The office also does these, but on its own schedule and never inside a reply: ${onTheClock
-          .map((a) => a.tool)
-          .join(', ')}. You cannot perform one now, so do not say you have. ` +
-        'Say what would make it happen — a dated task reaches the diary on the ' +
-        'next sync — or ask for what you need. ') +
-    /*
+      (onTheClock.length === 0
+        ? ''
+        : `The office also does these, but on its own schedule and never inside a reply: ${onTheClock
+            .map((a) => a.tool)
+            .join(', ')}. You cannot perform one now, so do not say you have. ` +
+          'Say what would make it happen — a dated task reaches the diary on the ' +
+          'next sync — or ask for what you need. ') +
+      /*
       What this person may NOT do, which is as load-bearing as what they may.
 
       An agent that does not know a tool exists cannot ask for it, and ADR-0018
@@ -276,11 +284,11 @@ export function capabilityBrief(cap: Capability): string {
       apart. Before this the brief said neither, and an agent hitting a boundary
       had nothing to propose (#49).
     */
-    (cap.mustAsk.length === 0
-      ? ''
-      : `The office can ${cap.mustAsk.map((a) => a.tool).join(', ')} but you do not hold ` +
-        'those — ask for one rather than saying it is impossible. ') +
-    /*
+      (cap.mustAsk.length === 0
+        ? ''
+        : `The office can ${cap.mustAsk.map((a) => a.tool).join(', ')} but you do not hold ` +
+          'those — ask for one rather than saying it is impossible. ') +
+      /*
       Switched off for everyone — the NAMES, and a clause, never the essay.
 
       `tool_permissions.disabled_reason` is written for a person reading the
@@ -295,26 +303,26 @@ export function capabilityBrief(cap: Capability): string {
       Governance page, and is still returned by `capabilityNow` for anything
       that wants it.
     */
-    (cap.cannot.length === 0
-      ? ''
-      : `Switched off for everyone: ${cap.cannot
-          .map((a) => `${a.tool} (${firstClause(a.why)})`)
-          .join('; ')}. `) +
-    (cap.declined.length === 0
-      ? ''
-      : `Already asked for and refused, so do not ask again: ${cap.declined
-          .map((d) => `${d.tool}${d.why === null ? '' : ` (${d.why})`}`)
-          .join(', ')}. `) +
-    'Never claim you cannot reach one of the reachable services, and never say ' +
-    'you lack access or an integration for one. If our records hold nothing ' +
-    'about the thing being asked about, say THAT — "I have nothing on it here" ' +
-    'is true and useful; "I do not have access to Notion" is a different claim ' +
-    'and it is not yours to make. ' +
-    // The specific sentence Grant objected to, forbidden by name.
-    'And do not offer to produce something "ready for you to add" when you can ' +
-    'add it yourself — if a verb above covers it, use it. ' +
-    NO_CALL_CHANNEL +
-    CHANNEL_TRUTHS
+      (cap.cannot.length === 0
+        ? ''
+        : `Switched off for everyone: ${cap.cannot
+            .map((a) => `${a.tool} (${firstClause(a.why)})`)
+            .join('; ')}. `) +
+      (cap.declined.length === 0
+        ? ''
+        : `Already asked for and refused, so do not ask again: ${cap.declined
+            .map((d) => `${d.tool}${d.why === null ? '' : ` (${d.why})`}`)
+            .join(', ')}. `) +
+      'Never claim you cannot reach one of the reachable services, and never say ' +
+      'you lack access or an integration for one. If our records hold nothing ' +
+      'about the thing being asked about, say THAT — "I have nothing on it here" ' +
+      'is true and useful; "I do not have access to Notion" is a different claim ' +
+      'and it is not yours to make. ' +
+      // The specific sentence Grant objected to, forbidden by name.
+      'And do not offer to produce something "ready for you to add" when you can ' +
+      'add it yourself — if a verb above covers it, use it. ' +
+      noCallChannel() +
+      channelTruths(),
   )
 }
 
@@ -360,22 +368,23 @@ export function capabilityBrief(cap: Capability): string {
  * half of the fix is `deliberationLeak` in `src/agents/quality.ts`; this is the
  * half that stops the model wanting to do it.
  */
-const NO_CALL_CHANNEL =
+// Functions, not constants: they name the person the running job is for (#404), which is known only when a job runs.
+const noCallChannel = (): string =>
   'One thing about the list above, because it is easy to misread: those are ' +
   'things the OFFICE does on the strength of what you write, not functions you ' +
   'can call. There is no call syntax here and no tool channel — your reply goes ' +
-  'to Grant exactly as you type it. So never write a tool name, a call, or any ' +
+  `to ${currentPerson().name} exactly as you type it. So never write a tool name, a call, or any ` +
   'JSON in your answer, and never narrate what you are about to do or which ' +
   'tool you are weighing up. Do the thinking silently and send only the result: ' +
-  'what you found, what you did, or what you need from him. If you cannot do ' +
-  'something, say so plainly in his words rather than naming the switch. '
+  'what you found, what you did, or what you need from them. If you cannot do ' +
+  'something, say so plainly in their words rather than naming the switch. '
 
-const CHANNEL_TRUTHS =
+const channelTruths = (): string =>
   'Facts about how your messages are sent, which are true whether or not you ' +
   'do anything: every Telegram message you send automatically carries thumbs ' +
   'up and thumbs down buttons, and a request for permission carries Go ahead ' +
-  'and Not now. Voice notes Grant sends are transcribed before you see them. ' +
-  'You reach him on Telegram and the team on Slack. Never tell him you can ' +
+  `and Not now. Voice notes ${currentPerson().name} sends are transcribed before you see them. ` +
+  'You reach them on Telegram and the team on Slack. Never tell them you can ' +
   'only produce plain text, or that you cannot add buttons — you can, because ' +
   'the office adds them for you.'
 

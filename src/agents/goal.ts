@@ -51,6 +51,7 @@
  * property that made `understand.ts` safe to put in front of the recognisers.
  */
 import type { SqlExecutor } from '../db/executor.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 
 /** One capability, exactly as the registry describes it. */
@@ -429,7 +430,7 @@ export function validate(
     )
     if (capability === 'task.create' && colleague !== undefined) {
       refused.push(
-        `${id} is work for ${colleague}, and task.create only puts things on Grant's own list`,
+        `${id} is work for ${colleague}, and task.create only puts things on ${currentPerson().possessive} own list`,
       )
       continue
     }
@@ -483,8 +484,9 @@ export function validate(
   }
 }
 
-const SYSTEM = (sheet: string, roster: string): string =>
-  [
+const SYSTEM = (sheet: string, roster: string): string => {
+  const person = currentPerson().name
+  return [
     'You are the chief of staff of a small office. You are given one clear request',
     'and you say what work is required to satisfy it. You do NOT do the work and you',
     'do NOT answer the request.',
@@ -515,10 +517,10 @@ const SYSTEM = (sheet: string, roster: string): string =>
     '   reading is ONE step and nothing more — do NOT add a write, a draft or an',
     '   artifact that was not asked for. Padding a question into work is the worst',
     '   thing you can do here.',
-    '3b. draft.create is for when Grant asked for something WRITTEN — a document, a',
-    '   write-up, a report, a message to be prepared. Analysis he wants told to him',
+    `3b. draft.create is for when ${person} asked for something WRITTEN — a document, a`,
+    '   write-up, a report, a message to be prepared. Analysis they want told to them',
     '   is not a draft.',
-    '3c. task.create is for putting something on GRANT\u2019S OWN list. Work the office',
+    `3c. task.create is for putting something on ${person.toUpperCase()}\u2019S OWN list. Work the office`,
     '   should go and do is a step of its own, not a task telling somebody to do it.',
     '3d. A standing instruction about how the office should behave in future is',
     '   preference.update. One step, nothing else.',
@@ -526,16 +528,18 @@ const SYSTEM = (sheet: string, roster: string): string =>
     '   remark — return no steps at all.',
     '5. specialist is a slug from the list of people, and only when the work genuinely',
     '   belongs to their subject. null otherwise.',
-    '6. audience says WHO the step output is for: "office" (us), "grant" (him), or',
+    `6. audience says WHO the step output is for: "office" (us), "grant" (${person}, the`,
+    '   person you work for — the value is spelt "grant" whoever that is), or',
     '   "outside" (anybody else — a client, a supplier, a cohort, the public).',
     '   Say it honestly. A step whose audience is outside the office may only ever',
     '   be draft.create: preparing what would be sent is as far as you go, and the',
-    '   sending is Grant’s decision. Never reach for a channel just because it',
+    `   sending is ${person}’s decision. Never reach for a channel just because it`,
     '   happens to be available.',
     '7. If the request is too vague to act on, or names something you cannot',
     '   identify, return no steps and say what you would need in unreachable.',
-    '8. why is one short phrase for Grant, not an explanation to yourself.',
+    `8. why is one short phrase for ${person}, not an explanation to yourself.`,
   ].join('\n')
+}
 
 /*
   An outcome he wants to KEEP is a written one (ledger R47).
@@ -600,6 +604,54 @@ export const withoutUnaskedDrafts = (plan: GoalPlan, request: string): GoalPlan 
   ]
   if (kept.length === 0 && plan.unreachable.length === 0) {
     return fellBack(`only unasked drafts were proposed: ${[...dropped].join(', ')}`)
+  }
+  return { ...plan, steps: kept, refused }
+}
+
+/**
+ * Did he ask for TASKS to be made? The condition for a plan that writes to a task list (#408).
+ *
+ * Closure acceptance, 3 October 2026: "Ask the finance director to review the outstanding work in this project and tell me
+ * what needs attention first" was planned as `notebook.read -> task.extract`, and the office put six new tasks into the
+ * project (twelve for the travel project) and called that the review. A review is a reading; extraction WRITES a task list
+ * nobody asked for, and the answer to "what needs attention" is in the tasks the project already has.
+ *
+ * Both halves are required, a thing made and a task to make it: "next steps", "what needs doing" and "outstanding work" name
+ * a finding, never a request to file one, so they do not count.
+ */
+export const asksForTasks = (request: string): boolean =>
+  // A result to keep is a written one (R47), and "remind me" is a task by its own words.
+  KEPT_FOR_LATER.test(request) ||
+  /\bremind\s+me\b/i.test(request) ||
+  (/\b(?:create|make|add|put|turn|pull|extract|file|log|raise|generate|set\s+up|assign|remind|track|schedule|write\s+down|note\s+down)\b/i.test(
+    request,
+  ) &&
+    /\b(?:tasks?|to-?dos?|action\s+items?|actions|follow-?ups?|reminders?)\b|\bon\s+(?:my|the|our)\s+(?:to-?do\s+|task\s+)?list\b/i.test(
+      request,
+    ))
+
+/** A plan without the task-list writes nobody asked for, and without anything that depended on them. */
+export const withoutUnaskedTasks = (plan: GoalPlan, request: string): GoalPlan => {
+  if (plan.how === 'fallback' || asksForTasks(request)) return plan
+  const dropped = new Set<string>()
+  const kept = plan.steps.filter((st) => {
+    if (
+      st.capability === 'task.extract' ||
+      st.capability === 'task.create' ||
+      st.needs.some((n) => dropped.has(n))
+    ) {
+      dropped.add(st.id)
+      return false
+    }
+    return true
+  })
+  if (dropped.size === 0) return plan
+  const refused = [
+    ...plan.refused,
+    `${[...dropped].join(', ')} would have written tasks nobody asked for`,
+  ]
+  if (kept.length === 0 && plan.unreachable.length === 0) {
+    return fellBack(`only unasked task writes were proposed: ${[...dropped].join(', ')}`)
   }
   return { ...plan, steps: kept, refused }
 }
@@ -720,6 +772,6 @@ export async function planFor(
     new Set(roster.map((r) => r.slug)),
     roster.map((r) => (r.name ?? '').trim()).filter((n) => /^[A-Za-z]{2,}$/.test(n)),
   )
-  const checked = withoutUnaskedDrafts(validated, said)
+  const checked = withoutUnaskedTasks(withoutUnaskedDrafts(validated, said), said)
   return checked.how === 'fallback' ? checked : { ...checked, model: result.model ?? null }
 }

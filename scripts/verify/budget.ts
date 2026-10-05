@@ -99,7 +99,7 @@ const REAL_JOB = `
             'teamhq:grant', 'research-director', app.now_utc(), 5,
             'budget-spent-' || gen_random_uuid()::text);
     select app.defer_over_budget();
-    select (app.held_for_budget())::text as r;`)
+    select (app.held_for_budget(app.operator_office()))::text as r;`)
   const held = JSON.parse(String(r.r ?? '{}')) as { jobs?: number; why?: string; until?: string }
   check(
     'the queued work is HELD, with the reason on it',
@@ -123,7 +123,7 @@ const REAL_JOB = `
             'teamhq:grant', 'research-director', app.now_utc(), 5,
             'budget-spent-' || gen_random_uuid()::text);
     select app.defer_over_budget();
-    select ((app.office_health(24))->'held_for_budget')::text as r;`)
+    select ((app.office_health(app.operator_office(), 24))->'held_for_budget')::text as r;`)
   const line = JSON.parse(String(r.r ?? '{}')) as { jobs?: number }
   check(
     'office_health carries it as its own state, not as stalled',

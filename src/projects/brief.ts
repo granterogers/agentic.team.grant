@@ -30,6 +30,7 @@
  * §12 exists to prevent.
  */
 import type { SqlExecutor } from '../db/executor.ts'
+import type { OfficeId } from '../office/context.ts'
 import { EmptyCompletionError, type ProviderRouter } from '../providers/router.ts'
 import { scrub } from '../text/scrub.ts'
 
@@ -72,6 +73,7 @@ interface CachedSource {
 /** Read what the sync has already cached. No Notebook call. */
 export const cachedSources = async (
   db: SqlExecutor,
+  office: OfficeId,
   projectId: string,
 ): Promise<readonly CachedSource[]> => {
   const { rows } = await db.execute(`
@@ -80,7 +82,8 @@ export const cachedSources = async (
            left(content, ${String(CHARS_PER_SOURCE)}) as excerpt,
            content_chars
     from public.documents
-    where project_id = ${lit(projectId)}::uuid
+    where office_id = ${lit(office)}::uuid
+      and project_id = ${lit(projectId)}::uuid
       and content is not null
     order by content_chars desc
     limit ${String(MAX_SOURCES)}
@@ -103,14 +106,16 @@ export const cachedSources = async (
  */
 export const briefIsStale = async (
   db: SqlExecutor,
+  office: OfficeId,
   projectId: string,
   currentFingerprints: readonly string[],
 ): Promise<boolean> => {
   const { rows } = await db.execute(`
-    select source_fingerprints::text as fps
-    from public.project_briefs
-    where project_id = ${lit(projectId)}::uuid
-    order by generated_at desc limit 1
+    select b.source_fingerprints::text as fps
+    from public.project_briefs b
+    join public.projects p on p.project_id = b.project_id and p.office_id = ${lit(office)}::uuid
+    where b.project_id = ${lit(projectId)}::uuid
+    order by b.generated_at desc limit 1
   `)
   if (rows.length === 0) return true
 
@@ -150,14 +155,16 @@ const PROMPT_HEADER =
 export const generateBrief = async (
   db: SqlExecutor,
   router: ProviderRouter,
+  /** The office the project belongs to. A project of any other office has no sources here and no brief. */
+  office: OfficeId,
   projectId: string,
   options: { force?: boolean } = {},
 ): Promise<BriefResult> => {
-  const sources = await cachedSources(db, projectId)
+  const sources = await cachedSources(db, office, projectId)
   if (sources.length === 0) throw new NoSourcesError(projectId)
 
   const fingerprints = sources.map((s) => s.fingerprint)
-  if (options.force !== true && !(await briefIsStale(db, projectId, fingerprints))) {
+  if (options.force !== true && !(await briefIsStale(db, office, projectId, fingerprints))) {
     return {
       briefId: '',
       body: '',
@@ -168,7 +175,8 @@ export const generateBrief = async (
   }
 
   const project = await db.execute(`
-    select name from public.projects where project_id = ${lit(projectId)}::uuid
+    select name from public.projects
+     where project_id = ${lit(projectId)}::uuid and office_id = ${lit(office)}::uuid
   `)
   const name = String(project.rows[0]?.name ?? 'this project')
 
@@ -211,14 +219,18 @@ export const generateBrief = async (
   const { rows } = await db.execute(`
     insert into public.project_briefs
       (project_id, body, sources_used, source_fingerprints, model, confidence)
-    values
-      (${lit(projectId)}::uuid, ${lit(text)}, ${String(sources.length)},
+    select
+      p.project_id, ${lit(text)}, ${String(sources.length)},
        array[${fingerprints.map((f) => lit(f)).join(', ')}]::text[],
        ${lit(completion.model)},
        -- Inferred, never verified. See the note in this file's header.
-       'inferred')
+       'inferred'
+      from public.projects p
+     where p.project_id = ${lit(projectId)}::uuid and p.office_id = ${lit(office)}::uuid
     returning brief_id::text as brief_id
   `)
+  // A project of another office is not this office's to brief: nothing was written, which reads as no brief.
+  if (rows[0] === undefined) throw new NoSourcesError(projectId)
 
   return {
     briefId: String(rows[0]?.brief_id),

@@ -66,8 +66,8 @@ async function setUp(): Promise<void> {
   const project = String(
     (
       await one(`
-        select project_id::text as id from public.projects
-         where status = 'active' and not is_fixture order by slug limit 1
+        -- The test office's own catch-all project: active and not a fixture, and nobody's real work.
+        select app.unnamed_project(app.test_office())::text as id
       `)
     ).id,
   )
@@ -75,8 +75,9 @@ async function setUp(): Promise<void> {
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by, recipient_agent)
-        values (extensions.gen_random_uuid(), ${lit(project)}::uuid,
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, recipient_agent)
+        values ((select office_id from public.projects where project_id = ${lit(project)}::uuid),
+                extensions.gen_random_uuid(), ${lit(project)}::uuid,
                 ${lit(`verify-handoff-${run}`)}, 'research', 'verify:handoff', 'research-director')
         returning job_id::text as id
       `)
@@ -86,8 +87,9 @@ async function setUp(): Promise<void> {
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by)
-        values (extensions.gen_random_uuid(), ${lit(project)}::uuid,
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by)
+        values ((select office_id from public.projects where project_id = ${lit(project)}::uuid),
+                extensions.gen_random_uuid(), ${lit(project)}::uuid,
                 ${lit(`verify-handoff-plain-${run}`)}, 'research', 'verify:handoff')
         returning job_id::text as id
       `)
@@ -104,7 +106,7 @@ try {
 
   const made = (
     await one(`
-    select public.record_consultation(${lit(jobId)}::uuid, 'research-director',
+    select app.record_consultation(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, 'research-director',
       'chief-of-staff', 'it is a research question') as r
   `)
   ).r as { ok?: boolean; error?: string; consulted?: string }
@@ -137,7 +139,7 @@ try {
 
   const self = (
     await one(`
-    select public.record_consultation(${lit(jobId)}::uuid, 'chief-of-staff',
+    select app.record_consultation(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, 'chief-of-staff',
       'chief-of-staff', 'talking to myself') as r
   `)
   ).r as { error?: string }
@@ -149,7 +151,7 @@ try {
 
   const nobody = (
     await one(`
-    select public.record_consultation(${lit(jobId)}::uuid, 'nobody-here') as r
+    select app.record_consultation(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, 'nobody-here', 'chief-of-staff') as r
   `)
   ).r as { error?: string }
   check(

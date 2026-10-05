@@ -25,6 +25,7 @@
  * Prints nothing secret: names, status, owner, and what to do.
  */
 
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { roster } from '../../src/telegram/roster.ts'
 
@@ -503,7 +504,7 @@ try {
   }))
   const written = (
     await db.execute(
-      `select app.record_connection_health($payload$${JSON.stringify(payload)}$payload$::jsonb) as n`,
+      `select app.record_connection_health(app.operator_office(), $payload$${JSON.stringify(payload)}$payload$::jsonb) as n`,
     )
   ).rows[0]
   console.log(

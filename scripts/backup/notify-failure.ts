@@ -26,6 +26,7 @@
  * because the whole point is that it must not be the thing that also breaks.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { escapeHtml } from '../../src/telegram/message.ts'
@@ -57,7 +58,7 @@ if (botToken === '') {
 
 const telegram = new TelegramClient(botToken)
 const botId = String(((await telegram.call('getMe')).result as { id: number }).id)
-const chat = (await db.execute(`select app.telegram_chat_for('grant', '${botId}') as c`)).rows[0]?.c
+const chat = (await db.execute(`select app.operator_chat('${botId}') as c`)).rows[0]?.c
 if (chat === null || chat === undefined) {
   console.log('no telegram chat registered; cannot page. The failure stands.')
   process.exit(0)

@@ -77,7 +77,7 @@ const setup = async (label: string) => {
     json(
       (
         await one(
-          `select app.hq_create_project(${lit(`Drive ${label} ${run}`)}, 'upload', ${lit(slug)}, ${lit(`Drive ${label} ${run}`)}, true) as v`,
+          `select app.hq_create_project(app.test_office(), ${lit(`Drive ${label} ${run}`)}, 'upload', ${lit(slug)}, ${lit(`Drive ${label} ${run}`)}, true) as v`,
         )
       ).v,
     ).project_id,
@@ -143,7 +143,11 @@ for (const [i, option] of options.entries()) {
     ).id,
   )
   const r = json(
-    (await one(`select app.hq_answer_blocker(${lit(b)}::uuid, ${lit(option)}, 'grant') as r`)).r,
+    (
+      await one(
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, ${lit(option)}, 'grant') as r`,
+      )
+    ).r,
   )
   const made = await readJobs(s.job.jobId)
   const promisesToAdd = /^\s*add\b/i.test(option)

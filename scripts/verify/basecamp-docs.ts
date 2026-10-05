@@ -15,6 +15,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

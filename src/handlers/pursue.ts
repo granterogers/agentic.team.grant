@@ -154,6 +154,7 @@ export function pursueHandler(deps: PursueDeps): Handler {
       const spent = async (): Promise<'deterministic_retrieval' | 'inference'> =>
         await howComposed(db, job.jobId)
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const payload = (
         (
           await db.execute(
@@ -297,6 +298,7 @@ export function pursueHandler(deps: PursueDeps): Handler {
           rather than lost. Canonical state, not a variable that happened to
           survive.
         */
+        // raw-sql[2]: keyed by the claimed job; job_steps is a derived row of the job the worker holds.
         const already = (
           await db
             .execute(`

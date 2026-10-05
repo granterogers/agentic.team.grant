@@ -34,7 +34,7 @@ const performed = async (label: string) =>
     (await one(`select count(*)::int as n from public.once_effects where label = ${lit(label)}`)).n,
   )
 const job = async (): Promise<string> => {
-  const p = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const p = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   return String(
     (
       await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)

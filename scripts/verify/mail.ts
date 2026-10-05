@@ -283,9 +283,9 @@ try {
   }
   const draft = (cols: string, vals: string): string => `
     insert into public.mail_messages
-      (message_id, thread_id, to_count, has_attachments, unread,
+      (office_id, message_id, thread_id, to_count, has_attachments, unread,
        first_seen_at, last_seen_at, labels, ${cols})
-    values (${lit(`c-${run}`)}, ${lit(`c-${run}`)}, 1, false, false,
+    values (app.test_office(), ${lit(`c-${run}`)}, ${lit(`c-${run}`)}, 1, false, false,
        app.now_utc(), app.now_utc(), array[]::text[], ${vals});`
 
   await refuse(
@@ -399,8 +399,9 @@ console.log('\nthe correspondence, and which project it belongs to (#172)')
 
   const got = (await one(`
     begin;
-    insert into public.projects (name, slug, status)
-    values (${lit(A)}, ${lit(slugA)}, 'active'), (${lit(B)}, ${lit(slugB)}, 'active');
+    insert into public.projects (office_id, name, slug, status)
+    values (app.test_office(), ${lit(A)}, ${lit(slugA)}, 'active'),
+           (app.test_office(), ${lit(B)}, ${lit(slugB)}, 'active');
 
     insert into public.project_aliases (project_id, alias, source, confidence)
     values
@@ -416,67 +417,67 @@ console.log('\nthe correspondence, and which project it belongs to (#172)')
             'Priya Raman', 'priya@example.com');
 
     insert into public.mail_messages
-      (message_id, thread_id, subject, from_name, from_address, to_count,
+      (office_id, message_id, thread_id, subject, from_name, from_address, to_count,
        sent_at, excerpt, labels, has_attachments, unread, first_seen_at, last_seen_at)
     values
       -- 1. a contact on the project, subject naming nothing
-      (${lit(msg('contact'))}, ${lit(msg('contact'))}, 'Thursday', 'Priya Raman',
+      (app.test_office(), ${lit(msg('contact'))}, ${lit(msg('contact'))}, 'Thursday', 'Priya Raman',
        'priya@example.com', 1, app.now_utc(), 'Can we move it', '{}', false, false,
        app.now_utc(), app.now_utc()),
       -- 2. a stranger, but the alias is in the subject
-      (${lit(msg('named'))}, ${lit(msg('named'))}, 'Re: Harbour Lighting Rebuild costs',
+      (app.test_office(), ${lit(msg('named'))}, ${lit(msg('named'))}, 'Re: Harbour Lighting Rebuild costs',
        'A Stranger', 'stranger@example.com', 1, app.now_utc(), 'see attached', '{}',
        false, false, app.now_utc(), app.now_utc()),
       -- 3. the alias in the EXCERPT only. Narrowing 1 of ADR-0037.
-      (${lit(msg('excerpt'))}, ${lit(msg('excerpt'))}, 'Fwd: your appointment',
+      (app.test_office(), ${lit(msg('excerpt'))}, ${lit(msg('excerpt'))}, 'Fwd: your appointment',
        'A Clinic', 'clinic@example.com', 1, app.now_utc(),
        'nothing to do with the harbour lighting rebuild at all', '{}', false, false,
        app.now_utc(), app.now_utc()),
       -- 4. the short alias. Narrowing 2.
-      (${lit(msg('short'))}, ${lit(msg('short'))}, 'hlr', 'A Stranger',
+      (app.test_office(), ${lit(msg('short'))}, ${lit(msg('short'))}, 'hlr', 'A Stranger',
        'stranger@example.com', 1, app.now_utc(), 'x', '{}', false, false,
        app.now_utc(), app.now_utc()),
       -- 5. the alias inside a longer word, which is not the alias
-      (${lit(msg('partial'))}, ${lit(msg('partial'))}, 'Re: preharbour lighting rebuilding',
+      (app.test_office(), ${lit(msg('partial'))}, ${lit(msg('partial'))}, 'Re: preharbour lighting rebuilding',
        'A Stranger', 'stranger@example.com', 1, app.now_utc(), 'x', '{}', false, false,
        app.now_utc(), app.now_utc()),
       -- 6. the OTHER project's alias. The isolation case.
-      (${lit(msg('rival'))}, ${lit(msg('rival'))}, 'Tidewater Ferry Study draft',
+      (app.test_office(), ${lit(msg('rival'))}, ${lit(msg('rival'))}, 'Tidewater Ferry Study draft',
        'A Stranger', 'stranger@example.com', 1, app.now_utc(), 'x', '{}', false, false,
        app.now_utc(), app.now_utc()),
       -- 7. both tiers at once. Must appear once, as a contact.
-      (${lit(msg('both'))}, ${lit(msg('both'))}, 'Harbour Lighting Rebuild — Thursday',
+      (app.test_office(), ${lit(msg('both'))}, ${lit(msg('both'))}, 'Harbour Lighting Rebuild — Thursday',
        'Priya Raman', 'priya@example.com', 1, app.now_utc(), 'x', '{}', false, false,
        app.now_utc(), app.now_utc()),
       -- 8. nothing at all
-      (${lit(msg('none'))}, ${lit(msg('none'))}, 'Save 20 percent on a tour',
+      (app.test_office(), ${lit(msg('none'))}, ${lit(msg('none'))}, 'Save 20 percent on a tour',
        'A Shop', 'shop@example.com', 1, app.now_utc(), 'x', '{}', false, false,
        app.now_utc(), app.now_utc());
 
     select
       (select jsonb_agg(x ->> 'message_id')
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x) as mine,
       (select jsonb_agg(x ->> 'message_id')
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugB)}), 50)) x) as theirs,
       (select x ->> 'why'
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x
         where x ->> 'message_id' = ${lit(msg('both'))}) as both_why,
       (select x ->> 'matched'
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x
         where x ->> 'message_id' = ${lit(msg('named'))}) as named_matched,
       (select count(*)
-         from jsonb_array_elements(app.mail_for_project(
+         from jsonb_array_elements(app.mail_for_project(app.test_office(), 
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x
         where x ->> 'message_id' = ${lit(msg('both'))}) as both_times,
       (select jsonb_agg(x ->> 'message_id')
-         from jsonb_array_elements(app.mail_search('Tidewater',
+         from jsonb_array_elements(app.mail_search(app.test_office(), 'Tidewater',
            (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x) as leak,
-      (select jsonb_array_length(app.mail_search('Tidewater', null, 50))) as unscoped,
-      (select app.forget_mail_before(7) ->> 'error') as too_short;
+      (select jsonb_array_length(app.mail_search(app.test_office(), 'Tidewater', null, 50))) as unscoped,
+      (select app.forget_mail_before(app.test_office(), 7) ->> 'error') as too_short;
     rollback;
   `)) as Record<string, unknown> | undefined
 
@@ -566,13 +567,13 @@ console.log('\nand what it may conclude when it cannot read the mail (#172)')
 {
   const slug = `mail-blind-${run}`
   const K = (k: string): string => `
-    insert into probe (k, v) select ${lit(k)}, app.project_knowledge(
+    insert into probe (k, v) select ${lit(k)}, app.project_knowledge(app.test_office(), 
       (select project_id from public.projects where slug = ${lit(slug)}))::text;`
   const cover = (await one(`
     begin;
     create temporary table probe (k text, v text) on commit drop;
-    insert into public.projects (name, slug, status)
-    values (${lit(`Mail blind ${run}`)}, ${lit(slug)}, 'active');
+    insert into public.projects (office_id, name, slug, status)
+    values (app.test_office(), ${lit(`Mail blind ${run}`)}, ${lit(slug)}, 'active');
 
     -- Nothing here yet: a project with no correspondents at all.
     ${K('no_contact')}
@@ -606,9 +607,9 @@ console.log('\nand what it may conclude when it cannot read the mail (#172)')
 
     -- And a cache that was read a minute ago.
     insert into public.mail_messages
-      (message_id, thread_id, subject, from_name, from_address, to_count,
+      (office_id, message_id, thread_id, subject, from_name, from_address, to_count,
        sent_at, excerpt, labels, has_attachments, unread, first_seen_at, last_seen_at)
-    values (${lit(`fixture-blind-${run}`)}, ${lit(`fixture-blind-${run}`)}, 'Anything',
+    values (app.test_office(), ${lit(`fixture-blind-${run}`)}, ${lit(`fixture-blind-${run}`)}, 'Anything',
             'Someone', 'someone@example.com', 1, app.now_utc(), 'x', '{}', false, false,
             app.now_utc(), app.now_utc());
 
@@ -672,8 +673,8 @@ console.log('\nthreads nobody has spoken in (#172)')
     await db.execute(`
     begin;
       create temp table await_res (k text, v jsonb) on commit drop;
-      insert into public.projects (slug, name, status)
-        values (${lit(q)}, 'Awaiting proof', 'active');
+      insert into public.projects (office_id, slug, name, status)
+        values (app.test_office(), ${lit(q)}, 'Awaiting proof', 'active');
       insert into public.project_attachments
         (project_id, connector, external_ref, display_name, role)
       select project_id, 'upload', ${lit(`u-${run}`)}, 'Uploads', 'source'
@@ -682,26 +683,26 @@ console.log('\nthreads nobody has spoken in (#172)')
       select project_id, 'Ada Reply', ${lit(`ada-${run}@awaiting.test`)}
         from public.projects where slug = ${lit(q)};
       insert into public.mail_messages
-        (message_id, thread_id, subject, from_name, from_address, to_count, sent_at, excerpt, labels)
+        (office_id, message_id, thread_id, subject, from_name, from_address, to_count, sent_at, excerpt, labels)
       values
         -- she asked, he answered, and nothing since: waiting on THEM
-        (${lit(`a0-${run}`)}, ${lit(`tA-${run}`)}, 'Proposal for the pilot', 'Ada Reply',
+        (app.test_office(), ${lit(`a0-${run}`)}, ${lit(`tA-${run}`)}, 'Proposal for the pilot', 'Ada Reply',
          ${lit(`ada-${run}@awaiting.test`)}, 1, app.now_utc() - interval '25 days', '...', array['INBOX']),
-        (${lit(`a1-${run}`)}, ${lit(`tA-${run}`)}, 'Re: Proposal for the pilot', 'Grant',
+        (app.test_office(), ${lit(`a1-${run}`)}, ${lit(`tA-${run}`)}, 'Re: Proposal for the pilot', 'Grant',
          ${lit(`grant-${run}@innergy.test`)}, 1, app.now_utc() - interval '20 days', '...', array['SENT']),
         -- she asked and he never answered: waiting on HIM
-        (${lit(`b1-${run}`)}, ${lit(`tB-${run}`)}, 'Question about scope', 'Ada Reply',
+        (app.test_office(), ${lit(`b1-${run}`)}, ${lit(`tB-${run}`)}, 'Question about scope', 'Ada Reply',
          ${lit(`ada-${run}@awaiting.test`)}, 1, app.now_utc() - interval '15 days', '...', array['INBOX']),
         -- yesterday, so not quiet at all
-        (${lit(`c1-${run}`)}, ${lit(`tC-${run}`)}, 'Yesterday', 'Ada Reply',
+        (app.test_office(), ${lit(`c1-${run}`)}, ${lit(`tC-${run}`)}, 'Yesterday', 'Ada Reply',
          ${lit(`ada-${run}@awaiting.test`)}, 1, app.now_utc() - interval '1 day', '...', array['INBOX']),
         -- old, from the same contact, and a promotion
-        (${lit(`d1-${run}`)}, ${lit(`tD-${run}`)}, '50 percent off everything', 'Ada Reply',
+        (app.test_office(), ${lit(`d1-${run}`)}, ${lit(`tD-${run}`)}, '50 percent off everything', 'Ada Reply',
          ${lit(`ada-${run}@awaiting.test`)}, 1, app.now_utc() - interval '30 days', '...',
          array['CATEGORY_PROMOTIONS']);
       insert into await_res
-      select 'mine', app.mail_awaiting((select project_id from public.projects where slug = ${lit(q)}), 7, 10);
-      insert into await_res select 'elsewhere', app.mail_awaiting(gen_random_uuid(), 7, 10);
+      select 'mine', app.mail_awaiting(app.test_office(), (select project_id from public.projects where slug = ${lit(q)}), 7, 10);
+      insert into await_res select 'elsewhere', app.mail_awaiting(app.test_office(), gen_random_uuid(), 7, 10);
       select k, v from await_res;
     rollback;
   `)
@@ -782,8 +783,8 @@ console.log('\nthreads nobody has spoken in (#172)')
     await db.execute(`
     begin;
       create temp table body_res (k text, v jsonb) on commit drop;
-      insert into public.projects (slug, name, status)
-        values (${lit(b)}, 'Body proof', 'active');
+      insert into public.projects (office_id, slug, name, status)
+        values (app.test_office(), ${lit(b)}, 'Body proof', 'active');
       insert into public.project_attachments
         (project_id, connector, external_ref, display_name, role)
       select project_id, 'upload', ${lit(`ub-${run}`)}, 'Uploads', 'source'
@@ -792,34 +793,34 @@ console.log('\nthreads nobody has spoken in (#172)')
       select project_id, 'Elena Marchetti', ${lit(`elena-${run}@bodies.test`)}
         from public.projects where slug = ${lit(b)};
       insert into public.mail_messages
-        (message_id, thread_id, subject, from_name, from_address, to_count, sent_at,
+        (office_id, message_id, thread_id, subject, from_name, from_address, to_count, sent_at,
          excerpt, labels, body, body_at, body_withheld)
       values
         -- a letter the office holds the words of
-        (${lit(`h1-${run}`)}, ${lit(`th1-${run}`)}, 'Module four schedule', 'Elena Marchetti',
+        (app.test_office(), ${lit(`h1-${run}`)}, ${lit(`th1-${run}`)}, 'Module four schedule', 'Elena Marchetti',
          ${lit(`elena-${run}@bodies.test`)}, 1, app.now_utc() - interval '2 days',
          'Confirming the recording slot', array['INBOX'],
          'Confirming the recording slot for module four on the 24th, and we agreed the fee stays at 2,400.',
          app.now_utc(), null),
         -- bulk: the fact it arrived, and deliberately not the marketing
-        (${lit(`h2-${run}`)}, ${lit(`th2-${run}`)}, 'Module four offers', 'Elena Marchetti',
+        (app.test_office(), ${lit(`h2-${run}`)}, ${lit(`th2-${run}`)}, 'Module four offers', 'Elena Marchetti',
          ${lit(`elena-${run}@bodies.test`)}, 1, app.now_utc() - interval '3 days',
          'Fifty percent off', array['CATEGORY_PROMOTIONS'], null, null, 'bulk'),
         -- a body old enough for the 90-day sweep to forget
-        (${lit(`h3-${run}`)}, ${lit(`th3-${run}`)}, 'Module four last year', 'Elena Marchetti',
+        (app.test_office(), ${lit(`h3-${run}`)}, ${lit(`th3-${run}`)}, 'Module four last year', 'Elena Marchetti',
          ${lit(`elena-${run}@bodies.test`)}, 1, app.now_utc() - interval '120 days',
          'Last year', array['INBOX'], 'The words of a very old letter.',
          app.now_utc() - interval '120 days', null);
       insert into body_res
-      select 'mine', app.mail_for_project((select project_id from public.projects where slug = ${lit(b)}), 20);
-      insert into body_res select 'elsewhere', app.mail_for_project(gen_random_uuid(), 20);
+      select 'mine', app.mail_for_project(app.test_office(), (select project_id from public.projects where slug = ${lit(b)}), 20);
+      insert into body_res select 'elsewhere', app.mail_for_project(app.test_office(), gen_random_uuid(), 20);
       insert into body_res
-      select 'found', app.mail_search('what did we agree about the fee',
+      select 'found', app.mail_search(app.test_office(), 'what did we agree about the fee',
                (select project_id from public.projects where slug = ${lit(b)}), 10);
-      insert into body_res select 'swept', jsonb_build_array(app.forget_mail_bodies_before(90));
-      insert into body_res select 'floor', jsonb_build_array(app.forget_mail_bodies_before(1));
+      insert into body_res select 'swept', jsonb_build_array(app.forget_mail_bodies_before(app.test_office(), 90));
+      insert into body_res select 'floor', jsonb_build_array(app.forget_mail_bodies_before(app.test_office(), 1));
       insert into body_res
-      select 'after', app.mail_for_project((select project_id from public.projects where slug = ${lit(b)}), 20);
+      select 'after', app.mail_for_project(app.test_office(), (select project_id from public.projects where slug = ${lit(b)}), 20);
       select k, v from body_res;
     rollback;
   `)

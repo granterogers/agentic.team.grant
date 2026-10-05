@@ -32,6 +32,15 @@ import type { SqlExecutor } from '../db/executor.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/**
+ * An SQL expression for the office a NotebookLM spend belongs to (migration 0802). The ledger, the allowance and the
+ * refusals are the OFFICE's, so every call says whose. The only constructor is the claimed job: never an id taken
+ * from a request, a payload field or a model answer.
+ */
+export type OfficeSql = string & { readonly __officeSql: true }
+export const officeOfJob = (jobId: string): OfficeSql =>
+  `app.job_office(${lit(jobId)}::uuid)` as OfficeSql
+
 export interface Allowance {
   readonly allowed: boolean
   readonly windowSpent: number
@@ -47,8 +56,14 @@ export interface Allowance {
 }
 
 /** What the meter says about doing this now. */
-export async function allowance(db: SqlExecutor, operation: string): Promise<Allowance> {
-  const { rows } = await db.execute(`select app.notebook_allowance(${lit(operation)}) as a`)
+export async function allowance(
+  db: SqlExecutor,
+  office: OfficeSql,
+  operation: string,
+): Promise<Allowance> {
+  const { rows } = await db.execute(
+    `select app.notebook_allowance(${office}, ${lit(operation)}) as a`,
+  )
   const a = (rows[0] as { a: Record<string, unknown> }).a
   const blocked = a.blocked_until === null ? null : String(a.blocked_until)
   const resets = a.window_resets_at === null ? null : String(a.window_resets_at)
@@ -86,6 +101,7 @@ export function describe(a: Allowance): string {
 /** Charge the meter. Called after the operation, with what actually happened. */
 export async function record(
   db: SqlExecutor,
+  office: OfficeSql,
   operation: string,
   context: {
     readonly notebook?: string | null
@@ -96,7 +112,7 @@ export async function record(
 ): Promise<void> {
   await db.execute(`
     select app.notebook_record_spend(
-      ${lit(operation)},
+      ${office}, ${lit(operation)},
       ${context.notebook === undefined || context.notebook === null ? 'null' : lit(context.notebook)},
       ${context.projectId === undefined || context.projectId === null ? 'null' : `${lit(context.projectId)}::uuid`},
       ${context.jobId === undefined || context.jobId === null ? 'null' : `${lit(context.jobId)}::uuid`},
@@ -111,13 +127,14 @@ export async function record(
  */
 export async function refused(
   db: SqlExecutor,
+  office: OfficeSql,
   operation: string,
   detail: string,
   resetsAt?: Date | null,
 ): Promise<{ loweredTo: number | null }> {
   const { rows } = await db.execute(`
     select app.notebook_record_refusal(
-      ${lit(operation)}, ${lit(detail)},
+      ${office}, ${lit(operation)}, ${lit(detail)},
       ${resetsAt === undefined || resetsAt === null ? 'null' : `${lit(resetsAt.toISOString())}::timestamptz`}
     ) as r
   `)

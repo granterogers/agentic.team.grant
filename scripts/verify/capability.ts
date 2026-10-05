@@ -41,6 +41,7 @@
 
 import { capabilityBrief, capabilityNow, contradictsReality } from '../../src/agents/capability.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { personOffice } from '../test-office.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -51,6 +52,9 @@ const db = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
+
+// The index is asked of one office: the sole person's, which is where this suite's raw writes land (the bridge).
+const person = await personOffice(db)
 
 const checks: boolean[] = []
 const check = (what: string, said: string, ok: boolean): void => {
@@ -75,7 +79,7 @@ await clean()
 
 console.log('\nwhat the office can do, right now')
 
-const office = await capabilityNow(db)
+const office = await capabilityNow(db, person)
 check(
   'the office reports what it can reach',
   office.reach.map((r) => `${r.service}${r.reachable ? '' : ' (no)'}`).join(', '),
@@ -152,7 +156,7 @@ await db.execute(`
           'scripts/verify/capability.ts', true)
 `)
 
-const appeared = await capabilityNow(db)
+const appeared = await capabilityNow(db, person)
 check(
   'a tool added a moment ago is in the index already',
   appeared.can.some((a) => a.tool === TOOL) ? 'it is there' : 'IT IS NOT THERE',
@@ -170,7 +174,7 @@ console.log('\nand it answers per person, four different ways')
   granted is the only way to observe `must_ask` at all. That is worth knowing:
   the distinction is real in the schema and currently empty in production.
 */
-const ungranted = await capabilityNow(db, WHO)
+const ungranted = await capabilityNow(db, person, WHO)
 check(
   'a tool the office holds and this person does not is MUST ASK, not CAN',
   ungranted.mustAsk.some((a) => a.tool === TOOL)
@@ -190,7 +194,7 @@ await db.execute(`
   insert into public.staff_tools (staff_slug, tool, granted_by, note)
   values (${lit(WHO)}, ${lit(TOOL)}, 'verify:capability', 'fixture grant')
 `)
-const granted = await capabilityNow(db, WHO)
+const granted = await capabilityNow(db, person, WHO)
 check(
   'granting it moves it from must-ask to can, with its verbs',
   granted.can.find((a) => a.tool === TOOL)?.verbs.join(', ') ?? 'NOT IN CAN',
@@ -219,7 +223,7 @@ check(
 await db.execute(`
   update public.tool_permissions set in_reply = false where tool = ${lit(TOOL)}
 `)
-const clock = await capabilityNow(db, WHO)
+const clock = await capabilityNow(db, person, WHO)
 const clockBrief = capabilityBrief(clock)
 check(
   'a tool only the clock can perform keeps its verbs OUT of the brief',
@@ -238,11 +242,11 @@ check(
 )
 check(
   'CONTROL: and the two calendar tools really are on the clock in the live registry',
-  (await capabilityNow(db, 'chief-of-staff')).can
+  (await capabilityNow(db, person, 'chief-of-staff')).can
     .filter((a) => !a.inReply)
     .map((a) => a.tool)
     .join(', ') || 'NONE — 0508 changed nothing',
-  (await capabilityNow(db, 'chief-of-staff')).can.filter((a) => !a.inReply).length >= 2,
+  (await capabilityNow(db, person, 'chief-of-staff')).can.filter((a) => !a.inReply).length >= 2,
 )
 await db.execute(`
   update public.tool_permissions set in_reply = true where tool = ${lit(TOOL)}
@@ -253,7 +257,7 @@ await db.execute(`
      set enabled = false, disabled_reason = 'switched off by verify:capability'
    where tool = ${lit(TOOL)}
 `)
-const off = await capabilityNow(db, WHO)
+const off = await capabilityNow(db, person, WHO)
 check(
   'switching it off for everyone moves it to CANNOT, with the reason',
   off.cannot.find((a) => a.tool === TOOL)?.why ?? 'NOT IN CANNOT',
@@ -283,7 +287,7 @@ await db.execute(`
           '{"why": "a fixture reason"}'::jsonb,
           'declined', app.now_utc(), 'grant', 'not in V1, ask again after launch')
 `)
-const refused = await capabilityNow(db, WHO)
+const refused = await capabilityNow(db, person, WHO)
 check(
   'a refused request is remembered, with the reason',
   refused.declined.find((d) => d.tool === TOOL)?.why ?? 'NOT REMEMBERED',
@@ -433,13 +437,13 @@ const post = async (
   const q = (v: unknown): string => (v === undefined || v === null ? 'null' : lit(String(v)))
   const call =
     action === 'decline_tool'
-      ? `public.hq_decline_tool(${q(args.p_request_id)}::uuid, ${q(args.p_reason)}, 'grant')`
+      ? `public.hq_decline_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${q(args.p_request_id)}::uuid), app.test_office()), ${q(args.p_request_id)}::uuid, ${q(args.p_reason)}, 'grant')`
       : action === 'approve_tool'
-        ? `public.hq_approve_tool(${q(args.p_request_id)}::uuid, null, 'grant')`
+        ? `public.hq_approve_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${q(args.p_request_id)}::uuid), app.test_office()), ${q(args.p_request_id)}::uuid, null, 'grant')`
         : action === 'revoke_tool'
-          ? `public.hq_revoke_tool(${q(args.p_slug)}, ${q(args.p_tool)}, 'grant')`
+          ? `public.hq_revoke_tool(app.owner_office('grant'), ${q(args.p_slug)}, ${q(args.p_tool)}, 'grant')`
           : action === 'staff_tool_set'
-            ? `public.hq_staff_tool_set(${q(args.p_slug)}, ${q(args.p_tool)}, ${args.p_granted === true ? 'true' : 'false'}, 'grant')`
+            ? `public.hq_staff_tool_set(app.owner_office('grant'), ${q(args.p_slug)}, ${q(args.p_tool)}, ${args.p_granted === true ? 'true' : 'false'}, 'grant')`
             : null
   if (call === null) return viaKey(action, args)
   const out = (await db.execute(`select ${call}::text as r`)).rows[0] as { r: string }
@@ -523,7 +527,7 @@ if (apiToken === '') {
   const seen = (
     await db.execute(`
       select coalesce((
-        select jsonb_agg(r) from jsonb_array_elements(app.hq_governance(40) -> 'requests') r
+        select jsonb_agg(r) from jsonb_array_elements(app.hq_governance(app.owner_office('grant'), 40) -> 'requests') r
          where r ->> 'id' = ${lit(open1)}
       ), '[]'::jsonb) ->> 0 as v`)
   ).rows[0] as { v: string | null }

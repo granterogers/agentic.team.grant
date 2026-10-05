@@ -230,8 +230,9 @@ const proof = (
     await db.execute(`
       begin;
       insert into public.jobs
-        (kind, state, requested_by, correlation_id, created_at, idempotency_key, announce)
-      values ('office.instruction', 'queued', 'telegram:grant', gen_random_uuid(),
+        (office_id, project_id, kind, state, requested_by, correlation_id, created_at, idempotency_key, announce)
+      values (app.owner_office('p4-second-person'), app.unnamed_project(app.owner_office('p4-second-person')),
+              'office.instruction', 'queued', 'telegram:grant', gen_random_uuid(),
               app.now_utc() - interval '${String(WAITING_TOO_LONG_MIN * 4)} minutes',
               'drains-control-' || gen_random_uuid(), false);
       ${WAITING};
@@ -273,8 +274,9 @@ const masked = (
     await db.execute(`
       begin;
       insert into public.jobs
-        (kind, state, requested_by, correlation_id, created_at, idempotency_key, announce)
-      values ('office.instruction', 'queued', 'telegram:grant', gen_random_uuid(),
+        (office_id, project_id, kind, state, requested_by, correlation_id, created_at, idempotency_key, announce)
+      values (app.owner_office('p4-second-person'), app.unnamed_project(app.owner_office('p4-second-person')),
+              'office.instruction', 'queued', 'telegram:grant', gen_random_uuid(),
               app.now_utc() - interval '${String(WAITING_TOO_LONG_MIN * 40)} minutes',
               'drains-masked-' || gen_random_uuid(), false);
       ${WAITING};
@@ -320,7 +322,7 @@ ok(
   dashboard.
 */
 const health = (
-  (await db.execute(`select app.office_health() -> 'waiting' as w`)).rows as {
+  (await db.execute(`select app.office_health(app.operator_office()) -> 'waiting' as w`)).rows as {
     w: { jobs: number; oldest_minutes: number; threshold_minutes: number }
   }[]
 )[0]

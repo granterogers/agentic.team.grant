@@ -29,6 +29,7 @@
 */
 
 import { HQ_API as API, UNCONFIGURED } from './backend.js'
+import { bounded } from './net.js'
 import * as session from './session.js'
 
 /*
@@ -163,15 +164,23 @@ const refuseUnconfigured = () => {
 
 export async function act(action, args = {}) {
   refuseUnconfigured()
-  const r = await fetch(API, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${await toPresent()}`,
-      'Content-Type': 'application/json',
+  const began = session.epoch()
+  // A change waits longer than a read (it can touch several tables) but it still ends, and says which step it stopped at.
+  const r = await bounded(
+    `office:act:${action}`,
+    API,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${await toPresent()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action, args }),
     },
-    body: JSON.stringify({ action, args }),
-  })
+    30_000,
+  )
   const body = await r.json().catch(() => ({}))
+  if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
   if (r.status === 401) {
     /*
       Clear BOTH, because either could be the thing the office refused and a
@@ -187,13 +196,19 @@ export async function act(action, args = {}) {
     still holds only the old key gets this, and the credential is NOT cleared: it is genuine, it still
     reads, and the way forward is to sign in, not to be signed out.
   */
-  if (r.status === 403 && body.error === 'person_required') {
+  if (r.status === 403 && (body.error === 'person_required' || body.error === 'operator_required')) {
     throw new Error(
       body.message ?? 'This needs you signed in. The office key cannot decide or speak as a person.',
     )
   }
   if (!r.ok) throw new Error(body.error ?? `The server returned ${r.status}`)
-  if (body.result?.error) throw new Error(body.result.error)
+  if (body.result?.error) {
+    // A typed refusal keeps its code so a page can speak for it (SOURCE_DISCONNECTED, 1010); the sentence stays the fallback.
+    const refused = new Error(body.result.error)
+    if (typeof body.result.error_code === 'string') refused.code = body.result.error_code
+    if (typeof body.result.reason === 'string') refused.reason = body.result.reason
+    throw refused
+  }
   // Only on the way out, and only after both refusal checks: an action that was
   // refused changed nothing, and offering to take back nothing is a lie.
   try {
@@ -228,9 +243,14 @@ export async function read(section, id, extra) {
       parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
     }
   }
-  const r = await fetch(`${API}?${parts.join('&')}`, {
-    headers: { Authorization: `Bearer ${await toPresent()}` },
-  })
+  const began = session.epoch()
+  const r = await bounded(
+    `office:read:${section}`,
+    `${API}?${parts.join('&')}`,
+    { headers: { Authorization: `Bearer ${await toPresent()}` } },
+    20_000,
+  )
+  if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
   if (r.status === 401) {
     session.forget()
     token.clear()
@@ -257,6 +277,41 @@ export async function read(section, id, extra) {
 }
 
 /**
+ * A section that answers with a FILE rather than JSON (the on-demand document preview, 0990): its bytes, as a Blob.
+ *
+ * The same door as `read`: one credential, the same 401 handling, the same words for a refusal. A gateway that answers a
+ * refusal in JSON is read for its words, and the bytes are never kept by this module.
+ */
+export async function readFile(section, id, extra) {
+  refuseUnconfigured()
+  const parts = [`section=${encodeURIComponent(section)}`]
+  if (id !== undefined) parts.push(`id=${encodeURIComponent(id)}`)
+  for (const [k, v] of Object.entries(extra ?? {})) {
+    if (v !== undefined && v !== null && v !== '') parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+  }
+  const began = session.epoch()
+  // The deadline covers the exchange up to the headers; a large file's body is read afterwards (src/net.js).
+  const r = await bounded(
+    `office:file:${section}`,
+    `${API}?${parts.join('&')}`,
+    { headers: { Authorization: `Bearer ${await toPresent()}` } },
+    60_000,
+  )
+  if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
+  if (r.status === 401) {
+    session.forget()
+    token.clear()
+    throw new Error('You are not signed in any more.')
+  }
+  if (!r.ok) {
+    const answered = await r.json().catch(() => ({}))
+    const said = typeof answered?.error === 'string' ? answered.error.trim() : ''
+    throw new Error(said === '' ? `The server returned ${r.status}` : said)
+  }
+  return await r.blob()
+}
+
+/**
  * Say what happened, next to the thing that caused it.
  *
  * `el` is the control that was pressed. The sentence goes into the nearest
@@ -277,7 +332,9 @@ export function say(el, message, tone = '') {
       return made
     })()
   holder.textContent = message
-  holder.className = `t-meta${tone === '' ? '' : ` ${tone}`}`
+  // The Settings page styles its feedback line by this class; replacing the whole class list used to drop it.
+  const keep = holder.classList.contains('st-said') ? 'st-said ' : ''
+  holder.className = `${keep}t-meta${tone === '' ? '' : ` ${tone}`}`
 }
 
 /**
@@ -349,26 +406,32 @@ export function alreadyAnswered(result) {
  * changes or removes something asks first, through here, so the wording is
  * consistent and nobody has to decide what counts.
  */
-export function sure(question) {
-  return window.confirm(question)
+export async function sure(question, confirmLabel = 'Continue', options = {}) {
+  /*
+    The in-page dialog (settings-ui confirmDialog), not the browser's: it has a clear Cancel, takes focus, traps Tab,
+    closes on Escape, and its buttons are 44px. It is ASYNC, so every caller awaits it - a caller that forgot would read
+    the pending promise as "yes", which is why the answer is tested as `!(await sure(...))` everywhere. Loaded on first use
+    so this file does not depend on the settings module at start-up; if it cannot load, the native confirm still asks
+    (an unasked destructive press is the worse failure).
+  */
+  let ui = null
+  try {
+    ui = await import('./settings-ui.js')
+  } catch {
+    ui = null
+  }
+  if (ui === null || typeof ui.confirmDialog !== 'function') return window.confirm(question)
+  return await ui.confirmDialog({
+    title: options.title ?? 'Please confirm',
+    body: String(question).replace(/\s*\n\s*/g, ' ').trim(),
+    confirmLabel,
+    cancelLabel: options.cancelLabel ?? 'Cancel',
+    danger: options.danger === true,
+  })
 }
 
-/**
- * Ask for a sentence, where the RPC behind the button requires one.
- *
- * `app.decline_tool` refuses a decline with no reason — *"it is what makes it
- * worth revisiting in three months"* — and the first draft of the Governance
- * page's Decline button sent none, so the press returned an error and did
- * nothing. Caught by driving it, which is the only thing that catches it: an
- * offer may only promise what the press can perform.
- *
- * Returns the trimmed text, or null for cancel AND for an empty answer. Empty
- * is a cancel rather than a blank reason, because a blank reason is the thing
- * the RPC refuses and a caller should not have to know that.
- */
-export function why(question, suggestion = '') {
-  const said = window.prompt(question, suggestion)
-  if (said === null) return null
-  const text = said.trim()
-  return text === '' ? null : text
-}
+/*
+  There was a `why()` here, a window.prompt for the reason a decline needs. Nothing called it: the Governance page's Decline
+  asks through settings-ui's askDialog (an offer may only promise what the press can perform - app.decline_tool refuses a
+  decline with no reason, and a blank answer is a cancel). Removed with the last native prompt in the product.
+*/

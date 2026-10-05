@@ -56,7 +56,7 @@ const r5 = await containmentRefusal(db, { jobId: real, kind: 'office.notion_impo
 check('an origin word the gate does not know refuses', r5 !== null, r5 ?? 'ALLOWED')
 await db.execute('drop function app.job_origin(uuid)')
 const claimed = await one(
-  `select outcome from app.claim_delivery('telegram', 'compat:${run}:d', 'acct', '-7000000000000099', 'result', null, null, null, '${real}'::uuid)`,
+  `select outcome from app.claim_delivery(app.job_office('${real}'::uuid), 'telegram', 'compat:${run}:d', 'acct', '-7000000000000099', 'result', null, null, null, '${real}'::uuid)`,
 )
 check(
   'the pre-0601 delivery guard accepts the RC2 call shape (job id passed)',

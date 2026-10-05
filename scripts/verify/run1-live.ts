@@ -175,7 +175,7 @@ const withQuestion = async (chat: string) => {
   const child = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(String(first.cmd.job))}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(String(first.cmd.job))}::uuid), p_parent => ${lit(String(first.cmd.job))}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0]
@@ -183,15 +183,15 @@ const withQuestion = async (chat: string) => {
   const b = await one(`
     with k as (update public.jobs set state = 'cancelled', state_reason = 'run1-live fixture'
                 where job_id = ${lit(child)}::uuid and state = 'queued' returning job_id)
-    insert into public.blockers (job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-    select job_id, 'Send the renewal note to the venue', 'run1-live fixture', 'nothing', array['Yes, do it','No, leave it'], 'chief-of-staff', false from k
+    insert into public.blockers (office_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+    select app.job_office(job_id), job_id, 'Send the renewal note to the venue', 'run1-live fixture', 'nothing', array['Yes, do it','No, leave it'], 'chief-of-staff', false from k
     returning blocker_id::text as id`)
   // As in production, the question REACHED him (0622, #394): a typed yes answers a question he was shown. A row
   // only - nothing is sent, and the target is a declared test chat.
   // 0623: the message names the question it asked, and is per bot (the bot the turn came through).
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
-    values ('telegram', ${lit(`run1-live-${crypto.randomUUID()}`)},
-      coalesce((select app.command_account(c.command_id) from public.inbound_commands c
+  await db.execute(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
+    values (app.job_office(${lit(child)}::uuid), 'telegram', ${lit(`run1-live-${crypto.randomUUID()}`)},
+      coalesce((select app.command_account(c.office_id, c.command_id) from public.inbound_commands c
                  where c.origin_channel = 'telegram' and c.origin_ref like ${lit(`${chat}:%`)}
                  order by c.received_at desc limit 1), 'run1-live'),
       ${lit(chat)}, 'blocker', ${lit(child)}::uuid, ${lit(String(b.id))}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
@@ -331,7 +331,7 @@ try {
     await origins.declare('telegram', chat)
     const q = await withQuestion(chat)
     const r = await one(
-      `select app.hq_answer_blocker(${lit(q.blocker)}::uuid, 'Yes, do it', null)::text as r`,
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q.blocker)}::uuid), app.test_office()), ${lit(q.blocker)}::uuid, 'Yes, do it', null)::text as r`,
     ).catch((e: Error) => ({ r: `raised: ${e.message.slice(0, 80)}` }))
     const b = await blockerRow(q.blocker)
     check(
@@ -344,6 +344,9 @@ try {
   const released = // Rows written to model 'the question reached him' were never sent to anybody: removed, so the leak witness cannot
     // read a fabricated row as harness traffic reaching a destination.
     await db.execute(`delete from public.deliveries where dedupe_key like 'run1-live-%'`)
+  await db.execute(
+    `delete from public.tasks t where t.assigned_to_human and exists (select 1 from public.jobs j where j.job_id = t.job_id and app.harness_job(j.job_id)) and (t.satisfies_blocker in (select b.blocker_id from public.blockers b where b.why_needed in ('run1-live fixture', 'run2-live fixture')) or t.title ~ '^(Run 2 live (proof|tick)|Send the renewal note to the venue)')`,
+  )
   await origins.release()
   console.log(`released ${String(released)} declaration(s)`)
 }

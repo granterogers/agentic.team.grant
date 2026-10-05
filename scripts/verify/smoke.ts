@@ -122,7 +122,8 @@ await page.waitForTimeout(400)
 for (const tab of ['team', 'behaviour', 'connections', 'channels', 'models', 'appearance']) {
   await page.locator(`[data-setting="${tab}"]`).click()
   await page.waitForTimeout(250)
-  if ((await page.locator('.setbody').count()) === 0) failures.push(`settings ${tab}: empty`)
+  if ((await page.locator('#settings .stg-col').count()) === 0)
+    failures.push(`settings ${tab}: empty`)
 }
 
 await browser.close()

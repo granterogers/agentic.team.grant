@@ -24,7 +24,13 @@
  */
 
 import type { TelegramUpdate } from './telegram.ts'
-import { secretMatches, senderOf, toCanonicalCommand, UnsupportedUpdateError } from './telegram.ts'
+import {
+  linkTokenOf,
+  secretMatches,
+  senderOf,
+  toCanonicalCommand,
+  UnsupportedUpdateError,
+} from './telegram.ts'
 
 const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') ?? ''
 /**
@@ -172,6 +178,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
     update.message?.chat ?? update.callback_query?.message?.chat ?? update.my_chat_member?.chat
   let subject: string | null = null
   let declaredTest = false
+  // The office the verified sender belongs to (P3). It comes from the office's own list of senders (or, for a declared
+  // test conversation, is the test office) - never from anything in the update.
+  let officeId: string | null = null
   if (sender !== null) {
     let admitted: Response
     try {
@@ -195,12 +204,51 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const who = (await admitted.json().catch(() => null)) as {
       subject?: string | null
       declared_test?: boolean
+      office_id?: string | null
     } | null
     if (who === null) return new Response('sender lookup failed', { status: 503 })
     subject = typeof who.subject === 'string' && who.subject !== '' ? who.subject : null
     declaredTest = who.declared_test === true
+    officeId = typeof who.office_id === 'string' && who.office_id !== '' ? who.office_id : null
   }
-  if (subject === null && !declaredTest) {
+  /*
+    A PERSON CONNECTING THEIR OWN TELEGRAM (#410, 0885).
+
+    This is the one message an UNRECOGNISED sender may send, because it is how a recognised one comes to exist: they
+    signed in to Team HQ, asked to connect, and tapped Start on a link carrying a one-time token. It is handled before
+    the stranger check and is the only thing that is. The office comes from the token's row and the actor from the
+    verified sender - nothing in the message chooses either - and the database decides whether the token is good.
+
+    Every refusal is answered with the same sentence, so a guess learns nothing. Anything that is not exactly
+    `/start link_<token>` in a private chat is not a link and falls through to the ordinary checks below.
+  */
+  const linkToken = linkTokenOf(update)
+  if (linkToken !== null && sender !== null && claimedChat !== undefined) {
+    const redeemed = (await rpcOne('channel_link_redeem', {
+      p_channel: 'telegram',
+      p_token: linkToken,
+      p_actor: sender,
+      p_conversation: String(claimedChat.id),
+      p_bot_id: BOT_ID,
+    })) as { ok?: boolean; token?: string | null } | null
+    // A lookup that fails is not a refusal: Telegram retries a 5xx, and the person's tap is not lost.
+    if (redeemed === null) return new Response('link lookup failed', { status: 503 })
+    if (typeof redeemed.token === 'string' && redeemed.token !== '') {
+      await fetch(`https://api.telegram.org/bot${redeemed.token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: String(claimedChat.id),
+          text:
+            redeemed.ok === true
+              ? 'Connected. What you send me here now goes to your team in Team HQ, and their answers come back here.'
+              : 'That link has expired or was already used. In Team HQ, open Settings, then Messaging, and press Connect Telegram for a new one.',
+        }),
+      }).catch(() => undefined)
+    }
+    return Response.json({ ok: true, link: redeemed.ok === true ? 'connected' : 'refused' })
+  }
+  if ((subject === null && !declaredTest) || officeId === null) {
     return Response.json({ ok: true, ignored: 'unrecognised sender' })
   }
 
@@ -249,9 +297,26 @@ Deno.serve(async (request: Request): Promise<Response> => {
           // A group has a name and Grant will recognise it by that, not by a
           // negative fourteen-digit id.
           p_title: chat.title ?? null,
+          // Who spoke: it is how a GROUP is judged (only an operator's office has one).
+          p_sender: sender,
         }),
       })
       registration = response.ok ? 'ok' : `http_${String(response.status)}`
+      // 'ignored' is the office declining the chat (a group that is not an operator's, or a chat already bound to another
+      // office): nothing from it is stored, and the update is acknowledged so Telegram does not retry it.
+      if (
+        response.ok &&
+        (await response
+          .clone()
+          .json()
+          .catch(() => null)) === 'ignored'
+      ) {
+        return Response.json({
+          ok: true,
+          ignored: 'this chat is not one this office accepts',
+          registration: 'ignored',
+        })
+      }
     } catch {
       registration = 'unreachable'
     }
@@ -284,6 +349,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       Prefer: 'resolution=ignore-duplicates,return=representation',
     },
     body: JSON.stringify({
+      // Explicit, from the verified sender: the compatibility bridge is not asked to guess.
+      office_id: officeId,
       origin_channel: command.origin_channel,
       origin_ref: command.origin_ref,
       actor: command.actor,
@@ -353,10 +420,21 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
   }
 
-  if (!response.ok && response.status !== 409) {
-    // A 5xx here means Telegram should retry, so say so. A 409 is the
-    // idempotency index doing its job and is success.
-    return new Response('storage failed', { status: 503 })
+  if (!response.ok) {
+    /*
+      A 409 is NOT automatically "the idempotency index doing its job". PostgREST answers 409 for a unique violation
+      (23505) AND for a foreign-key violation (23503), and the insert already says `ignore-duplicates`, so a real
+      duplicate arrives as an empty 201 and never reaches here. A 409 that is a foreign-key violation is a message the
+      database REFUSED - the update was acknowledged with 200 and the instruction vanished (P3: it was how a message
+      from an office whose Unnamed project did not exist was lost without a word). Only a unique violation is success.
+    */
+    const refused = (await response
+      .clone()
+      .json()
+      .catch(() => ({}))) as { code?: string }
+    if (!(response.status === 409 && refused.code === '23505')) {
+      return new Response('storage failed', { status: 503 })
+    }
   }
 
   // An instruction becomes work. Storing it was the whole of the inbound path

@@ -51,10 +51,12 @@
  */
 
 import { howComposed } from '../agents/provenance.ts'
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
 import { syncNotion } from '../notion/sync.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count, list } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
@@ -83,8 +85,7 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
               where connector = 'notion'), false) as enabled,
             (select disabled_reason from public.knowledge_connectors
               where connector = 'notion') as disabled_reason,
-            (select decrypted_secret from vault.decrypted_secrets
-              where name = 'notion.integration_token') as token
+            ${credentialSql('notion.integration_token')} as token
         `)
       ).rows[0] as {
         enabled?: boolean
@@ -124,7 +125,8 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
           select distinct p.project_id::text as id, p.name
             from public.projects p
             join public.project_attachments a using (project_id)
-           where p.status = 'active' and a.connector = 'notion' and a.enabled
+           where p.office_id = app.job_office('${job.jobId}'::uuid)
+             and p.status = 'active' and a.connector = 'notion' and a.enabled
            order by p.name
         `)
       ).rows as { id: string; name: string }[]
@@ -149,7 +151,7 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
       const result = { added: 0, changed: 0, shared: 0, skipped: [] as string[] }
       const filed: string[] = []
       for (const project of attached) {
-        const one = await syncNotion(db, client, project.id)
+        const one = await syncNotion(db, { jobId: job.jobId }, client, project.id)
         result.added += one.added
         result.changed += one.changed
         result.shared += one.shared
@@ -202,7 +204,7 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
       const body = announce
         ? await sayAs(db, router, 'operations-director', {
             purpose:
-              'Tell Grant what came in from his Notion pages. He writes notes ' +
+              `Tell ${currentPerson().name} what came in from their Notion pages. They write notes ` +
               'there; this is you noticing them, not announcing a milestone.',
             facts: [
               `${String(result.shared)} page(s) are shared with the integration`,

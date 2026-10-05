@@ -128,8 +128,10 @@ export async function resultContext(
   // cry wolf — and an inference output that somehow reached here unreviewed
   // must be labelled. The row knows which.
   const reviewRow = await db.execute(`
-    select reviewer_status::text as status, deterministic
-    from public.outputs where output_id = ${lit(outputId)}::uuid
+    select o.reviewer_status::text as status, o.deterministic
+    from public.outputs o
+    join public.jobs oj on oj.job_id = o.job_id and oj.office_id = app.job_office(${lit(job.jobId)}::uuid)
+    where o.output_id = ${lit(outputId)}::uuid
   `)
   const review = reviewRow.rows[0] as { status: string | null; deterministic: boolean } | undefined
   const reviewed =
@@ -264,6 +266,7 @@ export function combinedNotifier(
     // how a pager stops being read. Checked here rather than per channel so
     // there is one rule, for the reason this file's header already gives about
     // a filter applied in one of two call paths.
+    // raw-sql[2]: keyed by the claimed job; it reads one column of the job the worker holds and touches nothing else.
     const quiet = await db.execute(
       `select announce from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
     )

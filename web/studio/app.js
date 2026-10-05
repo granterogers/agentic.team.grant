@@ -19,7 +19,7 @@ import {
   hydrate,
   source,
 } from './data.js'
-import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, token, why, presented, presentedFresh} from './office.js'
+import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, token, presented, presentedFresh} from './office.js'
 /*
   Team HQ, the product at every address (ADR-0051; its design history is in
   basecamp_clone.md). The older studio this file also renders is kept at
@@ -35,19 +35,22 @@ import * as bc from './bc/shell.js'
 import * as bcJump from './bc/jump.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
+import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
 import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
-import { DENSITIES, PALETTES, TEXTURES, SCHEMES, appearance, apply, hydrate as hydrateAppearance, readTexture, saveWith, toggleScheme, activeScheme } from './appearance.js'
+import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as dictate from './dictate.js'
 import * as command from './command.js'
 import * as config from './settings.js'
+import * as copy from './settings-copy.js'
+import * as settingsUi from './settings-ui.js'
 import { wireCall, unwireCall, syncCallButtons, callIsLive, toggleCall } from './call.js'
-import { hydrateUsage, usageTab } from './usage.js'
+import { GROWTH, hydrateUsage, say as sayAmount, USAGE } from './usage.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
 import * as panels from './panels.js'
@@ -98,6 +101,9 @@ const latest = { lately: null, tasks: null }
   never start. The declaration belongs where the code that uses it can see it.
 */
 let ageTimer = null
+// Projects whose conversation the Chat route has already read this page load (declared up here: a `const` below a hoisted
+// function that uses it is the TDZ trap this file already records).
+const chatRead = new Set()
 
 /*
   The map, per project (#25).
@@ -533,11 +539,30 @@ const rememberTab = (slug, tab) => {
   thing that opened it may not be on screen any more.
 */
 let cameFrom = null
+let settingsCameFrom = null
 
 const sheet = (el, open) => {
   const wasOpen = !el.hidden
   el.hidden = !open
-  if (el.id === 'settings') el.classList.toggle('page', open)
+  if (el.id === 'settings') {
+    el.classList.toggle('page', open)
+    /*
+      Settings covers the whole screen, so what it covers must not be reachable by keyboard or announced
+      to a screen reader: Tab from the last section control used to walk into the shell hidden behind it.
+      The page is not a trap, it has Back and Escape, and Back returns focus to where it came from.
+    */
+    for (const n of document.body.children) {
+      if (n === el || n.tagName === 'SCRIPT' || n.id === 'viewer') continue
+      if (open) n.setAttribute('inert', '')
+      else n.removeAttribute('inert')
+    }
+    if (open && wasOpen === false) {
+      settingsCameFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    } else if (!open && wasOpen) {
+      if (settingsCameFrom !== null && settingsCameFrom.isConnected) settingsCameFrom.focus()
+      settingsCameFrom = null
+    }
+  }
   document.body.classList.toggle('behind', !$('#viewer').hidden)
 
   /*
@@ -1149,7 +1174,8 @@ function runCommand(row) {
     return
   }
   if (go.settings !== undefined) {
-    state.setting = go.settings
+    state.setting = config.tabId(go.settings)
+    state.settingsPane = 'detail'
     settingsSheet()
     sheet($('#settings'), true)
     return
@@ -1227,6 +1253,37 @@ document.addEventListener('keydown', (e) => {
     state.sendFor = null
     render()
   }
+})
+/*
+  CONNECTING GOOGLE starts with the office, not with a link (0648).
+
+  The consent screen is only reachable with a one-time state the office mints for a verified operator; the
+  callback refuses a code that arrives without one, so nobody can finish a connection they did not start
+  from here. Delegated on the document because the buttons live in panes that redraw themselves. The tab is
+  opened before the request so the browser treats it as the press it is, then pointed at Google.
+*/
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('[data-google-connect]')
+  if (!b) return
+  e.preventDefault()
+  const tab = window.open('', '_blank')
+  if (tab) tab.opener = null
+  void attempt(
+    b,
+    'Opening Google…',
+    async () => {
+      try {
+        const made = await act('google_connect_start', {})
+        const url = `${GOOGLE_START}?state=${encodeURIComponent(String(made?.state ?? ''))}`
+        if (tab) tab.location.href = url
+        else window.location.href = url
+      } catch (err) {
+        if (tab) tab.close()
+        throw err
+      }
+    },
+    'Google is open in a new tab.',
+  )
 })
 document.addEventListener('click', (e) => {
   if (!state.sendFor) return
@@ -1556,6 +1613,11 @@ const dockOpen = () => {
   try { return localStorage.getItem('studio.dock') === 'open' } catch { return false }
 }
 /*
+  SUPERSEDED BY #416 FOR EVERY SCREEN THAT HAS A PROJECT: the dock is the page's project and follows it (see paintDock).
+  The pin below survives only to carry the deliberately chosen general Conversation across repaints on screens with no
+  project loaded, and to keep the voice note and composer in step. What follows is the reasoning of #376, kept because it
+  explains why the pin exists at all.
+
   AN OPEN DOCK IS PINNED TO THE THREAD IT WAS OPENED ON (#376).
 
   It used to take its project from the page on every repaint. So a dock opened
@@ -1591,7 +1653,45 @@ const rememberDock = (open, slug) => {
   try { localStorage.setItem('studio.dock', open ? 'open' : 'shut') } catch { /* not fatal */ }
   if (!open) { pinDock(null); return }
   if (slug !== undefined) pinDock(slug)
-  else if (!was || dockPin() === null) pinDock(state.project ?? 'unnamed')
+  // #416: the page's project, or nothing. Opening the dock on a screen with no project loaded does not pick one for the
+  // person (it used to fall to the general Conversation); the dock asks.
+  else if (!was || dockPin() === null) pinDock(state.view === 'project' ? state.project : null)
+}
+
+/*
+  THE KEYBOARD MUST NOT TAKE THE NEWEST MESSAGE OUT OF THE TEAM CHAT (closure, 4 October).
+
+  The Chat tab's thread has this (see the resize handler on data-thread) and the dock's thread, which is the Team Chat a person on a
+  phone actually uses, did not: shrinking the visible height by what a keyboard takes put the thread 4,356 px from its end, showing
+  the top of the history with the box to type in underneath. Where the person was reading is remembered on every scroll, so the
+  resize handler answers about the moment BEFORE the geometry changed; if they were at the newest message they still are, and if
+  they were reading further up they are left there. Wired once; the thread is looked up fresh each time because a repaint replaces it.
+*/
+function wireDockKeyboard() {
+  if (state.dockKbWired === true) return
+  state.dockKbWired = true
+  document.addEventListener(
+    'scroll',
+    (e) => {
+      const t = e.target
+      if (t instanceof Element && t.matches('[data-dockthread]'))
+        state.dockAtEnd = t.scrollHeight - t.scrollTop - t.clientHeight < 40
+    },
+    { capture: true, passive: true },
+  )
+  const follow = () => {
+    if (state.dockAtEnd === false) return
+    const pin = () => {
+      const t = $('[data-dockthread]')
+      if (t !== null) t.scrollTop = t.scrollHeight
+    }
+    pin()
+    requestAnimationFrame(pin)
+    window.setTimeout(pin, 180)
+    window.setTimeout(pin, 420)
+  }
+  window.addEventListener('resize', follow, { passive: true })
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', follow, { passive: true })
 }
 
 function paintDock() {
@@ -1630,15 +1730,57 @@ function paintDock() {
     project this office does not list (yet: the prototype's projects are
     replaced when the office answers) is neither used nor overwritten.
   */
+  /*
+    THE PAGE'S PROJECT IS THE PROJECT (#416, which replaces the pin of #376).
+
+    The trusted page knows which project is loaded and the team must not guess from the words. So on a project page the
+    dock IS that project, whatever it showed before: navigating to another project moves it, and nothing is ever filed
+    under a project the person is not looking at. The stored pin is kept in step so the voice note and the typed
+    composer, which read the project from the dock's own markup, cannot disagree with it.
+
+    Anywhere else (the portfolio, my tasks, activity) no project is loaded, so none is chosen: the dock asks which one,
+    and the only thing a person can pick that is not a project is the general Conversation, on purpose and by name.
+  */
   const pinned = dockPin()
-  const known = pinned !== null && PROJECTS.some((x) => x.slug === pinned)
-  const slug = known ? pinned : state.project ?? loose?.slug ?? PROJECTS[0]?.slug
-  if (pinned === null && slug) pinDock(slug)
+  const onProject =
+    state.view === 'project' && state.project !== null && PROJECTS.some((x) => x.slug === state.project)
+  const slug = onProject
+    ? state.project
+    : pinned === 'unnamed' && loose !== undefined
+      ? 'unnamed'
+      : null
+  if (onProject && pinned !== slug) pinDock(slug)
   const p = slug ? byId(slug) : null
-  const filed = p !== null && p.slug !== state.project
+  // The dock is never filing somewhere other than the page any more (#416), so there is no "Filed under" state.
+  const filed = false
+  /*
+    THE DOCK READS THE RECORD TOO, once per project per page load.
+
+    Only the Chat tab ever read the office's conversation, so the dock - where nearly everything is said - showed this
+    browser's own sent messages and nothing the team had written since. An answer written minutes after the question was in
+    the office's record and on no screen a person was looking at. A failed or empty read changes nothing on screen.
+  */
+  if (p !== null && p.id && !chat.isReal(p.slug) && !chatRead.has(p.slug)) {
+    chatRead.add(p.slug)
+    void chat.load(p.slug, p.id, presented()).then((t) => {
+      if (t !== null) paintDock()
+    })
+  }
   const messages = p ? chat.thread(p.slug) : []
   const draft = $('[data-docksay]')?.value ?? ''
   const at = $('[data-dockthread]')?.scrollTop
+  /*
+    WHERE THE PERSON WAS, NOT JUST HOW FAR DOWN (closure, 4 October).
+
+    Restoring the old scrollTop is right for somebody reading further up and wrong for somebody at the newest message whose thread then
+    GROWS: the history loads after the dock first draws, the old box was short and its scrollTop was 0, and restoring 0 left the
+    thread at the top of 5,000 px of history with the newest message 4,500 px below the box to type in. A thread that was at its end
+    (or had nothing to scroll) stays at its end.
+  */
+  const prevThread = $('[data-dockthread]')
+  const wasAtEnd =
+    prevThread === null ||
+    prevThread.scrollHeight - prevThread.scrollTop - prevThread.clientHeight < 40
   /*
     THE BASECAMP EXPERIENCE'S VOICE NOTE LIVES IN THIS COMPOSER, and a repaint
     must not take a recording with it: the live microphone and panel nodes are
@@ -1653,10 +1795,8 @@ function paintDock() {
         <b>The team</b>
         <span class="t-meta">${
           p === null
-            ? 'No project yet'
-            : filed
-              ? `Filed under ${esc(p.slug === 'unnamed' ? 'Conversation' : p.name)}`
-              : esc(p.name)
+            ? 'No project open'
+            : esc(p.slug === 'unnamed' ? 'Conversation' : p.name)
         }</span>
       </span>
       <button class="closeconv" data-dock-close aria-label="Close the conversation">
@@ -1674,7 +1814,22 @@ function paintDock() {
         own treatment: no box, centred, and the two examples do more work than
         the explanation did.
       */
-      messages.length === 0
+      p === null
+        ? `<div class="dockblank dockpick">
+             <p class="t-meta">The team works inside a project. Open one to talk to the team about it.</p>
+             <div class="dockpicks">${PROJECTS.filter((x) => x.slug !== 'unnamed')
+               .map(
+                 (x) =>
+                   `<button class="btn quiet" type="button" data-dock-pick="${esc(x.slug)}">${esc(x.name)}</button>`,
+               )
+               .join('')}</div>
+             ${
+               loose === undefined
+                 ? ''
+                 : '<p class="t-meta dockwhere">Or <button class="btn quiet small" type="button" data-dock-pick="unnamed">start a general conversation</button>, which belongs to no project.</p>'
+             }
+           </div>`
+        : messages.length === 0
         ? `<div class="dockblank">
              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1687,15 +1842,20 @@ function paintDock() {
            </div>`
         : messages.map(bubble).join('')
     }</div>
-    <form class="composer" data-dockform${bcNote && p ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
+    ${
+      /* No project loaded, so nothing to type to: the picker above is the way in (#416). */
+      p === null
+        ? ''
+        : `<form class="composer" data-dockform${bcNote ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
       <div class="crow">
-        <textarea data-docksay rows="1" placeholder="Ask the team…"
+        <textarea data-docksay rows="1" placeholder="${p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
                   aria-label="Message the team"></textarea>
         ${bcNote ? bc.dockNoteButton() : ''}
         <button class="btn primary" type="submit">Send</button>
       </div>
       ${bcNote ? '<div class="bcnote" data-bc-notepanel hidden></div>' : ''}
     </form>`
+    }`
   if (keptMic !== null) el.querySelector('[data-bc-note]')?.replaceWith(keptMic)
   if (keptPanel !== null) el.querySelector('[data-bc-notepanel]')?.replaceWith(keptPanel)
   if (bcNote) bcWire.wireDockNote(el)
@@ -1703,12 +1863,41 @@ function paintDock() {
   const box = $('[data-docksay]', el)
   if (box) box.value = draft
   const thread = $('[data-dockthread]', el)
-  if (thread) thread.scrollTop = at ?? thread.scrollHeight
+  if (thread) thread.scrollTop = wasAtEnd ? thread.scrollHeight : (at ?? thread.scrollHeight)
+  state.dockAtEnd = thread ? thread.scrollHeight - thread.scrollTop - thread.clientHeight < 40 : true
+  wireDockKeyboard()
 
   $('[data-dock-close]', el)?.addEventListener('click', () => {
     rememberDock(false)
     paintDock()
   })
+  /*
+    Choosing where to talk when no project is loaded (#416).
+
+    A real project is OPENED, the same way the portfolio opens one, and the dock then follows the page. The general
+    Conversation is the one choice that is not a project; it is pinned on purpose and named as what it is.
+  */
+  for (const b of el.querySelectorAll('[data-dock-pick]')) {
+    b.addEventListener('click', () => {
+      const slug = b.dataset.dockPick
+      if (slug === undefined) return
+      if (slug === 'unnamed') {
+        pinDock('unnamed')
+        paintDock()
+        return
+      }
+      carry(null, null, () => {
+        state.project = slug
+        state.view = 'project'
+        state.tab = tabFor(slug)
+        state.attach = null
+        markSeen(slug)
+        render()
+      })
+      pinDock(slug)
+      paintDock()
+    })
+  }
 
   /*
     Retry, in the dock as well (#215).
@@ -2883,7 +3072,7 @@ function portfolio() {
   return `<main class="main">
     <div class="head">
       <div>
-        <h1 class="t-display">${esc(greeting())}, Grant</h1>
+        <h1 class="t-display">${esc(greeting())}</h1>
         <p class="t-lead" style="margin:var(--s2) 0 0">${esc(standing())}</p>
       </div>
       <!--
@@ -3331,11 +3520,12 @@ const bubble = (m) => {
       No backticks in this comment. Template literal.
     */
     if (typeof m.waiting === 'string' && m.waiting !== '' && m.waiting !== 'failed') {
-      const said = {
+      // `say` is the office's own report of a turn it is following (turn_status): words it derived, never ours.
+      const said = typeof m.say === 'string' && m.say !== '' ? m.say : ({
         sending: 'Sending to the office…',
         thinking: 'With the team. They are working on it.',
         slow: 'No answer yet. The office may still be working — it also answers in Slack and Telegram.',
-      }[m.waiting] ?? 'Waiting.'
+      }[m.waiting] ?? 'Waiting.')
       return `<div class="msg theirs waitrow" role="listitem" aria-live="polite">
         <span class="waitspin" aria-hidden="true"></span>
         <div class="mbody">
@@ -3395,8 +3585,8 @@ const bubble = (m) => {
           the page imply it was there. No backticks in this comment.
         -->
         ${m.backfilled ? '<span class="t-meta pendmark">From the channel history, before the office was watching</span>' : ''}
-        ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer comes
-          back in Slack and Telegram too.</span>` : ''}
+        ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer will appear in this chat and
+          on the Team page, and in Slack or Telegram if you have connected them.</span>` : ''}
         <!--
           Could not be delivered (#202).
 
@@ -3951,8 +4141,9 @@ function sources(p) {
           <!--
             Disconnect and Remove are different acts and say so.
 
-            Detaching a connector DISABLES the row and keeps the corpus it fed
-            (ADR-0013), so the word is Disconnect and the documents survive.
+            Detaching a connector DISABLES the row; what it indexed leaves
+            active retrieval and is kept, not deleted (ADR-0013 as amended),
+            so the word is Disconnect and connecting again brings it back.
             A reference holds nothing at all, so removing it is a real delete
             and there is nothing to warn about. One button, two verbs, because
             offering Disconnect on a bookmark implies a corpus that is not
@@ -5192,31 +5383,31 @@ function personEditor(c) {
 
         No backticks in this comment. Template literal.
       -->
-      <label class="flab">Skills <span class="t-meta">— comma separated. This decides
-        who gets the work: "how much should we charge" finds whoever owns
-        <i>charge</i>. It grants no tools.</span></label>
+      <label class="flab">Subject words <span class="t-meta">— separated by commas. These decide
+        who is asked: "how much should we charge" goes to whoever owns
+        <i>charge</i>. They do not give access to anything.</span></label>
       <input data-f="p_skills" value="${esc((c.expertise ?? []).join(', '))}"
-             aria-label="Skills" placeholder="pricing, charge, budget, forecast">
+             aria-label="Subject words" placeholder="pricing, charge, budget, forecast">
 
       <div class="srow wrap">
-        <label class="flab" style="margin:0">Bot</label>
-        <select data-bot="${esc(c.slug)}" aria-label="Which bot speaks as ${esc(c.name)}">
+        <label class="flab" style="margin:0">Telegram bot</label>
+        <select data-bot="${esc(c.slug)}" aria-label="Which Telegram bot speaks as ${esc(c.name)}">
           ${botOptions}
         </select>
         ${c.bot ? `<a class="t-meta" href="https://t.me/${esc(c.bot)}" target="_blank" rel="noopener">open chat</a>` : ''}
       </div>
 
       <details class="tools">
-        <summary>Tools — ${held} of ${tools.length} allowed</summary>
+        <summary>What ${esc(c.name)} may use — ${held} of ${tools.length} allowed</summary>
         <div class="toolbody">
           ${groups}
-          <p class="t-meta">Ticking saves at once. A greyed row is switched off for
-            everyone by policy, and granting it here cannot turn it on.</p>
+          <p class="t-meta">Each tick saves at once. A greyed row is switched off for
+            everyone, and cannot be turned on here.</p>
         </div>
       </details>
 
       ${procs.length === 0 ? '' : `<details class="tools">
-        <summary>How they work — ${procs.length} procedure${procs.length === 1 ? '' : 's'}</summary>
+        <summary>Ways of working you have taught ${esc(c.name)} — ${procs.length}</summary>
         <div class="toolbody">
           ${procs
             .map(
@@ -5252,381 +5443,151 @@ function personEditor(c) {
 }
 
 function teamTabSettings() {
+  const ui = settingsUi
+  const people = config.staff()
+  const active = people.filter((c) => c.active !== false)
+  const retired = people.filter((c) => c.active === false)
   const card = (c) =>
     state.person === c.slug
-      ? personEditor(c)
-      : `
-    <article class="staffcard${c.active === false ? ' retired' : ''}" data-lift data-edge data-tilt="3.2"
-             style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
-      ${face(c, 46)}
-      <div class="sbody">
-        <b>${esc(c.name)}</b>
-        <span class="t-label">${esc(c.role)}</span>
-        <span class="t-meta">${esc(
-          c.active === false ? 'Retired' : (c.doing ?? 'Available'),
-        )}</span>
-      </div>
-      <div class="sctl">
-        <button class="btn" data-configure="${esc(c.slug)}">Configure</button>
-      </div>
-    </article>`
-
-  const people = config.staff()
-  return `<div class="setbody">
-    <div class="tabhead">
-      <p class="t-lead" style="margin:0">${people.filter((c) => c.active !== false).length}
-        permanent. Bring in a specialist for a piece of work and they leave when it
-        is finished.</p>
-      ${canWrite() ? '<button class="btn primary" data-hire>+ Bring someone in</button>' : ''}
-    </div>
-    <!--
-      The form behind the last dead button in the product (#105, migrations
-      0233 to 0235).
-
-      It carried data-hire and nothing anywhere looked that attribute up. Found
-      by cross-referencing every data attribute in the rendered DOM against
-      every attribute any source file queries, which is now verify:wired,
-      rather than by pressing things one at a time.
-
-      Why and when are required fields rather than optional ones. A hire with
-      no reason and no end is how an office quietly grows: eight becomes
-      eleven, nobody remembers why three of them are there, and every prompt is
-      a little more expensive forever. The RPC refuses both too, because the
-      page is not the only possible caller.
-
-      No backticks in this comment. Template literal.
-    -->
-    <div class="hireform" data-hire-form hidden>
-      <div class="hirerow">
-        <label>Name
-          <input data-hire-name placeholder="Priya" autocomplete="off"></label>
-        <label>Here to do
-          <input data-hire-title placeholder="Pricing research" autocomplete="off"></label>
-      </div>
-      <label>Why they are needed
-        <input data-hire-why placeholder="The pricing work needs someone who is not already on three projects"
-               autocomplete="off">
-        <span class="t-meta" style="font-variant-caps:normal;letter-spacing:0">At least
-          30 characters — the database enforces it, and a reason nobody can read later
-          is the same as no reason.</span></label>
-      <div class="hirerow">
-        <label>Until
-          <input type="date" data-hire-until></label>
-        <span class="hireact">
-          <span class="t-meta" data-said></span>
-          <button class="btn primary" data-hire-go>Bring them in</button>
-          <button class="btn quiet" data-hire-cancel>Cancel</button>
-        </span>
-      </div>
-    </div>
-    <div class="staffgrid">${people.map(card).join('')}</div>
-    <p class="t-meta">A temporary agent carries a justification and an expiry, so the
-      office never quietly grows. Removing one is reversible — there is no delete,
-      because outputs, routing decisions and deliveries all name a person and a
-      roster that can lose a row is a history that stops explaining itself.</p>
-  </div>`
-}
-
-/*
-  Setting up — the checklist, and the one thing only Grant can do.
-
-  §31: an avoidable request for manual configuration is a design failure, and
-  the preference order is API, then CLI, then automated configuration, then a
-  manual UI. So this page is deliberately SHORT: everything that could be
-  automated already was, and what is left is the irreducible part — a Google
-  consent screen that has to be clicked by the person whose account it is.
-
-  Three states and not two. `off` is something switched off on purpose and must
-  not be shown as a fault; that distinction is the difference between a
-  checklist you trust and one you learn to ignore.
-*/
-function setupTab() {
-  const d = config.SETUP ?? {}
-  const services = d.services ?? []
-  const google = d.google ?? {}
-  /*
-    #210. From `hq_slack_setup`, not from the services list.
-
-    The first version asked `services` for an entry named "Slack". There is
-    none — Slack is listed there as "The office" — so the condition could never
-    fire and the form never rendered. Handed the same shape `google` has, so
-    nothing here has to match a display string.
-  */
-  const slack = d.slack ?? {}
-  const needs = Number(d.needs_you ?? 0)
-  const lamp = { ready: 'ok', action: 'degraded', off: 'off' }
-
-  return `<div class="setbody">
-    <div class="tabhead">
-      <p class="t-lead" style="margin:0">${
-        needs === 0
-          ? `${d.ready ?? services.length} of ${services.length} services are set up. Nothing needs you.`
-          : `${needs} thing${needs === 1 ? '' : 's'} need${needs === 1 ? 's' : ''} you. Everything else is done.`
-      }</p>
-    </div>
-
-    ${
-      google.services
-        ? `<article class="behave" data-lift data-tilt="1.4" data-saidwrap>
-      <div class="bhead">
-        <b>Google</b>
-        <span class="t-meta">${
-          google.ready
-            ? 'Connected. Calendar and mail are readable; sending stays off by policy.'
-            : 'Not connected. One consent screen, and only you can click it.'
-        }</span>
-        <span class="t-meta" data-said></span>
-      </div>
-      <div class="srow wrap">
-        ${
-          google.ready
-            ? `<button class="btn small quiet" data-forget-google>Disconnect Google</button>`
-            : `<a class="btn primary" href="${esc(GOOGLE_START)}" target="_blank" rel="noopener">Connect Google</a>`
-        }
-      </div>
-      <!--
-        The two credentials, before the consent screen can be reached.
-
-        The secret is a password field and is cleared the moment it is saved: it
-        goes straight to the Supabase Vault through the API and is never echoed,
-        never logged, and never put anywhere this page can read it back. That is
-        the established mechanism, and it is why there is a field here at all
-        rather than a request to paste it somewhere.
-
-        Shown only when Google is not connected — once it is, these are answered
-        and a form that stays around invites re-entering a working credential.
-
-        No backticks in this comment. Template literal.
-      -->
-      ${
-        google.ready
-          ? ''
-          : `<div class="gsetup" data-saidwrap>
-        <label class="flab">Client ID</label>
-        <input data-g-id placeholder="…apps.googleusercontent.com" aria-label="Google client ID"
-               value="${esc(google.client_id ?? '')}">
-        <label class="flab">Client secret</label>
-        <input data-g-secret type="password" autocomplete="off"
-               placeholder="GOCSPX-…" aria-label="Google client secret">
-        <div class="srow wrap">
-          <button class="btn" data-save-google>Save credentials</button>
-          <span class="t-meta" data-said></span>
+      ? `<div class="st-editor">${personEditor(c)}</div>`
+      : `<article class="st-person${c.active === false ? ' retired' : ''}">
+          <span class="st-face">${face(c, 52)}</span>
+          <div class="st-text">
+            <p class="st-name">${esc(c.name)}</p>
+            <p class="st-desc" style="margin:0">${esc(c.role ?? '')}</p>
+            <p class="st-meta" style="margin:0">${esc(c.active === false ? 'Retired' : (c.doing ?? 'Available'))}</p>
+          </div>
+          <div class="st-act">${config.VIEWER.operator ? ui.button({ label: 'Configure', tone: 'quiet', a: { 'data-configure': c.slug, 'aria-label': `Configure ${c.name}` } }) : ''}</div>
+        </article>`
+  const hire = canWrite() && config.VIEWER.operator
+    ? `<div class="st-form" data-hire-form data-saidwrap hidden>
+        <p class="st-desc" style="margin:0">A specialist is brought in for a piece of work, with a reason and an end date, so the team never grows quietly. They leave when the date comes.</p>
+        <div class="st-formrow">
+          <label class="st-field"><span>Name</span><input class="st-input" data-hire-name placeholder="Priya" autocomplete="off"></label>
+          <label class="st-field"><span>Here to do</span><input class="st-input" data-hire-title placeholder="Pricing research" autocomplete="off"></label>
+        </div>
+        <label class="st-field"><span>Why they are needed (at least 30 characters)</span>
+          <input class="st-input" data-hire-why placeholder="The pricing work needs someone who is not already on three projects" autocomplete="off"></label>
+        <div class="st-formrow">
+          <label class="st-field"><span>Until</span><input class="st-input" type="date" data-hire-until></label>
+        </div>
+        <div class="st-ctl" style="justify-content:flex-start">
+          ${ui.button({ label: 'Bring them in', tone: 'primary', a: { 'data-hire-go': true } })}
+          ${ui.button({ label: 'Cancel', tone: 'quiet', a: { 'data-hire-cancel': true } })}
+          <span class="st-said" data-said role="status" aria-live="polite"></span>
         </div>
       </div>`
-      }
-      <div class="glist">${(google.services ?? [])
-        .map(
-          (g) => `<div class="grow">
-          <span class="dotstate ${g.connected ? 's-ok' : 's-off'}"></span>
-          <b>${esc(g.name)}</b>
-          <span class="t-meta">${esc(g.does)}</span>
-        </div>`,
-        )
-        .join('')}</div>
-    </article>`
-        : ''
-    }
-
-    <!--
-      Putting Slack back, from the page (#210).
-
-      On 14 September a verification suite deleted the bot token and the
-      signing secret. The restore instruction sent Grant to "the Slack section
-      of Setting up", which did not exist: the only path was a script with the
-      token in an environment variable. Section 31 calls an avoidable request
-      for manual configuration a design failure, and his standing goal is
-      blunter than that - a capability that exists only as a script an agent
-      runs is a capability he does not have.
-
-      Shown only while Slack is missing its credentials, for the same reason
-      the Google form is: once it is connected these are answered, and a form
-      that stays around invites re-entering a working credential.
-
-      Both halves together because reinstalling produces both at the same
-      moment, and a bot token on its own can post while being unable to verify
-      anything inbound - which reads as connected and is half a connection.
-
-      Both fields are cleared on save. They go to the Supabase Vault through
-      the API and are never echoed, never logged and never readable back.
-
-      No backticks in this comment. Template literal.
-    -->
-    ${
-      slack.ready === false
-        ? `<article class="behave" data-lift data-tilt="1.4" data-saidwrap>
-      <div class="bhead">
-        <b>Slack</b>
-        <span class="t-meta">${
-          slack.why_off
-            ? esc(String(slack.why_off))
-            : 'Not connected.'
-        } Reinstall the app at Slack, then paste the two values it gives you.</span>
-        <span class="t-meta" data-said></span>
-      </div>
-      <div class="gsetup">
-        <label class="flab">Bot user OAuth token</label>
-        <input data-sl-bot type="password" autocomplete="off" placeholder="xoxb-…"
-               aria-label="Slack bot user OAuth token">
-        <span class="t-meta">Install App page, under Bot User OAuth Token. Starts xoxb-.</span>
-        <label class="flab">Signing secret</label>
-        <input data-sl-sig type="password" autocomplete="off" placeholder="32 hex characters"
-               aria-label="Slack signing secret">
-        <span class="t-meta">Basic Information, under App Credentials. 32 characters, 0-9 and a-f.</span>
-        <span class="t-meta">If you put them in the wrong boxes it does not matter — they are
-          sorted by shape, not by which field they came from.</span>
-        <div class="srow wrap">
-          <a class="btn small quiet" href="https://api.slack.com/apps" target="_blank"
-             rel="noopener">Open Slack app settings</a>
-          <button class="btn primary" data-save-slack>Reconnect Slack</button>
-        </div>
-      </div>
-    </article>`
-        : ''
-    }
-
-    <div class="servicegrid">${services
-      .map(
-        (x) => `<article class="service s-${lamp[x.state] ?? 'unchecked'}" data-lift data-tilt="2.6">
-        <div class="svbody">
-          <b>${esc(x.name)}</b>
-          <span class="t-meta">${esc(x.what ?? x.does ?? '')}</span>
-          ${x.detail ? `<span class="t-meta from">${esc(x.detail)}</span>` : ''}
-        </div>
-        <div class="svfoot">
-          <span class="dotstate"></span>
-          <span class="t-label">${esc(
-            x.state === 'ready' ? 'Ready' : x.state === 'off' ? 'Switched off' : 'Needs you',
-          )}</span>
-          ${x.action ? `<span class="t-meta">${esc(x.action)}</span>` : ''}
-        </div>
-      </article>`,
-      )
-      .join('')}</div>
-  </div>`
+    : ''
+  return [
+    ui.section({
+      title: 'Your team',
+      note: config.VIEWER.operator
+        ? 'Permanent members of the team. Choose Configure to change what someone does, who they are allowed to act as and what they may use.'
+        : 'Permanent members of the team. Who is on the team, and what each of them may use, is set by whoever runs this Team HQ.',
+      count: `${active.length} ${active.length === 1 ? 'person' : 'people'}`,
+      action: canWrite() && config.VIEWER.operator ? ui.button({ label: 'Bring someone in', tone: 'primary', a: { 'data-hire': true } }) : '',
+      body: hire + `<div class="st-people">${active.map(card).join('')}</div>`,
+    }),
+    retired.length === 0
+      ? ''
+      : ui.advanced({
+          title: 'Retired',
+          hint: `${retired.length} no longer taking work`,
+          body: `<div class="st-people">${retired.map(card).join('')}</div>
+            <p class="st-meta">Retiring someone is reversible. Nobody is ever deleted: what they wrote, decided and delivered stays under their name.</p>`,
+        }),
+  ].join('')
 }
 
 /*
-  Help — what all this is.
+  Help, as a guide (#104).
 
-  Written as prose rather than a list of features, because the question it
-  answers is not "what can it do" but "what am I looking at". Short on purpose:
-  a help page nobody finishes is a help page nobody read.
+  Written in Grant's register, which is a standing instruction: "Always be explicit with instructions... include full
+  instructions each and every time", so numbered steps, the real button labels, and what to expect. Written against
+  the interface as it stands: a guide describing tabs that no longer exist is worse than none. No secrets, ever.
 */
-/*
-  Help, as a guide rather than seven aphorisms (#104).
-
-  Grant named the sections: setup, navigation, connections, documents, tasks,
-  and using team voice and messaging. They are used in that order, because a
-  list of the things he asked for in the order he asked for them is a better
-  structure than one invented here.
-
-  ## Written in his register, which is a standing instruction
-
-  *"Always be explicit with instructions!!! Never assume I just know what you
-  are referring to. Also include full instructions each and every time with
-  URLs, steps to follow, etc."*
-
-  So: numbered steps, the real button labels, and what success looks like. Not
-  "connect your Drive account" but the press, the screen it lands on, and how
-  you know it worked.
-
-  ## Written LAST, on purpose
-
-  Nine of the thirty items in his review changed navigation. A guide describing
-  tabs that became sidebar entries is worse than no guide, because it is
-  confidently wrong. This describes the interface as it stands after all of
-  them.
-
-  ## No secrets, ever
-
-  Not the bearer token, not a connector credential, not in an example. Where a
-  step needs one, the step is the procedure for getting it — `npm run hq:token`
-  sends it to Telegram. `npm run check:secrets` would catch a pasted value in
-  this file; it would not catch one baked into a screenshot of this page.
-*/
-const HELP = [
+const HELP_TOPICS = [
   {
-    title: 'Setting up',
+    title: 'Find your way around',
     steps: [
-      'Open Settings at the bottom left, then "Setting up". It lists what is done and what is not, in order.',
-      'Anything still outstanding says what to press. Work down the list — each step unlocks the next.',
-      'To connect Google, use "Connect Google" on the Connections tab. It opens Google\'s own consent screen and comes back here.',
-      'The bearer token is never shown on any page. Run npm run hq:token and it arrives on Telegram.',
+      'The home screen lists your projects. Press one to open it. Inside you will find its tasks, documents, contacts, sources and team.',
+      'Press Jump to… at the top (or Shift J) to find any project, task or document by name.',
+      'The three dots at the top right open Settings, which apply to all of Team HQ. A single project has its own settings, in its menu under Project settings.',
+      'To leave Settings, press Back to workspace at the top left.',
     ],
-    note: 'If a step looks done but the light is orange, the connection answered and something about it is off — the card says which.',
+    note: 'A project is the source of truth and it lives in Team HQ. A Notion database, a notebook or a Drive folder is something a project is attached to, never the project itself.',
   },
   {
-    title: 'Finding your way around',
+    title: 'Connect your accounts',
     steps: [
-      'The sidebar is the whole of the navigation. Top left is the dashboard project you are in; press it to switch to another or to see them all.',
-      'Under it are that project\'s sections: Overview, AI Team, Documents, Tasks, Contacts, Sources and Project Settings. The number beside one is how many things are waiting in it.',
-      'The chevron at the very top left collapses the sidebar completely and gives the space to the content. It stays collapsed until you press it again.',
-      'At the bottom: Call the team, Recent activity, and Settings.',
+      'Open Settings, then Services.',
+      'Each service shows a word as well as a colour: Connected, Needs attention or Not connected.',
+      'For Google, press Connect Google. Google’s own permission screen opens in a new tab. Choose your account, allow access, and come back.',
+      'A service with no button cannot be connected from here yet. Its row says so.',
     ],
-    note: 'A dashboard project is the source of truth and it lives here. A Notion database, a notebook or a Drive folder is something a project is ATTACHED TO — never the project itself.',
+    note: 'Disconnecting Google removes access here and you can connect again whenever you like. To also withdraw the permission at Google, use myaccount.google.com/permissions.',
   },
   {
-    title: 'Connections',
+    title: 'Talk to the team',
     steps: [
-      'Settings, then Connections. Every service the office can reach, with a light saying whether it answered.',
-      'Not connected shows a Connect button that starts the real authorisation. Connected shows Manage, which takes you to where its credential lives.',
-      '"+ Connect something" lists everything available with its state, and every row leads somewhere real or says plainly that there is no flow yet.',
-      'The MCP card\'s "How to connect a client" shows the server URL and the tools another client would see — this is how something other than this page reaches the office.',
+      'Team Chat: open a project, press Chat, type a message and press Send.',
+      'A voice note in Team Chat: press Voice note, speak, press Stop, listen back, then press Send. Your words are turned into text and arrive as an ordinary chat message.',
+      'Talk to Team: press the round microphone beside Chat. Your browser asks for the microphone once. Speak naturally and interrupt whenever you like. Press it again to end the conversation, which also stops the microphone.',
+      'Telegram: message the team’s bot and Claire answers. A thumbs-down on a reply asks what you would have preferred.',
     ],
-    note: 'Disconnecting Google is real and reversible: it revokes here and you can connect again. Other services say Manage instead, because a button that appeared to revoke a credential while revoking nothing would be worse than no button.',
+    note: '',
   },
   {
-    title: 'Documents',
+    title: 'Decide what the team does on its own',
     steps: [
-      'Documents shows everything the office holds for a project. Opening one shows its whole text, however long.',
-      'Documents arrive through a connector rather than an upload: press "Bring documents in" and attach Drive, Notion or NotebookLM on the Sources tab.',
-      'The Sources tab takes a pasted Google Drive link and works out the rest by itself.',
-      'The speech icon on a document starts a conversation about that document with the team. The bar at the top of it brings you back to where you were.',
+      'Open Settings, then Autonomy and approvals.',
+      'Choose one of four levels, from Watch only to Act. The page says what each one means before you choose.',
+      'Whatever you choose, contacting another person, deleting something, spending money and changing a login or key always wait for your yes.',
+      'If you once answered “don’t ask me again” to a question, you can take that back on the same page under Questions you have turned off.',
     ],
-    note: 'A PDF that came in as extracted text shows its text. Where the office holds the actual file, it opens in a viewer with a link to the real thing.',
+    note: 'The team may message you on its own whenever it needs a decision. It never contacts anyone else without your approval.',
+  },
+  {
+    title: 'Documents and sources',
+    steps: [
+      'Open a project, then Documents. Opening one shows its whole text.',
+      'Documents arrive through a connection rather than an upload: open Sources and attach Drive, Notion or NotebookLM. Pasting a Google Drive link there works out the rest.',
+      'The speech icon on a document starts a conversation about it with the team.',
+    ],
+    note: 'A PDF that came in as extracted text shows its text. Where Team HQ holds the actual file, it opens in a viewer with a link to the real thing.',
   },
   {
     title: 'Tasks',
     steps: [
-      'Tasks, then "Add a task". A title is all that is required; a due date and an owner are optional.',
-      'The circle beside a task marks it done, and that is saved — it is not just a tick on this screen.',
-      'A task can be waiting on something, in progress, to do, or completed, and the section groups them that way.',
-      'To have dated tasks appear in your Google Calendar, turn on "Put dated tasks in my Google Calendar" on the Behaviour tab.',
+      'Open a project, then Tasks, then Add a task. A title is all that is required.',
+      'The circle beside a task marks it done, and that is saved.',
+      'To see dated tasks in your Google Calendar, turn on Show dated tasks in Google Calendar under Settings, then Autonomy and approvals.',
     ],
-    note: 'Calendar sync is one way. A task with a due date becomes an all-day event and comes away when it is done; the diary never changes a task, and nothing the office did not create is ever touched.',
-  },
-  {
-    title: 'Talking to the team',
-    steps: [
-      'Press "Call the team" in the sidebar. The browser asks for the microphone once. Talk over her whenever you like — she stops.',
-      'The call keeps running while you move around the interface. The button stays lit while it is live.',
-      'Press it again to hang up. That stops the microphone as well as the call — the recording indicator in your browser goes out.',
-      'To type instead, open AI Team then Chat on any project, or use the "Type instead" box on the call itself.',
-    ],
-    note: 'Telegram is the other way in, and the one that reaches you when you are not here. Message the bot and it answers as Claire.',
+    note: 'Calendar sync is one way. A task with a due date becomes an all-day event and is removed when the task is done; the calendar never changes a task.',
   },
   {
     title: 'When something looks wrong',
     steps: [
-      'Recent activity shows everything the office did and whether it can be undone.',
-      'Settings then Connections shows what is reachable right now, rather than what was reachable when it was set up.',
-      'The Usage tab says, on every card, whether a figure was measured, reported by the service, or estimated by us.',
-      'If a number looks wrong, say so. A dashboard that lies once is one you stop believing.',
+      'Settings, then Services shows what is working right now, and says what is wrong with anything that is not.',
+      'Settings, then Messaging shows how each way of reaching you is doing.',
+      'Settings, then Requests shows anything the team is waiting on you for.',
+      'Settings, then Usage and health says what the team is using and whether any work is stuck.',
     ],
-    note: '',
+    note: 'If a number or a status looks wrong, say so. A dashboard that is wrong once is one you stop believing.',
   },
 ]
 
 function helpTab() {
-  return `<div class="setbody">
-    <p class="t-lead" style="margin:0 0 var(--s4)">Seven things, in the order you
-      are likely to need them.</p>
-    <div class="helplist">${HELP.map((h) => `<article class="helpsec">
-      <h3 class="t-title" style="margin:0;font-size:17px">${esc(h.title)}</h3>
-      <ol class="helpsteps">${h.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
-      ${h.note === '' ? '' : `<p class="helpnote">${esc(h.note)}</p>`}
-    </article>`).join('')}</div>
-  </div>`
+  const ui = settingsUi
+  return HELP_TOPICS.map(
+    (h) => `<section class="st-sec">
+      <h3 class="st-sectitle">${esc(h.title)}</h3>
+      <div class="st-card"><div class="st-help">
+        <ol class="st-steps">${h.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+        ${h.note ? `<p class="st-meta st-helpnote">${esc(h.note)}</p>` : ''}
+      </div></div>
+    </section>`,
+  ).join('')
 }
 
 /*
@@ -5637,109 +5598,130 @@ function helpTab() {
   that interrupts on nothing is one you stop trusting.
 */
 function behaviourTab() {
-  const row = (b) => {
-    if (b.kind === 'choice') {
-      return `<article class="behave" data-lift data-tilt="1.6" data-saidwrap>
-        <div class="bhead"><b>${esc(b.name)}</b><span class="t-meta" data-said></span></div>
-        <div class="choices">
-          ${b.options.map((o) => `
-            <button class="choice ${b.value === o.id ? 'on' : ''}"
-                    data-choose="${esc(b.id)}:${esc(o.id)}" data-via="${esc(b.via ?? '')}"
-                    ${b.settable === false || !canWrite() ? 'disabled' : ''}>
-              <b>${esc(o.name)}</b>
-              <span class="t-meta">${esc(o.note)}</span>
-            </button>`).join('')}
-        </div>
-      </article>`
-    }
-    if (b.kind === 'switch') {
-      /*
-        Drawn as a control only when it IS one.
+  const ui = settingsUi
+  const B = (id) => config.BEHAVIOURS.find((b) => b.id === id)
+  const editable = (b) => b !== undefined && b.settable !== false && canWrite()
 
-        `settable` comes from the same allow-list `hq_set_setting` enforces, so
-        the page can never offer a switch the API will refuse. Two of these are
-        deliberately fixed rather than unbuilt — "keep everything undoable" is
-        what the ledger does, not a preference — and both say why instead of
-        being silently omitted, because a missing row raises the question and
-        a stated one answers it.
-
-        No backticks in this comment: template literal.
-      */
-      return `<article class="behave row" data-lift data-tilt="1.6" data-saidwrap>
-        <div class="bhead">
-          <b>${esc(b.name)}</b>
-          <span class="t-meta">${esc(b.note)}</span>
-          <span class="t-meta" data-said></span>
-        </div>
-        ${b.settable === false || !canWrite()
-          ? `<span class="pillvalue">${b.value ? 'On' : 'Off'}</span>`
-          : `<button class="toggle ${b.value ? 'on' : ''}" role="switch"
-                aria-checked="${b.value}" data-toggle="${esc(b.id)}"
-                data-via="${esc(b.via ?? '')}" data-now="${b.value ? '1' : ''}"
-                aria-label="${esc(b.name)}"><span class="knob"></span></button>`}
-      </article>`
-    }
-    return `<article class="behave row" data-lift data-tilt="1.6">
-      <div class="bhead">
-        <b>${esc(b.name)}</b>
-        <span class="t-meta">${esc(b.note)}</span>
-      </div>
-      <span class="pillvalue">${esc(b.value)}</span>
-    </article>`
-  }
   /*
-    The exceptions to the dial above (#15).
-
-    A standing authorization is Grant having said "do not ask me about this
-    again" -- usually by answering a question with that option rather than by
-    coming here. So this list is mostly a place to AUDIT and to take one back,
-    which is why there is a Revoke and no Add: a permission granted from a
-    settings page is one granted without the question that motivated it.
-
-    Level is shown because it is the thing that decides: a level-2 exception
-    lets outward work happen unasked, and a level-3 one cannot exist at all.
+    The dial (#15). A system that interrupts on everything is one you stop reading and one that interrupts on nothing
+    is one you stop trusting, so the four levels are laid out as four equal choices, each stating its effect, rather
+    than as a row of pills. The server owns the level and its id; the words are the page's (copy.js).
   */
-  const standing = (a) => `<article class="behave row ${a.live ? '' : 'spent'}" data-lift data-tilt="1.6" data-saidwrap>
-    <div class="bhead">
-      <b><code class="govreqtool">${esc(a.tool)}</code> in ${esc(a.scope)}</b>
-      <span class="t-meta">${esc(a.reason)}</span>
-      <!--
-        The reason only when it adds something.
+  const dial = B('autonomy')
+  const dialCard =
+    dial === undefined
+      ? ''
+      : ui.card([
+          `<div class="st-choices" role="group" aria-label="How much the team does on its own" data-saidwrap>
+            ${(dial.options ?? [])
+              .map((o) => {
+                const c = copy.autonomy[o.id] ?? { name: o.name, note: o.note }
+                return `<button type="button" class="st-choice" aria-pressed="${dial.value === o.id}"
+                  data-choose="${esc(dial.id)}:${esc(o.id)}" data-via="${esc(dial.via ?? '')}"
+                  data-name="${esc(c.name)}" ${editable(dial) ? '' : 'disabled'}>
+                  <b>${esc(c.name)}</b><span>${esc(c.note)}</span></button>`
+              })
+              .join('')}
+            <span class="st-said" data-said role="status" aria-live="polite" style="grid-column:1/-1"></span>
+          </div>`,
+        ])
 
-        app.revoke_standing supplies "you took it back" when Grant gives none,
-        which under a line already reading "Taken back" is the same sentence
-        twice - the repetition #186 found in the provenance line, in a smaller
-        place. No backticks in this comment: template literal.
-      -->
-      ${a.revoked
-        ? `<span class="t-meta">Taken back ${when.stamp(a.revoked)}${
-            a.revoked_reason && a.revoked_reason !== 'you took it back'
-              ? ` — ${esc(a.revoked_reason)}`
-              : ''
-          }</span>`
-        : `<span class="t-meta">Since ${when.stamp(a.since)}${a.until ? `, until ${when.stamp(a.until)}` : ''}</span>`}
-      <span class="t-meta" data-said></span>
-    </div>
-    ${a.live
-      ? `<button class="gobtn danger" data-unstand="${esc(a.id)}"
-                 ${canWrite() ? '' : 'disabled'}>Revoke</button>`
-      : '<span class="pillvalue">Taken back</span>'}
-  </article>`
+  /*
+    What no setting here can change. The dial's own notes say that something meant for another person, deleting,
+    spending and changing a credential always stop and ask; this states it once, plainly, where the dial is, so
+    nobody has to infer the consequence of choosing "Act" from the fine print of one card. It is a statement of how
+    the office works, not a control, and is drawn as one.
+  */
+  const always = ui.note({
+    tone: 'policy',
+    ic: 'shield',
+    title: 'Whatever you choose, these always wait for your yes',
+    text:
+      'Contacting another person (an email, a message, an invitation): the team can write it, and you approve it ' +
+      'before it is sent. Deleting something, spending money, and changing a login or key. The team may message ' +
+      'you on its own whenever it needs your decision.',
+  })
 
-  const live = config.STANDING.filter((a) => a.live).length
+  // The helpers that act without being asked: each one is a real, saved setting.
+  const helperRows = ['read_new_sources', 'notebook', 'calendar_tasks']
+    .map(B)
+    .filter((b) => b !== undefined)
+    .map((b) => {
+      const c = copy.behaviour[b.id] ?? { name: b.name, note: b.note }
+      return ui.row({
+        name: c.name,
+        desc: c.note,
+        wrap: true,
+        said: true,
+        // these switches govern every office, so only the operator's are live (the gateway refuses anybody else)
+        control: ui.toggle({ id: b.id, name: c.name, on: b.value === true, via: b.via, disabled: !editable(b) || !config.VIEWER.operator }),
+      })
+    })
 
-  return `<div class="setbody">
-    <p class="t-lead" style="margin:0">What the team may do on its own, and when it
-      should stop and ask you.</p>
-    <div class="behaves">${config.BEHAVIOURS.map(row).join('')}</div>
+  /*
+    The exceptions to the dial (#15). A standing authorization is "do not ask me about this again", usually said by
+    answering a question rather than by coming here - so this list is a place to audit and to take one back. There is
+    a Revoke and no Add on purpose: a permission granted from a settings page is one granted without the question that
+    motivated it. Revoking narrows what the team may do alone, so it needs no confirmation.
+  */
+  const allowed = config.STANDING.filter((a) => a.live)
+  const spent = config.STANDING.filter((a) => !a.live)
+  const standingRow = (a) =>
+    ui.row({
+      name: `${copy.toolName(a.tool)}${a.scope && a.scope !== 'everywhere' ? ` in ${a.scope}` : ''}`,
+      desc: ui.html(
+        a.live
+          ? `${a.reason ? `${esc(a.reason)} ` : ''}Allowed since ${when.stamp(a.since)}${a.until ? `, until ${when.stamp(a.until)}` : ''}.`
+          : `Taken back ${when.stamp(a.revoked)}${
+              a.revoked_reason && a.revoked_reason !== 'you took it back' ? `: ${esc(a.revoked_reason)}` : ''
+            }.`,
+      ),
+      wrap: true,
+      said: true,
+      control: a.live
+        ? ui.button({
+            label: 'Take back',
+            tone: 'quiet',
+            a: { 'data-unstand': a.id, disabled: !canWrite(), 'aria-label': `Take back permission for ${copy.toolName(a.tool)}` },
+          })
+        : ui.chip('off', 'Taken back'),
+    })
 
-    <section class="govsec">
-      <h3 class="govtitle">Things you said not to ask about<span class="t-meta">${esc(String(live))} in force</span></h3>
-      ${config.STANDING.length === 0
-        ? '<p class="t-meta govempty">Nothing. Every exception here comes from you answering a question with “do not ask me again”.</p>'
-        : `<div class="behaves">${config.STANDING.map(standing).join('')}</div>`}
-    </section>
-  </div>`
+  const guarantees = ui.card([
+    ui.row({
+      name: 'Everything the team does is recorded',
+      desc: 'Every action is written down as it happens, so it can be reviewed and, where possible, undone. This is how Team HQ works; it is not a setting.',
+      kind: 'fact',
+      control: '<span class="st-value">Always on</span>',
+    }),
+  ])
+
+  return [
+    ui.section({
+      title: 'How much the team does on its own',
+      note: 'This is the default for every project.',
+      body: dialCard + always,
+    }),
+    helperRows.length === 0
+      ? ''
+      : ui.section({
+          title: 'Things the team does by itself',
+          note: config.VIEWER.operator
+            ? 'Each of these is a real, saved setting.'
+            : 'These are shared by everyone using this Team HQ, so they are set by whoever runs it. You can see how they are set.',
+          body: ui.card(helperRows),
+        }),
+    ui.section({
+      title: 'Questions you have turned off',
+      note: 'When you answer a question with “don’t ask me again”, it is listed here so you can take it back.',
+      count: allowed.length === 0 ? '' : `${allowed.length} allowed`,
+      body:
+        config.STANDING.length === 0
+          ? ui.card([ui.empty('None. The team asks you about everything the level above says it should.')])
+          : ui.card([...allowed.map(standingRow), ...spent.map(standingRow)]),
+    }),
+    ui.section({ title: 'Always true', body: guarantees }),
+  ].join('')
 }
 
 
@@ -5763,436 +5745,397 @@ function behaviourTab() {
   Everything on this page is read-only for a reader with no token. Retracting a
   lesson and deciding a proposal are writes and say so.
 */
-function governanceTab() {
+/*
+  The three places the old Governance page's eleven lists now live (settings-ui.js has the pieces).
+
+  Governance was a reading surface for the engineer: lessons, proposals, requests, refusals, stranded work, scoring,
+  triggers, noticed patterns, decisions and a profile per agent, all in one scroll. A person comes to it for two reasons -
+  "is anything waiting for me?" and "what has it picked up that I may not want?" - so those are two tabs, and the
+  machinery (scoring, triggers, where each agent gets stuck) moved under Usage and health where it is read as machinery.
+*/
+const requestStateTone = { open: 'warn', approved: 'ok', done: 'ok', declined: 'off', dismissed: 'off', superseded: 'off', withdrawn: 'off' }
+
+/** What is waiting for a decision: open proposals, open tool requests and open offers. Zero until the page has been read. */
+function openRequestCount() {
   const g = config.GOVERNANCE
+  if (!g.loaded) return 0
+  return (
+    g.proposals.filter((p) => p.state === 'open').length +
+    (g.requests ?? []).filter((r) => r.state === 'open').length +
+    g.noticed.filter((s) => s.offer && s.state === 'open').length
+  )
+}
 
-  /*
-    Waiting, but only when there is a real office to wait for.
+/** The numbers an observation was counted from, as short plain facts. */
+const becauseFacts = (because) =>
+  Object.entries(because ?? {})
+    .filter(([, v]) => typeof v === 'number' || v === true || (typeof v === 'string' && v.trim() !== '' && v.length <= 32))
+    .slice(0, 4)
+    .map(([k, v]) => (v === true ? k.replace(/_/g, ' ') : `${v} ${k.replace(/_/g, ' ')}`))
 
-    With no token the studio banners "Nothing on this page is your office" and
-    the fallback rows in settings.js stand in — which is what makes this page
-    judgeable from a capture. With a token and nothing back yet, four empty
-    lists would say the office has learned nothing, and that is a different and
-    much worse sentence than "asking".
-  */
+const refusalDay = (iso) => {
+  const at = Date.parse(iso)
+  return Number.isNaN(at) ? '' : new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+function requestsTab() {
+  const ui = settingsUi
+  const g = config.GOVERNANCE
   if (!g.loaded && source.live) {
-    return `<div class="setbody">
-      <p class="t-lead" style="margin:0">Asking the office what it has learned…</p>
-      <div class="govskel">${[0, 1, 2].map(() => '<span></span>').join('')}</div>
-    </div>`
+    return ui.card([ui.empty('Asking the team what is waiting for you…')])
   }
+  const off = canWrite() ? false : true
+  const btn = (label, tone, a) => ui.button({ label, tone, a: { ...a, disabled: off } })
 
-  /*
-    A lesson, as a quotation.
+  const proposal = (p) =>
+    ui.caseCard({
+      title: p.title,
+      chips: p.state === 'open' ? '' : ui.chip(requestStateTone[p.state] ?? 'off', STATE_WORD[p.state] ?? p.state),
+      body: p.argument,
+      note: p.note ? `Your note: ${p.note}` : '',
+      meta: ui.facts([`${p.who} asks for ${p.remedy}`, p.cost, p.times > 1 ? `Hit ${p.times} times` : '']),
+      actions:
+        p.state === 'open'
+          ? btn('Decline', 'quiet', { 'data-decide': `${p.id}:declined` }) +
+            btn('Approve', 'primary', { 'data-decide': `${p.id}:approved` })
+          : btn('Reopen', 'quiet', { 'data-decide': `${p.id}:open` }),
+    })
 
-    The attribution line carries all three things the Issue asks for — the
-    scope, who learned it, and the job it came from — because a lesson you
-    cannot place is one you cannot judge. The job id is shown as its first
-    eight characters: it is there to be recognised and searched for, not read
-    aloud.
-  */
-  const lesson = (l) => `<article class="govlesson" data-lift data-tilt="1.4" data-saidwrap>
-    <blockquote class="govquote">${esc(l.body)}</blockquote>
-    <div class="govfoot">
-      <div class="govfrom">
-        <span class="govscope s-${esc(l.scope)}">${esc(SCOPE_WORD[l.scope] ?? l.scope)}</span>
-        <!--
-          The place, unless the scope already said it.
+  const request = (r) =>
+    ui.caseCard({
+      title: `${r.who_name} is asking to use “${copy.toolName(r.tool)}”`,
+      chips: r.state === 'open' ? '' : ui.chip(requestStateTone[r.state] ?? 'off', STATE_WORD[r.state] ?? r.state),
+      body: r.what_for,
+      note:
+        r.reason
+          ? `Your reason: ${r.reason}`
+          : r.state === 'open'
+            ? `Approving lets ${r.who_name} do this from now on. You can take it back from this page.`
+            : '',
+      meta: ui.facts([
+        ...becauseFacts(r.because),
+        r.declines > 0 ? `Asked again after ${r.declines} no${r.declines === 1 ? '' : 'es'}` : '',
+        ui.html(when.stamp(r.at)),
+      ]),
+      actions:
+        r.state === 'open'
+          ? btn('Decline', 'quiet', { 'data-tool': `${r.id}:decline` }) +
+            btn('Approve', 'primary', { 'data-tool': `${r.id}:approve` })
+          : r.state === 'approved'
+            ? btn('Take back', 'quiet', {
+                'data-revoke-tool': `${r.who}:${r.tool}`,
+                'aria-label': `Take back ${copy.toolName(r.tool)} from ${r.who_name}`,
+              })
+            : '',
+    })
 
-          A global lesson comes back with "everywhere" in both fields, and a
-          pill reading Everywhere followed by the word everywhere is the page
-          saying the same thing twice in a row.
+  const offer = (s) =>
+    ui.caseCard({
+      title: s.body,
+      body: '',
+      note: OFFER_WORD[s.offer] ?? 'The team can act on this.',
+      meta: ui.facts([
+        s.project,
+        KIND_WORD[s.kind] ?? String(s.kind).replace(/_/g, ' '),
+        ...becauseFacts(s.because),
+        s.dismissed > 0 ? `Dismissed ${s.dismissed} time${s.dismissed === 1 ? '' : 's'}` : '',
+        ui.html(when.stamp(s.at)),
+      ]),
+      actions:
+        btn('Decline', 'quiet', { 'data-suggest': `${s.id}:no` }) + btn('Accept', 'primary', { 'data-suggest': `${s.id}:yes` }),
+    })
 
-          No backticks in this comment: template literal.
-        -->
-        ${String(l.where ?? '').toLowerCase() === 'everywhere' ? ''
-          : `<span class="t-meta">${esc(l.where)}</span>`}
-        <span class="t-meta">learned by ${esc(l.who ?? 'the office')}</span>
-        ${l.seen > 1 ? `<span class="t-meta">seen ${esc(String(l.seen))} times</span>` : ''}
-        ${l.job ? `<span class="t-meta govjob" title="The job this came from">job ${esc(String(l.job).slice(0, 8))}</span>` : ''}
-        <span class="t-meta">${when.stamp(l.at)}</span>
-      </div>
-      <span class="t-meta" data-said></span>
-      <button class="gobtn danger" data-retract="${esc(l.id)}"
-              ${canWrite() ? '' : 'disabled'}>Retract</button>
-    </div>
-  </article>`
+  const refusal = (r) =>
+    ui.caseCard({
+      title: r.what,
+      note: `You said no${r.project ? ` in ${r.project}` : ''} on ${refusalDay(r.declined_at)}. It will not ask again until ${refusalDay(r.until)}.`,
+      meta: ui.facts(['Letting it ask again does not approve anything.']),
+      actions: btn('Let it ask again', 'quiet', { 'data-reopen': r.id }),
+    })
 
-  /*
-    A proposal, as a case to be answered.
+  const waiting = [
+    ...g.proposals.filter((p) => p.state === 'open').map(proposal),
+    ...(g.requests ?? []).filter((r) => r.state === 'open').map(request),
+    ...g.noticed.filter((s) => s.offer && s.state === 'open').map(offer),
+  ]
+  const earlier = [
+    ...g.proposals.filter((p) => p.state !== 'open').map(proposal),
+    ...(g.requests ?? []).filter((r) => r.state !== 'open').map(request),
+  ]
+  const refused = g.refusals ?? []
 
-    Approve and Decline sit side by side and a settled one keeps its verdict on
-    the page — #49's whole argument is that a decline has to be durable, and a
-    decline that disappears is one Grant cannot remember making. Reopen is
-    offered on a settled row because the world changes; it is a person's call
-    and never the office's.
-  */
-  const proposal = (p) => `<article class="govcase g-${esc(p.state)}" data-lift data-tilt="1.4" data-saidwrap>
-    <div class="govhead">
-      <b>${esc(p.title)}</b>
-      <span class="govstate">${esc(STATE_WORD[p.state] ?? p.state)}</span>
-    </div>
-    <p class="govarg">${esc(p.argument)}</p>
-    ${p.note ? `<p class="govnote">Your note: ${esc(p.note)}</p>` : ''}
-    <div class="govfoot">
-      <div class="govfrom">
-        <span class="t-meta">${esc(p.who)} asks for <b>${esc(p.remedy)}</b></span>
-        ${p.cost ? `<span class="t-meta govcost">${esc(p.cost)}</span>` : ''}
-        ${p.times > 1 ? `<span class="t-meta">hit ${esc(String(p.times))} times</span>` : ''}
-      </div>
-      <span class="t-meta" data-said></span>
-      ${p.state === 'open'
-        ? `<button class="gobtn" data-decide="${esc(p.id)}:declined"
-                   ${canWrite() ? '' : 'disabled'}>Decline</button>
-           <button class="gobtn go" data-decide="${esc(p.id)}:approved"
-                   ${canWrite() ? '' : 'disabled'}>Approve</button>`
-        : `<button class="gobtn" data-decide="${esc(p.id)}:open"
-                   ${canWrite() ? '' : 'disabled'}>Reopen</button>`}
-    </div>
-  </article>`
-
-  /*
-    A suggestion, and what became of it.
-
-    The dismissal count is deliberately loud when it is above zero. A thing
-    offered four times and dismissed four times is the office failing to take a
-    hint, and that is a fact about the office rather than about the suggestion.
-  */
-  const noted = (s) => `<li class="govnoted" data-lift data-tilt="1.2">
-    <div class="govhead">
-      <b>${esc(s.body)}</b>
-      <span class="govstate">${esc(STATE_WORD[s.state] ?? s.state)}</span>
-    </div>
-    <!--
-      The evidence, as chips.
-
-      suggestions.because is JSONB and holds the numbers the noticing pass
-      counted, not a sentence: something like eleven documents and no notebook.
-      Rendered with esc() it becomes the words object Object, which is what the
-      first pass at this page shipped.
-
-      No backticks in this comment: template literal.
-    -->
-    ${evidence(s.because)}
-    <div class="govfrom">
-      ${s.project ? `<span class="t-meta">${esc(s.project)}</span>` : ''}
-      <span class="t-meta">${esc(KIND_WORD[s.kind] ?? String(s.kind).replace(/_/g, ' '))}</span>
-      ${s.dismissed > 0
-        ? `<span class="govdismiss">dismissed ${esc(String(s.dismissed))}×</span>`
-        : ''}
-      <span class="t-meta">${when.stamp(s.at)}</span>
-    </div>
-    <!--
-      A decision, where there is one to make (#147).
-
-      Most suggestions are a NOTE: the noticing pass counted something and is
-      telling him. A few carry an offer the office can perform on a press, and
-      only those get buttons - drawing Accept on a note would put a control in
-      front of him that performs nothing, which this repository has a whole
-      audit for.
-
-      offer is app.hq_governance's name for suggestions.offer_kind, added in
-      0391. A missing one is a note, which is the common case and the safe
-      default.
-
-      The body above IS the drafted rule, verbatim, which is what makes these
-      buttons honest: he is approving the sentence he can read, not a summary
-      of one. No backticks in this comment: template literal.
-    -->
-    ${s.offer && s.state === 'open'
-      ? `<div class="govdecide">
-          <span class="t-meta">${esc(OFFER_WORD[s.offer] ?? 'The office can act on this.')}</span>
-          <button class="gobtn" data-suggest="${esc(s.id)}:yes"
-                  ${canWrite() ? '' : 'disabled'}>Accept</button>
-          <button class="gobtn danger" data-suggest="${esc(s.id)}:no"
-                  ${canWrite() ? '' : 'disabled'}>Decline</button>
-        </div>`
-      : ''}
-  </li>`
-
-  /*
-    An agent, and the walls it has hit.
-
-    `tried_and_could_not` comes from `app.impediments_tally(90, 1, false)` —
-    ninety days, at least once, fixtures excluded. An agent with an empty list
-    says so in a sentence rather than rendering as a card with a hole in it.
-  */
-  const agent = (a) => `<article class="govagent" data-lift data-tilt="1.4">
-    <div class="govhead">
-      <b>${esc(a.name)}</b>
-      <span class="t-meta">${esc(a.remit ?? '')}</span>
-    </div>
-    <div class="govtools">
-      <span class="govcount">${esc(String(a.tools ?? 0))} tools</span>
-      ${(a.expertise ?? []).slice(0, 4).map((x) => `<span class="govskill">${esc(x)}</span>`).join('')}
-    </div>
-    ${(a.tried_and_could_not ?? []).length === 0
-      ? '<p class="t-meta govclear">Has not been stopped by anything in ninety days.</p>'
-      : `<ul class="govwalls">${a.tried_and_could_not.map((w) => `<li>
-          <span class="govwall">${esc(w.needed)}</span>
-          <span class="t-meta">${esc(WALL_WORD[w.kind] ?? w.kind)}</span>
-          <span class="govtimes">${esc(String(w.times))}×</span>
-        </li>`).join('')}</ul>`}
-  </article>`
-
-  /*
-    What it counted, in a form a person can read.
-
-    Keys come from the noticing pass and are snake_case column-ish names, so
-    the underscores go and the number sits beside the word. A value that is
-    itself a structure is skipped rather than stringified — one chip reading
-    object Object teaches a reader to distrust the other four.
-  */
-  const evidence = (because) => {
-    const rows = Object.entries(because ?? {}).filter(
-      ([, v]) =>
-        typeof v === 'number' ||
-        v === true ||
-        (typeof v === 'string' && v.trim() !== '' && v.length <= 32),
-    )
-    if (rows.length === 0) return ''
-    /*
-      A counted fact and a signal that simply FIRED are not the same chip.
-
-      The noticing pass counts things — eleven documents, four Fridays — and the
-      number in ink is the whole point. A correction's evidence is boolean: it
-      followed an answer, it opened with a rejection. Rendering those through
-      the same path put a bold 1 in front of every one of them, which reads as a
-      count of something and is a count of nothing.
-
-      Long strings are dropped rather than truncated. This row is a set of
-      chips; a sentence in it is not a chip, and suggestions.because is JSONB
-      that nothing constrains, so the guard belongs here.
-    */
-    return `<div class="govwhy">${rows
-      .slice(0, 6)
-      .map(([k, v]) => `<span class="govbit">${v === true ? '' : `<b>${esc(String(v))}</b>`}
-        ${esc(k.replace(/_/g, ' '))}</span>`)
-      .join('')}</div>`
-  }
-
-  /*
-    A request for reach, as a thing to answer (ADR-0018, #272).
-
-    The difference from a proposal one section above: a proposal asks for a
-    CHANGE and this asks for a KEY. Approving it grants the tool there and
-    then, so the confirmation is on the approve side here and on the decline
-    side there -- the heavier press gets the question, whichever it is.
-
-    because is JSONB holding counts, not a sentence, so it goes through
-    evidence() like a suggestion does. Rendered with esc it reads object
-    Object, which is a defect this page has already shipped once.
-
-    No backticks in this comment: template literal.
-  */
-  const request = (r) => `<article class="govcase g-${esc(r.state)}" data-lift data-tilt="1.4" data-saidwrap>
-    <div class="govhead">
-      <b>${esc(r.who_name)} is asking for <code class="govreqtool">${esc(r.tool)}</code></b>
-      <span class="govstate">${esc(STATE_WORD[r.state] ?? r.state)}</span>
-    </div>
-    <p class="govarg">${esc(r.what_for)}</p>
-    ${r.reason ? `<p class="govnote">Your reason: ${esc(r.reason)}</p>` : ''}
-    ${evidence(r.because)}
-    <div class="govfoot">
-      <div class="govfrom">
-        ${r.declines > 0
-          ? `<span class="govdismiss">asked again after ${esc(String(r.declines))} no${r.declines === 1 ? '' : 'es'}</span>`
-          : ''}
-        <span class="t-meta">${when.stamp(r.at)}</span>
-      </div>
-      <span class="t-meta" data-said></span>
-      ${r.state === 'open'
-        ? `<button class="gobtn" data-tool="${esc(r.id)}:decline"
-                   ${canWrite() ? '' : 'disabled'}>Decline</button>
-           <button class="gobtn go" data-tool="${esc(r.id)}:approve"
-                   ${canWrite() ? '' : 'disabled'}>Approve</button>`
-        : ''}
-    </div>
-  </article>`
-
-  /*
-    A No the office is still remembering (ADR-0053).
-
-    The button takes the No back. It does NOT approve anything: the next time
-    the office wants to do this it asks again, and only an answer approves. The
-    wording says so, because Reopen sounds like Allow and it is not.
-
-    No backticks in this comment: template literal.
-  */
-  const shortDay = (iso) => {
-    const at = Date.parse(iso)
-    return Number.isNaN(at)
+  return [
+    ui.section({
+      title: 'Waiting for your decision',
+      count: waiting.length === 0 ? '' : `${waiting.length} open`,
+      body: ui.card(
+        waiting.length === 0
+          ? [ui.empty('Nothing is waiting for you. When the team needs a tool it does not have, or wants to start doing something new, it asks here.')]
+          : waiting,
+      ),
+    }),
+    refused.length === 0
       ? ''
-      : new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-  }
-  const refusal = (r) => `<article class="govcase g-declined" data-lift data-tilt="1.4" data-saidwrap>
-    <div class="govhead">
-      <b>${esc(r.what)}</b>
-      <span class="govstate">Said no</span>
-    </div>
-    <p class="govnote">You said no${r.project ? ` in ${esc(r.project)}` : ''} on ${esc(shortDay(r.declined_at))}.
-      It will not ask again until ${esc(shortDay(r.until))}.</p>
-    <div class="govfoot">
-      <div class="govfrom"><span class="t-meta">Reopening does not approve it. It lets the team ask again.</span></div>
-      <span class="t-meta" data-said></span>
-      <button class="gobtn" data-reopen="${esc(r.id)}" ${canWrite() ? '' : 'disabled'}>Let it ask again</button>
-    </div>
-  </article>`
-
-  /*
-    A decision, and what it ruled out (#129).
-
-    The ruled-out list is given its own line rather than folded into the
-    reason, because it is the thing the Issue is about and the thing that would
-    otherwise be skimmed: "we chose Notion" invites the question again, "we
-    chose Notion over Drive because the team edits in place" closes it.
-
-    A superseded decision stays on the page, sunken. That is the Issue's own
-    acceptance criterion — a log that hides what it replaced cannot answer when
-    the office changed its mind — and it is why this is a list rather than a
-    lookup.
-  */
-  const decision = (d) => `<article class="govcase ${d.live ? 'g-open' : 'g-declined'}" data-lift data-tilt="1.4" data-saidwrap>
-    <div class="govhead">
-      <b>${esc(d.question)}</b>
-      <span class="govstate">${d.live ? 'Standing' : 'Replaced'}</span>
-    </div>
-    <p class="govarg"><b>${esc(d.chose)}</b> — ${esc(d.because)}</p>
-    ${(d.ruled_out ?? []).length === 0
+      : ui.section({
+          title: 'Things you said no to',
+          note: 'After a no, the team stays quiet about it for a while. You can let it ask again.',
+          count: refused.length,
+          body: ui.card(refused.map(refusal)),
+        }),
+    earlier.length === 0
       ? ''
-      : `<p class="govnote">Ruled out: ${(d.ruled_out ?? []).map((x) => esc(x)).join(' · ')}</p>`}
-    <div class="govfoot">
-      <div class="govfrom">
-        <span class="t-meta">${d.by === 'grant' ? 'You decided' : `${esc(d.by)} decided`}</span>
-        ${d.project ? `<span class="t-meta">${esc(d.project)}</span>` : ''}
-        <span class="t-meta">${when.stamp(d.at)}</span>
-      </div>
-    </div>
-  </article>`
+      : ui.advanced({
+          title: 'Earlier decisions',
+          hint: `${earlier.length} already settled`,
+          body: ui.card(earlier),
+        }),
+  ].join('')
+}
 
-  const empty = (what) => `<p class="t-meta govempty">${esc(what)}</p>`
+function memoryTab() {
+  const ui = settingsUi
+  const g = config.GOVERNANCE
+  if (!g.loaded && source.live) {
+    return ui.card([ui.empty('Asking the team what it has learned…')])
+  }
+  const off = canWrite() ? false : true
 
-  return `<div class="setbody">
-    <p class="t-lead" style="margin:0">What the team has learned, what it wants,
-      what it noticed, and where it keeps getting stuck. Everything here is a row
-      you can act on — nothing changes behaviour without leaving a trace.</p>
+  const lesson = (l) =>
+    ui.caseCard({
+      title: `${SCOPE_WORD[l.scope] ?? l.scope}${String(l.where ?? '').toLowerCase() === 'everywhere' || !l.where ? '' : `: ${l.where}`}`,
+      body: l.body,
+      quote: true,
+      meta: ui.facts([
+        `Learned by ${l.who ?? 'the team'}`,
+        l.seen > 1 ? `Seen ${l.seen} times` : '',
+        ui.html(when.stamp(l.at)),
+      ]),
+      actions: ui.button({
+        label: 'Forget this',
+        tone: 'quiet',
+        a: { 'data-retract': l.id, disabled: off, 'aria-label': 'Forget this rule' },
+      }),
+    })
 
-    <section class="govsec">
-      <h3 class="govtitle">What it learned<span class="t-meta">${esc(String(g.lessons.length))}</span></h3>
-      ${g.lessons.length === 0
-        ? empty('Nothing yet. A lesson is written when a correction sticks.')
-        : `<div class="govlessons">${g.lessons.map(lesson).join('')}</div>`}
-    </section>
+  const decision = (d) =>
+    ui.caseCard({
+      title: d.question,
+      chips: ui.chip(d.live ? 'ok' : 'off', d.live ? 'In force' : 'Replaced'),
+      body: `${d.chose}: ${d.because}`,
+      note: (d.ruled_out ?? []).length === 0 ? '' : `Ruled out: ${(d.ruled_out ?? []).join(', ')}`,
+      meta: ui.facts([d.by === 'grant' ? 'You decided' : `${d.by} decided`, d.project, ui.html(when.stamp(d.at))]),
+    })
 
-    <section class="govsec">
-      <h3 class="govtitle">What it wants<span class="t-meta">${esc(String(g.proposals.filter((p) => p.state === 'open').length))} open</span></h3>
-      ${g.proposals.length === 0
-        ? empty('Nothing outstanding. A proposal appears when an agent hits the same wall three times.')
-        : `<div class="govcases">${g.proposals.map(proposal).join('')}</div>`}
-    </section>
+  const noticed = g.noticed.filter((s) => !(s.offer && s.state === 'open'))
+  const seen = (s) =>
+    ui.caseCard({
+      title: s.body,
+      chips: ui.chip(requestStateTone[s.state] ?? 'off', STATE_WORD[s.state] ?? s.state),
+      meta: ui.facts([
+        s.project,
+        KIND_WORD[s.kind] ?? String(s.kind).replace(/_/g, ' '),
+        ...becauseFacts(s.because),
+        ui.html(when.stamp(s.at)),
+      ]),
+    })
 
-    <section class="govsec">
-      <h3 class="govtitle">What you said no to<span class="t-meta">${esc(String((g.refusals ?? []).length))}</span></h3>
-      ${(g.refusals ?? []).length === 0
-        ? empty('Nothing. When you say no to a question about an action, it stays no for a while and appears here.')
-        : `<div class="govcases">${g.refusals.map(refusal).join('')}</div>`}
-    </section>
+  return [
+    ui.section({
+      title: 'Rules and habits it has picked up',
+      note: 'The team follows these in its work. Forgetting one stops the team being shown it from now on.',
+      count: g.lessons.length,
+      body: ui.card(
+        g.lessons.length === 0
+          ? [ui.empty('Nothing yet. When you correct the team and the correction sticks, it is written down here.')]
+          : g.lessons.map(lesson),
+      ),
+    }),
+    ui.section({
+      title: 'Decisions that are settled',
+      note: 'Written down when you answer a question or settle a proposal, so the team does not ask again.',
+      count: config.DECISIONS.length === 0 ? '' : `${config.DECISIONS.filter((d) => d.live).length} in force`,
+      body: ui.card(
+        config.DECISIONS.length === 0
+          ? [ui.empty('Nothing yet.')]
+          : config.DECISIONS.map(decision),
+      ),
+    }),
+    noticed.length === 0
+      ? ''
+      : ui.advanced({
+          title: 'Patterns it noticed',
+          hint: `${noticed.length} observation${noticed.length === 1 ? '' : 's'}`,
+          body: ui.card(noticed.map(seen)),
+        }),
+  ].join('')
+}
 
-    <section class="govsec">
-      <h3 class="govtitle">What it is asking for<span class="t-meta">${esc(String((g.requests ?? []).filter((r) => r.state === 'open').length))} open</span></h3>
-      ${(g.requests ?? []).length === 0
-        ? empty('Nothing outstanding. A request appears when an agent needs reach it does not have.')
-        : `<div class="govcases">${g.requests.map(request).join('')}</div>`}
-    </section>
+/*
+  USAGE AND HEALTH.
 
-    <!--
-      What it cannot finish, and how well it is doing (#272).
+  Three questions in the order a person asks them: is everything running, what is it costing, and (for whoever wants
+  to look) the detail. The old page led with a rounded-ring card per provider, a chart of a flat line and the size of
+  the database against the free tier - true, and none of it answers "is something wrong?". Every figure still says
+  whether it was counted, reported by the provider or estimated, because an estimate presented as a fact is the
+  defect this page exists to avoid.
+*/
+function healthTab() {
+  const ui = settingsUi
+  const g = config.GOVERNANCE
+  const list = config.services()
+  const wrong = list.filter((c) => ['degraded', 'dead'].includes(String(c.state)))
+  const anyConnected = list.some((c) => config.isConnected(c.state))
+  const stuck = Number((g.stranded ?? {}).total ?? 0)
+  const waiting = openRequestCount()
+  const open = (label, tab) => ui.button({ label, tone: 'quiet', a: { 'data-goto-setting': tab } })
 
-      Both were in the database with a mouth and no caller: nothing anywhere
-      read app.hq_stranded_work or app.eval_latest, so the one number that
-      says whether the office is getting better or worse was visible only to
-      a script. Folded into this payload rather than given their own sections,
-      because this is the same screen and the same question.
+  const summary = ui.card([
+    ui.row({
+      name: 'Services',
+      desc:
+        wrong.length === 0
+          ? anyConnected
+            ? 'Everything that is connected is working.'
+            : 'Nothing is connected yet. Connect Google, Slack or Telegram when you want the team to use them.'
+          : `${wrong.map((c) => c.name).join(', ')} ${wrong.length === 1 ? 'needs' : 'need'} attention.`,
+      control:
+        ui.chip(wrong.length === 0 ? (anyConnected ? 'ok' : 'off') : 'warn', wrong.length === 0 ? (anyConnected ? 'Working' : 'Nothing connected') : `${wrong.length} to look at`) +
+        (wrong.length === 0 ? '' : open('Review', 'connections')),
+    }),
+    ui.row({
+      name: 'Work in progress',
+      desc: stuck === 0 ? 'Nothing is stuck.' : `${stuck} piece${stuck === 1 ? '' : 's'} of work could not be finished and ${stuck === 1 ? 'is' : 'are'} waiting.`,
+      control: ui.chip(stuck === 0 ? 'ok' : 'warn', stuck === 0 ? 'Clear' : `${stuck} stuck`),
+    }),
+    ui.row({
+      name: 'Decisions waiting for you',
+      desc: waiting === 0 ? 'Nothing is waiting for you.' : `${waiting} request${waiting === 1 ? ' is' : 's are'} waiting for your decision.`,
+      control: ui.chip(waiting === 0 ? 'ok' : 'warn', waiting === 0 ? 'None' : `${waiting} waiting`) + (waiting === 0 ? '' : open('Review', 'requests')),
+    }),
+  ])
 
-      No backticks in this comment: template literal.
-    -->
-    <section class="govsec">
-      <h3 class="govtitle">What it cannot finish<span class="t-meta">${esc(String((g.stranded ?? {}).total ?? 0))}</span></h3>
-      ${Number((g.stranded ?? {}).total ?? 0) === 0
-        ? empty('Nothing is stuck. Work that needs something the office has not got would appear here.')
-        : `<div class="govstranded">
-            <ul class="govnotes">${((g.stranded ?? {}).kinds ?? []).map((k) => `<li class="govnote">
-              <b>${esc(k.kind ?? '')}</b>
-              <span class="t-meta">${esc(String(k.waiting ?? 0))} waiting</span>
-            </li>`).join('')}</ul>
-            ${(g.stranded ?? {}).why ? `<p class="t-meta govwhy">${esc(g.stranded.why)}</p>` : ''}
-          </div>`}
-    </section>
+  const PROV = { measured: 'Counted', reported: 'Reported by the provider', estimated: 'Our estimate' }
+  const spend = USAGE.services.find((s) => s.unit === 'usd')
+  const meter = (pct) =>
+    `<span class="st-meter" role="img" aria-label="${pct.toFixed(0)} percent of the limit"><i style="width:${Math.max(Math.min(pct, 100), pct > 0 ? 2 : 0)}%"></i></span>`
+  const usageRow = (s) => {
+    const pct =
+      s.of_limit !== undefined && s.of_limit !== null
+        ? Number(s.of_limit)
+        : s.limit
+          ? (Number(s.used) / Number(s.limit)) * 100
+          : null
+    return ui.row({
+      name: s.name,
+      desc: `${s.detail}. ${sayAmount(s.used, s.unit)}${s.limit ? ` of ${sayAmount(s.limit, s.unit)}` : ''}${s.window ? `, ${s.window}` : ''}.${s.note ? ` ${s.note}` : ''}`,
+      control: (pct === null ? '' : meter(pct)) + ui.chip('plain', PROV[s.provenance] ?? 'Counted'),
+      kind: 'wide',
+    })
+  }
 
-    <section class="govsec">
-      <h3 class="govtitle">How it is scoring<span class="t-meta">${
-        (g.scoring ?? []).length === 0 ? 'not measured' : `${esc(String((g.scoring ?? [])[0]?.agreed ?? 0))} of ${esc(String((g.scoring ?? [])[0]?.cases ?? 0))}`
-      }</span></h3>
-      ${(g.scoring ?? []).length === 0
-        ? empty('No evaluation has been run. npm run eval grades the office against Grant\'s own judgement.')
-        : `<ul class="govnotes">${(g.scoring ?? []).slice(0, 4).map((e) => `<li class="govnote">
-            <b>${esc(String(e.agreed ?? 0))} of ${esc(String(e.cases ?? 0))} agreed</b>
-            <span class="t-meta">mean ${esc(String(e.mean_score ?? '—'))} · ${esc(when.words(e.at))}${
-              e.note ? ` · ${esc(e.note)}` : ''
-            }</span>
-          </li>`).join('')}</ul>`}
-    </section>
+  const topModels = (USAGE.top_models ?? []).map((m) =>
+    ui.row({
+      name: m.name.replace(/:free$/, ''),
+      desc: `${sayAmount(m.calls, 'n')} calls${m.name.endsWith(':free') ? ', free model' : ''}${m.failed ? `, ${m.failed} failed` : ''}`,
+      kind: 'fact',
+    }),
+  )
 
-    <!--
-      What starts work on its own (#264).
+  const growth = (() => {
+    const gr = GROWTH
+    if (gr === null || !Array.isArray(gr.surfaces)) return ''
+    const mb = (n) => (Number.isFinite(Number(n)) && n !== null ? `${(Number(n) / 1024 / 1024).toFixed(0)} MB` : 'an unmeasured amount')
+    return ui.card([
+      ui.row({
+        name: 'Conversation volume',
+        desc: `${gr.messages_a_day} messages a day across ${gr.surfaces.length} surface${gr.surfaces.length === 1 ? '' : 's'}. The database is ${mb(gr.db_bytes)} of ${mb(gr.tier_bytes)} on the free tier.`,
+        kind: 'fact',
+      }),
+    ])
+  })()
 
-      The framework was built, verified and completely invisible: a section on
-      the gateway that no page read. Grant's questions from the Issue are the
-      columns — what exists, is it on, what does it listen for, what does it
-      start, when did it last fire, and was anything declined.
+  return [
+    ui.section({ title: 'Is everything running?', body: summary }),
+    ui.section({
+      title: 'Cost',
+      note: `Spent in the last 30 days: ${sayAmount(spend?.month ?? 0, 'usd')}. The aim is about £0 a month on the free tiers. Test runs are not counted.`,
+      body: ui.card(USAGE.services.map(usageRow)),
+    }),
+    ui.advanced({
+      title: 'Details for the curious',
+      hint: 'Models, conversation volume and where the team gets stuck',
+      body:
+        ui.section({ title: 'Which models are used most', body: ui.card(topModels.length === 0 ? [ui.empty('No calls yet.')] : topModels) }) +
+        growth +
+        teamHealthDetails(),
+    }),
+  ].join('')
+}
 
-      No backticks in this comment: template literal.
-    -->
-    <section class="govsec">
-      <h3 class="govtitle">What starts work on its own<span class="t-meta">${
-        (g.triggers ?? []).filter((t) => t.enabled).length
-      } on</span></h3>
-      ${(g.triggers ?? []).length === 0
-        ? empty('Nothing is listening. A trigger turns something happening — a document arriving, a connection failing — into work, under the same permissions as anything else.')
-        : `<ul class="govnotes">${(g.triggers ?? []).map((t) => `<li class="govnote gtrig">
-            <b>${esc(t.name ?? '')}</b>
-            <span class="gtrigstate ${t.enabled ? 'on' : 'off'}">${t.enabled ? 'on' : 'off'}</span>
-            <span class="t-meta">${esc(t.source ?? '')} · ${esc(t.event_type ?? '')} → ${esc(t.job_kind ?? '')}</span>
-            <span class="t-meta">${
-              t.last_fired ? `last fired ${esc(when.words(t.last_fired))}` : 'never fired'
-            }${Number(t.declined ?? 0) > 0 ? ` · ${esc(String(t.declined))} declined` : ''}</span>
-            ${
-              t.last_declined && t.last_declined.why
-                ? `<span class="t-meta govwhy">${esc(t.last_declined.why)}</span>`
-                : ''
-            }
-          </li>`).join('')}</ul>`}
-    </section>
-
-    <section class="govsec">
-      <h3 class="govtitle">What it noticed<span class="t-meta">${esc(String(g.noticed.length))}</span></h3>
-      ${g.noticed.length === 0
-        ? empty('Nothing noticed yet. The noticing pass runs over finished work.')
-        : `<ul class="govnotes">${g.noticed.map(noted).join('')}</ul>`}
-    </section>
-
-    <section class="govsec">
-      <h3 class="govtitle">What it has settled<span class="t-meta">${esc(String(config.DECISIONS.filter((d) => d.live).length))} standing</span></h3>
-      ${config.DECISIONS.length === 0
-        ? empty('Nothing yet. A decision is written down when you answer a question or settle a proposal.')
-        : `<div class="govcases">${config.DECISIONS.map(decision).join('')}</div>`}
-    </section>
-
-    <section class="govsec">
-      <h3 class="govtitle">What each of them can do<span class="t-meta">${esc(String(g.agents.length))}</span></h3>
-      <div class="govagents">${g.agents.map(agent).join('')}</div>
-    </section>
-  </div>`
+/*
+  Where the team is getting stuck, how it scores, and what starts work on its own: read as machinery, so it is
+  disclosed rather than shown. Everything in it is a reading; none of it is a control.
+*/
+function teamHealthDetails() {
+  const ui = settingsUi
+  const g = config.GOVERNANCE
+  const stranded = g.stranded ?? { total: 0, kinds: [] }
+  const stuck = Number(stranded.total ?? 0)
+  const agentRow = (a) => {
+    const walls = a.tried_and_could_not ?? []
+    return ui.row({
+      name: a.name,
+      desc:
+        walls.length === 0
+          ? `${a.remit ?? ''} Has not been stopped by anything in the last ninety days.`.trim()
+          : `${a.remit ?? ''} Could not: ${walls.map((w) => `${w.needed} (${WALL_WORD[w.kind] ?? w.kind}, ${w.times}×)`).join('; ')}.`.trim(),
+      kind: 'stack',
+      control: '',
+    })
+  }
+  const trig = (g.triggers ?? []).map((t) =>
+    ui.row({
+      name: t.name ?? '',
+      desc: `${t.source ?? ''} · ${t.event_type ?? ''} → ${t.job_kind ?? ''}. ${t.last_fired ? `Last fired ${when.words(t.last_fired)}.` : 'Never fired.'}`,
+      control: ui.chip(t.enabled ? 'ok' : 'off', t.enabled ? 'On' : 'Off'),
+    }),
+  )
+  const score = (g.scoring ?? []).slice(0, 4).map((e) =>
+    ui.row({
+      name: `${e.agreed ?? 0} of ${e.cases ?? 0} agreed with your judgement`,
+      desc: `Average score ${e.mean_score ?? '—'}, ${when.words(e.at)}${e.note ? `. ${e.note}` : ''}`,
+      kind: 'fact',
+    }),
+  )
+  return [
+    ui.section({
+      title: 'Work it could not finish',
+      count: stuck,
+      body: ui.card(
+        stuck === 0
+          ? [ui.empty('Nothing is stuck.')]
+          : [
+              ...(stranded.kinds ?? []).map((k) =>
+                ui.row({ name: k.kind ?? '', desc: `${k.waiting ?? 0} waiting`, kind: 'fact' }),
+              ),
+              ...(stranded.why ? [ui.row({ name: 'Why', desc: String(stranded.why), kind: 'fact' })] : []),
+            ],
+      ),
+    }),
+    ui.section({
+      title: 'What each person can do, and where they get stuck',
+      body: ui.card(g.agents.length === 0 ? [ui.empty('Nobody on the team yet.')] : g.agents.map(agentRow)),
+    }),
+    ui.section({
+      title: 'What starts work on its own',
+      note: 'A trigger turns something happening, like a document arriving, into work, under the same permissions as anything else.',
+      body: ui.card(trig.length === 0 ? [ui.empty('Nothing is listening.')] : trig),
+    }),
+    ui.section({
+      title: 'How it scores',
+      body: ui.card(score.length === 0 ? [ui.empty('No evaluation has been run.')] : score),
+    }),
+  ].join('')
 }
 
 /** A scope, in words. The enum is for the database; this page is for a person. */
@@ -6272,466 +6215,376 @@ const STATE_WORD = {
   settings page that reports a problem and leaves you to find the fix is a
   settings page that has told on itself and helped nobody.
 */
-function connectionsTab() {
-  const card = (c) => `
-    <article class="service s-${c.state}" data-lift data-tilt="3.4"
-             style="--tint:${esc(c.tint ?? 'var(--edge)')}">
-      <!--
-        Nothing rather than the word "undefined".
+/*
+  SERVICES: the accounts and tools the team can reach.
 
-        The marks table has a logo for the services with one, and Uploads and
-        MCP are not companies — there is no mark to draw. Printing an absent one
-        gave every card without a logo the literal text "undefined", wrapped
-        across two lines where the icon should be.
+  Every service is one row with the same four things in the same places - what it is, what the team uses it for, how
+  it is doing (a word as well as a colour), and the one next step. The old page drew each as a card with a tilt and a
+  pill and gave nine of them the same weight, which hid the two that needed looking at. Now what needs attention is a
+  section of its own, what works is a quiet list, and what is not connected says how to connect it or says honestly
+  that it cannot be connected from here.
 
-        This comment originally spelled that table name in backticks, inside an
-        HTML comment, inside a template literal — while itself saying not to.
-        The file became unparseable and every capture failed with a syntax
-        error. Fourth time; the rule is in CLAUDE.md and it is easy to type.
+  Telegram and Slack are messaging, so they moved to Messaging; the database, the model provider, GitHub and Zoom are
+  machinery or not yet possible, so they sit under Behind the scenes instead of next to your Google account.
+*/
+const MESSAGING_KEYS = new Set(['telegram', 'slack', 'voice', 'mail'])
+const MACHINERY_KEYS = new Set(['supabase', 'openrouter', 'github', 'zoom'])
 
-        No backticks in this comment: template literal.
-      -->
-      ${c.svg ? `<span class="mark">${c.svg}</span>` : ''}
-      <div class="svbody">
-        <b>${esc(c.name)}</b>
-        <span class="t-meta">${esc(c.used)}</span>
-        <!--
-          Capped. connection_health.detail is a short state note for most
-          services and four hundred characters of token scoping for GitHub, and
-          one card four times the height of its neighbours is the grid falling
-          over. The whole note is still in the database for whoever needs it.
-
-          No backticks in this comment. Template literal.
-        -->
-        <span class="t-meta from">${esc(
-          String(c.detail ?? '').length > 110
-            ? `${String(c.detail).slice(0, 108).replace(/[\s,;.]+\S*$/, '')}…`
-            : (c.detail ?? ''),
-        )}</span>
-      </div>
-      <div class="svfoot">
-        <span class="dotstate"></span>
-        <span class="t-label">${esc(config.STATE_LABEL[c.state])}</span>
-        <span class="t-meta">${when.stamp(c.lastAt, c.last)}</span>
-        <!--
-          The action, and it goes somewhere (#89, #90).
-
-          There was a button here carrying the text of c.fix and NOTHING ELSE —
-          no attribute, no handler. "Connect it" on the Zoom card and "Rotate
-          it" on the GitHub card, both completely inert. A card that names the
-          problem and offers a button that does not fix it is worse than a card
-          that only names the problem.
-
-          Not connected gets Connect, routed to the flow that already exists.
-          Connected gets Disconnect where a disconnect actually exists — which
-          today is the Google family, through forget_google. Everything else
-          says where its credential lives instead of offering a button that
-          would lie.
-
-          No backticks in this comment. Template literal.
-        -->
-        <span class="t-meta" data-said></span>
-        ${(() => {
-          const route = config.routeFor(c.key)
-          if (!config.isConnected(c.state)) {
-            if (route.how === 'oauth') {
-              return `<a class="btn small primary" href="${esc(GOOGLE_START)}"
-                        target="_blank" rel="noopener">${esc(route.label)}</a>`
-            }
-            if (route.how === 'tab') {
-              return `<button class="btn small primary" data-goto-setting="${esc(route.to)}"
-                        >${esc(route.label)}</button>`
-            }
-            if (route.how === 'mcp') {
-              return `<button class="btn small primary" data-mcp-open>${esc(route.label)}</button>`
-            }
-            return `<span class="t-meta">${esc(route.why ?? route.label)}</span>`
-          }
-          if (route.how === 'mcp') {
-            return `<button class="btn small quiet" data-mcp-open>${esc(route.label)}</button>`
-          }
-          /*
-            Disconnect where a disconnect is real, Manage where it is not (#90).
-
-            Driven by `route.off` rather than by the family, which is what made
-            this Google-only: Notion and NotebookLM both have a credential in
-            the vault and neither had a way out. A service with no `off` still
-            says Manage, because a button that appeared to revoke a credential
-            while revoking nothing is the failure this issue is about.
-
-            `btn small quiet`, deliberately not a new class. During the port
-            Disconnect rendered as a 110px empty box because `.mini` is a 78px
-            preview thumbnail -- grep for a class name before inventing one.
-          */
-          if (route.off !== undefined && canWrite()) {
-            return `<button class="btn small quiet" data-disconnect="${esc(route.off)}"
-                      data-service="${esc(c.name)}">Disconnect</button>`
-          }
-          return route.how === 'tab'
-            ? `<button class="btn small quiet" data-goto-setting="${esc(route.to)}"
-                 >Manage</button>`
-            : ''
-        })()}
-      </div>
-    </article>`
-  const list = config.services()
-  /*
-    Only what is actually wrong.
-
-    `state !== 'ok'` counted `unchecked` and `attested` as problems and told
-    Grant four of six services wanted looking at when none of them did. A
-    dashboard that cries wolf on the summary line is one he stops reading before
-    reaching the card that matters.
-  */
-  const bad = list.filter((c) => config.isWrong(c.state)).length
-  return `<div class="setbody">
-    <div class="tabhead">
-      <p class="t-lead" style="margin:0">${list.length} services. ${
-        bad === 0 ? 'All of them well.' : `${bad} want looking at.`}</p>
-      <button class="btn" data-connect-open>+ Connect something</button>
+function googleSetupPanel() {
+  const ui = settingsUi
+  const google = (config.SETUP ?? {}).google ?? {}
+  if (google.ready === true) return ''
+  return `<div class="st-form" data-saidwrap>
+    <p class="st-desc" style="margin:0">Google needs two values from your own Google Cloud project before it can ask
+      for your permission. Paste them here once; they are stored safely and never shown again.</p>
+    <div class="st-formrow">
+      <label class="st-field"><span>Client ID</span>
+        <input class="st-input" data-g-id placeholder="…apps.googleusercontent.com" aria-label="Google client ID"
+               value="${esc(google.client_id ?? '')}" autocomplete="off"></label>
+      <label class="st-field"><span>Client secret</span>
+        <input class="st-input" data-g-secret type="password" autocomplete="off" placeholder="GOCSPX-…"
+               aria-label="Google client secret"></label>
     </div>
-    <!--
-      What the trip to Google said (0486).
-
-      The consent flow ends on our own domain now, because the functions host
-      flattens HTML to plain text and every page that function has produced has
-      been a wall of raw markup. So the outcome arrives as a query parameter and
-      is said HERE, once, above the cards.
-
-      It is words and nothing else. Whether Google is actually connected is the
-      card underneath, which reads connection health from the office.
-    -->
-    ${
-      googleSaid === null
-        ? ''
-        : `<p class="saidback${googleSaid.tone === 'good' ? '' : ' warn'}">${esc(
-            googleSaid.text,
-          )}</p>`
-    }
-    <!--
-      What the office is holding of his mail (number 172, ADR-0038).
-
-      Grant authorised message bodies in writing and this is the disclosure
-      that has to ship with the permission: one sentence, on the pane where he
-      would go to disconnect Google, saying how many messages the office is
-      currently holding the WORDS of rather than only the subject line.
-
-      Three states and never a number for the first, because they are three
-      different facts. Could not ask, holds nothing, holds some. A zero printed
-      where the answer is unknown is the defect this whole block exists to
-      avoid.
-
-      No backticks in this comment. Template literal.
-    -->
-    ${(() => {
-      const m = config.MAIL_BODIES
-      if (m.held === null) {
-        return `<p class="t-meta" data-mailheld>The office could not say how much of your
-          mail it is holding.</p>`
-      }
-      if (m.held === 0) {
-        return `<p class="t-meta" data-mailheld>Of ${m.messages} cached messages the office
-          holds the words of <b>none</b> — only subject lines and previews.${
-            m.bulk === 0 ? '' : ` ${m.bulk} withheld as bulk.`
-          }</p>`
-      }
-      return `<p class="t-meta" data-mailheld>The office is holding the words of
-        <b>${m.held}</b> of ${m.messages} cached messages, forgotten after 90 days.${
-          m.bulk === 0 ? '' : ` ${m.bulk} withheld as bulk.`
-        }</p>`
-    })()}
-    <!--
-      The picker (#92).
-
-      This button had no attribute and no handler at all — the front door to
-      every integration in the product, completely inert, in two places.
-
-      It lists only what the office can actually reach, and every row leads to
-      a real flow or says plainly that there is not one. A picker offering a
-      service that cannot be connected is the same defect one level up.
-
-      No backticks in this comment. Template literal.
-    -->
-    <div class="connectpick" data-connect-menu hidden>
-      <p class="t-lead" style="margin:0 0 var(--s3)">What would you like the office to
-        reach? Each of these goes to the real thing.</p>
-      <div class="pickgrid">
-        ${list.map((c) => {
-          const route = config.routeFor(c.key)
-          const on = config.isConnected(c.state)
-          const body = `<span class="pickname">${c.svg ? `<span class="mark">${c.svg}</span>` : ''}
-              <b>${esc(c.name)}</b></span>
-            <span class="t-meta">${esc(on ? config.STATE_LABEL[c.state] : (route.why ?? route.label))}</span>`
-          if (on) return `<div class="pick done">${body}</div>`
-          if (route.how === 'oauth') {
-            return `<a class="pick" href="${esc(GOOGLE_START)}" target="_blank"
-                      rel="noopener">${body}</a>`
-          }
-          if (route.how === 'tab') {
-            return `<button class="pick" data-goto-setting="${esc(route.to)}">${body}</button>`
-          }
-          return `<div class="pick off">${body}</div>`
-        }).join('')}
-      </div>
+    <div class="st-ctl" style="justify-content:flex-start">
+      ${ui.button({ label: 'Save credentials', a: { 'data-save-google': true } })}
+      <span class="st-said" data-said role="status" aria-live="polite"></span>
     </div>
-    <div class="servicegrid">${list.map(card).join('')}</div>
-
-    <!--
-      Your task list somewhere else (number 259, Phase 2).
-
-      The office keeps Grant's personal tasks; a provider is a projection of
-      them and never the list. So this is a small card rather than a service
-      alongside Slack and Google: nothing here can stop the tasks working, and
-      the copy says so where he can read it before connecting anything.
-
-      The two fields are sorted BY SHAPE in the database, not by which box they
-      arrived in. 0359 records the alternative: a live secret pasted into a
-      plaintext setting and printed back onto this very page.
-
-      No backticks in this comment. Template literal.
-    -->
-    ${(() => {
-      const v = config.TASK_SYNC
-      if (v.configured === null) {
-        return `<section class="tsync" data-tsync>
-          <h3 class="t-title">Your task list elsewhere</h3>
-          <p class="t-meta">Asking the office…</p></section>`
-      }
-      if (v.configured === true) {
-        return `<section class="tsync on" data-tsync>
-          <h3 class="t-title">Your task list elsewhere</h3>
-          <p class="t-lead" style="margin:0 0 var(--s3)">Kept in step with Vikunja at
-            <b>${esc(String(v.url ?? ''))}</b>, project ${esc(String(v.project ?? ''))} —
-            ${String(v.linked)} task${v.linked === 1 ? '' : 's'} mapped. Your tasks live here;
-            that is a copy.</p>
-          ${
-            v.trouble.length === 0
-              ? '<p class="t-meta">Nothing in disagreement.</p>'
-              : `<ul class="ptasks">${v.trouble
-                  .slice(0, 5)
-                  .map(
-                    (t) => `<li class="ptask"><div class="ptbody"><b>${esc(
-                      String(t.title ?? ''),
-                    )}</b><span class="t-meta">${esc(String(t.why ?? t.state ?? ''))}</span></div></li>`,
-                  )
-                  .join('')}</ul>`
-          }
-          <span class="t-meta" data-said></span>
-          ${
-            canWrite()
-              ? '<button class="btn small quiet" data-vikunja-off>Disconnect</button>'
-              : ''
-          }
-        </section>`
-      }
-      return `<section class="tsync" data-tsync>
-        <h3 class="t-title">Your task list elsewhere</h3>
-        <p class="t-lead" style="margin:0 0 var(--s3)">Your tasks work on their own. If you
-          keep a Vikunja, the office can mirror them both ways — it stays a copy, and
-          disconnecting it never loses anything.</p>
-        ${
-          canWrite()
-            ? `<form class="myadd" data-vikunja-on data-saidwrap>
-                 <input data-vikunja-url placeholder="https://tasks.example.com"
-                        aria-label="The address of your Vikunja" required>
-                 <input data-vikunja-project type="number" min="1" placeholder="Project"
-                        aria-label="Which Vikunja project" required>
-                 <input data-vikunja-token type="password" placeholder="API token"
-                        aria-label="A Vikunja API token" required>
-                 <button class="btn primary" type="submit">Connect</button>
-                 <span class="t-meta" data-said></span>
-               </form>`
-            : '<p class="t-meta">Sign in to connect one.</p>'
-        }
-      </section>`
-    })()}
-
-    <!--
-      Outside providers the office has registered (#265).
-
-      The other direction from the MCP block below: that one is what connects
-      TO this office, this is what the office connects to. The inventory was
-      built, verified and never rendered, so a whole side of the integration
-      was invisible — which is the failure this whole run is about.
-
-      Three numbers per provider on purpose. A provider can advertise forty
-      tools, the office can offer six, and NONE be usable until Grant
-      approves: showing only what was offered would read as reach.
-
-      No backticks in this comment: template literal.
-    -->
-    <section class="provsec">
-      <h3 class="t-label">Providers the office uses</h3>
-      ${(config.PROVIDERS?.rows ?? []).length === 0
-        ? `<p class="t-meta">None registered. A provider is somewhere the office can
-             discover capabilities from — discovering them grants nothing on its own.</p>`
-        : `<div class="provgrid">${(config.PROVIDERS?.rows ?? []).map((p) => `
-          <article class="prov ${p.last_probe_ok ? 'well' : 'unwell'}">
-            <b>${esc(p.display_name || p.name || '')}</b>
-            <span class="stage s-${p.last_probe_ok ? 'approved' : 'review'}">${
-              p.last_probe_ok ? 'answering' : esc(p.last_probe_detail ?? 'not answering')
-            }</span>
-            <span class="t-meta">${esc(String(p.discovered ?? 0))} discovered ·
-              ${esc(String(p.offered ?? 0))} offered ·
-              <b>${esc(String(p.usable ?? 0))} usable</b></span>
-            ${((p.tools ?? []).length === 0)
-              ? ''
-              : `<ul class="provtools">${(p.tools ?? []).slice(0, 4).map((t) => `<li>
-                  <code>${esc(t.name ?? '')}</code>
-                  <span class="reach r-${esc(t.reach ?? 'unknown')}">${esc(t.reach ?? 'unknown')}</span>
-                  <span class="t-meta">${
-                    t.gone ? 'gone from the provider'
-                      : t.usable ? 'granted'
-                      : t.offered_as ? 'offered, waiting on you'
-                      : 'not offered'
-                  }</span>
-                  <!--
-                    Offering is not granting, and the wording has to keep them
-                    apart: this puts the tool in front of Grant as a request he
-                    can approve on the Governance page. ADR-0018 is the whole
-                    reason the two are separate verbs.
-                  -->
-                  ${t.gone || t.offered_as || !canWrite() ? '' :
-                    `<button class="btn quiet" data-offer-tool="${esc(t.id ?? '')}"
-                       data-offer-name="${esc(t.name ?? '')}">Offer it</button>`}
-                </li>`).join('')}</ul>`}
-            ${!canWrite() ? '' :
-              `<button class="btn quiet" data-revoke-provider="${esc(p.id ?? '')}"
-                 data-provider-name="${esc(p.display_name || p.name || '')}">Stop using this
-               </button>`}
-          </article>`).join('')}</div>`}
-      <!--
-        Registering one, which until now needed SQL (#265, #276).
-
-        Name and endpoint only. A provider that needs a token is NOT
-        registerable from here and the note says so plainly rather than
-        offering a box that would put a credential in a plaintext form field —
-        0359's lesson, and the reason register_mcp_provider takes a vault
-        reference rather than a secret.
-
-        Registering discovers nothing and grants nothing. The office probes
-        the endpoint, lists what it advertises, and every tool still has to be
-        offered and then approved.
-      -->
-      ${!canWrite() ? '' : `<div class="provadd">
-        <span class="t-label">Add a provider</span>
-        <p class="t-meta">The office will ask it what it can do. Nothing is granted by
-          asking. A provider that needs a token has to be connected another way —
-          this form has no box for one on purpose.</p>
-        <div class="provfields">
-          <!--
-            provin, not in. A class called just in is styled nowhere in this
-            stylesheet — the icon search measured 13.3px on its first capture
-            for exactly that reason, and anything under 16px makes iOS Safari
-            zoom the page on focus.
-          -->
-          <input class="provin" data-prov-name aria-label="Provider short name"
-            placeholder="short name, e.g. weather-mcp" />
-          <input class="provin" data-prov-endpoint aria-label="Provider endpoint"
-            placeholder="https://…/mcp" />
-          <button class="btn" data-register-provider>Add it</button>
-        </div>
-        <span class="t-meta" data-said></span>
-      </div>`}
-    </section>
-    <!--
-      How to connect a client to this office (#91).
-
-      Below the grid rather than inside a card, for the reason the channel
-      detail learned: expanding in place stretches the grid row and turns the
-      neighbours into tall empty boxes.
-
-      The token is not here. Not truncated, not fingerprinted, not present at
-      all - the RPC never selects token_sha256. This tab gets captured by
-      npm run shots and attached to a build step on a public page, and the
-      procedure for getting the token is the thing that belongs on screen.
-
-      No backticks in this comment. Template literal.
-    -->
-    ${!state.mcp ? '' : `<div class="chdetail">
-      <h3 class="t-title" style="margin:0;font-size:19px">Connecting a client</h3>
-      ${!config.MCP.loaded
-        ? '<p class="t-meta">Asking the office…</p>'
-        : `<p class="t-label">Server URL</p>
-           <code class="mcpurl">${esc(config.MCP.url)}</code>
-           <ol class="mcpsteps">${config.MCP.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
-           <div>
-             <span class="t-label">Tools a client would see (${
-               config.MCP.tools.filter((t) => t.on).length} of ${config.MCP.tools.length})</span>
-             <div class="chwho">${config.MCP.tools.map((t) => `<span class="chbot ${t.on ? '' : 'off'}"
-               title="${esc(t.why_off ?? t.what ?? '')}">
-               <b>${esc(t.tool)}</b>
-               <span class="t-meta">${esc(t.on ? (t.what ?? '') : (t.why_off ?? 'switched off'))}</span>
-             </span>`).join('')}</div>
-           </div>
-           ${config.MCP.clients.length === 0 ? '' : `<div>
-             <span class="t-label">Clients that have connected</span>
-             <div class="chwho">${config.MCP.clients.slice(0, 8).map((c) => `<span class="chbot ${c.on ? '' : 'off'}">
-               <b>${esc(c.name ?? 'unnamed')}</b>
-               <span class="t-meta">${esc(String(c.calls ?? 0))} calls${c.last ? ` · ${esc(c.last)}` : ''}</span>
-             </span>`).join('')}</div>
-           </div>`}`}
-    </div>`}
   </div>`
 }
 
-/** Channels — which surface reaches Grant, and when. */
-/*
-  The conversation's own surfaces, and what state each is in (#198).
+function slackSetupPanel() {
+  const ui = settingsUi
+  const slack = (config.SETUP ?? {}).slack ?? {}
+  if (slack.ready !== false) return ''
+  return `<div class="st-form" data-saidwrap>
+    <p class="st-desc" style="margin:0">${esc(slack.why_off ? String(slack.why_off) : 'Slack is not connected.')}
+      Reinstall the app at Slack, then paste the two values it gives you. It does not matter which box each goes in.</p>
+    <div class="st-formrow">
+      <label class="st-field"><span>Bot user OAuth token (starts xoxb-)</span>
+        <input class="st-input" data-sl-bot type="password" autocomplete="off" placeholder="xoxb-…"
+               aria-label="Slack bot user OAuth token"></label>
+      <label class="st-field"><span>Signing secret</span>
+        <input class="st-input" data-sl-sig type="password" autocomplete="off" placeholder="32 characters"
+               aria-label="Slack signing secret"></label>
+    </div>
+    <div class="st-ctl" style="justify-content:flex-start">
+      ${ui.button({ label: 'Open Slack app settings', tone: 'quiet', href: 'https://api.slack.com/apps' })}
+      ${ui.button({ label: 'Reconnect Slack', tone: 'primary', a: { 'data-save-slack': true } })}
+      <span class="st-said" data-said role="status" aria-live="polite"></span>
+    </div>
+  </div>`
+}
 
-  Above the connector grid rather than inside it, because they answer different
-  questions. The grid says "is this credential alive"; this says "can Grant
-  have a conversation there, and is anything wrong with it right now" — which
-  needs the credential AND the traffic AND the last day of delivery failures
-  together, and no one of those can answer it.
+/** One connection: logo, words, state, next step. `detail` is shown when it adds something. */
+function serviceRow(c, { showDetail = true, sub = false } = {}) {
+  const ui = settingsUi
+  const [tone, word] = copy.state[c.state] ?? ['off', c.state]
+  const route = config.routeFor(c.key)
+  const connected = config.isConnected(c.state)
+  const expired = route.how === 'oauth' && !connected && c.state === 'dead'
+  const long = String(c.detail ?? '')
+  const detail = long.length > 120 ? `${long.slice(0, 118).replace(/[\s,;.]+\S*$/, '')}…` : long
+  const checked = c.lastAt || c.last ? `Checked ${when.stamp(c.lastAt, c.last)}` : ''
+  // (already HTML: the stamp is a time element that keeps itself current)
+  let action = ''
+  // The shared connections (Google, Slack, Telegram) are made and withdrawn by the operator; for anyone else the row
+  // says so rather than offering a button the gateway would refuse.
+  const op = config.VIEWER.operator
+  if (!connected) {
+    if (route.how === 'oauth') {
+      if (op) action = ui.button({ label: expired ? 'Reconnect Google' : route.label, tone: 'primary', a: { 'data-google-connect': true } })
+    } else if (route.how === 'tab' && route.to !== 'setup') {
+      action = ui.button({ label: 'Set up', tone: 'primary', a: { 'data-goto-setting': route.to } })
+    } else if (route.how === 'mcp') action = ui.button({ label: route.label, tone: 'primary', a: { 'data-mcp-open': true } })
+  } else if (route.how === 'mcp') {
+    action = ui.button({ label: 'How to connect an app', tone: 'quiet', a: { 'data-mcp-open': true } })
+  } else if (route.off !== undefined && canWrite() && op) {
+    action = ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-disconnect': route.off, 'data-service': c.name } })
+  } else if (route.how === 'tab' && route.to !== 'setup') {
+    action = ui.button({ label: 'Manage', tone: 'quiet', a: { 'data-goto-setting': route.to } })
+  }
+  // A part of the one Google card: the card has the one Connect and the one Disconnect, so a part carries none.
+  if (sub) action = ''
+  const unreachable = !connected && action === '' && !sub
+  const whyNot = !op && route.how === 'oauth' ? 'Connected by whoever runs this Team HQ.' : route.why
+  // An expired permission is not a missing one: say so, and say that nothing already read is lost.
+  const expiredNote = expired
+    ? op
+      ? 'Google no longer accepts the permission that was saved, which happens when it expires or is withdrawn. Reconnecting takes one consent screen; nothing already read is lost.'
+      : 'Google needs to be reconnected by whoever runs this Team HQ. Nothing already read is lost.'
+    : ''
+  return `<div class="st-svc" data-saidwrap>
+    <span class="st-logo"${c.tint ? ` style="--tint:${esc(c.tint)}"` : ''}>${c.svg ?? ''}</span>
+    <div class="st-text">
+      <p class="st-name">${esc(c.name)}</p>
+      <p class="st-desc">${esc(c.used ?? '')}</p>
+      ${showDetail && detail && !expired ? `<p class="st-meta">${esc(detail)}</p>` : ''}
+      ${expiredNote ? `<p class="st-meta">${esc(expiredNote)}</p>` : ''}
+      ${unreachable && !expired ? `<p class="st-meta">${esc(whyNot ?? 'Set up outside Team HQ.')}</p>` : ''}
+      <span class="st-said" data-said role="status" aria-live="polite"></span>
+    </div>
+    <div class="st-state">
+      ${ui.chip(tone, word)}
+      ${checked && connected ? `<span class="st-meta">${checked}</span>` : ''}
+      ${action}
+    </div>
+  </div>`
+}
 
-  Five states, each with its own sentence from the office rather than a word
-  the page dresses up. #198 asks for never-connected to read as an INVITATION
-  and not an error, and that difference is entirely the wording — so the
-  wording is the RPC's, in one place, and this draws it.
-*/
-function conversationStates() {
-  const rows = config.CONVO_CHANNELS
-  if (!Array.isArray(rows) || rows.length === 0) return ''
-  /*
-    Named `lastSeen`, not `when` — a local `const when` shadows the module
-    namespace imported at the top of this file, so `when.words(iso)` inside it
-    resolves to the arrow function's own binding and throws "when.words is not
-    a function". The throw happens while `settingsSheet` is building its
-    template, BEFORE `innerHTML` is assigned, so the old pane stays on screen
-    and the symptom is "the Channels tab does nothing" — four steps from the
-    cause, and invisible until the page errors were printed.
-  */
-  const lastSeen = (iso) =>
-    iso === null || iso === undefined ? 'never' : when.words(iso)
-  return `<section class="convstates">
-    <h3 class="t-label">The conversation</h3>
-    <ul class="convlist">
-      ${rows.map((c) => `<li class="conv c-${esc(String(c.state))}">
-        <span class="convdot" aria-hidden="true"></span>
-        <div class="convbody">
-          <b>${esc(String(c.label))}</b>
-          <span class="t-meta">${esc(String(c.says))}</span>
-          <span class="t-meta from">
-            ${c.messages > 0
-              ? `${esc(String(c.messages))} message${c.messages === 1 ? '' : 's'}, last ${esc(lastSeen(c.last_at))}`
-              : 'nothing yet'}${c.recent_failures > 0
-              ? ` · ${esc(String(c.recent_failures))} could not be delivered today`
-              : ''}
-          </span>
+function connectionsTab() {
+  const ui = settingsUi
+  const all = config.services()
+  const isGoogleSvc = (c) => config.routeFor(c.key).family === 'google'
+  const main = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key) && !isGoogleSvc(c))
+  const googleRows = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key) && isGoogleSvc(c))
+  const machinery = all.filter((c) => MACHINERY_KEYS.has(c.key))
+  const attention = main.filter((c) => ['degraded', 'dead'].includes(String(c.state)))
+  const working = main.filter((c) => !attention.includes(c) && config.isConnected(c.state))
+  const idle = main.filter((c) => !attention.includes(c) && !config.isConnected(c.state))
+  const operator = config.VIEWER.operator
+  const googleNeedsSetup = operator && ((config.SETUP ?? {}).google ?? {}).ready === false
+
+  const said =
+    googleSaid === null
+      ? ''
+      : ui.note({
+          tone: googleSaid.tone === 'good' ? '' : 'warn',
+          ic: googleSaid.tone === 'good' ? 'info' : 'info',
+          text: googleSaid.text,
+        })
+
+  // What the team keeps of your email is a privacy fact, so it is stated as one.
+  const mail = (() => {
+    const m = config.MAIL_BODIES
+    if (m.held === null) return ''
+    const bulk = m.bulk === 0 ? '' : ` ${m.bulk} were withheld as bulk mail.`
+    return ui.card([
+      ui.row({
+        name: 'What the team keeps of your email',
+        desc:
+          m.held === 0
+            ? `Of ${m.messages} messages it has looked at, it keeps the subject line and a preview only, not the text.${bulk}`
+            : `It keeps the text of ${m.held} of ${m.messages} messages it has looked at, and forgets each one after 90 days.${bulk}`,
+        kind: 'fact',
+      }),
+    ])
+  })()
+
+  // Your tasks in another app (Vikunja). Your tasks live here; the other app is a copy.
+  const tasks = (() => {
+    const v = config.TASK_SYNC
+    const title = 'Keep your tasks in step with Vikunja'
+    // Only "asking" while there is an office to ask; signed out, the honest state is that nothing is connected.
+    if (v.configured === null && canWrite()) {
+      return ui.section({ title: 'Your tasks in another app', body: ui.card([ui.empty('Asking…')]) })
+    }
+    if (v.configured === true) {
+      const trouble = v.trouble ?? []
+      // The last round's reading of the connection (0981). A down Vikunja is the loudest thing on this card.
+      const h = v.health
+      const down = h !== null && h !== undefined && h.state === 'down'
+      const downChip = {
+        refused: 'Token refused',
+        failed: 'Refused the last round',
+        unreachable: 'Not answering',
+      }
+      const lastOk =
+        h !== null && h !== undefined && h.lastOkAt !== null && h.lastOkAt !== undefined
+          ? ` Last in step ${when.words(h.lastOkAt)}.`
+          : ''
+      const why = down
+        ? h.kind === 'refused'
+          ? 'Vikunja turned the token down. Nothing was changed here and nothing is lost. To fix it, disconnect, then connect again with a fresh token (Vikunja, Settings, API tokens).'
+          : h.kind === 'failed'
+            ? 'Vikunja answered but refused the sync. Nothing was changed here and nothing is lost. Check the address and the project number: disconnect, then connect again.'
+            : 'Vikunja is not answering. Nothing was changed here and nothing is lost. The team tries again every quarter of an hour and this clears itself when it answers.'
+        : ''
+      return ui.section({
+        title: 'Your tasks in another app',
+        body: ui.card([
+          ui.row({
+            name: title,
+            desc: `Connected to ${String(v.url ?? '')} (project ${String(v.project ?? '')}). ${v.linked} task${v.linked === 1 ? ' is' : 's are'} linked. Your tasks live here; the other app holds a copy, and disconnecting never loses anything.${lastOk}`,
+            wrap: true,
+            said: true,
+            // The words are long and the control is a chip plus a button: on a phone the control goes under them.
+            kind: 'wide',
+            status: '',
+            control:
+              (down
+                ? ui.chip('bad', downChip[h.kind] ?? 'Not answering')
+                : ui.chip(trouble.length === 0 ? 'ok' : 'warn', trouble.length === 0 ? 'In step' : `${trouble.length} to look at`)) +
+              (canWrite() && operator ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-vikunja-off': true } }) : ''),
+          }),
+          ...(down
+            ? [ui.row({ name: 'Why it stopped', desc: `What it said: ${String(h.detail ?? '')}. ${why}`, kind: 'fact', attr: { 'data-tsync-down': h.kind ?? 'unreachable' } })]
+            : []),
+          ...trouble.slice(0, 5).map((t) => ui.row({ name: String(t.title ?? ''), desc: String(t.why ?? t.state ?? ''), kind: 'fact' })),
+        ]),
+      })
+    }
+    return ui.section({
+      title: 'Your tasks in another app',
+      note: 'Your tasks work on their own. If you keep a Vikunja, the team can mirror them both ways. It stays a copy, and disconnecting never loses anything.',
+      body: ui.card([
+        canWrite() && operator
+          ? `<form class="st-form" data-vikunja-on data-saidwrap>
+              <div class="st-formrow">
+                <label class="st-field"><span>Address of your Vikunja</span>
+                  <input class="st-input" data-vikunja-url placeholder="https://tasks.example.com" aria-label="The address of your Vikunja" required></label>
+                <label class="st-field"><span>Project number</span>
+                  <input class="st-input" data-vikunja-project type="number" min="1" placeholder="1" aria-label="Which Vikunja project" required></label>
+                <label class="st-field"><span>API token</span>
+                  <input class="st-input" data-vikunja-token type="password" placeholder="Paste a token" aria-label="A Vikunja API token" required></label>
+              </div>
+              <div class="st-ctl" style="justify-content:flex-start">
+                <button class="st-btn primary" type="submit">Connect</button>
+                <span class="st-said" data-said role="status" aria-live="polite"></span>
+              </div>
+            </form>`
+          : ui.empty(canWrite() ? 'Connecting another task app is done by whoever runs this Team HQ.' : 'Sign in to connect one.'),
+      ]),
+    })
+  })()
+
+  // Outside tool providers and the address other apps use: for people who build things.
+  const providers = (config.PROVIDERS?.rows ?? []).map((p) => {
+    const ok = p.last_probe_ok
+    const toolsList = (p.tools ?? []).slice(0, 4)
+    return `<div class="st-case" data-saidwrap>
+      <div class="st-casehead"><h4 class="st-casetitle">${esc(p.display_name || p.name || '')}</h4>
+        ${ui.chip(ok ? 'ok' : 'warn', ok ? 'Answering' : String(p.last_probe_detail ?? 'Not answering'))}</div>
+      <p class="st-casenote">${esc(String(p.discovered ?? 0))} found · ${esc(String(p.offered ?? 0))} offered to the team · ${esc(String(p.usable ?? 0))} usable</p>
+      ${toolsList
+        .map(
+          (t) => `<div class="st-casefoot"><div class="st-casemeta"><span><code>${esc(t.name ?? '')}</code></span><span>${esc(t.reach ?? 'unknown')}</span><span>${
+            t.gone ? 'gone from the provider' : t.usable ? 'granted' : t.offered_as ? 'offered, waiting on you' : 'not offered'
+          }</span></div>${
+            t.gone || t.offered_as || !canWrite()
+              ? ''
+              : `<div class="st-caseact">${ui.button({ label: 'Offer it', tone: 'quiet', a: { 'data-offer-tool': t.id ?? '', 'data-offer-name': t.name ?? '' } })}</div>`
+          }</div>`,
+        )
+        .join('')}
+      ${canWrite() ? `<div class="st-casefoot"><div class="st-caseact">${ui.button({ label: 'Stop using this', tone: 'quiet', a: { 'data-revoke-provider': p.id ?? '', 'data-provider-name': p.display_name || p.name || '' } })}</div><span class="st-said" data-said role="status" aria-live="polite"></span></div>` : ''}
+    </div>`
+  })
+  const addProvider = canWrite()
+    ? `<div class="st-form" data-saidwrap>
+        <p class="st-desc" style="margin:0">Add a tool provider. The team asks it what it can do; asking grants nothing. A provider that needs a token has to be connected another way, so this form has no box for one.</p>
+        <div class="st-formrow">
+          <label class="st-field"><span>Short name</span><input class="st-input" data-prov-name aria-label="Provider short name" placeholder="weather-mcp"></label>
+          <label class="st-field"><span>Address</span><input class="st-input" data-prov-endpoint aria-label="Provider address" placeholder="https://…/mcp"></label>
         </div>
-        <!--
-          The state as a WORD as well as a colour. A dot alone is the
-          conveyed-by-colour-only failure axe exists to catch, and it is also
-          simply harder to read. No backticks in this comment.
-        -->
-        <span class="t-label convword">${esc(CONVO_WORD[String(c.state)] ?? String(c.state))}</span>
-      </li>`).join('')}
-    </ul>
-  </section>`
+        <div class="st-ctl" style="justify-content:flex-start">${ui.button({ label: 'Add it', a: { 'data-register-provider': true } })}<span class="st-said" data-said role="status" aria-live="polite"></span></div>
+      </div>`
+    : ''
+  const mcp = !state.mcp
+    ? ''
+    : !config.MCP.loaded
+      ? ui.card([ui.empty('Asking…')])
+      : ui.card([
+          ui.row({ name: 'Server address', desc: 'Give this to the other app.', kind: 'stack', control: `<code class="st-code" style="width:100%">${esc(config.MCP.url)}</code>` }),
+          ...config.MCP.steps.map((x, i) => ui.row({ name: `Step ${i + 1}`, desc: x, kind: 'fact' })),
+          ui.row({
+            name: `Tools another app would see (${config.MCP.tools.filter((t) => t.on).length} of ${config.MCP.tools.length})`,
+            desc: config.MCP.tools.map((t) => `${t.tool}${t.on ? '' : ` (off${t.why_off ? `: ${t.why_off}` : ''})`}`).join(', '),
+            kind: 'stack',
+          }),
+        ])
+
+  // What the setup check says still needs the person (it counts what only they can do), in their words.
+  const todo = ((config.SETUP ?? {}).services ?? []).filter((x) => x.state === 'action')
+  // (the checklist is about the deployment's own accounts - Slack app, shared notes, the group chat - so it is the operator's)
+  const stillToDo =
+    todo.length === 0 || !operator
+      ? ''
+      : ui.section({
+          title: 'Still to set up',
+          count: todo.length,
+          note: 'These need something only you can do.',
+          body: ui.card(
+            todo.map((x) =>
+              ui.row({
+                name: x.name,
+                desc: [x.what ?? x.does, x.action].filter(Boolean).join(' '),
+                control: ui.chip('warn', 'Needs you'),
+              }),
+            ),
+          ),
+        })
+
+  const machineryRows = machinery.map((c) => serviceRow(c))
+  const sectionFor = (title, list, note) =>
+    list.length === 0 ? '' : ui.section({ title, note, count: list.length, body: ui.card(list.map((c) => serviceRow(c))) })
+
+  /*
+    ONE GOOGLE, NOT THREE (4 October; made a single card on 5 October). Drive, Calendar and Gmail are one connection
+    made by one consent screen, and all three rows already pointed at the SAME disconnect ("google"), so three rows
+    with three Connect buttons were one account presented as three onboardings. There is now one card: one Connect
+    (or Reconnect), one Disconnect, and under it the state of each part, because each can be in a different state (a
+    scope withdrawn). The parts carry no buttons of their own. NotebookLM is not part of this card: Google offers no
+    API for it, so it is set up separately and is never ticked here.
+  */
+  const googleCard = (() => {
+    if (googleRows.length === 0) return ''
+    const on = googleRows.filter((c) => config.isConnected(c.state))
+    const dead = googleRows.some((c) => c.state === 'dead')
+    const degraded = googleRows.some((c) => c.state === 'degraded')
+    const op = config.VIEWER.operator
+    const [tone, word] = on.length === googleRows.length ? (degraded || dead ? ['warn', 'Needs attention'] : ['ok', 'Connected']) : on.length > 0 ? ['warn', 'Partly connected'] : dead ? ['bad', 'Needs reconnecting'] : ['off', 'Not connected']
+    const head = ui.row({
+      name: 'Google',
+      desc: 'One sign-in covers Drive, Calendar and Gmail. Notebook is connected separately and is not covered by this sign-in.',
+      kind: 'stack',
+      control: `<span data-google-summary>${ui.chip(tone, word)}</span>
+        ${on.length < googleRows.length && op ? ui.button({ label: dead ? 'Reconnect Google' : 'Connect Google', tone: 'primary', a: { 'data-google-connect': true } }) : ''}
+        ${on.length > 0 && canWrite() && op ? ui.button({ label: 'Disconnect Google', tone: 'quiet', a: { 'data-disconnect': 'google', 'data-service': 'Google' } }) : ''}
+        ${on.length < googleRows.length && !op ? '<span class="st-meta">Connected by whoever runs this Team HQ.</span>' : ''}`,
+    })
+    return ui.section({
+      title: 'Google',
+      body: ui.card([
+        head,
+        ...googleRows.map((c) => serviceRow(c, { sub: true })),
+      ]),
+    })
+  })()
+  const googleLine = googleCard
+  return [
+    said,
+    googleLine,
+    sectionFor('Needs attention', attention, 'These were connected and are not working properly.'),
+    sectionFor('Connected', working),
+    sectionFor('Not connected', idle),
+    stillToDo,
+    googleNeedsSetup
+      ? ui.section({ title: 'Set up Google', body: ui.card([googleSetupPanel()]) })
+      : '',
+    tasks,
+    mail === '' ? '' : ui.section({ title: 'Your email', body: mail }),
+    // the database, the AI provider and tool providers are the deployment's own, not a person's
+    !operator
+      ? ''
+      : ui.advanced({
+      title: 'Behind the scenes',
+      hint: 'The database, the AI provider and tools that cannot be connected from here',
+      body:
+        (machineryRows.length === 0 ? '' : ui.card(machineryRows)) +
+        ui.section({
+          title: 'Tool providers',
+          note: 'Outside services the team can ask what they can do.',
+          body: ui.card(providers.length === 0 ? [ui.empty('None added.')] : providers) + addProvider,
+        }) +
+        (mcp === '' ? '' : ui.section({ title: 'Connecting another app', body: mcp })),
+    }),
+  ].join('')
 }
 
 /*
+  The conversation's own surfaces, and what state each is in (#198): a state is a WORD as well as a colour (a dot alone
+  is the conveyed-by-colour-only failure), and the wording of the sentence is the RPC's, in one place.
+
   The state names a person sees. Kept beside the renderer rather than in the
   RPC because these are labels and the RPC's `says` is the sentence — two
   registers for two jobs, and putting the label in SQL would mean a migration
@@ -6747,229 +6600,237 @@ const CONVO_WORD = {
   unchecked: 'Unverified',
 }
 
+/*
+  MESSAGING: how the team gets in touch with you and where you can talk to it.
+
+  It had three things in one place, none of them labelled: the channels themselves, how each is doing, and one switch
+  (Only the Chief of Staff messages me) that lived on the Behaviour tab with a pointer here saying "read together".
+  Now the switch is here, with the thing it governs; the channels are rows with a state and a next step; and "how each
+  is doing" is a status list, not a second set of cards.
+*/
 function channelsTab() {
-  return `<div class="setbody">
-    <p class="t-lead" style="margin:0">How the office reaches you. Only the Chief of
-      Staff sends; everyone else still does the work.</p>
-    ${conversationStates()}
-    <div class="servicegrid">
-      ${config.CHANNELS.map((c) => {
-        const m = MARKS[c.key] ?? { svg: '', tint: 'currentColor' }
-        return `<article class="service s-${c.state}" data-lift data-tilt="3.4"
-                 style="--tint:${esc(m.tint)}">
-          <span class="mark">${m.svg}</span>
-          <div class="svbody">
-            <b>${esc(c.name)}</b>
-            <span class="t-meta">${esc(c.role)}</span>
-            <!--
-          Capped. connection_health.detail is a short state note for most
-          services and four hundred characters of token scoping for GitHub, and
-          one card four times the height of its neighbours is the grid falling
-          over. The whole note is still in the database for whoever needs it.
+  const ui = settingsUi
+  const channels = config.CHANNELS
+  const chiefB = config.BEHAVIOURS.find((b) => b.id === 'chief')
+  const operator = config.VIEWER.operator
+  const chiefName =
+    config.staff().find((p) => p.slug === 'chief-of-staff')?.name ?? 'the Chief of Staff'
 
-          No backticks in this comment. Template literal.
-        -->
-        <span class="t-meta from">${esc(
-          String(c.detail ?? '').length > 110
-            ? `${String(c.detail).slice(0, 108).replace(/[\s,;.]+\S*$/, '')}…`
-            : (c.detail ?? ''),
-        )}</span>
-          </div>
-          <div class="svfoot">
-            <span class="dotstate"></span>
-            <span class="t-label">${esc(config.STATE_LABEL[c.state])}</span>
-            <button class="btn small quiet" data-channel="${esc(c.key)}">${
-              state.channel === c.key ? 'Close' : 'How it works'}</button>
-          </div>
-        </article>`
-      }).join('')}
-    </div>
-    <!--
-      What the open channel actually is (#93).
+  const channelRow = (c) => {
+    const m = MARKS[c.key] ?? { svg: '', tint: 'currentColor' }
+    const [tone, word] = copy.state[c.state] ?? ['off', c.state]
+    const route = config.routeFor(c.key)
+    const connected = config.isConnected(c.state)
+    const open = state.channel === c.key
+    const long = String(c.detail ?? '')
+    const detail = long.length > 120 ? `${long.slice(0, 118).replace(/[\s,;.]+\S*$/, '')}…` : long
+    const disconnect =
+      connected && route.off !== undefined && canWrite() && config.VIEWER.operator
+        ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-disconnect': route.off, 'data-service': c.name } })
+        : ''
+    const how = ui.button({ label: open ? 'Hide details' : 'Details', tone: 'quiet', a: { 'data-channel': c.key, 'aria-expanded': open } })
+    const extra = open
+      ? `<div class="st-subpanel">
+          ${c.steps ? `<p class="st-desc" style="margin:0">${esc(c.steps)}</p>` : ''}
+          ${(c.settings ?? [])
+            .filter((x) => x.key !== 'telegram.only_chief_speaks')
+            .map(
+              (x) => `<p class="st-desc" style="margin:0"><b>${esc(x.name === 'Whose bot may use your private chat' ? 'Your private chat' : x.name)}:</b>
+                ${x.kind === 'switch' ? (x.value ? 'On' : 'Off') : x.value === '' ? 'any of the team’s bots may message you directly' : `only ${esc(String(x.value))}’s bot`}</p>`,
+            )
+            .join('')}
+          ${(c.who ?? []).length === 0
+            ? ''
+            : `<p class="st-meta" style="margin:0">Bots: ${(c.who ?? []).map((w) => `@${esc(w.username)} (${esc(w.whose)}${w.pager ? ', pager' : ''}${w.on ? '' : ', off'})`).join(' · ')}</p>`}
+        </div>`
+      : ''
+    return `<div class="st-svc" data-saidwrap>
+      <span class="st-logo" style="--tint:${esc(m.tint)}">${m.svg}</span>
+      <div class="st-text">
+        <p class="st-name">${esc(c.name)}</p>
+        <p class="st-desc">${esc(c.role)}</p>
+        ${detail ? `<p class="st-meta">${esc(detail)}</p>` : ''}
+        <span class="st-said" data-said role="status" aria-live="polite"></span>
+        ${extra}
+      </div>
+      <div class="st-state">${ui.chip(tone, word)}${disconnect}${how}</div>
+    </div>`
+  }
 
-      BELOW the grid, not inside the card. Expanding it in place stretched the
-      whole grid row, so the other three cards became tall empty boxes with a
-      logo floating at the top - visible immediately in a capture and invisible
-      in the source.
+  const convo = (config.CONVO_CHANNELS ?? [])
+    // Telegram and Slack are the deployment's own: a person who is not the operator is not told how they are doing
+    .filter((c) => operator || !/telegram|slack/i.test(String(c.label ?? '')))
+    .map((c) => {
+    const tone = { here: 'ok', carrying: 'ok', quiet: 'ok', degraded: 'warn', disconnected: 'bad', never: 'off', unchecked: 'off' }[String(c.state)] ?? 'off'
+    const bits = [
+      c.messages > 0 ? `${c.messages} message${c.messages === 1 ? '' : 's'}, last ${c.last_at ? when.words(c.last_at) : 'never'}` : 'No messages yet',
+      c.recent_failures > 0 ? `${c.recent_failures} could not be delivered today` : '',
+    ].filter(Boolean)
+    return ui.row({ name: String(c.label), desc: `${String(c.says)} ${bits.join('. ')}.`, control: ui.chip(tone, CONVO_WORD[String(c.state)] ?? String(c.state)) })
+  })
 
-      Everything here comes from the office rather than from this file: the
-      bots and whose they are, the settings that govern the channel, and what
-      to actually do, spelled out.
+  /*
+    CONNECTING YOUR OWN TELEGRAM (#410). Only for somebody who is not the operator: the operator's Telegram is the
+    deployment's own and has its own row above. A button, not a code to type - it opens Telegram on a link that is good
+    for ten minutes and once, and tapping Start there is the whole of it. Said nothing until the office has answered.
+  */
+  const linkSection = () => {
+    const t = config.LINK.telegram
+    if (operator || t === null || t === undefined || t.managed_by_operator === true) return ''
+    const pending = config.LINK.pending
+    const bot = t.bot ?? ''
+    let desc = ''
+    let control = ''
+    let chip = ui.chip('off', 'Not connected')
+    if (t.state === 'connected') {
+      chip = ui.chip('ok', 'Connected')
+      desc =
+        'Messages you send our Telegram bot reach your team, and their answers come back to that chat. ' +
+        (t.connected_at ? `Connected ${when.words(t.connected_at)}.` : '')
+      control = ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-link-disconnect': 'telegram' } })
+    } else if (t.state === 'waiting' || pending !== null) {
+      chip = ui.chip('warn', 'Waiting for you')
+      desc = pending
+        ? 'Open Telegram and tap Start. The link works once and for ten minutes.'
+        : 'A link was made but this page no longer has it. Start again to get a new one.'
+      control =
+        (pending ? ui.button({ label: 'Open Telegram', tone: 'primary', href: pending.url }) : '') +
+        ui.button({ label: 'Start again', tone: 'quiet', a: { 'data-link-begin': 'telegram' } })
+    } else if (t.can_connect === false) {
+      return ''
+    } else {
+      desc = bot
+        ? 'Connect your own Telegram so you can message the team from your phone. You will tap a link and press Start; there is nothing to copy or type.'
+        : 'Telegram is not available to connect yet.'
+      control = bot ? ui.button({ label: 'Connect Telegram', tone: 'primary', a: { 'data-link-begin': 'telegram' } }) : ''
+    }
+    return ui.section({
+      title: 'Your Telegram',
+      body: ui.card([
+        ui.row({ name: 'Telegram', desc, status: ` ${chip}`, control, kind: 'wide', wrap: true, said: true }),
+      ]),
+    })
+  }
 
-      The two Telegram settings sit side by side deliberately. They are
-      confused constantly - one decides WHO SENDS AT ALL, the other decides
-      WHICH CHAT - and putting them next to each other with both said plainly
-      is the cheapest fix available for that.
+  /*
+    CONNECTING YOUR OWN SLACK (ADR-0065). Only for somebody who is not the operator. It says what is TRUE: until the Slack
+    app has been opened to other workspaces there is no button at all (a button that cannot work is worse than none), and a
+    connected workspace says plainly whether the team can answer you there or only hears you. The office decides everything;
+    the page sends no office, no workspace and no token - Slack's own page does the consent and the office reads the result.
+  */
+  const slackSection = () => {
+    const s = config.LINK.slack
+    if (operator || s === null || s === undefined || s.managed_by_operator === true) return ''
+    const pending = config.LINK.slackPending
+    const said = config.LINK.slackSaid
+    let desc = ''
+    let control = ''
+    let chip = ui.chip('off', 'Not connected')
+    if (s.state === 'connected') {
+      chip = ui.chip('ok', 'Connected')
+      desc =
+        `Your Slack workspace${s.workspace ? ` “${s.workspace}”` : ''} is connected, and the team hears you there. ` +
+        (s.can_reply === true
+          ? 'Their answers come back to you in Slack. '
+          : 'Their answers appear here in Team HQ for now: replying inside Slack is not switched on for personal accounts yet. ') +
+        (s.connected_at ? `Connected ${when.words(s.connected_at)}.` : '')
+      control = ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-slack-disconnect': '1' } })
+    } else if (s.state === 'waiting' || pending !== null) {
+      chip = ui.chip('warn', 'Waiting for you')
+      desc = pending
+        ? 'Finish in Slack: choose your workspace and press Allow. The link works once and for ten minutes.'
+        : 'A link was made but this page no longer has it. Start again to get a new one.'
+      control =
+        (pending ? ui.button({ label: 'Open Slack', tone: 'primary', href: pending.url }) : '') +
+        ui.button({ label: 'Start again', tone: 'quiet', a: { 'data-slack-begin': '1' } })
+    } else if (s.available !== true) {
+      chip = ui.chip('off', 'Not available yet')
+      desc =
+        'Slack is not switched on for other workspaces yet. It needs the person who runs Team HQ to open the Slack app to them.'
+    } else {
+      desc =
+        'Connect your own Slack workspace so you can message the team from Slack. You will choose the workspace and press Allow in Slack; there is nothing to copy or type.'
+      control = ui.button({ label: 'Connect Slack', tone: 'primary', a: { 'data-slack-begin': '1' } })
+    }
+    const note = said === null || said === undefined ? '' : `<p class="st-desc" role="status" style="margin:6px 0 0">${esc(said)}</p>`
+    return ui.section({
+      title: 'Your Slack',
+      body: ui.card([
+        ui.row({ name: 'Slack', desc: `${desc}`, status: ` ${chip}`, control, kind: 'wide', wrap: true, said: true }),
+        note === '' ? '' : `<div class="st-row">${note}</div>`,
+      ]),
+    })
+  }
 
-      No backticks in this comment. Template literal.
-    -->
-    ${(() => {
-      const c = config.CHANNELS.find((x) => x.key === state.channel)
-      if (c === undefined) return ''
-      return `<div class="chdetail">
-        <h3 class="t-title" style="margin:0;font-size:19px">${esc(c.name)}</h3>
-        ${c.steps ? `<p class="t-lead" style="margin:0">${esc(c.steps)}</p>` : ''}
-        ${(c.settings ?? []).length === 0 ? '' : `<div class="chset">
-          ${c.settings.map((x) => `<div class="chrow">
-            <span class="chname">${esc(x.name)}</span>
-            <span class="chval">${x.kind === 'switch'
-              ? (x.value ? 'On' : 'Off')
-              : esc(String(x.value === '' ? 'anyone' : x.value))}</span>
-            <span class="t-meta">${esc(x.note ?? '')}</span>
-          </div>`).join('')}
-        </div>`}
-        ${(c.who ?? []).length === 0 ? '' : `<div>
-          <span class="t-label">Bots</span>
-          <div class="chwho">
-            ${c.who.map((w) => `<span class="chbot ${w.on ? '' : 'off'}">
-              <b>@${esc(w.username)}</b>
-              <span class="t-meta">${esc(w.whose)}${w.pager ? ' · pager' : ''}</span>
-            </span>`).join('')}
-          </div>
-        </div>`}
-      </div>`
-    })()}
-  </div>`
+  return [
+    linkSection(),
+    slackSection(),
+    chiefB === undefined
+      ? ''
+      : ui.section({
+          title: 'Who messages you',
+          body: ui.card([
+            ui.row({
+              name: copy.chief(chiefName).name,
+              desc: copy.chief(chiefName).note,
+              wrap: true,
+              said: true,
+              // governs every office, so only the operator's is live
+              control: ui.toggle({ id: chiefB.id, name: copy.chief(chiefName).name, on: chiefB.value === true, via: chiefB.via, disabled: chiefB.settable === false || !canWrite() || !operator }),
+            }),
+          ]),
+        }),
+    ui.section({
+      title: 'Where you can reach the team',
+      note: operator
+        ? 'Team Chat is always available inside Team HQ. The others need a connection.'
+        : 'Team Chat is always available inside Team HQ. Your own Telegram and Slack connections are in the sections above.',
+      body: ui.card(channels.filter((c) => operator || !['telegram', 'slack'].includes(String(c.key))).map(channelRow)),
+    }),
+    !operator || slackSetupPanel() === '' ? '' : ui.section({ title: 'Reconnect Slack', body: ui.card([slackSetupPanel()]) }),
+    convo.length === 0 ? '' : ui.section({ title: 'How each one is doing', body: ui.card(convo) }),
+  ].join('')
 }
 
 /*
-  Models and cost.
+  APPEARANCE: only what changes Team HQ.
 
-  The £0/month constraint is a hard one, so it is a live number rather than a
-  note in a document. The warning is the useful part: the free tier has an edge
-  and the only bad way to find it is an invoice.
-*/
-
-
-/*
-  Appearance — one of six tabs now, not the whole of Settings.
-
-  Its contents are unchanged. The swatches were always the right idea: nobody
-  knows what "Clay" looks like from the word, and each one paints itself from
-  its own palette's tokens so a new palette needs no code here.
+  The old tab offered five controls - light or dark, palette, density, texture and an uploaded texture - and in Team HQ
+  four of them did nothing: measured on the real page, switching to light left every surface dark, a different texture
+  left the screen pixel for pixel the same, and density changed a spacing variable the board does not read. They worked
+  in the classic studio, which is not what anyone is looking at. A control that does nothing is worse than no control,
+  so they are gone from here. What is left is the one thing that does change Team HQ - the accent colour, which buttons,
+  links, focus rings and the selected state all read (bc/tokens.css) - and a plain statement of the rest.
 */
 function appearanceTab() {
+  const ui = settingsUi
   const now = appearance()
-  return `<div class="setbody">
-      <p class="t-lead" style="margin:0 0 var(--s4)">Changes apply straight away and are
-        remembered on this device.</p>
-
-      <!--
-        Light and dark (#87).
-
-        The shortcut in the project header sets the same value this does, and
-        both read it back from the same place, so the two can never disagree —
-        which was the thing most likely to go wrong here: one control that works
-        and one that lies.
-
-        Three choices, not a switch. Following the system is the default and the
-        honest answer for most people; a boolean forces a side and then the
-        studio is the one application on the machine that does not go dark at
-        sunset with everything else.
-      -->
-      <div class="setgroup">
-        <span class="t-label">Light and dark</span>
-        <div class="segmented" role="group" aria-label="Light and dark">
-          ${SCHEMES.map((x) => `
-            <button class="seg ${now.scheme === x.id ? 'on' : ''}" data-scheme-pick="${x.id}"
-                    aria-pressed="${now.scheme === x.id}">${esc(x.name)}</button>`).join('')}
-        </div>
-      </div>
-
-      <!--
-        Density (#124).
-
-        Grant, in the review: "Improve space usage throughout - less
-        decoration, less clutter." A control rather than a guess, because
-        picking a tighter rhythm and hoping is how that request gets answered
-        once and re-litigated a month later.
-
-        Beside Light and dark because it is the same kind of choice about the
-        same thing, and in the same segmented shape #87 established, so there
-        is one way to pick between a small number of options rather than two.
-
-        The note under each is what it DOES, not what it is called. "Compact"
-        alone asks him to press it to find out.
-
-        No backticks in this comment: template literal.
-      -->
-      <div class="setgroup">
-        <span class="t-label">Density</span>
-        <div class="segmented" role="group" aria-label="Density">
-          ${DENSITIES.map((d) => `
-            <button class="seg ${now.density === d.id ? 'on' : ''}" data-density-pick="${d.id}"
-                    aria-pressed="${now.density === d.id}"
-                    title="${esc(d.note)}">${esc(d.name)}</button>`).join('')}
-        </div>
-        <p class="t-meta" style="margin:0">${esc(
-          (DENSITIES.find((d) => d.id === now.density) ?? DENSITIES[0]).note,
-        )}</p>
-      </div>
-
-      <div class="setgroup">
-        <span class="t-label">Palette</span>
-        <div class="swatches">
-          ${PALETTES.map((p) => `
-            <button class="swatch ${now.palette === p.id ? 'on' : ''}"
-                    data-palette-pick="${p.id}" data-palette="${p.id}">
-              <!--
-                A miniature of the actual interface, not three colour bars.
-                Grant: *"your sample palettes and textures don't look like
-                anything"* — and he was right: three chips tell you the hues
-                exist, not what living in them is like. This is a ground, a
-                card on it, two lines of type and the accent, at 1/8 scale.
-              -->
-              <span class="mini">
-                <span class="mini-card">
-                  <span class="mini-art"></span>
-                  <span class="mini-l1"></span>
-                  <span class="mini-l2"></span>
-                </span>
-                <span class="mini-btn"></span>
-              </span>
-              <b>${esc(p.name)}</b>
-              <span class="t-meta">${esc(p.note)}</span>
-            </button>`).join('')}
-        </div>
-      </div>
-
-      <div class="setgroup">
-        <span class="t-label">Texture</span>
-        <div class="swatches">
-          ${TEXTURES.map((t) => `
-            <button class="swatch ${now.texture === t.id ? 'on' : ''}"
-                    data-texture-pick="${t.id}">
-              <span class="texpreview" data-texture="${t.id}"><i></i></span>
-              <b>${esc(t.name)}</b>
-              <span class="t-meta">${esc(t.note)}</span>
-            </button>`).join('')}
-        </div>
-      </div>
-
-      <div class="setgroup">
-        <span class="t-label">Your own texture</span>
-        <div class="ownrow">
-          ${now.own ? `<button class="swatch ${now.texture === 'own' ? 'on' : ''}"
-              data-texture-pick="own" style="max-width:180px">
-              <span class="texpreview" style="background-image:url('${now.own}');
-                    background-size:cover"></span>
-              <b>${esc(now.ownName || 'Uploaded')}</b>
-              <span class="t-meta">Yours</span>
-            </button>` : ''}
-          <label class="dropzone">
-            <input type="file" accept="image/*" data-texture-file hidden>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-              <path d="M12 16V4M12 4L7 9M12 4l5 5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
-            <span><b>Upload a texture</b>
-              <span class="t-meta">Any image. It is shrunk and stored on this device.</span></span>
-          </label>
-          ${now.own ? '<button class="link add" data-texture-clear>Remove</button>' : ''}
-        </div>
-        <p class="t-meta" id="texerr" hidden></p>
-      </div>
-
-    </div>`
+  return [
+    ui.section({
+      title: 'Accent colour',
+      note: 'Used for buttons, links, the selected item and the focus ring. It applies straight away and is saved to your account, so your other devices match.',
+      body: ui.card([
+        `<div class="st-swatches" role="group" aria-label="Accent colour">${copy.ACCENTS.map(
+          (a) => `<button type="button" class="st-swatch" data-palette-pick="${esc(a.id)}"
+            aria-pressed="${now.palette === a.id}" data-name="${esc(a.name)}">
+            <span class="st-dot" style="--c:${esc(a.color)}" aria-hidden="true"></span>
+            <b>${esc(a.name)}</b>
+          </button>`,
+        ).join('')}</div>`,
+      ]),
+    }),
+    ui.section({
+      title: 'Display',
+      body: ui.card([
+        ui.row({
+          name: 'Colour scheme',
+          desc: 'Team HQ is designed for a dark background in every light. There is no light version yet.',
+          kind: 'fact',
+          control: '<span class="st-value">Dark</span>',
+        }),
+      ]),
+    }),
+  ].join('')
 }
 
 
@@ -7144,128 +7005,108 @@ function importSheet(p) {
 
 function settingsSheet() {
   const v = $('#settings')
+  // An old id (governance, setup) resolves to the tab that now holds what it held.
+  state.setting = config.tabId(state.setting)
+  const tabs = config.TABS
+  const here = tabs.find((t) => t.id === state.setting) ?? tabs[0]
+  /*
+    Until the office has answered, a signed-in person is told it is being asked, not shown the page's example rows.
+    The examples name things that resemble real projects, and a second person briefly read one of them as their own
+    standing permissions. Help and Appearance read nothing from the office, so they draw at once.
+  */
+  const unanswered =
+    canWrite() && config.settingsSource.state !== 'ready' && !['help', 'appearance'].includes(state.setting)
   const body =
-    state.setting === 'behaviour' ? behaviourTab()
-    : state.setting === 'governance' ? governanceTab()
+    unanswered
+      ? settingsUi.card([
+          settingsUi.empty(
+            config.settingsSource.state === 'failed'
+              ? 'Settings could not be read just now. Close this and open it again in a moment.'
+              : 'Asking Team HQ…',
+          ),
+        ])
+    : state.setting === 'behaviour' ? behaviourTab()
+    : state.setting === 'requests' ? requestsTab()
+    : state.setting === 'memory' ? memoryTab()
     : state.setting === 'connections' ? connectionsTab()
     : state.setting === 'channels' ? channelsTab()
-    : state.setting === 'models' ? usageTab()
+    : state.setting === 'models' ? healthTab()
     : state.setting === 'appearance' ? appearanceTab()
-    : state.setting === 'setup' ? setupTab()
     : state.setting === 'help' ? helpTab()
     : teamTabSettings()
+  // A phone shows the list of sections OR one section; everything wider shows both side by side.
+  const phone = window.matchMedia('(max-width: 760px)').matches
+  const pane = phone && state.settingsPane !== 'detail' ? 'index' : 'detail'
+  // The page redraws after every write; a person reading halfway down must not be thrown back to the top.
+  const kept = v.querySelector('.stg-main')
+  const keptTop = kept !== null && v.dataset.tab === state.setting ? kept.scrollTop : 0
+  const waiting = openRequestCount()
 
   /*
-    The close button lives in the dialog's own header (#88).
+    A PAGE, with its own bar, a grouped navigation and a content column (settings-ui.js).
 
-    Grant: *"Put the X in the top-right corner of the dialog's outer header,
-    outside the content area."* It was a sibling of the sheet, positioned
-    against the backdrop — so it floated in the corner of the SCREEN, detached
-    from the thing it closes, and on a narrow window it was nowhere near it.
-
-    The header is `position: sticky` inside the scrolling sheet rather than
-    `position: fixed`. Fixed would have been wrong twice over: the sheet is the
-    scroll container, and a fixed child of anything carrying backdrop-filter,
-    filter, transform, perspective or will-change anchors to that element
-    instead of the viewport — which is how a bottom navigation bar once
-    rendered across the top of the page.
+    It used to be a dialog over the board with nine tabs of equal weight (#88, #158). The way back is now a labelled
+    button in the bar rather than an X in a corner, the scope is stated in the bar on every screen (Grant, #158: "Do not
+    make users guess which scope they are editing"), and on a phone the sections and one section are two screens.
+    The old markup is gone; the wiring below still finds everything by data-* attributes.
   */
-  v.innerHTML = `<div class="sheet wide settings" data-more>
-    <div class="chead sheethead">
-      <span style="flex:1;min-width:0">
-        <!--
-          Named by scope (#158).
+  v.dataset.tab = state.setting
+  v.innerHTML = settingsUi.frame({
+    groups: config.TAB_GROUPS.map((g) => ({
+      name: g.name,
+      tabs: g.tabs.map((t) => ({ ...t, badge: t.id === 'requests' && waiting > 0 ? waiting : 0 })),
+    })),
+    current: state.setting,
+    pane,
+    tabTitle: here.name,
+    lead: here.lead,
+    body,
+    backLabel: phone && pane === 'detail' ? 'Settings' : 'Back to workspace',
+  })
+  const main = v.querySelector('.stg-main')
+  if (main !== null) main.scrollTop = keptTop
+  /*
+    Leaving the page, in the one place that knows which screen you are on.
 
-          Grant: *"There are effectively two kinds of settings, but the current
-          interface does not communicate this clearly. Separate them explicitly
-          into Global Settings and Project Settings... Do not make users guess
-          which scope they are editing."*
-
-          It said "The office", which is warm and says nothing about scope. The
-          project's own settings are two rows away in the rail under the other
-          name, so the two now differ by the only word that matters.
-        -->
-        <h1 class="t-display" style="margin:0;font-size:clamp(24px,2vw + 14px,32px)">Global settings</h1>
-        <p class="t-lead" style="margin:6px 0 0">Everything about how this place runs,
-          and what it is plugged into. For one project's own, open the project and
-          choose Project Settings.</p>
-      </span>
-      <button class="close inhead" aria-label="Close settings and go back">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
-    </div>
-    <div class="settabs" role="tablist" aria-label="Settings">
-      ${config.TABS.map((t) => `<button role="tab" class="settab ${
-        state.setting === t.id ? 'on' : ''
-      }" aria-selected="${state.setting === t.id}" data-setting="${t.id}">${esc(t.name)}</button>`).join('')}
-    </div>
-    ${body}
-    <!--
-      A sheet taller than the screen has to LOOK like it is.
-
-      Chromium paints an OVERLAY scrollbar on a touch device — zero reserved
-      width, invisible until you are already scrolling — so a settings tab with
-      two thousand pixels below the fold simply ended, mid-section, and read as
-      a rendering fault rather than as more to come. That is #108 wearing a
-      different hat, and it is the same defect that once left Save nowhere on
-      the phone task editor.
-
-      Sticky rather than absolute, and a real element rather than a pseudo: the
-      sheet is the scroll container, so an absolutely positioned fade scrolls
-      away with the content, and a fixed one would anchor to the sheet only
-      because it carries backdrop-filter, which is a coincidence to rely on.
-      Sticky needs no JavaScript and no class to toggle — with nothing below it
-      the fade sits on the sheet's own surface and cannot be seen, which is
-      exactly when there is nothing to announce.
-
-      No backticks in this comment: template literal.
-    -->
-    <div class="sheetfade" aria-hidden="true"></div>
-  </div>`
-
-  for (const b of v.querySelectorAll('[data-setting]')) {
-    b.addEventListener('click', async () => {
-      state.setting = b.dataset.setting
+    On a phone, from inside a section the bar's button goes back to the list of sections; from the list (and everywhere
+    wider) it closes Settings and returns to the workspace. The class close is kept on it because the rest of the
+    product finds the way out by that name.
+  */
+  $('[data-stg-back]', v)?.addEventListener('click', () => {
+    if (phone && pane === 'detail') {
+      state.settingsPane = 'index'
       settingsSheet()
       sheet(v, true)
-      /*
-        Governance is fetched the first time it is opened (#54).
+      return
+    }
+    state.settingsPane = 'index'
+    sheet(v, false)
+  })
+  /*
+    What a section reads is fetched when it is opened, never before (#54, #265).
 
-        Lazy, like the MCP view: four tables nobody else on a settings open
-        touches. Drawn once with its waiting line, then again with the answer,
-        so the tab responds immediately rather than appearing to hang.
-      */
-      if (state.setting === 'governance' && !config.GOVERNANCE.loaded) {
-        await config.hydrateGovernance(read)
-        /*
-          Only if the sheet is still open on the same tab.
-
-          Without this guard the redraw runs whenever the fetch lands, which
-          may be after the person has moved to another tab or closed the sheet
-          — and `sheet(v, true)` REOPENS it. A capture run walked six tabs,
-          closed the settings viewer, and had it reappear over the page three
-          seconds later; every click after that hit the backdrop.
-        */
-        if (state.setting === 'governance' && !v.hidden) {
-          settingsSheet()
-          sheet(v, true)
-        }
-      }
-      /*
-        The same lazy pattern for outside providers (#265).
-
-        Connections draws immediately from what the page already holds; the
-        provider inventory is one more table and is fetched only when somebody
-        opens the tab. The same guard applies — a redraw landing after the
-        person has moved on reopens a sheet they closed.
-      */
-      if (state.setting === 'connections' && !config.PROVIDERS.loaded) {
-        await config.hydrateProviders(read)
-        if (state.setting === 'connections' && !v.hidden) {
-          settingsSheet()
-          sheet(v, true)
-        }
+    Drawn once straight away from what the page holds, then again when the answer lands - and only if Settings is still
+    open on the same section, because a redraw that lands after the person has moved on or closed the page REOPENS it
+    (a capture run once had the viewer reappear three seconds after it was closed).
+  */
+  const needFor = async (id) => {
+    if ((id === 'requests' || id === 'memory' || id === 'models') && !config.GOVERNANCE.loaded) {
+      await config.hydrateGovernance(read)
+    }
+    if (id === 'connections' && !config.PROVIDERS.loaded) await config.hydrateProviders(read)
+  }
+  for (const b of v.querySelectorAll('[data-setting]')) {
+    b.addEventListener('click', async () => {
+      state.setting = config.tabId(b.dataset.setting)
+      state.settingsPane = 'detail'
+      settingsSheet()
+      sheet(v, true)
+      const asked = state.setting
+      const had = config.GOVERNANCE.loaded && config.PROVIDERS.loaded
+      await needFor(asked)
+      if (state.setting === asked && !v.hidden && !had) {
+        settingsSheet()
+        sheet(v, true)
       }
     })
   }
@@ -7365,7 +7206,30 @@ function settingsSheet() {
       if (kind === 'setting') return act('set_setting', { p_key: name, p_value: value })
       throw new Error('nothing behind that control yet')
     })
-    if (done !== null) await afterWrite()
+    if (done === null) return
+    // Show the new state at once; re-reading the whole payload takes a second or two and the page used to say
+    // "Saved." beside the OLD choice for that long.
+    const held = config.BEHAVIOURS.find((b) => b.via === via)
+    if (held !== undefined) {
+      held.value = kind === 'autonomy' ? value : value === 'true'
+      settingsSheet()
+      sheet(v, true)
+    }
+    await afterWrite()
+    /*
+      Said after the redraw, and found again by attribute: afterWrite rebuilds the page, so the button pressed is gone
+      and the word attempt() put beside it went with it. The state change is its own confirmation for an immediate
+      setting, but a save that took a second reads as nothing having happened without a word.
+    */
+    const again = $(`#settings [data-via="${CSS.escape(String(via ?? ''))}"]`)
+    if (again !== null) {
+      say(again, 'Saved.', 'good')
+      setTimeout(() => {
+        const live = $(`#settings [data-via="${CSS.escape(String(via ?? ''))}"]`)
+        const slot = live?.closest('[data-saidwrap]')?.querySelector('[data-said]')
+        if (slot !== null && slot !== undefined && slot.textContent === 'Saved.') slot.textContent = ''
+      }, 2500)
+    }
   }
 
   for (const b of v.querySelectorAll('[data-toggle]')) {
@@ -7401,7 +7265,7 @@ function settingsSheet() {
   }
 
   for (const b of v.querySelectorAll('[data-choose]')) {
-    b.addEventListener('click', () => {
+    b.addEventListener('click', async () => {
       const chosen = String(b.dataset.choose).split(':')[1]
       /*
         Confirmed when it widens what the office may do on its own.
@@ -7409,13 +7273,17 @@ function settingsSheet() {
         Narrowing needs no confirmation — nobody regrets being asked more often
         — and treating both the same is how a confirmation becomes noise.
       */
-      const widening = chosen !== 'suggest'
+      const widening = chosen === 'act_with_review' || chosen === 'act'
       if (
         widening &&
-        !sure(
-          'Let the team act without asking first? Consequential actions still ' +
-            'wait for you, and you can put this back at any time.',
-        )
+        !(await settingsUi.confirmDialog({
+          title: 'Let the team act on its own?',
+          body:
+            'Routine work will go ahead without asking first. Anything that contacts another ' +
+            'person, deletes, spends or changes a key still waits for your yes. You can put ' +
+            'this back at any time.',
+          confirmLabel: 'Yes, let it',
+        }))
       ) {
         return
       }
@@ -7605,11 +7473,14 @@ function settingsSheet() {
   for (const b of v.querySelectorAll('[data-retract]')) {
     b.addEventListener('click', async () => {
       if (
-        !sure(
-          'Retract this lesson? The team stops being shown it. Nothing is ' +
-            'deleted — a retraction is recorded next to it, so why it changed ' +
-            'stays answerable.',
-        )
+        !(await settingsUi.confirmDialog({
+          title: 'Stop using this?',
+          body:
+            'The team stops being shown it. Nothing is deleted: a note is recorded next to it, ' +
+            'so why it changed stays answerable.',
+          confirmLabel: 'Stop using it',
+          danger: true,
+        }))
       ) {
         return
       }
@@ -7633,11 +7504,14 @@ function settingsSheet() {
       const [id, verdict] = String(b.dataset.decide).split(':')
       if (
         verdict === 'declined' &&
-        !sure(
-          'Decline this? The agent stops asking for it — the decline is a row, ' +
-            'not a mood, so it will not come back next week. You can reopen it ' +
-            'here whenever you like.',
-        )
+        !(await settingsUi.confirmDialog({
+          title: 'Decline this?',
+          body:
+            'The team stops asking for it, and it will not come back next week. ' +
+            'You can let it ask again from this page whenever you like.',
+          confirmLabel: 'Decline',
+          danger: true,
+        }))
       ) {
         return
       }
@@ -7667,11 +7541,13 @@ function settingsSheet() {
       const yes = verdict === 'approve'
       if (
         yes &&
-        !sure(
-          'Grant this? The agent gets the tool from its next job onwards, and ' +
-            'whatever it reaches, it reaches as you. You can take it back under ' +
-            'What each of them can do.',
-        )
+        !(await settingsUi.confirmDialog({
+          title: 'Approve this?',
+          body:
+            'They can use it from their next job on, and whatever it reaches, it reaches as you. ' +
+            'You can take it back from this page.',
+          confirmLabel: 'Approve',
+        }))
       ) {
         return
       }
@@ -7683,7 +7559,12 @@ function settingsSheet() {
       */
       let reason = null
       if (!yes) {
-        reason = why('Why not? The team is shown this, and so are you when it asks again.')
+        reason = await settingsUi.askDialog({
+          title: 'Why not?',
+          body: 'The team is shown your reason, and so are you if it asks again.',
+          label: 'Your reason (a sentence of at least eight characters)',
+          confirmLabel: 'Decline',
+        })
         if (reason === null) return
       }
       const done = await attempt(b, 'Saving…', () =>
@@ -7692,6 +7573,28 @@ function settingsSheet() {
           yes ? { p_request_id: id } : { p_request_id: id, p_reason: reason },
         ),
         yes ? 'Granted.' : 'Declined.')
+      if (done) await afterGovernance()
+    })
+  }
+
+  /*
+    Taking back a grant that an approval gave. Confirmed, because the team loses something it was using. The request
+    that earned it stays on the page as history; the grant itself is this office's and nothing else's.
+  */
+  for (const b of v.querySelectorAll('[data-revoke-tool]')) {
+    b.addEventListener('click', async () => {
+      const [slug, tool] = String(b.dataset.revokeTool).split(':')
+      if (
+        !(await settingsUi.confirmDialog({
+          title: 'Take this back?',
+          body: 'They stop being able to use it from their next job on. You can approve it again if they ask.',
+          confirmLabel: 'Take it back',
+          danger: true,
+        }))
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Saving…', () => act('revoke_tool', { p_slug: slug, p_tool: tool }), 'Taken back.')
       if (done) await afterGovernance()
     })
   }
@@ -7732,21 +7635,26 @@ function settingsSheet() {
       const yes = verdict === 'yes'
       if (
         yes &&
-        !sure(
-          'Make this a standing rule? The team is shown it on every job from ' +
-            'now on. You can retract it at any time under What it learned, ' +
-            'and the retraction is recorded beside it.',
-        )
+        !(await settingsUi.confirmDialog({
+          title: 'Make this a standing rule?',
+          body:
+            'The team is shown it on every job from now on. You can stop it at any time under ' +
+            'What it has learned.',
+          confirmLabel: 'Make it a rule',
+        }))
       ) {
         return
       }
       if (
         !yes &&
-        !sure(
-          'Decline this rule? It is not stored, and the office will not offer ' +
-            'this one again — correct it differently and it can propose a new ' +
-            'one.',
-        )
+        !(await settingsUi.confirmDialog({
+          title: 'Decline this rule?',
+          body:
+            'It is not stored, and the team will not offer this one again. Correct it differently ' +
+            'and it can propose a new one.',
+          confirmLabel: 'Decline',
+          danger: true,
+        }))
       ) {
         return
       }
@@ -7759,7 +7667,14 @@ function settingsSheet() {
 
   for (const b of v.querySelectorAll('[data-retire-proc]')) {
     b.addEventListener('click', async () => {
-      if (!sure('Retire this procedure? The team stops being shown it. Saying it again brings it back.')) {
+      if (
+        !(await settingsUi.confirmDialog({
+          title: 'Stop using this?',
+          body: 'The team stops being shown it. Saying it again brings it back.',
+          confirmLabel: 'Stop using it',
+          danger: true,
+        }))
+      ) {
         return
       }
       const done = await attempt(b, 'Retiring…', () =>
@@ -7774,10 +7689,14 @@ function settingsSheet() {
       const bringingBack = b.dataset.to === 'true'
       if (
         !bringingBack &&
-        !sure(
-          `Retire ${b.dataset.name}? They stop taking work. Everything they have ` +
-            'already done stays, and you can bring them back at any time.',
-        )
+        !(await settingsUi.confirmDialog({
+          title: `Retire ${b.dataset.name}?`,
+          body:
+            'They stop taking work. Everything they have already done stays, and you can bring ' +
+            'them back at any time.',
+          confirmLabel: 'Retire',
+          danger: true,
+        }))
       ) {
         return
       }
@@ -7880,10 +7799,14 @@ function settingsSheet() {
         is a real loss of capability and not a tidy-up.
       */
       if (
-        !sure(
-          'Disconnect Google? The team stops being able to read your calendar ' +
-            'and mail. Everything already read stays. Reconnecting is one consent screen.',
-        )
+        !(await settingsUi.confirmDialog({
+          title: 'Disconnect Google?',
+          body:
+            'The team stops being able to read your calendar and mail. Everything already read ' +
+            'stays. Reconnecting is one consent screen.',
+          confirmLabel: 'Disconnect',
+          danger: true,
+        }))
       ) {
         return
       }
@@ -7947,10 +7870,14 @@ function settingsSheet() {
   for (const b of v.querySelectorAll('[data-vikunja-off]')) {
     b.addEventListener('click', async () => {
       if (
-        !sure(
-          'Disconnect Vikunja? Every task stays here — it was a copy, not the list. ' +
-            'The API token is removed too, so reconnecting needs a new one.',
-        )
+        !(await settingsUi.confirmDialog({
+          title: 'Disconnect Vikunja?',
+          body:
+            'Every task stays here; it was a copy, not the list. The access key is removed too, ' +
+            'so reconnecting needs a new one.',
+          confirmLabel: 'Disconnect',
+          danger: true,
+        }))
       ) {
         return
       }
@@ -7964,7 +7891,16 @@ function settingsSheet() {
       const key = b.dataset.disconnect
       const name = b.dataset.service ?? key
       const route = Object.values(config.ROUTES).find((r) => r.off === key)
-      if (!sure(`Disconnect ${name}? ${route?.costs ?? ''}`)) return
+      if (
+        !(await settingsUi.confirmDialog({
+          title: `Disconnect ${name}?`,
+          body: route?.costs ?? 'The team stops being able to use it.',
+          confirmLabel: 'Disconnect',
+          danger: true,
+        }))
+      ) {
+        return
+      }
       let outcome = null
       const done = await attempt(b, 'Disconnecting…', async () => {
         outcome = await act('disconnect', { p_service: key })
@@ -8007,7 +7943,174 @@ function settingsSheet() {
     })
   }
 
+  /*
+    Connecting and disconnecting your own Telegram (#410). Begin asks the office for a one-time link (the office stores
+    only a hash, so the page keeps the link it was given); the page then watches for the tap, because nothing else would
+    tell a person it worked. The office decides who and what: the page sends only the channel.
+  */
+  for (const b of v.querySelectorAll('[data-link-begin]')) {
+    b.addEventListener('click', async () => {
+      let outcome = null
+      const done = await attempt(
+        b,
+        'Making a link…',
+        async () => {
+          outcome = await act('channel_link_begin', { p_channel: 'telegram' })
+          return outcome
+        },
+        '',
+      )
+      if (!done) return
+      if (outcome?.ok !== true || !outcome?.token || !outcome?.bot) {
+        say(b, String(outcome?.message ?? 'Could not start. Try again in a moment.'), 'warn')
+        return
+      }
+      config.LINK.pending = {
+        url: `https://t.me/${outcome.bot}?start=link_${outcome.token}`,
+        until: outcome.expires_at,
+      }
+      config.LINK.telegram = { ...(config.LINK.telegram ?? {}), state: 'waiting', waiting_until: outcome.expires_at }
+      settingsSheet()
+      sheet($('#settings'), true)
+      watchLink()
+    })
+  }
+  for (const b of v.querySelectorAll('[data-link-disconnect]')) {
+    b.addEventListener('click', async () => {
+      if (
+        !(await settingsUi.confirmDialog({
+          title: 'Disconnect Telegram?',
+          body:
+            'The team stops messaging you there, and anything you send the bot is ignored until you connect again. ' +
+            'Your projects and history stay.',
+          confirmLabel: 'Disconnect',
+          danger: true,
+        }))
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Disconnecting…', async () => await act('channel_link_disconnect', { p_channel: 'telegram' }), '')
+      if (!done) return
+      config.LINK.pending = null
+      config.LINK.telegram = { ...(config.LINK.telegram ?? {}), state: 'none', connected_at: null, can_connect: true }
+      await afterWrite()
+    })
+  }
+
+  /*
+    Connecting and disconnecting your own Slack (ADR-0065). Begin asks the office for the one-time consent link and sends
+    nothing else; the page then opens Slack's own page in a new tab and watches for the result, because nothing else would
+    tell a person it worked. Disconnect asks first, and the office revokes the install at Slack.
+  */
+  for (const b of v.querySelectorAll('[data-slack-begin]')) {
+    b.addEventListener('click', async () => {
+      let outcome = null
+      const done = await attempt(
+        b,
+        'Making a link…',
+        async () => {
+          outcome = await act('slack_link_begin', {})
+          return outcome
+        },
+        '',
+      )
+      if (!done) return
+      if (outcome?.ok !== true || typeof outcome?.url !== 'string') {
+        say(b, String(outcome?.message ?? 'Could not start. Try again in a moment.'), 'warn')
+        return
+      }
+      config.LINK.slackPending = { url: outcome.url, until: outcome.expires_at }
+      config.LINK.slackSaid = null
+      config.LINK.slack = { ...(config.LINK.slack ?? {}), state: 'waiting', waiting_until: outcome.expires_at }
+      settingsSheet()
+      sheet($('#settings'), true)
+      watchSlack()
+    })
+  }
+  for (const b of v.querySelectorAll('[data-slack-disconnect]')) {
+    b.addEventListener('click', async () => {
+      if (
+        !(await settingsUi.confirmDialog({
+          title: 'Disconnect Slack?',
+          body:
+            'The team stops hearing you in that Slack workspace, and the connection is removed at Slack. ' +
+            'Your projects and history stay, and you can connect again.',
+          confirmLabel: 'Disconnect',
+          danger: true,
+        }))
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Disconnecting…', async () => await act('slack_link_disconnect', {}), '')
+      if (!done) return
+      config.LINK.slackPending = null
+      config.LINK.slackSaid = null
+      config.LINK.slack = { ...(config.LINK.slack ?? {}), state: 'none', connected_at: null, workspace: null, can_connect: true }
+      await afterWrite()
+    })
+  }
+
   wireAppearance(v)
+}
+
+/*
+  Waiting for the consent in Slack. As watchLink: asks the office every few seconds for at most the ten minutes the link
+  lives, stops when the Messaging tab is left, and treats a failed read as "ask again", never as a result.
+*/
+let slackTimer = null
+function watchSlack() {
+  if (slackTimer !== null) clearInterval(slackTimer)
+  const until = Date.now() + 10 * 60 * 1000
+  slackTimer = setInterval(async () => {
+    if (Date.now() > until || state.setting !== 'channels') {
+      clearInterval(slackTimer)
+      slackTimer = null
+      return
+    }
+    try {
+      const d = await read('slack_link')
+      if (d?.slack?.state === 'connected') {
+        clearInterval(slackTimer)
+        slackTimer = null
+        config.LINK.slack = d.slack
+        config.LINK.slackPending = null
+        settingsSheet()
+        sheet($('#settings'), true)
+      }
+    } catch (e) {
+      /* the next tick asks again */
+    }
+  }, 3000)
+}
+
+/*
+  Waiting for the tap in Telegram. Asks the office every few seconds, for at most the ten minutes the link lives, and
+  stops the moment the Messaging tab is left. A failed read is not a result: it asks again on the next tick.
+*/
+let linkTimer = null
+function watchLink() {
+  if (linkTimer !== null) clearInterval(linkTimer)
+  const until = Date.now() + 10 * 60 * 1000
+  linkTimer = setInterval(async () => {
+    if (Date.now() > until || state.setting !== 'channels') {
+      clearInterval(linkTimer)
+      linkTimer = null
+      return
+    }
+    try {
+      const d = await read('channel_link')
+      if (d?.telegram?.state === 'connected') {
+        clearInterval(linkTimer)
+        linkTimer = null
+        config.LINK.telegram = d.telegram
+        config.LINK.pending = null
+        settingsSheet()
+        sheet($('#settings'), true)
+      }
+    } catch (e) {
+      /* the next tick asks again */
+    }
+  }, 3000)
 }
 
 /*
@@ -8024,58 +8127,11 @@ function wireAppearance(v) {
     settingsSheet()          // redraw so the tick moves
     sheet(v, true)
   }
-  /*
-    The same value the header's shortcut sets (#87). One setting, two doors —
-    which is the only way the two can be guaranteed not to contradict each
-    other, and a page insisting it is light while it is plainly dark is the
-    worst outcome available here.
-  */
-  for (const b of v.querySelectorAll('[data-scheme-pick]')) {
-    b.addEventListener('click', () => {
-      pick('scheme', b.dataset.schemePick)
-      paintSchemeButtons()
-    })
-  }
+  // The accent is the one appearance setting that changes Team HQ (see appearanceTab); the old scheme, density and
+  // texture controls were removed from the page and their wiring with them.
   for (const b of v.querySelectorAll('[data-palette-pick]')) {
     b.addEventListener('click', () => pick('palette', b.dataset.palettePick))
   }
-  /*
-    Density redraws the pane, unlike palette.
-
-    The note under the control says what the chosen one does, so it has to be
-    rewritten — and the pane is the surface whose spacing just changed, which
-    makes it the one worth seeing change.
-  */
-  for (const b of v.querySelectorAll('[data-density-pick]')) {
-    b.addEventListener('click', () => {
-      pick('density', b.dataset.densityPick)
-      settingsSheet()
-      sheet(v, true)
-    })
-  }
-  for (const b of v.querySelectorAll('[data-texture-pick]')) {
-    b.addEventListener('click', () => pick('texture', b.dataset.texturePick))
-  }
-  const file = $('[data-texture-file]', v)
-  file?.addEventListener('change', async () => {
-    const chosen = file.files?.[0]
-    if (!chosen) return
-    const err = $('#texerr', v)
-    err.hidden = true
-    const out = await readTexture(chosen)
-    if (out.error) { err.textContent = out.error; err.hidden = false; return }
-    apply({ ...appearance(), texture: 'own', own: out.data, ownName: out.name })
-    settingsSheet()
-    sheet(v, true)
-  })
-  $('[data-texture-clear]', v)?.addEventListener('click', () => {
-    apply({ ...appearance(), texture: 'plaster', own: null, ownName: '' })
-    settingsSheet()
-    sheet(v, true)
-  })
-
-  $('.close', v)?.addEventListener('click', () => { sheet(v, false) })
-  v.addEventListener('click', (e) => { if (e.target === v) sheet(v, false) })
 }
 
 /*
@@ -8953,6 +9009,7 @@ function keepUrl() {
   }
   if (path === shownPath) return
   const first = shownPath === null
+  const before = shownPath
   shownPath = path
   try {
     /*
@@ -8961,8 +9018,20 @@ function keepUrl() {
       a path the host has never heard of.
     */
     const to = REVIEW ? `#${path}` : path
-    if (first) history.replaceState({ path }, '', to)
-    else history.pushState({ path }, '', to)
+    /*
+      Each entry remembers the address it was pushed from, so closing a maximised module can GO BACK to it rather than
+      pushing a second entry (Back after Close used to reopen the module just put away). A page that was OPENED on a
+      module has no earlier entry of its own: closing it replaces the entry instead of adding one.
+    */
+    const deepLinkClosing =
+      !first &&
+      before !== null &&
+      before.includes('/x/') &&
+      !path.includes('/x/') &&
+      history.state?.path === before &&
+      history.state?.from === undefined
+    if (first || deepLinkClosing) history.replaceState({ path }, '', to)
+    else history.pushState({ path, from: before }, '', to)
   } catch {
     /* A page opened from a file has no history to write to. It still works. */
   }
@@ -9317,7 +9386,9 @@ function wirePlane(root) {
           something he arranged deliberately — so it asks, the way every other
           irreversible control in this product does.
         */
-        const yes = await sure('Put every card back where the studio would have put it?', 'Reset the map')
+        const yes = await sure('Put every card back where the studio would have put it?', 'Reset the map', {
+          title: 'Reset the map?',
+        })
         if (!yes) return
         placed[slug] = { at: {}, view: {} }
         try {
@@ -9708,13 +9779,15 @@ function drawShell() {
     b.addEventListener('click', async () => {
       const kids = Number(b.dataset.kids ?? '0')
       if (
-        !sure(
+        !(await sure(
           `Delete “${b.dataset.name}”? ` +
             (kids === 0
               ? 'This cannot be undone.'
               : `Its ${String(kids)} subtask${kids === 1 ? '' : 's'} go with it. ` +
                 'This cannot be undone.'),
-        )
+          'Delete it',
+          { title: 'Delete this task?', danger: true },
+        ))
       ) {
         return
       }
@@ -9892,7 +9965,13 @@ function drawShell() {
       }
       const force = b.dataset.force === name
 
-      if (!force && !sure(`Create a dashboard project called "${name}"?`)) return
+      if (
+        !force &&
+        !(await sure(`Create a dashboard project called "${name}"?`, 'Create it', {
+          title: 'Create a project?',
+        }))
+      )
+        return
 
       const made = await attempt(
         b,
@@ -9984,16 +10063,20 @@ function drawShell() {
         Confirmed, always. Grant: "You should always check before making any
         destructive action with me."
 
-        Nothing is lost by disconnecting — ADR-0013 is explicit that the corpus
-        a connector fed survives the connector being removed — and the sentence
-        says so, because a confirmation that overstates the danger is one people
-        learn to click through.
+        Nothing is deleted by disconnecting, and the sentence says exactly what
+        changes (ADR-0013 as amended 4 October 2026): what the source indexed
+        stops being used in answers until it is connected again, while anything
+        uploaded or imported into Team HQ stays in use. A confirmation that
+        overstates the danger is one people learn to click through, and one that
+        understates it is worse.
       */
       if (
-        !sure(
-          `Disconnect ${b.dataset.name}? The documents it already gave stay; ` +
-            'nothing new comes in until it is connected again.',
-        )
+        !(await sure(
+          `Disconnect ${b.dataset.name}? What it indexed stops being used in answers until you connect it again. ` +
+            'Nothing is deleted, and anything you uploaded or imported into Team HQ stays.',
+          'Disconnect',
+          { title: 'Disconnect this source?', danger: true },
+        ))
       ) {
         return
       }
@@ -10019,7 +10102,14 @@ function drawShell() {
   */
   for (const b of root.querySelectorAll('[data-unarchive]')) {
     b.addEventListener('click', async () => {
-      if (!sure(`Bring ${b.dataset.name} back? Anything it had running stays stopped.`)) return
+      if (
+        !(await sure(
+          `Bring ${b.dataset.name} back? Anything it had running stays stopped.`,
+          'Bring it back',
+          { title: 'Bring this project back?' },
+        ))
+      )
+        return
       const done = await attempt(
         b,
         'Bringing it back…',
@@ -10075,10 +10165,12 @@ function drawShell() {
   for (const b of root.querySelectorAll('[data-forget-site]')) {
     b.addEventListener('click', async () => {
       if (
-        !sure(
+        !(await sure(
           `Forget the sign-in for ${b.dataset.name}? The office will not be able ` +
             'to open it again until you sign it in. Nothing it already read is removed.',
-        )
+          'Forget it',
+          { title: 'Forget this sign-in?', danger: true },
+        ))
       ) {
         return
       }
@@ -10427,7 +10519,10 @@ function drawShell() {
   const bulk = async (button, verb, run) => {
     const ids = [...state.picked]
     if (ids.length === 0) return
-    const yes = await sure(`${verb} ${String(ids.length)} task${ids.length === 1 ? '' : 's'}?`, verb)
+    const yes = await sure(`${verb} ${String(ids.length)} task${ids.length === 1 ? '' : 's'}?`, verb, {
+      title: `${verb} these tasks?`,
+      danger: /^(delete|remove)/i.test(verb),
+    })
     if (!yes) return
     const said = $('[data-picked-said]', root)
     button.disabled = true
@@ -10446,9 +10541,10 @@ function drawShell() {
     button.disabled = false
     await refresh()
     if (stuck.length > 0) {
-      window.alert(
-        `${moved} of ${ids.length} done. ${stuck.length} could not be: ${stuck[0]}`,
-      )
+      await settingsUi.noticeDialog({
+        title: 'Some could not be done',
+        body: `${moved} of ${ids.length} done. ${stuck.length} could not be: ${stuck[0]}`,
+      })
     }
   }
 
@@ -10522,7 +10618,8 @@ function drawShell() {
   call?.addEventListener('click', () => { toggleCall() })
 
   for (const b of root.querySelectorAll('[data-settings]')) {
-    b.addEventListener('click', () => { settingsSheet(); sheet($('#settings'), true) })
+    // Opening Settings from its button starts at the list of sections on a phone, not wherever it was last left.
+    b.addEventListener('click', () => { state.settingsPane = 'index'; settingsSheet(); sheet($('#settings'), true) })
   }
 
   for (const b of root.querySelectorAll('[data-filter]')) {
@@ -11002,10 +11099,12 @@ function drawShell() {
         by registering it again rather than destructive.
       */
       if (
-        !sure(
+        !(await sure(
           `Stop using ${b.dataset.providerName}? The office will not ask it anything ` +
             'again, and any tool it delivered stops working. You can add it back later.',
-        )
+          'Stop using it',
+          { title: 'Stop using this connector?', danger: true },
+        ))
       ) {
         return
       }
@@ -11045,11 +11144,13 @@ function drawShell() {
     b.addEventListener('click', async (e) => {
       e.stopPropagation()
       if (
-        !sure(
+        !(await sure(
           `Discard ${b.dataset.docTitle}? It leaves this list and does not ` +
             'join the project. Nothing is deleted — the document and where it ' +
             'came from are kept, and it can be brought back.',
-        )
+          'Discard it',
+          { title: 'Discard this document?', danger: true },
+        ))
       ) {
         return
       }
@@ -12860,7 +12961,9 @@ function wireDocActions(v, doc, shut) {
       document disappearing from the list he is looking at, which is
       indistinguishable from one at the moment it happens.
     */
-    const yes = await sure(`Move "${doc.title}" out of ${byId(state.project).name} and into ${name}?`, 'Move it')
+    const yes = await sure(`Move "${doc.title}" out of ${byId(state.project).name} and into ${name}?`, 'Move it', {
+      title: 'Move this document?',
+    })
     if (!yes) return
     const done = await attempt(b, 'Moving…',
       async () => await act('document_move', { p_document_id: doc.id, p_project_id: to }),
@@ -13202,6 +13305,8 @@ document.addEventListener('drop', (e) => {
 
 document.addEventListener('keydown', (e) => {
   const cmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
+  /* Team HQ's own palette (bc/jump.js) answers Cmd or Ctrl and K there; this older bar is the classic studio's. */
+  if (cmdK && state.experience === 'basecamp') return
   if (cmdK) { e.preventDefault(); state.cmd.open ? (closeCmd(), render()) : openCmd(); return }
   // Escape closes whatever is open, outermost first.
   if (e.key === 'Escape' && state.cmd.open) { closeCmd(); render() }
@@ -13321,11 +13426,49 @@ function cameBackFromGoogle() {
     return false
   }
   const outcome = said.get('google')
-  if (outcome === null) return false
+  if (outcome === null) {
+    /*
+      A link from a message (#413): "Reconnect Google" on a Telegram notice opens Settings on the tab it names.
+
+      Navigation and nothing else: it says WHERE to open, never what to do there, and only three tabs may be named.
+      Anything else is ignored. Signing in is still required to see anything on the tab, so a link does not widen what
+      anybody can read.
+    */
+    const wanted = said.get('settings')
+    if (wanted === null || !['connections', 'channels', 'health'].includes(wanted)) return false
+    state.setting = wanted
+    // On a phone a section replaces the menu: land on the section itself, not on the list of sections.
+    state.settingsPane = 'detail'
+    /*
+      What the Slack install callback sent back (ADR-0065): one word, used only to say something. Whether Slack IS connected
+      is read from the office when the tab opens, so a typed address cannot make it look connected.
+    */
+    const slackWord = said.get('slack')
+    if (wanted === 'channels' && ['connected', 'refused', 'failed'].includes(slackWord ?? '')) {
+      config.LINK.slackSaid =
+        slackWord === 'connected'
+          ? 'You are back from Slack. The status below is what the office sees.'
+          : slackWord === 'refused'
+            ? 'Slack was not connected. The link may have expired, or that workspace is already connected to another account. Start again to get a new link.'
+            : 'We could not finish connecting Slack just now. Nothing was changed. Try again in a moment.'
+    }
+    try {
+      const clean = new URL(location.href)
+      clean.searchParams.delete('settings')
+      clean.searchParams.delete('slack')
+      history.replaceState({}, '', clean.pathname + clean.search)
+    } catch {
+      /* A page opened from a file has no history to write to. */
+    }
+    // Not true: the caller opens the sheet only for a signed-in person (see where it is opened).
+    return 'link'
+  }
 
   const withWhat = (said.get('with') ?? '').split(',').filter((x) => x !== '')
   const why = (said.get('why') ?? '').slice(0, 160)
   state.setting = 'connections'
+  // The banner below is part of the Connections section, so on a phone the section has to be the thing that opens.
+  state.settingsPane = 'detail'
   googleSaid =
     outcome === 'connected'
       ? {
@@ -13422,7 +13565,21 @@ if (typeof window !== 'undefined') {
     */
     const path = e.state?.path ?? addressNow()
     shownPath = path
+    const was = state.bcExpanded
     goToPath(path)
+    /*
+      BACK FROM A MAXIMISED MODULE settles it back towards its card rather than
+      blinking out, exactly as the close button does. Only when the dialog
+      itself is what went away: stepping between two levels is not a close.
+    */
+    if (was && !state.bcExpanded) {
+      state.bcExpanded = was
+      bcExpand.exit(was, () => {
+        state.bcExpanded = null
+        render()
+      })
+      return
+    }
     render()
   })
 }
@@ -13466,7 +13623,12 @@ const bcContext = {
     and closing is a repaint rather than a navigation - which is what makes
     closing return "naturally to the underlying project homepage".
   */
+  /* An object (a tile, a row) that is about to become a detailed view remembers where it was, so the view grows from it. */
+  rememberOrigin: (el) => {
+    bcExpand.rememberEl(el)
+  },
   openExpanded: (id) => {
+    bcExpand.remember(id)
     state.bcExpanded = id
     render()
   },
@@ -13532,8 +13694,29 @@ const bcContext = {
       render()
       return
     }
-    state.bcExpanded = null
-    render()
+    /*
+      PUT AWAY TOWARDS THE CARD it grew from, then redraw. The animation always
+      calls back, so a close can never wait on motion that does not happen.
+    */
+    const was = state.bcExpanded
+    /*
+      If this very dialog was opened by a history entry of ours, closing is Back: the popstate handler plays the same
+      settle-to-card exit, and the history holds no stale 'open' entry for the next Back to land on.
+    */
+    const entry = typeof history === 'undefined' ? null : history.state
+    if (
+      entry?.path === shownPath &&
+      typeof entry?.from === 'string' &&
+      !entry.from.includes('/x/') &&
+      (shownPath ?? '').includes('/x/')
+    ) {
+      history.back()
+      return
+    }
+    bcExpand.exit(was, () => {
+      state.bcExpanded = null
+      render()
+    })
   },
   /*
     PROJECT SETTINGS, RENDERED AND WIRED BY ITS OWN MODULE.
@@ -13549,7 +13732,7 @@ const bcContext = {
   },
   projectSettingsBody: (p) => projectSettings.section(p, state.setpane, people),
   wireProjectSettings: (root, p) => {
-    projectSettings.wire(root, p, people, render, () => { lookSheet(p) })
+    projectSettings.wire(root, p, people, render, () => { lookSheet(p) }, refresh)
   },
   setPane: (id) => {
     state.setpane = id
@@ -13570,13 +13753,41 @@ const bcContext = {
   },
   /* The office's own settings, in the sheet that already holds them. */
   openGlobalSettings: (tab) => {
-    if (typeof tab === 'string' && tab !== '') state.setting = tab
+    // Named a section: show it. Not named: on a phone, start at the list of sections.
+    if (typeof tab === 'string' && tab !== '') {
+      state.setting = config.tabId(tab)
+      state.settingsPane = 'detail'
+    } else {
+      state.settingsPane = 'index'
+    }
     settingsSheet()
     sheet($('#settings'), true)
+    // The count beside Requests needs one read; the page draws again when it lands.
+    if (!config.GOVERNANCE.loaded) {
+      void config.hydrateGovernance(read).then(() => {
+        if (!$('#settings').hidden) {
+          settingsSheet()
+          sheet($('#settings'), true)
+        }
+      })
+    }
   },
   chatFor: (slug) => chat.thread(slug),
   chatIsReal: (slug) => chat.isReal(slug),
   chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, presented()),
+  /*
+    The Chat route READS THE RECORD when it opens, once per project per page load (P4 closure). `chatLoad` existed and
+    nothing in this experience called it, so a fresh load of /p/<slug>/chat said "Nothing has been said here yet" over a
+    conversation the office held - for every person - and the thread only appeared after a message was sent. The
+    fetch is async, so the redraw happens after the surface that asked for it has finished drawing.
+  */
+  needChat: (slug) => {
+    if (chatRead.has(slug)) return
+    chatRead.add(slug)
+    void chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, presented()).then((t) => {
+      if (t !== null) render()
+    })
+  },
   chatSend: (slug, text) => chat.send(slug, text, null),
   /* The Basecamp branch of drawShell returns before its paintDock call, so a
      voice note sent from the dock repaints it through this. */
@@ -13959,7 +14170,12 @@ render()
   Settings is a page rather than a route (#158), so it opens after the paint
   rather than through the router — the sheet reads a shell that has to exist.
 */
-if (backFromGoogle) {
+/*
+  A link from a message opens Settings only for somebody who is signed in (#413). Signed out, Settings would be drawn over
+  the page's invented example office, which is not somewhere to reconnect anything; the person gets the ordinary
+  signed-out page and its way in instead. The Google callback has always opened it, and still does.
+*/
+if (backFromGoogle === 'link' ? canWrite() : backFromGoogle) {
   settingsSheet()
   sheet($('#settings'), true)
 }
@@ -14828,8 +15044,18 @@ async function refresh() {
     reading that contradicts the row it sits in.
   */
   for (const k of Object.keys(progress)) delete progress[k]
+  let fresh = ''
+  try {
+    fresh = await presentedFresh()
+  } catch (e) {
+    // The sign-in service did not answer: say so on the strip and stop. The session is untouched (net.js).
+    source.state = source.at === null ? 'unreachable' : 'stale'
+    source.why = e instanceof Error ? e.message : 'the sign-in service did not answer'
+    render()
+    return
+  }
   await Promise.all([
-    hydrate(API, await presentedFresh()),
+    hydrate(API, fresh),
     // Both, together. Settings is a separate payload because it is a separate
     // screen and most visits never open it — but a write can change either, so
     // a refresh re-reads both rather than leaving one stale behind a tab.
@@ -14850,6 +15076,20 @@ async function refresh() {
   */
   if (state.sub === 'chat') {
     await chat.load(state.project, byId(state.project)?.id, tokenNow())
+  }
+  /*
+    And the dock's conversation, when the office reports that something changed (an answer landing is a change). It is a
+    different project from the page's whenever it is filing elsewhere, and the page's own was read just above.
+  */
+  if (dockOpen()) {
+    const filedAt = dockPin()
+    if (filedAt !== null && filedAt !== state.project) {
+      const filedProject = byId(filedAt)
+      if (filedProject?.id) await chat.load(filedAt, filedProject.id, tokenNow())
+    } else if (state.sub !== 'chat' && state.project) {
+      await chat.load(state.project, byId(state.project)?.id, tokenNow())
+    }
+    paintDock()
   }
 
   keepingPlace(() => { render() })
@@ -15109,7 +15349,22 @@ async function live() {
     panel to explain it. The seam is `office.js`, which knows about both and
     refreshes a session that is nearly out.
   */
-  const token = await presentedFresh()
+  let token = ''
+  try {
+    token = await presentedFresh()
+  } catch (e) {
+    /*
+      THE SIGN-IN SERVICE DID NOT ANSWER, and that is a different thing from having no session (net.js). The refresh
+      exchange runs BEFORE the studio payload is asked for, so a stuck Auth service used to leave the page on a blank
+      screen for as long as the browser cared to wait. Now it ends: the session stays where it is, the strip says which
+      step stopped and for how long, and Try again is offered (the same retry the studio payload has).
+    */
+    source.state = source.at === null ? 'unreachable' : 'stale'
+    source.why = e instanceof Error ? e.message : 'the sign-in service did not answer'
+    arrivalPending = false
+    render()
+    return
+  }
   if (token === '') {
     /*
       Not a failure, and it must not read as one (#119). `state` stays
@@ -15252,6 +15507,11 @@ async function live() {
   }).catch(() => undefined)
   void Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
     render()
+  })
+  // What Settings may OFFER depends on who is looking, which is only known once the settings payload has arrived; if
+  // the page is already open it is drawn again.
+  document.addEventListener('hq:viewer', () => {
+    if (!$('#settings').hidden) settingsSheet()
   })
 
   /*

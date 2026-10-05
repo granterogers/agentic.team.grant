@@ -36,6 +36,7 @@
  * under the next generation. It is not a repair tool for a typo.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { SlackClient } from '../../src/slack/api.ts'
 import { SlackOffice } from '../../src/slack/office.ts'

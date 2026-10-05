@@ -100,8 +100,8 @@ const PATH_TO: Readonly<Record<JobState, readonly JobState[]>> = {
 
 async function createJob(key: string, priority = 100): Promise<string> {
   const row = await one(`
-    insert into public.jobs (correlation_id, kind, idempotency_key, requested_by, priority)
-    values (gen_random_uuid(), 'verification.probe', '${key}', 'phase-1-verification', ${priority})
+    insert into public.jobs (office_id, correlation_id, kind, idempotency_key, requested_by, priority)
+    values (app.test_office(), gen_random_uuid(), 'verification.probe', '${key}', 'phase-1-verification', ${priority})
     returning job_id
   `)
   return String(row?.job_id)

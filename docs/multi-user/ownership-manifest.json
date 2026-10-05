@@ -1,0 +1,1434 @@
+{
+  "version": 1,
+  "baseline": "41de1965",
+  "generated_from": "production catalogue read-only, 1 October 2026; derivation rule: a table derives only through a foreign key whose columns are NOT NULL in the schema",
+  "tables": {
+    "appearance_settings": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "artifacts": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "artifacts_project_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["requested_by_job"],
+          "parent": "jobs",
+          "constraint": "artifacts_requested_by_job_fkey"
+        }
+      ]
+    },
+    "asset_actions": {
+      "class": "GLOBAL",
+      "why": "Named actions an agent can be asked to do to an asset; product catalogue."
+    },
+    "autonomy_policy": {
+      "class": "GLOBAL",
+      "why": "The matrix with the level-3 CHECK floor. Deliberately one global matrix: a per-office copy would let an office edit its own safety floor."
+    },
+    "autonomy_settings": {
+      "class": "OFFICE_CARRIER",
+      "why": "project_id null means office-global default.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "autonomy_settings_project_id_fkey"
+        }
+      ]
+    },
+    "blockers": {
+      "class": "OFFICE_CARRIER",
+      "why": "job_id and project_id are both nullable; a person presses a blocker by id, so the owner is recorded on the row.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "blockers_job_id_fkey"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "blockers_project_id_fkey"
+        }
+      ]
+    },
+    "branch_groups": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["parent_job_id"],
+          "parent": "jobs",
+          "constraint": "branch_groups_parent_job_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["synthesis_job_id"],
+          "parent": "jobs",
+          "constraint": "branch_groups_synthesis_job_id_fkey"
+        }
+      ]
+    },
+    "breadth_dimensions": {
+      "class": "SYSTEM",
+      "why": "Coverage dimensions of the breadth programme; harness vocabulary."
+    },
+    "briefings": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "browser_actions": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["session_id"],
+          "parent": "browser_sessions",
+          "constraint": "browser_actions_session_id_fkey"
+        },
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "browser_actions_job_id_fkey"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "browser_actions_project_id_fkey"
+        }
+      ]
+    },
+    "browser_sessions": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "browser_sessions_project_id_fkey"
+        }
+      ]
+    },
+    "build_steps": {
+      "class": "SYSTEM",
+      "why": "The build session log (what Claude is building); describes the developer session, not an office."
+    },
+    "calendar_event_projects": {
+      "class": "OFFICE_CARRIER",
+      "why": "Which projects an event is shown in (HQ-CAL-009): office_id is written with the row and is its owner.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["calendar_id", "event_id"],
+          "parent": "calendar_events",
+          "constraint": "calendar_event_projects_event_same_office"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "calendar_event_projects_project_same_office"
+        }
+      ]
+    },
+    "calendar_events": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "ci_runs": {
+      "class": "SYSTEM",
+      "why": "CI dispatch ledger and its deployment-wide minute ceiling."
+    },
+    "ci_workflows": {
+      "class": "SYSTEM",
+      "why": "Which workflows the deployment may run on demand."
+    },
+    "collections": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "collections_project_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["for_task_id"],
+          "parent": "tasks",
+          "constraint": "collections_for_task_id_fkey"
+        }
+      ]
+    },
+    "connection_health": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "connector_capabilities": {
+      "class": "GLOBAL",
+      "why": "Catalogue of what each knowledge connector can be asked for; product definition."
+    },
+    "consultations": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "consultations_job_id_fkey"
+        }
+      ]
+    },
+    "contact_label_links": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["owner", "label_id"],
+          "parent": "contact_labels",
+          "constraint": "contact_label_links_owner_label_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["contact_id"],
+          "parent": "contacts",
+          "constraint": "contact_label_links_contact_id_fkey"
+        }
+      ]
+    },
+    "contact_labels": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "contacts": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "contacts_project_id_fkey"
+        }
+      ]
+    },
+    "dashboard_layouts": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "dashboard_layouts_project_id_fkey"
+        }
+      ]
+    },
+    "decisions": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "decisions_project_id_fkey"
+        },
+        {
+          "columns": ["from_job"],
+          "parent": "jobs",
+          "constraint": "decisions_from_job_fkey"
+        },
+        {
+          "columns": ["supersedes"],
+          "parent": "decisions",
+          "constraint": "decisions_supersedes_fkey"
+        }
+      ]
+    },
+    "deliveries": {
+      "class": "OFFICE_CARRIER",
+      "why": "job_id is nullable (632 of 4,028 have none); the last mile is addressed by id.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "deliveries_job_id_fkey"
+        },
+        {
+          "columns": ["blocker_id"],
+          "parent": "blockers",
+          "constraint": "deliveries_blocker_id_fkey"
+        }
+      ]
+    },
+    "deployment_operators": {
+      "class": "SYSTEM",
+      "why": "Names which people operate the whole deployment (settings, credentials, roster, connectors). Operator authority is not office ownership, so no office owns this table (0647)."
+    },
+    "document_collections": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_collections_document_id_fkey"
+        }
+      ],
+      "also": [
+        {
+          "columns": ["collection_id"],
+          "parent": "collections",
+          "constraint": "document_collections_collection_id_fkey"
+        }
+      ]
+    },
+    "document_index_state": {
+      "class": "OFFICE_CARRIER",
+      "why": "The background indexer's schedule for a document (HQ-DOC-026): office_id is written with the row; closed to every API role.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_index_state_document_same_office"
+        }
+      ]
+    },
+    "document_orders": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "document_orders_project_id_fkey"
+        }
+      ]
+    },
+    "document_previews": {
+      "class": "OFFICE_CARRIER",
+      "why": "The derived, cached preview of an external document (HQ-DOC-029): office_id is written with the row; closed to every API role.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_previews_document_same_office"
+        }
+      ]
+    },
+    "documents": {
+      "class": "OFFICE_CARRIER",
+      "why": "project_id is nullable in the schema even though no row is null today, and a caller names the project on upload; carries the owner and the project is checked.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["mirrors_document_id"],
+          "parent": "documents",
+          "constraint": "documents_mirrors_document_id_fkey"
+        },
+        {
+          "columns": ["imported_from_document_id"],
+          "parent": "documents",
+          "constraint": "documents_imported_from_document_id_fkey"
+        },
+        {
+          "columns": ["produced_by_job"],
+          "parent": "jobs",
+          "constraint": "documents_produced_by_job_fkey"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "documents_project_id_fkey"
+        },
+        {
+          "columns": ["superseded_by"],
+          "parent": "documents",
+          "constraint": "documents_superseded_by_fkey"
+        }
+      ]
+    },
+    "drive_watch": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["attachment_id"],
+          "parent": "project_attachments",
+          "constraint": "drive_watch_attachment_id_fkey"
+        }
+      ]
+    },
+    "duty_said": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "duty_said_project_id_fkey"
+        }
+      ]
+    },
+    "eval_cases": {
+      "class": "SYSTEM",
+      "why": "Evaluation corpus; harness."
+    },
+    "eval_runs": {
+      "class": "SYSTEM",
+      "why": "Evaluation runs; harness."
+    },
+    "eval_scores": {
+      "class": "SYSTEM",
+      "why": "Evaluation scores; harness."
+    },
+    "event_triggers": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "event_triggers_project_id_fkey"
+        }
+      ]
+    },
+    "events": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "events_project_id_fkey"
+        },
+        {
+          "columns": ["compensates_event_id"],
+          "parent": "events",
+          "constraint": "events_compensates_event_id_fkey"
+        },
+        {
+          "columns": ["related_job_id"],
+          "parent": "jobs",
+          "constraint": "events_related_job_fk"
+        }
+      ]
+    },
+    "failure_signatures": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["last_job_id"],
+          "parent": "jobs",
+          "constraint": "failure_signatures_last_job_id_fkey"
+        }
+      ]
+    },
+    "feedback": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "google_oauth_states": {
+      "class": "SYSTEM",
+      "why": "One-time states for connecting the DEPLOYMENT'S Google account, minted for an operator and consumed by the OAuth callback (0648). Moves with the per-office Google decision in the ownership phase."
+    },
+    "google_services": {
+      "class": "GLOBAL",
+      "why": "Catalogue of connectable Google services and their scopes; no credentials."
+    },
+    "icon_defaults": {
+      "class": "GLOBAL",
+      "why": "Name-term to icon-key defaults used when creating a project; product default list."
+    },
+    "inbound_commands": {
+      "class": "OFFICE_CARRIER",
+      "why": "The turn as received. The project is a claim the page makes (project_id defaults to the Unnamed project), so the command records its own owner and the project is CHECKED against it.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["compensates_event_id"],
+          "parent": "events",
+          "constraint": "inbound_commands_compensates_event_id_fkey"
+        },
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "inbound_commands_job_id_fkey"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "inbound_commands_project_id_fkey"
+        },
+        {
+          "columns": ["paired_with"],
+          "parent": "inbound_commands",
+          "constraint": "inbound_commands_paired_with_fkey"
+        }
+      ]
+    },
+    "inbound_commands_slack": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["command_id"],
+          "parent": "inbound_commands",
+          "constraint": "inbound_commands_slack_command_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["resolved_project_id"],
+          "parent": "projects",
+          "constraint": "inbound_commands_slack_resolved_project_id_fkey"
+        }
+      ]
+    },
+    "project_events": {
+      "class": "OFFICE_CARRIER",
+      "why": "Calendar events of a project (HQ-CAL-001): office_id is written with the row and is its owner.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_events_project_same_office"
+        }
+      ]
+    },
+    "slack_installs": {
+      "class": "OFFICE_CARRIER",
+      "why": "A person's own Slack workspace install (ADR-0065); written only by app.slack_install_redeem, which takes the office from the verified state's row, and tied to its workspace by a same-office composite key so an install cannot belong to a different office than its workspace.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["team_id"],
+          "parent": "slack_workspaces",
+          "constraint": "slack_installs_team_id_fkey"
+        }
+      ]
+    },
+    "document_chunks": {
+      "class": "OFFICE_CARRIER",
+      "why": "Derived passages of a document's text (#419); written only by app.index_document_chunks, which copies the document's own office, and tied to the document by a same-office composite key so a passage cannot belong to a different office than its document.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_chunks_document_id_fkey"
+        }
+      ]
+    },
+    "document_version_notes": {
+      "class": "OFFICE_CARRIER",
+      "why": "Provenance of a document version (0900); written only by app.document_version_link, which copies the head document's own office, and tied to its documents by same-office composite keys so a note cannot belong to a different office than the version it describes.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_version_notes_document_id_fkey"
+        },
+        {
+          "columns": ["previous_document_id"],
+          "parent": "documents",
+          "constraint": "document_version_notes_previous_document_id_fkey"
+        },
+        {
+          "columns": ["rolled_back_to"],
+          "parent": "documents",
+          "constraint": "document_version_notes_rolled_back_to_fkey"
+        }
+      ]
+    },
+    "document_import_requests": {
+      "class": "OFFICE_CARRIER",
+      "why": "A person's explicit request to import an external document that Team HQ does not hold yet (0900); written only by app.hq_document_import under the verified office, and tied to its documents by same-office composite keys.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_import_requests_document_id_fkey"
+        },
+        {
+          "columns": ["copy_document_id"],
+          "parent": "documents",
+          "constraint": "document_import_requests_copy_document_id_fkey"
+        }
+      ]
+    },
+    "document_provenance": {
+      "class": "OFFICE_CARRIER",
+      "why": "How a made document was made - the house style hash, the design and the cited sources (0940); written once by app.document_provenance_record under the verified office, read by app.document_provenance_of.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_provenance_document_id_fkey"
+        }
+      ]
+    },
+    "channel_link_challenges": {
+      "class": "OFFICE_CARRIER",
+      "why": "A person's one-time request to connect their own messaging identity; it has no parent row that decides its owner, so it records the office itself, from the verified session.",
+      "cross": []
+    },
+    "incidents": {
+      "class": "OFFICE_CARRIER",
+      "why": "An incident is an office's problem with a service; it has no parent row that decides its owner, so it records the owner itself.",
+      "cross": []
+    },
+    "inference_usage": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "inference_usage_job_id_fkey"
+        }
+      ]
+    },
+    "integration_connections": {
+      "class": "OFFICE_CARRIER",
+      "why": "An office's connection to a provider account (HQ-GOOG-003): office_id is written at creation and write-once, and is the only owner the row has."
+    },
+    "job_branches": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["group_id"],
+          "parent": "branch_groups",
+          "constraint": "job_branches_group_id_fkey"
+        }
+      ],
+      "also": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "job_branches_job_id_fkey"
+        }
+      ]
+    },
+    "job_child_slots": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "job_child_slots_job_id_fkey"
+        }
+      ]
+    },
+    "job_impediments": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "job_impediments_job_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "job_impediments_project_id_fkey"
+        }
+      ]
+    },
+    "job_kind_needs": {
+      "class": "GLOBAL",
+      "why": "Which job kinds need which runtime capability; product/runtime definition."
+    },
+    "job_pauses": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "job_pauses_job_id_fkey"
+        }
+      ]
+    },
+    "job_plans": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "job_plans_job_id_fkey"
+        }
+      ]
+    },
+    "job_state_transitions": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "job_state_transitions_job_id_fkey"
+        }
+      ]
+    },
+    "job_steps": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "job_steps_job_id_fkey"
+        }
+      ]
+    },
+    "job_traces": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "job_traces_job_id_fkey"
+        }
+      ]
+    },
+    "jobs": {
+      "class": "OFFICE_CARRIER",
+      "why": "Every job has an owner; 7,243 real jobs have no project, so a project cannot be the owner (project_id and parent_job_id are nullable).",
+      "cross": [
+        {
+          "columns": ["parent_job_id"],
+          "parent": "jobs",
+          "constraint": "jobs_parent_job_id_fkey"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "jobs_project_id_fkey"
+        },
+        {
+          "columns": ["root_job_id"],
+          "parent": "jobs",
+          "constraint": "jobs_root_job_id_fkey"
+        }
+      ]
+    },
+    "knowledge_connectors": {
+      "class": "GLOBAL",
+      "why": "Seven rows keyed by connector NAME (upload, mcp, notebooklm, notion, github, drive, browser): the catalogue of routes a document can arrive by, with a deployment-level enabled switch. Per-office connection state lives in connection_health and the attachments, not here."
+    },
+    "known_escapes": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["delivery_id"],
+          "parent": "deliveries",
+          "constraint": "known_escapes_delivery_id_fkey"
+        }
+      ]
+    },
+    "legacy_trusted_commands": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["command_id"],
+          "parent": "inbound_commands",
+          "constraint": "legacy_trusted_commands_command_id_fkey"
+        }
+      ]
+    },
+    "lessons": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["from_job"],
+          "parent": "jobs",
+          "constraint": "lessons_from_job_fkey"
+        },
+        {
+          "columns": ["supersedes"],
+          "parent": "lessons",
+          "constraint": "lessons_supersedes_fkey"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "lessons_project_id_fkey"
+        }
+      ]
+    },
+    "mail_messages": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "mcp_auth_codes": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "mcp_calls": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["client_id"],
+          "parent": "mcp_clients",
+          "constraint": "mcp_calls_client_id_fkey"
+        }
+      ]
+    },
+    "mcp_clients": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "mcp_discovered_tools": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["provider_id"],
+          "parent": "mcp_providers",
+          "constraint": "mcp_discovered_tools_provider_id_fkey"
+        }
+      ]
+    },
+    "mcp_oauth_clients": {
+      "class": "SYSTEM",
+      "why": "RFC 7591 dynamic registrations are unauthenticated by design and unowned until a consent binds a code to an office (mcp_auth_codes)."
+    },
+    "mcp_providers": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "model_prices": {
+      "class": "GLOBAL",
+      "why": "Published model prices used only to compute modelled cost; public data."
+    },
+    "notebook_budgets": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["probe_id"],
+          "parent": "notebook_capability_probes",
+          "constraint": "notebook_budgets_probe_id_fkey"
+        }
+      ]
+    },
+    "notebook_capability_probes": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "notebook_chat_usage": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "notebook_chat_usage_project_id_fkey"
+        }
+      ]
+    },
+    "notebook_exclusions": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "notebook_operation_cost": {
+      "class": "GLOBAL",
+      "why": "Our own estimate table of notebook operation costs; not tied to a person."
+    },
+    "notebook_refusals": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "notebook_spend": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "notebook_spend_project_id_fkey"
+        },
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "notebook_spend_job_id_fkey"
+        }
+      ]
+    },
+    "notebook_sync_queue": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "notebook_sync_queue_project_id_fkey"
+        },
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "notebook_sync_queue_job_id_fkey"
+        }
+      ]
+    },
+    "notification_events": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "notification_events_project_id_fkey"
+        }
+      ]
+    },
+    "notification_preferences": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "notification_preferences_project_id_fkey"
+        }
+      ]
+    },
+    "office_backfill_report": {
+      "class": "SYSTEM",
+      "why": "The P2 ownership backfill's own record of which rule proved how many rows of which table. Append-only deployment evidence; no person reads it."
+    },
+    "office_bridge_use": {
+      "class": "SYSTEM",
+      "why": "Counts how often a legacy writer relied on the compatibility bridge to be given an office. Deployment telemetry that ends when P3 removes the bridge."
+    },
+    "office_edge_exceptions": {
+      "class": "SYSTEM",
+      "why": "Names the few existing append-only rows whose edge crosses offices and cannot be corrected; the matching key stays NOT VALID and a check keeps the list from growing."
+    },
+    "office_repair_log": {
+      "class": "SYSTEM",
+      "why": "Old values of the few rows a P2 backfill wave had to re-point, written before the change so it can be reversed. Append-only deployment evidence."
+    },
+    "office_members": {
+      "class": "SYSTEM",
+      "why": "Legacy email-keyed sign-in allow-list; to be retired when offices exist. Not an ownership key."
+    },
+    "offices": {
+      "class": "SYSTEM",
+      "why": "The ownership primitive itself: one row per office (person, sample, test, system), immutable identity, never deleted. An office is not owned by an office."
+    },
+    "operator_senders": {
+      "class": "SYSTEM",
+      "why": "Dedupe-key namespaces of legitimate senders; operator-maintained containment data."
+    },
+    "output_shapes": {
+      "class": "GLOBAL",
+      "why": "What an output of a given shape must carry; product definition."
+    },
+    "outputs": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "outputs_job_id_fkey"
+        }
+      ]
+    },
+    "plane_layouts": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "plane_layouts_project_id_fkey"
+        }
+      ]
+    },
+    "preference_instructions": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["command_id"],
+          "parent": "inbound_commands",
+          "constraint": "preference_instructions_command_id_fkey"
+        }
+      ]
+    },
+    "preference_proposals": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "preference_proposals_project_id_fkey"
+        },
+        {
+          "columns": ["instruction_id"],
+          "parent": "preference_instructions",
+          "constraint": "preference_proposals_instruction_id_fkey"
+        }
+      ]
+    },
+    "project_aliases": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_aliases_project_id_fkey"
+        }
+      ]
+    },
+    "project_attachments": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_attachments_project_id_fkey"
+        }
+      ]
+    },
+    "project_briefs": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_briefs_project_id_fkey"
+        }
+      ]
+    },
+    "project_connector_choices": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_connector_choices_project_id_fkey"
+        }
+      ]
+    },
+    "project_references": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_references_project_id_fkey"
+        }
+      ]
+    },
+    "project_seen": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_seen_project_id_fkey"
+        }
+      ]
+    },
+    "project_staff": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_staff_project_id_fkey"
+        }
+      ]
+    },
+    "project_switches": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_switches_project_id_fkey"
+        }
+      ]
+    },
+    "projects": {
+      "class": "OFFICE_CARRIER",
+      "why": "Root: a dashboard project is the first thing a person creates; nothing above it."
+    },
+    "proposals": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["delivered_by_job"],
+          "parent": "jobs",
+          "constraint": "proposals_delivered_by_job_fkey"
+        }
+      ]
+    },
+    "provider_health": {
+      "class": "SYSTEM",
+      "why": "Circuit-breaker state of the shared LLM provider; infrastructure."
+    },
+    "provider_models": {
+      "class": "SYSTEM",
+      "why": "Measured model allow-list for the deployment; infrastructure."
+    },
+    "providers": {
+      "class": "SYSTEM",
+      "why": "LLM provider registry for the whole deployment (one key, one cost ceiling). Human offices must not own or edit it."
+    },
+    "relations": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "relations_project_id_fkey"
+        }
+      ]
+    },
+    "responsibilities": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "responsibilities_project_id_fkey"
+        }
+      ]
+    },
+    "routing_decisions": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "routing_decisions_job_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["linked_job_id"],
+          "parent": "jobs",
+          "constraint": "routing_decisions_linked_job_id_fkey"
+        }
+      ]
+    },
+    "self_improvement_kinds": {
+      "class": "GLOBAL",
+      "why": "Job kinds that count against the self-improvement token budget; deployment policy."
+    },
+    "signals": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "signals_project_id_fkey"
+        },
+        {
+          "columns": ["caused_by_job"],
+          "parent": "jobs",
+          "constraint": "signals_caused_by_job_fkey"
+        }
+      ]
+    },
+    "skill_tools": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["skill_id"],
+          "parent": "skills",
+          "constraint": "skill_tools_skill_id_fkey"
+        }
+      ]
+    },
+    "skill_uses": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["skill_id"],
+          "parent": "skills",
+          "constraint": "skill_uses_skill_id_fkey"
+        }
+      ],
+      "also": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "skill_uses_job_id_fkey"
+        }
+      ]
+    },
+    "skills": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "skills_project_id_fkey"
+        },
+        {
+          "columns": ["from_job"],
+          "parent": "jobs",
+          "constraint": "skills_from_job_fkey"
+        },
+        {
+          "columns": ["supersedes"],
+          "parent": "skills",
+          "constraint": "skills_supersedes_fkey"
+        }
+      ]
+    },
+    "slack_app_credentials": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "slack_channel_authority": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "slack_channel_authority_project_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["source_job"],
+          "parent": "jobs",
+          "constraint": "slack_channel_authority_source_job_fkey"
+        },
+        {
+          "columns": ["consumed_by_job"],
+          "parent": "jobs",
+          "constraint": "slack_channel_authority_consumed_by_job_fkey"
+        }
+      ]
+    },
+    "slack_channel_map": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["team_id"],
+          "parent": "slack_workspaces",
+          "constraint": "slack_channel_map_team_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "slack_channel_map_project_id_fkey"
+        }
+      ]
+    },
+    "slack_workspaces": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "staff": {
+      "class": "GLOBAL",
+      "why": "The eight shared personas (Claire, Tom, ...). Identities not state: what a persona learns, holds or is granted lives in office-owned rows. Every office sees the same roster."
+    },
+    "staff_prompts": {
+      "class": "GLOBAL",
+      "why": "Versioned product prompts for the shared personas; product text, contains no office data."
+    },
+    "staff_tools": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "standing_authorizations": {
+      "class": "OFFICE_CARRIER",
+      "why": "project_id null means office-global; it is authority and must not depend on a nullable parent.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "standing_authorizations_project_id_fkey"
+        }
+      ]
+    },
+    "style_profiles": {
+      "class": "OFFICE_CARRIER",
+      "why": "A project's kept report style (HQ-STYLE-013): office_id is written with the row and is its owner.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "style_project_in_same_office"
+        }
+      ]
+    },
+    "subject_identities": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "suggestions": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "suggestions_project_id_fkey"
+        }
+      ]
+    },
+    "sync_runs": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "system_config": {
+      "class": "SYSTEM",
+      "why": "Deployment settings. Roughly sixteen keys are per-person and are to be split out later (office_settings); until then the table is operator-only."
+    },
+    "task_calendar_links": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["task_id"],
+          "parent": "tasks",
+          "constraint": "task_calendar_links_task_id_fkey"
+        }
+      ]
+    },
+    "task_links": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["task_id"],
+          "parent": "tasks",
+          "constraint": "task_links_task_id_fkey"
+        }
+      ]
+    },
+    "task_tombstones": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "tasks": {
+      "class": "OFFICE_CARRIER",
+      "why": "Personal tasks may have no project (project_id nullable) and a caller names the project.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "tasks_project_id_fkey"
+        },
+        {
+          "columns": ["parent_task_id"],
+          "parent": "tasks",
+          "constraint": "tasks_parent_task_id_fkey"
+        },
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "tasks_job_id_fkey"
+        },
+        {
+          "columns": ["satisfies_blocker"],
+          "parent": "blockers",
+          "constraint": "tasks_satisfies_blocker_fkey"
+        }
+      ]
+    },
+    "telegram_bots": {
+      "class": "SYSTEM",
+      "why": "Shared bots, one per staff persona. A bot is infrastructure; the CHAT is the identity (telegram_chats)."
+    },
+    "telegram_chats": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    },
+    "test_destinations": {
+      "class": "SYSTEM",
+      "why": "Destinations a harness may deliver to; containment registry, retired never deleted."
+    },
+    "test_origins": {
+      "class": "SYSTEM",
+      "why": "Conversations a verification run declared as test traffic before knocking; containment registry."
+    },
+    "tool_permissions": {
+      "class": "GLOBAL",
+      "why": "Capability catalogue and the product safety floor: what the product CAN do. Per-office narrowing lives in staff_tools and standing_authorizations."
+    },
+    "tool_requests": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["from_job"],
+          "parent": "jobs",
+          "constraint": "tool_requests_from_job_fkey"
+        }
+      ]
+    },
+    "trigger_firings": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["trigger_id"],
+          "parent": "event_triggers",
+          "constraint": "trigger_firings_trigger_id_fkey"
+        }
+      ],
+      "also": [
+        {
+          "columns": ["signal_id"],
+          "parent": "signals",
+          "constraint": "trigger_firings_signal_id_fkey"
+        }
+      ],
+      "cross": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "trigger_firings_job_id_fkey"
+        }
+      ]
+    },
+    "tts_usage": {
+      "class": "SYSTEM",
+      "why": "Deployment-wide metering of a shared TTS provider."
+    },
+    "undo_requests": {
+      "class": "OFFICE_DERIVED",
+      "path": [
+        {
+          "columns": ["action_id"],
+          "parent": "undoable_actions",
+          "constraint": "undo_requests_action_id_fkey"
+        }
+      ]
+    },
+    "undoable_actions": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation.",
+      "cross": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "undoable_actions_job_id_fkey"
+        }
+      ]
+    },
+    "workspace_layouts": {
+      "class": "OFFICE_CARRIER",
+      "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
+    }
+  }
+}

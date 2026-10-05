@@ -29,6 +29,8 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
+import type { OfficeId } from '../office/context.ts'
 import { nothingToDo, type Plan } from '../tools/plan.ts'
 import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
 
@@ -112,6 +114,11 @@ function eventFor(row: PlanRow): Record<string, unknown> {
  */
 export async function planTasksForCalendar(
   db: SqlExecutor,
+  /**
+   * `office` is the office this sync is FOR: the claimed job's (or the one a script names). A calendar link is filed
+   * against a task inside that office, so a sync can never link, or clear, another office's task.
+   */
+  office: RetrievalOffice,
   options: { readonly fetchImpl?: typeof fetch } = {},
 ): Promise<{
   readonly ok: boolean
@@ -144,7 +151,13 @@ export async function planTasksForCalendar(
   }
 
   const access = await googleAccess(db, fetchImpl)
-  await recordGoogleHealth(db, access)
+  // The office is the caller's (the claimed job's, or the one a script names), resolved in SQL - never an ambient default.
+  const officeId = (
+    'officeId' in office
+      ? office.officeId
+      : ((await db.execute(`select ${officeOf(office)}::text as id`)).rows[0] as { id: string }).id
+  ) as OfficeId
+  await recordGoogleHealth(db, access, officeId)
   if (!access.ok) {
     return { ok: false, note: access.reason, plan: nothingToDo('calendar.write', access.reason) }
   }
@@ -163,7 +176,8 @@ export async function planTasksForCalendar(
     return { ok: false, note: why, plan: nothingToDo('calendar.write', why) }
   }
 
-  const answer = (await db.execute('select app.calendar_task_plan() as p')).rows[0] as {
+  const answer = (await db.execute(`select app.calendar_task_plan(${officeOf(office)}) as p`))
+    .rows[0] as {
     p: CalendarWork
   }
   const work = answer.p
@@ -208,12 +222,13 @@ export async function planTasksForCalendar(
 /** Put dated, open tasks in the diary, and take away the ones that are done. */
 export async function syncTasksToCalendar(
   db: SqlExecutor,
+  office: RetrievalOffice,
   options: { readonly fetchImpl?: typeof fetch; readonly dryRun?: boolean } = {},
 ): Promise<SyncOutcome> {
   const fetchImpl = options.fetchImpl ?? fetch
   const nothing = { created: 0, updated: 0, removed: 0 }
 
-  const planned = await planTasksForCalendar(db, options)
+  const planned = await planTasksForCalendar(db, office, options)
   if (planned.work === undefined || planned.access === undefined) {
     return { ok: planned.ok, note: planned.note, ...nothing }
   }
@@ -263,7 +278,7 @@ export async function syncTasksToCalendar(
     const already = listed.items?.find((e) => typeof e.id === 'string' && e.id !== '')?.id
     if (already !== undefined) {
       await db.execute(
-        `select app.calendar_link_set(${lit(row.task_id)}::uuid, ${lit(target)}, ${lit(already)}, ${lit(row.hash)})`,
+        `select app.calendar_link_set(${officeOf(office)}, ${lit(row.task_id)}::uuid, ${lit(target)}, ${lit(already)}, ${lit(row.hash)})`,
       )
       created += 1
       continue
@@ -283,7 +298,7 @@ export async function syncTasksToCalendar(
       continue
     }
     await db.execute(
-      `select app.calendar_link_set(${lit(row.task_id)}::uuid, ${lit(target)}, ${lit(body.id)}, ${lit(row.hash)})`,
+      `select app.calendar_link_set(${officeOf(office)}, ${lit(row.task_id)}::uuid, ${lit(target)}, ${lit(body.id)}, ${lit(row.hash)})`,
     )
     created += 1
   }
@@ -304,7 +319,9 @@ export async function syncTasksToCalendar(
       alone" flag is a real improvement and is not this change.
     */
     if (r.status === 404 || r.status === 410) {
-      await db.execute(`select app.calendar_link_clear(${lit(row.task_id)}::uuid)`)
+      await db.execute(
+        `select app.calendar_link_clear(${officeOf(office)}, ${lit(row.task_id)}::uuid)`,
+      )
       continue
     }
     if (!r.ok) {
@@ -312,7 +329,7 @@ export async function syncTasksToCalendar(
       continue
     }
     await db.execute(
-      `select app.calendar_link_set(${lit(row.task_id)}::uuid, ${lit(on)}, ${lit(row.event_id ?? '')}, ${lit(row.hash)})`,
+      `select app.calendar_link_set(${officeOf(office)}, ${lit(row.task_id)}::uuid, ${lit(on)}, ${lit(row.event_id ?? '')}, ${lit(row.hash)})`,
     )
     updated += 1
   }
@@ -332,7 +349,9 @@ export async function syncTasksToCalendar(
     const url = `${API}/calendars/${encodeURIComponent(row.calendar_id)}/events/${encodeURIComponent(row.event_id)}`
     const look = await fetchImpl(url, { headers })
     if (look.status === 404 || look.status === 410) {
-      await db.execute(`select app.calendar_link_clear(${lit(row.task_id)}::uuid)`)
+      await db.execute(
+        `select app.calendar_link_clear(${officeOf(office)}, ${lit(row.task_id)}::uuid)`,
+      )
       removed += 1
       continue
     }
@@ -346,7 +365,9 @@ export async function syncTasksToCalendar(
     if (found.extendedProperties?.private?.[TAG] !== row.task_id) {
       trouble.push(`event ${row.event_id} is not ours — left alone`)
       // The link is wrong, and keeping it would mean trying again for ever.
-      await db.execute(`select app.calendar_link_clear(${lit(row.task_id)}::uuid)`)
+      await db.execute(
+        `select app.calendar_link_clear(${officeOf(office)}, ${lit(row.task_id)}::uuid)`,
+      )
       continue
     }
     const gone = await fetchImpl(url, { method: 'DELETE', headers })
@@ -356,7 +377,9 @@ export async function syncTasksToCalendar(
       trouble.push(`could not remove the event for ${row.task_id} (${String(gone.status)})`)
       continue
     }
-    await db.execute(`select app.calendar_link_clear(${lit(row.task_id)}::uuid)`)
+    await db.execute(
+      `select app.calendar_link_clear(${officeOf(office)}, ${lit(row.task_id)}::uuid)`,
+    )
     removed += 1
   }
 

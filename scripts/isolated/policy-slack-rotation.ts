@@ -111,7 +111,11 @@ check(
 
 // ---- 3. nothing standing, nothing implied ------------------------------------------------------------------------
 const standing = json(
-  (await one(`select app.grant_standing('slack.rotate', null, 'always', 'grant') as r`)).r,
+  (
+    await one(
+      `select app.grant_standing(app.test_office(), 'slack.rotate', null, 'always', 'grant') as r`,
+    )
+  ).r,
 )
 const viaGateway = await w.asPerson('grant_standing', {
   p_tool: 'slack.rotate',
@@ -123,21 +127,25 @@ check(
   String(standing.error).slice(0, 80),
 )
 for (const dial of ['act', 'act_with_review', 'suggest']) {
-  await one(`select app.hq_autonomy_set(${lit(dial)}, null, 'grant') as r`)
+  await one(
+    `select app.hq_autonomy_set(app.owner_office('grant'), ${lit(dial)}, null, 'grant') as r`,
+  )
   await run(await w.dutyJob('office.slack_rotate'))
 }
+const rotationJob1 = (await w.dutyJob('office.slack_rotate')).jobId
 const decisionAtAct = json(
   (
     await one(
-      `select app.authorize_effect(p_project => null, p_tool => 'slack.rotate', p_job => ${lit((await w.dutyJob('office.slack_rotate')).jobId)}::uuid, p_fingerprint => 'x') as d`,
+      `select app.authorize_effect(p_office => app.job_office(${lit(rotationJob1)}::uuid), p_project => null, p_tool => 'slack.rotate', p_job => ${lit(rotationJob1)}::uuid, p_fingerprint => 'x') as d`,
     )
   ).d,
 )
-await one(`select app.hq_autonomy_set('act', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'act', null, 'grant') as r`)
+const rotationJob2 = (await w.dutyJob('office.slack_rotate')).jobId
 const atAct = json(
   (
     await one(
-      `select app.authorize_effect(p_project => null, p_tool => 'slack.rotate', p_job => ${lit((await w.dutyJob('office.slack_rotate')).jobId)}::uuid, p_fingerprint => 'x') as d`,
+      `select app.authorize_effect(p_office => app.job_office(${lit(rotationJob2)}::uuid), p_project => null, p_tool => 'slack.rotate', p_job => ${lit(rotationJob2)}::uuid, p_fingerprint => 'x') as d`,
     )
   ).d,
 )
@@ -146,7 +154,7 @@ check(
   atAct.verdict === 'ask' && decisionAtAct.verdict === 'ask' && rotations === 0,
   `act -> ${String(atAct.verdict)}`,
 )
-await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'suggest', null, 'grant') as r`)
 
 // ---- 4. nothing a job carries is an approval -------------------------------------------------------------------------
 const forged = await w.dutyJob('office.slack_rotate')
@@ -160,7 +168,7 @@ const parent = await w.dutyJob('office.slack_rotate')
 const other = String(
   (
     await one(
-      `select app.request_generation_approval(${lit(parent.jobId)}::uuid, 'notebook.generate', 'a deck', 'proof') as id`,
+      `select app.request_generation_approval(app.job_office(${lit(parent.jobId)}::uuid), ${lit(parent.jobId)}::uuid, 'notebook.generate', 'a deck', 'proof') as id`,
     )
   ).id,
 )

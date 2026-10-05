@@ -1,0 +1,267 @@
+{
+  "app.job_depth(p_job_id uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound: the id IS the claim. It walks the held job's own parent chain (a child and its parent are one office) and returns a number; a job that does not exist is depth 0. Service-only.",
+    "proof": "k-proof: app.job_depth is job-bound: service-only, the depth of the held job, and a job that does not exist is depth 0"
+  },
+  "app.job_origin(p_job_id uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound: classifies the held job's tree. The one other row it reads, the command a root points at, counts only when it is the root's OWN office's (a pinned command of another office reads as none), and its harness test asks harness_job, which is office-checked since 0853.",
+    "proof": "k-proof: app.job_origin is job-bound: a pinned command of B's reads as no command, exactly as a missing one, and a missing job is unknown"
+  },
+  "app.job_forwarded(p_job uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound: reads whether the command the held job was made from was forwarded, joined on the job's own office. A command of another office, and a missing job, are not forwarded.",
+    "proof": "k-proof: app.job_forwarded is job-bound: only the job's own office's command can be what it was forwarded from, B's reads as none, and a missing job is not forwarded"
+  },
+  "app.owed_a_word(p_job_id uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound: who is owed a sentence for the held job. The command the job points at is data and counts only on a command of the job's own office; every other table it reads (deliveries, pauses, blockers) is keyed by the job.",
+    "proof": "k-proof: app.owed_a_word is job-bound: a command of B's that A's job points at is owed nothing, exactly as a command that does not exist"
+  },
+  "app.stop_requested(p_job uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound: reads one flag of the held job and nothing else. A missing job is false.",
+    "proof": "k-proof: app.stop_requested is job-bound: true for the held job that was asked to stop, false for one that was not and for one that does not exist"
+  },
+  "app.open_approval_for_job(p_job uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound: the held job's own open question, selected inside the job's office. Nothing for a job with none or none at all.",
+    "proof": "k-proof: app.open_approval_for_job is job-bound: the held job's own open question, nothing for a job with none or none at all, never B's"
+  },
+  "app.job_plan(p_job_id uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound reader of the plan the held job recorded (written only by job_plan_set, which takes the office). A job without a plan, or without existing, has none. Service-only; its one wrapper, public.hq_job_plan, is service_role only and is reported, not reached by the gateway.",
+    "proof": "k-proof: app.job_plan is job-bound: the held job's own plan, and a job that does not exist has none"
+  },
+  "app.cannot(p_job_id uuid, p_kind impediment_kind, p_needed text, p_noticed_by text, p_detail text, p_understood_as text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound writer: records an impediment under the held job, taking the project and the specialist from that job's own row. It names no other id. A job that does not exist is 'no such job' and writes nothing.",
+    "proof": "k-proof: app.cannot is job-bound: it records under the held job's own project, a job that does not exist is 'no such job', and B's rows do not move"
+  },
+  "app.understood(p_job_id uuid, p_sentence text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound writer: stores one restatement on the held job, once. It names no other id.",
+    "proof": "k-proof: app.understood is job-bound: the held job's own restatement is stored once, a job that does not exist is 'no such job'"
+  },
+  "app.staff_behind_job(p_job_id uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound reader: the specialist behind the held job, from its lineage's routing decisions or, for a duty's job, the duty found by slug WITHIN the job's own office (slugs repeat across offices since 0680).",
+    "proof": "k-proof: app.staff_behind_job is job-bound: a duty is the job's own office's, so a slug only B has names nobody for A's job, and a missing job names nobody"
+  },
+  "app.approval_binds(p_job uuid, p_fingerprint text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound reader: does the fingerprint of what the held job is about to do match what was approved for THIS job. Reads only the job's own pauses.",
+    "proof": "k-proof: app.approval_binds is job-bound: the held job's own approval matches only the action it bound, and a job with none reads as one that does not exist"
+  },
+  "app.renew_lease(p_job uuid, p_worker text, p_attempt integer, p_gen bigint)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "The claim fence: keyed by the job AND the worker, the attempt and the claim number, so a stale worker or claim renews nothing. Not weakened here.",
+    "proof": "k-proof: app.renew_lease and app.job_held are the claim fence: a stale claim, a stale worker and a missing job hold nothing, the real claim holds"
+  },
+  "app.job_held(p_job uuid, p_worker text, p_attempt integer, p_gen bigint)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "The claim fence: does this worker still hold this attempt of this job at this claim number. A missing job holds nothing.",
+    "proof": "k-proof: app.renew_lease and app.job_held are the claim fence: a stale claim, a stale worker and a missing job hold nothing, the real claim holds"
+  },
+  "app.pause_job(p_job uuid, p_reason text, p_detail text, p_resume_when text, p_resumable boolean, p_until timestamp with time zone, p_expires_at timestamp with time zone, p_binds_to text, p_worker text, p_gen bigint)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound writer: parks the held job and records why. A worker that says who it is must still hold the claim (stale caller is refused). It names no other id; the blockers it looks at are the job's own.",
+    "proof": "k-proof: app.pause_job is job-bound: a worker that does not hold the claim cannot park the job, the holder can, and a missing job is no such job"
+  },
+  "app.resume_job(p_job uuid, p_why text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Job-bound writer: wakes the held job when its pause is over. It names no other id. A job that is not parked, or does not exist, is refused with its own sentence.",
+    "proof": "k-proof: app.resume_job is job-bound: it wakes a parked job, refuses one that is not parked, and a missing job is no such job"
+  },
+  "app.dequeue_job(p_worker text, p_can_transcribe boolean, p_can_subprocess boolean, p_kinds text[], p_requested_by text)": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan: the one worker queue is global by design. It takes a queued job of an ACTIVE office only (a disabled office's work waits where it is, 0681), returns the job whole with its office_id, and the worker passes that office to every later call. It carries nothing from one office to another.",
+    "proof": "k-proof: app.dequeue_job returns the claimed job whole with its office, and a disabled office's queued job is not claimed"
+  },
+  "public.dequeue_job(p_worker text, p_can_transcribe boolean, p_can_subprocess boolean, p_kinds text[], p_requested_by text)": {
+    "class": "GLOBAL",
+    "reason": "The service_role door onto app.dequeue_job: no browser role can execute it, and it returns exactly what app.dequeue_job returns, office included.",
+    "proof": "k-proof: app.dequeue_job returns the claimed job whole with its office, and a disabled office's queued job is not claimed"
+  },
+  "app.dispatch_due_responsibilities()": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan over duties: each fired job is the duty's own office (insert office_id = the responsibility's), the duty slug is unique per office, and app.due_responsibilities only returns duties of an active office.",
+    "proof": "k-proof: app.dispatch_due_responsibilities fires an active office's due duty and none of a switched-off office's"
+  },
+  "public.dispatch_due_responsibilities()": {
+    "class": "GLOBAL",
+    "reason": "The service_role door onto app.dispatch_due_responsibilities; no browser role can execute it.",
+    "proof": "k-proof: app.dispatch_due_responsibilities fires an active office's due duty and none of a switched-off office's"
+  },
+  "app.recover_stalled_jobs()": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan: moves a job whose lease lapsed to retrying, failed or notifying, one row at a time, in the job's own office; a job of an office that is not active is not swept (0852). It moves no job's office and shows no content.",
+    "proof": "k-proof: app.recover_stalled_jobs recovers an active office's stalled job and leaves a switched-off office's where it was"
+  },
+  "app.recover_stalled_syncs()": {
+    "class": "GLOBAL",
+    "reason": "Housekeeping by the clock: marks a sync run whose lease lapsed as abandoned, per row, keeping each row's office. It starts nothing.",
+    "proof": "k-proof: app.recover_stalled_syncs abandons a lapsed sync run in every office and each keeps its office"
+  },
+  "app.requeue_retrying()": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan: moves a retrying job of an ACTIVE office to queued, keeping the row's office (0852).",
+    "proof": "k-proof: app.requeue_retrying requeues an active office's retrying job and leaves a switched-off office's where it was"
+  },
+  "app.resumable_now()": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan: lists, per job, the parked jobs of an ACTIVE office whose wait is over (job id, kind, reason). A listing of ids for the worker; it changes nothing and carries nothing between offices (0852).",
+    "proof": "k-proof: app.resumable_now lists the wake-ups of an active office and none of a switched-off one"
+  },
+  "app.resume_paused(p_kinds text[])": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan: re-queues a job of an ACTIVE office that was parked only because no worker had its handler, keeping the row's office (0852).",
+    "proof": "k-proof: app.resume_paused resumes an active office's parked job and leaves a switched-off office's parked"
+  },
+  "app.settle_exhausted_jobs()": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan: fails a job of an ACTIVE office that has no attempts left and cannot start, per row, keeping the row's office (0852).",
+    "proof": "k-proof: app.settle_exhausted_jobs fails an active office's job with no attempts left and leaves a switched-off office's alone"
+  },
+  "app.enqueue_orphans()": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan: gives a job to an inbound message of an ACTIVE office that has none, through app.enqueue_inbound, which files the job in the command's own office (0852).",
+    "proof": "k-proof: app.enqueue_orphans makes a job for an active office's unanswered message and none for a switched-off office's"
+  },
+  "app.expire_undo_offers()": {
+    "class": "GLOBAL",
+    "reason": "Housekeeping by the clock: an undo offer past its deadline is expired, per row, in every office. No job moves, nothing starts, and each row keeps its office.",
+    "proof": "k-proof: app.expire_undo_offers expires lapsed offers by the clock, in every office, and each keeps its office"
+  },
+  "app.mcp_expire_codes()": {
+    "class": "GLOBAL",
+    "reason": "Retention by the clock: deletes authorization codes long past their expiry, in every office; a live code is untouched.",
+    "proof": "k-proof: app.mcp_expire_codes drops codes long past their expiry in every office and leaves each office's live code"
+  },
+  "app.provision_missing_channels()": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan: queues one channel-provisioning job per ACTIVE office's old-enough attached project, filed in the project's own office (0852); a project of an office that is not active wants nothing.",
+    "proof": "k-proof: app.provision_missing_channels wants a channel for an active office's project and none for a switched-off office's"
+  },
+  "app.proposals_undeliver()": {
+    "class": "GLOBAL",
+    "reason": "Housekeeping: puts a proposal back in front of its person only when the job that delivered it finished without a sent delivery, and only through a job of the proposal's OWN office (0784). It can only restore, never hide.",
+    "proof": "k-proof: app.proposals_undeliver puts a proposal back only through its own office's delivering job, and each keeps its office"
+  },
+  "app.chores_for_backups()": {
+    "class": "GLOBAL",
+    "reason": "Deployment-level chore: a stale or unproven backup is raised on the list of each OPERATOR's office only (app.operator_offices(), active offices), never on another person's.",
+    "proof": "k-proof: app.chores_for_backups raises its chore for the operator's office only, never for another person's"
+  },
+  "app.chores_for_credentials()": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan over credential health: a chore is raised and cleared in the credential's own office, and only for an ACTIVE office (0852).",
+    "proof": "k-proof: app.chores_for_credentials raises a chore for an active office's dead credential and none for a switched-off office's"
+  },
+  "public.chores_for_credentials()": {
+    "class": "GLOBAL",
+    "reason": "The service_role door onto app.chores_for_credentials; no browser role can execute it.",
+    "proof": "k-proof: app.chores_for_credentials raises a chore for an active office's dead credential and none for a switched-off office's"
+  },
+  "app.job_trace_prune(p_days integer, p_limit integer)": {
+    "class": "GLOBAL",
+    "reason": "Retention by the clock: deletes trace lines older than the window in every office (a deployment-wide retention rule); it moves no job and returns only a count.",
+    "proof": "k-proof: app.job_trace_prune drops traces past the window in every office (retention is deployment-wide), keeps the recent ones, and moves no job"
+  },
+  "app.defer_over_budget()": {
+    "class": "GLOBAL",
+    "reason": "Deployment budget by design (the free-tier quota is shared): it delays queued jobs of an over-budget specialist and never moves a job or its office.",
+    "proof": "k-proof: app.defer_over_budget only delays queued work: it moved no job from one office to another"
+  },
+  "app.claim_pending_notification(p_worker text, p_lease_seconds integer)": {
+    "class": "GLOBAL",
+    "reason": "Deployment scan: leases one finished job of an ACTIVE office for delivery (0784, as dequeue_job since 0681) and returns it whole with its own project; it carries nothing between offices.",
+    "proof": "k-proof: app.claim_pending_notification claims an active office's finished job and never a switched-off office's"
+  },
+  "app.harness_job(p_job_id uuid)": {
+    "class": "GLOBAL",
+    "reason": "Classification predicate over the job's own row and its ancestors: returns one boolean and no content. The command a job points at counts only in the job's own office (0853). Service-only, and only ever asked with an id the asker already holds.",
+    "proof": "k-proof: app.harness_job classifies the job's own row: a person's turn is not harness, a suite's is, and another office's real job reads as a missing one"
+  },
+  "app.harness_suggestion(p_offer_args jsonb)": {
+    "class": "GLOBAL",
+    "reason": "Classification predicate: harness_job of the job a suggestion came from. One boolean, no content.",
+    "proof": "k-proof: app.harness_suggestion is harness_job of the job a suggestion came from, and false for a suggestion that names none"
+  },
+  "app.job_office(p_job uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "The resolver itself: the office of the CLAIMED job, which the worker passes to every later call. It takes no office; a job that does not exist has no office (no_office). Service-only.",
+    "proof": "k-proof: app.job_office is the resolver: it takes no office, answers the claimed job's own office, and a job that does not exist has no office"
+  },
+  "app.delivery_office(p_job uuid, p_channel text, p_target_ref text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "The delivery resolver: the job's office, else the test office for a registered test destination, else the operator's. It takes no office from a caller. Service-only.",
+    "proof": "k-proof: app.delivery_office is the resolver: it takes no office, a delivery for a job is that job's office, and one for no job is the operator's"
+  },
+  "app.operator_chat(p_bot_id text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "The operator resolver: the operator's own chat for a bot, computed inside from app.operator_office(). It takes no office and answers only for the operator's office.",
+    "proof": "k-proof: app.operator_chat is the resolver: it takes no office and answers only for the operator's office, never another person's chat"
+  },
+  "app.principal_refusal(p_by text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "The principal resolver: refuses an empty or unknown name with a fixed sentence. It takes a name and no office and reads no content.",
+    "proof": "k-proof: app.principal_refusal is the resolver: it takes a name and no office, refuses an empty or unknown one with a fixed sentence and says nothing for a person the office knows"
+  },
+  "app.enqueue_inbound(p_command_id uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the adapter writes the command under the verified sender (or the signed-in person) and then asks for the job; the job takes the office of that command. The command id comes from the adapter's own insert, never from a request.",
+    "proof": "identity-door: enqueue_inbound makes the job in the office of the command the adapter wrote, each command's own, and cannot be asked for an office"
+  },
+  "public.enqueue_inbound(p_command_id uuid)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the adapter writes the command under the verified sender (or the signed-in person) and then asks for the job; the job takes the office of that command. The command id comes from the adapter's own insert, never from a request.",
+    "proof": "identity-door: enqueue_inbound makes the job in the office of the command the adapter wrote, each command's own, and cannot be asked for an office"
+  },
+  "app.mcp_client_for(p_token_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the MCP bearer token (hashed) IS the identity. It returns the one enabled client that holds that hash and the office the client was issued in, in an active non-system office. No office is accepted, so none can be named.",
+    "proof": "identity-door: mcp_client_for turns a token hash into that client's own office, a hash nobody holds into nothing, and cannot be asked for an office"
+  },
+  "public.mcp_client_for(p_token_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the MCP bearer token (hashed) IS the identity. It returns the one enabled client that holds that hash and the office the client was issued in, in an active non-system office. No office is accepted, so none can be named.",
+    "proof": "identity-door: mcp_client_for turns a token hash into that client's own office, a hash nobody holds into nothing, and cannot be asked for an office"
+  },
+  "app.mcp_code_challenge(p_code_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the hash of an authorisation code nobody can guess IS the lookup. It returns the challenge of an unredeemed, unexpired code and nothing else; it accepts no office.",
+    "proof": "identity-door: mcp_code_challenge answers only for the holder of an unredeemed, unexpired code, and cannot be asked for an office"
+  },
+  "public.mcp_code_challenge(p_code_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the hash of an authorisation code nobody can guess IS the lookup. It returns the challenge of an unredeemed, unexpired code and nothing else; it accepts no office.",
+    "proof": "identity-door: mcp_code_challenge answers only for the holder of an unredeemed, unexpired code, and cannot be asked for an office"
+  },
+  "app.mcp_redeem_code(p_code_sha256 text, p_client_id text, p_redirect_uri text, p_token_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: redeeming a code binds the client to the office the code was issued in (written when the signed-in person consented). A code of another office cannot take or re-bind a client, and a code works once. It accepts no office.",
+    "proof": "identity-door: mcp_redeem_code binds a client to the office its code was issued in; another office's code does not take that client, and a code works once"
+  },
+  "public.mcp_redeem_code(p_code_sha256 text, p_client_id text, p_redirect_uri text, p_token_sha256 text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: redeeming a code binds the client to the office the code was issued in (written when the signed-in person consented). A code of another office cannot take or re-bind a client, and a code works once. It accepts no office.",
+    "proof": "identity-door: mcp_redeem_code binds a client to the office its code was issued in; another office's code does not take that client, and a code works once"
+  },
+  "app.record_telegram_chat(p_chat_id text, p_chat_type text, p_bot_id text, p_subject text, p_title text, p_username text, p_sender text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: a private chat is its own sender's office, a group is recorded only for an operator's office, a stranger is ignored, and a chat is never moved from the office it was first recorded in. It accepts no office.",
+    "proof": "identity-door: record_telegram_chat files a private chat under its own sender's office, ignores a stranger and a non-operator's group, and cannot be asked for an office"
+  },
+  "public.record_telegram_chat(p_chat_id text, p_chat_type text, p_bot_id text, p_subject text, p_title text, p_username text, p_sender text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: a private chat is its own sender's office, a group is recorded only for an operator's office, a stranger is ignored, and a chat is never moved from the office it was first recorded in. It accepts no office.",
+    "proof": "identity-door: record_telegram_chat files a private chat under its own sender's office, ignores a stranger and a non-operator's group, and cannot be asked for an office"
+  },
+  "public.sender_admitted(p_channel text, p_actor text, p_conversation text)": {
+    "class": "OFFICE_TRUSTED_DERIVED",
+    "reason": "Identity door: the verified sender on a channel becomes their office (app.office_for_sender), a declared test conversation becomes the test office, a stranger becomes none. It accepts no office; the adapter has already verified the signature.",
+    "proof": "identity-door: sender_admitted gives a verified sender their own office, a stranger none, and cannot be asked for an office"
+  }
+}

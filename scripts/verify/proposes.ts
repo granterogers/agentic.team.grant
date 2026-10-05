@@ -91,21 +91,25 @@ const makeJob = async (n: number): Promise<string> =>
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by, recipient_agent)
-        values (extensions.gen_random_uuid(), ${lit(projectId)}::uuid,
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, recipient_agent)
+        values (${office()}, extensions.gen_random_uuid(), ${lit(projectId)}::uuid,
                 ${lit(`fixture-proposes-${run}-${String(n)}`)}, 'research', 'verify:proposes', ${lit(WHO)})
         returning job_id::text as id
       `)
     ).id,
   )
 
+// The office this suite's jobs live in: its project's (a job takes its project's office).
+const office = () =>
+  `(select p.office_id from public.projects p where p.project_id = ${lit(projectId)}::uuid)`
+
 console.log(`\nverify:proposes — ${run}\n`)
 
 projectId = String(
   (
     await one(`
-      select project_id::text as id from public.projects
-       where status = 'active' and not is_fixture order by slug limit 1
+      -- The test office's own catch-all project: active and not a fixture, and nobody's real work.
+      select app.unnamed_project(app.test_office())::text as id
     `)
   ).id,
 )
@@ -119,7 +123,7 @@ try {
 
   const said = (
     await one(`
-    select public.understood(${lit(j0)}::uuid,
+    select app.understood(${lit(j0)}::uuid,
       'You want the last quarter of interviews summarised into one page.') as r
   `)
   ).r as { ok?: boolean; understood_as?: string }
@@ -132,7 +136,7 @@ try {
   */
   const again = (
     await one(`
-    select public.understood(${lit(j0)}::uuid, 'Actually you wanted something else entirely.') as r
+    select app.understood(${lit(j0)}::uuid, 'Actually you wanted something else entirely.') as r
   `)
   ).r as { ok?: boolean; already?: string }
   check(
@@ -141,9 +145,8 @@ try {
     again.ok === false && String(again.already).includes('interviews'),
   )
 
-  const tooShort = (
-    await one(`select public.understood(${lit(await makeJob(1))}::uuid, 'ok') as r`)
-  ).r as { error?: string }
+  const tooShort = (await one(`select app.understood(${lit(await makeJob(1))}::uuid, 'ok') as r`))
+    .r as { error?: string }
   check(
     'a restatement that says nothing is refused',
     tooShort.error ?? '(accepted)',
@@ -244,7 +247,7 @@ try {
     proposal the office would nag, and a check that only ever runs at four
     could not tell a working threshold from none at all.
   */
-  const belowBar = (await one(`select app.raise_proposals(30, 99, true) as r`)).r as {
+  const belowBar = (await one(`select app.raise_proposals(${office()}, 30, 99, true) as r`)).r as {
     raised?: number
   }
   const noneYet = Number(
@@ -256,7 +259,7 @@ try {
     noneYet === 0,
   )
 
-  await db.execute('select app.raise_proposals(30, 3, true)')
+  await db.execute(`select app.raise_proposals(${office()}, 30, 3, true)`)
   const rows = (
     await db.execute(`
       select proposal_id::text as id, title, remedy, argument, times_seen, state
@@ -276,7 +279,7 @@ try {
   )
 
   // Running it again is not a second proposal.
-  await db.execute('select app.raise_proposals(30, 3, true)')
+  await db.execute(`select app.raise_proposals(${office()}, 30, 3, true)`)
   const stillOne = Number(
     (await one(`select count(*)::int as n from public.proposals where needed = ${lit(NEED)}`)).n,
   )
@@ -315,7 +318,9 @@ try {
     could have made the office tell Grant about a gap it invented. This is the
     regression for that.
   */
-  const batch = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
+  const batch = (await one(`select app.proposals_to_send(${office()}, 500) as r`)).r as {
+    id: string
+  }[]
   check(
     'a harness proposal never reaches the batch Claire sends',
     `${String(batch.length)} waiting, ours ${batch.some((b) => b.id === rows[0]?.id) ? 'AMONG THEM' : 'absent'}`,
@@ -334,20 +339,24 @@ try {
   */
   const realOne = (
     await one(`
-    insert into public.proposals (staff_slug, kind, needed, title, remedy, argument, times_seen)
-    values ('growth-director', 'not_capable', ${lit(`realproof-${run}`)},
+    insert into public.proposals (office_id, staff_slug, kind, needed, title, remedy, argument, times_seen)
+    values (${office()}, 'growth-director', 'not_capable', ${lit(`realproof-${run}`)},
             'real proof', 'real proof', 'real proof', 3)
     returning proposal_id::text as id
   `)
   ).id as string
-  const withReal = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
+  const withReal = (await one(`select app.proposals_to_send(${office()}, 500) as r`)).r as {
+    id: string
+  }[]
   check(
     'CONTROL: a proposal with real provenance IS offered',
     withReal.some((b) => b.id === realOne) ? 'offered' : 'NOT OFFERED — the reader is inert',
     withReal.some((b) => b.id === realOne),
   )
-  await db.execute(`select app.proposals_sent(array[${lit(realOne)}]::uuid[])`)
-  const after = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
+  await db.execute(`select app.proposals_sent(${office()}, array[${lit(realOne)}]::uuid[])`)
+  const after = (await one(`select app.proposals_to_send(${office()}, 500) as r`)).r as {
+    id: string
+  }[]
   check(
     'and once sent it is not sent again',
     `${String(after.length)} waiting`,
@@ -369,7 +378,7 @@ try {
 
   const declined = (
     await one(`
-    select public.decide_proposal(${lit(String(rows[0]?.id))}::uuid, 'declined',
+    select public.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = ${lit(String(rows[0]?.id))}::uuid), app.test_office()), ${lit(String(rows[0]?.id))}::uuid, 'declined',
       'not worth it for now') as r
   `)
   ).r as { ok?: boolean }
@@ -387,7 +396,7 @@ try {
         ${lit(`asked again to ${NEED}, still no tool`)}, 'a probe instruction')
     `)
   }
-  const swept = (await one('select app.raise_proposals(30, 3, true) as r')).r as {
+  const swept = (await one(`select app.raise_proposals(${office()}, 30, 3, true) as r`)).r as {
     left_declined?: number
   }
   const state = (await one(`
@@ -403,7 +412,9 @@ try {
     `times_seen still ${String(state.times_seen)}`,
     state.times_seen === 4,
   )
-  const silent = (await one('select app.proposals_to_send(20) as r')).r as { id: string }[]
+  const silent = (await one(`select app.proposals_to_send(${office()}, 20) as r`)).r as {
+    id: string
+  }[]
   check(
     'and it is never queued to send again',
     `${String(silent.length)} waiting, none of them ours`,
@@ -460,7 +471,7 @@ try {
   const counted = Number(
     (
       await one(`
-        select count(*)::int as n from app.impediments_tally(30, 1, false)
+        select count(*)::int as n from app.impediments_tally(app.test_office(), 30, 1, false)
          where needed like ${lit(`%${run}%`)}
       `)
     ).n,
@@ -507,9 +518,11 @@ check(
   from tomorrow — and the assertion is about what it says, not about a count
   that changes with the office's own history.
 */
+// The round is one office's: the claimed job's, so the duty is given a real job in this suite's office.
+const dutyJob = await makeJob(99)
 const out = await proposeHandler(db).handle(
   {
-    jobId: '00000000-0000-0000-0000-000000000000',
+    jobId: dutyJob,
     kind: 'office.propose',
     correlationId: '00000000-0000-0000-0000-000000000000',
     projectId: null,
@@ -521,7 +534,8 @@ const out = await proposeHandler(db).handle(
 check(
   'the handler runs the pass and says what it found',
   `${out.body.slice(0, 80)}`,
-  out.body.length > 10 && out.announce === false,
+  // Whether it announces depends on whether this office had something new to say - the property is that it says what it found.
+  out.body.length > 10 && typeof out.announce === 'boolean',
 )
 
 /*
@@ -531,7 +545,9 @@ check(
   the first time the office raises a real one; "no row the page shows Grant is
   a harness row" survives every future run.
 */
-const shown = (await one(`select app.hq_governance(40) as g`)).g as { proposals?: unknown }
+const shown = (await one(`select app.hq_governance(app.owner_office('grant'), 40) as g`)).g as {
+  proposals?: unknown
+}
 const parsed = typeof shown === 'string' ? (JSON.parse(shown) as { proposals?: unknown }) : shown
 const onPage = Array.isArray(parsed?.proposals)
   ? (parsed.proposals as { title?: string }[]).map((p) => String(p.title ?? ''))

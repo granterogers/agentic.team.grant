@@ -9,6 +9,7 @@
  * proving the narrowing did not take the search box with it.
  */
 import { retrieve } from '../../src/knowledge/retrieval.ts'
+import { testOffice } from '../test-office.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'rscope')
@@ -23,7 +24,7 @@ const check = (what: string, ok: boolean, detail: string) => {
 const mk = async (label: string): Promise<string> => {
   const name = `fixture scope ${label} ${run}`
   await one(
-    `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`scope-${label}-${run}`)}, ${lit(name)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`scope-${label}-${run}`)}, ${lit(name)}, true)::text as r`,
   )
   return String(
     (
@@ -38,32 +39,33 @@ const B = await mk('b')
 const WORD = `zebracrossing${run}`
 const BODY = `${WORD} is the only marker in this document. `.repeat(20)
 const addDoc = (project: string, ref: string) =>
-  one(`insert into public.documents (project_id, title, connector, external_ref, content, content_chars, content_fingerprint, fetched_at, added_by)
-    values (${lit(project)}::uuid, ${lit(`Scope doc ${ref}`)}, 'upload', ${lit(ref)}, ${lit(BODY + ref)}, ${String((BODY + ref).length)},
+  one(`insert into public.documents (office_id, project_id, title, connector, external_ref, content, content_chars, content_fingerprint, fetched_at, added_by)
+    values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(`Scope doc ${ref}`)}, 'upload', ${lit(ref)}, ${lit(BODY + ref)}, ${String((BODY + ref).length)},
             encode(extensions.digest(${lit(BODY + ref)}, 'sha256'), 'hex'), app.now_utc(), 'grant')
     returning document_id::text as id`)
 const docA = String((await addDoc(A, `a-${run}`)).id)
 
-const inA = await retrieve(db, WORD, A)
+const office = await testOffice(db)
+const inA = await retrieve(db, office, WORD, A)
 check(
   'control: a document in project A is found when A is asked for',
   inA.some((h) => h.documentId === docA),
   `${inA.length} hit(s)`,
 )
-const inB = await retrieve(db, WORD, B)
+const inB = await retrieve(db, office, WORD, B)
 check(
   'a question in project B does not see project A',
   !inB.some((h) => h.documentId === docA),
   `${inB.length} hit(s)`,
 )
-const nobody = await retrieve(db, WORD, null)
+const nobody = await retrieve(db, office, WORD, null)
 check(
   'NO project named is not "every project": the document of A is not returned',
   !nobody.some((h) => h.documentId === docA),
   `${nobody.length} hit(s)`,
 )
 const box = await db.execute(
-  `select document_id::text as id from app.search_documents(${lit(WORD)}, null, 10)`,
+  `select document_id::text as id from app.search_documents(${lit(office.officeId)}::uuid, ${lit(WORD)}, null, 10)`,
 )
 check(
   "control: Grant's own search box (a null project on purpose) still finds it, so the narrowing is precise",

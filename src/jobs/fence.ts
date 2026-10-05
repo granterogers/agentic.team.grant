@@ -3,7 +3,7 @@
  *
  * `dequeue_job` leases a job to one worker for a while and increments its `attempt`, so the pair
  * (leased_by, attempt) already names one claim and no other. What was missing was anything that ASKED: the
- * worker's state writes were `update jobs set state = ... where job_id = ...`, so a worker whose lease had
+ * worker's state writes were an update of the job's state keyed by its id alone, so a worker whose lease had
  * lapsed - a handler slower than 300 seconds, a paused process - could finish a job that a second worker
  * had since claimed, over the top of it.
  *

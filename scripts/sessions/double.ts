@@ -28,8 +28,8 @@ const send = async (i: number): Promise<string> =>
     (
       await one(`
     begin;
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
-      values ('teamhq', ${lit(`${chat}:${String(i)}`)}, ${lit(actor)}, ${lit(say)}, ${lit(`teamhq:sess_double:${chat}-${String(i)}`)}, app.now_utc(), ${lit(proj)}::uuid);
+    insert into public.inbound_commands (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
+      values ((select office_id from public.projects where project_id = ${lit(proj)}::uuid), 'teamhq',${lit(`${chat}:${String(i)}`)}, ${lit(actor)}, ${lit(say)}, ${lit(`teamhq:sess_double:${chat}-${String(i)}`)}, app.now_utc(), ${lit(proj)}::uuid);
     create temp table _j on commit drop as select (app.enqueue_inbound((select command_id from public.inbound_commands where dedupe_key = ${lit(`teamhq:sess_double:${chat}-${String(i)}`)})) ->> 'job_id')::uuid as id;
     update public.jobs set announce = false where job_id = (select id from _j);
     select (select id from _j)::text as id;

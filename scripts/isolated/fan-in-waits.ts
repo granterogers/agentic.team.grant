@@ -51,14 +51,14 @@ const fanIn = async () => {
   const parent = await realParent(db)
   const branch = String(
     (
-      await one(`select app.enqueue_child(p_parent => ${lit(parent)}::uuid, p_kind => 'verify.branch',
+      await one(`select app.enqueue_child(p_office => app.job_office(${lit(parent)}::uuid), p_parent => ${lit(parent)}::uuid, p_kind => 'verify.branch',
           p_payload => '{}'::jsonb, p_announce => false)::text as v`)
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0]
   if (branch === undefined) throw new Error('no branch job')
   const made = json(
     (
-      await one(`select app.fan_in_over(${lit(parent)}::uuid, 'What do the two of you make of the venue?',
+      await one(`select app.fan_in_over(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'What do the two of you make of the venue?',
         ${lit(JSON.stringify([{ agent: 'research-director', job_id: branch, purpose: 'what research makes of it' }]))}::jsonb,
         'office.synthesise', app.now_utc() + interval '20 minutes') as v`)
     ).v,
@@ -136,7 +136,7 @@ const failing = await realParent(db)
 const failer = String(
   (
     await one(
-      `select app.enqueue_child(p_parent => ${lit(failing)}::uuid, p_kind => 'verify.fails', p_payload => '{}'::jsonb, p_announce => false)::text as v`,
+      `select app.enqueue_child(p_office => app.job_office(${lit(failing)}::uuid), p_parent => ${lit(failing)}::uuid, p_kind => 'verify.fails', p_payload => '{}'::jsonb, p_announce => false)::text as v`,
     )
   ).v,
 ).match(/[0-9a-f-]{36}/)?.[0]
@@ -176,7 +176,7 @@ check(
   const probe = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(pj)}::uuid, p_kind => 'verify.provider', p_payload => '{}'::jsonb, p_announce => false)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(pj)}::uuid), p_parent => ${lit(pj)}::uuid, p_kind => 'verify.provider', p_payload => '{}'::jsonb, p_announce => false)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0]

@@ -93,6 +93,8 @@ const MAKE = (name: string) => `
   looks exactly like a reader that returns nothing.
 */
 const ID = (name: string) => `(select project_id from public.projects where slug = ${lit(name)})`
+/** The office that project is in: these functions take an office, and the suite's subjects live wherever the bridge put them. */
+const OFFICE = (name: string) => `(select office_id from public.projects where slug = ${lit(name)})`
 /*
   A scratch table, because a section often needs a writer's ANSWER and a
   reader's answer from the same transaction, and only the last select comes
@@ -114,11 +116,11 @@ section = 'the session'
     begin;
     ${SCRATCH}
     ${MAKE(PROJECT)}
-    ${KEEP('opened', `app.browser_session_open(${ID(PROJECT)}, 'Supplier.Example.COM', 'Read the supplier price list every Monday morning.', null, 'grant')`)}
-    ${KEEP('bad', `app.browser_session_open(${ID(PROJECT)}, 'not-a-site', 'Read the supplier price list every Monday morning.', null, 'grant')`)}
-    ${KEEP('thin', `app.browser_session_open(${ID(PROJECT)}, 'supplier.example.com', 'stuff', null, 'grant')`)}
+    ${KEEP('opened', `app.browser_session_open(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'Supplier.Example.COM', 'Read the supplier price list every Monday morning.', null, 'grant')`)}
+    ${KEEP('bad', `app.browser_session_open(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'not-a-site', 'Read the supplier price list every Monday morning.', null, 'grant')`)}
+    ${KEEP('thin', `app.browser_session_open(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'supplier.example.com', 'stuff', null, 'grant')`)}
     select ${GET('opened')} as opened, ${GET('bad')} as bad_site, ${GET('thin')} as thin,
-           app.browser_sessions_for(${ID(PROJECT)}) as sessions;
+           app.browser_sessions_for(${OFFICE(PROJECT)}, ${ID(PROJECT)}) as sessions;
     rollback;`)
 
   const opened = asJson(got.opened)
@@ -164,21 +166,21 @@ section = 'establishing and forgetting'
     begin;
     ${SCRATCH}
     ${MAKE(PROJECT)}
-    ${KEEP('junk', `app.browser_session_establish(${ID(PROJECT)}, 'supplier.example.com', 'Read the trade price list every Monday.', 'paste me somewhere else', 'grant')`)}
-    ${KEEP('empty', `app.browser_session_establish(${ID(PROJECT)}, 'supplier.example.com', 'Read the trade price list every Monday.', '', 'grant')`)}
-    ${KEEP('made', `app.browser_session_establish(${ID(PROJECT)}, 'supplier.example.com', 'Read the trade price list every Monday.', ${lit(JAR)}, 'grant')`)}
-    ${KEEP('live', `app.browser_sessions_for(${ID(PROJECT)})`)}
+    ${KEEP('junk', `app.browser_session_establish(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'supplier.example.com', 'Read the trade price list every Monday.', 'paste me somewhere else', 'grant')`)}
+    ${KEEP('empty', `app.browser_session_establish(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'supplier.example.com', 'Read the trade price list every Monday.', '', 'grant')`)}
+    ${KEEP('made', `app.browser_session_establish(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'supplier.example.com', 'Read the trade price list every Monday.', ${lit(JAR)}, 'grant')`)}
+    ${KEEP('live', `app.browser_sessions_for(${OFFICE(PROJECT)}, ${ID(PROJECT)})`)}
     ${KEEP(
       'held',
       `to_jsonb((select app.resolve_secret(credential_ref) is not null
                                 from public.browser_sessions where session_id = ${SESS}))`,
     )}
-    ${KEEP('forgot', `app.browser_session_forget(${SESS})`)}
-    ${KEEP('twice', `app.browser_session_forget(${SESS})`)}
+    ${KEEP('forgot', `app.browser_session_forget(${OFFICE(PROJECT)}, ${SESS})`)}
+    ${KEEP('twice', `app.browser_session_forget(${OFFICE(PROJECT)}, ${SESS})`)}
     select ${GET('junk')} as junk, ${GET('empty')} as empty, ${GET('made')} as made,
            ${GET('live')} as live, ${GET('held')} as held, ${GET('forgot')} as forgot,
            ${GET('twice')} as twice,
-           app.browser_sessions_for(${ID(PROJECT)}) as after;
+           app.browser_sessions_for(${OFFICE(PROJECT)}, ${ID(PROJECT)}) as after;
     rollback;`)
 
   ok(
@@ -312,9 +314,9 @@ section = 'harness traffic is invisible'
            (${ID(REAL)}, 'read', 'https://x.example.com/real', true, 2000);
     select (select count(*)::int from public.browser_actions
              where project_id in (${ID(PROJECT)}, ${ID(REAL)})) as written,
-           app.browser_lately(${ID(PROJECT)}, 10) as fixture_side,
-           app.browser_lately(${ID(REAL)}, 10) as real_side,
-           app.browser_budget() as budget;
+           app.browser_lately(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 10) as fixture_side,
+           app.browser_lately(${OFFICE(REAL)}, ${ID(REAL)}, 10) as real_side,
+           app.browser_budget(${OFFICE(PROJECT)}) as budget;
     rollback;`)
 
   ok('both rows were written', Number(got.written) === 2)
@@ -358,9 +360,9 @@ section = 'a page is a source'
     begin;
     ${SCRATCH}
     ${MAKE(PROJECT)}
-    ${KEEP('first', `app.record_browser_page(${ID(PROJECT)}, 'https://supplier.example.com/prices', 'Prices', 'Widget A costs forty pounds.', null)`)}
-    ${KEEP('again', `app.record_browser_page(${ID(PROJECT)}, 'https://supplier.example.com/prices', 'Prices, updated', 'Widget A costs forty five pounds.', null)`)}
-    ${KEEP('empty', `app.record_browser_page(${ID(PROJECT)}, 'https://supplier.example.com/empty', 'Nothing', '   ', null)`)}
+    ${KEEP('first', `app.record_browser_page(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'https://supplier.example.com/prices', 'Prices', 'Widget A costs forty pounds.', null)`)}
+    ${KEEP('again', `app.record_browser_page(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'https://supplier.example.com/prices', 'Prices, updated', 'Widget A costs forty five pounds.', null)`)}
+    ${KEEP('empty', `app.record_browser_page(${OFFICE(PROJECT)}, ${ID(PROJECT)}, 'https://supplier.example.com/empty', 'Nothing', '   ', null)`)}
     select ${GET('first')} as first, ${GET('again')} as again, ${GET('empty')} as empty,
            (select origin from public.documents
              where document_id = (${GET('first')} ->> 'document_id')::uuid) as origin,
@@ -405,7 +407,7 @@ section = 'stop is a column'
     values (${ID(PROJECT)}, gen_random_uuid(), ${lit(`verify:browser-${run}`)}, 'browser.gather',
             ${lit(`verify:browser-${run}`)}, 'running', 'direct_command');
     ${KEEP('before', `to_jsonb(app.stop_requested(${JOB}))`)}
-    ${KEEP('asked', `app.request_stop(${JOB}, 'grant')`)}
+    ${KEEP('asked', `app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${JOB}), app.test_office()), ${JOB}, 'grant')`)}
     ${KEEP('after', `to_jsonb(app.stop_requested(${JOB}))`)}
     select ${GET('before')} as before, ${GET('asked')} as asked, ${GET('after')} as after;
     rollback;`)
@@ -421,7 +423,8 @@ section = 'stop is a column'
                              requested_by, state, intent_class, finished_at)
     values (${ID(PROJECT)}, gen_random_uuid(), ${lit(`verify:browser-done-${run}`)}, 'browser.gather',
             ${lit(`verify:browser-done-${run}`)}, 'complete', 'direct_command', app.now_utc());
-    select app.request_stop((select job_id from public.jobs
+    select app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = (select job_id from public.jobs
+             where requested_by = ${lit(`verify:browser-done-${run}`)} limit 1)), app.test_office()), (select job_id from public.jobs
              where requested_by = ${lit(`verify:browser-done-${run}`)} limit 1), 'grant') as asked;
     rollback;`)
   ok(

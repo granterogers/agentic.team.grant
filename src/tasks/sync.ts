@@ -32,7 +32,12 @@
  * refused task must not stop the other forty.
  */
 import type { SqlExecutor } from '../db/executor.ts'
-import { type CanonicalTask, ProviderDownError, type TaskProvider } from './provider.ts'
+import {
+  type CanonicalTask,
+  ProviderAuthError,
+  ProviderDownError,
+  type TaskProvider,
+} from './provider.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -76,6 +81,8 @@ export interface SyncReport {
   readonly held: number
   /** Set when the provider could not be reached. Nothing else ran. */
   readonly down: string | null
+  /** Why it is down: `refused` is a credential the provider answered and turned away; `unreachable` is everything else. */
+  readonly downKind?: 'unreachable' | 'refused' | null
 }
 
 interface Pushable {
@@ -103,7 +110,7 @@ export async function syncOnce(
   db: SqlExecutor,
   provider: TaskProvider,
   gate: SyncGate,
-  opts: { readonly limit?: number } = {},
+  opts: { readonly office: string; readonly limit?: number },
 ): Promise<SyncReport> {
   const name = provider.name
   let pushed = 0
@@ -118,7 +125,7 @@ export async function syncOnce(
     const work = asJson(
       (
         await db.execute(
-          `select app.tasks_to_push(${lit(name)}, ${String(opts.limit ?? 200)}) as v`,
+          `select app.tasks_to_push(${lit(opts.office)}::uuid, ${lit(name)}, ${String(opts.limit ?? 200)}) as v`,
         )
       ).rows[0]?.v,
     )
@@ -129,13 +136,32 @@ export async function syncOnce(
     for (const d of deletes) {
       const link = (d.links ?? []).find((l) => l.provider === name)
       const ext = String(link?.external_id ?? '')
-      if (ext === '') continue
+      if (ext === '') {
+        /*
+          Nothing was ever made at the provider (the database does not offer a placeholder as an id), so there is
+          nothing to remove and nothing to ask about: the debt is simply cleared. Leaving it open meant it was listed
+          again on every round for ever.
+        */
+        await db.execute(
+          `select app.task_delete_pushed(${lit(opts.office)}::uuid, ${lit(d.id)}::uuid, ${lit(name)})`,
+        )
+        continue
+      }
       if (!(await gate.mayDelete({ title: d.title, externalId: ext }))) {
         held += 1
         continue
       }
-      await provider.remove(ext)
-      await db.execute(`select app.task_delete_pushed(${lit(d.id)}::uuid, ${lit(name)})`)
+      try {
+        await provider.remove(ext)
+      } catch (error) {
+        if (error instanceof ProviderDownError) throw error
+        // One refused delete must not stop the other forty tasks syncing. The tombstone stays, so it is offered again.
+        failed += 1
+        continue
+      }
+      await db.execute(
+        `select app.task_delete_pushed(${lit(opts.office)}::uuid, ${lit(d.id)}::uuid, ${lit(name)})`,
+      )
       deleted += 1
     }
 
@@ -162,7 +188,7 @@ export async function syncOnce(
         const got = await provider.upsert(task)
         await db.execute(`
           select app.task_pushed(
-            ${lit(t.id)}::uuid, ${lit(name)}, ${lit(got.externalId)},
+            ${lit(opts.office)}::uuid, ${lit(t.id)}::uuid, ${lit(name)}, ${lit(got.externalId)},
             ${String(t.revision)}, ${lit(got.externalProjectId)}, ${lit(got.externalRevision)})`)
         pushed += 1
       } catch (error) {
@@ -176,7 +202,7 @@ export async function syncOnce(
         */
         await db
           .execute(`
-            select app.task_push_failed(${lit(t.id)}::uuid, ${lit(name)},
+            select app.task_push_failed(${lit(opts.office)}::uuid, ${lit(t.id)}::uuid, ${lit(name)},
               ${lit(String((error as Error).message).slice(0, 400))})`)
           .catch(() => undefined)
         failed += 1
@@ -193,6 +219,8 @@ export async function syncOnce(
         external_revision: r.externalRevision,
         external_project_id: r.externalProjectId,
       }
+      // The office's own mark, when the provider's copy carries one: how a lost create is told from a stranger's task.
+      if (r.canonicalId !== null && r.canonicalId !== undefined) fields.canonical_id = r.canonicalId
       /*
         A priority the provider did not set is LEFT OUT of the payload, not
         sent as null. `app.task_pulled` only touches a field the payload
@@ -203,7 +231,7 @@ export async function syncOnce(
       const said = asJson(
         (
           await db.execute(`
-            select app.task_pulled(${lit(name)}, ${lit(r.externalId)},
+            select app.task_pulled(${lit(opts.office)}::uuid, ${lit(name)}, ${lit(r.externalId)},
               ${lit(JSON.stringify(fields))}::jsonb) as v`)
         ).rows[0]?.v,
       )
@@ -217,7 +245,13 @@ export async function syncOnce(
           held += 1
           continue
         }
-        await provider.remove(r.externalId)
+        try {
+          await provider.remove(r.externalId)
+        } catch (error) {
+          if (error instanceof ProviderDownError) throw error
+          failed += 1
+          continue
+        }
         deleted += 1
         continue
       }
@@ -239,10 +273,22 @@ export async function syncOnce(
         failed,
         held,
         down: error.detail,
+        downKind: error instanceof ProviderAuthError ? 'refused' : 'unreachable',
       }
     }
     throw error
   }
 
-  return { provider: name, pushed, deleted, pulled, created, conflicts, failed, held, down: null }
+  return {
+    provider: name,
+    pushed,
+    deleted,
+    pulled,
+    created,
+    conflicts,
+    failed,
+    held,
+    down: null,
+    downKind: null,
+  }
 }

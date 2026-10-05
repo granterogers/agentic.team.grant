@@ -41,6 +41,7 @@
  * Harness blockers are excluded through `app.harness_job`, the canonical
  * predicate, because a suite's fixture question is not one he can see.
  */
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 /** An open question, and the two roads an answer could take from it. */

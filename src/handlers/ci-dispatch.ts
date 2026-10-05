@@ -33,6 +33,7 @@ export function ciDispatchHandler(deps: CiDispatchDeps): Handler {
       }
       const say = (body: string): HandlerOutput => ({ ...base, announce: true, body })
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const pinned = (
         (
           await db.execute(

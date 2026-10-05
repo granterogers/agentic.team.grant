@@ -34,6 +34,7 @@
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
 
+import '../../src/safety/require-production-site.ts'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { officeKey } from './lib/sign-in.ts'
@@ -172,7 +173,7 @@ try {
             'verify:running-probe:' || gen_random_uuid()::text)
     returning job_id, stop_requested_at into v_job, v_before;
 
-    v_said := app.request_stop(v_job, 'verify:running');
+    v_said := app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = v_job), app.test_office()), v_job, 'verify:running');
     select stop_requested_at into v_after from public.jobs where job_id = v_job;
 
     if v_before is not null then

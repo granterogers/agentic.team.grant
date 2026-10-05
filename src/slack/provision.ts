@@ -135,6 +135,15 @@ export class ChannelProvisioner {
   ) {}
 
   /**
+   * The office this workspace belongs to, as SQL. A channel mapping is a derived row (it has no office of its own: it
+   * is reached through its workspace), so every statement pins the workspace, and anything that names a project also
+   * names the project's office, which must be this workspace's.
+   */
+  private get office(): string {
+    return `(select w.office_id from public.slack_workspaces w where w.team_id = ${lit(this.teamId)})`
+  }
+
+  /**
    * Ensure the project has a channel, and that Postgres knows about it.
    *
    * Postgres is asked first, always. Slack's channel list is a cache of
@@ -160,7 +169,10 @@ export class ChannelProvisioner {
     return (
       (await this.one<{ channel_id: string }>(`
         select channel_id from public.slack_channel_map
-         where project_id = ${lit(projectId)}::uuid and active and purpose = 'project' and discipline is null
+         where team_id = ${lit(this.teamId)}
+           and project_id = ${lit(projectId)}::uuid
+           and project_id in (select pp.project_id from public.projects pp where pp.office_id = ${this.office})
+           and active and purpose = 'project' and discipline is null
          limit 1`)) !== undefined
     )
   }
@@ -176,7 +188,8 @@ export class ChannelProvisioner {
       is_fixture: boolean | null
     }>(
       `select name, channel_prefix, is_fixture from public.projects
-        where project_id = ${lit(projectId)}::uuid`,
+        where office_id = ${this.office}
+          and project_id = ${lit(projectId)}::uuid`,
     )
     const stem =
       named?.channel_prefix !== null &&
@@ -199,10 +212,18 @@ export class ChannelProvisioner {
     // is a machine's name for a project; a person reading a sidebar wants the
     // name they gave it.
     const { named, name } = await this.wanted(projectId, projectLabel, staffSlug)
+    // A project of another office reads as no project at all, exactly as a missing one does: nothing is created
+    // in Slack for a project this workspace's office does not hold.
+    if (named === undefined) {
+      return { outcome: 'failed', channelId: null, channelName: name, errorCode: 'no_such_project' }
+    }
 
     const mapped = await this.one<{ channel_id: string; channel_name: string }>(`
       select channel_id, channel_name from public.slack_channel_map
-      where project_id = ${lit(projectId)}::uuid and active
+      where team_id = ${lit(this.teamId)}
+        and project_id = ${lit(projectId)}::uuid
+        and project_id in (select pp.project_id from public.projects pp where pp.office_id = ${this.office})
+        and active
         and purpose = 'project'
         and discipline is not distinct from ${staffSlug === undefined || staffSlug === null ? 'null' : lit(staffSlug)}
       order by created_at limit 1
@@ -266,6 +287,7 @@ export class ChannelProvisioner {
     name: string,
     purpose: 'general' | 'alerts' | 'other' = 'general',
   ): Promise<ProvisionResult> {
+    // raw-sql[2]: keyed by the workspace; the mapping is derived through its workspace and this statement pins team_id.
     const mapped = await this.one<{ channel_id: string; channel_name: string }>(`
       select channel_id, channel_name from public.slack_channel_map
        where channel_name = ${lit(name)} and team_id = ${lit(this.teamId)} and active
@@ -344,6 +366,7 @@ export class ChannelProvisioner {
     purpose: string,
   ): Promise<void> {
     if (channelId === '') return
+    // raw-sql[2]: keyed by the workspace; it writes this workspace's own row, and never rebinds a channel id another workspace holds.
     await this.db.execute(`
       insert into public.slack_channel_map
         (channel_id, team_id, project_id, channel_name, purpose, created_by_app)
@@ -351,6 +374,7 @@ export class ChannelProvisioner {
               ${lit(purpose)}, true)
       on conflict (channel_id) do update
         set channel_name = excluded.channel_name, active = true, archived_at = null
+        where public.slack_channel_map.team_id = excluded.team_id
     `)
   }
 
@@ -394,18 +418,20 @@ export class ChannelProvisioner {
    * second is visible.
    */
   private async resolveNameTaken(projectId: string, name: string): Promise<ProvisionResult> {
+    // raw-sql[2]: keyed by the workspace; the mapping is derived through its workspace and this statement pins team_id.
     const known = await this.one<{ channel_id: string; project_id: string | null }>(`
       select channel_id, project_id::text as project_id
       from public.slack_channel_map
-      where channel_name = ${lit(name)}
+      where team_id = ${lit(this.teamId)} and channel_name = ${lit(name)}
       order by created_at desc limit 1
     `)
 
     if (known !== undefined && known.project_id === projectId) {
+      // raw-sql[2]: keyed by the workspace; it updates one row of this workspace's own mapping.
       await this.db.execute(`
         update public.slack_channel_map
            set active = true, archived_at = null
-         where channel_id = ${lit(known.channel_id)}
+         where team_id = ${lit(this.teamId)} and channel_id = ${lit(known.channel_id)}
       `)
       return {
         outcome: 'adopted',
@@ -428,14 +454,18 @@ export class ChannelProvisioner {
     await this.db.execute(`
       insert into public.slack_channel_map
         (channel_id, team_id, project_id, channel_name, purpose, created_by_app, discipline)
-      values (${lit(channelId)}, ${lit(this.teamId)}, ${lit(projectId)}::uuid,
-              ${lit(channelName)}, 'project', ${createdByApp ? 'true' : 'false'},
-              ${discipline === undefined || discipline === null ? 'null' : lit(discipline)})
+      select ${lit(channelId)}, ${lit(this.teamId)}, pp.project_id,
+             ${lit(channelName)}, 'project', ${createdByApp ? 'true' : 'false'},
+             ${discipline === undefined || discipline === null ? 'null' : lit(discipline)}
+        from public.projects pp
+       where pp.office_id = ${this.office}
+         and pp.project_id = ${lit(projectId)}::uuid
       on conflict (channel_id) do update
         set project_id = excluded.project_id,
             channel_name = excluded.channel_name,
             active = true,
             archived_at = null
+        where public.slack_channel_map.team_id = excluded.team_id
     `)
   }
 

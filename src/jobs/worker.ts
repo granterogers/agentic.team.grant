@@ -34,7 +34,9 @@ import { type Domain, howComposed } from '../agents/provenance.ts'
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import { withoutStrayQuotes } from '../agents/stray-quotes.ts'
+import { withJobScope } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { personOfJob, withPerson } from '../office/person.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
 import type { Plan } from '../tools/plan.ts'
@@ -73,7 +75,7 @@ async function trace(
   const n = (v: number | undefined): string => (v === undefined ? 'null' : String(v))
   try {
     await db.execute(
-      `select app.job_trace_add(${lit(jobId)}::uuid, ${lit(kind)},
+      `select app.job_trace_add(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, ${lit(kind)},
          ${lit(JSON.stringify(redactDeep(detail)))}::jsonb,
          ${n(numbers.tokensIn)}, ${n(numbers.tokensOut)},
          ${n(numbers.pence)}, ${n(numbers.ms)})`,
@@ -91,16 +93,19 @@ async function trace(
  * must never be a way for production to break.
  */
 async function recordPlan(db: SqlExecutor, job: Job, handler: Handler): Promise<void> {
-  if (handler.plan === undefined) return
+  const planOf = handler.plan
+  if (planOf === undefined) return
   try {
-    const plan = await handler.plan(job, db)
+    const plan = await withJobScope(job.jobId, async () =>
+      withPerson(await personOfJob(db, job.jobId), () => planOf.call(handler, job, db)),
+    )
     const steps = JSON.stringify(plan.steps)
     const reaches =
       plan.reaches.length === 0
         ? `array[]::text[]`
         : `array[${plan.reaches.map((r) => lit(r)).join(', ')}]`
     await db.execute(
-      `select app.job_plan_set(${lit(job.jobId)}::uuid, ${lit(plan.tool)}, ${reaches},
+      `select app.job_plan_set(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, ${lit(plan.tool)}, ${reaches},
          ${lit(steps)}::jsonb, ${lit(summarise(plan))}, ${String(plannedWrites(plan))})`,
     )
     await trace(db, job.jobId, 'plan', {
@@ -125,6 +130,11 @@ export interface Job {
   readonly leasedBy?: string
   /** The claim's number (0625, see fence.ts); absent on a schema from before it. */
   readonly claimGen?: number
+  /**
+   * The office this job belongs to, fixed when the job was made and never changed (P3). Read back at the claim from the
+   * job row; absent only on a job built by a test. Anything the job does is done inside it.
+   */
+  readonly officeId?: string
   /** Set when a renewal finds the claim gone. */
   lost?: boolean
 }
@@ -182,6 +192,20 @@ export interface HandlerOutput {
    * composes its own words needs to know nothing about this.
    */
   readonly topic?: string
+  /**
+   * An operational notice rather than an answer (#413): something that needs the person's attention, such as a service
+   * that has to be reconnected. The Telegram pager shows it as a plain heading and short paragraphs, with a real button
+   * into Team HQ when there is somewhere to go, and none of an answer's furniture: no provenance line, no Useful / Not
+   * useful (there is nothing to rate), no Mute (the incident layer already decides when to remind).
+   *
+   * `link.url` comes from `teamHqUrl` (src/incidents/link.ts), the one place that puts the deployment's own base in front
+   * of a path inside Team HQ. A handler that wants a button asks it first and words the message to match: a notice that
+   * says "tap the button" with no button is the defect this field exists to prevent.
+   */
+  readonly notice?: {
+    readonly heading: string
+    readonly link?: { readonly label: string; readonly url: string }
+  }
   /**
    * Everything the answer could legitimately have taken a SPECIFIC from — the
    * instruction, the conversation replayed into the prompt, and the documents
@@ -450,6 +474,7 @@ const moveTo = async (
 ): Promise<void> => {
   const finished = ['complete', 'cancelled', 'failed'].includes(state)
   const fence = fenceClause(claim)
+  // P3: keyed by the claimed job id (and fenced by its claim); reaches no other row.
   const { rows } = await db.execute(`
     update public.jobs
     set state = ${lit(state)}::public.job_state
@@ -477,6 +502,7 @@ const moveJob = (db: SqlExecutor, job: Job, state: string, reason?: string): Pro
 const mayRetry = async (db: SqlExecutor, job: Job): Promise<boolean> => {
   if (job.attempt >= 4) return false
   try {
+    // P3: keyed by the claimed job id; reads that job's own attempt ceiling.
     const { rows } = await db.execute(
       `select attempt < max_attempts as room from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
     )
@@ -546,7 +572,19 @@ export const recoverStalled = async (db: SqlExecutor): Promise<readonly Recovere
     misconfigured trigger cannot fail an import. Deciding happens here, a
     moment later, where a failure costs the decision and not the document.
   */
-  await db.execute('select app.fire_pending_signals(20)').catch(() => undefined)
+  /*
+    A scan that serves every office (0804): it loops the active offices and each fires only its own signals against
+    its own triggers. One office's failure leaves the others' scan alone.
+  */
+  const signalOffices = await db
+    .execute("select office_id from public.offices where state = 'active' and kind <> 'system'")
+    .then((r) => r.rows as { office_id: string }[])
+    .catch(() => [] as { office_id: string }[])
+  for (const o of signalOffices) {
+    await db
+      .execute(`select app.fire_pending_signals('${String(o.office_id)}'::uuid, 20)`)
+      .catch(() => undefined)
+  }
 
   /*
     And CI reservations nothing ever reported against (#17).
@@ -629,8 +667,10 @@ const recordOnLedger = async (
     // fixture event per probe would leave it just as unreadable — the daily
     // capacity report learned the same lesson about `requested_by` and reports
     // 20 finished jobs instead of 101.
+    // P3: the ledger entry is selected FROM the claimed job's own row (job_id = the worker's job); no other row is read.
     await db.execute(`
-      select public.append_event(
+      select app.append_event(
+        app.job_office(${lit(job.jobId)}::uuid),
         ${lit(job.correlationId)}::uuid,
         -- 'agent': the office did this, not Grant and not a cron. The check
         -- constraint allows user, agent and system, and a research finding is
@@ -675,6 +715,7 @@ const readClaimGen = async (
   let last: unknown
   for (let i = 0; i < 4; i++) {
     try {
+      // P3: keyed by the claimed job id, worker and attempt: the claim fence itself.
       const g = await db.execute(
         `select claim_gen from public.jobs
           where job_id = ${lit(jobId)}::uuid and leased_by = ${lit(workerId)} and attempt = ${String(attempt)}`,
@@ -749,7 +790,7 @@ export const dequeue = async (
 ): Promise<Job | null> => {
   const { rows } = await db.execute(
     `select job_id::text as job_id, kind, correlation_id::text as correlation_id,
-            project_id::text as project_id, idempotency_key, attempt
+            project_id::text as project_id, idempotency_key, attempt, office_id::text as office_id
      from app.dequeue_job(${lit(workerId)}, ${canTranscribe ? 'true' : 'false'},
                           ${canSubprocess ? 'true' : 'false'},
                           ${
@@ -765,6 +806,9 @@ export const dequeue = async (
   // changing what dequeue_job RETURNS would break a worker running the old shape. A schema without the column
   // answers an error, and the fence then asks the attempt as it always did.
   const gen = await readClaimGen(db, String(r.job_id), workerId, Number(r.attempt))
+  // The claim returns the job whole, with the office it belongs to (0852): every later call passes it on.
+  const officeId =
+    r.office_id === null || r.office_id === undefined ? undefined : String(r.office_id)
   return {
     jobId: String(r.job_id),
     kind: String(r.kind),
@@ -772,6 +816,7 @@ export const dequeue = async (
     projectId: r.project_id === null ? null : String(r.project_id),
     idempotencyKey: String(r.idempotency_key),
     attempt: Number(r.attempt),
+    ...(officeId === undefined ? {} : { officeId }),
     // The claim this worker now holds, so every later write can ask whether it still does (Run 4, D1).
     leasedBy: workerId,
     ...(gen === undefined || gen === null ? {} : { claimGen: Number(gen) }),
@@ -832,6 +877,7 @@ export const askedOnPause = async (
   notify?: Notifier,
 ): Promise<string | null> => {
   if (output.announce !== true || notify === undefined) return null
+  // P3: blockers of the claimed job only (job_id is the worker's own claimed job).
   const open = await db
     .execute(
       `select blocker_id::text as id from public.blockers
@@ -860,6 +906,7 @@ export const askedOnPause = async (
       untouched and the sweep still recovers it. Best-effort: a failed stamp
       costs at most one extra try, never the question.
     */
+    // P3: stamps the blocker just read for the claimed job; keyed by that blocker id.
     await db
       .execute(
         `update public.blockers set asked_at = app.now_utc(), ask_attempts = ask_attempts + 1
@@ -882,6 +929,7 @@ export const askedOnPause = async (
  * Null when the job is not paused on an open question.
  */
 export const pausedQuestion = async (db: SqlExecutor, jobId: string): Promise<string | null> => {
+  // P3: the blocker of one job id the caller already holds; joins jobs on that same job id.
   const { rows } = await db
     .execute(
       `select b.requested_action as asked, b.why_needed as why, b.approval_options as options
@@ -932,6 +980,7 @@ export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): 
     paused jobs, so a question answered anywhere stops here. Younger than two
     days, so a deploy does not spring an old question on him.
   */
+  // P3: DEPLOYMENT SCAN. Sweeps paused jobs of every office; each row is joined only to its own job's blockers, outputs and deliveries, and the notifier is handed that job, so no data is carried between offices.
   const { rows } = await db.execute(`
     select j.job_id::text as job_id, j.kind, j.correlation_id::text as correlation_id,
            j.project_id::text as project_id,
@@ -969,6 +1018,7 @@ export const askUnasked = async (db: SqlExecutor, notify?: Notifier, max = 10): 
     output_id: string | null
   }[]) {
     if (r.output_id === null) continue
+    // P3: DEPLOYMENT SCAN row: the output id came from the same row's own job in the scan above.
     const stored = await db.execute(
       `select body, confidence::text as confidence, evidence::text as evidence,
               deterministic, model, sources, contradictions
@@ -1101,7 +1151,10 @@ const runJobHeld = async (
   */
   await recordPlan(db, job, handler)
   try {
-    output = await handler.handle(job, db)
+    // WHO the work is for travels with it (#404): the sentences a handler composes name the office's person, never "Grant".
+    output = await withJobScope(job.jobId, async () =>
+      withPerson(await personOfJob(db, job.jobId), () => handler.handle(job, db)),
+    )
     output = { ...output, body: withoutStrayQuotes(output.body) }
   } catch (error) {
     /*
@@ -1138,7 +1191,7 @@ const runJobHeld = async (
     try {
       const said = (
         await db.execute(
-          `select app.failure_seen(${lit(job.kind)}, ${lit((error as Error).message.slice(0, 500))},
+          `select app.failure_seen(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.kind)}, ${lit((error as Error).message.slice(0, 500))},
              ${job.projectId === null ? 'null' : lit(job.projectId)},
              ${lit(job.jobId)}::uuid) as r`,
         )
@@ -1237,9 +1290,11 @@ const runJobHeld = async (
     — a job with no command id, an unreadable extent — and an undefined value
     never accuses anybody: the check fires only on an explicit `false`.
   */
+  // P3: keyed by the claimed job id; the command id is read off that job's own pinned config.
   const hadHistory = await db
     .execute(`
       select (app.conversation_extent(
+                app.job_office(${lit(job.jobId)}::uuid),
                 (select (pinned_config ->> 'command_id')::uuid from public.jobs
                   where job_id = ${lit(job.jobId)}::uuid)
               ) ->> 'turns_total')::int > 1 as had`)
@@ -1353,6 +1408,8 @@ const runJobHeld = async (
         pause stands, and a refused sentence with nobody to ask is simply not
         kept. The refusal is already counted above.
       */
+
+      // P3: keyed by the claimed job id.
       (
         (
           await db.execute(
@@ -1370,6 +1427,7 @@ const runJobHeld = async (
       const learnable = await mayRetry(db, job)
       if (learnable) {
         try {
+          // P3: keyed by the claimed job id.
           await db.execute(`
             update public.jobs
                set pinned_config = coalesce(pinned_config, '{}'::jsonb)
@@ -1468,6 +1526,7 @@ const runJobHeld = async (
   // An output from a worker that no longer holds the job must not become the newest one a delivery reads (D6).
   await assertHeld(db, job)
   try {
+    // P3: an output of the CLAIMED job: job_id is the worker's own job and the held-check is in the same statement; the office is that job's (outputs are derived from jobs).
     inserted = await db.execute(`
     insert into public.outputs
       (job_id, staff_id, body, confidence, evidence, sources, contradictions,
@@ -1556,6 +1615,7 @@ const runJobHeld = async (
     output and its successor's met. The dead attempt's row is marked `superseded` (0621), with the reason in words: neither pending nor
     rejected, which block the commit, and not deterministic, which would be a claim nobody made.
   */
+  // P3: outputs of the claimed job id only.
   await db
     .execute(
       `update public.outputs
@@ -1595,35 +1655,38 @@ const runJobHeld = async (
       /*
         AND IT FAILS OPEN, which also makes the deploy order not matter.
 
-        `app.say_once` gained a third parameter in 0589. A migration is not a
-        deploy -- this repository has paid for assuming they land together --
-        so a worker carrying this line can reach a database that has only the
-        two-argument form.
+        `app.say_once` gained a third parameter in 0589 and, in 0782, its
+        office. A migration is not a deploy -- this repository has paid for
+        assuming they land together -- so a worker carrying this line can reach
+        a database that has only the older forms (the release procedure pauses
+        the worker for the migration so the two land together).
 
-        Which arity is called therefore follows what is being asked, not what
-        is newest: a handler with no topic asks the TWO-argument form, which
-        0584 already shipped and which is what every deployed worker calls
-        today. Sending everything through the three-argument form would mean
-        that on a database without 0589 EVERY call throws -- and the catch
-        below would turn 0584's dedupe off altogether rather than leaving it
-        alone. A safe failure mode is not the same as no regression.
+        The office is the CLAIMED job's (`app.job_office`), never a value taken
+        from the output or the request.
 
-        The catch then covers the remaining case -- a topic-carrying handler
-        on a database without 0589 -- by SPEAKING, the same direction the
-        `!== false` below chooses for an empty row. A dedupe rule that fails
-        closed silences a real failure report, which is the expensive
-        direction.
+        Which arity is called follows what is being asked, not what is newest:
+        a handler with no topic leaves the topic out. Sending everything
+        through the topic form would mean that on a database without 0589
+        EVERY call throws -- and the catch below would turn 0584's dedupe off
+        altogether rather than leaving it alone. A safe failure mode is not the
+        same as no regression.
+
+        The catch then covers a database that has not been migrated by
+        SPEAKING, the same direction the `!== false` below chooses for an empty
+        row. A dedupe rule that fails closed silences a real failure report,
+        which is the expensive direction.
       */
       const say = await db
         .execute(
           output.topic === undefined
-            ? `select app.say_once(${lit(job.jobId)}::uuid, ${lit(output.body)}) as say`
-            : `select app.say_once(${lit(job.jobId)}::uuid, ${lit(output.body)}, ${lit(output.topic)}) as say`,
+            ? `select app.say_once(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, ${lit(output.body)}) as say`
+            : `select app.say_once(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, ${lit(output.body)}, ${lit(output.topic)}) as say`,
         )
         .then((r) => (r.rows[0] as { say?: boolean } | undefined)?.say)
         .catch(() => undefined)
       announce = say !== false
     }
+    // P3: keyed by the claimed job id.
     await db.execute(
       `update public.jobs set announce = ${announce ? 'true' : 'false'}
         where job_id = ${lit(job.jobId)}::uuid`,
@@ -1644,6 +1707,7 @@ const runJobHeld = async (
     any other, and the job stays where its handler put it.
   */
   const stateNow = String(
+    // P3: keyed by the claimed job id.
     (
       (
         await db.execute(
@@ -1655,6 +1719,7 @@ const runJobHeld = async (
   if (stateNow === 'paused') {
     if (!gate.exempt) {
       const verdict = await review(output, job)
+      // P3: keyed by the output this run just inserted for the claimed job.
       await db.execute(`
         update public.outputs
         set reviewer_status = ${lit(verdict.status)}::public.reviewer_status,
@@ -1688,6 +1753,7 @@ const runJobHeld = async (
 
   if (!gate.exempt) {
     const verdict = await review(output, job)
+    // P3: keyed by the output this run just inserted for the claimed job.
     await db.execute(`
       update public.outputs
       set reviewer_status = ${lit(verdict.status)}::public.reviewer_status,
@@ -1743,7 +1809,7 @@ const runJobHeld = async (
     try {
       await db.execute(`
         select app.enqueue_child(
-          ${lit(job.jobId)}::uuid, 'office.instruction',
+          app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.instruction',
           jsonb_build_object(
             'instruction', ${lit(output.handoff.clause.slice(0, 4_000))},
             'addressed_to', ${lit(output.handoff.to)},
@@ -1877,6 +1943,7 @@ export const deliverPending = async (
       continue
     }
 
+    // P3: DEPLOYMENT SCAN row: the output id came from the notifying-job sweep above, one job at a time.
     const stored = await db.execute(
       // `sources` is read rather than assumed empty. It used to be
       // reconstructed as `[]`, which was harmless while nothing consulted it

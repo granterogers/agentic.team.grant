@@ -45,6 +45,7 @@ import { raiseBlocker } from '../inference/record.ts'
 import { fingerprint, type Outcome, type Paused, type Step } from '../jobs/checkpoint.ts'
 import { type Claimed, callerArgs } from '../jobs/fence.ts'
 import { isUntrusted, retrieveAcrossOffice, whereFrom } from '../knowledge/retrieval.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { mayAct, refusalSentence } from './approval.ts'
 import type { GoalPlan, PlanStep } from './goal.ts'
@@ -170,26 +171,35 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
    */
   'db.read': {
     effect: 'none',
-    run: async ({ db, projectId }): Promise<Observation> => {
+    run: async ({ db, jobId, projectId }): Promise<Observation> => {
       if (projectId === null) {
         return nothing('db.read', 'no project is in scope for this request')
       }
+      // Every read below is confined to the CLAIMED job's office, so a project id from anywhere else reads as empty.
+      const office = `app.job_office(${lit(jobId)}::uuid)`
       const { rows } = await db.execute(`
         select
           (select count(*) from public.documents
-            where project_id = ${lit(projectId)}::uuid and state <> 'archived')::int as docs,
+            where office_id = ${office}
+              and project_id = ${lit(projectId)}::uuid
+              and app.document_in_play(state, origin, project_id, connector, external_parent_ref))::int as docs,
           (select count(*) from public.tasks
-            where project_id = ${lit(projectId)}::uuid and state <> 'done')::int as open_tasks,
+            where office_id = ${office}
+              and project_id = ${lit(projectId)}::uuid and state <> 'done')::int as open_tasks,
           (select coalesce(string_agg(t, '; '), '') from (
              select left(title, 70) as t from public.documents
-              where project_id = ${lit(projectId)}::uuid and state <> 'archived'
+              where office_id = ${office}
+                and project_id = ${lit(projectId)}::uuid
+                and app.document_in_play(state, origin, project_id, connector, external_parent_ref)
               order by created_at desc limit 8) d)::text as doc_titles,
           (select coalesce(string_agg(t, '; '), '') from (
              select left(title, 70) as t from public.tasks
-              where project_id = ${lit(projectId)}::uuid and state <> 'done'
+              where office_id = ${office}
+                and project_id = ${lit(projectId)}::uuid and state <> 'done'
               order by created_at desc limit 8) k)::text as task_titles,
           (select coalesce(max(updated_at)::text, '') from public.documents
-            where project_id = ${lit(projectId)}::uuid) as newest`)
+            where office_id = ${office}
+              and project_id = ${lit(projectId)}::uuid) as newest`)
       const r = (rows[0] ?? {}) as Record<string, unknown>
       const docs = Number(r.docs ?? 0)
       const open = Number(r.open_tasks ?? 0)
@@ -234,14 +244,14 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
    */
   'notebook.read': {
     effect: 'none',
-    run: async ({ db, projectId, request, step }): Promise<Observation> => {
+    run: async ({ db, jobId, projectId, request, step }): Promise<Observation> => {
       /*
         The step's own `why` is what this step is looking for; the request is
         the fallback, because a plan whose steps carry no reason is one the
         validator let through with the request as the only thing said.
       */
       const asking = (step.why === '' ? request : step.why).slice(0, 400)
-      const hits = await retrieveAcrossOffice(db, asking, projectId, 5).catch(() => null)
+      const hits = await retrieveAcrossOffice(db, { jobId }, asking, projectId, 5).catch(() => null)
       if (hits === null) {
         return nothing('notebook.read', 'the knowledge index could not be searched')
       }
@@ -366,7 +376,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
             {
               role: 'system',
               content:
-                'You are writing up what colleagues found, for Grant.\n\n' +
+                `You are writing up what colleagues found, for ${currentPerson().name}.\n\n` +
                 'THE ONLY THING YOU MAY USE IS THE MATERIAL THE USER TURN ' +
                 'CARRIES. Do not add a fact, a number, a date, a name or a ' +
                 'recommendation that is not in it. Where it does not answer the ' +
@@ -466,7 +476,8 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         harness traffic from his own list without reading the title.
       */
       const { rows } = await db.execute(`
-        select app.my_task_add(p_title => ${lit(title)},
+        select app.my_task_add(p_office => app.job_office(${lit(jobId)}::uuid),
+                               p_title => ${lit(title)},
                                p_detail => ${lit(detail)},
                                p_job => ${lit(jobId)}::uuid) as t`)
       const raw = (rows[0] as { t?: unknown })?.t
@@ -482,7 +493,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         capability: 'task.create',
         found: true,
         ids: [got.id],
-        saw: `Put on Grant's list: "${title}"`,
+        saw: `Put on ${currentPerson().possessive} list: "${title}"`,
         title,
       }
     },
@@ -536,7 +547,8 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
                 (
                   await db.execute(
                     `select coalesce(title, '') as t from public.documents
-                      where document_id = ${lit(String(scopedTo[0]))}::uuid`,
+                      where office_id = app.job_office(${lit(jobId)}::uuid)
+                        and document_id = ${lit(String(scopedTo[0]))}::uuid`,
                   )
                 ).rows[0] as { t?: string } | undefined
               )?.t ?? '',
@@ -544,7 +556,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
           : ''
       const { rows } = await db
         .execute(`
-          select app.enqueue_child(${lit(jobId)}::uuid, 'office.extract_tasks',
+          select app.enqueue_child(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, 'office.extract_tasks',
             jsonb_build_object('from', ${lit(only)}), interval '0', false${callerArgs(held)})::text as id`)
         .catch(() => ({ rows: [] as Record<string, unknown>[] }))
       const id = String((rows[0] as { id?: string } | undefined)?.id ?? '')
@@ -796,8 +808,8 @@ export const compile = (
             detail: `${step.capability}: ${decision.because}`,
             resumeWhen:
               decision.reason === 'outside_audience'
-                ? 'Grant answers. This reaches somebody outside the office, which no autonomy setting lifts.'
-                : `Grant answers, or raises this project's autonomy above ${
+                ? `${currentPerson().name} answers. This reaches somebody outside the office, which no autonomy setting lifts.`
+                : `${currentPerson().name} answers, or raises this project's autonomy above ${
                     decision.autonomy ?? 'its current level'
                   }.`,
             /*

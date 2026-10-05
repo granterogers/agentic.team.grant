@@ -15,14 +15,15 @@
  * 339,010 bytes of auth wall.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { createHash, randomBytes } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
 import { DeliveryService } from '../../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { escapeHtml } from '../../src/telegram/message.ts'
 import { pagerBot } from '../../src/telegram/roster.ts'
 import { TelegramTransport } from '../../src/telegram/transport.ts'
+import { bundleForm } from './lib/bundle.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 if (supabaseToken === undefined || supabaseToken === '') {
@@ -36,13 +37,10 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 // --- deploy -----------------------------------------------------------------
 
-const entrypoint = await readFile('supabase/functions/mcp/index.ts', 'utf8')
-const form = new FormData()
-form.append(
-  'metadata',
-  JSON.stringify({ name: 'mcp', entrypoint_path: 'index.ts', verify_jwt: false }),
-)
-form.append('file', new File([entrypoint], 'index.ts', { type: 'application/typescript' }))
+// The function asks src/auth/speaker.ts who is consenting, so it ships its import graph (as voice does).
+const mcpBundle = await bundleForm('mcp', 'supabase/functions/mcp/index.ts')
+const form = mcpBundle.form
+console.log(`mcp: bundling ${String(mcpBundle.files)} file(s) from the import graph`)
 
 const deployed = await fetch(`${api}/functions/deploy?slug=mcp`, {
   method: 'POST',
@@ -83,8 +81,8 @@ if (clientArg !== undefined) {
   const hash = createHash('sha256').update(token, 'utf8').digest('hex')
 
   await db.execute(`
-    insert into public.mcp_clients (client_id, display_name, token_sha256, scopes)
-    values (${lit(clientId)}, ${lit(displayName)}, ${lit(hash)}, ${scopes})
+    insert into public.mcp_clients (office_id, client_id, display_name, token_sha256, scopes)
+    values (app.require_office(app.operator_office()), ${lit(clientId)}, ${lit(displayName)}, ${lit(hash)}, ${scopes})
     on conflict (client_id) do update
       set token_sha256 = excluded.token_sha256,
           display_name = excluded.display_name,
@@ -131,8 +129,7 @@ if (token !== null) {
   const chat =
     pager === null
       ? null
-      : (await db.execute(`select app.telegram_chat_for('grant', ${lit(pager.botId)}) as c`))
-          .rows[0]?.c
+      : (await db.execute(`select app.operator_chat(${lit(pager.botId)}) as c`)).rows[0]?.c
   if (pager === null || chat === null || chat === undefined) {
     console.error(
       '\nThe client is registered but the token could not be delivered: no Telegram chat.\n' +

@@ -61,6 +61,7 @@
  * replayed answer goes to `outputs` and nowhere else.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { writeFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import { direction, makeComparer } from '../src/eval/judge.ts'

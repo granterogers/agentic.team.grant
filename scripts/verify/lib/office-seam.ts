@@ -21,6 +21,7 @@
  * suite that forgets to stub something fails loudly rather than quietly
  * talking to a real office.
  */
+import '../../../src/safety/arm.ts'
 
 /** The gateway a browser check points at when it stubs the office itself. */
 export const NOWHERE = 'https://office.invalid/functions/v1/hq-api'

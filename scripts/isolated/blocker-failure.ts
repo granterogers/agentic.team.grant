@@ -93,7 +93,7 @@ const make = async (titles: string[]): Promise<string> => {
   const BY = `telegram:grant${String(seq)}`
   const r = await one(`
     with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, pinned_config, announce)
-               values ('office.pursue', '${BY}', app.unnamed_project(), 'b7-' || gen_random_uuid(), gen_random_uuid(),
+               values ('office.pursue', '${BY}', app.unnamed_project(app.test_office()), 'b7-' || gen_random_uuid(), gen_random_uuid(),
                        jsonb_build_object('plan', '${JSON.stringify(plan(titles)).replace(/'/g, "''")}'::jsonb, 'request', 'isolated proof'), true)
                returning job_id)
     select job_id::text as id from j`)
@@ -216,7 +216,9 @@ const b = String(
     )
   ).id,
 )
-await db.execute(`select app.hq_answer_blocker('${b}'::uuid, 'Yes, do it', 'grant')`)
+await db.execute(
+  `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${b}'::uuid), app.test_office()), '${b}'::uuid, 'Yes, do it', 'grant')`,
+)
 await step(job)
 check(
   'and answering it performs the step exactly once',

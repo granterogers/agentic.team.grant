@@ -64,28 +64,28 @@ export const localDate = (now: Date, timeZone: string): string =>
     day: '2-digit',
   }).format(now)
 
-export const gatherInputs = async (db: SqlExecutor): Promise<BriefingInputs> => {
+export const gatherInputs = async (db: SqlExecutor, office: string): Promise<BriefingInputs> => {
   const { rows } = await db.execute(`
     select
-      (select count(*)::int from public.blockers where state = 'open') as open_blockers,
+      (select count(*)::int from public.blockers where office_id = ${lit(office)}::uuid and state = 'open') as open_blockers,
       (select count(*)::int from public.blockers
-        where state = 'open' and real_deadline is not null and real_deadline <= app.now_utc())
+        where office_id = ${lit(office)}::uuid and state = 'open' and real_deadline is not null and real_deadline <= app.now_utc())
         as overdue_blockers,
-      (select count(*)::int from public.today) as live_jobs,
-      (select count(*)::int from public.today where state = 'waiting_user') as waiting_on_grant,
-      (select count(*)::int from public.today where minutes_since_change >= 60) as stalled_jobs,
+      (select count(*)::int from app.today_in(${lit(office)}::uuid)) as live_jobs,
+      (select count(*)::int from app.today_in(${lit(office)}::uuid) where state = 'waiting_user') as waiting_on_grant,
+      (select count(*)::int from app.today_in(${lit(office)}::uuid) where minutes_since_change >= 60) as stalled_jobs,
       (select count(*)::int from public.jobs
-        where state = 'failed' and finished_at >= app.now_utc() - interval '24 hours')
+        where office_id = ${lit(office)}::uuid and state = 'failed' and finished_at >= app.now_utc() - interval '24 hours')
         as failed_24h,
       (select count(*)::int from public.jobs
-        where state = 'complete' and finished_at >= app.now_utc() - interval '24 hours')
+        where office_id = ${lit(office)}::uuid and state = 'complete' and finished_at >= app.now_utc() - interval '24 hours')
         as completed_24h
   `)
   const r = rows[0] ?? {}
 
   const attention = await db.execute(`
     select name, open_blockers, failed_jobs_24h, stalled_jobs, brief_is_stale, has_brief
-    from app.project_attention()
+    from app.project_attention(${lit(office)}::uuid)
   `)
 
   return {
@@ -183,16 +183,18 @@ export const generateBriefing = async (
   db: SqlExecutor,
   kind: BriefingKind,
   forDate: string,
-  scopeRef = 'grant',
+  scopeRef: string | null,
+  office: string,
 ): Promise<Briefing | null> => {
-  const inputs = await gatherInputs(db)
+  const inputs = await gatherInputs(db, office)
   const body = compose(kind, forDate, inputs)
 
   const { rows } = await db.execute(`
-    insert into public.briefings (kind, for_date, scope_ref, body, inputs)
-    values (${lit(kind)}::public.briefing_kind, ${lit(forDate)}::date, ${lit(scopeRef)},
+    insert into public.briefings (office_id, kind, for_date, scope_ref, body, inputs)
+    values (${lit(office)}::uuid, ${lit(kind)}::public.briefing_kind, ${lit(forDate)}::date,
+            ${scopeRef === null ? `app.office_actor(${lit(office)}::uuid)` : lit(scopeRef)},
             ${lit(body)}, ${lit(JSON.stringify(inputs))}::jsonb)
-    on conflict (kind, scope_ref, for_date) do nothing
+    on conflict (office_id, kind, scope_ref, for_date) do nothing
     returning briefing_id::text as id
   `)
 

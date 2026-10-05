@@ -25,6 +25,7 @@
 import { remember } from '../../src/agents/remember.ts'
 import { readTeaching } from '../../src/agents/teaching.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { testOffice } from '../test-office.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -35,6 +36,8 @@ const db = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
+// Harness traffic belongs to the test office: every lesson this suite stores and reads is the test office's.
+const person = await testOffice(db)
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const one = async (sql: string): Promise<Record<string, unknown>> =>
   ((await db.execute(sql)).rows[0] ?? {}) as Record<string, unknown>
@@ -59,8 +62,8 @@ check(
 )
 
 const project = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values (${lit(SLUG)}, ${lit(`Withdraw proof ${run}`)}, 'Removed at the end of this run', 'paused')
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (app.test_office(), ${lit(SLUG)},${lit(`Withdraw proof ${run}`)}, 'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const projectId = String(project.id)
 await db.execute(`
@@ -88,7 +91,7 @@ const sweep = async (): Promise<void> => {
                        where learned_by = ${lit(BY)}`)
   ).rows as { id: string }[]) {
     await db
-      .execute(`select app.retract_lesson(${lit(row.id)}::uuid,
+      .execute(`select app.retract_lesson(coalesce((select zz_o.office_id from public.lessons zz_o where zz_o.lesson_id = ${lit(row.id)}::uuid), app.test_office()), ${lit(row.id)}::uuid,
                   'verify:withdraw teardown -- nothing this run stated outlives it.',
                   ${lit(BY)}) as r`)
       .catch(() => undefined)
@@ -120,7 +123,7 @@ const teach = (said: string) => {
 
 /* A rule stated with no project in scope, which is how a global one is made. */
 const RULE = 'From now on, always paste the screenshot links into every reply you send me.'
-const stored = await remember(db, teach(RULE), BY, null, null, null)
+const stored = await remember(db, person, teach(RULE), BY, null, null, null)
 check(
   'a rule stated with no project in scope is stored',
   stored.stored ?? 'nothing',
@@ -141,7 +144,7 @@ check('and it is live at global scope', `${String(await live())} live`, (await l
   cannot see it.
 */
 const WITHDRAW = 'Stop putting the screenshot links in the replies any more.'
-const fromProject = await remember(db, teach(WITHDRAW), BY, null, null, projectId)
+const fromProject = await remember(db, person, teach(WITHDRAW), BY, null, null, projectId)
 check(
   'withdrawing it from inside a project does not deny it',
   `“${fromProject.said.slice(0, 110)}”`,
@@ -161,6 +164,7 @@ check(
 /* And when he says he means everywhere, it goes. */
 const everywhere = await remember(
   db,
+  person,
   teach('Stop putting the screenshot links in the replies any more, everywhere.'),
   BY,
   null,
@@ -176,7 +180,7 @@ check(
 /*
   AND THE RETRACTION IT WROTE SAYS WHO DID IT AND WHY, IN THAT ORDER.
 
-  `app.retract_lesson(p_lesson_id, p_why, p_by)` writes `body = p_why` and
+  `app.retract_lesson(coalesce((select zz_o.office_id from public.lessons zz_o where zz_o.lesson_id = p_lesson_id), app.test_office()), p_lesson_id, p_why, p_by)` writes `body = p_why` and
   `learned_by = p_by`. `remember()` passed the author second, so the AUTHOR
   went into the reason column and the REASON into the author column, on every
   retraction the office has ever written -- and `lessons.is_fixture` is
@@ -213,6 +217,7 @@ check(
 */
 const nothing = await remember(
   db,
+  person,
   teach('Stop putting due dates on the things you make for me any more.'),
   BY,
   null,

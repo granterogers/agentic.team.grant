@@ -9,7 +9,9 @@
  * that saw a red run every ten minutes during an outage would train everyone
  * to ignore it.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { operatorOffice } from '../../src/db/office.ts'
 import { UnavailableNotebookAdapter } from '../../src/notebook/adapter.ts'
 import { LiveNotebookAdapter } from '../../src/notebook/live-adapter.ts'
 import { notebookEnabled } from '../../src/notebook/sync-queue.ts'
@@ -44,6 +46,7 @@ if (live === null) {
     adapter: new UnavailableNotebookAdapter(),
     listNotebooks: async () => [],
     workerId: `sync-${process.pid}`,
+    officeId: await operatorOffice(db, process.env.OFFICE_ID),
   })
   console.log(`run ${outcome.runId}: ${outcome.state} - ${outcome.detail}`)
   process.exit(0)
@@ -60,6 +63,7 @@ try {
     adapter: live,
     listNotebooks: async () => live.listNotebooks(),
     workerId,
+    officeId: await operatorOffice(db, process.env.OFFICE_ID),
   })
 
   console.log(`run ${outcome.runId}: ${outcome.state}`)

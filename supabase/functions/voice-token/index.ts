@@ -32,6 +32,8 @@
  * that can rewrite the assistant's instructions is a page that can rewrite the
  * assistant, and the page is the untrusted half of this pair.
  */
+import { bearerOf, resolveSpeaker } from '../../../src/auth/speaker.ts'
+
 const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 const MODEL = Deno.env.get('VOICE_MODEL') ?? 'gpt-realtime-2.1-mini'
 // Claire is a woman and this is her voice. Configuration, not a constant, so
@@ -91,7 +93,7 @@ const corsFor = (request: Request): Record<string, string> => {
         (ALLOWED_ORIGINS[0] ?? 'null')
   return {
     'Access-Control-Allow-Origin': allowed,
-    'Access-Control-Allow-Headers': 'content-type',
+    'Access-Control-Allow-Headers': 'content-type, authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     // Without this a shared cache can hand one origin's response to another.
     Vary: 'Origin',
@@ -107,12 +109,19 @@ const corsFor = (request: Request): Record<string, string> => {
  * that reads fine takes twenty seconds to sit through, and you cannot scroll
  * past it.
  */
-const INSTRUCTIONS =
-  "You are Claire, Chief of Staff of Grant's small AI team. You are on a " +
-  'voice call with Grant himself — he runs the place, he knows how it works, ' +
-  'and he is not a customer.\n\n' +
+/*
+  WHO THE CALL IS WITH (#404). The name comes from the office the SESSION resolved to (`public.offices.name`, a person
+  office only) - never from the page, the request or a default - and when there is no person to name the words are
+  neutral. Pronouns are not inferred from a name: the wording says the name or "they". `src/office/person.ts` is the
+  same rule for the worker; this file cannot import it (Deno edge bundle), so the few lines are repeated.
+*/
+const NEUTRAL = 'the person you work for'
+const INSTRUCTIONS = (name: string, named: boolean): string =>
+  `You are Claire, Chief of Staff of ${named ? `${name}'s` : 'a'} small AI team. You are on a ` +
+  `voice call with ${name} themselves — they run the place, they know how it works, ` +
+  'and they are not a customer.\n\n' +
   'Talk like a competent colleague on the phone. Short turns: one or two ' +
-  'sentences, then stop and let him speak. Never deliver a paragraph. Never ' +
+  'sentences, then stop and let them speak. Never deliver a paragraph. Never ' +
   'list more than three things aloud. Contractions, plain words, an opinion ' +
   'where you have one. British English.\n\n' +
   'You have seven directors: Tom on strategy, Emma on research, Daniel on ' +
@@ -120,31 +129,31 @@ const INSTRUCTIONS =
   'Oliver on communications and creative, Grace on quality and risk.\n\n' +
   'You have TWO tools and they are for different things.\n\n' +
   'look_up — to FIND OUT. A project, a colleague, what is in flight, what is ' +
-  'waiting on him, what someone reported. It comes back in a second or two ' +
+  'waiting on them, what someone reported. It comes back in a second or two ' +
   'with real state, so use it freely rather than guessing or apologising. ' +
   'You may call it mid-sentence; keep talking while it runs.\n\n' +
   'ask_the_team — to MAKE SOMETHING HAPPEN. Research, analysis, a draft, a ' +
   'decision to be looked into, a change to be made. This starts real work and ' +
   'takes minutes, so say what you are doing in a few words BEFORE you call it ' +
-  '("Right, I will put that to Emma"), then tell him what came back.\n\n' +
-  'The difference matters: looking something up and telling him is instant, ' +
+  '("Right, I will put that to Emma"), then tell them what came back.\n\n' +
+  'The difference matters: looking something up and telling them is instant, ' +
   'and putting it to the team is not. Never delegate a question you can look ' +
   'up. Never pretend to answer something that is actually work.\n\n' +
   'Below is the state of play as of the moment this call started. It is real ' +
   'and it is yours — you are not a switchboard, you run this office and you ' +
-  'know what is in it. Speak from it directly. If he asks about something not ' +
+  'know what is in it. Speak from it directly. If they ask about something not ' +
   'in it, or asks for detail, look it up rather than saying you do not know.' +
   '\n\nIf something fails, say so plainly and say what you will do about it. ' +
   'Never say "I hope this helps", "let me know if", or "as an AI".'
 
-const TOOLS = [
+const TOOLS = (name: string, named: boolean) => [
   {
     type: 'function',
     name: 'look_up',
     description:
-      'Find out something real, now. A project by any name Grant uses for it, ' +
+      `Find out something real, now. A project by any name ${name} uses for it, ` +
       'a colleague and what they last reported, what is in flight, what is ' +
-      'waiting on him. Returns canonical state in about a second. Use this ' +
+      'waiting on them. Returns canonical state in about a second. Use this ' +
       'for every question of fact — never delegate one.',
     parameters: {
       type: 'object',
@@ -152,7 +161,7 @@ const TOOLS = [
         about: {
           type: 'string',
           description:
-            'What to look up, in his words — a project name, a person, or the ' +
+            'What to look up, in their words — a project name, a person, or the ' +
             'question itself. Leave it vague and you get the state of play, ' +
             'which is a fine answer to "what is going on".',
         },
@@ -166,7 +175,7 @@ const TOOLS = [
     name: 'ask_the_team',
     description:
       'Put a request or a question to the team. Use for real work and for ' +
-      "anything about the live state of Grant's projects. Returns what the " +
+      `anything about the live state of ${named ? `${name}'s` : 'the'} projects. Returns what the ` +
       'office says, which may be an answer or a confirmation that it has been ' +
       'delegated and will come back in Slack.',
     parameters: {
@@ -193,8 +202,85 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method !== 'POST') {
     return Response.json({ error: 'method not allowed' }, { status: 405, headers: cors })
   }
+
+  /*
+    WHO MAY MINT A CALL (#400, E1). This endpoint used to mint a realtime session for anybody who
+    could reach the URL, and a minted session is a metered OpenAI capability carrying a briefing
+    of the office's live state. Authenticate BEFORE anything is read or spent: no state lookup,
+    no OpenAI call and no 503 that tells a stranger whether voice is configured. The verifier is
+    the one the voice function uses, so the two cannot disagree about who a caller is.
+  */
+  const speaker = await resolveSpeaker(bearerOf(request), {
+    hqToken: Deno.env.get('HQ_API_TOKEN') ?? '',
+    supabaseUrl: DB_URL,
+    anonKey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    serviceKey: SERVICE_KEY,
+  })
+  if (speaker === null) {
+    return Response.json({ error: 'unauthorized' }, { status: 401, headers: cors })
+  }
+
+  /*
+    THE OFFICE THIS CALL BELONGS TO (P3). The signed-in speaker's login resolved to it; the machine key (the deploy probe,
+    verify:talk) names no office and speaks for the TEST office. No office, no briefing, no session: a call is never opened
+    on the whole deployment's state.
+  */
+  let office: string | null = speaker.office
+  if (office === null && speaker.kind === 'service') {
+    try {
+      const machine = (await (
+        await fetch(`${DB_URL}/rest/v1/rpc/resolve_machine_office`, {
+          method: 'POST',
+          headers: {
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: '{}',
+        })
+      ).json()) as { ok?: boolean; office_id?: string }
+      office =
+        machine.ok === true && typeof machine.office_id === 'string' ? machine.office_id : null
+    } catch {
+      office = null
+    }
+  }
+  if (office === null) {
+    return Response.json({ error: 'no_office' }, { status: 403, headers: cors })
+  }
+
   if (OPENAI_KEY === '') {
     return Response.json({ error: 'voice is not configured' }, { status: 503, headers: cors })
+  }
+
+  /*
+    WHO THIS CALL IS WITH, from the office the session resolved to. A person office with a usable name is called by it;
+    anything else (the test office, a failed lookup) gets neutral words. Never a default name.
+  */
+  let personName = NEUTRAL
+  let personNamed = false
+  try {
+    const rows = (await (
+      await fetch(
+        `${DB_URL}/rest/v1/offices?office_id=eq.${encodeURIComponent(office)}&select=kind,name`,
+        {
+          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+        },
+      )
+    ).json()) as { kind?: string; name?: string }[]
+    const tidy = (rows[0]?.name ?? '')
+      .split('')
+      .map((c) => (c.charCodeAt(0) <= 0x1f ? ' ' : c))
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80)
+    if (rows[0]?.kind === 'person' && tidy !== '') {
+      personName = tidy
+      personNamed = true
+    }
+  } catch {
+    // Neutral words: not knowing costs a plainer sentence, never somebody else's name.
   }
 
   /*
@@ -250,7 +336,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           Authorization: `Bearer ${SERVICE_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ p_about: slug }),
+        body: JSON.stringify({ p_office: office, p_about: slug }),
       })
       if (look.ok) {
         inView =
@@ -274,7 +360,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         Authorization: `Bearer ${SERVICE_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: '{}',
+      body: JSON.stringify({ p_office: office }),
     })
     if (read.ok) {
       stateBrief = `\n\n--- THE STATE OF PLAY ---\n${JSON.stringify(await read.json())}`
@@ -286,10 +372,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
   const instructions =
     (stateBrief === ''
-      ? `${INSTRUCTIONS}\n\nYou could not read the office's state when this call ` +
+      ? `${INSTRUCTIONS(personName, personNamed)}\n\nYou could not read the office's state when this call ` +
         'started. Say so if he asks about anything current, and use look_up — that ' +
         'may still work.'
-      : INSTRUCTIONS + stateBrief) + inView
+      : INSTRUCTIONS(personName, personNamed) + stateBrief) + inView
 
   const session = {
     type: 'realtime',
@@ -314,7 +400,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       },
       output: { voice: VOICE },
     },
-    tools: TOOLS,
+    tools: TOOLS(personName, personNamed),
     tool_choice: 'auto',
   }
 
@@ -363,7 +449,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       voice: VOICE,
       // The page shows this. A call where she cannot reach the team is worth
       // knowing about before you ask her to do something.
-      tools: degraded ? [] : TOOLS.map((t) => t.name),
+      tools: degraded ? [] : TOOLS(personName, personNamed).map((t) => t.name),
       degraded,
       /*
         WHAT THE SESSION WAS GIVEN, as facts rather than as its contents.

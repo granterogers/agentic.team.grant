@@ -17,6 +17,7 @@
  *
  * Never logs a token: length, expiry and an 8-char fingerprint only.
  */
+import '../../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
@@ -98,7 +99,7 @@ if (!process.argv.includes('--approved-by-grant')) {
 // tested — §18's *invalid refresh token* case, and the one path here that can
 // lock us out of Slack. This script is the caller and the reporting.
 const outcome = await rotateAndPersist(
-  { execute: (sql: string) => db.execute(sql) },
+  { office: 'app.operator_office()', execute: (sql: string) => db.execute(sql) },
   APP_ID,
   refreshToken,
 )
@@ -126,9 +127,9 @@ const refFor = async (name: string): Promise<string> =>
 
 await db.execute(`
   insert into public.slack_app_credentials
-    (slack_app_id, team_id, app_name, config_token_ref, config_refresh_ref,
+    (office_id, slack_app_id, team_id, app_name, config_token_ref, config_refresh_ref,
      config_token_expires_at, config_token_rotated_at, rotation_failures, last_rotation_error)
-  values ('${APP_ID}', 'T0BUCJ2L5FD', 'AI Team HQ',
+  values (app.require_office(app.operator_office()), '${APP_ID}', 'T0BUCJ2L5FD', 'AI Team HQ',
           '${await refFor('slack.config_token')}'::app.vault_secret_ref,
           '${await refFor('slack.config_refresh_token')}'::app.vault_secret_ref,
           to_timestamp(${pair.expiresAt}), now(), 0, null)

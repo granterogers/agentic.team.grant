@@ -36,6 +36,7 @@
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
 
+import '../../src/safety/require-production-site.ts'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { signIn } from './lib/sign-in.ts'
@@ -220,7 +221,9 @@ try {
     and a reference left behind sits on one of Grant's real projects for ever.
   */
   for (const id of made) {
-    await db.execute(`select public.remove_project_reference('${id}'::uuid)`)
+    await db.execute(
+      `select public.remove_project_reference((select p.office_id as office from public.projects p join public.project_references r using (project_id) where r.reference_id = '${id}'::uuid), '${id}'::uuid)`,
+    )
   }
   const left = await stored()
   check('the probe reference is gone again', left.length === 0, JSON.stringify(left))

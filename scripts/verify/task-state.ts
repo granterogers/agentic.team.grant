@@ -40,15 +40,15 @@ begin
     returning command_id into c1;
   j := (app.enqueue_inbound(c1) ->> 'job_id')::uuid;
   update public.jobs set announce = false where job_id = j;
-  t_personal := app.my_task_add(p_title => 'Book the minibus ${run}', p_job => j);
-  t_project := app.task_add(p_project => proj, p_title => 'Chase the caterers ${run}', p_job => j);
+  t_personal := app.my_task_add(p_office => app.test_office(), p_title => 'Book the minibus ${run}', p_job => j);
+  t_project := app.task_add(p_office => app.test_office(), p_project => proj, p_title => 'Chase the caterers ${run}', p_job => j);
   insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
     values ('teamhq', 'verify-taskstate-${run}:2', 'verify-taskstate-${run}', 'bin the minibus one', 'teamhq:verify:taskstate-${run}-2', app.now_utc(), proj)
     returning command_id into c2;
   perform app.enqueue_inbound(c2);
   update public.jobs set announce = false where job_id = (select job_id from public.inbound_commands where command_id = c2);
-  harness_personal := app.my_task_referent(c2);
-  harness_any := app.my_task_referent(c2, p_any_task => true);
+  harness_personal := app.my_task_referent((select office.office_id from public.inbound_commands office where office.command_id = c2), c2);
+  harness_any := app.my_task_referent((select office.office_id from public.inbound_commands office where office.command_id = c2), c2, p_any_task => true);
   /*
     A REAL conversation holding a harness-marked task, so the control can
     fail. A command inserted here is synthetic by construction (0575 denies
@@ -59,9 +59,9 @@ begin
   */
   select c.command_id into real_cmd from public.inbound_commands c
    where c.job_id is not null and not app.harness_job(c.job_id) order by c.received_at desc limit 1;
-  perform app.task_add(p_project => proj, p_title => 'Harness in a real chat ${run}', p_added_by => 'verify:control');
-  real_any := app.my_task_referent(real_cmd, '48:00'::interval, true);
-  moved := app.hq_task_state(t_personal ->> 'id', 'cancelled');
+  perform app.task_add(p_office => app.test_office(), p_project => proj, p_title => 'Harness in a real chat ${run}', p_added_by => 'verify:control');
+  real_any := app.my_task_referent((select office.office_id from public.inbound_commands office where office.command_id = real_cmd), real_cmd, '48:00'::interval, true);
+  moved := app.hq_task_state(app.test_office(), t_personal ->> 'id', 'cancelled');
   raise exception 'RESULT %', jsonb_build_object(
     'harness_job', app.harness_job(j),
     'harness_personal', harness_personal,

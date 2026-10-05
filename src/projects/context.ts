@@ -19,6 +19,8 @@
  * message; guessing costs a day of misfiled work.
  */
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
+import type { OfficeId } from '../office/context.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -89,13 +91,19 @@ export type Resolution =
  * word — which is the common case, and the one where asking would be annoying
  * rather than careful.
  */
-export const matchProject = async (db: SqlExecutor, name: string): Promise<Resolution> => {
+export const matchProject = async (
+  db: SqlExecutor,
+  /** Whose projects are searched. A name is only ever matched against one office's own. */
+  office: OfficeId,
+  name: string,
+): Promise<Resolution> => {
   const needle = name.trim().toLowerCase()
   if (needle === '') return { kind: 'not_found', searched: name }
 
   const rows = await db.execute(`
     select project_id::text as project_id, slug, name
-    from public.projects where status = 'active' order by name
+    from public.projects
+    where office_id = ${lit(office)}::uuid and status = 'active' order by name
   `)
   const all: ProjectMatch[] = rows.rows.map((r) => ({
     projectId: String(r.project_id),
@@ -120,18 +128,25 @@ export const matchProject = async (db: SqlExecutor, name: string): Promise<Resol
 /** Record a switch. Insert only — 0026 revokes update. */
 export const switchTo = async (
   db: SqlExecutor,
+  /** The office whose chat is switching; the project named must be one of its own. */
+  office: OfficeId,
   scope: Scope,
   projectId: string | null,
   by: string,
   reason: string,
 ): Promise<string> => {
   const { rows } = await db.execute(`
-    insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
-    values (${lit(scope.kind)}::public.project_scope_kind, ${lit(scope.ref)},
+    insert into public.project_switches
+      (scope_kind, scope_ref, project_id, switched_by, reason, office_id)
+    select ${lit(scope.kind)}::public.project_scope_kind, ${lit(scope.ref)},
             ${projectId === null ? 'null' : `${lit(projectId)}::uuid`},
-            ${lit(by)}, ${lit(reason)})
+            ${lit(by)}, ${lit(reason)}, ${lit(office)}::uuid
+     where app.require_office(${lit(office)}::uuid) is not null
+       and ${projectId === null ? 'true' : `exists (select 1 from public.projects p where p.project_id = ${lit(projectId)}::uuid and p.office_id = ${lit(office)}::uuid)`}
     returning switch_id::text as id
   `)
+  // A project of another office is refused exactly as a missing one is: nothing is written.
+  if (rows[0] === undefined) throw new Error('no_such_project')
   return String(rows[0]?.id)
 }
 
@@ -143,11 +158,13 @@ export const switchTo = async (
  */
 export const resolveProject = async (
   db: SqlExecutor,
+  office: RetrievalOffice,
   scope: Scope,
   explicitProjectId?: string,
 ): Promise<string | null> => {
   const { rows } = await db.execute(`
     select app.resolve_project(
+      ${officeOf(office)},
       ${lit(scope.kind)}::public.project_scope_kind,
       ${lit(scope.ref)},
       ${explicitProjectId === undefined ? 'null' : `${lit(explicitProjectId)}::uuid`}

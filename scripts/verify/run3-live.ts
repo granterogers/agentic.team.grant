@@ -39,6 +39,10 @@ const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Reco
 const run = Date.now().toString(36)
 const origins = await testOrigins(db, 'verify:run3-live')
 const key = await officeKey(db)
+// The office these refusal probes aim at is the SAMPLE's, never Grant's (#414): a regression in a refusal would then change
+// the Sample (reset-able) and not a real person's office. The properties are the same; only the victim moved.
+const VICTIM = String((await one(`select app.owner_office('p4-second-person')::text as o`)).o ?? '')
+if (VICTIM === '') throw new Error("the Sample office is not available as the probes' target")
 
 const gateway = async (auth: string | null, action: string, args: Record<string, unknown>) => {
   const r = await fetch(`${base}/hq-api`, {
@@ -107,7 +111,9 @@ try {
       const t = await r.text()
       check(
         `the anon key calling ${fn} over PostgREST is refused as a permission failure`,
-        r.status === 401 && /permission denied for function/.test(t),
+        // Or, since P3 put the office first, "no function with these arguments" (404 PGRST202): an anon key names nothing.
+        (r.status === 401 && /permission denied for function/.test(t)) ||
+          (r.status === 404 && /PGRST202/.test(t)),
         `http ${String(r.status)}`,
       )
     }
@@ -250,17 +256,22 @@ try {
     const held = Number(
       (
         await one(
-          `select count(*)::int as n from public.staff_tools where staff_slug = 'chief-of-staff' and tool = 'db.read'`,
+          `select count(*)::int as n from public.staff_tools where staff_slug = 'chief-of-staff' and tool = 'db.read' and office_id = ${lit(VICTIM)}::uuid`,
         )
       ).n,
     )
     check(
       "the test member cannot change a real specialist's grants",
-      held === 1 && /test principal/i.test(JSON.stringify(grants.body)),
+      // Refused at the gateway (an operator is required, P1.3) or by the database's own test-principal rule: the
+      // property is that the grant is unchanged and the request was refused, not which layer said no first.
+      held === 1 &&
+        grants.status === 403 &&
+        (/test principal/i.test(JSON.stringify(grants.body)) ||
+          (grants.body as { error?: string }).error === 'operator_required'),
       `held ${String(held)}`,
     )
     const q = await one(`select blocker_id::text as id from public.blockers b
-      where b.state = 'open' and not app.harness_job(b.job_id) order by b.created_at desc limit 1`)
+      where b.state = 'open' and b.office_id = ${lit(VICTIM)}::uuid order by b.created_at desc limit 1`)
     if (q?.id) {
       const r = await gateway(test.access, 'answer_blocker', {
         p_blocker_id: String(q.id),
@@ -271,7 +282,9 @@ try {
       )
       check(
         "the test member cannot answer one of Grant's REAL open questions",
-        still.s === 'open' && /test principal/i.test(JSON.stringify(r.body)),
+        // Either refusal is the property holding: the test principal rule, or (the stronger one, since the question is in
+        // ANOTHER office) the same sentence a question that does not exist gets. What must never happen is a resolution.
+        still.s === 'open' && /test principal|nothing here to answer/i.test(JSON.stringify(r.body)),
         `${String(still.s)} ${JSON.stringify(r.body).slice(0, 80)}`,
       )
     } else {
@@ -287,7 +300,11 @@ try {
       ['a test principal', `'verify-operator'`, /test principal/],
     ] as const) {
       const r = json(
-        (await one(`select public.hq_autonomy_set('act', null, 'run3 live', ${by})::text as r`)).r,
+        (
+          await one(
+            `select public.hq_autonomy_set(${lit(VICTIM)}::uuid, 'act', null, 'run3 live', ${by})::text as r`,
+          )
+        ).r,
       )
       check(
         `hq_autonomy_set: ${label} is refused by name`,

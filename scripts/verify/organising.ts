@@ -81,8 +81,8 @@ const slug = `fixture-organising-${run}`
 const projectId = String(
   (
     await one(`
-      insert into public.projects (slug, name, purpose, status)
-      values (${lit(slug)}, ${lit(`Organising ${run}`)},
+      insert into public.projects (office_id, slug, name, purpose, status)
+      values (app.test_office(), ${lit(slug)}, ${lit(`Organising ${run}`)},
               'Removed at the end of this run', 'paused')
       returning project_id::text as id`)
   ).id,
@@ -103,9 +103,10 @@ const mkDoc = async (title: string): Promise<string> =>
     (
       await one(`
         insert into public.documents
-          (project_id, connector, external_ref, title, content, content_fingerprint,
+          (office_id, project_id, connector, external_ref, title, content, content_fingerprint,
            fetched_at, origin, state, produced_by)
-        values (${lit(projectId)}::uuid, null, ${lit(`${title}-${run}`)}, ${lit(title)},
+        values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+                ${lit(projectId)}::uuid, null, ${lit(`${title}-${run}`)}, ${lit(title)},
                 'A short body, so the row is a document and not a stub.',
                 encode(extensions.digest('body-' || ${lit(title)} || ${lit(run)}, 'sha256'), 'hex'),
                 app.now_utc(), 'made', 'approved', 'Emma')
@@ -236,8 +237,11 @@ check(
   refusedEmpty.includes('missing: p_tag'),
 )
 const rpcRefusal = String(
-  (await one(`select app.tag_document(${lit(subject)}::uuid, '   ', true) ->> 'error' as v`)).v ??
-    '',
+  (
+    await one(
+      `select app.tag_document(app.test_office(), ${lit(subject)}::uuid, '   ', true) ->> 'error' as v`,
+    )
+  ).v ?? '',
 )
 check(
   'and the RPC refuses it too, for a caller that is not the page',

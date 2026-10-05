@@ -1,3 +1,92 @@
+> ## 2026-10-05 - PRODUCTION-ACCESS GUARD (branch `claude/ux-closure-guard`)
+>
+> A previous autonomous run touched production (read-only catalogue queries) only because credentials were in its environment.
+> Production access is now **off by default**: `ALLOW_PRODUCTION_CHECKS=1` for any contact, plus `ALLOW_PRODUCTION_WRITES=1` for
+> deploys, migrations, purges, senders and production-heavy suites. One definition (`src/safety/production-gate.ts`), enforced at
+> `ManagementApiExecutor`, `PgExecutor`, a global `fetch` guard, entry modules and `db-query.sh`; inert in Deno (the worker) and for
+> the local replica. Inventory, switches, residuals: `docs/production-access-guard.md`; manifest `docs/testing/production-access.json`;
+> tests `tests/safety/`. Every command that touches production now needs the flag on its own command line, including the ones in
+> "Asking the office about itself" in `CLAUDE.md` (`npm run q`, `check:*`, `measure`, ...), which that file does not yet say.
+>
+> ## 2026-10-04 (later) - TELEGRAM SELF-SERVICE, DELIVERY OFFICE, TALK, GATE (branch `claude/multi-user-p4`)
+>
+> Migrations through **0886**. hq-api **v884**, telegram-webhook **v689**, page `dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M` (rollback
+> `dpl_DPj4Nmnu5J3xy7afcNsUNccnCd3f`). **#410 Telegram** (ADR-0064): a person connects their own Telegram from Settings >
+> Messaging by a single-use ten-minute link; the webhook binds the SENDER to the TOKEN's office; refusals and the operator's
+> office are covered; proofs `verify:channel-link`, `sample:channel-link`, `scripts/isolated/telegram-link.ts` (real webhook).
+> NOT proven: a real iPhone tap on a real link (MANUAL). **Slack not attempted.** **delivery_office (0883/0884):** missing
+> provenance is the system office, never the operator; an operator sender may not address another office's chat or channel
+> (`verify:delivery-office`). **verify:talk** now drives Team HQ with SIMULATED audio (voice note and Talk to Team real-audio
+> acceptance remain MANUAL). **#414:** `verify:history` and `verify:connectors` converted (test office + Sample rollbacks);
+> `gate:safe` has three parts. **Temp files:** the producer is NOT identified; `log_temp_files` was reported not settable by our role (CORRECTED: never tried; the docs and API spec say it is configurable, see `docs/ops/supabase-forensics-2026-10-04.md`)
+> (`docs/ops/supabase-efficiency-2026-10-04.md`). Old `npm run gate` still PARTIAL.
+>
+> ## 2026-10-04 - P4 CONTINUATION (branch `claude/multi-user-p4`): incidents, project context, learning, labels, safe gate
+>
+> Migrations through **0882** (752 files). Worker **v959**, page `dpl_DPj4Nmnu5J3xy7afcNsUNccnCd3f` (rollback
+> `dpl_5PTmaiPmmrJjxWfteNsUoPXQce8K`). **#413** an unresolved problem is told once per office/service/problem
+> (`public.incidents`, `app.incident_seen`, resolution reports whether he was told); live on Telegram and Slack for two failing
+> duties. **#416** the loaded project is the project (ADR-0063); Telegram/Slack/voice resolve a single named project (0880).
+> **#417** teaching recogniser fixed and proved live. **#418** the office's own actor reads `you` (0881). **#414** `npm run
+> gate:safe` (serial, no model calls, fingerprints 25 offices before and after; last run 10/10, all diffs empty) -
+> `docs/testing/gate-reach.md`; the old `npm run gate` is NOT converted (PARTIAL). **#408** closed, **#412** narrowed.
+> 0882 corrects the browser Settings card. P0: `docs/ops/supabase-efficiency-2026-10-04.md` (measured / inferred / unknown;
+> the temp-spill source is NOT attributed, memory starvation NOT proven). Still MANUAL: VOICE NOTE real-mic and TALK TO TEAM
+> real-audio acceptance. `verify:talk` is stale (drives `/classic/`).
+>
+> ## 2026-10-02 - MULTI-USER P4: SECOND-USER ACCEPTANCE (branch `claude/multi-user-p4`; HARD STOP: nobody invited)
+>
+> A controlled second PERSON now exists in production (office `205669cc-…`, login on the reserved `.invalid` domain, password
+> in the Vault as `p4.second_person.password`): provisioned by `app.provision_person_office` (0863), retired by
+> `app.retire_person_office`, both operator-only (`npm run office:second-person`). Real session, real gateway, real worker,
+> real model path: first login empty; same-name objects isolated; foreign id = nonexistent id for 11 reads and 15 writes;
+> Claire and her children stay in the office (49 model calls, 0 deliveries); retrieval canaries both directions with positive
+> controls; two browsers, both switch directions, four storage kinds; voice, MCP; 47 attack checks; five sabotages red then
+> green; Grant's own account 42/42 afterwards; harness contamination in his office unchanged (1827/3251/10/0/1014).
+> **One defect found and fixed**: `google`, `build`, `ci_lately`, `ci_budget`, `bots` took no office so no office check covered
+> them; they are now the operator's (`hq-api` v852). **Open, filed, Grant's to decide before a real person tries it**: the
+> agents address the second person as "Grant"; there is no sign-out control; Telegram, Slack, Google and MCP are not
+> configured for a second person. Canonical: `docs/multi-user/P4-SECOND-USER-ACCEPTANCE.md`. `app.sole_person_office()` is
+> now NULL by design; operator tools name `app.operator_office()`.
+>
+> ## 2026-10-01 - MULTI-USER P2: THE OWNERSHIP FOUNDATION (branch `claude/multi-user-p2`; P3 NOT started)
+>
+> Migrations **0653-0666** applied (13 waves, each verified before the next). Every private row now has an office: a
+> `public.offices` row per person / sample / test / system, `office_id NOT NULL` and write-once on the 52 carriers, 56
+> composite `(parent, office)` keys, guard triggers on all 45 derived tables, an endpoint guard on `relations`, per-office
+> private names, and row security on the 46 tables that lacked it. Production holds **one person office (Grant), one test
+> office and one system office; no second real person was created.** The history was assigned by evidence in five tiers
+> (63,803 rows: 29,928 person / 24,248 test / 9,627 system / 0 unresolved); 8,484 unattributable rows are in the system
+> office, and 5,821 harness rows are in Grant's office because the database links them to his projects - flagged, not
+> hidden. New gate entry `check:office-edges`. Found live and fixed: the guards ran as the writer, so the Telegram webhook
+> answered 503 for 7 min 47 s (0664). **Not done, on purpose:** the 878 functions, the 47 ambient-Grant defaults, the
+> bridge removal, the machine-key rotation (device evidence), MCP consent. Canonical: `docs/multi-user/P2-OWNERSHIP.md`,
+> ADR-0061; P1 is closed in `docs/multi-user/P1-FINAL-CLOSURE.md`. Next: P3, in the order P2-OWNERSHIP.md section 13 gives.
+
+> ## 2026-10-01 - MULTI-USER P0 + P1 SECURITY CLOSURE (branch `claude/multi-user-p0-p1`; P2 NOT started)
+>
+> Migrations **0647-0652** applied; `voice` v595, `voice-token` v625, `hq-api` v830, `google-oauth` v591, `worker` v899 and
+> the studio page deployed, each probed live. Fixed: the unauthenticated voice mint and the ambient voice subject; 22
+> deployment-wide actions and the Drive browse now need a deployment **operator** (`deployment_operators`, 0647); one
+> resolver for fixed-name credentials (`app.deployment_credential`, 0648; raw readers retired, 0649); the Google connect
+> flow needs a one-time state (it used to store any account's code); storage is written only after the database target is
+> authorized (0650); no member is Grant by default (0652). New gate entries: `check:ownership`, `check:system-secrets`,
+> `check:machine-key`. **Not done, and why:** the machine key is not rotated (device evidence needed), 22 unused
+> write-scoped MCP tokens are not revoked (yours to confirm), MCP consent is still the machine key. Canonical:
+> `docs/multi-user/P1-CLOSURE.md`. Next: review the P2 gate verdict there before the ownership migration begins.
+
+> ## 2026-10-01 - MULTI-USER RESEARCH COMPLETE (design only; nothing applied)
+>
+> The research the policy closure named as next has been done on `claude/multi-user-research`, against `41de1965`
+> (migrations through 0646). **Production was read, not changed**: no migration, deploy, RLS change or user was created.
+> Read `docs/multi-user/` - start with `ARCHITECTURE.md`, then `REVIEWS.md` (two adversarial reviews and what changed) and
+> `IMPLEMENTATION-PLAN.md`; the decision is ADR-0060 (proposed). Issue #399 is resolved architecturally in
+> `TABLE-REVIEW-399.md` (all 129 tables). **There is no historical multi-user branch in this repository** - see
+> `LEGACY-BRANCH-REVIEW.md`. The original audit stays closed. **Three present-day weaknesses were found and are NOT fixed**
+> (change freeze): `voice-token` has no authentication (E1, HIGH); any signed-in session or the machine key can browse
+> Grant's Google Drive (E13); a `person` session may run system-wide actions (E14). They are Phase 1 of the plan and do not
+> depend on the rest. Issues: #400 (voice), #401 (Drive/operator actions), #402 (implementation tracker), #399 (commented).
+
 > ## 2026-10-01 - FINAL POLICY CLOSURE: ORIGINAL ARCHITECTURE AUDIT: CLOSED
 >
 > Grant's seven final policy decisions are implemented (migrations 0640-0646), reviewed adversarially (eight defects
@@ -1051,6 +1140,113 @@ rather than rediscovery.
 
 ---
 
+## 4 October 2026 (run 2, last stretch) - production frozen, local and replica work only
+
+**Read `docs/ops/deployment-queue-2026-10-04.md` first: it is the authority for what is waiting and the order to do it in.**
+Nothing from this stretch is applied or deployed. Supabase read UNHEALTHY at 17:28 and 18:20 UTC; production interaction is
+suspended (no migrations, deploys, production suites or model calls) until Grant asks or there is concrete evidence of recovery.
+Written and NOT applied: migrations 0892, 0893, 0894.
+
+Done here, each with a red-then-green control: the PDF reader undoes chained text filters (four real ReportLab files were
+called scans; `verify:file-text-corpus`); a DOCX from a real producer over 50,000 characters (`verify:file-text-docx`); an
+explicitly named secondary project read at its end of document with a same-name foreign-office control (`chunks.ts`);
+whitespace-only passages (0894); the envelope retry ceiling as a pure tested decision and a larger golden corpus (#412);
+Slack adversarial edges 26/26 on the replica; the phone header keeps more of the name at 320px and its regression adds a long
+name and the portfolio; a double-tap on a dialog's Confirm no longer reaches the control underneath (`verify:dialogs`);
+`check:tokens` stops crying wolf and joins `gate:safe`; `check:secrets` is green again (it had been red on made-up Slack
+fixtures). Full unit suite: 297 files, 4,462 tests.
+
+**A decision for Grant, not changed:** detaching a source keeps its documents and so their passages (ADR-0013). If it should
+withdraw them from answers, that reverses the ADR.
+
+Still manual: voice note and Talk to Team on a real iPhone, the Telegram pairing tap, a real Slack install (after the Slack app
+settings in the queue file), `npm run backup:rehearse`, and a Supabase support request for `log_temp_files = 10240` for 24 hours.
+
+---
+
+## 4 October 2026 (run 2, later) - Slack self-service built (receiving half), phone header, native dialogs gone, platform down
+
+**State at the end of this stretch:** branch `claude/multi-user-p4`; migrations applied through **0891** (761); **0892 is
+committed and NOT applied** (and 0893 likewise); the **Supabase platform has been UNHEALTHY for over two hours** (see
+`docs/ops/supabase-efficiency-2026-10-04.md`, run 2 addendum), so nothing below marked "not deployed" could be.
+
+* **#414:** `verify:run3-live`, `verify:drains`, `verify:dryrun`, `verify:proposes` are `sample` class in `gate:safe --part=ops`
+  (8/8, Grant and every other office unchanged); `verify:drains` and `verify:backups` had been RED unnoticed (injected jobs with
+  no office; a stale-rehearsal premise) and are repaired. A real finding: the last passing restore rehearsal is 21 September.
+* **Slack self-service (ADR-0065):** the ownership level is DECIDED (a workspace belongs to one office; the installer is its
+  first admitted sender) and the **receiving half is built**: migrations 0891-0892, `src/slack/oauth.ts` and the `slack-oauth`
+  edge function, the gateway actions `slack_link_begin` / `slack_link_disconnect` and section `slack_link`, the Settings card.
+  The **sending half is built too** (`src/slack/installs.ts`, wired into `pass.ts`): a connected workspace is answered with its
+  OWN token, an office with no install by nothing, never the operator's token. Proofs: `verify:slack-link` (DB, 25/25,
+  production, rolled back), `scripts/isolated/slack-oauth.ts` (the REAL callback against the replica with a Slack transport
+  double, 22/22, sabotage red then green), **`scripts/isolated/slack-send.ts` (the REAL door and the REAL Slack channel against the
+  replica, 18/18: both people admitted as their own offices, crossed identities refused, each answer carries its own token,
+  sabotage red then green, and a control showing the defect below)**, `tests/slack/oauth.test.ts` (15) and
+  `tests/slack/installs.test.ts` (9, sabotage red then green), `verify:slack-card` (the card in every state and both presses,
+  local, red then green). **A defect the end-to-end proof found:** events from a connected personal workspace would have been
+  ignored (the door only knew the deployment's credentials row); migration **0893** fixes it and makes "can receive" ask the
+  door's own predicate. `deploy:worker` sets `slack.per_office_delivery` only after its probe passes, so the card says answers
+  appear in Team HQ until the worker that answers in Slack is live.
+  **EXTERNAL, only Grant can do:** open the Slack app to other workspaces (Manage Distribution), add the redirect URL
+  `https://<ref>.supabase.co/functions/v1/slack-oauth`, and set `system_config` `slack.client_id` (public). Until then the card
+  says "Not available yet" and offers no button. **A real install has never been run: REAL SLACK INSTALL - MANUAL ACCEPTANCE
+  REQUIRED.**
+* **P5:** `sure()` is async and every destructive control (12 sites) asks in the page's own dialog, 44px on touch; both native
+  alerts are `noticeDialog`; the unused `window.prompt` helper is removed. `verify:dialogs` (local, 29 checks) and
+  `tests/web/no-native-dialogs.test.ts`. The phone header now keeps the project's name (Attention and Sign out are 44px icons
+  under 480px): `verify:phone-header` (local; the name was 0px at 320 and 28px at 360 before, 52 and 92 after). Live
+  `sample:confirm-ux` passed 20/20 before the outage; the header fix is **not deployed** to the page.
+* **To do when the platform recovers:** see the ordered list in the ops note. Deploy the page last.
+
+## 4 October 2026 (run 2) - answer envelope on for the Sample, documents read in passages (#412, #419)
+
+* **#412:** `answerEnvelope` is wired into the answering call for offices listed in `system_config` `answers.envelope_offices`
+  (0887; the Sample only). Fallback models measured (`docs/testing/answer-envelope-canary.md`): qwen 10/12 (the misses were the
+  reasoning budget), mistral 11/12 (one unclosed tag, failed over). A turn stops after 4 recorded envelope misses. PROVEN FOR
+  SAMPLE; widening is one edit of that row and needs evidence on the fallback models in real, long prompts first.
+* **#419:** `public.document_chunks` (0888-0890) holds ordered, overlapping passages of `documents.content`, written by a trigger on
+  `documents` through `app.index_document_chunks`; retrieval shows the best two passages per document with "part N of M" in the
+  header, and falls back to the head when none was cut. `src/text/file-text.ts` reads text, Markdown, HTML, DOCX and text PDFs at
+  upload and says "not searchable" plus why for a scan. Proofs: `scripts/isolated/chunks.ts` (a fact at the END of a 134,000
+  character document, foreign office and project canaries, re-index, archive, delete, sabotage controls), `sample:documents`
+  (the DEPLOYED gateway). `npm run deploy:hq-api` deploys the gateway alone and uploads `file-text.ts` beside it.
+* Drive files that arrive as bytes (PDF, Word) are read through `fileText` before they are recorded (`handlers/drive-read.ts`,
+  unit-tested with a red-on-sabotage control; NOT yet driven against a real Drive file).
+* Not done: OCR (an image-only PDF stays unsearchable by design), a retention sweep of stale passages beyond the one
+  generation kept, NotebookLM sources that arrive as bytes.
+
+## 3 October 2026 (closure) - office-owned tool requests, guard at the executor, Reconnect Google
+
+`approve_tool`, `decline_tool`, `revoke_tool` are office-owned (no longer operator-only); `staff_tool_set` and everything
+deployment-wide stay operator-only. Proof: `npm run verify:sample-tool-requests` (24/24, cross-office negatives) and
+`tests/gateway/office-owned-tool-requests.test.ts`. The production-heavy guard is enforced in `ManagementApiExecutor.execute`
+(`src/db/suite-guard.ts`); `npm run suite --production`, the gate and e2e state intent. Settings: the health row no longer says
+"Everything that is connected is working" when nothing is; Direct upload says it is always available; an expired Google reads
+"Reconnect Google" with a plain explanation (`npm run verify:google-reconnect`, local). `verify:ui` (54/54, reads the Sample's office,
+class smoke) and `verify:keyboard` (32/32) were stale tests and are repaired. hq-api v861, page deployment `dpl_HAPFk8DoTrBKtrRTgQnL6TsbsB7k`
+(rollback `dpl_4rCCYcZaE455QaiHopaVxc1iADeY`). The Open-for-Grant items in the entry below are closed.
+
+## 3 October 2026 (later) - Sample Person, Settings deployed, #404/#405 closed, #407 fixed
+
+The Sample Person (the P4 second person, Jordan Reyes / Brightside Café) is the authenticated test environment: `docs/multi-user/SAMPLE-PERSON.md`.
+`npm run sample:seed|reset|status`, `npm run verify:sample-settings -- --grant` (55/55), `npm run sample:shots -- <label>`.
+Settings page deployed (rollback `dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z`), hq-api v858 (`viewer.operator`), worker v931 (#407). #404 and #405
+closed. Which suites may run where: `docs/testing/SUITE-CLASSES.md`, `npm run suite`. Supabase: `docs/multi-user/SUPABASE-DEGRADATION-2026-10.md`
+(no upgrade; read the dashboard CPU/IO for the incident windows first). Open for Grant: whether a person may answer their own office's tool requests;
+`verify:ui` is broken since P3 (calls `app.hq_studio_settings()` with no office); `verify:keyboard` has five unrelated failures. Record: P4 acceptance §22.
+
+## 3 October 2026 - Global Settings redesigned (page only, not deployed)
+
+New information architecture (4 groups, 9 sections), its own design layer (`web/studio/settings-ui.css`, `settings-ui.js`,
+`settings-copy.js`), real Accent colour control, in-page confirm dialogs, shell made `inert` behind the page. Audit and
+reasoning: `docs/ux/global-settings-audit-2026-10-03.md`. Checks: `npx tsx scripts/p5/settings-shots.ts <label>` (captures at
+four widths) and `npx tsx scripts/p5/settings-qa.ts` (sizes, contrast, names, Basecamp, accent persistence, keyboard) - both
+local, neither touches the office. `verify:wired`, `smoke`, lint, typecheck, `npm test`, check:templates/branding/secrets
+green. Still pointing at the old DOM: `verify:studio`, `layouts`, `controls`, `keyboard`, `system`. No policy, RPC or
+authorisation changed. Not deployed; nothing run against production.
+
+---
+
 ## 30 September 2026 - final audit reconciliation
 
 Verdict **AUDIT PARTIAL - 82 findings remain** (`docs/final-audit/FINAL-RECONCILIATION.md`, ADR-0057). Migrations 0627-0632
@@ -2086,6 +2282,21 @@ Grant's and none blocks the £0 work.
   has been paged; reconnecting needs a browser.
 - **`dependency_wait` was not resumable**, so the first live fan-in sat paused
   for eighteen minutes with the answer never written.
+
+### 2 October 2026 — post-P4 closure is BLOCKED by a platform incident
+
+#404 (each person is addressed by their own name) and #405 (Sign out) are built and pushed (`4a305933`, `b88ef55a`) but
+NOT live-proven and the Issues stay open. From about 12:23 UTC the Supabase project was degraded (project health API:
+auth, rest, realtime, storage unhealthy; trivial cached queries thousands of times slower with our worker idle). Worker
+v925 is deployed but unproven; the voice function and the new page are not deployed. **The worker heartbeat is PAUSED**:
+`npx tsx scripts/p3/worker-heartbeat.ts resume` once `select count(*) from public.jobs` returns in under a second.
+Details and the exact resume sequence: `docs/multi-user/P4-SECOND-USER-ACCEPTANCE.md` §21.
+
+*Update, later the same day:* the platform recovered at 16:06 UTC; worker v925 was proven, the page
+(`dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z`) and voice (v623/v652) were deployed, and #405 passed 38/38 on production. It degraded
+again from about 16:50 under worker plus test load, so the heartbeat is PAUSED again. Still owed: the #404 second-person
+prompt inspection, the production send-reload-compare Chat proof, and the production stale-request run. #407 (Google duties
+`no_office`) is a separate pre-existing defect.
 
 ### What a fresh session should read
 

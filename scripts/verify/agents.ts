@@ -393,7 +393,7 @@ record(
 // is precisely the gap the router closes.
 const firstText = 'I need you to research the competitor pricing for the enterprise tier'
 const firstJob = await mkJob(`fixture-dup-a-${run}`)
-const firstScan = await scanForDuplicates(db, firstText, { projectId })
+const firstScan = await scanForDuplicates(db, firstText, { office: 'app.test_office()', projectId })
 const firstDecision = route(firstText, firstScan)
 await recordDecision(db, firstJob, firstDecision)
 record(
@@ -405,7 +405,10 @@ record(
 
 const secondText = 'what did we ever find out about enterprise pricing from the competitor'
 const secondJob0 = await mkJob(`fixture-dup-b-${run}`)
-const secondScan = await scanForDuplicates(db, secondText, { projectId })
+const secondScan = await scanForDuplicates(db, secondText, {
+  office: 'app.test_office()',
+  projectId,
+})
 const found = secondScan.candidates.find((c) => c.jobId === firstJob)
 record(
   'required query',
@@ -493,7 +496,7 @@ record(
 // ===========================================================================
 
 const vagueText = 'Maybe we should look into the competitor pricing'
-const vagueScan = await scanForDuplicates(db, vagueText, { projectId })
+const vagueScan = await scanForDuplicates(db, vagueText, { office: 'app.test_office()', projectId })
 const vague = route(vagueText, vagueScan)
 record(
   'ambiguity',
@@ -518,7 +521,10 @@ record(
 )
 
 const clearText = 'I need you to research the competitor onboarding flow'
-const clear = route(clearText, await scanForDuplicates(db, clearText, { projectId }))
+const clear = route(
+  clearText,
+  await scanForDuplicates(db, clearText, { office: 'app.test_office()', projectId }),
+)
 record(
   'ambiguity',
   'a CONFIDENT request still gets a bounded roster, not a team',
@@ -989,7 +995,7 @@ const switchFrom = await realProject(`probe-switch-a-${run}`, 'Probe: switching,
 const otherId = await realProject(`probe-switch-b-${run}`, 'Probe: switching, the second')
 
 const unresolved = await one(`
-  select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p
+  select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scopeRef)}, null)::text as p
 `)
 record(
   'project switching',
@@ -1004,7 +1010,7 @@ await db.execute(`
           'Switching to a real project to demonstrate scoped context.')
 `)
 const afterSwitch = await one(
-  `select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p`,
+  `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scopeRef)}, null)::text as p`,
 )
 record(
   'project switching',
@@ -1021,7 +1027,7 @@ await db.execute(`
           'Switching again, to show that the latest wins and the first survives.')
 `)
 const latest = await one(
-  `select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p`,
+  `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scopeRef)}, null)::text as p`,
 )
 const history = await one(`
   select count(*)::int as n from public.project_switches where scope_ref = ${lit(scopeRef)}
@@ -1040,7 +1046,7 @@ await db.execute(`
           'Explicitly clearing the project context for this scope.')
 `)
 const cleared = await one(
-  `select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p`,
+  `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scopeRef)}, null)::text as p`,
 )
 const historyAfter = await one(`
   select count(*)::int as n from public.project_switches where scope_ref = ${lit(scopeRef)}
@@ -1088,7 +1094,7 @@ await db.execute(`
           'A harness switching the scope to its own fixture, and then dying.')
 `)
 const guarded = await one(
-  `select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p`,
+  `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scopeRef)}, null)::text as p`,
 )
 record(
   'project switching',
@@ -1139,7 +1145,9 @@ for (let i = 0; i < ORDER_ROUNDS; i += 1) {
            ('telegram_chat', ${lit(ref)}, ${lit(otherId)}::uuid, 'verify:agents',
             'second, and the one that counts')
   `)
-  const seen = await one(`select app.current_project('telegram_chat', ${lit(ref)})::text as p`)
+  const seen = await one(
+    `select app.current_project(app.test_office(), 'telegram_chat', ${lit(ref)})::text as p`,
+  )
   if (seen?.p !== otherId) wrongWinner += 1
 }
 record(
@@ -1153,7 +1161,7 @@ record(
 
 // Explicit beats everything.
 const explicit = await one(`
-  select app.resolve_project('telegram_chat', ${lit(scopeRef)}, ${lit(projectId)}::uuid)::text as p
+  select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scopeRef)}, ${lit(projectId)}::uuid)::text as p
 `)
 record(
   'project switching',
@@ -1179,7 +1187,7 @@ await db.execute(`
           'A passing switch inside a channel that is permanently mapped elsewhere.')
 `)
 const mapped = await one(
-  `select app.resolve_project('slack_channel', ${lit(chan)}, null)::text as p`,
+  `select app.resolve_project(app.test_office(), 'slack_channel', ${lit(chan)}, null)::text as p`,
 )
 record(
   'project switching',

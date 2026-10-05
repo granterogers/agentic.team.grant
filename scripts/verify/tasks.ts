@@ -106,9 +106,9 @@ console.log('tasks —')
   That invariant catching this script is the invariant working.
 */
 const proj = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values ('verify-tasks-fixture', 'Task verification', 'Thrown away', 'paused')
-  on conflict (slug) do update set name = excluded.name
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (app.test_office(), 'verify-tasks-fixture', 'Task verification', 'Thrown away', 'paused')
+  on conflict (office_id, slug) do update set name = excluded.name
   returning project_id
 `)
 const pid = String(proj.project_id)
@@ -117,7 +117,7 @@ const pid = String(proj.project_id)
 const made = asJson(
   (
     await one(`
-  select public.task_add(
+  select app.task_add(p_office => app.test_office(), 
     p_project := '${pid}'::uuid,
     p_title := 'Conduct first five interviews',
     p_detail := 'From the corpus',
@@ -142,19 +142,19 @@ ok('a new task starts as todo', row.state === 'todo')
 ok('done_at is null until it is done', row.done_at === null)
 
 // --- state, and the trigger that keeps done_at honest -----------------------
-await db.execute(`select public.hq_task_state('${tid}', 'done', null)`)
+await db.execute(`select public.hq_task_state(app.test_office(), '${tid}', 'done', null)`)
 const done = await one(`select state, done_at from public.tasks where task_id = '${tid}'::uuid`)
 ok('hq_task_state moves it', done.state === 'done')
 ok('done_at is filled by the RPC, not the caller', done.done_at !== null)
 
-await db.execute(`select public.hq_task_state('${tid}', 'todo', null)`)
+await db.execute(`select public.hq_task_state(app.test_office(), '${tid}', 'todo', null)`)
 const undone = await one(`select done_at from public.tasks where task_id = '${tid}'::uuid`)
 ok('reopening clears done_at', undone.done_at === null)
 
 // --- the refusals, which are the point --------------------------------------
 await answersWithError(
   'a blocked task with no reason is refused by the RPC',
-  `select public.hq_task_state('${tid}', 'blocked', '') as v`,
+  `select public.hq_task_state(app.test_office(), '${tid}', 'blocked', '') as v`,
   'say what it is blocked on',
 )
 
@@ -179,18 +179,18 @@ await db.execute(
 )
 const repaired = await one(`select done_at from public.tasks where task_id = '${tid}'::uuid`)
 ok('a done task with a nulled completion time is repaired, not rejected', repaired.done_at !== null)
-await db.execute(`select public.hq_task_state('${tid}', 'todo', null)`)
+await db.execute(`select public.hq_task_state(app.test_office(), '${tid}', 'todo', null)`)
 
 await answersWithError(
   'an assignee who does not exist is named, not silently dropped',
-  `select public.task_add(p_project := '${pid}'::uuid, p_title := 'Nobody can do this',
+  `select app.task_add(p_office => app.test_office(), p_project := '${pid}'::uuid, p_title := 'Nobody can do this',
      p_assignee := 'nobody-at-all', p_added_by := 'verify:tasks') as v`,
   'nobody here is called',
 )
 
 await answersWithError(
   'an empty title is refused',
-  `select public.task_add(p_project := '${pid}'::uuid, p_title := '   ',
+  `select app.task_add(p_office => app.test_office(), p_project := '${pid}'::uuid, p_title := '   ',
      p_added_by := 'verify:tasks') as v`,
   'a task needs a title',
 )
@@ -202,9 +202,9 @@ await refuses(
 
 // --- fixtures are excluded from what the office reports ---------------------
 await db.execute(`
-  select public.task_add(p_project := '${pid}'::uuid, p_title := 'Later, unassigned',
+  select app.task_add(p_office => app.test_office(), p_project := '${pid}'::uuid, p_title := 'Later, unassigned',
     p_added_by := 'verify:tasks');
-  select public.task_add(p_project := '${pid}'::uuid, p_title := 'Stuck one',
+  select app.task_add(p_office => app.test_office(), p_project := '${pid}'::uuid, p_title := 'Stuck one',
     p_assignee := 'operations-director', p_added_by := 'verify:tasks');
 `)
 
@@ -255,17 +255,17 @@ ok('deleting the project cascades its tasks away', Number(left.n) === 0)
 */
 const readerSlug = `task-reader-${Math.random().toString(36).slice(2, 10)}`
 const rp = await one(`
-  insert into public.projects (slug, name, purpose, status)
-  values ('${readerSlug}', 'Task reader proof', 'Removed at the end of the run', 'paused')
+  insert into public.projects (office_id, slug, name, purpose, status)
+  values (app.test_office(), '${readerSlug}', 'Task reader proof', 'Removed at the end of the run', 'paused')
   returning project_id
 `)
 const rid = String(rp.project_id)
 
 try {
   await db.execute(`
-    select public.task_add(p_project := '${rid}'::uuid, p_title := 'Conduct first five interviews',
+    select app.task_add(p_office => app.test_office(), p_project := '${rid}'::uuid, p_title := 'Conduct first five interviews',
       p_detail := 'From the corpus', p_assignee := 'chief-of-staff', p_added_by := 'grant');
-    select public.task_add(p_project := '${rid}'::uuid, p_title := 'Stuck one',
+    select app.task_add(p_office => app.test_office(), p_project := '${rid}'::uuid, p_title := 'Stuck one',
       p_assignee := 'operations-director', p_added_by := 'grant');
   `)
   const stuck = await one(`
@@ -273,7 +273,7 @@ try {
      where project_id = '${rid}'::uuid and title = 'Stuck one'
   `)
   await db.execute(
-    `select public.hq_task_state('${String(stuck.task_id)}', 'blocked', 'Notion not shared')`,
+    `select public.hq_task_state(app.test_office(), '${String(stuck.task_id)}', 'blocked', 'Notion not shared')`,
   )
 
   const seen = asJson((await one(`select app.studio_tasks('${rid}'::uuid) as v`)).v)

@@ -67,20 +67,20 @@ if (existing?.bot_id) {
   await db.execute(`insert into public.telegram_bots (bot_id, username, staff_slug, is_pager, token_ref)
     values (${lit(BOT)}, 'isolated_vault_bot', 'chief-of-staff', true, ${lit(String(secret.id))})`)
 }
-await db.execute(`insert into public.subject_identities (subject, origin_channel, actor, note)
-  values ('grant', 'telegram', ${lit(GRANT_CHAT)}, 'isolated proof') on conflict do nothing`)
+await db.execute(`insert into public.subject_identities (office_id, subject, origin_channel, actor, note)
+  values (app.operator_office(), 'grant', 'telegram', ${lit(GRANT_CHAT)}, 'isolated proof') on conflict do nothing`)
 const register = (chat: string, subject: string | null) =>
-  db.execute(`insert into public.telegram_chats (chat_id, chat_type, bot_id, subject, last_seen_at)
-    values (${lit(chat)}, 'private', ${lit(BOT)}, ${subject === null ? 'null' : lit(subject)}, now())
+  db.execute(`insert into public.telegram_chats (office_id, chat_id, chat_type, bot_id, subject, last_seen_at)
+    values (app.operator_office(), ${lit(chat)}, 'private', ${lit(BOT)}, ${subject === null ? 'null' : lit(subject)}, now())
     on conflict (chat_id, bot_id) do update set subject = excluded.subject, last_seen_at = now()`)
 await register(GRANT_CHAT, 'grant')
 
 const handler = vaultExportHandler(db)
 const job = async (): Promise<Job> => {
-  const p = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const p = String((await one(`select app.unnamed_project(app.operator_office())::text as p`)).p)
   const r =
-    await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-    values ('office.vault_export', 'duty:vault-export', ${lit(p)}::uuid, 'vd-' || gen_random_uuid(), gen_random_uuid())
+    await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+    values (app.operator_office(), 'office.vault_export', 'duty:vault-export', ${lit(p)}::uuid, 'vd-' || gen_random_uuid(), gen_random_uuid())
     returning job_id::text as id, correlation_id::text as cid, idempotency_key as k`)
   return {
     jobId: String(r.id),

@@ -60,7 +60,7 @@ const mk = async (label: string, by: 'person' | 'sql'): Promise<string> => {
     if (r.status !== 200) throw new Error(`create failed ${JSON.stringify(r.body)}`)
   } else {
     await one(
-      `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`r-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
+      `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`r-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
     )
   }
   return String(
@@ -225,22 +225,32 @@ check(
   (await channelsFor(D)) === 0 && (await questionsFor(D)) === 1,
   `${String(await questionsFor(D))} question(s)`,
 )
+// The authority is recorded inside the office that holds the project (migration 0804).
+const dOffice = `(select office_id from public.projects where project_id = ${lit(D)}::uuid)`
 const dutyTry = json(
   (
     await one(
-      `select app.record_channel_authority(${lit(D)}::uuid, null, ${lit((await w.dutyJob('office.provision_channels', D)).jobId)}::uuid) as r`,
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, null, ${lit((await w.dutyJob('office.provision_channels', D)).jobId)}::uuid) as r`,
     )
   ).r,
 )
 const machineTry = json(
-  (await one(`select app.record_channel_authority(${lit(D)}::uuid, 'verify-operator', null) as r`))
-    .r,
+  (
+    await one(
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, 'verify-operator', null) as r`,
+    )
+  ).r,
 )
 const strangerTry = json(
-  (await one(`select app.record_channel_authority(${lit(D)}::uuid, 'mallory', null) as r`)).r,
+  (
+    await one(
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, 'mallory', null) as r`,
+    )
+  ).r,
 )
 const nobodyTry = json(
-  (await one(`select app.record_channel_authority(${lit(D)}::uuid, null, null) as r`)).r,
+  (await one(`select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, null, null) as r`))
+    .r,
 )
 check(
   'a duty job, a test member, a stranger and nobody each produce no authority',
@@ -252,7 +262,7 @@ const personTurn = await w.personTurn()
 const planTry = json(
   (
     await one(
-      `select app.record_channel_authority(${lit(D)}::uuid, null, ${lit(personTurn)}::uuid) as r`,
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, null, ${lit(personTurn)}::uuid) as r`,
     )
   ).r,
 )
@@ -274,7 +284,7 @@ const forwardedNow =
 const forwardedTry = json(
   (
     await one(
-      `select app.record_channel_authority(${lit(D)}::uuid, null, ${lit(forwardedTurn)}::uuid) as r`,
+      `select app.record_channel_authority(${dOffice}, ${lit(D)}::uuid, null, ${lit(forwardedTurn)}::uuid) as r`,
     )
   ).r,
 )
@@ -337,10 +347,10 @@ check(
 
 // ---- 6. review findings: the most permissive dial does not make an unprompted channel, nothing broad is standing,
 //         and a stale reason lapses --------------------------------------------------------------------------------
-await one(`select app.hq_autonomy_set('act', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'act', null, 'grant') as r`)
 const U = await mk('unprompted-act', 'sql')
 const atAct = await handler().handle(await sweepJob(U), db)
-await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'suggest', null, 'grant') as r`)
 check(
   'dial at "Act", nobody asked: still no channel, and a question is raised (a channel cannot be deleted)',
   (await channelsFor(U)) === 0 &&
@@ -349,12 +359,16 @@ check(
   atAct.body.slice(0, 90),
 )
 const broad = json(
-  (await one(`select app.grant_standing('slack.channel', null, 'anywhere', 'grant') as r`)).r,
+  (
+    await one(
+      `select app.grant_standing(app.test_office(), 'slack.channel', null, 'anywhere', 'grant') as r`,
+    )
+  ).r,
 )
 const broadProject = json(
   (
     await one(
-      `select app.grant_standing('slack.channel', ${lit(U)}::uuid, 'anywhere', 'grant') as r`,
+      `select app.grant_standing(app.test_office(), 'slack.channel', ${lit(U)}::uuid, 'anywhere', 'grant') as r`,
     )
   ).r,
 )

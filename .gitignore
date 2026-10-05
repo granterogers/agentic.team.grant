@@ -175,3 +175,6 @@ web/studio/textures/raw/
 # Never committed — a committed default is one office shipped to everybody who
 # clones this. See web/studio/backend.js.
 web/studio/config.js
+
+# local lists of production identifiers for the staging preflight (never committed)
+.staging/

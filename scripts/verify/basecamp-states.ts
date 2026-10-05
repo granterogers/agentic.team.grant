@@ -18,6 +18,7 @@
  * here is served by a stand-in in this process; nothing is written to any
  * real office, and the run leaves nothing behind.
  */
+import '../../src/safety/arm.ts'
 import { mkdir } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { chromium, devices } from 'playwright'

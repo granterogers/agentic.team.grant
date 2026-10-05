@@ -64,7 +64,7 @@ let documentId = ''
 
 try {
   await one(`
-    select app.hq_create_project(${lit(`Fixture import ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Fixture import ${run}`)}, 'upload',
                                  ${lit(SLUG)}, ${lit(`Fixture import ${run}`)}, true) as r
   `)
   projectId = String(
@@ -118,7 +118,7 @@ try {
 
   const imported = (
     await one(`
-      select public.import_output(${lit(outputId)}::uuid, ${lit(`Research ${run}`)},
+      select public.import_output(app.test_office(), ${lit(outputId)}::uuid, ${lit(`Research ${run}`)},
         array['probe', 'PROBE-Upper'], null, null, ${lit(`Imported ${run}`)}) as r
     `)
   ).r as { ok?: boolean; document?: string; title?: string; error?: string }
@@ -162,7 +162,9 @@ try {
     `produced_by=${String(doc.produced_by)} job=${String(doc.job) === jobId ? 'the right one' : 'WRONG'}`,
     doc.produced_by === 'research-director' && String(doc.job) === jobId,
   )
-  const edges = await all(`select * from public.relations_of('document', ${lit(documentId)}::uuid)`)
+  const edges = await all(
+    `select * from public.relations_of(app.test_office(), 'document', ${lit(documentId)}::uuid)`,
+  )
   const verbs = edges.map((e) => `${String(e.verb)}:${String(e.other_kind)}`)
   check(
     'and the job and agent edges are traversable',
@@ -234,7 +236,9 @@ try {
     String(status.s),
     status.s === 'approved',
   )
-  const again = (await one(`select public.import_output(${lit(outputId)}::uuid) as r`)).r as {
+  const again = (
+    await one(`select public.import_output(app.test_office(), ${lit(outputId)}::uuid) as r`)
+  ).r as {
     ok?: boolean
     document?: string
   }
@@ -257,7 +261,7 @@ try {
 
   const dropped = (
     await one(
-      `select public.decide_output(${lit(outputId)}::uuid, 'rejected', 'not what I meant') as r`,
+      `select public.decide_output(app.test_office(), ${lit(outputId)}::uuid, 'rejected', 'not what I meant') as r`,
     )
   ).r as { ok?: boolean; was?: string; now?: string }
   const stillThere = Number(
@@ -272,8 +276,11 @@ try {
     `${JSON.stringify(dropped)} · ${String(stillThere)} row(s) left`,
     dropped.ok === true && dropped.now === 'rejected' && stillThere === 1,
   )
-  const undone = (await one(`select public.decide_output(${lit(outputId)}::uuid, 'pending') as r`))
-    .r as { ok?: boolean; now?: string }
+  const undone = (
+    await one(
+      `select public.decide_output(app.test_office(), ${lit(outputId)}::uuid, 'pending') as r`,
+    )
+  ).r as { ok?: boolean; now?: string }
   check('and it can be undone', JSON.stringify(undone), undone.now === 'pending')
 
   /*
@@ -281,8 +288,11 @@ try {
     status alone would leave an output marked approved with nothing in the
     project — the half-built gate this whole Issue is about.
   */
-  const sneaky = (await one(`select public.decide_output(${lit(outputId)}::uuid, 'approved') as r`))
-    .r as { ok?: boolean; error?: string }
+  const sneaky = (
+    await one(
+      `select public.decide_output(app.test_office(), ${lit(outputId)}::uuid, 'approved') as r`,
+    )
+  ).r as { ok?: boolean; error?: string }
   check(
     'CONTROL: approval cannot be set without importing, which is what creates the document',
     JSON.stringify(sneaky),
@@ -293,7 +303,9 @@ try {
   console.log('\nand it refuses rather than guessing')
 
   const ghost = (
-    await one(`select public.import_output('00000000-0000-0000-0000-000000000000'::uuid) as r`)
+    await one(
+      `select public.import_output(app.test_office(), '00000000-0000-0000-0000-000000000000'::uuid) as r`,
+    )
   ).r as { ok?: boolean; error?: string }
   check(
     'an output that does not exist is refused',
@@ -302,7 +314,7 @@ try {
   )
   const badSource = (
     await one(`
-      select public.import_output(${lit(outputId)}::uuid, null, null, null,
+      select public.import_output(app.test_office(), ${lit(outputId)}::uuid, null, null, null,
         '00000000-0000-0000-0000-000000000000'::uuid) as r
     `)
   ).r as { ok?: boolean; error?: string }
@@ -341,7 +353,9 @@ try {
       `)
     ).id,
   )
-  const declared = (await one(`select public.import_output(${lit(declaredId)}::uuid) as r`)).r as {
+  const declared = (
+    await one(`select public.import_output(app.test_office(), ${lit(declaredId)}::uuid) as r`)
+  ).r as {
     ok?: boolean
     title?: string
     title_from_structure?: boolean
@@ -372,7 +386,9 @@ try {
       `)
     ).id,
   )
-  const plain = (await one(`select public.import_output(${lit(plainId)}::uuid) as r`)).r as {
+  const plain = (
+    await one(`select public.import_output(app.test_office(), ${lit(plainId)}::uuid) as r`)
+  ).r as {
     ok?: boolean
     title?: string
     title_from_structure?: boolean

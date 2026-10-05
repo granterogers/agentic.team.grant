@@ -15,6 +15,7 @@
  * that turned out to be an auth wall; the rule since then is that a status code
  * is not a verification.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
@@ -94,14 +95,16 @@ if (botUserId === '') {
 // Record the workspace, so installation state is a fact in Postgres rather than
 // something inferred from whether a call happens to work.
 await db.execute(`
-  insert into public.slack_workspaces (team_id, team_name, bot_user_id, installed)
-  values ('${teamId}', '${teamName.replace(/'/g, "''")}', '${botUserId}', true)
+  insert into public.slack_workspaces (office_id, team_id, team_name, bot_user_id, installed)
+  values (app.require_office(app.operator_office()), '${teamId}', '${teamName.replace(/'/g, "''")}', '${botUserId}', true)
   on conflict (team_id) do update
     set team_name = excluded.team_name,
         bot_user_id = excluded.bot_user_id,
         installed = true,
         uninstalled_at = null,
         revocation_reason = null
+    -- the workspace is the deploying operator's office's: another office's registration is never overwritten
+    where public.slack_workspaces.office_id = excluded.office_id
 `)
 
 // --- function secrets ------------------------------------------------------

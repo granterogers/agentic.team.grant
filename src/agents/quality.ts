@@ -28,6 +28,7 @@
  * someone wrote a second caller.
  */
 
+import { currentPerson } from '../office/person.ts'
 import { datesIn, isoForMention, MONTH_WORD, wrongWeekday } from './derivable.ts'
 import type { Domain } from './provenance.ts'
 
@@ -1587,10 +1588,30 @@ export const deliberationLeak = (
   //
   // Split on terminators AND newlines: deliberation arrives as short lines as
   // often as as sentences.
-  const PLAN =
-    /\b(?:we|i)\s*(?:'ll|'d)?\s*(?:need to|needs to|must|should|will|shall|can|could|might|may|would)?\s*(?:call|invoke|use|query|read|perform|request|run|attempt|try)\b|^\s*attempt\b|\blet'?s\s+(?:respond|reply|answer|say|do|try|call|use)\b|\bwe'?ll\s+(?:call|request|use|query|read)\b/i
+  /*
+    TWO STRENGTHS OF EVIDENCE, because the machinery half is two different things (#412 closure).
+
+    A tool NAMED by its registry identifier (`db.read`) is unmistakably the office's own machinery, so beside it a wide set of
+    planning verbs is safe: "We need to access office records: db.read but we cannot actually run" is the leak the model wrote
+    on 3 October. The generic nouns - the policy, the instructions, the description, the schema - are ORDINARY ENGLISH an
+    answer uses all day ("We need to check the policy with the accountant"), so beside them only the original calling verbs
+    count, and the ordinary ones (access, fetch, open, check, cannot) are left entirely alone.
+  */
+  const planWith = (verbs: string, modal: string): RegExp =>
+    new RegExp(
+      `\\b(?:we|i)\\s*(?:'ll|'d)?\\s*(?:${modal})?\\s*(?:${verbs})\\b|^\\s*attempt\\b|\\blet'?s\\s+(?:respond|reply|answer|say|do|try|call|use)\\b|\\bwe'?ll\\s+(?:call|request|use|query|read)\\b`,
+      'i',
+    )
+  const MODAL = 'need to|needs to|must|should|will|shall|can|could|might|may|would'
+  const PLAN_CALLING = planWith('call|invoke|use|query|read|perform|request|run|attempt|try', MODAL)
+  const PLAN_NAMED = planWith(
+    'call|invoke|use|query|read|perform|request|run|attempt|try|access|fetch|pull|retrieve|open|load|check',
+    `${MODAL}|cannot(?:\\s+actually)?|can't(?:\\s+actually)?|can\\s+not(?:\\s+actually)?`,
+  )
+  // "the policy", "the instructions", "the schema", "the description" are not here: they are the office's subject matter as
+  // often as its machinery. What is left names the TOOL, or the parameters of a call.
   const MACHINERY =
-    /\bthe (?:tool|spec|schema|policy|instructions?|description)\b|\bparameters?\s*[:?]|\baccording to the tool\b|\btool call\b/i
+    /\bthe tool(?:'s|\s+(?:spec|schema|description|instructions?))?\b|\bparameters?\s*[:?]|\baccording to the tool\b|\btool call\b/i
   const dotted = toolNames.filter((t) => t.includes('.'))
 
   const machineryAnywhere = MACHINERY.test(text) || dotted.some((t) => text.includes(t))
@@ -1609,12 +1630,11 @@ export const deliberationLeak = (
     if (machineryAnywhere && selfQuestion.test(s)) {
       return `the answer questions itself instead of answering ("${s.slice(0, 70)}")`
     }
-    if (!PLAN.test(s)) continue
     const named = dotted.find((t) => s.includes(t))
-    if (named !== undefined) {
+    if (named !== undefined && PLAN_NAMED.test(s)) {
       return `the answer plans out loud instead of answering ("${s.slice(0, 70)}")`
     }
-    if (MACHINERY.test(s)) {
+    if (MACHINERY.test(s) && PLAN_CALLING.test(s)) {
       return `the answer plans out loud instead of answering ("${s.slice(0, 70)}")`
     }
   }
@@ -1814,9 +1834,9 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
       problems.push({
         field: 'body',
         problem:
-          `the text tells Grant what he said ("${said}") and this conversation has no ` +
-          'earlier turn at all — there is nothing he could have told you. Ask what he ' +
-          'means, or say you have nothing on it; never attribute a fact to him that ' +
+          `the text tells ${currentPerson().name} what they said ("${said}") and this conversation has no ` +
+          'earlier turn at all — there is nothing they could have told you. Ask what they ' +
+          'mean, or say you have nothing on it; never attribute a fact to them that ' +
           'only the model produced.',
       })
     }
@@ -1880,8 +1900,8 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
       problem:
         `the text promises to contact somebody on a named channel ("${promised}"), and ` +
         'nothing in this job can do that — the notifier turns THIS answer into a ' +
-        'message to Grant and opens no other conversation. Say who should be asked ' +
-        'and let him ask, or hand the work to the specialist, but do not promise a ' +
+        `message to ${currentPerson().name} and opens no other conversation. Say who should be asked ` +
+        'and let them ask, or hand the work to the specialist, but do not promise a ' +
         'message that will never be sent.',
     })
   }
@@ -2005,9 +2025,9 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
     problems.push({
       field: 'body',
       problem:
-        `${deliberating}. What Grant receives has to be the answer, not the ` +
+        `${deliberating}. What ${currentPerson().name} receives has to be the answer, not the ` +
         'working — no planning out loud, no tool calls, no scratch. Say the ' +
-        'thing itself, in prose, addressed to him.',
+        'thing itself, in prose, addressed to them.',
     })
   }
 
@@ -2022,7 +2042,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
       problem:
         `the text claims to have read something ("${readClaim}") while evidence is ` +
         `"${m.evidence}", which means nothing was read. One of the two is wrong, and ` +
-        'the sentence is the half Grant sees.',
+        `the sentence is the half ${currentPerson().name} sees.`,
     })
   }
 

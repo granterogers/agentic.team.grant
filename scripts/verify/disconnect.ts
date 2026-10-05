@@ -100,7 +100,7 @@ for (const [service, must] of [
 ] as const) {
   const r = await one(`
     begin;
-    create temp table _r as select (app.hq_disconnect('${service}'))::text as d;
+    create temp table _r as select (app.hq_disconnect(app.owner_office('grant'), '${service}'))::text as d;
     select (select d from _r) as d;
     rollback;
   `)
@@ -122,7 +122,7 @@ for (const [service, must] of [
 ] as const) {
   const r = await one(`
     begin;
-    create temp table _d as select (app.hq_disconnect('${service}'))::text as d;
+    create temp table _d as select (app.hq_disconnect(app.owner_office('grant'), '${service}'))::text as d;
     select (select d from _d) as d;
     rollback;
   `)
@@ -157,9 +157,9 @@ for (const [service, must] of [
 */
 const after = await one(`
   begin;
-  create temp table _said as select app.hq_disconnect('notion') as v;
+  create temp table _said as select app.hq_disconnect(app.owner_office('grant'), 'notion') as v;
   select (select v::text from _said) as said,
-         (select x::text from jsonb_array_elements(app.hq_studio_settings() -> 'connections') x
+         (select x::text from jsonb_array_elements(app.hq_studio_settings(app.owner_office('grant')) -> 'connections') x
            where x ->> 'key' = 'notion') as row,
          (select count(*)::int from vault.secrets where name = 'notion.integration_token') as left_behind;
   rollback;
@@ -199,7 +199,7 @@ check(
 
 const nb = await one(`
   begin;
-  create temp table _nb as select app.hq_disconnect('notebooklm') as v;
+  create temp table _nb as select app.hq_disconnect(app.owner_office('grant'), 'notebooklm') as v;
   select (select v::text from _nb) as said,
          (select value::text from public.system_config where key = 'notebook.enabled') as enabled;
   rollback;
@@ -212,7 +212,7 @@ check(
 
 const gg = await one(`
   begin;
-  create temp table _gg as select app.hq_disconnect('calendar') as v;
+  create temp table _gg as select app.hq_disconnect(app.owner_office('grant'), 'calendar') as v;
   select (select v::text from _gg) as said,
          (select value::text from public.system_config where key = 'calendar.enabled') as enabled,
          (select count(*)::int from vault.secrets where name = 'google.refresh_token') as left_behind;
@@ -260,7 +260,7 @@ const revoking = await one(`
     end if;
   end
   $do$;
-  create temp table _rv as select app.hq_forget_google() as v;
+  create temp table _rv as select app.hq_forget_google(app.owner_office('grant')) as v;
   select (select v::text from _rv) as said,
          (select count(*)::int from vault.secrets
            where name = 'google.refresh_token') as still_ours,
@@ -293,23 +293,24 @@ check(
 )
 /*
   CONTROL, and the reason it is here: every assertion above passes just as well
-  if `app.vault_secret` had been widened carelessly. The parked name must be
-  readable by the handler and the ORIGINAL name must still be refused to
-  anything outside the allow-list — so the check that the parking is not a
+  if the credential gate had been widened carelessly. The parked name must be
+  readable by the handler and every other name must still be refused to
+  anything outside the classes — so the check that the parking is not a
   loophole is the one that asks what the gate now permits.
 */
 const gate = await one(`
-  select (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-           where n.nspname = 'app' and p.proname = 'vault_secret'
-             and pg_get_functiondef(p.oid) like '%google.revoking_refresh_token%') as knows_parked,
+  select app.credential_class('google.revoking_refresh_token') as parked_class,
+         app.credential_class('google.refresh_token') as ours_class,
          (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-           where n.nspname = 'app' and p.proname = 'vault_secret'
+           where n.nspname = 'app' and p.proname = 'deployment_credential'
              and pg_get_functiondef(p.oid) like '%42501%') as still_refuses
 `)
 check(
-  'the parked name is readable, and the gate still refuses everything else',
-  `knows_parked=${String(gate.knows_parked)}, refuses=${String(gate.still_refuses)}`,
-  gate.knows_parked === 1 && gate.still_refuses === 1,
+  'the parked name is a human-integration credential, and the resolver still refuses everything else',
+  `parked=${String(gate.parked_class)}, ours=${String(gate.ours_class)}, refuses=${String(gate.still_refuses)}`,
+  gate.parked_class === 'human_integration' &&
+    gate.ours_class === 'human_integration' &&
+    gate.still_refuses === 1,
 )
 /*
   The parked copy is destroyed whether the revoke worked or not.
@@ -318,6 +319,8 @@ check(
   prevent, wearing a different name — so both outcomes are driven, not just
   the happy one.
 */
+// The sign-out is the deployment's own Google office's (migration 0800): the office the single health row belongs to.
+const HOME_OFFICE = 'app.google_home_office()'
 for (const [what, ok] of [
   ['a confirmed revoke', true],
   ['a FAILED revoke', false],
@@ -332,7 +335,7 @@ for (const [what, ok] of [
       end if;
     end
     $do$;
-    create temp table _fin as select app.google_revoke_finish(${ok ? 'true' : 'false'},
+    create temp table _fin as select app.google_revoke_finish(${HOME_OFFICE},${ok ? 'true' : 'false'},
       'verify:disconnect') as v;
     select (select v::text from _fin) as said,
            (select count(*)::int from vault.secrets
@@ -363,8 +366,8 @@ for (const [what, ok] of [
 */
 const twice = await one(`
   begin;
-  create temp table _once as select app.hq_disconnect('notion') as v;
-  select (app.hq_disconnect('notion'))::text as again;
+  create temp table _once as select app.hq_disconnect(app.owner_office('grant'), 'notion') as v;
+  select (app.hq_disconnect(app.owner_office('grant'), 'notion'))::text as again;
   rollback;
 `)
 check(
@@ -389,6 +392,10 @@ check(
 // The half a browser has to do
 // ===========================================================================
 
+// P3: these read the dashboard of the person whose pages are being captured, so they name that office first.
+const OFFICE_FIRST = new Set(['hq_studio', 'usage_overview', 'hq_studio_lately'])
+const callOf = (fn: string, args: string): string =>
+  `app.${fn}(${OFFICE_FIRST.has(fn) ? `app.operator_office()${args === '' ? '' : `, ${args}`}` : args})`
 const sections: Record<string, unknown> = {}
 for (const [name, fn, args] of [
   ['studio', 'hq_studio', ''],
@@ -396,7 +403,7 @@ for (const [name, fn, args] of [
   ['usage_overview', 'usage_overview', '30'],
   ['studio_setup', 'hq_setup', ''],
 ] as const) {
-  sections[name] = (await one(`select app.${fn}(${args}) as d`)).d
+  sections[name] = (await one(`select ${callOf(fn, args)} as d`)).d
 }
 
 const TYPES: Record<string, string> = {

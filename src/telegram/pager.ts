@@ -34,7 +34,7 @@ import { deliveryKey } from '../jobs/delivery-key.ts'
 import type { HandlerOutput, Job, NotifyOutcome } from '../jobs/worker.ts'
 import type { ActionId } from '../slack/blocks.ts'
 import type { TelegramClient } from './api.ts'
-import { inlineKeyboard, type PagerMessage, pagerText } from './message.ts'
+import { inlineKeyboard, noticeKeyboard, type PagerMessage, pagerText } from './message.ts'
 import { TelegramTransport } from './transport.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -81,9 +81,11 @@ export class TelegramPager {
   }
 
   /** The registered chat for this subject, or null if nobody has spoken yet. */
-  async chatFor(subject?: string): Promise<string | null> {
+  async chatFor(job: { readonly jobId: string }, subject?: string): Promise<string | null> {
+    // The office is the CLAIMED job's, and the subject defaults to that office's own person - not to a literal.
+    const office = `app.job_office(${lit(job.jobId)}::uuid)`
     const { rows } = await this.db.execute(
-      `select app.telegram_chat_for(${lit(subject ?? this.options.subject ?? 'grant')}, ${lit(this.options.botId)}) as chat_id`,
+      `select app.telegram_chat_for(${office}, ${subject === undefined && this.options.subject === undefined ? `app.office_actor(${office})` : lit(subject ?? this.options.subject ?? '')}, ${lit(this.options.botId)}) as chat_id`,
     )
     const chatId = (rows[0] as { chat_id?: string | null } | undefined)?.chat_id
     return chatId === undefined ? null : chatId
@@ -121,7 +123,8 @@ export class TelegramPager {
     // reason to stay quiet than severity is.
     const inbound = await this.db.execute(`
       select 1 from public.inbound_commands
-       where job_id = ${lit(input.job.jobId)}::uuid and origin_channel = 'telegram'
+       where office_id = app.job_office(${lit(input.job.jobId)}::uuid)
+         and job_id = ${lit(input.job.jobId)}::uuid and origin_channel = 'telegram'
        limit 1
     `)
     if (inbound.rows.length > 0) {
@@ -141,8 +144,8 @@ export class TelegramPager {
       }
     }
 
-    const subject = this.options.subject ?? 'grant'
-    const chatId = await this.chatFor(subject)
+    const subject = this.options.subject
+    const chatId = await this.chatFor(input.job, subject)
     if (chatId === null) {
       return {
         delivered: false,
@@ -154,7 +157,8 @@ export class TelegramPager {
     // The same rule Slack asks, asked for this channel. One implementation of
     // "should Grant be told", consulted twice.
     const { rows } = await this.db.execute(`
-      select app.notification_allowed(${lit(subject)}, 'telegram',
+      select app.notification_allowed(app.job_office(${lit(input.job.jobId)}::uuid),
+        ${subject === undefined ? `app.office_actor(app.job_office(${lit(input.job.jobId)}::uuid))` : lit(subject)}, 'telegram',
         ${lit(input.severity)}::public.notify_severity,
         ${input.job.projectId === null ? 'null' : `${lit(input.job.projectId)}::uuid`}) as allowed
     `)
@@ -181,7 +185,9 @@ export class TelegramPager {
         : ((
             (
               await this.db.execute(
-                `select name from public.projects where project_id = ${lit(input.job.projectId)}::uuid`,
+                `select name from public.projects
+                  where office_id = app.job_office(${lit(input.job.jobId)}::uuid)
+                    and project_id = ${lit(input.job.projectId)}::uuid`,
               )
             ).rows[0] as { name?: string } | undefined
           )?.name ?? null)
@@ -203,8 +209,13 @@ export class TelegramPager {
         routine: input.routine ?? false,
       },
       correlationId: input.job.correlationId,
-      actions: input.actions,
+      // A notice is not an answer: nothing to rate, undo or mute (#413). The incident layer is what decides when it is
+      // said again, so a Mute button on it would only be a second, worse way to say the same thing.
+      actions: input.output.notice === undefined ? input.actions : [],
       projectUrl,
+      ...(input.output.notice === undefined
+        ? {}
+        : { notice: { heading: input.output.notice.heading } }),
     }
 
     const result = await this.delivery.deliver({
@@ -221,7 +232,10 @@ export class TelegramPager {
       blockerId: input.blockerId ?? null,
       body: {
         text: pagerText(message),
-        keyboard: inlineKeyboard(input.actions, input.job.correlationId, projectUrl),
+        keyboard:
+          input.output.notice === undefined
+            ? inlineKeyboard(input.actions, input.job.correlationId, projectUrl)
+            : noticeKeyboard(input.output.notice.link),
         // An `important` result may arrive at 3am. Anything short of urgent
         // goes in silently: it is on the phone when he looks, without the
         // phone asking to be looked at.
@@ -247,7 +261,8 @@ export class TelegramPager {
         // Scoped to this bot (0097). A chat id is the same number across every
         // bot Grant has opened, so an unscoped mark would silence the whole
         // team because one director was blocked.
-        `select app.mark_telegram_undeliverable(${lit(chatId)}, ${lit(result.errorCode)}, ${lit(this.options.botId)}) as marked`,
+        // And to the office of the job that was being paged for (0804): a chat belongs to one office.
+        `select app.mark_telegram_undeliverable(app.job_office(${lit(input.job.jobId)}::uuid), ${lit(chatId)}, ${lit(result.errorCode)}, ${lit(this.options.botId)}) as marked`,
       )
     }
 
@@ -264,8 +279,8 @@ export class TelegramPager {
   ): Promise<void> {
     await this.db.execute(`
       insert into public.notification_events
-        (channel, severity, project_id, subject_kind, subject_ref, outcome)
-      values ('telegram', ${lit(input.severity)}::public.notify_severity,
+        (office_id, channel, severity, project_id, subject_kind, subject_ref, outcome)
+      values (app.job_office(${lit(input.job.jobId)}::uuid), 'telegram', ${lit(input.severity)}::public.notify_severity,
               ${input.job.projectId === null ? 'null' : `${lit(input.job.projectId)}::uuid`},
               'output', ${lit(input.outputId)}::uuid, ${lit(outcome)})
     `)

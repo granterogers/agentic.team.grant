@@ -104,6 +104,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // --- start ---------------------------------------------------------------
 
   if (path === '' || path === '/' || path === '/start') {
+    /*
+      A START WITHOUT A LIVE STATE IS REFUSED (0648). The state is minted by hq-api for a verified operator
+      (hq_google_connect_start) and goes through Google's consent screen to /callback. Starting here with
+      nothing is how a stranger would begin a flow whose end overwrites the office's Google connection, so
+      nothing is offered: no redirect, and no hint of which part was missing.
+    */
+    const state = url.searchParams.get('state') ?? ''
+    if ((await rpc('google_oauth_state_live', { p_state: state })) !== true) {
+      return plainly('Start connecting Google from Settings in the app.', 400)
+    }
     // Which service's permission to ask for.
     //
     // Grant: *"if someone wants to add connection to Gmail, connection to
@@ -164,6 +174,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     consent.searchParams.set('access_type', 'offline')
     consent.searchParams.set('prompt', 'consent')
     consent.searchParams.set('include_granted_scopes', 'true')
+    consent.searchParams.set('state', state)
     return new Response(null, { status: 302, headers: { location: consent.toString() } })
   }
 
@@ -180,16 +191,47 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const code = url.searchParams.get('code') ?? ''
     if (code === '') return plainly('No code came back from Google.', 400)
 
+    /*
+      THE STATE IS CONSUMED BEFORE THE CODE IS EXCHANGED (0648). A callback is reachable by anybody with the
+      URL, and what it does with a code is replace the stored refresh token - the credential the whole office
+      reads mail, calendar and Drive through. Without a state minted for a signed-in operator and not yet used,
+      a code from ANY Google account would have connected the office to that account. Consuming marks it used
+      in the same statement that checks it, so a replayed callback is refused too. The operator it was minted
+      for is who the client secret is read as.
+    */
+    const operator = await rpc('google_oauth_state_consume', {
+      p_state: url.searchParams.get('state') ?? '',
+    })
+    if (typeof operator !== 'string' || operator === '') {
+      return (
+        (await backToApp('refused', { why: 'This connection was not started from Settings.' })) ??
+        plainly('This connection was not started from Settings, so nothing was changed.', 400)
+      )
+    }
+
     if (config.has_secret !== true) {
       return plainly('No client secret. Paste it in Settings and try again.', 400)
     }
 
     // The secret is read HERE, with the service key, and never leaves this
     // function. There is deliberately no RPC that returns it.
-    const secretRows = (await rpc('vault_secret', { p_name: 'google.client_secret' })) as
-      | string
-      | null
-    if (secretRows === null) {
+    // The office is the operator's own, resolved in the database from the operator the consumed state was minted
+    // for (P3). The callback is reachable by anybody with the URL, so nothing in the request names an office.
+    const office = await rpc('office_of_operator', { p_operator: operator }).catch(() => null)
+    if (typeof office !== 'string' || office === '') {
+      return plainly(
+        'This connection is not for an office on this deployment, so nothing was changed.',
+        400,
+      )
+    }
+    const held = await rpc('deployment_credential', {
+      p_office: office,
+      p_name: 'google.client_secret',
+      p_operator: operator,
+      p_job: null,
+    }).catch(() => null)
+    const secretRows = typeof held === 'string' ? held : null
+    if (secretRows === null || secretRows === '') {
       return plainly('The client secret is missing.', 400)
     }
 
@@ -228,6 +270,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     await rpc('hq_store_google_refresh', {
+      p_office: office,
       p_refresh_token: tokens.refresh_token,
       p_scopes: tokens.scope ?? '',
     })

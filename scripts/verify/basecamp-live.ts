@@ -33,6 +33,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import '../../src/safety/require-production-site.ts'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
@@ -602,10 +603,12 @@ if (pick !== '') {
 
   /* And it is back exactly as it was, through the sanctioned writer. */
   if (was.hue === null) {
-    await db.execute(`select app.hq_project_look('${SUBJECT}', null, null, null, array['hue'])`)
+    await db.execute(
+      `select app.hq_project_look((select office_id as office from public.projects where slug = '${SUBJECT}'), '${SUBJECT}', null, null, null, array['hue'])`,
+    )
   } else {
     await db.execute(
-      `select app.hq_project_look('${SUBJECT}', null, '${was.hue}', null, array[]::text[])`,
+      `select app.hq_project_look((select office_id as office from public.projects where slug = '${SUBJECT}'), '${SUBJECT}', null, '${was.hue}', null, array[]::text[])`,
     )
   }
   const now = await lookOf()

@@ -121,14 +121,17 @@ const make = async (by: string): Promise<Job> => {
       ? {
           id: String(
             (
-              await one(`select app.enqueue_child(p_parent => '${await realParent(db)}'::uuid,
-                p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`)
+              await (async (parent: string) =>
+                one(`select app.enqueue_child(p_office => app.job_office('${parent}'::uuid), p_parent => '${parent}'::uuid,
+                p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`))(
+                await realParent(db),
+              )
             ).v,
           ).match(/[0-9a-f-]{36}/)?.[0],
         }
       : await one(`
     with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-               values ('verify.ask', '${by}', app.unnamed_project(), 'r46-' || gen_random_uuid(), gen_random_uuid())
+               values ('verify.ask', '${by}', app.unnamed_project(app.test_office()), 'r46-' || gen_random_uuid(), gen_random_uuid())
                returning job_id)
     select job_id::text as id from j`)
   const got = await dequeue(db, 'r46', false, false, ['verify.ask'], by)
@@ -148,7 +151,9 @@ const age = (jobId: string) =>
     `update public.blockers set created_at = created_at - interval '3 minutes' where job_id = '${jobId}'`,
   )
 const answer = (blocker: string, a: string) =>
-  db.execute(`select app.hq_answer_blocker('${blocker}'::uuid, '${a}', 'grant')`)
+  db.execute(
+    `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${blocker}'::uuid), app.test_office()), '${blocker}'::uuid, '${a}', 'grant')`,
+  )
 
 // 1. A genuine question is delivered, once, under its blocker's scope.
 const real = await make('telegram:grant')

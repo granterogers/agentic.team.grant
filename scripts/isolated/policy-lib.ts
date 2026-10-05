@@ -121,7 +121,7 @@ export async function policyWorld(defaultDb: string): Promise<World> {
         String(
           (
             await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-              values (${lit(kind)}, ${lit(`duty:${kind.replace(/\./g, '-')}`)}, ${project === null ? 'null' : `${lit(project)}::uuid`},
+              values (${lit(kind)}, 'duty:' || coalesce((select slug from public.responsibilities where job_kind = ${lit(kind)} limit 1), (select slug from public.responsibilities order by slug limit 1)), ${project === null ? 'null' : `${lit(project)}::uuid`},
                       'pol-' || gen_random_uuid(), gen_random_uuid())
               returning job_id::text as id`)
           ).id,
@@ -133,7 +133,7 @@ export async function policyWorld(defaultDb: string): Promise<World> {
       const made = String(
         (
           await one(
-            `select app.enqueue_child(${lit(parent)}::uuid, ${lit(kind)}, '{}'::jsonb)::text as c`,
+            `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, ${lit(kind)}, '{}'::jsonb)::text as c`,
           )
         ).c,
       )
@@ -150,7 +150,7 @@ export async function policyWorld(defaultDb: string): Promise<World> {
       json(
         (
           await one(
-            `select app.hq_answer_blocker(${lit(blocker)}::uuid, ${lit(option)}, ${lit(by)}) as r`,
+            `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(blocker)}::uuid), app.test_office()), ${lit(blocker)}::uuid, ${lit(option)}, ${lit(by)}) as r`,
           )
         ).r,
       ),

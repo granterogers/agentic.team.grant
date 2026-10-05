@@ -31,42 +31,45 @@ const check = (what: string, ok: boolean, detail: string) => {
 }
 const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>
 const OPTS = ['Yes, do it', 'No, leave it']
-const project = async (label: string): Promise<string> => {
+const project = async (label: string, office = 'app.test_office()'): Promise<string> => {
   const id = String(
     json(
       (
-        await one(`select app.hq_create_project(${lit(`Reversal ${label} ${run}`)}, 'upload', ${lit(`reversal-${label}-${run}`)},
+        await one(`select app.hq_create_project(${office}, ${lit(`Reversal ${label} ${run}`)}, 'upload', ${lit(`reversal-${label}-${run}`)},
           ${lit(`Reversal ${label} ${run}`)}, true) as v`)
       ).v,
     ).project_id,
   )
   await db.execute(
-    `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(id)}::uuid, 'suggest', 'grant', 'reversal proof')`,
+    `insert into public.autonomy_settings (office_id, project_id, level, set_by, reason) values ((select office_id from public.projects where project_id = ${lit(id)}::uuid), ${lit(id)}::uuid,'suggest', 'grant', 'reversal proof')`,
   )
   return id
 }
 const job = async (p: string, by = 'telegram:grant-rev'): Promise<string> =>
   String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values ('office.instruction', ${lit(by)}, ${lit(p)}::uuid, 'rv-' || gen_random_uuid(), gen_random_uuid())
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+        values ((select office_id from public.projects where project_id = ${lit(p)}::uuid), 'office.instruction', ${lit(by)}, ${lit(p)}::uuid, 'rv-' || gen_random_uuid(), gen_random_uuid())
         returning job_id::text as id`)
     ).id,
   )
 const ask = async (p: string, j: string, fp: string) =>
   String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
           approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
-        values (${lit(p)}::uuid, ${lit(j)}::uuid, ${lit(`Put it in Notion ${run}`)}, 'reversal proof',
+        values ((select office_id from public.projects where project_id = ${lit(p)}::uuid), ${lit(p)}::uuid, ${lit(j)}::uuid, ${lit(`Put it in Notion ${run}`)}, 'reversal proof',
           'Nothing happens until somebody answers this question.', array[${OPTS.map(lit).join(',')}],
           'chief-of-staff', true, ${lit(fp)}, 'No, leave it') returning blocker_id::text as id`)
     ).id,
   )
 const answer = async (b: string, a: string, by = 'grant') =>
   json(
-    (await one(`select app.hq_answer_blocker(${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`))
-      .r,
+    (
+      await one(
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`,
+      )
+    ).r,
   )
 /** As the gateway calls it: through PostgREST with the service key, which sets the request's claims. */
 const SERVICE = `select set_config('request.jwt.claims', '{"role":"service_role"}', true);`
@@ -74,7 +77,7 @@ const withdraw = async (b: string, by: string | null) =>
   json(
     (
       await one(
-        `${SERVICE} select app.withdraw_refusal(${lit(b)}::uuid, ${by === null ? 'null' : lit(by)})::text as r`,
+        `${SERVICE} select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, ${by === null ? 'null' : lit(by)})::text as r`,
       )
     ).r,
   )
@@ -87,7 +90,9 @@ const verdict = async (p: string, fp: string, j?: string) =>
   })
 const refusalsListed = async () =>
   (
-    json((await one(`select app.active_refusals()::text as r`)).r) as unknown as { id: string }[]
+    json((await one(`select app.active_refusals(app.test_office())::text as r`)).r) as unknown as {
+      id: string
+    }[]
   ).map((r) => r.id)
 
 // ---- 1. taking a No back clears the memory, and never approves -------------------------------
@@ -192,7 +197,7 @@ await answer(bB, 'No, leave it')
   const b = await ask(p3, j, fp)
   await answer(b, 'No, leave it')
   await db.execute(
-    `select app.grant_standing('notebook.write', ${lit(p3)}::uuid, 'reversal proof', 'grant', null)`,
+    `select app.grant_standing(app.test_office(), 'notebook.write', ${lit(p3)}::uuid, 'reversal proof', 'grant', null)`,
   )
   const withStanding = await verdict(p3, fp, await job(p3))
   check(
@@ -226,7 +231,8 @@ await answer(bB, 'No, leave it')
 }
 // ---- 3b. a duty's No (tool + project, no fingerprint) is taken back the same way --------------
 {
-  const p3b = await project('duty')
+  // The specialist holds notebook.write in the operator's office only (grants are per office), so the duty runs there.
+  const p3b = await project('duty', 'app.operator_office()')
   const again = async () => {
     const j = await job(p3b, 'duty:reversal-proof')
     return governOutward(db as never, {
@@ -263,7 +269,7 @@ await answer(bB, 'No, leave it')
   const b = await ask(p4, j, fp)
   await answer(b, 'No, leave it')
   await db.execute(
-    `insert into public.subject_identities (subject, origin_channel, actor, note) values ('verify-echo', 'slack', 'U0ECHOVERIFY${run.toUpperCase().slice(0, 4)}', 'reversal proof') on conflict do nothing`,
+    `insert into public.subject_identities (office_id, subject, origin_channel, actor, note) values (app.test_office(), 'verify-echo', 'slack', 'U0ECHOVERIFY${run.toUpperCase().slice(0, 4)}', 'reversal proof') on conflict do nothing`,
   )
   const staff = String((await one(`select slug from public.staff limit 1`)).slug)
   for (const [label, by] of [
@@ -292,7 +298,11 @@ await answer(bB, 'No, leave it')
   const b = await ask(p4b, await job(p4b), fp)
   await answer(b, 'No, leave it')
   const direct = json(
-    (await one(`select app.withdraw_refusal(${lit(b)}::uuid, 'grant')::text as r`)).r,
+    (
+      await one(
+        `select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, 'grant')::text as r`,
+      )
+    ).r,
   )
   check(
     'called as plain SQL, the way a handler or a job would, it is refused even for the right name',
@@ -302,7 +312,7 @@ await answer(bB, 'No, leave it')
   const anon = json(
     (
       await one(
-        `select set_config('request.jwt.claims', '{"role":"anon"}', true); select app.withdraw_refusal(${lit(b)}::uuid, 'grant')::text as r`,
+        `select set_config('request.jwt.claims', '{"role":"anon"}', true); select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, 'grant')::text as r`,
       )
     ).r,
   )
@@ -322,14 +332,14 @@ await answer(bB, 'No, leave it')
   const worker = String(
     (
       await one(
-        `select has_function_privilege('ai_team_app', 'app.withdraw_refusal(uuid, text)', 'execute') as x`,
+        `select has_function_privilege('ai_team_app', 'app.withdraw_refusal(uuid, uuid, text)', 'execute') as x`,
       )
     ).x,
   )
   const gateway = String(
     (
       await one(
-        `select has_function_privilege('service_role', 'app.withdraw_refusal(uuid, text)', 'execute') as x`,
+        `select has_function_privilege('service_role', 'public.hq_withdraw_refusal(uuid, uuid, text)', 'execute') as x`,
       )
     ).x,
   )
@@ -362,7 +372,7 @@ await answer(bB, 'No, leave it')
   const b = await ask(p5, j, fp)
   await answer(b, 'No, leave it')
   await db.execute(
-    `insert into public.tasks (project_id, title, detail, state, assigned_to_human, job_id, added_by, priority) values (${lit(p5)}::uuid, 'tick proof ${run}', 'x', 'todo', true, ${lit(j)}::uuid, 'the office', 2)`,
+    `insert into public.tasks (office_id, project_id, title, detail, state, assigned_to_human, job_id, added_by, priority) values ((select office_id from public.projects where project_id = ${lit(p5)}::uuid), ${lit(p5)}::uuid, 'tick proof ${run}', 'x', 'todo', true, ${lit(j)}::uuid, 'the office', 2)`,
   )
   await db.execute(
     `update public.tasks set state = 'done', done_at = now(), completed_by = 'grant' where title = ${lit(`tick proof ${run}`)}`,
@@ -452,7 +462,8 @@ const act = async (bearer: string | null, args: Record<string, unknown>) => {
   return { status: r.status, body: (await r.json().catch(() => ({}))) as Record<string, unknown> }
 }
 {
-  const p7 = await project('gateway')
+  // Grant's own session acts in the operator's office, so the No it takes back is in that office.
+  const p7 = await project('gateway', 'app.operator_office()')
   const mk = async (label: string) => {
     const fp = await fingerprint({ action: `gw-${label}`, run })
     const j = await job(p7)
@@ -460,7 +471,9 @@ const act = async (bearer: string | null, args: Record<string, unknown>) => {
     await answer(b, 'No, leave it')
     return { fp, b }
   }
-  const gov = json((await one(`select app.hq_governance()::text as r`)).r) as {
+  const gov = json(
+    (await one(`select app.hq_governance(app.owner_office('grant'))::text as r`)).r,
+  ) as {
     refusals?: { id: string }[]
   }
   const x = await mk('anon')
@@ -478,7 +491,8 @@ const act = async (bearer: string | null, args: Record<string, unknown>) => {
   const stranger = await act(SESSION_STRANGER, { p_blocker_id: x.b, p_by: 'grant' })
   check(
     'a valid session that is not a member: refused, the No stands',
-    stranger.status === 401 && (await verdict(p7, x.fp, await job(p7))).verdict === 'refuse',
+    (stranger.status === 401 || stranger.status === 403) &&
+      (await verdict(p7, x.fp, await job(p7))).verdict === 'refuse',
     `http ${String(stranger.status)}`,
   )
   const viaToken = await act(TOKEN, { p_blocker_id: x.b, p_by: 'mallory' })

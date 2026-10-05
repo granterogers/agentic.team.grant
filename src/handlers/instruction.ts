@@ -95,7 +95,14 @@ import type { Correction } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
 import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
+import { ownTask } from '../agents/own-task.ts'
+import { projectWorkSpine, readProjectWork } from '../agents/project-work.ts'
 import { sentencesOf } from '../agents/sentences.ts'
+import {
+  pointsAtAProject,
+  projectsToAskAbout,
+  whichProjectQuestion,
+} from '../agents/which-project.ts'
 
 const entitled = allEntitled
 
@@ -113,7 +120,7 @@ import {
   subtaskRequest,
   taskStateChange,
 } from '../agents/mine.ts'
-import { groundedIn, namedColleague } from '../agents/named.ts'
+import { carryReportBacks, groundedIn, namedColleague, reportsBackOn } from '../agents/named.ts'
 import {
   asksWhatWasSaid,
   closesWithoutAsking,
@@ -137,7 +144,7 @@ import {
   consulted,
   established,
   howComposed as howComposedFrom,
-  PROVENANCE_NOTE,
+  provenanceNote,
 } from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
 import { asksForWork } from '../agents/request.ts'
@@ -185,6 +192,8 @@ import {
   waitingBlock,
 } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
+import { currentPerson } from '../office/person.ts'
+import { EnvelopeCeilingError, envelopeDecision } from '../providers/envelope.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import { escapeHtml } from '../telegram/message.ts'
@@ -198,7 +207,8 @@ import {
   transcribeTelegramVoice,
   VoiceNoteError,
 } from '../voice/inbound.ts'
-import { allowance, describe } from './meter.ts'
+import { allowance, describe, officeOfJob } from './meter.ts'
+import { keepStyle } from './style-keep.ts'
 
 /**
  * The host, for saying out loud. Never the whole url.
@@ -343,7 +353,7 @@ export const planAndPursue = async (
   const handed = await db
     .execute(`
       select ${deliberate === null ? 'app.enqueue_child_once' : 'app.enqueue_child'}(
-        ${lit(job.jobId)}::uuid, 'office.pursue',
+        app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.pursue',
         ${
           deliberate === null
             ? `${lit(request.slice(0, 2000))},
@@ -380,7 +390,9 @@ export const planAndPursue = async (
     handed?.created === false && typeof handed.job_id === 'string'
       ? await db
           .execute(
-            `select parent_job_id::text as p from public.jobs where job_id = ${lit(handed.job_id)}::uuid`,
+            `select parent_job_id::text as p from public.jobs
+              where job_id = ${lit(handed.job_id)}::uuid
+                and office_id = app.job_office(${lit(job.jobId)}::uuid)`,
           )
           .then((r) => String((r.rows[0] as { p?: string } | undefined)?.p ?? '') === job.jobId)
           .catch(() => false)
@@ -513,14 +525,22 @@ interface HisTask {
   function is answered with the old one-argument call, mapped to the same
   shape; any other error still throws, because a failing query is not an
   absent one.
+
+  0783 gave it an office too: the conversation it reads is the CLAIMED job's
+  office's. Against a database from before 0783 the same fall-back applies - the
+  office-first call does not exist there either, and the one-argument call is
+  what that database answers.
 */
 export async function referentCandidates(
   db: SqlExecutor,
   commandId: string,
+  jobId: string,
 ): Promise<{ readonly rows: readonly unknown[] }> {
   const id = lit(commandId === '' ? '00000000-0000-0000-0000-000000000000' : commandId)
   try {
-    return await db.execute(`select app.my_task_referent(${id}::uuid, p_any_task => true) as t`)
+    return await db.execute(
+      `select app.my_task_referent(app.job_office(${lit(jobId)}::uuid), ${id}::uuid, p_any_task => true) as t`,
+    )
   } catch (error) {
     if (!/does not exist|42883|p_any_task/.test(String((error as Error).message))) throw error
     const r = await db.execute(`select app.my_task_referent(${id}::uuid) as t`)
@@ -811,6 +831,12 @@ export async function speaker(
    * convene somebody and the handler would have to know which.
    */
   alsoAddressed: readonly string[] = [],
+  /**
+   * The claimed job, so the project's roster is read in the job's office. Without it nobody can say whose project
+   * this is and the roster is simply not restricted (the catch below), which is what a test that only wants the
+   * literal path gets.
+   */
+  jobId: string | null = null,
 ): Promise<Speaker> {
   const byName = addressedTo === null || addressedTo === '' ? null : addressedTo
   if (byName !== null) {
@@ -846,8 +872,8 @@ export async function speaker(
         ...s,
         reason:
           also.length === 0
-            ? 'addressed directly — Grant opened this person’s bot'
-            : `Grant picked ${String(also.length + 1)} people himself`,
+            ? `addressed directly — ${currentPerson().name} opened this person’s bot`
+            : `${currentPerson().name} picked ${String(also.length + 1)} people themselves`,
         alsoConvened: also,
         // Addressing somebody IS convening them, so this one is not empty:
         // Grant picked the specialist himself.
@@ -977,8 +1003,15 @@ export async function speaker(
     .execute(`select slug, coalesce(name, '') as name from public.staff where active`)
     .then((r) => r.rows as { slug: string; name: string }[])
     .catch(() => [] as { slug: string; name: string }[])
-  const named = asks.map((t) => namedColleague(t, colleagues))
-  const found =
+  const namedHere = asks.map((t) => namedColleague(t, colleagues))
+  // A clause that only asks for the finding of the one before it belongs to whoever that one was given to (#408).
+  const named = namedHere.map((n, i) => {
+    if (n !== null || i === 0) return n
+    const before = namedHere[i - 1] ?? null
+    const join = parts[i]?.joinedBy ?? ''
+    return before !== null && !/\bthen\b/.test(join) && reportsBackOn(asks[i] ?? '') ? before : null
+  })
+  const foundBeforeCarry =
     matched === undefined
       ? named.every((n) => n === null)
         ? undefined
@@ -989,6 +1022,25 @@ export async function speaker(
             return n !== null ? [{ i, slug: n }] : matched.filter((x) => x.i === i)
           })
         : matched
+
+  /*
+    A REPORT-BACK CLAUSE BELONGS TO WHOEVER OWNS THE CLAUSE BEFORE IT, HOWEVER THAT OWNER WAS CHOSEN (#408 closure).
+
+    The carry above only knows an owner who was NAMED. "Ask the appropriate person on the team to review our launch preparation
+    and identify anything important that is still unfinished" names nobody, so the first clause went to the quality director by
+    subject, the second ("identify anything ... unfinished") matched the operations director by its own words, and a second
+    specialist was convened to answer half a sentence. He answered "I have nothing on the launch preparation in our records" and
+    that became the result he was handed. A clause that only asks for the finding of the one before it has no subject of its own;
+    it takes that clause's owner, chained, whichever mechanism picked it. Joined by "then" it is a sequence (#128) and is left.
+  */
+  const found =
+    foundBeforeCarry === undefined
+      ? undefined
+      : carryReportBacks(
+          asks,
+          parts.map((p) => p.joinedBy),
+          foundBeforeCarry,
+        )
 
   // Order matters and duplicates do not: `pickRoster`'s contested branch takes
   // the first name, so the first ask has to come first.
@@ -1065,10 +1117,12 @@ export async function speaker(
     the query hiccupped.
   */
   const onProject =
-    projectId === null
+    projectId === null || jobId === null
       ? undefined
       : await db
-          .execute(`select unnest(app.staff_on_project(${lit(projectId)}::uuid)) as slug`)
+          .execute(
+            `select unnest(app.staff_on_project(app.job_office(${lit(jobId)}::uuid), ${lit(projectId)}::uuid)) as slug`,
+          )
           .then((r) => (r.rows as { slug: string }[]).map((x) => String(x.slug)))
           .then((xs) => (xs.length === 0 ? undefined : xs))
           .catch(() => undefined)
@@ -1147,7 +1201,7 @@ async function hisTaskByName(
   name: string,
 ): Promise<{ id: string; title: string } | null> {
   const r = await db.execute(`
-    select app.my_tasks('all', 200, null, 'smart', app.harness_job(${lit(jobId)}::uuid)) as t`)
+    select app.my_tasks(app.job_office(${lit(jobId)}::uuid), 'all', 200, null, 'smart', app.harness_job(${lit(jobId)}::uuid)) as t`)
   const raw = (r.rows[0] as { t?: unknown })?.t
   const all = ((typeof raw === 'string' ? JSON.parse(raw) : raw) ?? []) as {
     id?: string
@@ -1211,6 +1265,7 @@ async function addTask(
   const said = await db
     .execute(`
       select app.task_add(
+        p_office => app.job_office(${lit(job.jobId)}::uuid),
         p_project => ${job.projectId === null ? 'null' : `${lit(String(job.projectId))}::uuid`},
         p_title => ${lit(titled)},
         p_due_on => ${when === null ? 'null' : `${lit(when.on)}::date`},
@@ -1278,10 +1333,11 @@ async function act(
   // a notebook — ADR-0014's whole point is that "where does this project's
   // output go" has one answer.
   const { rows } = await db.execute(`
-    select display_name from public.project_attachments
-     where project_id = ${lit(String(job.projectId))}::uuid
-       and connector = 'notebooklm' and enabled
-     order by case when role = 'home' then 0 else 1 end
+    select a.display_name from public.project_attachments a
+      join public.projects p on p.project_id = a.project_id and p.office_id = app.job_office(${lit(job.jobId)}::uuid)
+     where a.project_id = ${lit(String(job.projectId))}::uuid
+       and a.connector = 'notebooklm' and a.enabled
+     order by case when a.role = 'home' then 0 else 1 end
      limit 1
   `)
   const notebook = (rows[0] as { display_name?: string } | undefined)?.display_name
@@ -1302,7 +1358,7 @@ async function act(
     // this wrong: a gate whose request can be muted is not a gate.
     await db.execute(`
       select app.enqueue_child(
-        ${lit(job.jobId)}::uuid, 'notebook.generate',
+        app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'notebook.generate',
         jsonb_build_object('kind', ${lit(kind)}, 'instructions', ${lit(instructions)}),
         interval '0', true${callerArgs(job)}
       )
@@ -1317,7 +1373,7 @@ async function act(
   // What this will cost, said at the moment of asking rather than after.
   // Grant asked to be told the remaining usage "every time I make a request",
   // and the request is the only moment at which knowing changes his mind.
-  const meter = await allowance(db, kinds[0] ?? 'ask')
+  const meter = await allowance(db, officeOfJob(job.jobId), kinds[0] ?? 'ask')
   const cost = `\n\n${describe(meter)}`
 
   // Written the way a person writes a one-line acknowledgement, not the way a
@@ -1342,6 +1398,7 @@ async function act(
   //
   // The text is still produced and still stored, because it is this job's
   // output and §10 wants an output; it is only not delivered.
+  // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
   await db.execute(`update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`)
   return (
     (started.length === 1
@@ -1367,7 +1424,8 @@ async function act(
 async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<string> {
   const commandId = String(payload.command_id ?? '')
   const { rows: existing } = await db.execute(
-    `select transcript from public.inbound_commands where command_id = ${lit(commandId)}::uuid`,
+    `select transcript from public.inbound_commands
+      where command_id = ${lit(commandId)}::uuid and office_id = app.job_office(${lit(job.jobId)}::uuid)`,
   )
   const already = (existing[0] as { transcript?: string | null } | undefined)?.transcript
   if (already !== undefined && already !== null && already.trim() !== '') return already.trim()
@@ -1380,6 +1438,7 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
       -- wrong token here does not fetch the wrong audio — it fetches nothing.
       ${BOT_FOR_INBOUND}
      where c.command_id = ${lit(commandId)}::uuid
+       and c.office_id = app.job_office(${lit(job.jobId)}::uuid)
        and t.enabled and t.token_ref is not null
      limit 1
   `)
@@ -1396,7 +1455,7 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
   // switched Actions off, 'api' is the live one — and it is also the faster
   // one, because it runs where the webhook already kicks rather than waiting
   // for a runner to boot and download a model.
-  const vocabulary = await spokenVocabulary(db)
+  const vocabulary = await spokenVocabulary(db, job)
   const transcriber = await readTranscriber(db)
 
   if (transcriber.mode === 'none') {
@@ -1480,9 +1539,11 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
     update public.inbound_commands
        set transcript = ${lit(heard.text)}, instruction = ${lit(heard.text)}
      where command_id = ${lit(commandId)}::uuid
+       and office_id = app.job_office(${lit(job.jobId)}::uuid)
   `)
   // Onto the job too, so `pinned_config` still explains the job's behaviour
   // afterwards — §6's whole reason for pinning.
+  // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
   await db.execute(`
     update public.jobs
        set pinned_config = pinned_config || jsonb_build_object(
@@ -1507,7 +1568,7 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
  * naming a project makes their name transcribable without a code change. The
  * fixed nouns are the ones no table holds.
  */
-async function spokenVocabulary(db: SqlExecutor): Promise<string[]> {
+async function spokenVocabulary(db: SqlExecutor, job: Job): Promise<string[]> {
   // Ordered most-specific first: the hint has a token budget and the caller
   // truncates, so the words most likely to be mangled must come before the
   // ones a general model already knows.
@@ -1516,7 +1577,8 @@ async function spokenVocabulary(db: SqlExecutor): Promise<string[]> {
     const { rows } = await db.execute(`
       select name from public.staff where active
       union
-      select name from public.projects where status = 'active'
+      select name from public.projects
+       where office_id = app.job_office(${lit(job.jobId)}::uuid) and status = 'active'
     `)
     return [...fixed, ...rows.map((r) => String(r.name)).filter((n) => n !== '')]
   } catch {
@@ -1595,11 +1657,13 @@ interface Candidate {
  */
 async function whichProject(
   db: SqlExecutor,
+  job: Job,
   named: string | null,
 ): Promise<{ project: Candidate | null; ask: string | null }> {
   const { rows } = await db.execute(`
     select project_id::text as project_id, slug, name
-      from public.projects where status = 'active' order by updated_at desc
+      from public.projects
+     where office_id = app.job_office(${lit(job.jobId)}::uuid) and status = 'active' order by updated_at desc
   `)
   const active = rows as unknown as Candidate[]
 
@@ -1647,7 +1711,7 @@ async function handleLinks(
 ): Promise<string | null> {
   if (request.intent === 'discuss') return null
 
-  const { project, ask } = await whichProject(db, request.namedProject)
+  const { project, ask } = await whichProject(db, job, request.namedProject)
   if (project === null) return ask
 
   const said: string[] = []
@@ -1659,6 +1723,7 @@ async function handleLinks(
   for (const link of places) {
     const { rows } = await db.execute(`
       select app.hq_attach(
+        app.job_office(${lit(job.jobId)}::uuid),
         ${lit(project.slug)},
         ${lit(link.kind === 'notebooklm' ? 'notebooklm' : 'notion')},
         ${lit(link.ref)},
@@ -1682,9 +1747,10 @@ async function handleLinks(
     // natively, transcribing a video and rendering a PDF, where we would hand
     // Notion the HTML of a consent banner.
     const { rows } = await db.execute(`
-      select display_name from public.project_attachments
-       where project_id = ${lit(project.project_id)}::uuid
-         and connector = 'notebooklm' and enabled
+      select a.display_name from public.project_attachments a
+        join public.projects p on p.project_id = a.project_id and p.office_id = app.job_office(${lit(job.jobId)}::uuid)
+       where a.project_id = ${lit(project.project_id)}::uuid
+         and a.connector = 'notebooklm' and a.enabled
        limit 1
     `)
     if (rows.length === 0) {
@@ -1723,7 +1789,7 @@ async function enqueueSource(
   // was quietly filed under another.
   await db.execute(`
     select app.enqueue_child(
-      ${lit(job.jobId)}::uuid, 'notebook.add_source',
+      app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'notebook.add_source',
       jsonb_build_object('url', ${lit(link.url)}, 'kind', ${lit(link.kind)}),
       interval '0', false, ${lit(projectId)}::uuid${callerArgs(job)}
     )
@@ -1770,7 +1836,8 @@ async function pairWithNearby(
            coalesce(c.transcript, c.instruction) as said
       from public.inbound_commands c
       join public.inbound_commands self on self.command_id = ${lit(commandId)}::uuid
-     where c.command_id <> self.command_id
+     where c.office_id = app.job_office(${lit(job.jobId)}::uuid) and self.office_id = app.job_office(${lit(job.jobId)}::uuid)
+       and c.command_id <> self.command_id
        and c.origin_channel = self.origin_channel
        and split_part(c.origin_ref, ':', 1) = split_part(self.origin_ref, ':', 1)
        and coalesce(c.addressed_to, '') = coalesce(self.addressed_to, '')
@@ -1814,8 +1881,10 @@ async function pairWithNearby(
              instruction = case
                when command_id = ${lit(commandId)}::uuid then ${lit(joined)}
                else instruction end
-       where command_id in (${lit(commandId)}::uuid, ${lit(other.command_id)}::uuid)
+       where office_id = app.job_office(${lit(job.jobId)}::uuid)
+         and command_id in (${lit(commandId)}::uuid, ${lit(other.command_id)}::uuid)
     `)
+    // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
     await db.execute(`
       update public.jobs
          set pinned_config = pinned_config
@@ -1868,11 +1937,14 @@ async function recallOlder(
   db: SqlExecutor,
   commandId: string,
   instruction: string,
+  jobId: string,
 ): Promise<Memory> {
   if (commandId === '') return NOTHING_OLDER
 
+  // The conversation is the CLAIMED job's office's (0783), never one found by chat and speaker alone.
+  const office = `app.job_office(${lit(jobId)}::uuid)`
   const extent = await db
-    .execute(`select app.conversation_extent(${lit(commandId)}::uuid) as e`)
+    .execute(`select app.conversation_extent(${office}, ${lit(commandId)}::uuid) as e`)
     .then(
       (r) =>
         (r.rows[0] as { e?: Record<string, number> } | undefined)?.e ?? {
@@ -1893,7 +1965,7 @@ async function recallOlder(
 
   const recalled = await db
     .execute(
-      `select app.recall_conversation(${lit(commandId)}::uuid, ${lit(instruction.slice(0, 500))}, 3) as r`,
+      `select app.recall_conversation(${office}, ${lit(commandId)}::uuid, ${lit(instruction.slice(0, 500))}, 3) as r`,
     )
     .then((r) => (r.rows[0] as { r?: unknown } | undefined)?.r)
     .then((raw) =>
@@ -1937,6 +2009,7 @@ async function recallOlder(
 async function conversationBefore(
   db: SqlExecutor,
   commandId: string,
+  jobId: string,
 ): Promise<
   readonly {
     said: string
@@ -1947,7 +2020,10 @@ async function conversationBefore(
   }[]
 > {
   if (commandId === '') return []
-  const { rows } = await db.execute(`select app.conversation_before(${lit(commandId)}::uuid) as t`)
+  // Only this office's conversation (0783): the office is the claimed job's, never found from the command alone.
+  const { rows } = await db.execute(
+    `select app.conversation_before(app.job_office(${lit(jobId)}::uuid), ${lit(commandId)}::uuid) as t`,
+  )
   const raw = (rows[0] as { t: unknown } | undefined)?.t
   if (!Array.isArray(raw)) return []
   return raw
@@ -2028,6 +2104,7 @@ async function offerRule(
   try {
     const { rows } = await db.execute(`
       select app.propose_standing_rule(
+        app.job_office(${lit(job.jobId)}::uuid),
         ${lit(correction.rule)}, 'global', null, null,
         ${lit(job.jobId)}::uuid, ${lit(because)}::jsonb) as r`)
     row = (rows[0] as { r?: { offered?: boolean; rule?: string; error?: string } } | undefined)?.r
@@ -2123,6 +2200,7 @@ async function resolveProjects(db: SqlExecutor, plan: Plan, jobId: string): Prom
     const { rows } = await db.execute(`
       select r.project_id::text, r.slug, r.name, r.confidence::float8 as confidence
         from app.resolve_project_by_name(
+               app.job_office(${lit(jobId)}::uuid),
                ${lit(name)},
                app.harness_job(${lit(jobId)}::uuid)) r
        order by r.confidence desc
@@ -2136,6 +2214,8 @@ async function resolveProjects(db: SqlExecutor, plan: Plan, jobId: string): Prom
     const { rows } = await db.execute(`
       select a.external_ref
         from public.project_attachments a
+        join public.projects p
+          on p.project_id = a.project_id and p.office_id = app.job_office(${lit(jobId)}::uuid)
        where a.project_id = ${lit(projectId)}::uuid
          and a.connector = 'notebooklm' and a.enabled
        limit 1
@@ -2211,6 +2291,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
   return {
     kind: 'office.instruction',
     handle: async (job: Job): Promise<HandlerOutput> => {
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const { rows } = await deps.db.execute(
         `select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
       )
@@ -2267,7 +2348,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       > | null = null
       /** The turn before this one, read at most once and only when a gate needs it. */
       const previousTurn = () =>
-        (previous ??= conversationBefore(deps.db, String(payload.command_id ?? ''))
+        (previous ??= conversationBefore(deps.db, String(payload.command_id ?? ''), job.jobId)
           .catch(() => [])
           .then((turns) => turns.at(-1)))
       const rejects = rejectsWithoutSaying(cleanedWords)
@@ -2355,6 +2436,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           Staff everywhere else in this system, which is exactly who asks a
           clarifying question.
         */
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await deps.db
           .execute(`
             update public.jobs set recipient_agent = 'chief-of-staff'
@@ -2385,6 +2467,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       if (closes) {
         const last = await previousTurn()
         if (early === 'close') {
+          // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
           await deps.db
             .execute(`
               update public.jobs set recipient_agent = 'chief-of-staff'
@@ -2395,6 +2478,41 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               last !== undefined && Number(last.stillGoing ?? 0) > 0
                 ? 'Right. I will come back to you when what is still going on has finished.'
                 : 'Right — nothing else from me.',
+            confidence: 'high',
+            evidence: 'verified',
+            sources: [`job:${job.jobId}`],
+            contradictions: null,
+            path: await howComposed(deps.db, job.jobId),
+            model: null,
+          } satisfies HandlerOutput
+        }
+      }
+
+      /*
+        "THIS PROJECT", WITH NO PROJECT TO MEAN (#416).
+
+        Telegram and Slack have no loaded project. A name in the message resolves in `enqueue_inbound` (0880) and a
+        conversation that has been about a project stays on it; what is left is a message that POINTS at a project it has
+        not named, in a conversation with none established. Answering from the general Conversation would be a guess,
+        so this asks. The dashboard never reaches here: its page states the project.
+
+        On HIS words (`cleanedWords`), never a rewrite: a guard that permits or refuses must read what he said (#322).
+      */
+      if (!isBranch && pointsAtAProject(cleanedWords)) {
+        const names = await projectsToAskAbout(
+          deps.db,
+          job.jobId,
+          String(payload.origin_channel ?? ''),
+        )
+        if (names !== null) {
+          // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
+          await deps.db
+            .execute(`
+              update public.jobs set recipient_agent = 'chief-of-staff'
+               where job_id = ${lit(job.jobId)}::uuid`)
+            .catch(() => undefined)
+          return {
+            body: whichProjectQuestion(names),
             confidence: 'high',
             evidence: 'verified',
             sources: [`job:${job.jobId}`],
@@ -2487,7 +2605,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         deps.router,
         job.projectId ?? null,
         payload.addressed_also ?? [],
+        job.jobId,
       )
+
+      /*
+        A request addressed TO the person answering is a request for the work, not for an introduction (#408).
+
+        "Ask the finance specialist to summarise the budget assumptions" reached the finance director as is, and she answered
+        "let me know which finance specialist you want to handle this". Only a leading "ask|have|get <her> to" is removed, only
+        when she is the one named, and only from the text a model reads: every reader that decides to DO something reads his own
+        words (`turn.kept`), so this can improve an answer and cannot start work. See own-task.ts.
+      */
+      instruction = ownTask(instruction, who)
 
       /*
         Write down who it went to (#65).
@@ -2500,6 +2629,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         This is the whole of the cheap half of the fix: the decision already
         existed, it just never reached the row anyone would look at.
       */
+      // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
       await deps.db
         .execute(`
           update public.jobs set recipient_agent = ${lit(who.slug)}
@@ -2596,6 +2726,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.conversation_work(
+                  app.job_office(${lit(job.jobId)}::uuid),
                   ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
                   interval '24 hours',
                   ${lit(job.jobId)}::uuid) as r`)
@@ -2706,6 +2837,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.another_pair_of_eyes(
+                  app.job_office(${lit(job.jobId)}::uuid),
                   ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
                   ${lit(job.jobId)}::uuid) as r`)
               .then(async (r) => {
@@ -2729,7 +2861,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 const started = await deps.db
                   .execute(`
                     select app.enqueue_child_once(
-                      ${lit(job.jobId)}::uuid, 'office.instruction',
+                      app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.instruction',
                       ${lit(`${String(pick.slug ?? '')}: ${String(pick.about ?? '').slice(0, 2_000)}`)},
                       jsonb_build_object(
                         'instruction', ${lit(String(pick.about ?? '').slice(0, 4_000))},
@@ -2824,7 +2956,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         const spawned = await deps.db
           .execute(`
             select app.enqueue_child_once(
-              ${lit(job.jobId)}::uuid, 'office.instruction',
+              app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.instruction',
               ${lit(`${other}: ${instruction.slice(0, 2_000)}`)},
               jsonb_build_object(
                 'instruction', ${lit(instruction.slice(0, 4_000))},
@@ -2865,7 +2997,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         */
         await deps.db
           .execute(`
-            select public.record_consultation(${lit(job.jobId)}::uuid, ${lit(other)},
+            select app.record_consultation(app.job_office(${lit(job.jobId)}::uuid),
+              ${lit(job.jobId)}::uuid, ${lit(other)},
               ${lit(who.slug)},
               ${lit(`convened alongside ${who.slug}: ${who.reason}`.slice(0, 400))}, 0)
           `)
@@ -2909,6 +3042,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         await deps.db
           .execute(`
             select app.fan_in_over(
+              app.job_office(${lit(job.jobId)}::uuid),
               ${lit(job.jobId)}::uuid,
               ${lit(instruction.slice(0, 1_000))},
               ${lit(
@@ -3000,7 +3134,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         */
         const said = await deps.db
           .execute(`
-            select public.record_consultation(${lit(job.jobId)}::uuid, ${lit(who.slug)},
+            select app.record_consultation(app.job_office(${lit(job.jobId)}::uuid),
+              ${lit(job.jobId)}::uuid, ${lit(who.slug)},
               'chief-of-staff', ${lit(who.reason)}, 0) as r
           `)
           .catch((error: unknown) => ({
@@ -3076,6 +3211,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             `)
             .catch(() => undefined)
         }
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await deps.db.execute(`
           update public.jobs
              set pinned_config = pinned_config
@@ -3084,6 +3220,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         `)
         await deps.db.execute(`
           select app.request_approval(
+            app.job_office(${lit(job.jobId)}::uuid),
             ${lit(job.jobId)}::uuid,
             ${lit(`Carry out ${String(plan.steps.length)} steps: ${plan.instruction.slice(0, 160)}`)},
             ${lit(
@@ -3197,6 +3334,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         if (wire !== null) {
           await deps.db.execute(`
             select app.enqueue_child(
+              app.job_office(${lit(job.jobId)}::uuid),
               ${lit(job.jobId)}::uuid,
               'office.notion_adopt',
               '{}'::jsonb,
@@ -3209,6 +3347,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         if (fill) {
           await deps.db.execute(`
             select app.enqueue_child(
+              app.job_office(${lit(job.jobId)}::uuid),
               ${lit(job.jobId)}::uuid,
               'office.notion_import',
               '{}'::jsonb,
@@ -3408,7 +3547,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const hisLastTurn = wantsAntecedent(turn.kept)
         ? // His last three turns, so "and another for the caterers" after "also one
           // to book the minibus" still reaches the turn that said "task".
-          (await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => []))
+          (
+            await conversationBefore(deps.db, String(payload.command_id ?? ''), job.jobId).catch(
+              () => [],
+            )
+          )
             .slice(-3)
             .map((t) => t.said)
             .join(' ')
@@ -3525,6 +3668,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   question rather than the other way round.
                 */
                 `select app.conversation_work(
+                   app.job_office(${lit(job.jobId)}::uuid),
                    ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
                    interval '24 hours', null,
                    ${wantsTheirAnswers ? "interval '24 hours'" : "interval '30 minutes'"}) as r`,
@@ -3681,6 +3825,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(
                 `select app.stop_conversation_work(
+                   app.job_office(${lit(job.jobId)}::uuid),
                    ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
                    ${lit(`you asked me to stop: ${instruction.slice(0, 120)}`)}) as r`,
               )
@@ -3773,6 +3918,37 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         a substitution, so this can only ever store a rule it would have stored
         anyway.
       */
+      /*
+        "USE THIS REPORT'S STYLE FOR THIS PROJECT" (HQ-STYLE-018).
+
+        Read from his own words through `entitled` (a forwarded message and the model's paraphrase are both silent), and
+        BEFORE the teaching reader below: "use it for future reports in this project" has the shape of a standing rule,
+        and storing it as one would put a sentence in every prompt for ever instead of saving a style. The write is the
+        viewer button's own function, reached through `keepStyle`; a style the project already has is asked about, and
+        which report is meant is asked about whenever it is not one.
+      */
+      const styleKeep = isBranch ? null : entitled.keepStyle(turn.kept)
+      if (styleKeep !== null) {
+        const kept = await keepStyle(deps.db, {
+          jobId: job.jobId,
+          projectId: job.projectId === null ? null : String(job.projectId),
+          commandId: typeof payload.command_id === 'string' ? payload.command_id : null,
+          channel: typeof payload.origin_channel === 'string' ? payload.origin_channel : null,
+          staffSlug: who.slug,
+          request: styleKeep,
+        })
+        return {
+          body: kept.body,
+          confidence: 'high',
+          // A statement about a record the code just read or wrote.
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: await howComposed(deps.db, job.jobId),
+          model: null,
+          ...(kept.blockerId === undefined ? {} : { asksBlocker: kept.blockerId }),
+        } satisfies HandlerOutput
+      }
       const asRules = understood.surviving.filter((r) => r.kind === 'preference').map((r) => r.text)
       const teaching =
         /*
@@ -3835,6 +4011,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         One query, on a path that fires only when he is actually teaching
         something.
       */
+      // raw-sql[2]: keyed by the claimed job; it reads who requested the job the worker holds.
       const learnedBy = await deps.db
         .execute(`
           select coalesce(
@@ -3892,6 +4069,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? null
           : await remember(
               deps.db,
+              { jobId: job.jobId },
               teaching,
               learnedBy,
               // Addressed to one person, or to the office. Getting this backwards
@@ -4017,7 +4195,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.enqueue_child(
-                  ${lit(job.jobId)}::uuid, 'notebook.list_artifacts',
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'notebook.list_artifacts',
                   jsonb_build_object(
                     'kinds', ${lit(JSON.stringify(listing.kinds))}::jsonb,
                     'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
@@ -4191,13 +4369,56 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? null
           : entitled.page(turn.kept)
       const wantsPage = askedForPage?.why === 'asked' ? askedForPage : null
-      const reading =
-        wantsPage === null
+      /*
+        Looking something up on the web (web research). Same guards as a page request and for the same reasons: not on a
+        branch (a second reading of one request would search twice), not when a file or a repeat already claimed the
+        sentence, and only from his own words (`entitled`, which a forwarded message makes silent). A sentence carrying a
+        link is the page request's; this one needs no link.
+      */
+      const wantsResearch =
+        job.projectId === null ||
+        isBranch ||
+        wantsFile !== null ||
+        alreadyOn !== null ||
+        wantsPage !== null
+          ? null
+          : entitled.research(turn.kept)
+      const researching =
+        wantsResearch === null
           ? null
           : await deps.db
               .execute(`
                 select app.enqueue_child(
-                  ${lit(job.jobId)}::uuid, 'browser.gather',
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'web.research',
+                  jsonb_build_object(
+                    'question', ${lit(wantsResearch.question.slice(0, 500))},
+                    'by', ${lit(who.slug)},
+                    'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
+                    'command_id', ${lit(String(payload.command_id ?? ''))}
+                  ),
+                  interval '0', true${callerArgs(job)}
+                )::text as id`)
+              .then(
+                () =>
+                  'Looking that up on the web now \u2014 I will read the best pages and keep the useful ones ' +
+                  'with this project. I only read; I do not press anything.',
+              )
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'search the web', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))}, null)`)
+                  .catch(() => undefined)
+                return null
+              })
+      const reading =
+        wantsPage === null
+          ? researching
+          : await deps.db
+              .execute(`
+                select app.enqueue_child(
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'browser.gather',
                   jsonb_build_object(
                     'url', ${lit(wantsPage.url.slice(0, 2_000))},
                     'because', ${lit(wantsPage.because.slice(0, 500))},
@@ -4233,7 +4454,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.enqueue_child(
-                  ${lit(job.jobId)}::uuid, 'artifact.report',
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'artifact.report',
                   jsonb_build_object(
                     'brief', ${lit(wantsFile.brief.slice(0, 2_000))},
                     'by', ${lit(who.slug)},
@@ -4268,7 +4489,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.enqueue_child(
-                  ${lit(job.jobId)}::uuid, 'office.extract_tasks',
+                  app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'office.extract_tasks',
                   jsonb_build_object(
                     'from', ${lit(pullOut.from ?? '')},
                     'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
@@ -4342,6 +4563,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           : await deps.db
               .execute(`
                 select app.my_task_add(
+                  p_office => app.job_office(${lit(job.jobId)}::uuid),
                   p_title => ${lit(forGrant.title.slice(0, 200))},
                   p_due_on => ${forGrant.due === null ? 'null' : `${lit(forGrant.due)}::date`},
                   /*
@@ -4362,7 +4584,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   p_project => ${
                     job.projectId === null
                       ? 'null'
-                      : `(select slug from public.projects where project_id = ${lit(job.projectId)}::uuid)`
+                      : `(select slug from public.projects
+                          where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                            and project_id = ${lit(job.projectId)}::uuid)`
                   },
                   /*
                     WHICH JOB MADE IT.
@@ -4513,12 +4737,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .execute(`
                 select coalesce(
                   (select left(o.body, 500) from public.outputs o
-                     join public.inbound_commands c on c.job_id = o.job_id
+                     join public.inbound_commands c
+                       on c.job_id = o.job_id and c.office_id = app.job_office(${lit(job.jobId)}::uuid)
                     where c.origin_channel = 'teamhq'
                       and c.command_id <> ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid
                       and split_part(c.origin_ref, ':', 1) = (
                         select split_part(origin_ref, ':', 1) from public.inbound_commands
-                         where command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)
+                         where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                           and command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)
                     order by c.received_at desc limit 1), '') as said`)
               .then((r) => String((r.rows[0] as { said?: string } | undefined)?.said ?? ''))
               /*
@@ -4616,7 +4842,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 which is the boundary a clock cannot express.
               */
               .execute(
-                `select app.my_task_referent(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as t`,
+                `select app.my_task_referent(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as t`,
               )
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
@@ -4670,6 +4896,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 }
                 const set = await deps.db.execute(`
                   select app.my_task_set(
+                    app.job_office(${lit(job.jobId)}::uuid),
                     ${lit(subject.id)},
                     ${change.title === null ? 'p_title => null' : `p_title => ${lit(change.title.slice(0, 200))}`},
                     p_due_on => ${change.due === null ? 'null' : `${lit(change.due)}::date`},
@@ -4704,7 +4931,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const settledTask: { text: string; did: boolean } | null =
         settles === null
           ? null
-          : await referentCandidates(deps.db, String(payload.command_id ?? ''))
+          : await referentCandidates(deps.db, String(payload.command_id ?? ''), job.jobId)
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
                 const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
@@ -4744,8 +4971,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   }
                 }
                 const set = await deps.db.execute(
-                  `select app.hq_task_state(${lit(target.id)}, ${lit(settles.state)}, null,
-                     app.command_principal(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
+                  `select app.hq_task_state(app.job_office(${lit(job.jobId)}::uuid), ${lit(target.id)}, ${lit(settles.state)}, null,
+                     app.command_principal(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
                 )
                 const out = (set.rows[0] as { r?: unknown })?.r
                 const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
@@ -4786,7 +5013,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const subbed: { text: string; did: boolean } | null =
         subOf === null
           ? null
-          : await referentCandidates(deps.db, String(payload.command_id ?? ''))
+          : await referentCandidates(deps.db, String(payload.command_id ?? ''), job.jobId)
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
                 const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
@@ -4814,6 +5041,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 }
                 const made = await deps.db.execute(`
                   select app.my_task_add(
+                    p_office => app.job_office(${lit(job.jobId)}::uuid),
                     p_title => ${lit(subOf.title.slice(0, 200))},
                     p_parent => ${lit(parent.id)},
                     p_job => ${lit(job.jobId)}::uuid) as r`)
@@ -4858,7 +5086,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .execute(
                 // One assembly, asked here and by the test: the previous turn's tree, only a question he was
                 // SHOWN on a channel that delivers (0622, #394), or the one it said it was still waiting on.
-                `select * from app.open_questions_for_reply(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)`,
+                `select * from app.open_questions_for_reply(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)`,
               )
               .then(async (r) => {
                 const rows = r.rows as {
@@ -4903,6 +5131,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 */
                 if (q !== undefined && spoken === 'unclear') {
                   // Bind this turn to the question it is asking about again.
+                  // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
                   await deps.db.execute(`
                     update public.jobs
                        set pinned_config = coalesce(pinned_config, '{}'::jsonb)
@@ -4923,8 +5152,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   gets a refusal back, which the line below reports.
                 */
                 const res = await deps.db.execute(
-                  `select app.hq_answer_blocker(${lit(q.id)}::uuid, ${lit(option)},
-                     app.command_principal(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
+                  `select app.hq_answer_blocker(app.job_office(${lit(job.jobId)}::uuid), ${lit(q.id)}::uuid, ${lit(option)},
+                     app.command_principal(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
                 )
                 const out = (res.rows[0] as { r?: unknown })?.r
                 const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
@@ -5293,16 +5522,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const counted = await deps.db
         .execute(`
-          select (select count(*) from public.tasks t where t.job_id = ${lit(job.jobId)}::uuid)
+          select (select count(*) from public.tasks t
+                   where t.office_id = app.job_office(${lit(job.jobId)}::uuid) and t.job_id = ${lit(job.jobId)}::uuid)
                + (select count(*) from public.documents d
-                   where d.produced_by_job = ${lit(job.jobId)}::uuid) as n,
+                   where d.office_id = app.job_office(${lit(job.jobId)}::uuid) and d.produced_by_job = ${lit(job.jobId)}::uuid) as n,
                  (select count(*) from public.jobs c
-                   where c.parent_job_id = ${lit(job.jobId)}::uuid) as kids,
+                   where c.office_id = app.job_office(${lit(job.jobId)}::uuid) and c.parent_job_id = ${lit(job.jobId)}::uuid) as kids,
                  (select count(*) from public.blockers b
-                   where b.state = 'open'
+                   where b.office_id = app.job_office(${lit(job.jobId)}::uuid) and b.state = 'open'
                      and (b.job_id = ${lit(job.jobId)}::uuid
                           or b.job_id in (select c.job_id from public.jobs c
-                                           where c.parent_job_id = ${lit(job.jobId)}::uuid))) as asking`)
+                                           where c.office_id = app.job_office(${lit(job.jobId)}::uuid)
+                                             and c.parent_job_id = ${lit(job.jobId)}::uuid))) as asking`)
         .then((r) => r.rows[0] as { n?: number; kids?: number; asking?: number } | undefined)
         .catch(() => undefined)
       const landedRows = counted === undefined ? acted : Number(counted.n ?? 0)
@@ -5430,7 +5661,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? String((payload as { coherence_note?: unknown }).coherence_note).slice(0, 600)
           : null
 
-      const turnsBefore = await conversationBefore(deps.db, String(payload.command_id ?? ''))
+      const turnsBefore = await conversationBefore(
+        deps.db,
+        String(payload.command_id ?? ''),
+        job.jobId,
+      )
       const turns = turnsBefore
 
       /*
@@ -5473,7 +5708,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         establish.
       */
       const commandId = String(payload.command_id ?? '')
-      const memory = await recallOlder(deps.db, commandId, instruction)
+      const memory = await recallOlder(deps.db, commandId, instruction, job.jobId)
 
       /*
         Asked what was said earlier, in a conversation with nothing earlier
@@ -5534,7 +5769,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         instruction.split(/\s+/).length <= 8 && lastSaid !== ''
           ? `${lastSaid} ${instruction}`
           : instruction
-      const hits = !answering ? [] : await retrieveAcrossOffice(deps.db, searchFor, job.projectId)
+      const hits = !answering
+        ? []
+        : await retrieveAcrossOffice(deps.db, { jobId: job.jobId }, searchFor, job.projectId)
       const context = contextBlock(hits)
 
       /*
@@ -5553,7 +5790,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         no project, and empty is the common case today because nothing matches
         an inbox of travel and clinic mail.
       */
-      const mail = !answering ? [] : await correspondence(deps.db, job.projectId, instruction)
+      const mail = !answering
+        ? []
+        : await correspondence(deps.db, { jobId: job.jobId }, job.projectId, instruction)
       /*
         And WHY it is empty, when it is (#172, #257).
 
@@ -5569,7 +5808,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? null
           : (((
               await deps.db
-                .execute(`select app.mail_coverage(${lit(job.projectId)}::uuid) as c`)
+                .execute(
+                  `select app.mail_coverage(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.projectId)}::uuid) as c`,
+                )
                 .catch(() => ({ rows: [] as Record<string, unknown>[] }))
             ).rows[0]?.c as MailCoverage | undefined) ?? null)
       const mailContext = mailBlock(mail, mailCover)
@@ -5589,7 +5830,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         the model a list of things to try. The office brings what belongs to
         the project and the model reads it or does not.
       */
-      const quiet = !answering ? [] : await awaiting(deps.db, job.projectId)
+      const quiet = !answering ? [] : await awaiting(deps.db, { jobId: job.jobId }, job.projectId)
       const waitingContext = waitingBlock(quiet)
 
       /*
@@ -5606,7 +5847,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         a sentence saying "I searched all of it" on every turn is noise that
         teaches a model to skim the block it sits in.
       */
-      const coverage = !answering ? null : await coverageOf(deps.db, job.projectId)
+      const coverage = !answering
+        ? null
+        : await coverageOf(deps.db, { jobId: job.jobId }, job.projectId)
       const gapNote = coverage === null ? '' : coverageNote(coverage)
 
       /*
@@ -5625,7 +5868,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ? []
         : (((
             await deps.db
-              .execute(`select app.decisions_about(${lit(instruction.slice(0, 500))}, 4) as d`)
+              .execute(
+                `select app.decisions_about(app.job_office(${lit(job.jobId)}::uuid), ${lit(instruction.slice(0, 500))}, 4) as d`,
+              )
               .catch(() => ({ rows: [{ d: '[]' }] }))
           ).rows[0]?.d as Decided[] | string | undefined) ?? [])
 
@@ -5655,7 +5900,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 (d) =>
                   `· ${d.question} → ${d.chose}${
                     d.ruled_out.length === 0 ? '' : ` (not: ${d.ruled_out.join(', ')})`
-                  } — ${d.because} [${d.by === 'grant' ? 'Grant decided' : `${d.by} decided`}${
+                  } — ${d.because} [${d.by === 'grant' ? `${currentPerson().name} decided` : `${d.by} decided`}${
                     d.project === null ? '' : `, on ${d.project}`
                   }]`,
               )
@@ -5685,6 +5930,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 .execute(`
                   select o.body as body, coalesce(s.name, o.staff_id::text) as who
                     from public.outputs o
+                    join public.jobs oj on oj.job_id = o.job_id and oj.office_id = app.job_office(${lit(job.jobId)}::uuid)
                     left join public.staff s on s.staff_id = o.staff_id
                    where o.output_id = ${lit(payload.from_output)}::uuid
                 `)
@@ -5749,7 +5995,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         .execute(`
           select slug, name, reserved_reason is not null as reserved
             from public.projects
-           where status = 'active'
+           where office_id = app.job_office(${lit(job.jobId)}::uuid)
+             and status = 'active'
              /*
                The same question the resolver asks, asked of the same fact.
                No backticks in here: this comment sits inside a template
@@ -5792,11 +6039,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ? ''
         : await deps.db
             .execute(`
-              select app.my_tasks('overdue', 15, null, 'smart', h.harness) as overdue,
-                     app.my_tasks('today', 15, null, 'smart', h.harness) as today,
-                     app.my_tasks('upcoming', 10, null, 'smart', h.harness) as upcoming,
-                     app.my_tasks('unscheduled', 15, null, 'smart', h.harness) as unscheduled,
-                     app.my_tasks_counts() as counts
+              select app.my_tasks(h.office, 'overdue', 15, null, 'smart', h.harness) as overdue,
+                     app.my_tasks(h.office, 'today', 15, null, 'smart', h.harness) as today,
+                     app.my_tasks(h.office, 'upcoming', 10, null, 'smart', h.harness) as upcoming,
+                     app.my_tasks(h.office, 'unscheduled', 15, null, 'smart', h.harness) as unscheduled,
+                     app.my_tasks_counts(h.office) as counts
                 /*
                   A harness turn sees its own world (ledger R8), the rule the
                   project spine above already follows: without it every test
@@ -5804,7 +6051,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   the same session had just made. False for every message a
                   person sends, so byte-identical for Grant.
                 */
-                from (select app.harness_job(${lit(job.jobId)}::uuid) as harness) h`)
+                from (select app.harness_job(${lit(job.jobId)}::uuid) as harness,
+                             app.job_office(${lit(job.jobId)}::uuid) as office) h`)
             .then((r) => {
               /*
                 The executor hands a jsonb column back as an OBJECT, and
@@ -5835,6 +6083,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             */
             .catch(() => '')
 
+      /*
+        THE WORK IN THE PROJECT, and in a project the question names (#408).
+
+        Documents were retrieved per project and a project's tasks were read by
+        nothing, so "what is overdue on the trip" was answered, truthfully, with
+        "I don't see any". The projects are the ones this turn is about and no
+        others (see project-work.ts), read for the job's own office. An empty
+        result is a failed or absent read, never "the project has no tasks": a
+        project with none says so in its own block.
+      */
+      const projectWorkBriefs = !answering
+        ? []
+        : await readProjectWork(deps.db, job.jobId, job.projectId, instruction, lit)
+      const projectWork = projectWorkSpine(projectWorkBriefs)
+
       // Asked once per answer rather than described in the prompt as a
       // constant: a connector switched off an hour ago must change what she
       // says she can do.
@@ -5848,7 +6111,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         hits a boundary has something to propose (#49) instead of asserting a
         limitation it does not have (#64).
       */
-      const cap = !answering ? EMPTY_CAPABILITY : await capabilityNow(deps.db, who.slug)
+      const cap = !answering
+        ? EMPTY_CAPABILITY
+        : await capabilityNow(deps.db, { jobId: job.jobId }, who.slug)
       const reach = cap.reach
 
       /*
@@ -5864,7 +6129,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const guidance = !answering
         ? { lessons: [], skills: [] }
-        : await guidanceFor(deps.db, who.slug, job.kind, job.projectId)
+        : await guidanceFor(deps.db, { jobId: job.jobId }, who.slug, job.kind, job.projectId)
       // At retrieval, not at completion: a skill shown to a job and then
       // ignored still shaped the prompt, so it still answers for the outcome.
       await recordSkillUse(deps.db, guidance.skills, job.jobId)
@@ -5886,14 +6151,42 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? ''
           : await deps.db
               .execute(
-                `select app.project_instruction_for(${lit(job.projectId)}::uuid, ${lit(who.slug)}) as v`,
+                `select app.project_instruction_for(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.projectId)}::uuid, ${lit(who.slug)}) as v`,
               )
               .then((r) => String((r.rows[0] as { v?: string } | undefined)?.v ?? '').trim())
               .catch(() => '')
 
+      /*
+        The answer envelope (#412), for the offices that are listed and no others.
+
+        On: the reply is only what the model put between the answer tags, so working-out outside them cannot reach a
+        person. A model that ignores the format is failed over by the router (at most its three candidates), and a job
+        that retries must not start the whole chain again indefinitely: after ENVELOPE_MISS_CEILING misses recorded
+        against this turn the turn stops here with a named error, and the worker's existing out-of-attempts path tells
+        the person (#211) instead of spending a fourth round of calls. Unreadable settings mean off.
+      */
+      const envelope = !answering
+        ? false
+        : await deps.db
+            .execute(
+              `select app.answer_envelope_on(app.job_office(${lit(job.jobId)}::uuid)) as on,
+                      (select count(*) from public.inference_usage u
+                        where u.correlation_id = ${lit(job.correlationId)}::uuid
+                          and u.outcome = 'malformed_response') as misses`,
+            )
+            .then((r) =>
+              envelopeDecision(r.rows[0] as { on?: unknown; misses?: unknown } | undefined),
+            )
+            .catch((error: unknown) => {
+              // Only the ceiling is allowed through; an unreadable setting means off.
+              if (error instanceof EnvelopeCeilingError) throw error
+              return false
+            })
+
       const completion = !answering
         ? null
         : await deps.router.complete({
+            ...(envelope ? { answerEnvelope: true } : {}),
             messages: [
               {
                 role: 'system',
@@ -5915,9 +6208,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   // not an instruction about this reply.
                   (localBrief === ''
                     ? ''
-                    : `On this project specifically, Grant has told you: ${localBrief} `) +
-                  'You are replying to Grant, who runs the place, in a private chat. He is ' +
-                  'a colleague you know well, not a customer.\n\n' +
+                    : `On this project specifically, ${currentPerson().name} has told you: ${localBrief} `) +
+                  `You are replying to ${currentPerson().name}, who runs the place, in a private chat. ` +
+                  'They are a colleague you know well, not a customer.\n\n' +
                   /*
                       Say which constraint you set aside (#231).
 
@@ -5959,7 +6252,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                       and CLAUDE.md records why a prompt alone is not enough —
                       the same build obeys one run and not the next.
                     */
-                  `${PROVENANCE_NOTE}\n\n` +
+                  `${provenanceNote()}\n\n` +
                   // Grant: *"I want messages in general from everyone to be
                   // more human and easier to read."* Two things, and the
                   // second was the one being missed: the replies were
@@ -6066,10 +6359,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                          */
                       ' Numbered excerpts from our documents follow. Cite them as [1], [2], ' +
                       'and say plainly when they do not answer the question. Prefer them ' +
-                      'over anything you merely know.\n\nBut what Grant states in his own ' +
-                      'message outranks every document. If he gives you a figure, a name or ' +
-                      'a fact, use HIS, even where a document says otherwise — and when a ' +
-                      'document disagrees with him, say so rather than quietly choosing ' +
+                      `over anything you merely know.\n\nBut what ${currentPerson().name} states in their own ` +
+                      'message outranks every document. If they give you a figure, a name or ' +
+                      'a fact, use THEIRS, even where a document says otherwise — and when a ' +
+                      'document disagrees with them, say so rather than quietly choosing ' +
                       'one.'),
               },
               ...(context === ''
@@ -6126,6 +6419,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               // has an answer that is both honest and useful.
               ...(projectList === '' ? [] : [{ role: 'system' as const, content: projectList }]),
               ...(hisList === '' ? [] : [{ role: 'system' as const, content: hisList }]),
+              ...(projectWork === '' ? [] : [{ role: 'system' as const, content: projectWork }]),
               /*
                 WHAT THIS TURN ALREADY DID (ledger R42). When a turn both acts
                 and asks, the confirmation goes above the answer — and the
@@ -6317,7 +6611,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // convention. Writing the row by hand was the mistake; the duplicate
       // scan is not optional here just because the roster was already decided.
       const scan = await scanForDuplicates(deps.db, instruction, {
+        office: `app.job_office(${lit(job.jobId)}::uuid)`,
         ...(job.projectId === null ? {} : { projectId: job.projectId }),
+        jobId: job.jobId,
       })
       const decided = route(instruction, scan)
       /*
@@ -6674,6 +6970,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ...(waitingContext === '' ? [] : [waitingContext]),
           ...(projectList === '' ? [] : [projectList]),
           ...(hisList === '' ? [] : [hisList]),
+          ...(projectWork === '' ? [] : [projectWork]),
         ],
         /*
           What was LOOKED AT, not what came back.
@@ -6699,6 +6996,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         consultedDomains: [
           ...(answering ? (['documents'] as const) : []),
           'projects' as const,
+          // Only when the project's work was actually read: a failed read is not a look that found nothing.
+          ...(projectWorkBriefs.length > 0 ? (['tasks'] as const) : []),
           /*
             Mail, but only when the office could actually read it (#172).
 
@@ -6718,7 +7017,22 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           documents about renewals" and can never support "we hold four
           documents on renewals" — a search is not a census.
         */
-        completeDomains: ['projects' as const],
+        completeDomains: [
+          'projects' as const,
+          /*
+            A project's tasks are held WHOLE when every one was listed (#408).
+
+            "The only overdue task" is an exhaustiveness claim and the gate
+            refuses it unless the list was a census. The reader says how many
+            it listed against how many exist, so the claim is entitled exactly
+            when the block itself said "All of them are listed", and a project
+            with more tasks than fit is still a search that cannot support it.
+          */
+          ...(projectWorkBriefs.length > 0 &&
+          projectWorkBriefs.every((b) => b.shown >= b.counts.total)
+            ? (['tasks'] as const)
+            : []),
+        ],
         /*
           NOT `documents`, and never — see the comment above. This line is
           here to say that #257 did not change it: a search is not a census

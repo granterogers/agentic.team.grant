@@ -129,7 +129,7 @@ await db.execute(`
 
 const eventId = (
   await db.execute(`
-  select public.append_event(
+  select app.append_event(p_office => app.test_office(),
     p_correlation_id => '${correlation}'::uuid,
     p_actor_kind     => 'system',
     p_actor          => 'phase-1-verification',
@@ -152,7 +152,7 @@ await succeeds(
   'write path',
   'INSERT via append_event() as the application role',
   `set local role ai_team_app;
-   select public.append_event(
+   select app.append_event(p_office => app.test_office(),
      p_correlation_id => '${correlation}'::uuid,
      p_actor_kind => 'agent', p_actor => 'verifier',
      p_trigger => 'manual_verification', p_action_type => 'ledger.app_role_append',
@@ -292,7 +292,7 @@ checks.push({
 await succeeds(
   'undo',
   'first compensating event for the original',
-  `select public.append_event(
+  `select app.append_event(p_office => app.test_office(),
      p_correlation_id => '${correlation}'::uuid,
      p_actor_kind => 'user', p_actor => 'grant',
      p_trigger => 'undo_pressed', p_action_type => 'ledger.proof_reversed',
@@ -303,7 +303,7 @@ await succeeds(
 await failsWith(
   'undo',
   'second compensating event for the SAME original (Undo pressed twice)',
-  `select public.append_event(
+  `select app.append_event(p_office => app.test_office(),
      p_correlation_id => '${correlation}'::uuid,
      p_actor_kind => 'user', p_actor => 'grant',
      p_trigger => 'undo_pressed_again', p_action_type => 'ledger.proof_reversed',
@@ -321,7 +321,7 @@ await failsWith(
 await failsWith(
   'write boundary',
   'reversible = true with no reversal_method',
-  `select public.append_event(
+  `select app.append_event(p_office => app.test_office(),
      p_correlation_id => '${correlation}'::uuid,
      p_actor_kind => 'agent', p_actor => 'verifier',
      p_trigger => 'manual_verification', p_action_type => 'ledger.bad_reversibility',
@@ -333,7 +333,7 @@ await failsWith(
 await failsWith(
   'write boundary',
   'a 1001-character rationale (chain-of-thought would not fit either)',
-  `select public.append_event(
+  `select app.append_event(p_office => app.test_office(),
      p_correlation_id => '${correlation}'::uuid,
      p_actor_kind => 'agent', p_actor => 'verifier',
      p_trigger => 'manual_verification', p_action_type => 'ledger.long_rationale',
@@ -346,7 +346,7 @@ await failsWith(
 await failsWith(
   'write boundary',
   'a free-form action_type ("Did Some Stuff")',
-  `select public.append_event(
+  `select app.append_event(p_office => app.test_office(),
      p_correlation_id => '${correlation}'::uuid,
      p_actor_kind => 'agent', p_actor => 'verifier',
      p_trigger => 'manual_verification', p_action_type => 'Did Some Stuff',
@@ -358,7 +358,7 @@ await failsWith(
 await failsWith(
   'write boundary',
   'an unknown actor_kind ("robot")',
-  `select public.append_event(
+  `select app.append_event(p_office => app.test_office(),
      p_correlation_id => '${correlation}'::uuid,
      p_actor_kind => 'robot', p_actor => 'verifier',
      p_trigger => 'manual_verification', p_action_type => 'ledger.bad_actor',

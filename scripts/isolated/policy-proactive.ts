@@ -18,7 +18,7 @@ const verdict = async (tool: string, audience: string | null = null): Promise<st
   const job = await w.dutyJob('office.chores')
   const r = (
     await one(
-      `select (app.authorize_effect(p_project => null, p_tool => ${lit(tool)}, p_audience => ${audience === null ? 'null' : lit(audience)},
+      `select (app.authorize_effect(p_office => app.job_office(${lit(job.jobId)}::uuid), p_project => null, p_tool => ${lit(tool)}, p_audience => ${audience === null ? 'null' : lit(audience)},
                  p_job => ${lit(job.jobId)}::uuid, p_fingerprint => ${lit(`fp-${tool}-${w.run}`)})) ->> 'verdict' as v`,
     )
   ).v
@@ -31,7 +31,9 @@ const OUTWARD = ['slack.post', 'drive.ingest', 'notebook.write', 'slack.channel'
 const CONSEQUENTIAL = ['task.board.delete', 'slack.rotate']
 const SWITCHED_OFF = ['gmail.send', 'db.delete', 'production.write', 'spend.money', 'github.write']
 for (const dial of DIALS) {
-  await one(`select app.hq_autonomy_set(${lit(dial)}, null, 'grant') as r`)
+  await one(
+    `select app.hq_autonomy_set(app.owner_office('grant'), ${lit(dial)}, null, 'grant') as r`,
+  )
   const t: Record<string, string> = {}
   for (const tool of [
     ...READ,
@@ -139,14 +141,16 @@ check(
   copy.slice(0, 140),
 )
 // A proactive internal result is in front of him afterwards; the noticing pass runs without asking anybody anything.
-const noticed = await one(`select app.raise_suggestions() as r`).catch((e: Error) => ({
-  r: `error ${e.message}`,
-}))
+const noticed = await one(`select app.raise_suggestions(app.sole_person_office()) as r`).catch(
+  (e: Error) => ({
+    r: `error ${e.message}`,
+  }),
+)
 check(
   'proactive noticing runs and asks nobody (it offers; it does not act)',
   !String(noticed.r).startsWith('error'),
   JSON.stringify(noticed.r).slice(0, 80),
 )
-await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'suggest', null, 'grant') as r`)
 void db
 await w.finish()

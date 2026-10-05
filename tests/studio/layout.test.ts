@@ -1,221 +1,398 @@
 /**
- * The project home's layout engine.
+ * The project home's freeform workspace engine.
  *
- * The properties below are the ones a person notices the moment they are
- * wrong: modules overlapping, a drop landing somewhere else, a resize that
- * silently exceeds the grid, and a stored layout from an older version
- * rendering as a page of holes. Every one of them is decidable from the
- * rectangles alone, which is why they are here rather than in a capture run —
- * a browser can show that two panes overlap, and cannot enumerate the
- * hundred drags that would have made them.
+ * Replaces the grid-era suite (4 October 2026): the 12-column model, collision
+ * prevention and `squeeze` were Grant's 22 September request and the freeform
+ * stage is his 4 October one, so those assertions are retired on purpose, not
+ * weakened. What stays is the spirit of the old file - the properties a person
+ * notices the moment they are wrong are decidable from rectangles alone.
  */
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 // @ts-expect-error — a browser module with no types; ADR-0002, no build step.
-import { BOUNDS, COLS, clamp, compact, DEFAULT, squeeze } from '../../web/studio/bc/layout.js'
+import * as L from '../../web/studio/bc/layout.js'
 
-type Rect = { id: string; x: number; y: number; w: number; h: number }
+type Rect = {
+  id: string
+  x: number
+  y: number
+  w: number
+  h: number
+  z?: number
+  tint?: string | null
+}
+const S = { w: 1200, h: 620 }
+
+const memory = (): Storage => {
+  const m = new Map<string, string>()
+  return {
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, v),
+    removeItem: (k: string) => void m.delete(k),
+    clear: () => m.clear(),
+    key: () => null,
+    length: 0,
+  } as unknown as Storage
+}
 
 const overlaps = (a: Rect, b: Rect): boolean =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
-const anyOverlap = (list: Rect[]): [Rect, Rect] | null => {
-  for (let i = 0; i < list.length; i += 1) {
-    for (let j = i + 1; j < list.length; j += 1) {
-      const a = list[i] as Rect
-      const b = list[j] as Rect
-      if (overlaps(a, b)) return [a, b]
-    }
-  }
-  return null
-}
+beforeEach(() => {
+  ;(globalThis as { localStorage?: Storage }).localStorage = memory()
+  L.forgetAll()
+  L.persistence({})
+  L.setStage(S.w, S.h)
+})
 
-describe('the layout engine', () => {
-  it('ships a default in which nothing overlaps and nothing leaves the grid', () => {
-    const out = compact(DEFAULT) as Rect[]
-    expect(anyOverlap(out)).toBeNull()
-    for (const m of out) expect(m.x + m.w).toBeLessThanOrEqual(COLS)
-  })
-
-  it('clamps a module into its own bounds rather than refusing it', () => {
-    /*
-      A stored rectangle is untrusted input: it can come from an older version,
-      a hand-edited localStorage, or a bound that has since changed. Refusing
-      it would lose the page; clamping keeps every module and moves the one
-      that is wrong.
-    */
-    const wide = clamp({ id: 'tasks', x: 0, y: 0, w: 99, h: 99 }) as Rect
-    expect(wide.w).toBe(BOUNDS.tasks.maxW)
-    expect(wide.h).toBe(BOUNDS.tasks.maxH)
-    const tiny = clamp({ id: 'tasks', x: -5, y: -5, w: 0, h: 0 }) as Rect
-    expect(tiny.w).toBe(BOUNDS.tasks.minW)
-    expect(tiny.h).toBe(BOUNDS.tasks.minH)
-    expect(tiny.x).toBe(0)
-    expect(tiny.y).toBe(0)
-  })
-
-  it('never lets a module hang off the right edge, however wide it is asked to be', () => {
-    const m = clamp({ id: 'documents', x: 10, y: 0, w: 8, h: 5 }) as Rect
-    expect(m.x + m.w).toBeLessThanOrEqual(COLS)
-  })
-
-  it('pushes the module underneath down rather than overlapping it', () => {
-    const out = compact(
-      [
-        { id: 'tasks', x: 0, y: 0, w: 6, h: 5 },
-        { id: 'board', x: 0, y: 0, w: 6, h: 5 },
-      ],
-      null,
-    ) as Rect[]
-    expect(anyOverlap(out)).toBeNull()
-    expect(out.map((m) => m.y).sort((a, b) => a - b)).toEqual([0, 5])
-  })
-
-  it('leaves the module being dragged on the row it was dropped on', () => {
-    /*
-      THE ONE EXCEPTION, and the reason it exists: without it the dragged
-      module compacts to the top along with everything else and the drop reads
-      as having been ignored.
-    */
-    const out = compact(
-      [
-        { id: 'tasks', x: 0, y: 0, w: 4, h: 4 },
-        { id: 'board', x: 6, y: 9, w: 4, h: 4 },
-      ],
-      'board',
-    ) as Rect[]
-    expect((out.find((m) => m.id === 'board') as Rect).y).toBe(9)
-  })
-
-  it('closes the gap under a module that is not being dragged', () => {
-    const out = compact([{ id: 'tasks', x: 0, y: 12, w: 4, h: 4 }], null) as Rect[]
-    expect((out[0] as Rect).y).toBe(0)
-  })
-
-  it('is stable: compacting twice changes nothing the second time', () => {
-    const once = compact(DEFAULT) as Rect[]
-    const twice = compact(once) as Rect[]
-    expect(twice).toEqual(once)
-  })
-
-  it('survives a stored layout naming a module that no longer exists', () => {
-    const out = compact([
-      { id: 'tasks', x: 0, y: 0, w: 4, h: 4 },
-      { id: 'chat', x: 4, y: 0, w: 4, h: 4 },
-    ]) as Rect[]
-    /*
-      compact() does not filter - layout() does, on the way out of storage -
-      so what is asserted here is that an unknown id gets a usable default
-      rather than NaN geometry, which would render as a pane with no box.
-    */
-    const ghost = out.find((m) => m.id === 'chat') as Rect
-    expect(Number.isFinite(ghost.w)).toBe(true)
-    expect(ghost.w).toBeGreaterThan(0)
-  })
-
-  it('never produces a fractional row or column', () => {
-    const out = compact([{ id: 'tasks', x: 1.6, y: 2.4, w: 4.5, h: 5.5 }]) as Rect[]
-    for (const v of Object.values(out[0] as Rect)) {
-      if (typeof v === 'number') expect(Number.isInteger(v)).toBe(true)
-    }
-  })
-
-  it('keeps every minimum at or above three columns, so no pane can be a sliver', () => {
-    /*
-      Asserted as a property of the TABLE rather than of one entry, because the
-      failure it guards against is somebody adding a seventh module with a
-      minimum of one - which is 70px at a third of the page, and CLAUDE.md
-      records what that does to a card: one character per line.
-    */
-    for (const [id, b] of Object.entries(
-      BOUNDS as Record<string, { minW: number; minH: number }>,
-    )) {
-      expect(b.minW, id).toBeGreaterThanOrEqual(3)
-      expect(b.minH, id).toBeGreaterThanOrEqual(3)
+describe('the default', () => {
+  it('fits any stage and overlaps nothing', () => {
+    for (const st of [
+      { w: 1200, h: 620 },
+      { w: 900, h: 500 },
+      { w: 1800, h: 900 },
+      // A tablet or a window dragged in: three columns of 240px cannot fit, and the page must not open overlapping itself.
+      { w: 666, h: 560 },
+      { w: 760, h: 600 },
+      { w: 540, h: 700 },
+      { w: 500, h: 900 },
+    ]) {
+      L.setStage(st.w, st.h)
+      const list = L.layout('p') as Rect[]
+      expect(list.length).toBe(L.ALL.length)
+      for (const m of list) {
+        expect(m.x).toBeGreaterThanOrEqual(0)
+        expect(m.x + m.w).toBeLessThanOrEqual(st.w)
+        expect(m.y + m.h).toBeLessThanOrEqual(st.h)
+      }
+      for (let i = 0; i < list.length; i += 1)
+        for (let j = i + 1; j < list.length; j += 1)
+          expect(overlaps(list[i] as Rect, list[j] as Rect)).toBe(false)
     }
   })
 })
 
-/*
- * MAKING ROOM WITHOUT MAKING SOMEBODY LEAVE.
- *
- * Grant, 23 September: "enlarging one panel can cause the neighbouring panel to
- * jump/move away... the neighbouring panel should intelligently shrink to
- * compensate where possible... Only move a panel to another row when the
- * available width genuinely cannot accommodate both panels at their minimum
- * viable widths."
- */
-describe('squeezing a row rather than reflowing it', () => {
-  /*
-    The shape the layout functions deal in. `layout.js` is a browser module with
-    no types (ADR-0002, no build step), so the callbacks below need it written
-    out once rather than four times.
-  */
-  type Cell = { id: string; x: number; y: number; w: number; h: number }
-  /* Two six-column panels side by side on one row. */
-  const pair = () => [
-    { id: 'tasks', x: 0, y: 0, w: 6, h: 5 },
-    { id: 'board', x: 6, y: 0, w: 6, h: 5 },
-  ]
-
-  it('shrinks the neighbour to the right instead of pushing it down', () => {
-    const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
-    const after = squeeze(widened, 'tasks')
-    const board = after.find((m: Cell) => m.id === 'board')
-    expect(board).toMatchObject({ x: 8, y: 0, w: 4 })
-  })
-
-  it('and the neighbour stays on the same row', () => {
-    const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
-    const after = compact(squeeze(widened, 'tasks').map(clamp), 'tasks')
-    expect(after.find((m: Cell) => m.id === 'board')?.y).toBe(0)
-  })
-
-  it('narrows a neighbour on the LEFT when the resized panel grows leftwards', () => {
-    const widened = pair().map((m: Cell) => (m.id === 'board' ? { ...m, x: 4, w: 8 } : m))
-    const after = squeeze(widened, 'board')
-    expect(after.find((m: Cell) => m.id === 'tasks')).toMatchObject({ x: 0, w: 4 })
-  })
-
-  /*
-    THE ONE CASE WHERE A ROW CHANGE IS RIGHT. `board` cannot go below its own
-    minimum, so when there is not enough left for it, it is NOT mangled - it is
-    left alone and compaction moves it down.
-  */
-  it('moves a neighbour down only when it cannot fit at its minimum width', () => {
-    const min = BOUNDS.board.minW
-    const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w: COLS - (min - 1) } : m))
-    const after = compact(squeeze(widened, 'tasks').map(clamp), 'tasks')
-    expect(after.find((m: Cell) => m.id === 'board')?.y).toBeGreaterThan(0)
-  })
-
-  it('never lets a squeezed neighbour fall below its minimum width', () => {
-    for (let w = 3; w <= COLS; w += 1) {
-      const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w } : m))
-      for (const m of compact(squeeze(widened, 'tasks').map(clamp), 'tasks')) {
-        expect(m.w).toBeGreaterThanOrEqual(BOUNDS[m.id].minW)
-      }
-    }
-  })
-
-  it('and never produces an overlap, whatever the width', () => {
-    for (let w = 3; w <= COLS; w += 1) {
-      const widened = pair().map((m: Cell) => (m.id === 'tasks' ? { ...m, w } : m))
-      const after = compact(squeeze(widened, 'tasks').map(clamp), 'tasks')
-      for (const a of after) {
-        for (const b of after) {
-          if (a === b) continue
-          const over = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
-          expect(over).toBe(false)
+describe('a start that cannot fit the stage is wrapped, not piled up', () => {
+  it('every preset overlaps nothing at tablet widths, keeping every module at least its minimum', () => {
+    for (const st of [
+      { w: 666, h: 560 },
+      { w: 760, h: 600 },
+    ]) {
+      for (const key of Object.keys(L.PRESETS)) {
+        L.setStage(st.w, st.h)
+        L.applyPreset('p', key)
+        const list = L.layout('p') as Rect[]
+        for (const m of list) {
+          expect(m.w, `${key} ${m.id} width`).toBeGreaterThanOrEqual(L.MIN.w)
+          expect(m.x + m.w, `${key} ${m.id} right edge`).toBeLessThanOrEqual(st.w)
         }
+        for (let i = 0; i < list.length; i += 1)
+          for (let j = i + 1; j < list.length; j += 1)
+            expect(overlaps(list[i] as Rect, list[j] as Rect), `${key} ${st.w}`).toBe(false)
       }
     }
   })
 
-  it('leaves a module on another row alone', () => {
-    const below = [...pair(), { id: 'documents', x: 0, y: 5, w: 6, h: 5 }]
-    const widened = below.map((m: Cell) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
-    const after = squeeze(widened, 'tasks')
-    expect(after.find((m: Cell) => m.id === 'documents')).toMatchObject({ x: 0, y: 5, w: 6 })
+  it('CONTROL: a person who drags one module onto another still gets the overlap they asked for', () => {
+    L.setStage(666, 560)
+    const [a, b] = L.layout('p') as Rect[] as [Rect, Rect]
+    L.place('p', a.id, { x: b.x + 10, y: b.y + 10, w: a.w, h: a.h })
+    const list = L.layout('p') as Rect[]
+    const A = list.find((m) => m.id === a.id) as Rect
+    const B = list.find((m) => m.id === b.id) as Rect
+    expect(overlaps(A, B)).toBe(true)
+  })
+})
+
+describe('the starter note never covers a module', () => {
+  it('sits clear of every module at every stage, or is not offered', () => {
+    for (const st of [
+      { w: 1800, h: 900 },
+      { w: 1200, h: 620 },
+      { w: 780, h: 640 },
+      { w: 666, h: 560 },
+      { w: 540, h: 700 },
+    ]) {
+      L.forgetAll()
+      L.setStage(st.w, st.h)
+      const mods = L.layout('s') as Rect[]
+      const notes = L.postits('s') as (Rect & { starter?: boolean })[]
+      expect(notes.length).toBeLessThanOrEqual(1)
+      for (const n of notes)
+        for (const m of mods) expect(overlaps(n, m), `${st.w}x${st.h} ${m.id}`).toBe(false)
+    }
+  })
+
+  it('CONTROL: on a wide stage there is one, so the check above is not passing on an empty list', () => {
+    L.forgetAll()
+    L.setStage(1800, 900)
+    expect((L.postits('s') as Rect[]).length).toBe(1)
+  })
+})
+
+describe('free placement', () => {
+  it('moves and resizes by any pixel amount, not in grid steps', () => {
+    const out = L.place('p', 'tasks', { x: 13, y: 7, w: 301, h: 177 }) as Rect[]
+    const t = out.find((m) => m.id === 'tasks') as Rect
+    expect([t.x, t.y, t.w, t.h]).toEqual([13, 7, 301, 177])
+  })
+
+  it('permits overlap and does not move the neighbour', () => {
+    const before = L.layout('p') as Rect[]
+    const board = before.find((m) => m.id === 'board') as Rect
+    const out = L.place('p', 'tasks', { x: board.x + 20, y: board.y + 20 }) as Rect[]
+    const tasks = out.find((m) => m.id === 'tasks') as Rect
+    const after = out.find((m) => m.id === 'board') as Rect
+    expect(overlaps(tasks, after)).toBe(true)
+    expect([after.x, after.y, after.w, after.h]).toEqual([board.x, board.y, board.w, board.h])
+  })
+
+  it('raises what was just placed above everything', () => {
+    const out = L.place('p', 'schedule', { x: 5 }) as Rect[]
+    const top = Math.max(...out.map((m) => m.z ?? 0))
+    expect((out.find((m) => m.id === 'schedule') as Rect).z).toBe(top)
+  })
+
+  it('clamps into the stage and above the minimum rather than refusing', () => {
+    const wild = L.clampRect({ id: 'tasks', x: -50, y: 9999, w: 3, h: 99999 }, S) as Rect
+    expect(wild.x).toBe(0)
+    expect(wild.w).toBe(L.MIN.w)
+    expect(wild.h).toBeLessThanOrEqual(S.h)
+    expect(wild.y + wild.h).toBeLessThanOrEqual(S.h)
+  })
+
+  it('never lets a module leave the stage (no infinite canvas)', () => {
+    const out = L.place('p', 'tasks', { x: 50000, y: 50000 }) as Rect[]
+    const t = out.find((m) => m.id === 'tasks') as Rect
+    expect(t.x + t.w).toBeLessThanOrEqual(S.w)
+    expect(t.y + t.h).toBeLessThanOrEqual(S.h)
+  })
+})
+
+describe('alignment guides', () => {
+  const others = [{ id: 'a', x: 300, y: 100, w: 200, h: 100 }]
+  it('snaps only within the threshold', () => {
+    const near = L.align({ id: 'm', x: 297, y: 400, w: 150, h: 80 }, others, S, 'move', 6)
+    expect(near.rect.x).toBe(300)
+    expect(near.guides.some((g: { axis: string }) => g.axis === 'x')).toBe(true)
+    const far = L.align({ id: 'm', x: 280, y: 400, w: 150, h: 80 }, others, S, 'move', 6)
+    expect(far.rect.x).toBe(280)
+  })
+  it('snaps centres as well as edges', () => {
+    const c = L.align({ id: 'm', x: 375, y: 400, w: 50, h: 80 }, others, S, 'move', 6)
+    expect(c.rect.x + c.rect.w / 2).toBe(400)
+  })
+  it('resize snaps only the moving edges', () => {
+    const r = L.align({ id: 'm', x: 100, y: 10, w: 197, h: 50 }, others, S, 'size', 6)
+    expect(r.rect.x).toBe(100)
+    expect(r.rect.x + r.rect.w).toBe(300)
+  })
+})
+
+describe('Auto Arrange', () => {
+  it('removes overlaps but keeps order, widths and rough position', () => {
+    const messy = [
+      { id: 'tasks', x: 20, y: 30, w: 400, h: 250, z: 1, tint: null },
+      { id: 'board', x: 200, y: 40, w: 400, h: 240, z: 2, tint: null },
+      { id: 'documents', x: 650, y: 35, w: 350, h: 250, z: 3, tint: null },
+      { id: 'schedule', x: 30, y: 330, w: 500, h: 220, z: 4, tint: null },
+    ]
+    const out = L.tidy(messy, S) as Rect[]
+    for (let i = 0; i < out.length; i += 1)
+      for (let j = i + 1; j < out.length; j += 1)
+        expect(overlaps(out[i] as Rect, out[j] as Rect)).toBe(false)
+    const by = (id: string) => out.find((m) => m.id === id) as Rect
+    expect(by('tasks').x).toBeLessThan(by('board').x)
+    expect(by('board').x).toBeLessThan(by('documents').x)
+    expect(by('schedule').y).toBeGreaterThan(by('tasks').y)
+    for (const m of out) {
+      expect(m.x + m.w).toBeLessThanOrEqual(S.w)
+      expect(m.y + m.h).toBeLessThanOrEqual(S.h)
+    }
+  })
+  it('keeps every module (it lightly tidies, it does not drop things)', () => {
+    L.place('p', 'tasks', { x: 400, y: 100 })
+    const out = L.autoArrange('p') as Rect[]
+    expect(out.map((m) => m.id).sort()).toEqual([...L.ALL].sort())
+  })
+})
+
+describe('Reset View', () => {
+  it('resets arrangement, tint and zoom but never a Post-it or a saved layout', () => {
+    L.place('p', 'tasks', { x: 300, y: 200 })
+    L.setTint('p', 'tasks', 'coral')
+    L.setZoom('p', 0.8)
+    L.saveLayout('p', 'Mine')
+    const note = L.addPostit('p')
+    L.setPostit('p', note.id, { text: 'remember the roofer' })
+    L.reset('p')
+    expect(L.customised('p')).toBe(false)
+    expect(L.zoomOf('p')).toBe(1)
+    expect((L.layout('p') as Rect[]).every((m) => m.tint === null)).toBe(true)
+    expect(L.postits('p').map((n: { text: string }) => n.text)).toEqual(['remember the roofer'])
+    expect(L.layoutNames('p')).toEqual(['Mine'])
+  })
+  it('stores nothing at all when there is nothing left to keep', () => {
+    L.place('p', 'tasks', { x: 300 })
+    L.reset('p')
+    expect(L.doc('p').mods).toBeNull()
+    expect((globalThis.localStorage as Storage).getItem('bc.stage.p')).toBeNull()
+  })
+})
+
+describe('persistence and project isolation', () => {
+  it('round-trips through the office array', () => {
+    L.place('p', 'tasks', { x: 11, y: 22, w: 333, h: 222 })
+    L.setTint('p', 'tasks', '#aabbcc')
+    L.setZoom('p', 1.2)
+    const n = L.addPostit('p')
+    L.setPostit('p', n.id, { text: 'hello' })
+    const back = L.fromPanels(L.toPanels(L.doc('p')))
+    expect(back).toEqual(L.doc('p'))
+  })
+  it('survives a reload from the browser store', () => {
+    L.place('p', 'tasks', { x: 11, y: 22 })
+    L.setTint('p', 'tasks', 'sky')
+    L.setZoom('p', 0.7)
+    L.forgetAll()
+    expect((L.layout('p') as Rect[]).find((m) => m.id === 'tasks')).toMatchObject({
+      x: 11,
+      y: 22,
+      tint: 'sky',
+    })
+    expect(L.zoomOf('p')).toBe(0.7)
+  })
+  it('keeps projects independent', () => {
+    L.place('a', 'tasks', { x: 400 })
+    L.setZoom('a', 0.6)
+    const b = L.layout('b') as Rect[]
+    expect(b.find((m) => m.id === 'tasks')?.x).not.toBe(400)
+    expect(L.zoomOf('b')).toBe(1)
+    L.addPostit('a')
+    expect(L.postits('b')[0]).toMatchObject({ starter: true })
+  })
+  it('sends the whole document to the office, debounced, and a blank one as a reset', () => {
+    const sent: unknown[] = []
+    const resets: number[] = []
+    L.persistence({
+      save: (_s: string, p: unknown) => void sent.push(p),
+      reset: () => void resets.push(1),
+    })
+    L.place('p', 'tasks', { x: 50 })
+    L.flush()
+    expect(sent.length).toBe(1)
+    expect((sent[0] as Array<{ id: string }>).some((m) => m.id === '__workspace')).toBe(true)
+    L.reset('p')
+    L.flush()
+    expect(resets.length).toBe(1)
+  })
+  it('does not adopt the office copy over a change made this session', () => {
+    L.place('p', 'tasks', { x: 99 })
+    const office = L.toPanels({ ...L.doc('p'), zoom: 1.4 })
+    expect(L.adopt('p', office)).toBe(false)
+    expect(L.zoomOf('p')).toBe(1)
+  })
+  it('adopts the office copy for a project not yet touched here', () => {
+    const d = { ...L.normalise({}), zoom: 0.9 }
+    expect(L.adopt('fresh', L.toPanels(d))).toBe(true)
+    expect(L.zoomOf('fresh')).toBe(0.9)
+  })
+  it('treats a legacy grid-era array as no arrangement rather than a page of holes', () => {
+    expect(L.fromPanels([{ id: 'tasks', x: 0, y: 0, w: 4, h: 5 }])).toBeNull()
+  })
+})
+
+describe('tints', () => {
+  it('offers eight to twelve curated tints', () => {
+    expect(L.TINTS.length).toBeGreaterThanOrEqual(8)
+    expect(L.TINTS.length).toBeLessThanOrEqual(12)
+  })
+  it('accepts curated and custom hex colours and refuses anything else', () => {
+    expect(L.setTint('p', 'tasks', 'teal')).toBe(true)
+    expect(L.setTint('p', 'tasks', '#12abEF')).toBe(true)
+    expect(L.setTint('p', 'tasks', 'red; background:url(x)')).toBe(false)
+    expect(L.setTint('p', 'tasks', null)).toBe(true)
+  })
+})
+
+describe('zoom', () => {
+  it('is bounded', () => {
+    expect(L.setZoom('p', 9)).toBe(L.ZOOM.max)
+    expect(L.setZoom('p', 0)).toBe(L.ZOOM.min)
+  })
+})
+
+describe('named layouts and presets', () => {
+  it('saves, loads, renames and deletes', () => {
+    L.place('p', 'tasks', { x: 321, y: 123 })
+    expect(L.saveLayout('p', '  Focus  ')).toBe('Focus')
+    L.place('p', 'tasks', { x: 5, y: 5 })
+    expect(L.loadLayout('p', 'Focus')).toBe(true)
+    expect((L.layout('p') as Rect[]).find((m) => m.id === 'tasks')).toMatchObject({
+      x: 321,
+      y: 123,
+    })
+    expect(L.renameLayout('p', 'Focus', 'Deep work')).toBe(true)
+    expect(L.layoutNames('p')).toEqual(['Deep work'])
+    expect(L.deleteLayout('p', 'Deep work')).toBe(true)
+    expect(L.layoutNames('p')).toEqual([])
+  })
+  it('refuses a rename onto an existing name and an empty name', () => {
+    L.saveLayout('p', 'A')
+    L.saveLayout('p', 'B')
+    expect(L.renameLayout('p', 'A', 'B')).toBe(false)
+    expect(L.saveLayout('p', '   ')).toBe('')
+  })
+  it('ships Overview, Planning, Research and Documents', () => {
+    expect(Object.values(L.PRESETS).map((p) => (p as { name: string }).name)).toEqual([
+      'Overview',
+      'Planning',
+      'Research',
+      'Documents',
+    ])
+    for (const key of Object.keys(L.PRESETS)) {
+      expect(L.applyPreset('p', key)).toBe(true)
+      for (const m of L.layout('p') as Rect[]) expect(m.x + m.w).toBeLessThanOrEqual(S.w)
+    }
+  })
+})
+
+describe('Post-its', () => {
+  it('starts with one blank starter that is not stored until typed in', () => {
+    const first = L.postits('p')
+    expect(first.length).toBe(1)
+    expect(first[0]).toMatchObject({ starter: true, text: '' })
+    expect(L.doc('p').postits.length).toBe(0)
+    const id = L.setPostit('p', 'n_starter', { text: 'hi' })
+    expect(id).not.toBe('n_starter')
+    expect(L.postits('p')).toMatchObject([{ text: 'hi' }])
+  })
+  it('creates more, moves them, resizes them, removes them explicitly', () => {
+    const a = L.addPostit('p')
+    const b = L.addPostit('p')
+    expect(a.id).not.toBe(b.id)
+    L.movePostit('p', a.id, { x: 10, y: 20, w: 250, h: 220 })
+    expect(L.postits('p').find((n: { id: string }) => n.id === a.id)).toMatchObject({
+      x: 10,
+      y: 20,
+      w: 250,
+      h: 220,
+    })
+    L.removePostit('p', a.id)
+    expect(L.postits('p').map((n: { id: string }) => n.id)).toEqual([b.id])
+  })
+  it('does not resurrect the starter after the last note is removed', () => {
+    const a = L.addPostit('p')
+    L.removePostit('p', a.id)
+    expect(L.postits('p')).toEqual([])
+  })
+  it('is scoped to its project', () => {
+    L.setPostit('a', 'n_starter', { text: 'only a' })
+    expect(L.postits('b')[0]).toMatchObject({ starter: true })
+  })
+  it('holds text and a rectangle and nothing else (no extraction, no conversion)', () => {
+    const n = L.addPostit('p')
+    // `at` is when the note last changed, kept only so two copies can be merged note by note; nothing else may be added.
+    expect(Object.keys(n).sort()).toEqual(['at', 'h', 'id', 'text', 'w', 'x', 'y', 'z'])
   })
 })

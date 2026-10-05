@@ -31,6 +31,7 @@
  * can audit is a notification that quietly becomes noise.
  */
 
+import '../src/safety/require-production-writes.ts'
 import { DeliveryService } from '../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import { TelegramClient } from '../src/telegram/api.ts'
@@ -67,8 +68,7 @@ if (pager === null) {
   process.exit(1)
 }
 
-const chat = (await db.execute(`select app.telegram_chat_for('grant', '${pager.botId}') as c`))
-  .rows[0]?.c
+const chat = (await db.execute(`select app.operator_chat('${pager.botId}') as c`)).rows[0]?.c
 if (chat === null || chat === undefined) {
   console.error('no telegram chat registered for grant')
   process.exit(1)

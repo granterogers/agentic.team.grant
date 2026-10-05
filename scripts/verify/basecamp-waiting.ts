@@ -30,6 +30,7 @@
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
 
+import '../../src/safety/require-production-site.ts'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { signIn } from './lib/sign-in.ts'
@@ -263,7 +264,7 @@ try {
   const said = String(
     (
       await db.execute(
-        `select app.hq_answer_blocker('${second}'::uuid, 'Do whatever you think best', 'grant')::text as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${second}'::uuid), app.test_office()), '${second}'::uuid, 'Do whatever you think best', 'grant')::text as r`,
       )
     ).rows[0]?.r ?? '',
   )

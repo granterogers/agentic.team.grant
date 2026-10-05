@@ -18,6 +18,7 @@
  * BYPASSRLS would be strictly worse. Roles are created NOLOGIN with no
  * password, which is why this output is safe to store beside the dump.
  */
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

@@ -15,6 +15,7 @@
 
 import { act, alreadyAnswered, attempt, canWrite, read, say, token } from '../office.js'
 import * as session from '../session.js'
+import { signOut } from '../signout.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
 import * as live from './livevoice.js'
@@ -33,15 +34,22 @@ import {
   toggleCall,
 } from '../call.js'
 import * as compose from './compose.js'
-import * as grid from './layout.js'
+import * as cal from './calendar.js'
+import * as docview from './docview.js'
+import * as docthumbs from './docthumbs.js'
+import * as styleForm from './style.js'
+import * as expand from './expand.js'
+import { wireStage } from './stage.js'
 import * as contacts from './contacts.js'
 import * as todos from './todos.js'
 import * as docorder from './docorder.js'
 import * as jump from './jump.js'
+import * as account from './account.js'
 
 let ctx = null
 export const mount = (c) => {
   ctx = c
+  c.jumpRefresh = jump.refresh
   /*
     ONE key listener for the whole experience, on the document, attached once.
 
@@ -533,6 +541,18 @@ const followChat = (root) => {
 }
 
 export const wire = (root) => {
+  // The entry and set-up screens are their own world; the rest of the wiring has nothing to attach to there.
+  account.wire(root)
+  if (account.mode() !== 'app') return
+  expand.play(root)
+  cal.wire(root)
+  docview.wire(root, ctx, fileFor)
+  for (const b of root.querySelectorAll('[data-bc-actf]')) {
+    b.addEventListener('click', () => {
+      ctx.state.bcActFilter = b.dataset.bcActf
+      ctx.render()
+    })
+  }
   rememberDialogScroll(root)
 
   // Navigation inside the experience.
@@ -733,6 +753,13 @@ export const wire = (root) => {
     })
   }
 
+  for (const b of root.querySelectorAll('[data-bc-signout]')) {
+    b.addEventListener('click', () => {
+      b.disabled = true
+      signOut()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-bc-attention]')) {
     b.addEventListener('click', () => {
       /*
@@ -750,8 +777,7 @@ export const wire = (root) => {
   wireOutputs(root)
   wireSearch(root)
   wireDocs(root)
-  wireArrange(root)
-  wireBoard(root)
+  wireStage(root, ctx)
   wireDocsWorkspace(root)
   wireCounts(root)
   wireSources(root)
@@ -767,6 +793,11 @@ export const wire = (root) => {
 const wireSearch = (root) => {
   const box = root.querySelector('#bc-search-q')
   if (box !== null) {
+    /*
+      Search runs as you type, so Enter has nothing left to do. Left alone it submitted the form, which reloaded the page
+      and threw the query away: the one key a person presses to say "go" cleared what they had written.
+    */
+    box.closest('form')?.addEventListener('submit', (e) => e.preventDefault())
     /*
       Filters as you type (§7.1's "immediately"), and the caret is put back
       where it was: `render()` replaces every node, so a redraw on each
@@ -1657,6 +1688,8 @@ const saidIn = (el, words) => {
 const wireContacts = (root) => {
   for (const b of root.querySelectorAll('[data-bc-contact]')) {
     b.addEventListener('click', () => {
+      // A contact row on the home grows into its record; inside an open Contacts sheet it is a step, not a growth.
+      if (!ctx.state.bcExpanded) ctx.rememberOrigin?.(b)
       ctx.openContact(b.dataset.bcContact)
     })
   }
@@ -1749,6 +1782,44 @@ const wireContacts = (root) => {
       const done = await attempt(b, 'Saving…', () => contacts.save(ctx.state.project, key, patch), 'Saved.')
       if (done !== null) {
         ctx.render()
+        await ctx.refresh()
+      }
+    })
+  }
+
+  /*
+    TAKING ONE OFF THE PROJECT. `contacts.putAway` existed and nothing pressed
+    it, so a contact added by mistake could never leave. Two presses, like
+    removing a task, because it is the one thing on this record that cannot be
+    done by correcting a field. The office keeps the row and offers an undo, so
+    "removed" here means put away, and the words say so.
+  */
+  for (const b of root.querySelectorAll('[data-bc-contact-away]')) {
+    let armed = false
+    b.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true
+        b.textContent = 'Press again to remove'
+        setTimeout(() => {
+          armed = false
+          if (b.isConnected) b.textContent = 'Remove contact'
+        }, 6000)
+        return
+      }
+      const key = b.dataset.bcContactAway ?? ''
+      if (localKey(key)) {
+        await contacts.putAway(ctx.state.project, key, true)
+        ctx.closeContact()
+        return
+      }
+      const done = await attempt(
+        b,
+        'Removing…',
+        () => contacts.putAway(ctx.state.project, key, true),
+        'Removed. The office keeps it, and Undo brings it back.',
+      )
+      if (done !== null) {
+        ctx.closeContact()
         await ctx.refresh()
       }
     })
@@ -1852,6 +1923,13 @@ const wirePageMenu = (root) => {
     expanded view rather than a page, which is the specification's rule for
     every expanded thing now.
   */
+  for (const b of root.querySelectorAll('[data-bc-style]')) {
+    b.addEventListener('click', () => {
+      shut()
+      const p = ctx.projects().find((q) => q.slug === ctx.state.project)
+      if (p !== undefined) void styleForm.open(p)
+    })
+  }
   for (const b of root.querySelectorAll('[data-bc-sources]')) {
     b.addEventListener('click', () => {
       shut()
@@ -1872,256 +1950,6 @@ const wirePageMenu = (root) => {
     })
   }
 
-}
-
-/* ------------------------------------------- arranging the home (§14) --- */
-
-/*
-  THE BOARD IS DRAGGED AND RESIZED, not reordered by buttons.
-
-  Grant, 22 September: *"Implement proper drag-and-drop module repositioning;
-  dynamic module resizing; sensible minimum sizes; sensible maximum sizes;
-  collision prevention; responsive rearrangement; persistence... Do not
-  substitute crude up/down controls for genuine spatial rearrangement."*
-
-  Three decisions here are worth stating because each of them is a trap this
-  repository has already paid for:
-
-  1. **The header is both the press and the drag handle.** A separate grip is
-     what CLAUDE.md records as eighteen buttons that looked fine and did
-     nothing - they sat inside the handle, a drag began, and the DOM the click
-     was travelling towards no longer existed. Here a pointer that MOVES more
-     than four pixels becomes a drag and the click is suppressed; a pointer
-     that does not is an ordinary press and opens the module. One element,
-     two meanings, decided by what the person actually did.
-
-  2. **Pointer events, captured.** `setPointerCapture` keeps the gesture with
-     the module even when the pointer leaves it, which is most of a drag; it
-     also gives touch and pen the same path as the mouse for nothing.
-
-  3. **The preview is the real grid.** Dragging writes the rectangle into the
-     live layout and repaints the board's inline styles directly, without a
-     render - so what is under the pointer is the actual arrangement, including
-     the modules that have been pushed down, rather than a ghost that tells
-     the truth only when it lands.
-*/
-
-/** Where the pointer is, in grid units, relative to a board element. */
-const gridAt = (board, clientX, clientY) => {
-  const box = board.getBoundingClientRect()
-  const cols = grid.COLS
-  const gap = Number.parseFloat(getComputedStyle(board).gap) || 0
-  const colW = (box.width - gap * (cols - 1)) / cols
-  const rowH = grid.ROW + gap
-  return {
-    col: Math.round((clientX - box.left) / (colW + gap)),
-    row: Math.round((clientY - box.top) / rowH),
-    colW,
-    rowH,
-  }
-}
-
-/** Paint one module's rectangle without a render. */
-const paintRect = (board, list) => {
-  for (const m of list) {
-    const el = board.querySelector(`[data-mod="${m.id}"]`)
-    if (el === null) continue
-    el.style.gridColumn = `${String(m.x + 1)}/span ${String(m.w)}`
-    el.style.gridRow = `${String(m.y + 1)}/span ${String(m.h)}`
-  }
-  board.style.setProperty(
-    '--bc-rows',
-    String(list.reduce((n, m) => Math.max(n, m.y + m.h), 0)),
-  )
-}
-
-const wireBoard = (root) => {
-  const board = root.querySelector('[data-bc-board]')
-  if (board === null) return
-  const slug = board.dataset.bcBoard ?? ctx.state.project
-
-  /*
-    ONE POINTER GESTURE AT A TIME, and the element it belongs to. Held on the
-    closure rather than on the module, because a drag that starts on one
-    header and ends over another is the ordinary case.
-  */
-  let live = null
-
-  const begin = (kind, el, e) => {
-    const mod = el.closest('[data-mod]')
-    if (mod === null) return
-    const id = mod.dataset.mod
-    const start = grid.layout(slug).find((m) => m.id === id)
-    if (start === undefined) return
-    live = { kind, id, mod, startX: e.clientX, startY: e.clientY, rect: start, moved: false }
-    el.setPointerCapture?.(e.pointerId)
-  }
-
-  const during = (e) => {
-    if (live === null) return
-    const dx = e.clientX - live.startX
-    const dy = e.clientY - live.startY
-    if (!live.moved && Math.hypot(dx, dy) < 4) return
-    if (!live.moved) {
-      live.moved = true
-      board.classList.add('bcpanes--moving')
-      live.mod.classList.add('bcmod--dragging')
-    }
-    const { colW, rowH } = gridAt(board, e.clientX, e.clientY)
-    const dCol = Math.round(dx / (colW + (Number.parseFloat(getComputedStyle(board).gap) || 0)))
-    const dRow = Math.round(dy / rowH)
-    const want =
-      live.kind === 'move'
-        ? { x: live.rect.x + dCol, y: Math.max(0, live.rect.y + dRow) }
-        : { w: live.rect.w + dCol, h: live.rect.h + dRow }
-    paintRect(board, grid.place(slug, live.id, want))
-    e.preventDefault()
-  }
-
-  const finish = (e) => {
-    if (live === null) return
-    const was = live
-    live = null
-    board.classList.remove('bcpanes--moving')
-    was.mod.classList.remove('bcmod--dragging')
-    if (!was.moved) return
-    /*
-      SUPPRESS THE CLICK THAT FOLLOWS A DRAG. A pointerup after a real gesture
-      is still followed by a click on the header, which would open the module
-      the person has just finished moving.
-    */
-    const swallow = (c) => {
-      c.stopPropagation()
-      c.preventDefault()
-    }
-    was.mod.addEventListener('click', swallow, { capture: true, once: true })
-    globalThis.setTimeout(() => {
-      was.mod.removeEventListener('click', swallow, { capture: true })
-    }, 350)
-    ctx.render()
-    e?.preventDefault?.()
-  }
-
-  for (const h of board.querySelectorAll('.bcmodhead')) {
-    h.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return
-      /*
-        A CONTROL INSIDE THE HEADER IS NOT THE HEADER. Grant asked for exactly
-        this: "Do not allow interactive controls within the header, such as
-        three-dot menus, to accidentally trigger expansion."
-      */
-      /* The title's own button IS the header's target (its keyboard stop), so
-         a press on the title still drags; every other control does not. */
-      if (e.target.closest('button:not(.bcmodopen), a, input, select, [data-bc-modoff]') !== null) return
-      begin('move', h, e)
-    })
-    h.addEventListener('pointermove', during)
-    h.addEventListener('pointerup', finish)
-    h.addEventListener('pointercancel', finish)
-  }
-  for (const r of board.querySelectorAll('[data-bc-resize]')) {
-    r.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return
-      e.stopPropagation()
-      begin('size', r, e)
-    })
-    r.addEventListener('pointermove', during)
-    r.addEventListener('pointerup', finish)
-    r.addEventListener('pointercancel', finish)
-    r.addEventListener('click', (e) => {
-      e.stopPropagation()
-    })
-  }
-
-  /*
-    THE KEYBOARD CAN MOVE AND RESIZE TOO, because a workspace only a mouse can
-    arrange is a workspace half the people cannot arrange. Alt with an arrow
-    moves; Alt and Shift resizes. Held on the header, which is already the
-    focusable thing.
-  */
-  for (const h of board.querySelectorAll('.bcmodhead')) {
-    h.addEventListener('keydown', (e) => {
-      const id = h.closest('[data-mod]')?.dataset.mod
-      if (id === undefined) return
-      if ((e.key === 'Enter' || e.key === ' ') && !e.altKey) {
-        e.preventDefault()
-        ctx.openExpanded?.(id)
-        return
-      }
-      if (!e.altKey) return
-      const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[
-        e.key
-      ]
-      if (step === undefined) return
-      e.preventDefault()
-      const now = grid.layout(slug).find((m) => m.id === id)
-      if (now === undefined) return
-      const want = e.shiftKey
-        ? { w: now.w + step[0], h: now.h + step[1] }
-        : { x: now.x + step[0], y: Math.max(0, now.y + step[1]) }
-      grid.place(slug, id, want)
-      ctx.render()
-      document.querySelector(`[data-mod="${id}"] .bcmodopen`)?.focus()
-    })
-  }
-
-  /* Taking a module off the page, from the cross on its header. */
-  for (const b of board.querySelectorAll('[data-bc-modoff]')) {
-    b.addEventListener('click', (e) => {
-      e.stopPropagation()
-      grid.remove(slug, b.dataset.bcModoff)
-      ctx.render()
-    })
-    b.addEventListener('pointerdown', (e) => {
-      e.stopPropagation()
-    })
-  }
-}
-
-/*
-  The panel that puts a module back and resets the page. Everything it used to
-  do with Up, Down and Remove is done on the board itself now.
-*/
-const wireArrange = (root) => {
-  const panel = root.querySelector('[data-bc-arrange-panel]')
-  const slug = ctx.state.project
-
-  /*
-    There is no longer a control that OPENS this panel, and there must not be:
-    the panel appears on the board exactly when something is off it, and
-    disappears when the page is whole. Two loops used to hang a toggle and a
-    close button off it. They survived the move and matched nothing for the
-    life of the feature -- a listener bound to an attribute no renderer emits,
-    which is the dead-control shape with the sign reversed. They are gone
-    rather than kept: a handler nothing can reach is a claim that a control
-    exists.
-  */
-
-  /*
-    The panel is inside the thing being redrawn, so a press closes it unless it
-    is reopened - and a control that undoes itself on every use reads as
-    broken. #197's lesson in miniature: anything that must survive a redraw has
-    to be put back after it.
-  */
-  const reopen = () => {
-    const again = document.querySelector('[data-bc-arrange-panel]')
-    if (again !== null) again.hidden = false
-  }
-
-  for (const b of root.querySelectorAll('[data-bc-arr-on]')) {
-    b.addEventListener('click', () => {
-      grid.add(slug, b.dataset.bcArrOn)
-      ctx.render()
-      reopen()
-    })
-  }
-  for (const b of root.querySelectorAll('[data-bc-arr-reset]')) {
-    b.addEventListener('click', () => {
-      grid.reset(slug)
-      ctx.render()
-      reopen()
-    })
-  }
 }
 
 /* ------------------------------------------------------- docs and files */
@@ -2176,6 +2004,8 @@ const wireDocs = (root) => {
       void openDoc(
         b.dataset.bcDocOpen ?? '',
         b.dataset.bcDocTitle ?? fig?.dataset.bcDocTitle ?? 'document',
+        fig?.dataset.bcDocproject ?? '',
+        fig ?? b,
       )
     })
   }
@@ -2189,7 +2019,7 @@ const wireDocs = (root) => {
     if (ref === '') continue
     fig.addEventListener('click', (e) => {
       if (e.target.closest('[data-bc-doc-open]') !== null) return
-      void openDoc(ref, fig.dataset.bcDocTitle ?? 'document')
+      void openDoc(ref, fig.dataset.bcDocTitle ?? 'document', fig.dataset.bcDocproject ?? '', fig)
     })
   }
 
@@ -2260,6 +2090,26 @@ const dressObject = (host, face) => {
 }
 
 const paintThumb = async (host, ref) => {
+  /*
+    A THUMBNAIL KEPT ON THIS DEVICE (docthumbs.js): the viewer made it from the first page or the picture while the
+    document was open, keyed to the source's modified time. It is checked first, so a tile for an external document that
+    Team HQ does not hold needs no request at all, and a source that changed shows none rather than an old one.
+  */
+  if (ref.startsWith('id:')) {
+    const kept = docthumbs.get(ref.slice(3), host.dataset.bcThumbmod ?? '')
+    if (kept !== null) {
+      const img = document.createElement('img')
+      img.className = 'realpage'
+      img.alt = ''
+      img.decoding = 'async'
+      img.src = kept
+      await img.decode().catch(() => {})
+      host.classList.remove('bcthumb--object', 'bcthumb--i')
+      host.replaceChildren(img)
+      host.classList.add('has-real')
+      return
+    }
+  }
   const file = await fileFor(ref)
   if (file === null) return
   const face = bcMini.faceFor(file.mime ?? '', file.url === '' ? (file.title ?? '') : file.url)
@@ -2319,72 +2169,26 @@ const openInTab = (href) => {
   a.remove()
 }
 
-const openDoc = async (ref, title) => {
+const openDoc = async (ref, title, project = '', from = null) => {
   /*
-    FOUR ANSWERS, one of which used to be silence.
-
-    A reference beginning `d:` names a document with no file and no record -
-    there is nothing to fetch and nothing to open, and the honest answer is
-    the details rather than nothing happening. That silence was most of
-    Grant's *"some PDFs can be clicked while other assets cannot"*.
+    EVERY PRESS OPENS THE DOCUMENT HERE (4 October). Routine viewing must not
+    send a person to Google Drive: the record draws the preview, the details and
+    the version history beside it, and the two ways out - Open source and Open
+    the file - are buttons on it. What used to be here opened a new tab (and, for
+    a Drive document, Drive itself); that is now a choice rather than the default.
   */
-  if (ref === '' || ref.startsWith('d:')) {
-    ctx.openDocDetail?.(ref, title)
-    return
-  }
-  if (isAudioRef(ref)) {
-    /* A recording plays HERE, with the project still around it. */
-    ctx.openDocDetail?.(ref, title)
-    return
-  }
-  const file = await fileFor(ref)
-  if (file === null) {
-    ctx.openDocDetail?.(ref, title)
-    return
-  }
   /*
-    A DOCUMENT THAT LIVES SOMEWHERE ELSE OPENS THERE.
-
-    Grant's §25: clicking it should open the actual Drive, Docs, Sheets or
-    Slides document, normally in a new tab. The office holds a reference rather
-    than a copy, so there is no file here to show - and showing its details
-    instead would be the product losing the one thing the link was for.
-
-    The address is derived in `drive.js`, in one place, from the id and the
-    kind. A connector this does not know returns '' and falls through to the
-    ordinary handling below, which is the honest answer rather than a guessed
-    URL.
+    A document listed under ALL PROJECTS belongs to the project named on it, and the record is drawn for the project
+    you are in. So a press on another project's document goes to that project first, then opens the record there.
   */
-  const elsewhere = bcDrive.opensAt(file)
-  if (elsewhere !== '') {
-    globalThis.open(elsewhere, '_blank', 'noopener')
-    return
-  }
-  if (file.url !== '') {
-    if (isAudioRef(file.url) || String(file.mime ?? '').startsWith('audio/')) {
-      ctx.openDocDetail?.(ref, title)
-      return
-    }
-    openInTab(file.url)
-    return
-  }
-  /*
-    No file, but real words. A blob is the honest way to put them in a tab:
-    it is the document's own content, not a rendering of it, and it needs no
-    route this experience has not built.
-  */
-  const text = String(file.content ?? '')
-  if (text === '') {
-    ctx.openDocDetail?.(ref, title)
-    return
-  }
-  const blob = new Blob([`${title}\n\n${text}`], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  openInTab(url)
-  globalThis.setTimeout(() => {
-    URL.revokeObjectURL(url)
-  }, 60_000)
+  const elsewhere = project !== '' && project !== ctx.state.project
+  if (elsewhere) ctx.go?.(`/p/${project}/documents`)
+  // A tile that is on THIS page grows into the viewer and the viewer settles back onto it; a document from another
+  // project has no tile here, so it simply opens.
+  if (!elsewhere && !ctx.state.bcExpanded) ctx.rememberOrigin?.(from)
+  ctx.openDocDetail?.(ref, title)
 }
+
 
 /* ------------------------------------------------------------------ tasks */
 
@@ -2883,6 +2687,7 @@ const wireTasks = (root) => {
 
   for (const b of root.querySelectorAll('[data-bc-task-open]')) {
     b.addEventListener('click', () => {
+      if (!ctx.state.bcExpanded) ctx.rememberOrigin?.(b)
       ctx.openTask(b.dataset.bcTaskOpen)
     })
   }
@@ -2912,6 +2717,11 @@ const wireTasks = (root) => {
       }
       const who = String(root.querySelector('#bc-edit-who')?.value ?? '').trim()
       const due = String(root.querySelector('#bc-edit-due')?.value ?? '').trim()
+      const title = String(root.querySelector('#bc-edit-title')?.value ?? '').trim()
+      if (title === '') {
+        say(b, 'A task needs words. What needs doing?', 'warn')
+        return
+      }
       /*
         `p_clear` is how the office is told to EMPTY a field, because null
         means "leave it alone" to `hq_task_update` — so clearing the assignee
@@ -2926,6 +2736,7 @@ const wireTasks = (root) => {
         () =>
           act('task_update', {
             p_task_id: id,
+            p_title: title,
             p_assignee: who === '' ? null : who,
             p_due_on: due === '' ? null : due,
             p_clear: clear,
@@ -2933,6 +2744,36 @@ const wireTasks = (root) => {
         'Saved.',
       )
       if (done !== null) await ctx.refresh()
+    })
+  }
+
+  /*
+    REMOVING A TASK. Two presses, because removing is the one thing on this form that is not a save: the first press says
+    what the second will do. It is a cancellation, not a deletion, so it is kept for history and can be taken back from
+    the undo strip that every write offers.
+  */
+  for (const b of root.querySelectorAll('[data-bc-taskremove]')) {
+    let armed = false
+    b.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true
+        b.textContent = 'Press again to remove'
+        setTimeout(() => {
+          armed = false
+          if (b.isConnected) b.textContent = 'Remove task'
+        }, 6000)
+        return
+      }
+      const done = await attempt(
+        b,
+        'Removing…',
+        () => act('task_state', { p_task_id: b.dataset.bcTaskremove, p_state: 'cancelled' }),
+        'Removed.',
+      )
+      if (done !== null) {
+        await ctx.refresh()
+        ctx.goAnywhere(`/p/${ctx.state.project}/tasks`)
+      }
     })
   }
 

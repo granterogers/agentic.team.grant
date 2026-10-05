@@ -35,12 +35,17 @@ import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
 import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
+import * as cal from './calendar.js'
+import * as docsrc from './docsources.js'
+import * as finder from './finder.js'
+import * as websrc from './websources.js'
 import * as when from '../when.js'
 import * as bcDocOrder from './docorder.js'
 import * as stopping from './stopping.js'
 import * as contacts from './contacts.js'
 import * as bcDrive from './drive.js'
 import * as todos from './todos.js'
+import * as account from './account.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
 
 /*
@@ -59,6 +64,15 @@ export const mount = (c) => {
   todos.mount(c)
   contacts.mount(c)
   compose.mount(c)
+  account.mount(c)
+  cal.init(c)
+  docsrc.init(c)
+  websrc.init(c)
+  c.find = (q) => searchHits(q, 'Everything', null)
+  finder.onArrive(() => {
+    c.render()
+    c.jumpRefresh?.()
+  })
 }
 
 const state = () => ctx.state
@@ -403,6 +417,16 @@ const topRow = () => {
           </svg>
         </button>
       </span>
+      ${
+        canWrite()
+          ? `<button type="button" class="bcbtn bcsignout" data-bc-signout="1"
+        title="Sign out and clear this browser of your work"
+        aria-label="Sign out"><svg class="bcsoicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+          stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="M16 8l4 4-4 4"/><path d="M20 12H9"/>
+        </svg><span class="bcsotext">Sign out</span></button>`
+          : ''
+      }
     </div>
   </header>`
 }
@@ -419,7 +443,7 @@ const tray = () =>
       typed team chat away from a phone on the projects screen rather than
       removing a duplicate.
     -->
-    <button type="button" class="bcnarrow-only" data-bc-dock>
+    <button type="button"${state().view === 'project' ? ' class="bcnarrow-only"' : ''} data-bc-dock>
       <span aria-hidden="true">${trayMark(TRAY_MARKS.chat)}</span><span>Chat</span>
     </button>
     ${trayItems()
@@ -760,8 +784,24 @@ const projectHeader = (p, latest) => {
  * Portfolio (home)
  * ======================================================================== */
 
+/*
+  THE PROJECTS A PERSON SEES. Every office has one catch-all project called Unnamed, where conversations that belong to
+  no project are filed. Empty, it is plumbing, and showing it made a brand-new office look as if it already had a
+  project and hid the first-run screen. Once something is filed there it is real work, so it is listed.
+*/
+const filedUnder = (p) =>
+  (p.tasks ?? []).length +
+    (p.documents ?? []).length +
+    (p.activity ?? []).length +
+    (p.contacts ?? []).length +
+    (p.waiting ?? []).length >
+  0
+const listed = () => PROJECTS.filter((p) => p.slug !== 'unnamed' || filedUnder(p))
+
 const portfolio = () => {
-  if (PROJECTS.length === 0) {
+  // A signed-in person whose office has nothing in it yet is shown the one next step, not an empty list.
+  if (listed().length === 0 && source.live === true && canWrite()) return account.firstRun()
+  if (listed().length === 0) {
     return `<h1 class="bcsectiontitle">Your projects</h1>
       ${empty(
         {
@@ -771,9 +811,13 @@ const portfolio = () => {
         '',
       )}`
   }
-  return `<h1 class="bcsectiontitle">Your projects</h1>
+  return `<div class="bcportfoliohead"><h1 class="bcsectiontitle">Your projects</h1>${
+    canWrite()
+      ? `<button type="button" class="bcbtn bcbtn--outline" data-bc-newproject-open aria-expanded="false">New project</button>`
+      : ''
+  }</div>${canWrite() ? account.newProject({ open: false }) : ''}
     <div class="bcgrid bcgrid--projects">
-      ${PROJECTS.map((p) => {
+      ${listed().map((p) => {
         const open = (p.tasks ?? []).filter((t) => t.state !== 'done').length
         const waiting = (p.waiting ?? []).length
         const late = bcMini.filtered(p, 'late').length
@@ -1259,6 +1303,7 @@ const taskRecord = (p) => {
         has to address. Anybody the row names who is not on the team stays
         selectable, so opening a record can never silently reassign it.
       -->
+      ${input({ id: 'bc-edit-title', label: 'What needs doing', name: 'title', autocomplete: 'off', value: t.title })}
       ${assigneePicker('bc-edit-who', t.who)}
       <!--
         The date the row actually carries. This read t.due, which is prose
@@ -1279,6 +1324,11 @@ const taskRecord = (p) => {
           'data-bc-taskdone': key,
           'data-bc-want': done ? 'todo' : 'done',
         })}
+        ${
+          t.local === true || t.id === undefined || t.id === null || t.id === ''
+            ? ''
+            : button('Remove task', { kind: 'danger', 'data-bc-taskremove': key })
+        }
       </div>
       ${
         t.local === true || t.id === undefined || t.id === null || t.id === ''
@@ -1395,10 +1445,10 @@ const personRow = (p, c, on) => {
 */
 const personEditor = (c) => `<form class="bcaddform bcgap-l" data-bc-personform="${esc(c.slug)}">
   <div class="bcformrow">
-    ${input({ id: 'bc-p-name', label: 'Name', name: 'name', value: esc(c.name ?? ''), maxlength: '40' })}
-    ${input({ id: 'bc-p-title', label: 'Role', name: 'title', value: esc(c.title ?? ''), maxlength: '80' })}
+    ${input({ id: 'bc-p-name', label: 'Name', name: 'name', value: c.name ?? '', maxlength: '40' })}
+    ${input({ id: 'bc-p-title', label: 'Role', name: 'title', value: c.title ?? '', maxlength: '80' })}
   </div>
-  ${input({ id: 'bc-p-pronouns', label: 'Pronouns', name: 'pronouns', value: esc(c.pronouns ?? ''), maxlength: '24' })}
+  ${input({ id: 'bc-p-pronouns', label: 'Pronouns', name: 'pronouns', value: c.pronouns ?? '', maxlength: '24' })}
   <label class="bclabel" for="bc-p-remit">What they are responsible for</label>
   <textarea class="bcinput" id="bc-p-remit" name="remit" rows="3">${esc(c.responsibilities ?? '')}</textarea>
   <label class="bclabel" for="bc-p-skills">Subject words</label>
@@ -1645,6 +1695,27 @@ const teamSurface = (p) => {
  * enforces the idempotency (a partial unique index, 0317 through 0322); this
  * is the page not asking for something it has already been given.
  */
+/*
+  WHAT WAS ASKED, IN WORDS A PERSON USES (closure, 4 October).
+
+  The Team page printed "Asked: office.instruction" and "Asked: office.synthesise" under every result: the name of the job that
+  made it, which is the office's plumbing and means nothing to the person it is shown to. A kind the page knows is said in words;
+  a dotted kind it does not know is left out (nothing is better than the machine's name); and a real sentence is shown as written.
+*/
+const ASKED_IN_WORDS = {
+  'office.instruction': 'your message',
+  'office.synthesise': 'pulling the answers together',
+  'office.provision_channels': 'setting up a channel',
+  'office.pursue': 'working through the steps',
+  'office.extract_tasks': 'reading the project for work to do',
+}
+const askedWords = (ask) => {
+  const said = String(ask ?? '').trim()
+  if (said === '') return ''
+  if (Object.hasOwn(ASKED_IN_WORDS, said)) return ASKED_IN_WORDS[said]
+  return /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/.test(said) ? '' : said
+}
+
 const outputRow = (r) => {
   const done = r.output.imported === true
   const ready = r.state === 'review' && !done
@@ -1675,7 +1746,7 @@ const outputRow = (r) => {
           .filter(Boolean)
           .join(' · '),
       )}</span>
-      ${r.ask ? `<span class="bcitemmeta">Asked: ${esc(r.ask)}${r.from ? ` — ${esc(r.from)}` : ''}</span>` : ''}
+      ${askedWords(r.ask) !== '' ? `<span class="bcitemmeta">Asked: ${esc(askedWords(r.ask))}${r.from ? ` — ${esc(r.from)}` : ''}</span>` : ''}
       ${
         (r.derived ?? []).length === 0
           ? ''
@@ -1748,8 +1819,8 @@ const docRow = (d, i) => {
   const ref = bcMini.docRef(d)
   /* Draggable for the same reason the tile is, and with the same separation:
      the row carries the drag, the control inside it carries the press. */
-  return `<div class="bcitem bcdoc--openable" data-bc-doc="${esc(ref)}"
-    data-bc-docid="${esc(String(d.id ?? ''))}" draggable="true"
+  return `<div class="bcitem bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-dochay="${esc(docsrc.hay(d))}"
+    data-bc-docid="${esc(String(d.id ?? ''))}" data-bc-docproject="${esc(String(d.project ?? ''))}" draggable="true"
     data-bc-doc-title="${esc(d.title ?? '')}">
     <!--
       THE SAME DRAWING THE GALLERY USES. This row drew four lines of text
@@ -1761,7 +1832,7 @@ const docRow = (d, i) => {
     <div class="bcitembody">
       <button type="button" class="bcitemtitle bcitemlink" data-bc-doc-open="${esc(ref)}"
         data-bc-doc-title="${esc(d.title ?? '')}">${esc(d.title)}</button>
-      <span class="bcitemmeta">${esc([bcMini.kindWordOf(d), d.origin, d.size, d.when].filter(Boolean).join(' · '))}</span>
+      <span class="bcitemmeta">${docsrc.mark(d, esc)}${esc([bcMini.kindWordOf(d), d.origin, d.size, d.when].filter(Boolean).join(' · '))}${docsrc.versionChip(d, esc)}${docsrc.projectChip(d, esc)}</span>
     </div>
     <span class="bcpmeta">${esc(opensAs(d))}</span>
   </div>`
@@ -1788,6 +1859,51 @@ const opensAs = (d) => {
   return 'Details'
 }
 
+/*
+  THE FILTER BAR: search, where it came from, what kind of file.
+
+  Only the sources that actually have a document are offered, with a count, so
+  the bar describes this project rather than every connector there could be.
+  The state is a per-viewer convenience (which way you like to look at a shelf),
+  so it lives in this browser, and it is read here and written by wire.js, which
+  is the one place that touches it.
+*/
+const docFilterBar = (p, every, f) => {
+  const by = docsrc.counts(every)
+  const present = docsrc.SOURCES.filter((s) => by.has(s.id))
+  const types = docsrc.TYPES.filter((t) => every.some((d) => d.typeKey === t.id))
+  const chip = (id, label, n) =>
+    `<button type="button" class="bcsrcchip${f.source === id ? ' is-on' : ''}" data-bc-docsrc="${esc(id)}"
+      aria-pressed="${f.source === id ? 'true' : 'false'}">${esc(label)}${n === undefined ? '' : ` <span class="bcsrcn">${String(n)}</span>`}</button>`
+  return `<div class="bcdocfilter" role="search" aria-label="Find and filter these documents">
+    <label class="bcdocfind"><span class="bcvh">Search these documents</span>
+      <input type="search" class="bcinput bcdocq" data-bc-docq placeholder="Search by name, source or tag" value="${esc(f.q)}" autocomplete="off">
+    </label>
+    <span class="bcsrcchips" role="group" aria-label="Where they came from">
+      ${chip('all', 'All', every.length)}
+      ${present.map((s) => chip(s.id, s.short, by.get(s.id))).join('')}
+    </span>
+    ${
+      (listed().length > 1)
+        ? `<label class="bcdoctype"><span class="bcvh">Which projects</span>
+            <select class="bcdocsortpick" data-bc-docscope aria-label="Which projects">
+              <option value="project"${f.scope === 'all' ? '' : ' selected'}>This project</option>
+              <option value="all"${f.scope === 'all' ? ' selected' : ''}>All projects</option>
+            </select></label>`
+        : ''
+    }
+    ${
+      types.length > 1
+        ? `<label class="bcdoctype"><span class="bcvh">Kind of file</span>
+            <select class="bcdocsortpick" data-bc-doctype aria-label="Kind of file">
+              <option value="all">All types</option>
+              ${types.map((t) => `<option value="${esc(t.id)}"${f.type === t.id ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}
+            </select></label>`
+        : ''
+    }
+  </div>`
+}
+
 const documentsSurface = (p) => {
   /*
     THE SAME ORDER THE MINIATURE USES (§§30, 34).
@@ -1796,8 +1912,20 @@ const documentsSurface = (p) => {
     rather than two implementations of it -- which is §30's requirement stated
     as an architecture rather than as a promise.
   */
-  const how = bcDocOrder.mode(p.slug)
-  const docs = bcDocOrder.ordered(p.slug, p.documents ?? [], how)
+  const f = docsrc.filterOf(p.slug)
+  /*
+    ALL PROJECTS (HQ-DOC-015: sort and filter by project). The same logical list, assembled from every project's own
+    documents, each carrying its project's name. Nothing is merged across projects: the same Drive file in two
+    projects is two items, because a project is part of what a document in Team HQ belongs to.
+  */
+  const several = listed().length > 1
+  const scopeAll = several && f.scope === 'all'
+  const every = scopeAll
+    ? listed().flatMap((q) => bcMini.docsOf(q).map((d) => ({ ...d, project: q.slug, projectName: q.name })))
+    : bcMini.docsOf(p)
+  // A custom order is one project's arrangement; across projects the honest default is by project.
+  const how = scopeAll && bcDocOrder.mode(p.slug) === 'custom' ? 'project' : bcDocOrder.mode(p.slug)
+  const docs = bcDocOrder.ordered(p.slug, docsrc.applyFilter(every, f), how)
   const view = docsView()
   return `${crumbFor(p, 'documents')}
     <div class="bcrecordhead">
@@ -1816,13 +1944,14 @@ const documentsSurface = (p) => {
           ${button('Thumbnails', { 'data-bc-docview': 'wall', 'aria-pressed': view === 'wall' ? 'true' : 'false' })}
           ${button('List', { 'data-bc-docview': 'list', 'aria-pressed': view === 'list' ? 'true' : 'false' })}
         </span>
-        ${bcMini.sortControl(p.slug, how, 'full')}
+        ${bcMini.sortControl(p.slug, how, 'full', scopeAll)}
         ${button('Add a file', { kind: 'primary', 'data-bc-upload': '1' })}
       </span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       What the team wrote, what you uploaded, and what came in from connected sources.
     </p>
+    ${docFilterBar(p, every, f)}
     <!--
       WHERE THE FILE IS COMING FROM.
 
@@ -1856,7 +1985,15 @@ const documentsSurface = (p) => {
     </form>
     ${bcDrive.panel()}
     ${
-      docs.length === 0
+      docs.length === 0 && every.length > 0
+        ? empty(
+            {
+              title: 'Nothing matches',
+              body: 'No document fits that search and those filters. Clear them to see everything again.',
+            },
+            button('Clear filters', { 'data-bc-docclear': '1' }),
+          )
+        : docs.length === 0
         ? empty(
             {
               title: 'Nothing filed yet',
@@ -1865,8 +2002,8 @@ const documentsSurface = (p) => {
             button('Add a file', { kind: 'primary', 'data-bc-upload': '1' }),
           )
         : view === 'list'
-          ? `<div class="bclist" data-bc-docdrop="${esc(p.slug)}">${docs.map((d, i) => docRow(d, i)).join('')}</div>`
-          : `<div class="bcdocs bcdocs--wall" data-bc-docdrop="${esc(p.slug)}">${bcMini.docThumbs(docs)}</div>`
+          ? `<div class="bclist" data-bc-docdrop="${esc(p.slug)}">${docs.map((d, i) => docRow(d, i)).join('')}</div><p class="bcpmeta" data-bc-docnone hidden>No document fits that search.</p>`
+          : `<div class="bcdocs bcdocs--wall" data-bc-docdrop="${esc(p.slug)}">${bcMini.docThumbs(docs)}</div><p class="bcpmeta" data-bc-docnone hidden>No document fits that search.</p>`
     }`
 }
 
@@ -2003,6 +2140,7 @@ const contactRecord = (p, c, i) => {
         .join('')}
       <div class="bcrow">
         ${button('Save changes', { kind: 'primary', 'data-bc-contact-save': esc(key) })}
+        ${button('Remove contact', { 'data-bc-contact-away': esc(key) })}
         <span class="bcsaidhere" data-bc-contact-said role="status" aria-live="polite"></span>
       </div>
     </form>`
@@ -2195,7 +2333,8 @@ const sourcesSurface = (p) => {
             button('Add Source', { kind: 'primary', 'data-bc-source-add': '1' }),
           )
         : `<div class="bcsources bcsources--full">${ss.map((s, i) => sourceRow(s, i)).join('')}</div>`
-    }`
+    }
+    ${websrc.block(p)}`
 }
 
 /** One source, with the facts the office actually holds about it. */
@@ -2325,17 +2464,50 @@ const addSourceSurface = (p) => {
   The same two defects as the to-do rows, on the surface whose whole subject
   is when things happened.
 */
+/*
+  FILTERS FOR THE ACTIVITY LIST (4 October). Only the filters the data can
+  honestly answer are offered: a filter whose every result would be empty is a
+  dead control. Who did it is read from `who` (Grant, or a member of the team),
+  the door it came through from `via`, and what it touched from `category`.
+*/
+const ACT_FILTERS = [
+  { id: 'all', name: 'Everything', test: () => true },
+  { id: 'people', name: 'People', test: (a) => ['grant', 'you'].includes(String(a.who ?? '').toLowerCase()) },
+  { id: 'team', name: 'The team', test: (a) => !['grant', 'you', ''].includes(String(a.who ?? '').toLowerCase()) },
+  { id: 'integration', name: 'Integrations', test: (a) => ['ChatGPT', 'Claude', 'External assistant', 'Telegram', 'Slack', 'Voice'].includes(String(a.via ?? '')) },
+  { id: 'sync', name: 'Sync', test: (a) => a.category === 'sync' || /sync/i.test(String(a.via ?? '')) },
+  { id: 'document', name: 'Documents', test: (a) => a.category === 'document' },
+  { id: 'task', name: 'Tasks', test: (a) => a.category === 'task' },
+  { id: 'calendar', name: 'Calendar', test: (a) => a.category === 'calendar' },
+]
 const activitySurface = (p) => {
   const acts = p.activity ?? []
+  const offered = ACT_FILTERS.filter((f) => f.id === 'all' || acts.some(f.test))
+  const want = state().bcActFilter ?? 'all'
+  const on = offered.some((f) => f.id === want) ? want : 'all'
+  const test = (offered.find((f) => f.id === on) ?? offered[0]).test
+  const shown = acts.filter(test)
   return `${crumbFor(p, 'activity')}
     <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
     <p class="bcpmeta bcprose bcgap-l">
-      What has happened on this project, most recent first.
+      What has happened on this project, most recent first. Each line says who did it and, where it is known, which door it came through.
     </p>
+    ${
+      offered.length > 1
+        ? `<div class="bcsrcchips bcactfilter" role="group" aria-label="Filter the activity">${offered
+            .map(
+              (f) =>
+                `<button type="button" class="bcsrcchip${f.id === on ? ' is-on' : ''}" data-bc-actf="${esc(f.id)}" aria-pressed="${f.id === on ? 'true' : 'false'}">${esc(f.name)}${f.id === 'all' ? '' : ` <span class="bcsrcn">${String(acts.filter(f.test).length)}</span>`}</button>`,
+            )
+            .join('')}</div>`
+        : ''
+    }
     ${
       acts.length === 0
         ? empty({ title: 'Nothing yet', body: 'What people and the team do on this project is listed here.' })
-        : bcMini.timelineMini(p, { items: acts.length })
+        : shown.length === 0
+          ? empty({ title: 'Nothing matches', body: 'Nothing on this project fits that filter.' }, button('Show everything', { 'data-bc-actf': 'all' }))
+          : bcMini.timelineMini({ ...p, activity: shown }, { items: shown.length })
     }`
 }
 
@@ -2415,7 +2587,7 @@ const boardSurface = (p) => {
   return `${crumbFor(p, 'board')}
     <div class="bcrecordhead">
       <h1>${esc(toolById('board')?.name ?? 'Card Table')}</h1>
-      <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
+      <span class="bcactions">${button('The list instead', { kind: 'outline', 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       The same to-dos, by stage. Drag a card to another column, or choose its stage on the card.
@@ -2462,113 +2634,22 @@ const boardSurface = (p) => {
  * and `starts_on`, both already returned by `app.studio_tasks`.
  * ======================================================================== */
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
-
-const monthGrid = (ym, marks, today) => {
-  const [y, m] = ym.split('-').map(Number)
-  const first = new Date(Date.UTC(y, m - 1, 1))
-  const lead = (first.getUTCDay() + 6) % 7
-  const len = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  const cells = []
-  for (let i = 0; i < lead; i += 1) cells.push('<span class="bccal-pad"></span>')
-  for (let d = 1; d <= len; d += 1) {
-    const iso = `${ym}-${String(d).padStart(2, '0')}`
-    const n = marks.get(iso) ?? 0
-    const cls = ['bccal-day']
-    if (n > 0) cls.push('bccal-day--has')
-    if (iso === today) cls.push('bccal-day--today')
-    cells.push(
-      `<span class="${cls.join(' ')}"${n > 0 ? ` title="${esc(n === 1 ? '1 thing due' : `${n} things due`)}"` : ''}>${d}</span>`,
-    )
-  }
-  return `<div class="bccal">
-    <div class="bccalmonth">${esc(`${MONTHS[m - 1]} ${String(y)}`)}</div>
-    <div class="bccalgrid">
-      ${DOW.map((d) => `<span class="bccal-dow">${esc(d)}</span>`).join('')}
-      ${cells.join('')}
-    </div>
-  </div>`
-}
-
 const scheduleSurface = (p) => {
   const all = (p.tasks ?? []).filter((t) => t.milestone !== true)
-  const dated = all
-    .map((t) => ({ t, iso: String(t.due_on ?? t.starts_on ?? '').slice(0, 10) }))
-    .filter((x) => x.iso !== '' && !Number.isNaN(new Date(`${x.iso}T00:00:00Z`).getTime()))
-    .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0))
   const undated = all.filter((t) => String(t.due_on ?? t.starts_on ?? '') === '')
-  const now = new Date()
-  const today = now.toISOString().slice(0, 10)
-  const marks = new Map()
-  for (const { iso } of dated) marks.set(iso, (marks.get(iso) ?? 0) + 1)
-  /*
-    The months that HAVE something in them, plus this one. A month stepper
-    would need state the router does not carry, and scrolling a short list of
-    real months is a better answer than paging through empty ones.
-  */
-  const months = [...new Set([today.slice(0, 7), ...dated.map((x) => x.iso.slice(0, 7))])].sort()
-  const byMonth = new Map()
-  for (const d of dated) {
-    const k = d.iso.slice(0, 7)
-    if (!byMonth.has(k)) byMonth.set(k, [])
-    byMonth.get(k).push(d)
-  }
   return `${crumbFor(p, 'schedule')}
     <div class="bcrecordhead">
       <h1>${esc(toolById('schedule')?.name ?? 'Schedule')}</h1>
-      <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
+      <span class="bcactions">${button('The list instead', { kind: 'outline', 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      When this project's to-dos are due. Anything without a date is listed at the foot.
+      This project's events and the to-dos that fall due, by day, week or month. To-dos without a date are listed at the foot.
     </p>
+    ${cal.block(p, { full: true })}
     ${
-      dated.length === 0 && undated.length === 0
-        ? empty(
-            {
-              title: 'Nothing is scheduled',
-              body: 'A to-do with a date appears here, on its day. Give one a date and this fills in.',
-            },
-            button('Go to the to-dos', { kind: 'primary', 'data-bc-go': at(`/p/${p.slug}/tasks`) }),
-          )
-        : months
-            .map((ym) => {
-              const items = byMonth.get(ym) ?? []
-              return `<section class="bcmonth">
-                ${monthGrid(ym, marks, today)}
-                <div class="bcagenda">
-                  <h2 class="bcagendamonth">${esc(`${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`)}</h2>
-                  ${
-                    items.length === 0
-                      ? `<p class="bcpmeta">Nothing is due this month.</p>`
-                      : items
-                          .map(
-                            ({ t, iso }) => `<div class="bcagendaitem${bcMini.isLate(t) ? ' bcagendaitem--late' : ''}">
-                              <span class="bcagendadate">
-                                <span class="bcagendadd">${esc(String(Number(iso.slice(8, 10))))}</span>
-                                <span class="bcagendamm">${esc(MONTHS[Number(iso.slice(5, 7)) - 1].slice(0, 3))}</span>
-                              </span>
-                              <button type="button" class="bcitemtitle bcitemlink bcagendawhat"
-                                data-bc-task-open="${esc(taskKey(t))}">${esc(t.title)}</button>
-                              <!--
-                                IN WORDS AS WELL AS IN COLOUR. A date box with
-                                a different border is not a statement anybody
-                                can read out, and the one thing a schedule owes
-                                a person is which of these is already late.
-                              -->
-                              ${bcMini.isLate(t) ? status('Overdue', 'blocked') : ''}
-                              ${t.who ? `<span class="bcagendawho">${esc(whoName(t.who))}</span>` : ''}
-                            </div>`,
-                          )
-                          .join('')
-                  }
-                </div>
-              </section>`
-            })
-            .join('') +
-          (undated.length === 0
-            ? ''
-            : `<section class="bcundated">
+      undated.length === 0
+        ? ''
+        : `<section class="bcundated">
                 <h2>No date yet</h2>
                 <p class="bcpmeta bcprose">
                   Work with nothing to be due by. Giving one a date puts it on
@@ -2605,7 +2686,7 @@ const scheduleSurface = (p) => {
                     )
                     .join('')}
                 </div>
-              </section>`)
+              </section>`
     }`
 }
 
@@ -2624,6 +2705,7 @@ const scheduleSurface = (p) => {
  * ======================================================================== */
 
 const chatSurface = (p) => {
+  ctx?.needChat?.(p.slug)
   const said = ctx?.chatFor?.(p.slug) ?? []
   const shown = said.length > 0 ? said : (p.chat ?? [])
   const real = ctx?.chatIsReal?.(p.slug) === true
@@ -2801,9 +2883,21 @@ const outputRecord = (p) => {
     }`
 }
 
+/*
+  A requested import that is still waiting. When the office has tried to fetch the file and could not, it says why and
+  offers the press again (the same press: it starts a new fetch only when none is running). When nothing has failed it
+  says the office is fetching, rather than the older "the next time it reads this file", which promised a read nothing
+  had scheduled. Plain words in this comment: it sits near template literals.
+*/
+const importWaiting = (d) =>
+  d.import_error
+    ? `<span class="bcpmeta bcximporterr">The office could not fetch this file yet: ${esc(d.import_error)}</span>
+       ${button('Try the import again', { 'data-bc-docimport': esc(String(d.id)) })}`
+    : '<span class="bcpmeta">Import requested. The office is fetching the file and will keep a copy in Team HQ when it arrives.</span>'
+
 const documentRecord = (p) => {
   const want = state().bcDoc
-  const docs = p.documents ?? []
+  const docs = bcMini.docsOf(p)
   /*
     THE REFERENCE IS THE FILE, AND TWO DOCUMENTS CAN POINT AT ONE FILE.
 
@@ -2828,51 +2922,83 @@ const documentRecord = (p) => {
         button('Back to Docs & Files', { 'data-bc-go': at(`/p/${p.slug}/documents`) }),
       )}`
   }
+  const e = docsrc.enrich(d)
   const isAudio = bcMini.isAudioDoc(d)
   const file = d.file ?? ''
+  const ref = bcMini.docRef(d)
+  const when_ = (iso) => (iso === null || iso === undefined || iso === '' ? '' : when.precise(iso))
   const facts = [
     ['What it is', bcMini.kindWordOf(d)],
+    ['Source', docsrc.nameOfSource(e.src)],
     ['Size', d.size ?? ''],
     ['Where it came from', d.origin ?? ''],
-    ['When', d.when ?? ''],
+    ['Added', when_(d.uploaded ?? d.added) || (d.when ?? '')],
+    ['Modified', when_(e.modified)],
+    ['Written', when_(d.created)],
+    ['Version', d.pending_version ? (docsrc.versionLabel(d)?.text ?? '') : d.version_count > 1 ? `${String(d.current_version ?? d.version_count)} of ${String(d.version_count)}` : ''],
+    ['Also held in', (e.alsoIn ?? []).map(docsrc.nameOfSource).join(', ')],
+    ['In Team HQ', e.src === 'drive' || e.src === 'notebook' || e.src === 'notion' || e.src === 'web' ? (d.imported === true ? 'A durable copy is kept' : 'Read from the source; no copy kept') : ''],
   ].filter(([, v]) => v !== '' && v !== undefined)
+  const sourceHref = docsrc.sourceUrl(e)
+  const canImport =
+    String(d.id ?? '') !== '' &&
+    (d.fromOffice === true ? d.import_available === true && d.import_state !== 'imported' : ['drive', 'notebook', 'notion', 'web'].includes(e.src) && d.imported !== true)
+  const importPending = d.import_state === 'pending'
+  /*
+    READ ON DEMAND, OR IMPORTED. An external document Team HQ holds no file of is read from its source when this opens
+    (the gateway decides what that means for the format); an imported one is Team HQ's own copy. Neither is the other,
+    and the line under the title says which, quietly, so a person is never left guessing whether a copy exists.
+  */
+  const onDemand =
+    d.fromOffice === true &&
+    d.imported !== true &&
+    d.hasFile !== true &&
+    String(d.id ?? '') !== '' &&
+    ['drive', 'notebook', 'notion', 'web'].includes(e.src)
+  const sourceName = docsrc.nameOfSource(e.src)
+  const provenanceLine =
+    d.imported === true && d.fromOffice === true
+      ? '<p class="bcpvline" data-bc-pvline="imported">Imported copy · kept in Team HQ, whatever happens to the original</p>'
+      : onDemand
+        ? `<p class="bcpvline" data-bc-pvline="ondemand">${esc(e.src === 'drive' ? 'Read from Google Drive on demand' : `Text indexed from ${sourceName}`)} · not copied to Team HQ</p>`
+        : ''
   return `<div class="bcrecordhead">
       <h1>${esc(d.title ?? 'Document')}</h1>
+      <span class="bcactions">
+        ${sourceHref === '' ? '' : `<a class="bcbtn bcbtn--outline" href="${esc(sourceHref)}" target="_blank" rel="noopener" data-bc-opensource>Open source</a>`}
+        ${canImport ? (importPending ? importWaiting(d) : button('Import to Team HQ', { 'data-bc-docimport': esc(String(d.id)) })) : ''}
+      </span>
     </div>
-    ${
-      isAudio && file !== ''
-        ? `<div class="bcplayer">
-            <audio controls preload="metadata" src="${esc(file)}" data-bc-audio="1"
-              aria-label="${esc(`Play ${d.title ?? 'the recording'}`)}"></audio>
-          </div>`
-        : ''
-    }
-    ${
-      !isAudio && file !== ''
-        ? `<p class="bcpmeta bcprose">
-            ${esc('The file itself opens in a new tab, at full size.')}
-          </p>
-          <div class="bcrow">
-            ${button('Open the file', { kind: 'primary', 'data-bc-doc-tab': esc(file) })}
-            ${button('Download', { 'data-bc-doc-save': esc(file), 'data-bc-doc-title': esc(d.title ?? '') })}
-          </div>`
-        : ''
-    }
-    ${
-      file === ''
-        ? `<p class="bcpmeta bcprose">
-            There is no file behind this one to open — it is a record of
-            something the office knows about rather than something it holds.
-            What it knows is below.
-          </p>`
-        : ''
-    }
-    <h2 class="bcsubhead">Details</h2>
-    <dl class="bcfacts bcgap-l">
-      ${facts
-        .map(([k, v]) => `<div class="bcfact"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`)
-        .join('')}
-    </dl>`
+    ${provenanceLine}
+    <div class="bcdocgrid">
+      <div class="bcdocpreview" role="region" tabindex="0" aria-label="${esc(`Preview of ${d.title ?? 'the document'}`)}" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-doctitle="${esc(d.title ?? '')}"${
+        onDemand && !isAudio
+          ? ` data-bc-docmode="ondemand" data-bc-docid="${esc(String(d.id))}" data-bc-docproject="${esc(String(p.slug ?? ''))}" data-bc-docsourcename="${esc(sourceName)}" data-bc-docsourceurl="${esc(sourceHref)}" data-bc-docimportable="${canImport && !importPending ? '1' : ''}"`
+          : ''
+      }>
+        ${
+          isAudio && file !== ''
+            ? `<div class="bcplayer">
+                <audio controls preload="metadata" src="${esc(file)}" data-bc-audio="1"
+                  aria-label="${esc(`Play ${d.title ?? 'the recording'}`)}"></audio>
+              </div>`
+            : '<p class="bcpmeta" data-bc-docpreviewnote>Loading the preview…</p>'
+        }
+      </div>
+      <aside class="bcdocside" aria-label="About this document">
+        <h2 class="bcsubhead">Details</h2>
+        <dl class="bcfacts">
+          ${facts.map(([k, v]) => `<div class="bcfact"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
+        </dl>
+        <div class="bcrow bcdocacts">
+          ${!isAudio && file !== '' ? button('Open the file', { 'data-bc-doc-tab': esc(file) }) : ''}
+          ${file !== '' ? button('Download', { 'data-bc-doc-save': esc(file), 'data-bc-doc-title': esc(d.title ?? '') }) : ''}
+        </div>
+        <p class="bcpmeta" data-bc-docsay role="status"></p>
+        <div class="bcdocversions" data-bc-docversions="${esc(String(d.id ?? ''))}" hidden></div>
+        ${e.src === 'generated' && String(d.id ?? '') !== '' ? `<div class="bcdocstyle" data-bc-docstyle="${esc(String(d.id))}" data-bc-docproject="${esc(String(p.slug ?? ''))}" hidden></div>` : ''}
+      </aside>
+    </div>`
 }
 
 /*
@@ -3153,7 +3279,17 @@ const myTasks = () => {
 }
 
 const allActivity = () => {
+  /*
+    Newest first ACROSS projects. This was each project's list one after the
+    other, so the page read as "everything in the first project, then
+    everything in the second" and a person could not tell what had just
+    happened. Items with no instant keep their place after the dated ones.
+  */
   const rows = PROJECTS.flatMap((p) => (p.activity ?? []).map((a) => ({ ...a, project: p.name })))
+    .map((a, i) => ({ a, i, t: a.at ? Date.parse(a.at) : Number.NaN }))
+    .sort((x, y) => (Number.isNaN(y.t) ? -1 : 0) - (Number.isNaN(x.t) ? -1 : 0) || (y.t || 0) - (x.t || 0) || x.i - y.i)
+    .map((x) => x.a)
+    .slice(0, 80)
   return `<h1 class="bcsectiontitle">Activity</h1>
     ${
       rows.length === 0
@@ -3213,7 +3349,7 @@ const marked = (text, query) => {
   showing. Access control is the office's: this searches what it sent us.
 */
 
-const KINDS = ['Everything', 'Tasks', 'Documents', 'People', 'Sources', 'Outputs', 'Projects']
+const KINDS = ['Everything', 'Tasks', 'Documents', 'People', 'Sources', 'Outputs', 'Projects', ...finder.KINDS]
 
 const searchHits = (q, kind, only) => {
   const needle = q.trim().toLowerCase()
@@ -3224,19 +3360,19 @@ const searchHits = (q, kind, only) => {
 
   for (const p of PROJECTS) {
     if (only !== null && p.slug !== only) continue
-    if (want('Projects') && match(p.name, p.purpose)) {
+    if (want('Projects') && p.slug !== 'unnamed' && match(p.name, p.purpose)) {
       hits.push({ kind: 'Project', project: p.name, title: p.name, excerpt: p.purpose ?? '', who: '', when: '', to: at(`/p/${p.slug}`) })
     }
     if (want('Tasks')) {
       for (const t of p.tasks ?? []) {
         if (!match(t.title, t.note, t.who)) continue
-        hits.push({ kind: 'Task', project: p.name, title: t.title, excerpt: t.note ?? '', who: whoName(t.who), when: bcMini.dueWords(t), to: at(`/p/${p.slug}/tasks`) })
+        hits.push({ kind: 'Task', project: p.name, open: { type: 'task', key: todos.keyOf(t) }, title: t.title, excerpt: t.note ?? '', who: whoName(t.who), when: bcMini.dueWords(t), to: at(`/p/${p.slug}/tasks`) })
       }
     }
     if (want('Documents')) {
-      for (const d of p.documents ?? []) {
-        if (!match(d.title, d.kind, d.origin)) continue
-        hits.push({ kind: 'Document', project: p.name, title: d.title, excerpt: [d.kind, d.size].filter(Boolean).join(' · '), who: d.origin ?? '', when: d.when ?? '', to: at(`/p/${p.slug}/documents`) })
+      for (const d of bcMini.docsOf(p)) {
+        if (!match(d.title, d.kind, d.origin, docsrc.nameOfSource(d.src))) continue
+        hits.push({ kind: d.src === 'web' ? 'Web page' : 'Document', project: p.name, open: { type: 'doc', ref: bcMini.docRef(d), title: d.title }, title: d.title, excerpt: [d.kind, d.size].filter(Boolean).join(' · '), who: d.origin ?? '', when: d.when ?? '', to: at(`/p/${p.slug}/documents`) })
       }
     }
     if (want('People')) {
@@ -3266,6 +3402,13 @@ const searchHits = (q, kind, only) => {
       hits.push({ kind: 'Specialist', project: '', title: c.name, excerpt: c.role ?? '', who: '', when: '', to: at('/') })
     }
   }
+  hits.push(
+    ...finder.extra(q, kind, only, {
+      projects: () => PROJECTS,
+      knownEvents: (slug) => cal.knownEvents(slug),
+      chatFor: (slug) => ctx?.chatFor?.(slug) ?? [],
+    }),
+  )
   return hits
 }
 
@@ -3286,7 +3429,7 @@ const search = () => {
       </div>
       <div class="bcinline-list" role="group" aria-label="Filter by project">
         <button type="button" data-bc-only="" aria-pressed="${only === null ? 'true' : 'false'}">Every project</button>
-        ${PROJECTS.map(
+        ${listed().map(
           (p) =>
             `<button type="button" data-bc-only="${esc(p.slug)}" aria-pressed="${only === p.slug ? 'true' : 'false'}">${esc(p.name)}</button>`,
         ).join('')}
@@ -3524,6 +3667,7 @@ const notLive = () => {
   return `<div class="bcnotlive${s.tone === '' ? '' : ' bcnotlive--bad'}" role="status">
     <b>${esc(s.label)}</b>
     <span>${esc(s.say)}</span>
+    ${canRetry && typeof source.why === 'string' && source.why !== '' ? `<span data-bc-why>${esc(source.why)}</span>` : ''}
     ${canRetry ? button('Try again', { 'data-bc-retry-office': '1' }) : ''}
     <!--
       SIGNING IN, and there is no office token in it anywhere.
@@ -3555,7 +3699,15 @@ const notLive = () => {
   </div>`
 }
 
-export const html = () =>
+export const html = () => {
+  // Arriving, and setting up the office, are their own screens with none of the shell's navigation (bc/account.js).
+  const screen = account.mode()
+  if (screen === 'entry') return account.entry()
+  if (screen === 'setup') return account.setup()
+  return shell()
+}
+
+const shell = () =>
   `<a class="bcskip" href="#bcmain">Skip to main content</a>
   ${topRow()}
   ${notLive()}

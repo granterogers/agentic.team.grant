@@ -15,6 +15,7 @@
  * Nothing leaves this machine. Every property is read from what the page
  * actually POSTED, never from what the screen says.
  */
+import '../../src/safety/arm.ts'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -252,26 +253,29 @@ const dock = async (page: Page, text: string): Promise<void> => {
   await go(page, '/basecamp/p/provenance-b', '.bcmain')
   await dock(page, 'From the dock on B')
   await go(page, '/basecamp', '[data-bc-go^="/p/"]')
-  /* What the open dock SHOWS, read before sending: the header and the note's project. */
-  const shows = (await page.evaluate(
+  /*
+    What the open dock SHOWS on the portfolio (#416). No project is loaded there, so the dock does not pick one for the
+    person (it used to keep B's thread, and before that fall to Unnamed): it offers a choice and has nothing to type into.
+  */
+  const onPortfolio = (await page.evaluate(
     inPage(
-      "return (document.querySelector('#dock [data-bc-noteproject]')?.getAttribute('data-bc-noteproject') ?? '') + ' | ' + (document.querySelector('#dock .dockhead')?.textContent ?? '').replace(/\\s+/g, ' ').trim()",
+      "return { composer: document.querySelectorAll('#dock [data-dockform]').length, picks: [...document.querySelectorAll('#dock [data-dock-pick]')].map((b) => b.getAttribute('data-dock-pick')), head: (document.querySelector('#dock .dockhead')?.textContent ?? '').replace(/\\s+/g, ' ').trim() }",
     ),
-  )) as string
-  await dock(page, 'From the dock on the portfolio')
+  )) as { composer: number; picks: string[]; head: string }
   const docked = turns.slice(before)
   check('the dock on B states B', who(docked[0]?.project) === 'B', who(docked[0]?.project))
-  /*
-    Left open on the way back to the portfolio, the dock goes on SHOWING B's
-    thread - its header names B and its voice note files there - so B is what
-    it must state: the project on screen, never one the office has to infer.
-    (The portfolio draws no dock button of its own; #149's Unnamed rule is for
-    a surface with no thread open, which the backend proof covers.)
-  */
   check(
-    'the dock left open on the portfolio states the project whose thread it shows',
-    shows.startsWith('provenance-b |') && who(docked[1]?.project) === 'B',
-    `shows ${shows}, stated ${who(docked[1]?.project)}`,
+    'with no project loaded the dock offers a choice of project and nothing to type into',
+    onPortfolio.composer === 0 &&
+      onPortfolio.picks.includes('provenance-a') &&
+      onPortfolio.picks.includes('provenance-b') &&
+      /No project open/.test(onPortfolio.head),
+    JSON.stringify(onPortfolio),
+  )
+  check(
+    'and nothing reached the office while no project was loaded',
+    docked.length === 1,
+    `${String(docked.length)} turn(s)`,
   )
   check('nothing threw', thrown.length === 0, thrown.join(' | '))
   await ctx.close()
@@ -447,7 +451,7 @@ const LOOPBACK = `
   await ctx.close()
 }
 
-/* --- 8. an open dock keeps its thread through navigation and Send (#376) --- */
+/* --- 8. an open dock follows the page it is on (#416, which replaced #376) --- */
 /*
   The failure: open the dock on B, go back to the portfolio with it still open,
   send. The message was filed under B - correctly, it was B's thread on screen -
@@ -492,49 +496,59 @@ const mineCount = (v: DockView, text: string): number =>
   await go(page, '/basecamp/p/provenance-b', '.bcmain')
   await dock(page, 'Opened on B (dock-376)')
 
-  // The old failure, step for step: open on B, navigate, send.
+  // Away from any project and back through the picker (#416): the dock asks which project, and choosing OPENS it.
   await go(page, '/basecamp', '[data-bc-go^="/p/"]')
   const before = await view(page)
-  const text1 = 'Sent from the portfolio (dock-376)'
+  check(
+    'on the portfolio the dock asks which project and has no composer',
+    before.note === '' &&
+      /No project open/.test(before.head) &&
+      (await page.locator('#dock [data-dockform]').count()) === 0,
+    `"${before.head}"`,
+  )
+  await page.locator('#dock [data-dock-pick="provenance-b"]').click()
+  await page.waitForTimeout(900)
+  const text1 = 'Sent after choosing B (dock-416)'
   await sendInDock(page, text1)
   const after = await view(page)
   check(
-    'the thread visible before Send is the thread visible after it (#376)',
-    before.note === 'provenance-b' && after.note === before.note && after.head === before.head,
-    `before ${before.note} "${before.head}" -> after ${after.note} "${after.head}"`,
+    'choosing B opens B, and the dock is B',
+    after.note === 'provenance-b' && /Provenance B/.test(after.head),
+    `${after.note} "${after.head}"`,
   )
   check(
-    'and the message just sent is still on screen, with the one before it',
-    has(after, text1) && has(after, 'Opened on B (dock-376)'),
-    after.said.join(' | ').slice(0, 300),
-  )
-  check(
-    'the page stated the project the dock shows',
-    who(turns.at(-1)?.project) === 'B' && turns.at(-1)?.said === text1,
+    'the message is on screen with the one before it, and the page stated B',
+    has(after, text1) &&
+      has(after, 'Opened on B (dock-376)') &&
+      who(turns.at(-1)?.project) === 'B' &&
+      turns.at(-1)?.said === text1,
     `${who(turns.at(-1)?.project)}: ${String(turns.at(-1)?.said)}`,
   )
 
-  // Onto ANOTHER project with the dock still open: it stays on B, and says so.
+  // Onto ANOTHER project with the dock still open: it FOLLOWS the page (#416), so nothing is ever filed under a project
+  // the person is not looking at, and there is nothing to move.
   await go(page, '/basecamp/p/provenance-a', '.bcmain')
   const onA = await view(page)
-  const text2 = 'Sent while looking at A (dock-376)'
+  const text2 = 'Sent while looking at A (dock-416)'
   await sendInDock(page, text2)
   const onA2 = await view(page)
   check(
-    'navigating to A with the dock open does not change where it files',
-    onA.note === 'provenance-b' &&
-      onA2.note === 'provenance-b' &&
-      who(turns.at(-1)?.project) === 'B',
+    'navigating to A with the dock open moves the dock to A',
+    onA.note === 'provenance-a' &&
+      onA2.note === 'provenance-a' &&
+      who(turns.at(-1)?.project) === 'A',
     `shows ${onA.note}, then ${onA2.note}, stated ${who(turns.at(-1)?.project)}`,
   )
   check(
-    'and its header says the thread is not the page behind it',
-    /Provenance B/.test(onA2.head) && /Filed under/.test(onA2.head),
+    'and its header names the page it is on, with nothing offered to move it',
+    /Provenance A/.test(onA2.head) &&
+      !/Filed under/.test(onA2.head) &&
+      (await page.locator('[data-dock-here]').count()) === 0,
     onA2.head,
   )
   check(
-    'and the message is visible there too',
-    has(onA2, text2),
+    'and the message is visible there, and the one sent on B is not',
+    has(onA2, text2) && !has(onA2, text1),
     onA2.said.join(' | ').slice(0, 300),
   )
 
@@ -549,27 +563,27 @@ const mineCount = (v: DockView, text: string): number =>
   const afterNote = await view(page)
   const noteTurn = turns.slice(beforeNote)
   check(
-    'a voice note from the same dock is stated as the same project',
-    noteTurn.length === 1 && who(noteTurn[0]?.project) === 'B',
+    "a voice note from the same dock is stated as the page's project",
+    noteTurn.length === 1 && who(noteTurn[0]?.project) === 'A',
     noteTurn.map((t) => `${who(t.project)}: ${t.said}`).join(' | ') || 'no note reached the door',
   )
   check(
-    'and it lands in the thread on screen, which is still B',
-    afterNote.note === 'provenance-b' && has(afterNote, 'What still needs doing on this project?'),
+    'and it lands in the thread on screen, which is A',
+    afterNote.note === 'provenance-a' && has(afterNote, 'What still needs doing on this project?'),
     `${afterNote.note}: ${afterNote.said.slice(-3).join(' | ')}`,
   )
 
-  // Closing and reopening on A is the deliberate change of context.
+  // Closing and reopening the dock on the same page shows the same project: it is the page's, not a remembered one.
   await page.locator('#dock [data-dock-close]').click()
   await page.waitForTimeout(500)
   await page.locator('[data-bc-dock]:visible').first().click({ timeout: 8000 })
   await page.waitForTimeout(600)
   const reopened = await view(page)
-  const text3 = 'Sent after reopening on A (dock-376)'
+  const text3 = 'Sent after reopening on A (dock-416)'
   await sendInDock(page, text3)
   const reopened2 = await view(page)
   check(
-    'closing the dock and opening it on A moves it to A, deliberately',
+    'closing the dock and opening it again on A shows A',
     reopened.note === 'provenance-a' &&
       reopened2.note === 'provenance-a' &&
       who(turns.at(-1)?.project) === 'A' &&
@@ -596,8 +610,7 @@ const mineCount = (v: DockView, text: string): number =>
   await page.waitForTimeout(600)
   await page.locator('[data-bc-dock]:visible').first().click({ timeout: 8000 })
   await page.waitForTimeout(600)
-  await go(page, '/basecamp', '[data-bc-go^="/p/"]')
-  const text = 'A slow question from the portfolio (dock-376)'
+  const text = 'A slow question asked on B (dock-416)'
   await sendInDock(page, text, 1200)
   const waiting = await view(page)
   check(
@@ -626,15 +639,14 @@ const mineCount = (v: DockView, text: string): number =>
   await page.waitForTimeout(600)
   await page.locator('[data-bc-dock]:visible').first().click({ timeout: 8000 })
   await page.waitForTimeout(600)
-  await go(page, '/basecamp', '[data-bc-go^="/p/"]')
-  const text = 'This one fails first, from the dock (dock-376)'
+  const text = 'This one fails first, from the dock (dock-416)'
   await sendInDock(page, text, 1200)
   await page.waitForSelector('#dock [data-chat-retry]', { timeout: 10000 })
   await page.locator('#dock [data-chat-retry]').first().click()
   await page.waitForTimeout(1500)
   const after = await view(page)
   check(
-    'Try again in a dock left open on the portfolio resends to B, once',
+    'Try again in the dock resends to B, once',
     turns.length === 2 && turns.every((t) => who(t.project) === 'B' && t.said === text),
     turns.map((t) => `${who(t.project)}: ${t.said}`).join(' | '),
   )
@@ -669,23 +681,34 @@ const mineCount = (v: DockView, text: string): number =>
   await page.waitForTimeout(600)
   await page.locator('[data-dock]:visible').first().click({ timeout: 8000 })
   await page.waitForTimeout(500)
-  const head0 = (await view(page)).head
-  await sendInDock(page, 'Asked from the portfolio (dock-376)')
-  await go(page, '/classic/p/provenance-a', '#dock [data-dockform]')
-  const onA = await view(page)
-  await sendInDock(page, 'Still the portfolio dock, on A (dock-376)')
-  const onA2 = await view(page)
+  // #416: with no project loaded the dock asks; the general Conversation is one explicit, named choice among them.
+  const asking = await view(page)
+  const picks = await page.locator('#dock [data-dock-pick]').count()
   check(
-    'a dock opened on the portfolio files under Unnamed and says so',
+    'a dock opened on the portfolio asks which project, offering the general conversation by name',
+    /No project open/.test(asking.head) &&
+      picks >= 3 &&
+      (await page.locator('#dock [data-dock-pick="unnamed"]').count()) === 1 &&
+      (await page.locator('#dock [data-dockform]').count()) === 0,
+    `"${asking.head}", ${String(picks)} choices`,
+  )
+  await page.locator('#dock [data-dock-pick="unnamed"]').click()
+  await page.waitForTimeout(600)
+  const head0 = (await view(page)).head
+  await sendInDock(page, 'Asked from the portfolio (dock-416)')
+  check(
+    'choosing the general conversation files under Unnamed and says so',
     /Conversation/.test(head0) && who(turns[0]?.project) === 'Unnamed',
     `"${head0}", stated ${who(turns[0]?.project)}`,
   )
+  await go(page, '/classic/p/provenance-a', '#dock [data-dockform]')
+  const onA = await view(page)
+  await sendInDock(page, 'Now on A (dock-416)')
   check(
-    'opening a project does not move it: still Unnamed, still visible',
-    /Conversation/.test(onA.head) &&
-      who(turns[1]?.project) === 'Unnamed' &&
-      has(onA2, 'Asked from the portfolio (dock-376)') &&
-      has(onA2, 'Still the portfolio dock, on A (dock-376)'),
+    'opening a project moves the dock to that project, and the message is stated as it',
+    /Provenance A/.test(onA.head) &&
+      !/Conversation/.test(onA.head) &&
+      who(turns[1]?.project) === 'A',
     `"${onA.head}", stated ${who(turns[1]?.project)}`,
   )
   check('nothing threw on the default dashboard', thrown.length === 0, thrown.join(' | '))

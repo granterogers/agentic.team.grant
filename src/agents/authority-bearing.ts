@@ -57,8 +57,31 @@ const CONTACT_THEN_PERSON = new RegExp(
 /** Acts whose effect lands outside the office whoever the audience is (money, orders, deletion, publishing). */
 const OUTWARD_ACT =
   /\b(?:pay|transfer|refund|invoice|order|buy|purchase|subscribe|book|reserve|hire|fire|deploy|merge|publish|submit|sign|approve|delete|remove|cancel|upload|push)\s+(?:the\s+|a\s+|an\s+|any\s+|all\s+|my\s+|our\s+)?(?!(?:as|in|is|to|of|for|with|and|or|on|at|it|them)\b)\w+/i
-/** "the word delete" names a word; it does not do it. */
-const QUOTED_WORD = /\b(?:the\s+(?:word|term|phrase)s?|words?\s+like)\s+["'“‘]?[\w-]+["'”’]?/gi
+/** "the word delete" names a word; it does not do it. ("the single word Namaste" is the same thing.) */
+const QUOTED_WORD =
+  /\b(?:the\s+(?:single\s+|one\s+)?(?:word|term|phrase)s?|words?\s+like)\s+["'“‘]?[\w-]+["'”’]?/gi
+
+/*
+  THE OFFICE'S OWN WORDS TO THE PERSON (#417).
+
+  Two ordinary ways of teaching a style rule overlap authority vocabulary, and the cure for each is a PRINCIPLE about what
+  the words are about rather than a longer list of strings:
+
+  1. A trigger that is the office's own reply. "Whenever you reply to me, start with Right" names an event, and `whenever`
+     is what a standing trigger looks like - but the event is the office speaking to the person, so the rule has set
+     nothing running that was not already happening. Only that trigger clause is set aside for the "something running" test.
+     Every other test still reads the whole sentence, so "whenever you reply to me, copy my accountant" is still refused
+     (a contact), "whenever you reply to a client" is still refused (a contact), and "whenever a supplier writes" is still
+     refused (the trigger is somebody else's event, not the office's reply).
+
+  2. "Sign off" as a closing. "Sign off every answer to me with Namaste" is how a message ends; "sign off the invoice" is an
+     act. It is a closing ONLY when what is being closed is the office's own communication, and the noun stays in the
+     sentence so a contact in the same clause ("sign off every email to the supplier") is still seen.
+*/
+const OWN_REPLY_TRIGGER =
+  /\b(?:whenever|each\s+time|every\s+time|any\s+time|when)\s+(?:you|we|i)\s+(?:reply|replies|answer|respond|write\s+back|report|summari[sz]e|brief|explain|speak|talk)\b(?:\s+(?:to\s+)?(?:me|us))?(?:\s+(?:about|on|regarding)\s+(?:the\s+|my\s+|our\s+)?\w+(?:\s+\w+){0,2})?/gi
+const SIGN_OFF_CLOSING =
+  /\bsign(?:ing)?\s+off(?=\s+(?:on\s+)?(?:every|each|all|any|my|your|the)?\s*(?:of\s+)?(?:your\s+|my\s+)?(?:answer|reply|replies|response|message|email|note|update|report|briefing|summary|digest|draft|text)s?\b)/gi
 
 const SETS_SOMETHING_RUNNING =
   /\b(?:every|each)\s+(?:day|morning|afternoon|evening|night|week|weekday|weekend|month|quarter|year|hour|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\b(?:daily|weekly|monthly|hourly|nightly|fortnightly|quarterly|annually)\b|\b(?:whenever|as\s+soon\s+as|automatically|on\s+a\s+schedule|recurring|on\s+repeat|each\s+time)\b|\bwhen\s+(?:a|an|any|someone|somebody|the|my)\s+\w+(?:\s+\w+)?\s+(?:writes|emails|messages|calls|sends|asks|replies|contacts|arrives|comes\s+in|lands|signs|pays|books|cancels)\b|\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\bby\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|noon|midday|midnight|end\s+of\s+(?:the\s+)?(?:day|week|month))\b/i
@@ -70,7 +93,7 @@ const SETS_SOMETHING_RUNNING =
   a list of dangerous phrasings could never give: a "handle refunds yourselves" is simply not about presentation.
 */
 const PRESENTATION =
-  /\b(?:(?:open|start|begin|end|finish|close|lead)\s+(?:with|by)|at\s+the\s+(?:top|bottom|end|start)|(?:first|last)\s+(?:thing|line|paragraph)|the\s+(?:word|term|phrase)s?|spell(?:ing)?|british|american|english|language|tone|formal(?:ly)?|informal(?:ly)?|friendly|polite|warm|casual|wording|phrasing|vocabulary|jargon|capitali[sz](?:e|ation)|bold|italics?|heading|headline|font|emoji|emojis|punctuation|oxford\s+comma|(?:conclusion|answer|summary|result|recommendation|number|headline)s?\s+first|first\s+(?:line|sentence)|lead\s+with|structure|order|format|layout|refer\s+to\s+\w+(?:\s+\w+)?\s+as|call\s+(?:it|them|the\s+\w+)\s+(?:a|an|the)?\s*\w+|say\s+["'“‘]|(?:in|to)\s+(?:the\s+)?(?:first|second|third)\s+person|sign\s+off|greeting)\b/i
+  /\b(?:(?:open|start|begin|end|finish|close|lead)\s+(?:with|by)|(?:open|start|begin|end|finish|close|conclude|lead|sign\s+off)\b[^.!?]{0,60}?\b(?:answers?|repl(?:y|ies)|responses?|messages?|emails?|notes?|updates?|reports?|briefings?|summar(?:y|ies)|digests?|drafts?|texts?)\b[^.!?]{0,60}?\b(?:with|by)\b|at\s+the\s+(?:top|bottom|end|start)|(?:first|last)\s+(?:thing|line|paragraph)|the\s+(?:single\s+|one\s+)?(?:word|term|phrase)s?|spell(?:ing)?|british|american|english|language|tone|formal(?:ly)?|informal(?:ly)?|friendly|polite|warm|casual|wording|phrasing|vocabulary|jargon|capitali[sz](?:e|ation)|bold|italics?|heading|headline|font|emoji|emojis|punctuation|oxford\s+comma|(?:conclusion|answer|summary|result|recommendation|number|headline)s?\s+first|first\s+(?:line|sentence)|lead\s+with|structure|order|format|layout|refer\s+to\s+\w+(?:\s+\w+)?\s+as|call\s+(?:it|them|the\s+\w+)\s+(?:a|an|the)?\s*\w+|say\s+["'“‘]|(?:in|to)\s+(?:the\s+)?(?:first|second|third)\s+person|sign\s+off|greeting)\b/i
 
 export interface AuthorityReading {
   /** True when the office must not store this as an order without his explicit yes. */
@@ -90,6 +113,8 @@ export const readAuthority = (body: string, dimension: string | null): Authority
   const aboutOthers = text
     .replace(TO_GRANT, ' ')
     .replace(QUOTED_WORD, ' ')
+    // "Sign off every answer to me" closes the office's own words; "sign off the invoice" is an act and is left alone.
+    .replace(SIGN_OFF_CLOSING, 'close')
     // A sentence or clause opens with a capital that is not a name: lower it, so a verb that starts one is still a verb.
     .replace(
       /(^|[.!?]\s+|,\s+)([A-Z])(?=[a-z])/g,
@@ -101,7 +126,8 @@ export const readAuthority = (body: string, dimension: string | null): Authority
   if (GRANTS_PERMISSION.test(text)) because.push('it gives the office permission')
   if (CONTACT_THEN_PERSON.test(aboutOthers) || OUTWARD_ACT.test(aboutOthers))
     because.push('it directs something outside the office')
-  if (SETS_SOMETHING_RUNNING.test(text))
+  // The trigger that is the office's own reply to the person sets nothing running (#417); every other trigger still does.
+  if (SETS_SOMETHING_RUNNING.test(text.replace(OWN_REPLY_TRIGGER, ' ')))
     because.push('it sets something running on a schedule or a trigger')
   if (because.length === 0) {
     const presentation =

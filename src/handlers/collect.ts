@@ -71,6 +71,7 @@ export function collectHandler(deps: CollectDeps): Handler {
         model: null,
       })
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const { rows } = await deps.db.execute(
         `select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
       )
@@ -136,7 +137,7 @@ export function collectHandler(deps: CollectDeps): Handler {
       const recorded = (
         await deps.db.execute(`
           select app.record_file_document(
-            ${lit(projectId)}::uuid, ${lit(title)}, ${lit(path)}, ${lit(mime)},
+            app.job_office(${lit(job.jobId)}::uuid), ${lit(projectId)}::uuid, ${lit(title)}, ${lit(path)}, ${lit(mime)},
             ${String(bytes.byteLength)}::bigint, ${lit(notebookId)}, ${lit(artifactId)},
             null, 'chief-of-staff', ${lit(job.jobId)}::uuid) as r
         `)

@@ -27,6 +27,7 @@
  * need a chat id it has no way to obtain.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const go = process.argv.includes('--go')
@@ -95,7 +96,7 @@ for (const bot of bots) {
     await db.execute(`
       select app.record_telegram_chat(
         ${lit(chat.chat_id)}, ${lit(String(answer.result?.type ?? 'private'))},
-        ${lit(bot.bot_id)}, ${lit(chat.subject)}
+        ${lit(bot.bot_id)}, ${lit(chat.subject)}, null, null, ${lit(chat.chat_id)}
       )
     `)
     recovered += 1

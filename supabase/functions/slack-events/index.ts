@@ -109,8 +109,12 @@ const rest = async (
   retries a non-2xx, and there is no reason to tell a stranger anything). A
   failure to ASK is not a refusal, and answers 503 so Slack tries again.
 */
-type Admission = 'admitted' | 'test' | 'stranger' | 'unknown'
+type Admission = {
+  readonly kind: 'admitted' | 'test' | 'stranger' | 'unknown'
+  readonly office: string | null
+}
 const admission = async (actor: string, conversation: string): Promise<Admission> => {
+  const unknown: Admission = { kind: 'unknown', office: null }
   const asked = await fetch(`${DB_URL}/rest/v1/rpc/sender_admitted`, {
     method: 'POST',
     headers: {
@@ -120,14 +124,19 @@ const admission = async (actor: string, conversation: string): Promise<Admission
     },
     body: JSON.stringify({ p_channel: 'slack', p_actor: actor, p_conversation: conversation }),
   }).catch(() => null)
-  if (asked === null || !asked.ok) return 'unknown'
+  if (asked === null || !asked.ok) return unknown
   const said = (await asked.json().catch(() => null)) as {
     subject?: string | null
     declared_test?: boolean
+    office_id?: string | null
   } | null
-  if (said === null) return 'unknown'
-  if (said.declared_test === true) return 'test'
-  return typeof said.subject === 'string' && said.subject !== '' ? 'admitted' : 'stranger'
+  if (said === null) return unknown
+  // The office is the verified sender's (or the test office for a declared test conversation) - never the event's claim.
+  const office = typeof said.office_id === 'string' && said.office_id !== '' ? said.office_id : null
+  if (said.declared_test === true) return { kind: office === null ? 'stranger' : 'test', office }
+  return typeof said.subject === 'string' && said.subject !== '' && office !== null
+    ? { kind: 'admitted', office }
+    : { kind: 'stranger', office: null }
 }
 
 /*
@@ -135,16 +144,20 @@ const admission = async (actor: string, conversation: string): Promise<Admission
   only inside one. Asked for everything that is not a declared test conversation (a harness keeps its fixture team ids).
   'unknown' means we could not ask, and is never a yes.
 */
-const workspaceOk = async (team: unknown): Promise<'ok' | 'wrong' | 'unknown'> => {
-  if (typeof team !== 'string' || team === '') return 'wrong'
-  const asked = await fetch(`${DB_URL}/rest/v1/rpc/slack_team_ok`, {
+const workspaceOk = async (
+  team: unknown,
+  office: string | null,
+  channel: string | null,
+): Promise<'ok' | 'wrong' | 'unknown'> => {
+  if (typeof team !== 'string' || team === '' || office === null) return 'wrong'
+  const asked = await fetch(`${DB_URL}/rest/v1/rpc/slack_ingress_ok`, {
     method: 'POST',
     headers: {
       apikey: SERVICE_KEY,
       Authorization: `Bearer ${SERVICE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ p_team: team }),
+    body: JSON.stringify({ p_office: office, p_team: team, p_channel: channel }),
   }).catch(() => null)
   if (asked === null || !asked.ok) return 'unknown'
   return (await asked.json().catch(() => null)) === true ? 'ok' : 'wrong'
@@ -163,10 +176,13 @@ const workspaceOk = async (team: unknown): Promise<'ok' | 'wrong' | 'unknown'> =
  */
 const storeCommand = async (
   command: ReturnType<typeof toCanonicalCommand>,
+  office: string,
 ): Promise<'stored' | 'duplicate' | 'failed'> => {
   const stored = await rest(
     'inbound_commands',
     {
+      // Explicit, from the verified sender: the compatibility bridge is not asked to guess.
+      office_id: office,
       origin_channel: command.origin_channel,
       origin_ref: command.origin_ref,
       actor: command.actor,
@@ -190,8 +206,16 @@ const storeCommand = async (
   // one of five simultaneous redeliveries came back 409, the handler returned
   // 503, and Slack was told to retry an event that had already been stored
   // correctly. 409 is success.
-  if (!stored.ok && stored.status !== 409) return 'failed'
-  if (stored.status === 409) return 'duplicate'
+  // A 409 is a duplicate ONLY when it is a unique violation (23505). A foreign-key violation also answers 409, and
+  // treating it as "already stored" lost the message without a word (P3).
+  if (!stored.ok) {
+    const why = (await stored
+      .clone()
+      .json()
+      .catch(() => ({}))) as { code?: string }
+    if (!(stored.status === 409 && why.code === '23505')) return 'failed'
+    return 'duplicate'
+  }
 
   const returned = (await stored.json()) as { command_id?: string }[]
   const commandId = returned[0]?.command_id
@@ -281,14 +305,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
     // A stranger's press is nobody's answer: not stored, so it cannot claim an undo offer,
     // record feedback or answer a question (#388).
     const presser = await admission(pressed.actor, pressed.slack.channel_id ?? '')
-    if (presser === 'unknown') return new Response('could not check the sender', { status: 503 })
-    if (presser === 'stranger') return new Response('', { status: 200 })
-    if (presser !== 'test') {
-      const w = await workspaceOk(pressed.slack.team_id)
+    if (presser.kind === 'unknown')
+      return new Response('could not check the sender', { status: 503 })
+    if (presser.kind === 'stranger' || presser.office === null)
+      return new Response('', { status: 200 })
+    if (presser.kind !== 'test') {
+      const w = await workspaceOk(
+        pressed.slack.team_id,
+        presser.office,
+        pressed.slack.channel_id ?? null,
+      )
       if (w === 'unknown') return new Response('could not check the workspace', { status: 503 })
       if (w === 'wrong') return new Response('', { status: 200 })
     }
-    await storeCommand(pressed)
+    await storeCommand(pressed, presser.office)
     // An empty 200 leaves the message exactly as it is. Slack treats a body
     // here as a REPLACEMENT for the message, so returning anything chatty would
     // overwrite the result the button is attached to.
@@ -345,15 +375,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const sender = await admission(command.actor, command.slack.channel_id ?? '')
-  if (sender === 'unknown') return new Response('could not check the sender', { status: 503 })
-  if (sender === 'stranger') return Response.json({ ok: true, ignored: 'unrecognised sender' })
-  if (sender !== 'test') {
-    const w = await workspaceOk(command.slack.team_id)
+  if (sender.kind === 'unknown') return new Response('could not check the sender', { status: 503 })
+  if (sender.kind === 'stranger' || sender.office === null)
+    return Response.json({ ok: true, ignored: 'unrecognised sender' })
+  if (sender.kind !== 'test') {
+    const w = await workspaceOk(
+      command.slack.team_id,
+      sender.office,
+      command.slack.channel_id ?? null,
+    )
     if (w === 'unknown') return new Response('could not check the workspace', { status: 503 })
     if (w === 'wrong') return Response.json({ ok: true, ignored: 'unrecognised workspace' })
   }
 
-  const outcome = await storeCommand(command)
+  const outcome = await storeCommand(command, sender.office)
   if (outcome === 'failed') return new Response('storage failed', { status: 503 })
   if (outcome === 'duplicate') {
     return Response.json({ ok: true, dedupe_key: command.dedupe_key, duplicate: true })

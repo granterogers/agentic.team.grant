@@ -13,12 +13,12 @@ const src = readFileSync(
 const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
 describe('the Slack door asks which workspace', () => {
   it('asks the database function, not a list in the edge function', () => {
-    expect(code).toMatch(/rest\/v1\/rpc\/slack_team_ok/)
+    expect(code).toMatch(/rest\/v1\/rpc\/slack_ingress_ok/)
   })
   it('for events: after admission, only when not a declared test, before the command is stored', () => {
     const ev = code.slice(code.indexOf('const sender = await admission('))
-    const ask = ev.indexOf("if (sender !== 'test') {")
-    const store = ev.indexOf('await storeCommand(command)')
+    const ask = ev.indexOf("if (sender.kind !== 'test') {")
+    const store = ev.indexOf('await storeCommand(command, sender.office)')
     expect(ask).toBeGreaterThan(0)
     expect(store).toBeGreaterThan(ask)
     expect(ev.slice(ask, store)).toMatch(/w === 'wrong'/)
@@ -26,8 +26,8 @@ describe('the Slack door asks which workspace', () => {
   })
   it('for button presses: the same condition before the press is stored', () => {
     const pr = code.slice(code.indexOf('const presser = await admission('))
-    const ask = pr.indexOf("if (presser !== 'test') {")
-    const store = pr.indexOf('await storeCommand(pressed)')
+    const ask = pr.indexOf("if (presser.kind !== 'test') {")
+    const store = pr.indexOf('await storeCommand(pressed, presser.office)')
     expect(ask).toBeGreaterThan(0)
     expect(store).toBeGreaterThan(ask)
     expect(pr.slice(ask, store)).toMatch(/w === 'wrong'/)

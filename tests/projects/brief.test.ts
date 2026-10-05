@@ -9,7 +9,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { SqlExecutor } from '../../src/db/executor.ts'
+import { trustedOffice } from '../../src/office/context.ts'
 import { briefIsStale } from '../../src/projects/brief.ts'
+
+const OFFICE = trustedOffice('11111111-1111-4111-8111-111111111111')
 
 /** Returns whatever `source_fingerprints` Postgres would have rendered. */
 const fakeDb = (rendered: string | null): SqlExecutor => ({
@@ -24,13 +27,13 @@ const fakeDb = (rendered: string | null): SqlExecutor => ({
 
 describe('briefIsStale', () => {
   it('is stale when no brief exists yet', async () => {
-    expect(await briefIsStale(fakeDb(null), 'p', ['a'.repeat(64)])).toBe(true)
+    expect(await briefIsStale(fakeDb(null), OFFICE, 'p', ['a'.repeat(64)])).toBe(true)
   })
 
   it('is not stale when the same fingerprints come back', async () => {
     const a = 'a'.repeat(64)
     const b = 'b'.repeat(64)
-    expect(await briefIsStale(fakeDb(`{${a},${b}}`), 'p', [a, b])).toBe(false)
+    expect(await briefIsStale(fakeDb(`{${a},${b}}`), OFFICE, 'p', [a, b])).toBe(false)
   })
 
   it('ignores ordering, because array order is not guaranteed', async () => {
@@ -39,29 +42,29 @@ describe('briefIsStale', () => {
     // inference on it.
     const a = 'a'.repeat(64)
     const b = 'b'.repeat(64)
-    expect(await briefIsStale(fakeDb(`{${b},${a}}`), 'p', [a, b])).toBe(false)
+    expect(await briefIsStale(fakeDb(`{${b},${a}}`), OFFICE, 'p', [a, b])).toBe(false)
   })
 
   it('is stale when a source changed', async () => {
     const a = 'a'.repeat(64)
     const changed = 'c'.repeat(64)
-    expect(await briefIsStale(fakeDb(`{${a}}`), 'p', [changed])).toBe(true)
+    expect(await briefIsStale(fakeDb(`{${a}}`), OFFICE, 'p', [changed])).toBe(true)
   })
 
   it('is stale when a source was added', async () => {
     const a = 'a'.repeat(64)
-    expect(await briefIsStale(fakeDb(`{${a}}`), 'p', [a, 'd'.repeat(64)])).toBe(true)
+    expect(await briefIsStale(fakeDb(`{${a}}`), OFFICE, 'p', [a, 'd'.repeat(64)])).toBe(true)
   })
 
   it('is stale when a source went away', async () => {
     const a = 'a'.repeat(64)
     const b = 'b'.repeat(64)
-    expect(await briefIsStale(fakeDb(`{${a},${b}}`), 'p', [a])).toBe(true)
+    expect(await briefIsStale(fakeDb(`{${a},${b}}`), OFFICE, 'p', [a])).toBe(true)
   })
 
   it('handles the quoted rendering Postgres sometimes uses', async () => {
     const a = 'a'.repeat(64)
-    expect(await briefIsStale(fakeDb(`{"${a}"}`), 'p', [a])).toBe(false)
+    expect(await briefIsStale(fakeDb(`{"${a}"}`), OFFICE, 'p', [a])).toBe(false)
   })
 
   it('reports no change when a brief cited nothing and there is still nothing', async () => {
@@ -74,6 +77,6 @@ describe('briefIsStale', () => {
     // raises NoSourcesError before consulting staleness, so a project with no
     // sources never gets this far. Corrected rather than "fixing" working code
     // to satisfy a test I could not justify.
-    expect(await briefIsStale(fakeDb('{}'), 'p', [])).toBe(false)
+    expect(await briefIsStale(fakeDb('{}'), OFFICE, 'p', [])).toBe(false)
   })
 })

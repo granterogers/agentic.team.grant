@@ -41,7 +41,7 @@ const freshProject = async (label: string): Promise<string> =>
   String(
     json(
       (
-        await one(`select app.hq_create_project(${lit(`Outward ${label} ${run}`)}, 'upload', ${lit(`outward-${label}-${run}`)},
+        await one(`select app.hq_create_project(app.test_office(), ${lit(`Outward ${label} ${run}`)}, 'upload', ${lit(`outward-${label}-${run}`)},
           ${lit(`Outward ${label} ${run}`)}, true) as v`)
       ).v,
     ).project_id,
@@ -96,7 +96,7 @@ for (const [label, standing] of [
     const answered = json(
       (
         await one(
-          `select app.hq_answer_blocker(${lit(String(q.blocker))}::uuid, ${lit(option)}, 'grant') as r`,
+          `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(String(q.blocker))}::uuid), app.test_office()), ${lit(String(q.blocker))}::uuid, ${lit(option)}, 'grant') as r`,
         )
       ).r,
     )

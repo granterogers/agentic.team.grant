@@ -114,20 +114,20 @@ section = 'a second attempt sees what the first one did'
     create temp table r (k text, v jsonb) on commit drop;
 
     -- Attempt one: three steps, two of them finished.
-    insert into r select 'a1', app.step_begin(${JOB}, 'gather', 0, 'none', 1, 'v1');
-    insert into r select 'd1', app.step_done(${JOB}, 'gather', '{"documents": 8}'::jsonb);
-    insert into r select 'a2', app.step_begin(${JOB}, 'draft', 1, 'none', 1, 'v1');
-    insert into r select 'd2', app.step_done(${JOB}, 'draft', '{"title": "A report"}'::jsonb);
+    insert into r select 'a1', app.step_begin(app.job_office(${JOB}), ${JOB}, 'gather', 0, 'none', 1, 'v1');
+    insert into r select 'd1', app.step_done(app.job_office(${JOB}), ${JOB}, 'gather', '{"documents": 8}'::jsonb);
+    insert into r select 'a2', app.step_begin(app.job_office(${JOB}), ${JOB}, 'draft', 1, 'none', 1, 'v1');
+    insert into r select 'd2', app.step_done(app.job_office(${JOB}), ${JOB}, 'draft', '{"title": "A report"}'::jsonb);
 
     -- and then the worker dies. Attempt two asks the same questions.
-    insert into r select 'b1', app.step_begin(${JOB}, 'gather', 0, 'none', 1, 'v1');
-    insert into r select 'b2', app.step_begin(${JOB}, 'draft', 1, 'none', 1, 'v1');
-    insert into r select 'b3', app.step_begin(${JOB}, 'store', 2, 'local', 1, 'v1');
+    insert into r select 'b1', app.step_begin(app.job_office(${JOB}), ${JOB}, 'gather', 0, 'none', 1, 'v1');
+    insert into r select 'b2', app.step_begin(app.job_office(${JOB}), ${JOB}, 'draft', 1, 'none', 1, 'v1');
+    insert into r select 'b3', app.step_begin(app.job_office(${JOB}), ${JOB}, 'store', 2, 'local', 1, 'v1');
 
     select (select v from r where k = 'b1') as gather_again,
            (select v from r where k = 'b2') as draft_again,
            (select v from r where k = 'b3') as store_first,
-           app.job_progress(${JOB}) as progress;
+           app.job_progress(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${JOB}), app.test_office()), ${JOB}) as progress;
     rollback;`)
 
   const gather = asJson(got.gather_again)
@@ -175,13 +175,13 @@ section = 'an interrupted EXTERNAL write is never repeated'
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
 
-    insert into r select 'post', app.step_begin(${JOB}, 'post', 0, 'external', 1, 'v1');
+    insert into r select 'post', app.step_begin(app.job_office(${JOB}), ${JOB}, 'post', 0, 'external', 1, 'v1');
     -- and the worker dies here, between the send and the record.
-    insert into r select 'again', app.step_begin(${JOB}, 'post', 0, 'external', 1, 'v1');
+    insert into r select 'again', app.step_begin(app.job_office(${JOB}), ${JOB}, 'post', 0, 'external', 1, 'v1');
 
     -- The same shape, but the step only touched the office.
-    insert into r select 'local', app.step_begin(${JOB}, 'tidy', 1, 'local', 1, 'v1');
-    insert into r select 'local_again', app.step_begin(${JOB}, 'tidy', 1, 'local', 1, 'v1');
+    insert into r select 'local', app.step_begin(app.job_office(${JOB}), ${JOB}, 'tidy', 1, 'local', 1, 'v1');
+    insert into r select 'local_again', app.step_begin(app.job_office(${JOB}), ${JOB}, 'tidy', 1, 'local', 1, 'v1');
 
     select (select v from r where k = 'again') as external_again,
            (select v from r where k = 'local_again') as local_again;
@@ -211,10 +211,10 @@ section = 'a checkpoint from different code is refused, not guessed through'
     begin;
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'a', app.step_begin(${JOB}, 'gather', 0, 'none', 1, 'v1');
-    insert into r select 'b', app.step_done(${JOB}, 'gather', '{"documents": 8}'::jsonb);
+    insert into r select 'a', app.step_begin(app.job_office(${JOB}), ${JOB}, 'gather', 0, 'none', 1, 'v1');
+    insert into r select 'b', app.step_done(app.job_office(${JOB}), ${JOB}, 'gather', '{"documents": 8}'::jsonb);
     -- The schema changed. The step is finished and must still not be skipped.
-    insert into r select 'c', app.step_begin(${JOB}, 'gather', 0, 'none', 2, 'v2');
+    insert into r select 'c', app.step_begin(app.job_office(${JOB}), ${JOB}, 'gather', 0, 'none', 2, 'v2');
     select (select v from r where k = 'c') as under_new_code;
     rollback;`)
 
@@ -236,8 +236,8 @@ section = 'what a step recorded cannot be rewritten'
     begin;
     ${SETUP}
     create temp table r (k text, v text) on commit drop;
-    select app.step_begin(${JOB}, 'post', 0, 'external', 1, 'v1');
-    select app.step_done(${JOB}, 'post', '{"sent": true}'::jsonb, 'telegram:389');
+    select app.step_begin(app.job_office(${JOB}), ${JOB}, 'post', 0, 'external', 1, 'v1');
+    select app.step_done(app.job_office(${JOB}), ${JOB}, 'post', '{"sent": true}'::jsonb, 'telegram:389');
 
     /*
       A plpgsql block, because a plain SQL script has no exception handler and
@@ -263,7 +263,7 @@ section = 'what a step recorded cannot be rewritten'
     end $x$;
 
     -- Finishing twice is a retry, not an error.
-    insert into r select 'twice', (app.step_done(${JOB}, 'post', '{}'::jsonb) ->> 'already');
+    insert into r select 'twice', (app.step_done(app.job_office(${JOB}), ${JOB}, 'post', '{}'::jsonb) ->> 'already');
 
     select (select v from r where k = 'edit') as edit,
            (select v from r where k = 'delete') as del,
@@ -311,7 +311,7 @@ section = 'pausing, and what may resume on a tick'
 
     select (select state::text from public.jobs where job_id = ${JOB}) as state,
            (select waiting_on from public.jobs where job_id = ${JOB}) as waiting_on,
-           app.job_progress(${JOB}) -> 'paused' as paused,
+           app.job_progress(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${JOB}), app.test_office()), ${JOB}) -> 'paused' as paused,
            (select count(*) from jsonb_array_elements(app.resumable_now()) x
              where (x ->> 'job_id')::uuid = ${JOB}) as on_a_tick;
     rollback;`)
@@ -437,8 +437,8 @@ section = 'and a job cancelled from a pause leaves nothing half-written'
     begin;
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
-    select app.step_begin(${JOB}, 'gather', 0, 'none', 1, 'v1');
-    select app.step_done(${JOB}, 'gather', '{"documents": 8}'::jsonb);
+    select app.step_begin(app.job_office(${JOB}), ${JOB}, 'gather', 0, 'none', 1, 'v1');
+    select app.step_done(app.job_office(${JOB}), ${JOB}, 'gather', '{"documents": 8}'::jsonb);
     select app.pause_job(${JOB}, 'awaiting_human_action', 'Waiting.', 'He answers.',
                          true, null, null);
     update public.jobs set state = 'cancelled', state_reason = 'he changed his mind'

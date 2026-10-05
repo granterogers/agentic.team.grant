@@ -52,7 +52,11 @@ const db = new ManagementApiExecutor(
   token,
 )
 // Real rows, so the good case is the real good case rather than a stub of one.
-const studio = ((await db.execute('select app.hq_studio() as d')).rows[0] as { d: unknown }).d
+const studio = (
+  (await db.execute('select app.hq_studio(app.operator_office()) as d')).rows[0] as {
+    d: unknown
+  }
+).d
 
 const server = createServer(async (rq, rs) => {
   let f = join('web/studio', decodeURIComponent((rq.url ?? '/').split('?')[0] ?? '/'))

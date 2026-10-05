@@ -418,7 +418,7 @@ const send = async (said) => {
     const body = await askOffice(said)
     show('The team', body.speak, body.did === 'delegated' ? 'delegated' : '')
     say(body.did === 'delegated'
-      ? 'Put to the team — the answer comes back in Slack and Telegram.'
+      ? 'Put to the team — the answer will be on the Team page, and in Slack or Telegram if you have connected them.'
       : 'Ask another.')
   } catch (e) {
     show('The team', 'I could not reach the office: ' + e.message, 'bad')
@@ -567,12 +567,16 @@ export async function startCall() {
       as office.js and chat.js, closed the same way (ADR-0048).
     */
     if (MINT === '') throw new Error(UNCONFIGURED)
+    // Minting needs a signed-in session (#400): the office will not hand a stranger a metered call.
     const minted = await fetch(MINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + presented() },
       body: JSON.stringify({ project: onProject }),
     })
     if (stale()) return abandon()
+    if (minted.status === 401) {
+      throw refused(minted)
+    }
     if (!minted.ok) throw new Error('the office would not start a call (' + minted.status + ')')
     const { client_secret, model, degraded } = await minted.json()
     if (stale()) return abandon()

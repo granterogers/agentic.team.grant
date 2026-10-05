@@ -114,7 +114,7 @@ ok(
     `)
   }
   const tally = await all(
-    `select needed from public.impediments_tally(30, 2) where needed = ${lit(NEED)}`,
+    `select needed from app.impediments_tally(app.test_office(), 30, 2, false) where needed = ${lit(NEED)}`,
   )
   ok(
     'and five of them still do not reach the tally',
@@ -234,13 +234,13 @@ await refuses(
 
 {
   const once = await all(
-    `select times from app.impediments_tally(30, 2, true) where needed = ${lit(SOLO)}`,
+    `select times from app.impediments_tally(app.test_office(), 30, 2, true) where needed = ${lit(SOLO)}`,
   )
   ok('one occurrence is not a pattern, and does not reach the tally', once.length === 0)
 
   const tally = await all(`
     select times, staff_slug, for_instance, kind::text k
-      from app.impediments_tally(30, 2, true) where needed = ${lit(NEED)}
+      from app.impediments_tally(app.test_office(), 30, 2, true) where needed = ${lit(NEED)}
   `)
   ok(
     'a limitation that keeps recurring does',
@@ -261,7 +261,7 @@ await refuses(
 
 {
   const viaWrapper = await all(
-    `select needed from public.impediments_tally(30, 1) where needed = ${lit(NEED)}`,
+    `select needed from app.impediments_tally(app.test_office(), 30, 1, false) where needed = ${lit(NEED)}`,
   )
   ok(
     'and none of it is visible through the public wrapper',
@@ -356,7 +356,7 @@ await refuses(
 
 {
   const leaked = await all(
-    `select needed from public.impediments_tally(30, 1)
+    `select needed from app.impediments_tally(app.test_office(), 30, 1, false)
       where needed in (${lit(NEED)}, ${lit(SOLO)})`,
   )
   ok(

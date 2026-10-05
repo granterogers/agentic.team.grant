@@ -182,7 +182,9 @@ for (const channel of ['teamhq', 'telegram', 'slack', 'voice']) {
     const chat = chatFor(run, channel, 5)
     const q = await ask(channel, chat, 'the florist')
     await reply(channel, chat, 'ok thanks')
-    await db.execute(`select app.hq_answer_blocker(${lit(q)}::uuid, 'No, leave it', 'grant')`)
+    await db.execute(
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q)}::uuid), app.test_office()), ${lit(q)}::uuid, 'No, leave it', 'grant')`,
+    )
     const r = await reply(channel, chat, 'yes please')
     check(
       tag('CONTROL: a bound question answered elsewhere is not answered again'),

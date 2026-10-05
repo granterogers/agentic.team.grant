@@ -58,6 +58,8 @@ export interface ProcessedCallback {
 
 interface PendingRow {
   command_id: string
+  /** The office of the press itself (the command row's own). Every statement about this press is confined to it. */
+  office_id: string
   callback_action: string
   origin_channel: string
   origin_ref: string
@@ -88,7 +90,7 @@ interface PendingRow {
  */
 export const PENDING = (limit: number): string => `
   with press as (
-    select c.command_id, c.callback_action, c.origin_channel, c.origin_ref, c.actor
+    select c.command_id, c.office_id, c.callback_action, c.origin_channel, c.origin_ref, c.actor
     from public.inbound_commands c
     where c.callback_action is not null
       and c.processed_at is null
@@ -97,6 +99,7 @@ export const PENDING = (limit: number): string => `
   )
   select
     press.command_id::text        as command_id,
+    press.office_id::text         as office_id,
     press.callback_action         as callback_action,
     press.origin_channel          as origin_channel,
     press.origin_ref              as origin_ref,
@@ -111,21 +114,22 @@ export const PENDING = (limit: number): string => `
   -- generalised the table. origin_ref is target:message on both Slack and
   -- Telegram, because both adapters were written to the same envelope.
   left join public.deliveries d
-    on d.channel = press.origin_channel
+    on d.office_id = press.office_id
+   and d.channel = press.origin_channel
    and d.target_ref = split_part(press.origin_ref, ':', 1)
    and d.message_ref = split_part(press.origin_ref, ':', 2)
    -- Two bots number their own messages in the same private chat, so chat + message id alone matched two
    -- deliveries for one press (8 such groups in production). The press knows which bot it came through.
-   and (app.command_account(press.command_id) is null
-        or d.account_ref = app.command_account(press.command_id))
-  left join public.jobs j on j.job_id = d.job_id
+   and (app.command_account(press.office_id, press.command_id) is null
+        or d.account_ref = app.command_account(press.office_id, press.command_id))
+  left join public.jobs j on j.job_id = d.job_id and j.office_id = press.office_id
   left join lateral (
     -- Through the delivery's JOB, not through its correlation. A correlation
     -- spans every job an instruction spawned, so resolving that way attributes
     -- a 👍 to whichever job finished last (0037). Silently, and with a real
     -- signal, which is the worst combination.
     select o.output_id from public.outputs o
-    where o.job_id = d.job_id
+    where o.job_id = j.job_id
     order by o.created_at desc limit 1
   ) o on true
 `
@@ -139,11 +143,12 @@ export const PENDING = (limit: number): string => `
  * a re-run — arrives while the first is still in flight, so a read-then-write
  * would let both act.
  */
-const claim = async (db: SqlExecutor, commandId: string): Promise<boolean> => {
+const claim = async (db: SqlExecutor, commandId: string, office: string): Promise<boolean> => {
   const { rows } = await db.execute(`
     update public.inbound_commands
        set processed_at = app.now_utc()
      where command_id = ${lit(commandId)}::uuid
+       and office_id = ${lit(office)}::uuid
        and processed_at is null
     returning command_id::text as id
   `)
@@ -186,7 +191,8 @@ const askForTheCorrection = async (db: SqlExecutor, row: PendingRow): Promise<vo
     select app.callback_ack(b.bot_id, 'not_useful') as ack, b.bot_id::text as bot_id
       from public.telegram_chats c
       join public.telegram_bots b on b.bot_id = c.bot_id and b.enabled
-     where c.chat_id = ${lit(chatId)}
+     where c.office_id = ${lit(row.office_id)}::uuid
+       and c.chat_id = ${lit(chatId)}
      limit 1
   `)
   const found = rows[0] as { ack?: { token?: string }; bot_id?: string } | undefined
@@ -229,8 +235,9 @@ const recordFeedback = async (
 ): Promise<void> => {
   await db.execute(`
     insert into public.feedback
-      (subject_kind, subject_ref, signal, origin_channel, given_by)
+      (office_id, subject_kind, subject_ref, signal, origin_channel, given_by)
     values (
+      ${lit(row.office_id)}::uuid,
       ${row.output_id === null ? `'notification'` : `'output'`},
       ${row.output_id === null ? 'null' : `${lit(row.output_id)}::uuid`},
       ${lit(String(FEEDBACK_SIGNAL[signal]))}::public.feedback_signal,
@@ -257,7 +264,8 @@ const resolveNotification = async (
     update public.notification_events
        set outcome = ${lit(outcome)}::public.notification_outcome,
            resolved_at = app.now_utc()
-     where subject_ref = ${lit(row.output_id)}::uuid
+     where office_id = ${lit(row.office_id)}::uuid
+       and subject_ref = ${lit(row.output_id)}::uuid
        and outcome = 'delivered'
   `)
 }
@@ -273,7 +281,7 @@ const doUndo = async (db: SqlExecutor, row: PendingRow): Promise<ProcessedCallba
   }
 
   const offers = await db.execute(`
-    select action_id::text as id, description from public.undo_offers
+    select action_id::text as id, description from app.undo_offers_in(${lit(row.office_id)}::uuid)
     where correlation_id = ${lit(row.correlation_id)}::uuid
     order by undo_deadline
   `)
@@ -292,7 +300,7 @@ const doUndo = async (db: SqlExecutor, row: PendingRow): Promise<ProcessedCallba
   }
 
   const { rows } = await db.execute(`
-    select app.request_undo(${lit(offer.id)}::uuid, ${lit(row.actor)},
+    select app.request_undo(${lit(row.office_id)}::uuid, ${lit(offer.id)}::uuid, ${lit(row.actor)},
       ${lit(`${row.origin_channel}:button`)})::text as status
   `)
   return {
@@ -322,8 +330,8 @@ export interface ProcessOptions {
  */
 const pressedBy = async (db: SqlExecutor, row: PendingRow): Promise<string | null> => {
   const { rows } = await db.execute(`
-    select app.command_principal(${lit(row.command_id)}::uuid) as who,
-           app.principal_refusal(app.command_principal(${lit(row.command_id)}::uuid)) as refusal
+    select app.command_principal(${lit(row.office_id)}::uuid, ${lit(row.command_id)}::uuid) as who,
+           app.principal_refusal(app.command_principal(${lit(row.office_id)}::uuid, ${lit(row.command_id)}::uuid)) as refusal
   `)
   const r = rows[0] as { who?: string | null; refusal?: string | null } | undefined
   if (r === undefined || r.refusal !== null || typeof r.who !== 'string' || r.who === '')
@@ -347,7 +355,7 @@ export const processCallbacks = async (
 
   for (const raw of rows) {
     const row = raw as unknown as PendingRow
-    if (!(await claim(db, row.command_id))) continue // someone else has it
+    if (!(await claim(db, row.command_id, row.office_id))) continue // someone else has it
     try {
       const action = row.callback_action as CallbackAction
       switch (action) {
@@ -448,6 +456,7 @@ export const processCallbacks = async (
             break
           }
           const applied = await applyPreference(db, parseInstruction('leave me alone today'), {
+            office: row.office_id,
             subject: who,
             originChannel: row.origin_channel as 'slack' | 'telegram' | 'voice' | 'teamhq',
             instruction: 'mute 24h (button)',
@@ -504,20 +513,25 @@ export const processCallbacks = async (
         */
           const { rows: answered } = await db.execute(`
           select app.hq_answer_blocker(
+            -- The office of the job the message came from: the delivery row is ours, so this is not a value
+            -- the press carried.
+            app.job_office(${lit(row.job_id)}::uuid),
             q.blocker_id,
             case when ${action === 'approve' ? 'true' : 'false'} then q.approval_options[1]
                  else coalesce(q.decline_option, q.approval_options[array_length(q.approval_options, 1)]) end,
             -- Whoever pressed, as the office knows them; refused inside the
             -- function when it does not (0608). Never a default.
-            app.command_principal(${lit(row.command_id)}::uuid)
+            app.command_principal(${lit(row.office_id)}::uuid, ${lit(row.command_id)}::uuid)
           ) as r
           from (select b.blocker_id, b.approval_options, b.decline_option
                   from public.blockers b
-                 where b.blocker_id = app.approval_for_delivery(${lit(row.delivery_id)}::uuid)
+                 where b.office_id = ${lit(row.office_id)}::uuid
+                   and b.blocker_id = app.approval_for_delivery(${lit(row.office_id)}::uuid, ${lit(row.delivery_id)}::uuid)
                    -- A press that did not come through a production door (stamped synthetic) may only answer
                    -- test traffic: it must not bind a REAL question, whoever its subject resolves to.
                    and (not coalesce((select c.synthetic from public.inbound_commands c
-                                       where c.command_id = ${lit(row.command_id)}::uuid), false)
+                                       where c.command_id = ${lit(row.command_id)}::uuid
+                                         and c.office_id = ${lit(row.office_id)}::uuid), false)
                         or app.harness_job(b.job_id))) q
         `)
           const r = (answered[0] as { r: Record<string, unknown> | null } | undefined)?.r ?? null
@@ -572,7 +586,8 @@ export const processCallbacks = async (
       if (row.callback_action === 'approve' || row.callback_action === 'decline') {
         await db
           .execute(
-            `update public.inbound_commands set processed_at = null where command_id = ${lit(row.command_id)}::uuid`,
+            `update public.inbound_commands set processed_at = null
+              where command_id = ${lit(row.command_id)}::uuid and office_id = ${lit(row.office_id)}::uuid`,
           )
           .catch(() => undefined)
       }

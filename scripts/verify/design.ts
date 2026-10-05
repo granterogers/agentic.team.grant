@@ -31,6 +31,7 @@
  * A floor is a floor. Passing it is not a compliment.
  */
 
+import '../../src/safety/require-production-site.ts'
 import { existsSync, readFileSync } from 'node:fs'
 
 let pass = 0

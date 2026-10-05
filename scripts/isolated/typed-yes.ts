@@ -35,7 +35,7 @@ const turn = async (text: string, context?: Record<string, unknown>) => {
   return { command: String(cmd.id), job: String((v as { job_id: string }).job_id) }
 }
 const ask = async (job: string, sentTo: string | null) => {
-  const proj = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const proj = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   const b = String(
     (
       await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
@@ -53,14 +53,16 @@ const forNext = async (command: string) =>
   // only what the reply may BIND to: a question named but not bindable is one the office asks about (0623)
   (
     await db.execute(
-      `select id from app.open_questions_for_reply(${lit(command)}::uuid) where bindable`,
+      `select id from app.open_questions_for_reply(
+         (select office.office_id from public.inbound_commands office where office.command_id = ${lit(command)}::uuid),
+         ${lit(command)}::uuid) where bindable`,
     )
   ).rows.map((r) => String((r as { id: string }).id))
 
 const settleAll = () =>
   db.execute(`do $x$ declare r record; begin
     for r in select blocker_id from public.blockers where state = 'open' loop
-      perform app.hq_answer_blocker(r.blocker_id, 'No', 'grant');
+      perform app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = r.blocker_id), app.test_office()), r.blocker_id, 'No', 'grant');
     end loop; end $x$`)
 // ---- shown: delivered to his chat -------------------------------------------------------------------------------
 {

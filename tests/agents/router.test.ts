@@ -33,6 +33,13 @@ const fakeDb = (candidateRows: Record<string, unknown>[] = [], unrouted = 0): Sq
     ),
 })
 
+// The scan is confined to an office; the tests do not care which, so they all ask in the test office.
+const scanHere = (
+  db: SqlExecutor,
+  text: string,
+  options: { projectId?: string | undefined } = {},
+) => scanForDuplicates(db, text, { office: 'app.test_office()', ...options })
+
 describe('searchTerms', () => {
   it('keeps the distinctive words and drops the scaffolding', () => {
     expect(searchTerms('Please can you summarise the pricing research for us')).toEqual([
@@ -63,7 +70,7 @@ describe('searchTerms', () => {
 
 describe('the scan is a real query with a stated blind spot', () => {
   it('records a marker rather than fabricating a term when nothing is distinctive', async () => {
-    const scan = await scanForDuplicates(fakeDb(), 'ok do it')
+    const scan = await scanHere(fakeDb(), 'ok do it')
     expect(scan.terms).toEqual([NO_DISTINCTIVE_TERMS])
     expect(scan.candidates).toEqual([])
   })
@@ -72,13 +79,13 @@ describe('the scan is a real query with a stated blind spot', () => {
     // `none_found` with 40 invisible jobs is not the same claim as `none_found`
     // with 0, and a caller that cannot tell them apart reads a blind spot as an
     // all-clear.
-    const scan = await scanForDuplicates(fakeDb([], 40), 'the pricing research')
+    const scan = await scanHere(fakeDb([], 40), 'the pricing research')
     expect(scan.candidates).toEqual([])
     expect(scan.unroutedLiveJobs).toBe(40)
   })
 
   it('reports which words matched, not a similarity score', async () => {
-    const scan = await scanForDuplicates(
+    const scan = await scanHere(
       fakeDb([
         {
           job_id: '11111111-1111-4111-8111-111111111111',
@@ -307,7 +314,7 @@ describe('ambiguity never becomes a workload', () => {
     // which would do substantive work, so clarification is required and the
     // roster is empty. Both are asserted outright.
     const text = 'Maybe we should look into the competitor pricing'
-    const d = route(text, await scanForDuplicates(fakeDb(), text))
+    const d = route(text, await scanHere(fakeDb(), text))
     expect(d.clarificationNeeded).toBe(true)
     expect(d.roster).toEqual([])
     expect(d.rosterReason).toMatch(/ask/)
@@ -329,12 +336,12 @@ describe('the duplicate resolution', () => {
 
   it('is none_found when the scan came back empty', async () => {
     const text = 'I need you to research the pricing'
-    expect(route(text, await scanForDuplicates(fakeDb(), text)).resolution).toBe('none_found')
+    expect(route(text, await scanHere(fakeDb(), text)).resolution).toBe('none_found')
   })
 
   it('links rather than duplicates when the caller says so', async () => {
     const text = 'I need you to research the pricing'
-    const d = route(text, await scanForDuplicates(withCandidate(), text), {
+    const d = route(text, await scanHere(withCandidate(), text), {
       linkTo: '22222222-2222-4222-8222-222222222222',
     })
     expect(d.resolution).toBe('linked_to_existing')
@@ -346,14 +353,14 @@ describe('the duplicate resolution', () => {
     // that is one character short would fail at insert time, in production,
     // on the branch that only runs when a near-duplicate exists.
     const text = 'I need you to research the pricing'
-    const d = route(text, await scanForDuplicates(withCandidate(), text))
+    const d = route(text, await scanHere(withCandidate(), text))
     expect(d.resolution).toBe('proceeded_distinct')
     expect((d.distinctJustification ?? '').trim().length).toBeGreaterThanOrEqual(20)
   })
 
   it('says in the default justification that no reason was given', async () => {
     const text = 'I need you to research the pricing'
-    const d = route(text, await scanForDuplicates(withCandidate(), text))
+    const d = route(text, await scanHere(withCandidate(), text))
     expect(d.distinctJustification).toMatch(/no caller justification/)
   })
 })

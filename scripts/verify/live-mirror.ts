@@ -29,6 +29,7 @@
  * strictly stronger than testing the working tree: every byte the browser
  * executes came back from the deployed host this minute.
  */
+import '../../src/safety/require-production-site.ts'
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'

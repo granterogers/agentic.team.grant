@@ -48,9 +48,12 @@
 import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
+
+const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 /** One proposal, as `app.proposals_to_send` returns it. */
 interface Waiting {
@@ -92,9 +95,11 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
 
         Fixtures excluded, which is the parameter's whole point (0297).
       */
-      const row = (await db.execute(`select app.raise_proposals(30, 3, false) as r`)).rows[0] as
-        | { r?: unknown }
-        | undefined
+      // The round is one OFFICE's: the claimed job's (multi-user P3), so the tally, the proposals and the delivered
+      // mark are all that office's, and a second office's duty raises and tells its own person only.
+      const office = `app.job_office('${job.jobId.replace(/'/g, "''")}'::uuid)`
+      const row = (await db.execute(`select app.raise_proposals(${office}, 30, 3, false) as r`))
+        .rows[0] as { r?: unknown } | undefined
       const raw = row?.r
       const outcome = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {})) as {
         raised?: number
@@ -110,7 +115,8 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
           (
             await db.execute(
               `select count(*)::int as n from public.proposals
-                where state = 'open' and not app.harness_label(needed)`,
+                where office_id = app.job_office('${job.jobId}'::uuid)
+                  and state = 'open' and not app.harness_label(needed)`,
             )
           ).rows[0] as { n?: number }
         )?.n ?? 0,
@@ -134,8 +140,13 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
         of him, and a number that mixed them would mean neither.
       */
       const noticed = Number(
-        ((await db.execute('select app.raise_suggestions(40) as n')).rows[0] as { n?: number })
-          ?.n ?? 0,
+        (
+          (
+            await db.execute(
+              `select app.raise_suggestions(app.job_office(${lit(job.jobId)}::uuid), 40) as n`,
+            )
+          ).rows[0] as { n?: number }
+        )?.n ?? 0,
       )
 
       const body =
@@ -166,15 +177,17 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
         rest keep their turn on the next round.
       */
       const waiting = asWaiting(
-        (await db.execute(`select app.proposals_to_send(5) as r`)).rows[0] as { r?: unknown },
+        (await db.execute(`select app.proposals_to_send(${office}, 5) as r`)).rows[0] as {
+          r?: unknown
+        },
       )
       if (waiting.length === 0) return { ...base, body: withRestored } satisfies HandlerOutput
 
       const lines = waiting.map((w) => `${w.who} could not ${w.needed} — ${w.remedy}`)
       const said = await sayAs(db, router, 'chief-of-staff', {
         purpose:
-          'Tell Grant what the team has run into that it cannot do, and that each one ' +
-          'is waiting for a yes or no from him on the Governance page. Do not argue for ' +
+          `Tell ${currentPerson().name} what the team has run into that it cannot do, and that each one ` +
+          'is waiting for a yes or no from them on the Governance page. Do not argue for ' +
           'any of them and do not invent a cost. Keep the list as given.',
         facts: [
           `there ${waiting.length === 1 ? 'is' : 'are'} ${count(waiting.length, 'thing', 'things')} the team could not do`,
@@ -197,7 +210,7 @@ export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = 
         the defect it exists to prevent.
       */
       await db.execute(
-        `select app.proposals_sent(array[${waiting
+        `select app.proposals_sent(${office}, array[${waiting
           .map((w) => `'${w.id.replace(/'/g, "''")}'::uuid`)
           .join(', ')}], '${job.jobId.replace(/'/g, "''")}'::uuid) as n`,
       )

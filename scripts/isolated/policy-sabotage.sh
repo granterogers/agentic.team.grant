@@ -70,7 +70,7 @@ sab_sql sc-authority-never-spent slack-channels "create or replace function app.
 sab_src sc-handler-ignores-the-gate slack-channels src/handlers/channels.ts "s/if \(!d\.ok\) \{\s*await quiet\(\)/if (false) {\n            await quiet()/" "if \(false\)"
 
 G=3; echo "### 3 Notion destination"
-sab_sql nt-scope-ignored notion "do \$m\$ declare d text; begin d := pg_get_functiondef('app.authorize_effect(uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure); execute replace(d, 'scope_ref = p_scope', 'scope_ref is not null'); end \$m\$" "select pg_get_functiondef('app.authorize_effect(uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure) like '%scope_ref is not null%'"
+sab_sql nt-scope-ignored notion "do \$m\$ declare d text; begin d := pg_get_functiondef('app.authorize_effect(uuid,uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure); execute replace(d, 'scope_ref = p_scope', 'scope_ref is not null'); end \$m\$" "select pg_get_functiondef('app.authorize_effect(uuid,uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure) like '%scope_ref is not null%'"
 sab_sql nt-tool-wide-standing-allowed notion "update public.tool_permissions set scoped = false where tool = 'notion.write'" "select scoped from public.tool_permissions where tool = 'notion.write'"
 sab_sql nt-system-mints-authority notion "create or replace function app.person_provenance(p_by text, p_job uuid) returns text language sql as \$f\$ select 'grant'::text \$f\$" "select pg_get_functiondef('app.person_provenance(text,uuid)'::regprocedure) like '%select ''grant''%'"
 
@@ -80,7 +80,7 @@ sab_sql sr-rotate-becomes-standing-capable slack-rotation "update public.tool_pe
 
 G=5; echo "### 5 Learning"
 sab_src ln-authority-rules-stored learning src/agents/remember.ts "s/if \(reading\.bearsAuthority\) \{/if (false) {/" "if \(false\)"
-sab_sql ln-authorization-reads-lessons learning "do \$m\$ declare d text; begin d := pg_get_functiondef('app.authorize_effect(uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure); execute replace(d, 'v := app.may_act(p_project, p_tool, p_asked_job);', 'v := app.may_act(p_project, p_tool, p_asked_job); if exists (select 1 from public.lessons_live where body ilike ''%authorised%'') then return v || jsonb_build_object(''verdict'', ''proceed''); end if;'); end \$m\$" "select pg_get_functiondef('app.authorize_effect(uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure) like '%lessons_live%'"
+sab_sql ln-authorization-reads-lessons learning "do \$m\$ declare d text; begin d := pg_get_functiondef('app.authorize_effect(uuid,uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure); execute replace(d, 'v := app.may_act_in(p_office, v_proj, p_tool, v_asked);', 'v := app.may_act_in(p_office, v_proj, p_tool, v_asked); if exists (select 1 from public.lessons_live where body ilike ''%authorised%'') then return v || jsonb_build_object(''verdict'', ''proceed''); end if;'); end \$m\$" "select pg_get_functiondef('app.authorize_effect(uuid,uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure) like '%lessons_live%'"
 sab_src ln-anon-door-left-open learning migrations/0642_a_public_key_reaches_no_table_without_a_row_policy.sql "s/execute format\('revoke all on table %s from anon, authenticated', r\.t\);/execute format('select 1 \/* %s *\/', r.t);/" "select 1 /\\*"
 
 G=6; echo "### 6 Retrieval"
@@ -89,7 +89,7 @@ sab_sql rt-siblings-include-fixtures retrieval "create or replace function app.s
 
 G=7; echo "### 7 Proactivity"
 sab_sql pr-outward-proceeds-at-suggest proactive "update public.autonomy_policy set verdict = 'proceed' where autonomy = 'suggest' and action_level = 2" "select verdict from public.autonomy_policy where autonomy = 'suggest' and action_level = 2"
-sab_sql pr-outside-audience-floor-gone proactive "do \$m\$ declare d text; begin d := pg_get_functiondef('app.authorize_effect(uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure); execute replace(d, 'if p_audience = ''outside'' and v_verdict = ''proceed''', 'if false and p_audience = ''outside'' and v_verdict = ''proceed'''); end \$m\$" "select pg_get_functiondef('app.authorize_effect(uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure) like '%if false and p_audience%'"
+sab_sql pr-outside-audience-floor-gone proactive "do \$m\$ declare d text; begin d := pg_get_functiondef('app.authorize_effect(uuid,uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure); execute replace(d, 'if p_audience = ''outside'' and v_verdict = ''proceed''', 'if false and p_audience = ''outside'' and v_verdict = ''proceed'''); end \$m\$" "select pg_get_functiondef('app.authorize_effect(uuid,uuid,text,uuid,text,text,text,uuid,text,text)'::regprocedure) like '%if false and p_audience%'"
 
 echo
 echo "SUMMARY"

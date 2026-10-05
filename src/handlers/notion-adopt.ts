@@ -22,6 +22,7 @@
  * there; if nothing is shared, the answer is a sentence about sharing it.
  */
 
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
@@ -66,10 +67,10 @@ export function notionAdoptHandler(deps: NotionAdoptDeps): Handler {
       const setup = (
         await db.execute(`
           select
-            (select decrypted_secret from vault.decrypted_secrets
-              where name = 'notion.integration_token') as token,
+            ${credentialSql('notion.integration_token')} as token,
             (select name from public.projects
-              where project_id = ${lit(job.projectId)}::uuid) as project_name
+              where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                and project_id = ${lit(job.projectId)}::uuid) as project_name
         `)
       ).rows[0] as { token?: string | null; project_name?: string | null }
 
@@ -119,8 +120,11 @@ export function notionAdoptHandler(deps: NotionAdoptDeps): Handler {
         await db.execute(`
           insert into public.project_attachments
             (project_id, connector, external_ref, display_name, role, artifact_kind, ref_kind)
-          values (${lit(job.projectId)}::uuid, 'notion', ${lit(only.id)},
-                  ${lit(only.title)}, 'home', ${lit(want.kind)}, 'data_source')
+          select op.project_id, 'notion', ${lit(only.id)},
+                 ${lit(only.title)}, 'home', ${lit(want.kind)}, 'data_source'
+            from public.projects op
+           where op.office_id = app.job_office(${lit(job.jobId)}::uuid)
+             and op.project_id = ${lit(job.projectId)}::uuid
           on conflict (project_id, connector, external_ref, role) do update
             set enabled = true, disabled_reason = null, updated_at = app.now_utc()
         `)
@@ -138,6 +142,8 @@ export function notionAdoptHandler(deps: NotionAdoptDeps): Handler {
         await db.execute(`
           delete from public.project_connector_choices
            where project_id = ${lit(job.projectId)}::uuid and connector = 'notion'
+             and project_id in (select op.project_id from public.projects op
+                                 where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
         `)
       }
 

@@ -8,7 +8,9 @@
  * and reads come from the Postgres cache, so a full pass over every project
  * costs nothing in money and nothing in Notebook quota.
  */
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { trustedOffice } from '../../src/office/context.ts'
 import { generateBrief, NoSourcesError } from '../../src/projects/brief.ts'
 import { EmptyCompletionError, ProviderRouter } from '../../src/providers/router.ts'
 
@@ -38,12 +40,12 @@ const spend = async (): Promise<number> => {
 const before = await spend()
 
 const projects = await db.execute(`
-  select p.project_id::text as project_id, p.name,
+  select p.project_id::text as project_id, p.office_id::text as office_id, p.name,
          count(s.document_id)::int as sources
   from public.projects p
-  join public.documents s on s.project_id = p.project_id
+  join public.documents s on s.project_id = p.project_id and s.office_id = p.office_id
   where p.status = 'active' and s.content is not null
-  group by p.project_id, p.name
+  group by p.project_id, p.office_id, p.name
   order by p.name
 `)
 
@@ -60,7 +62,10 @@ for (const row of projects.rows) {
   const projectId = String(row.project_id)
   const name = String(row.name)
   try {
-    const result = await generateBrief(db, router, projectId, { force })
+    // Each project is briefed inside the office its own row names; nothing is carried between offices.
+    const result = await generateBrief(db, router, trustedOffice(row.office_id), projectId, {
+      force,
+    })
     if (result.skipped !== null) {
       skipped += 1
       console.log(`- ${name}: skipped (${result.skipped})`)

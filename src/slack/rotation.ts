@@ -176,6 +176,11 @@ export function secondsUntilExpiry(
  *    a pair Slack has already issued and already invalidated the old one for.
  */
 export interface RotationDeps {
+  /**
+   * SQL for the office whose installation is being rotated: the claimed job's (app.job_office of it), or the
+   * operator's for the script. The credential row is addressed by app id AND office, never by app id alone.
+   */
+  readonly office: string
   readonly execute: (sql: string) => Promise<{ readonly rows: readonly Record<string, unknown>[] }>
   readonly fetchImpl?: typeof fetch
 }
@@ -215,7 +220,7 @@ export async function rotateAndPersist(
       update public.slack_app_credentials
       set rotation_failures = rotation_failures + 1,
           last_rotation_error = ${sqlLit(rotation.message.slice(0, 400))}
-      where slack_app_id = ${sqlLit(appId)}
+      where office_id = ${deps.office} and slack_app_id = ${sqlLit(appId)}
     `)
     return { kind: 'failed', error: rotation.message, needsHuman: rotation.needsHuman === true }
   }
@@ -250,7 +255,7 @@ export async function rotateAndPersist(
         `update public.slack_app_credentials
           set config_token_expires_at = to_timestamp(${String(Math.floor(pair.expiresAt))}),
               config_token_rotated_at = app.now_utc(), rotation_failures = 0, last_rotation_error = null
-        where slack_app_id = ${sqlLit(appId)}`,
+        where office_id = ${deps.office} and slack_app_id = ${sqlLit(appId)}`,
       )
       .then(() => true)
       .catch(() => false)

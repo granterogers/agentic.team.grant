@@ -12,6 +12,7 @@
  * after that the existing one is reused, because rotating a token nobody asked
  * to rotate would silently lock Grant's phone out of the dashboard.
  */
+import '../../src/safety/require-production-writes.ts'
 import { randomBytes } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
@@ -65,6 +66,29 @@ form.append(
   JSON.stringify({ name: 'hq-api', entrypoint_path: 'index.ts', verify_jwt: false }),
 )
 form.append('file', new File([entrypoint], 'index.ts', { type: 'application/typescript' }))
+// The file reader the upload action imports as ./file-text.ts (#419): one source, uploaded beside the entrypoint.
+form.append(
+  'file',
+  new File([await readFile('src/text/file-text.ts', 'utf8')], 'file-text.ts', {
+    type: 'application/typescript',
+  }),
+)
+
+// And the Slack install helpers it imports as ./oauth.ts (ADR-0065).
+form.append(
+  'file',
+  new File([await readFile('src/slack/oauth.ts', 'utf8')], 'oauth.ts', {
+    type: 'application/typescript',
+  }),
+)
+
+// The on-demand document preview (0990): one source in src/, uploaded beside the entrypoint as ./preview.ts.
+form.append(
+  'file',
+  new File([await readFile('src/documents/preview.ts', 'utf8')], 'preview.ts', {
+    type: 'application/typescript',
+  }),
+)
 
 const deployed = await fetch(`${api}/functions/deploy?slug=hq-api`, {
   method: 'POST',

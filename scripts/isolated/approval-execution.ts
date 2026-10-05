@@ -90,7 +90,7 @@ const make = async (titles: string[]): Promise<string> => {
   const BY = `telegram:grant${String(seq)}`
   const r = await one(`
     with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, pinned_config, announce)
-               values ('office.pursue', '${BY}', app.unnamed_project(), 'r45-' || gen_random_uuid(), gen_random_uuid(),
+               values ('office.pursue', '${BY}', app.unnamed_project(app.test_office()), 'r45-' || gen_random_uuid(), gen_random_uuid(),
                        jsonb_build_object('plan', '${JSON.stringify(plan(titles)).replace(/'/g, "''")}'::jsonb, 'request', 'isolated proof'), true)
                returning job_id)
     select job_id::text as id from j`)
@@ -212,9 +212,13 @@ for (const [a, want] of [
   const j = await make([t])
   await step(j)
   const b = await blocker(j)
-  await db.execute(`select app.hq_answer_blocker('${b}'::uuid, '${a}', 'grant')`)
+  await db.execute(
+    `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${b}'::uuid), app.test_office()), '${b}'::uuid, '${a}', 'grant')`,
+  )
   const second = await db
-    .execute(`select app.hq_answer_blocker('${b}'::uuid, '${a}', 'grant')::text as r`)
+    .execute(
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${b}'::uuid), app.test_office()), '${b}'::uuid, '${a}', 'grant')::text as r`,
+    )
     .then((r) => String((r.rows[0] as { r?: string }).r))
     .catch((e: unknown) => `refused: ${String((e as Error).message).slice(0, 60)}`)
   await step(j)

@@ -106,17 +106,18 @@ const subject = `hexavolt ${run}`
 const searched = await one(`
   begin;
   select app.record_decision_made(
+    app.test_office(),
     ${lit(`Which supplier do we use for the ${subject} order?`)},
     'Northgate',
     array['Bellamy', 'splitting it between both'],
     'Bellamy could not commit to the lead time and splitting it doubles the admin.',
     ${lit(REAL)}, null, null, null);
   select
-    jsonb_array_length(app.decisions_about(${lit(`who supplies our ${subject}`)})) as found,
-    (app.decisions_about(${lit(`who supplies our ${subject}`)}) -> 0 ->> 'chose') as chose,
-    (app.decisions_about(${lit(`did we ever consider Bellamy for ${subject}`)}) -> 0 ->> 'chose')
+    jsonb_array_length(app.decisions_about(app.test_office(), ${lit(`who supplies our ${subject}`)})) as found,
+    (app.decisions_about(app.test_office(), ${lit(`who supplies our ${subject}`)}) -> 0 ->> 'chose') as chose,
+    (app.decisions_about(app.test_office(), ${lit(`did we ever consider Bellamy for ${subject}`)}) -> 0 ->> 'chose')
       as by_ruled_out,
-    jsonb_array_length(app.decisions_about(${lit(`what colour is the ${run} van`)})) as unrelated;
+    jsonb_array_length(app.decisions_about(app.test_office(), ${lit(`what colour is the ${run} van`)})) as unrelated;
   rollback;
 `)
 
@@ -148,9 +149,10 @@ console.log('\nit crosses projects — a boundary that is not a privacy boundary
 {
   const got = await one(`
     begin;
-    insert into public.projects (name, slug, status)
-    values (${lit(`Fixture decisions ${run}`)}, ${lit(`fixture-decisions-${run}`)}, 'paused');
+    insert into public.projects (office_id, name, slug, status)
+    values (app.test_office(), ${lit(`Fixture decisions ${run}`)}, ${lit(`fixture-decisions-${run}`)}, 'paused');
     select app.record_decision_made(
+      app.test_office(),
       ${lit(`Do we run the ${run} webinars live or recorded?`)},
       'Recorded, with a live Q and A after',
       array['Fully live'],
@@ -162,8 +164,8 @@ console.log('\nit crosses projects — a boundary that is not a privacy boundary
     -- handler calls. A check that passed one in would be testing a signature
     -- nobody uses.
     select
-      jsonb_array_length(app.decisions_about(${lit(`should the ${run} webinars be live`)})) as found,
-      (app.decisions_about(${lit(`should the ${run} webinars be live`)}) -> 0 ->> 'project') as named;
+      jsonb_array_length(app.decisions_about(app.test_office(), ${lit(`should the ${run} webinars be live`)})) as found,
+      (app.decisions_about(app.test_office(), ${lit(`should the ${run} webinars be live`)}) -> 0 ->> 'project') as named;
     rollback;
   `)
   check(
@@ -183,9 +185,11 @@ console.log('\nchanging its mind, without losing what it thought before')
   const got = await one(`
     begin;
     select app.record_decision_made(
+      app.test_office(),
       ${lit(`Where do the ${run} module pages live?`)}, 'Google Drive', array['Notion'],
       'Everyone already had Drive open.', ${lit(REAL)}, null, null, null);
     select app.record_decision_made(
+      app.test_office(),
       ${lit(`Where do the ${run} module pages live?`)}, 'Notion', array['Google Drive'],
       'The team needs to edit in place.', ${lit(REAL)}, null, null,
       (select decision_id from public.decisions
@@ -196,7 +200,7 @@ console.log('\nchanging its mind, without losing what it thought before')
         where question = ${lit(`Where do the ${run} module pages live?`)}) as total,
       (select count(*) from public.decisions_live
         where question = ${lit(`Where do the ${run} module pages live?`)}) as live,
-      (app.decisions_about(${lit(`where do the ${run} module pages go`)}) -> 0 ->> 'chose') as answer;
+      (app.decisions_about(app.test_office(), ${lit(`where do the ${run} module pages go`)}) -> 0 ->> 'chose') as answer;
     rollback;
   `)
   check(
@@ -215,10 +219,10 @@ console.log('\nchanging its mind, without losing what it thought before')
   // be read in order, so the index refuses it.
   const said = await refusedBy(`
     begin;
-    select app.record_decision_made('a', 'b', array[]::text[], 'c', ${lit(WHO)});
-    select app.record_decision_made('d', 'e', array[]::text[], 'f', ${lit(WHO)}, null, null,
+    select app.record_decision_made(app.test_office(), 'a', 'b', array[]::text[], 'c', ${lit(WHO)});
+    select app.record_decision_made(app.test_office(), 'd', 'e', array[]::text[], 'f', ${lit(WHO)}, null, null,
       (select decision_id from public.decisions where question = 'a' and decided_by = ${lit(WHO)}));
-    select app.record_decision_made('g', 'h', array[]::text[], 'i', ${lit(WHO)}, null, null,
+    select app.record_decision_made(app.test_office(), 'g', 'h', array[]::text[], 'i', ${lit(WHO)}, null, null,
       (select decision_id from public.decisions where question = 'a' and decided_by = ${lit(WHO)}));
     rollback;
   `)
@@ -241,7 +245,7 @@ for (const [what, sql] of [
 ] as const) {
   const said = await refusedBy(`
     begin;
-    select app.record_decision_made('a', 'b', array[]::text[], 'c', ${lit(WHO)});
+    select app.record_decision_made(app.test_office(), 'a', 'b', array[]::text[], 'c', ${lit(WHO)});
     ${sql};
     rollback;
   `)
@@ -261,20 +265,21 @@ console.log('\nanswering a question and settling a proposal both write one down'
 {
   const got = await one(`
     begin;
-    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
-    values (extensions.gen_random_uuid(), null, ${lit(`verify-decisions-${run}`)},
+    insert into public.jobs (office_id, correlation_id, project_id, idempotency_key, kind, requested_by)
+    values (app.test_office(), extensions.gen_random_uuid(), null, ${lit(`verify-decisions-${run}`)},
             'research', ${lit(`teamhq:verify-decisions-${run}`)});
     insert into public.blockers
-      (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+      (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
        approval_options, originating_agent, work_can_continue)
-    values (null, (select job_id from public.jobs
+    values (app.test_office(), null, (select job_id from public.jobs
                     where idempotency_key = ${lit(`verify-decisions-${run}`)}),
             ${lit(`Where do the ${run} pages live?`)},
             'Two places could hold them and only you can say.',
             'Nothing moves until you answer.',
             array['Notion', 'Google Drive', 'Neither, leave it'],
             'chief-of-staff', true);
-    select app.hq_answer_blocker(
+    select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = (select blocker_id from public.blockers
+        where requested_action = ${lit(`Where do the ${run} pages live?`)})), app.test_office()), 
       (select blocker_id from public.blockers
         where requested_action = ${lit(`Where do the ${run} pages live?`)}), 'Notion', 'grant');
     select chose, array_to_string(ruled_out, ' | ') as ruled_out, decided_by
@@ -302,7 +307,7 @@ console.log('\nanswering a question and settling a proposal both write one down'
     values ('growth-director', 'missing_tool', ${lit(`Reading a page on the open web (${run})`)},
             'web.search', 'Nine research jobs ended with a citation I could not read.',
             'Free tier, 100 lookups a day', ${lit(`fixture-need-${run}`)}, 'open');
-    select app.decide_proposal(
+    select app.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = (select proposal_id from public.proposals where needed = ${lit(`fixture-need-${run}`)})), app.test_office()), 
       (select proposal_id from public.proposals where needed = ${lit(`fixture-need-${run}`)}),
       'declined', 'Not until there is a free tier we can live inside.', ${lit(REAL)});
     select chose, array_to_string(ruled_out, ' | ') as ruled_out, because
@@ -337,10 +342,10 @@ console.log('\nanswering a question and settling a proposal both write one down'
       (staff_slug, kind, title, remedy, argument, cost_note, needed, state)
     values ('growth-director', 'missing_tool', ${lit(`Reopened (${run})`)}, 'web.search',
             'x', 'none', ${lit(`fixture-reopen-${run}`)}, 'open');
-    select app.decide_proposal(
+    select app.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = (select proposal_id from public.proposals where needed = ${lit(`fixture-reopen-${run}`)})), app.test_office()), 
       (select proposal_id from public.proposals where needed = ${lit(`fixture-reopen-${run}`)}),
       'declined', 'Not now.', ${lit(REAL)});
-    select app.decide_proposal(
+    select app.decide_proposal(coalesce((select zz_o.office_id from public.proposals zz_o where zz_o.proposal_id = (select proposal_id from public.proposals where needed = ${lit(`fixture-reopen-${run}`)})), app.test_office()), 
       (select proposal_id from public.proposals where needed = ${lit(`fixture-reopen-${run}`)}),
       'open', null, ${lit(REAL)});
     -- ONE, from the decline. The reopen adds nothing.
@@ -365,14 +370,15 @@ console.log('\nand harness traffic never reaches a prompt')
   const got = await one(`
     begin;
     select app.record_decision_made(
+      app.test_office(),
       ${lit(`Should the ${run} fixture reach a prompt?`)}, 'No', array['Yes'],
       'Because it is a fixture.', ${lit(WHO)}, null, null, null);
     select
       (select count(*) from public.decisions
         where decided_by = ${lit(WHO)} and is_fixture) as flagged,
-      jsonb_array_length(app.decisions_about(
+      jsonb_array_length(app.decisions_about(app.test_office(),
         ${lit(`should the ${run} fixture reach a prompt`)})) as reachable,
-      jsonb_array_length(app.decisions_so_far(200)) as on_the_page_before;
+      jsonb_array_length(app.decisions_so_far(app.owner_office('grant'), 200)) as on_the_page_before;
     rollback;
   `)
   check(

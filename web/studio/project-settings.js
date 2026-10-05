@@ -548,6 +548,22 @@ function projectPane(p) {
   return `
     <div class="setproj">
       <div class="setblock" data-saidwrap>
+        <span class="t-label">Name</span>
+        <p class="t-meta">What this project is called, everywhere it appears. The address
+          and everything inside it stay exactly as they are.</p>
+        ${
+          canWrite()
+            ? `<form class="setadd" data-projrename-form="${esc(p.slug)}">
+                 <input type="text" data-projname maxlength="80" value="${esc(p.name)}"
+                   aria-label="Project name" autocomplete="off" spellcheck="false">
+                 <button type="submit" class="btn small" data-projrename="${esc(p.slug)}">Save name</button>
+               </form>`
+            : `<span class="t-meta">Read-only — no token in this browser.</span>`
+        }
+        <span class="t-meta" data-said role="status" aria-live="polite"></span>
+      </div>
+
+      <div class="setblock" data-saidwrap>
         <span class="t-label">Take it with you</span>
         <p class="t-meta">Everything ${esc(p.name)} holds, as one file: the brief, the
           documents and their text, the tasks, the contacts, the sources, the team
@@ -685,7 +701,7 @@ function download(name, payload) {
  * archiving will report. A page that patched one row would be right about that
  * row and wrong about the rest.
  */
-export function wire(root, p, people, redraw, openLook) {
+export function wire(root, p, people, redraw, openLook, reload) {
   /*
     The picker is built in `app.js`, where the sheet and its 451 marks live, so
     it is handed in rather than imported - importing it here would make this
@@ -783,7 +799,13 @@ export function wire(root, p, people, redraw, openLook) {
     b.addEventListener('click', async () => {
       // Removing an automation is the one thing on this pane that cannot be
       // undone by pressing the same button again.
-      if (!sure(`Remove this automation?\n\n“${b.dataset.what}”\n\nPausing it keeps it.`)) return
+      if (
+        !(await sure(`“${b.dataset.what}” will be removed. Pausing it keeps it.`, 'Remove it', {
+          title: 'Remove this automation?',
+          danger: true,
+        }))
+      )
+        return
       await attempt(
         b,
         'Removing…',
@@ -810,7 +832,13 @@ export function wire(root, p, people, redraw, openLook) {
 
   for (const b of root.querySelectorAll('[data-label-remove]')) {
     b.addEventListener('click', async () => {
-      if (!sure(`Remove the label “${b.dataset.name}”? It comes off every contact carrying it.`)) {
+      if (
+        !(await sure(
+          `Remove the label “${b.dataset.name}”? It comes off every contact carrying it.`,
+          'Remove it',
+          { title: 'Remove this label?', danger: true },
+        ))
+      ) {
         return
       }
       await attempt(b, 'Removing…', () => people.removeLabel(b.dataset.labelRemove), 'Removed.')
@@ -836,14 +864,46 @@ export function wire(root, p, people, redraw, openLook) {
     })
   }
 
+  /*
+    RENAMING. The one field on the record a person is certain to want to change,
+    and the only place in Team HQ that could. The office refuses a name another
+    live project already answers to and says so in words; that sentence is shown
+    as it came, because it names the project in the way.
+  */
+  for (const f of root.querySelectorAll('[data-projrename-form]')) {
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const b = f.querySelector('[data-projrename]')
+      const name = String(f.querySelector('[data-projname]')?.value ?? '').trim()
+      if (b === null) return
+      if (name === '') {
+        say(b, 'A project needs a name.', 'warn')
+        return
+      }
+      if (name === p.name) {
+        say(b, 'That is already its name.')
+        return
+      }
+      const done = await attempt(
+        b,
+        'Saving…',
+        () => act('rename_project', { p_slug: f.dataset.projrenameForm, p_name: name }),
+        'Renamed.',
+      )
+      if (done) await reload?.()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-archive]')) {
     b.addEventListener('click', async () => {
       if (
-        !sure(
-          `Archive “${b.dataset.name}”?\n\n` +
+        !(await sure(
+          `Archive “${b.dataset.name}”? ` +
             'It leaves your project list and stops running anything by itself. ' +
             'Nothing is deleted, and you can bring it back.',
-        )
+          'Archive it',
+          { title: 'Archive this project?' },
+        ))
       ) {
         return
       }

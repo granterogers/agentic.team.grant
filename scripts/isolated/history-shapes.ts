@@ -26,7 +26,7 @@ const inRollback = async (body: string): Promise<Record<string, unknown>> => {
       declare c uuid; e jsonb; r jsonb; pr uuid; v jsonb;
       begin
         perform set_config('application_name', 'PostgREST 14.5', true);
-        pr := (app.hq_create_project(${lit(`History real ${run}`)}, 'upload',
+        pr := (app.hq_create_project(app.test_office(), ${lit(`History real ${run}`)}, 'upload',
                  ${lit(`hreal-${run}`)}, ${lit(`History real ${run}`)}, true) ->> 'project_id')::uuid;
         ${body}
         raise exception 'ROLLED-BACK:%', r::text;
@@ -47,7 +47,7 @@ const mk = async (n: string) =>
     (
       (
         await one(
-          `select app.hq_create_project(${lit(n)}, 'upload', ${lit(`${n}-ref`)}, ${lit(n)}, true) as v`,
+          `select app.hq_create_project(app.test_office(), ${lit(n)}, 'upload', ${lit(`${n}-ref`)}, ${lit(n)}, true) as v`,
         )
       ).v as { project_id: string }
     ).project_id,
@@ -75,20 +75,21 @@ check(
 
 // The suite's own turn is harness and hidden; the real-shaped one is shown.
 await db.execute(
-  `select app.say_in_project(${lit(good)}::uuid, ${lit(`Said from the studio ${run}`)}, 'research-director')`,
+  `select app.say_in_project(app.test_office(), ${lit(good)}::uuid, ${lit(`Said from the studio ${run}`)}, 'research-director')`,
 )
-const own = ((await one(`select app.conversation_history(${lit(good)}::uuid, 100) as v`)).v ??
-  []) as Msg[]
+const own = ((
+  await one(`select app.conversation_history(app.test_office(), ${lit(good)}::uuid, 100) as v`)
+).v ?? []) as Msg[]
 check(
   'the suite’s own studio turn is hidden (0602)',
   !own.some((m) => String(m.body).includes('Said from the studio')),
   `${String(own.length)} shown`,
 )
 const studio = await inRollback(`
-  v := app.say_in_project(pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
-  e := app.say_in_project(pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
+  v := app.say_in_project(app.test_office(), pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
+  e := app.say_in_project(app.test_office(), pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
   r := jsonb_build_object('origin', app.job_origin((v ->> 'job')::uuid), 'nobody_ok', e ->> 'ok',
-                          'history', app.conversation_history(pr, 100));`)
+                          'history', app.conversation_history(app.test_office(), pr, 100));`)
 const h = (studio.history ?? []) as Msg[]
 const said = h.find((m) => String(m.body).includes(`Said for real from the studio ${run}`))
 check(

@@ -29,6 +29,7 @@
  * produced it.
  */
 
+import '../../src/safety/require-production-checks.ts'
 import { recordDecision, route, scanForDuplicates } from '../../src/agents/router.ts'
 import { combinedNotifier, pagerChannel } from '../../src/channels/notify.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
@@ -44,6 +45,7 @@ import { ChannelProvisioner } from '../../src/slack/provision.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { TelegramPager } from '../../src/telegram/pager.ts'
 import { pagerBot } from '../../src/telegram/roster.ts'
+import { officeOfProject } from '../test-office.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -91,7 +93,7 @@ const projectId = String(project.id)
 console.log(`project: ${String(project.name)} (${String(project.slug)})`)
 
 // --- §5: route it. A roster is decided, not assumed. ------------------------
-const scan = await scanForDuplicates(db, question, { projectId })
+const scan = await scanForDuplicates(db, question, { office: 'app.operator_office()', projectId })
 const decision = route(question, scan)
 console.log(
   `routed: intent=${decision.intent} confident=${String(decision.confident)} ` +
@@ -101,8 +103,8 @@ console.log(
 // --- §7: a real job --------------------------------------------------------
 const job = await one(`
   insert into public.jobs
-    (correlation_id, project_id, idempotency_key, kind, intent_class, requested_by, priority)
-  values (gen_random_uuid(), ${lit(projectId)}::uuid,
+    (office_id, correlation_id, project_id, idempotency_key, kind, intent_class, requested_by, priority)
+  values (app.require_office(app.operator_office()), gen_random_uuid(), ${lit(projectId)}::uuid,
           ${lit(`ask-${Date.now().toString(36)}`)}, 'office.ask',
           ${lit(decision.intent)}, 'grant', 100)
   returning job_id::text as id, correlation_id::text as corr
@@ -151,7 +153,7 @@ console.log(
 // something nothing read: `ask` sent every question to a model with no context
 // from the documents at all, which made ADR-0013's "retrieval plus a model
 // call" half a sentence.
-const hits = await retrieve(db, question, projectId)
+const hits = await retrieve(db, await officeOfProject(db, projectId), question, projectId)
 const context = contextBlock(hits)
 console.log(
   hits.length === 0

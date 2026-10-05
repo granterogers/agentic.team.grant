@@ -76,8 +76,8 @@ const makeJob = async (tag: string): Promise<string> =>
     (
       await one(`
         insert into public.jobs
-          (correlation_id, project_id, idempotency_key, kind, requested_by, priority, announce)
-        values (gen_random_uuid(), null, ${lit(`stop-${run}-${tag}`)}, ${lit(`stopprobe.${run}`)},
+          (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, priority, announce)
+        values (app.test_office(), gen_random_uuid(), null, ${lit(`stop-${run}-${tag}`)}, ${lit(`stopprobe.${run}`)},
                 ${lit(MINE)}, 100, false)
         returning job_id::text as id`)
     ).id,
@@ -126,7 +126,13 @@ const stepsFor = (ran: string[]) => [
 // --- 2. a stop asked for BEFORE the run halts at the first checkpoint -------
 {
   const jobId = await makeJob('before')
-  const asked = asJson((await one(`select app.request_stop(${lit(jobId)}::uuid, 'grant') as r`)).r)
+  const asked = asJson(
+    (
+      await one(
+        `select app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${lit(jobId)}::uuid), app.test_office()), ${lit(jobId)}::uuid, 'grant') as r`,
+      )
+    ).r,
+  )
   check(
     'a stop is accepted on a job that has not finished',
     JSON.stringify(asked),
@@ -162,7 +168,9 @@ const stepsFor = (ran: string[]) => [
       effect: 'none' as const,
       run: async () => {
         ran.push('one')
-        await db.execute(`select app.request_stop(${lit(jobId)}::uuid, 'grant')`)
+        await db.execute(
+          `select app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${lit(jobId)}::uuid), app.test_office()), ${lit(jobId)}::uuid, 'grant')`,
+        )
         return { outcome: { did: 1 } }
       },
     },
@@ -215,7 +223,13 @@ const stepsFor = (ran: string[]) => [
   await db.execute(`
     update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
       state_reason = 'verify:stop fixture' where job_id = ${lit(jobId)}::uuid`)
-  const asked = asJson((await one(`select app.request_stop(${lit(jobId)}::uuid, 'grant') as r`)).r)
+  const asked = asJson(
+    (
+      await one(
+        `select app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${lit(jobId)}::uuid), app.test_office()), ${lit(jobId)}::uuid, 'grant') as r`,
+      )
+    ).r,
+  )
   check(
     'CONTROL: a job that already finished cannot be stopped, and says why',
     String(asked.note ?? asked.error ?? '(said nothing)'),
@@ -225,7 +239,7 @@ const stepsFor = (ran: string[]) => [
   const missing = asJson(
     (
       await one(
-        `select app.request_stop('00000000-0000-0000-0000-000000000000'::uuid, 'grant') as r`,
+        `select app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = '00000000-0000-0000-0000-000000000000'::uuid), app.test_office()), '00000000-0000-0000-0000-000000000000'::uuid, 'grant') as r`,
       )
     ).r,
   )

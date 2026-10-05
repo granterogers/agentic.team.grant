@@ -31,6 +31,7 @@
  *
  * Static on purpose: it must be able to fail before anything is sent.
  */
+import '../src/safety/arm.ts'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 

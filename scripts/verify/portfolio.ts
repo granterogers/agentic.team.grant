@@ -67,7 +67,8 @@ interface Portfolio {
 }
 
 const portfolio = async (): Promise<Portfolio> =>
-  ((await one('select app.hq_portfolio_tasks() as p')).p ?? {}) as unknown as Portfolio
+  ((await one('select app.hq_portfolio_tasks(app.test_office()) as p')).p ??
+    {}) as unknown as Portfolio
 
 /*
   Real subjects, and NOT marked `verify:` — Issue #45's trap, walked into once
@@ -156,7 +157,9 @@ check(
   is not about a project"; a slug that does not resolve is a typo, and filing
   that under "no project" would lose the task somewhere he is not looking.
 */
-const viaRpc = await one(`select public.hq_task_add('', 'A loose task through the RPC') as r`)
+const viaRpc = await one(
+  `select public.hq_task_add(app.test_office(), '', 'A loose task through the RPC') as r`,
+)
 check(
   'the write path accepts an empty project as meaning none',
   JSON.stringify((viaRpc.r as Record<string, unknown>).project),
@@ -165,7 +168,9 @@ check(
 )
 await db.execute(`delete from public.tasks where title = 'A loose task through the RPC'`)
 
-const typo = await one(`select public.hq_task_add('coching-corse', 'A typo') as r`)
+const typo = await one(
+  `select public.hq_task_add(app.test_office(), 'coching-corse', 'A typo') as r`,
+)
 check(
   'and a MISTYPED project is still refused, rather than filed under none',
   String((typo.r as Record<string, unknown>).error ?? '(it was ACCEPTED)').slice(0, 56),

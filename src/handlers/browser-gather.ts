@@ -109,6 +109,7 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
       const say = (body: string, announce = true): HandlerOutput =>
         ({ ...base, announce, body }) satisfies HandlerOutput
 
+      // raw-sql[2]: keyed by the claimed job; it reads the payload and project of the job the worker holds.
       const pinned =
         ((
           await db.execute(
@@ -136,7 +137,13 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
         exceeded is a cap nobody counted against. Refusing early costs a
         sentence; refusing late costs the money the whole assessment was about.
       */
-      const budget = jsonOf((await db.execute('select app.browser_budget() as r')).rows[0]?.r) as {
+      const budget = jsonOf(
+        (
+          await db.execute(
+            `select app.browser_budget(app.job_office(${lit(job.jobId)}::uuid)) as r`,
+          )
+        ).rows[0]?.r,
+      ) as {
         left_minutes?: number
         exhausted?: boolean
       }
@@ -153,7 +160,10 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
                  app.resolve_secret(s.credential_ref) as jar,
                  (s.revoked_at is not null) as gone
             from public.browser_sessions s
-           where s.project_id = ${lit(projectId)}::uuid and s.site = ${lit(host)}`)
+           where s.project_id = ${lit(projectId)}::uuid and s.site = ${lit(host)}
+             and exists (select 1 from public.projects sp
+                          where sp.project_id = s.project_id
+                            and sp.office_id = app.job_office(${lit(job.jobId)}::uuid))`)
       ).rows[0] as SessionRow | undefined
 
       if (session !== undefined && session.gone) {
@@ -174,7 +184,8 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
         ms: number,
       ): Promise<void> => {
         await db.execute(`
-          select app.browser_note(${nul(session?.session_id ?? null)}::uuid,
+          select app.browser_note(app.job_office(${lit(job.jobId)}::uuid),
+                                  ${nul(session?.session_id ?? null)}::uuid,
                                   ${lit(job.jobId)}::uuid, ${lit(verb)}, ${lit(url)},
                                   ${String(ok)}, ${lit(detail)}, ${nul(shotPath)},
                                   ${String(Math.max(0, Math.round(ms)))})`)
@@ -204,7 +215,8 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
               await note('read', got.ok, got.detail, null, got.ms)
               if (got.signedOut && session !== undefined) {
                 await db.execute(
-                  `select app.browser_session_expired(${lit(session.session_id)}::uuid,
+                  `select app.browser_session_expired(app.job_office(${lit(job.jobId)}::uuid),
+                                                    ${lit(session.session_id)}::uuid,
                                                     ${lit(got.detail.slice(0, 200))})`,
                 )
               }
@@ -262,7 +274,8 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
               const kept = jsonOf(
                 (
                   await db.execute(`
-                  select app.record_browser_page(${lit(projectId)}::uuid, ${lit(url)},
+                  select app.record_browser_page(app.job_office(${lit(job.jobId)}::uuid),
+                                                 ${lit(projectId)}::uuid, ${lit(url)},
                                                  ${lit(title.slice(0, 300))}, ${lit(text)},
                                                  ${lit(job.jobId)}::uuid) as r`)
                 ).rows[0]?.r,

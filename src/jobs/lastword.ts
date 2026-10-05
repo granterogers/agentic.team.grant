@@ -145,6 +145,7 @@ export async function lastWord(
          from public.jobs j
          join public.inbound_commands c
            on c.command_id = (j.pinned_config ->> 'command_id')::uuid
+          and c.office_id = app.job_office(${lit(job.jobId)}::uuid)
         where j.job_id = ${lit(job.jobId)}::uuid`,
     )
     spoken = (rows[0] as { spoken: boolean } | undefined)?.spoken === true
@@ -168,6 +169,7 @@ export async function lastWord(
   */
   let outputId: string
   try {
+    // P3: an output of the claimed job (job_id is the worker's own claimed job; outputs are derived from jobs).
     const { rows } = await db.execute(`
       insert into public.outputs
         (job_id, staff_id, body, confidence, evidence, sources, deterministic)
@@ -241,6 +243,7 @@ export async function lastWord(
     command and `parent_job_id is null`, so this can never resurrect a duty's
     muted chatter — the rows 0584 silences are not rows this function returns.
   */
+  // P3: keyed by the claimed job id.
   await db
     .execute(`update public.jobs set announce = true where job_id = ${lit(job.jobId)}::uuid`)
     .catch(() => undefined)

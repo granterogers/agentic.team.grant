@@ -53,6 +53,7 @@ import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { sampleOffice } from '../sample/lib.ts'
 import { namesAnOffice } from './lib/office-seam.ts'
 
 const CHROMIUM = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
@@ -85,12 +86,12 @@ const ROUTES = [
   // Activity was removed as a section by #222; its panel lives on Overview.
   { kind: 'pane', at: 'team', name: 'settings · team' },
   { kind: 'pane', at: 'behaviour', name: 'settings · behaviour' },
-  { kind: 'pane', at: 'governance', name: 'settings · governance' },
+  { kind: 'pane', at: 'requests', name: 'settings · requests' },
+  { kind: 'pane', at: 'memory', name: 'settings · what it has learned' },
   { kind: 'pane', at: 'connections', name: 'settings · connections' },
   { kind: 'pane', at: 'channels', name: 'settings · channels' },
   { kind: 'pane', at: 'models', name: 'settings · usage' },
   { kind: 'pane', at: 'appearance', name: 'settings · appearance' },
-  { kind: 'pane', at: 'setup', name: 'settings · setting up' },
   { kind: 'pane', at: 'help', name: 'settings · help' },
   /*
     THE CALL IS NOT A SCREEN, so it is not a route here.
@@ -173,6 +174,13 @@ const db = new ManagementApiExecutor(
   token,
 )
 
+// P3: these read the dashboard of the person whose pages are being captured, so they name that office first.
+// Every one of these takes the office first (checked against pg_proc), so none is called without it. The office is the
+// SAMPLE PERSON's: the pages are captured from a real second office, never from Grant's, which also makes this a read
+// of fictional data rather than of his.
+const sampleOfficeId = (await sampleOffice()).officeId
+const callOf = (fn: string, args: string): string =>
+  `app.${fn}('${sampleOfficeId}'::uuid${args === '' ? '' : `, ${args}`})`
 const sections: Record<string, unknown> = {}
 for (const [name, fn] of SECTIONS) {
   // Two of these take an argument, and calling them without one is a different
@@ -187,7 +195,7 @@ for (const [name, fn] of SECTIONS) {
         : fn === 'hq_governance'
           ? '40'
           : ''
-  const { rows } = await db.execute(`select app.${fn}(${args}) as d`)
+  const { rows } = await db.execute(`select ${callOf(fn, args)} as d`)
   sections[name] = (rows[0] as { d: unknown }).d
 }
 console.log(`Captured ${String(Object.keys(sections).length)} sections of real data.\n`)
@@ -399,7 +407,7 @@ const MEASURE = `() => {
         So the same rule verify:controls arrived at in #190: find what is in
         front, and measure that.
       */
-      const order = ['#settings .setbody', '#viewer .docbody', '#viewer', 'main', '.main']
+      const order = ['#settings .stg-main', '#viewer .docbody', '#viewer', 'main', '.main']
       for (const sel of order) {
         const box = document.querySelector(sel)
         if (box === null) continue

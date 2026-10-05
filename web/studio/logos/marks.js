@@ -46,6 +46,19 @@ export const MARKS = {
               <path d="M3.5 14 6 9.6l4.8 8.4H5.9z"/>
               <path d="M8.3 18h12.2l-2.4 2.6H6.6z"/>`),
   },
+  calendar: {
+    name: 'Google Calendar',
+    tint: '#4a7fd4',
+    svg: svg(`<rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/>
+              <path d="M3.5 9.6h17M8 3.4v3.2M16 3.4v3.2"/>
+              <path d="M9.2 17.2h1.1c1 0 1.7-.5 1.7-1.4 0-.8-.6-1.3-1.5-1.3M14 13.6l1.2-.8v4.4" stroke-width="1.5"/>`),
+  },
+  gmail: {
+    name: 'Gmail',
+    tint: '#d9594c',
+    svg: svg(`<rect x="3.5" y="5.5" width="17" height="13" rx="2.4"/>
+              <path d="M4 7.4l8 6.2 8-6.2"/>`),
+  },
   notebooklm: {
     name: 'NotebookLM',
     tint: '#4a7fd4',
@@ -129,6 +142,22 @@ export const MARKS = {
     tint: 'currentColor',
     svg: svg(`<path d="M12 15.4V4.2"/><path d="M7.8 8.4 12 4.2l4.2 4.2"/>
               <path d="M4.2 15.6v2.6a1.8 1.8 0 001.8 1.8h12a1.8 1.8 0 001.8-1.8v-2.6"/>`),
+  },
+  /*
+    The two ways of reaching the team that are Team HQ's own rather than a company's: talking (a microphone) and mail
+    (an envelope). Generic shapes and no tint, for the reason above. Without them the Messaging rows drew an empty box
+    where the mark goes whenever the payload named them voice and mail.
+  */
+  voice: {
+    name: 'Voice',
+    tint: 'currentColor',
+    svg: svg(`<rect x="9" y="3.2" width="6" height="11" rx="3"/>
+              <path d="M5.6 11.4a6.4 6.4 0 0012.8 0M12 17.8v3"/>`),
+  },
+  mail: {
+    name: 'Email',
+    tint: 'currentColor',
+    svg: svg(`<rect x="3" y="5.4" width="18" height="13.2" rx="2.2"/><path d="m3.6 7.4 8.4 6 8.4-6"/>`),
   },
 }
 

@@ -104,7 +104,7 @@ const arc = await one(`
   do $$
   declare v jsonb; v_id uuid; v_body text := ${lit(RULE)};
   begin
-    v := app.propose_standing_rule(v_body, 'global', null, null, null,
+    v := app.propose_standing_rule(app.test_office(), v_body, 'global', null, null, null,
            '{"signals":["it followed an answer","it is short"]}'::jsonb);
     v_id := (v ->> 'suggestion_id')::uuid;
     insert into _r values ('offered', v ->> 'offered'), ('rule', v ->> 'rule');
@@ -114,7 +114,7 @@ const arc = await one(`
       (select count(*)::text from public.lessons where body = v_body));
 
     -- The same class again, punctuated differently. It must not come back.
-    v := app.propose_standing_rule(v_body || '  ', 'global');
+    v := app.propose_standing_rule(app.test_office(), v_body || '  ', 'global');
     insert into _r values ('again', v ->> 'offered'), ('again_why', v ->> 'why');
 
     -- What the page is given: a suggestion that carries an offer is a
@@ -122,12 +122,12 @@ const arc = await one(`
     -- studio would draw Accept on things that perform nothing.
     insert into _r
       select 'page_' || k, x ->> k
-        from jsonb_array_elements(app.hq_governance(400) -> 'noticed') x,
+        from jsonb_array_elements(app.hq_governance(app.test_office(), 400) -> 'noticed') x,
              unnest(array['offer','state','body']) k
        where x ->> 'id' = v_id::text;
 
     -- The press.
-    v := app.decide_suggestion(v_id, true, 'grant');
+    v := app.decide_suggestion(coalesce((select zz_o.office_id from public.suggestions zz_o where zz_o.suggestion_id = v_id), app.test_office()), v_id, true, 'grant');
     insert into _r values ('accepted', v ->> 'accepted'), ('did', v ->> 'did'),
                           ('lesson_id', coalesce(v ->> 'lesson_id', '')),
                           ('decide_error', coalesce(v ->> 'error', ''));
@@ -139,7 +139,7 @@ const arc = await one(`
       (select scope::text from public.lessons where body = v_body limit 1));
 
     -- And pressing it again decides nothing twice.
-    v := app.decide_suggestion(v_id, true, 'grant');
+    v := app.decide_suggestion(coalesce((select zz_o.office_id from public.suggestions zz_o where zz_o.suggestion_id = v_id), app.test_office()), v_id, true, 'grant');
     insert into _r values ('twice', coalesce(v ->> 'already', ''));
   end $$;
   select
@@ -223,9 +223,9 @@ const declined = await one(`
   do $$
   declare v jsonb; v_id uuid; v_body text := ${lit(NO)};
   begin
-    v := app.propose_standing_rule(v_body, 'global');
+    v := app.propose_standing_rule(app.test_office(), v_body, 'global');
     v_id := (v ->> 'suggestion_id')::uuid;
-    v := app.decide_suggestion(v_id, false, 'grant');
+    v := app.decide_suggestion(coalesce((select zz_o.office_id from public.suggestions zz_o where zz_o.suggestion_id = v_id), app.test_office()), v_id, false, 'grant');
     insert into _r values ('accepted', v ->> 'accepted');
     insert into _r values ('state',
       (select state from public.suggestions where suggestion_id = v_id));
@@ -234,7 +234,7 @@ const declined = await one(`
     insert into _r values ('learned',
       (select count(*)::text from public.lessons where body = v_body));
     -- A declined offer must not come back, which is #49's own last box.
-    v := app.propose_standing_rule(v_body, 'global');
+    v := app.propose_standing_rule(app.test_office(), v_body, 'global');
     insert into _r values ('again', v ->> 'offered');
   end $$;
   select
@@ -282,14 +282,14 @@ for (const scope of ['global', 'project', 'staff', 'agent', 'kind'] as const) {
     do $$
     declare v jsonb; v_id uuid; v_body text := ${lit(body)};
     begin
-      v := app.propose_standing_rule(v_body, ${lit(scope)}, 'chief-of-staff',
+      v := app.propose_standing_rule(app.test_office(), v_body, ${lit(scope)}, 'chief-of-staff',
              (select project_id from public.projects where status = 'active' limit 1));
       insert into _r values ('offered', coalesce(v ->> 'offered', 'false')),
                             ('why', coalesce(v ->> 'error', ''));
       v_id := (v ->> 'suggestion_id')::uuid;
       if v_id is not null then
         begin
-          v := app.decide_suggestion(v_id, true, 'grant');
+          v := app.decide_suggestion(coalesce((select zz_o.office_id from public.suggestions zz_o where zz_o.suggestion_id = v_id), app.test_office()), v_id, true, 'grant');
           insert into _r values ('accepted', coalesce(v ->> 'accepted', 'false')),
                                 ('raised', '');
         exception when others then
@@ -369,7 +369,7 @@ if (apiToken === '') {
   const absent = String(
     (
       await one(
-        `select public.decide_suggestion('00000000-0000-0000-0000-000000000000'::uuid, true)::text as v`,
+        `select public.decide_suggestion(coalesce((select zz_o.office_id from public.suggestions zz_o where zz_o.suggestion_id = '00000000-0000-0000-0000-000000000000'::uuid), app.test_office()), '00000000-0000-0000-0000-000000000000'::uuid, true)::text as v`,
       )
     ).v,
   )
@@ -397,7 +397,7 @@ if (apiToken === '') {
   )
   const omitted = await db
     .execute(
-      `select public.decide_suggestion('00000000-0000-0000-0000-000000000000'::uuid)::text as v`,
+      `select public.decide_suggestion(coalesce((select zz_o.office_id from public.suggestions zz_o where zz_o.suggestion_id = '00000000-0000-0000-0000-000000000000'::uuid), app.test_office()), '00000000-0000-0000-0000-000000000000'::uuid)::text as v`,
     )
     .then(
       () => 'resolved (a default exists)',

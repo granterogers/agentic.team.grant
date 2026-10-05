@@ -84,6 +84,11 @@ const post = async (
   grants (0618) - so this suite, which restores what it changes, calls the function directly, as the
   operator, naming the person. It tests the POLICY (a per-staff grant is not a second place that can say
   yes), which is what these checks are about; the door in front of it is tested elsewhere.
+
+  ON THE TEST OFFICE, NEVER GRANT'S (#414). This used to name `app.owner_office('grant')`, so every run revoked and
+  re-granted a tool on his REAL growth director's sheet, in the real office, while reading the team payload from the test
+  office - two different offices in one check. The office key is a machine and resolves to the test office (above); the press
+  and the permission reads below now name that same office, and the suite puts the grant back EXACTLY as it found it.
 */
 const asPerson = async (
   action: 'staff_tool_set',
@@ -92,7 +97,7 @@ const asPerson = async (
   void action
   const q = (v: string) => `'${v.replace(/'/g, "''")}'`
   const { rows } = await db.execute(
-    `select app.hq_staff_tool_set(${q(args.p_slug)}, ${q(args.p_tool)}, ${String(args.p_granted)}, 'grant')::text as r`,
+    `select app.hq_staff_tool_set(app.test_office(), ${q(args.p_slug)}, ${q(args.p_tool)}, ${String(args.p_granted)}, 'verify:hq')::text as r`,
   )
   return { status: 200, body: String((rows[0] as { r: unknown }).r) }
 }
@@ -428,15 +433,40 @@ record(
 // section returns JSON, but that the lights are HONEST: every row carries when
 // it was last probed, and a row nobody probed is not green.
 
+// The office key is a MACHINE and resolves to the TEST office (P3), so this reads the test office's lights, not a
+// person's. The suite seeds its own five in that office and removes them, and asserts the property that matters: the
+// machine context sees exactly those, and none of the person's private connection state.
+await db.execute(`
+  delete from public.connection_health where office_id = app.test_office() and credential like 'verify-hq-%'`)
+await db.execute(`
+  insert into public.connection_health (office_id, service, credential, state, detail, owner, action, checked_at)
+  select app.test_office(), 'verify-hq-svc-' || g, 'verify-hq-' || g, 'ok', 'fixture reading', 'verify', '', app.now_utc()
+    from generate_series(1, 5) g`)
 const connResponse = await get('?section=connections')
 const connData = (JSON.parse(connResponse.body) as { data?: { rows?: Record<string, unknown>[] } })
   .data
 const connRows = connData?.rows ?? []
+await db.execute(`
+  delete from public.connection_health where office_id = app.test_office() and credential like 'verify-hq-%'`)
+const personsRows = Number(
+  (
+    (
+      await db.execute(
+        `select count(*)::int as n from public.connection_health where office_id <> app.test_office()`,
+      )
+    ).rows[0] as { n: number }
+  ).n,
+)
 
 record(
   'the connections section returns a row per service',
   `http ${String(connResponse.status)}, ${String(connRows.length)} row(s)`,
   connResponse.status === 200 && connRows.length >= 5,
+)
+record(
+  "the machine key reads the TEST office's lights and none of a person's (a person holds rows, and none came back)",
+  `${String(personsRows)} private row(s) exist, ${String(connRows.filter((r) => !String(r.credential).startsWith('verify-hq-')).length)} came back that are not this suite's`,
+  personsRows > 0 && connRows.every((r) => String(r.credential).startsWith('verify-hq-')),
 )
 
 record(
@@ -542,8 +572,11 @@ record(
   viaKey.status === 403 && viaKey.body.includes('person_required'),
 )
 const stillBlocked = String(
-  (await db.execute(`select app.staff_may_use('growth-director', 'gmail.send')::text as v`)).rows[0]
-    ?.v ?? 'x',
+  (
+    await db.execute(
+      `select app.staff_may_use(app.test_office(),'growth-director', 'gmail.send')::text as v`,
+    )
+  ).rows[0]?.v ?? 'x',
 )
 record(
   'and the permission function still says no afterwards',
@@ -564,14 +597,25 @@ record(
   enabled, delivered, and one growth-director already holds — so the revoke and
   the restore both put the roster back exactly where they found it.
 */
+const heldBefore =
+  String(
+    (
+      await db.execute(
+        `select app.staff_may_use(app.test_office(),'growth-director', 'notebook.read')::text as v`,
+      )
+    ).rows[0]?.v ?? 'x',
+  ) === 'true'
 await asPerson('staff_tool_set', {
   p_slug: 'growth-director',
   p_tool: 'notebook.read',
   p_granted: false,
 })
 const revoked = String(
-  (await db.execute(`select app.staff_may_use('growth-director', 'notebook.read')::text as v`))
-    .rows[0]?.v ?? 'x',
+  (
+    await db.execute(
+      `select app.staff_may_use(app.test_office(),'growth-director', 'notebook.read')::text as v`,
+    )
+  ).rows[0]?.v ?? 'x',
 )
 await asPerson('staff_tool_set', {
   p_slug: 'growth-director',
@@ -579,9 +623,20 @@ await asPerson('staff_tool_set', {
   p_granted: true,
 })
 const restored = String(
-  (await db.execute(`select app.staff_may_use('growth-director', 'notebook.read')::text as v`))
-    .rows[0]?.v ?? 'x',
+  (
+    await db.execute(
+      `select app.staff_may_use(app.test_office(),'growth-director', 'notebook.read')::text as v`,
+    )
+  ).rows[0]?.v ?? 'x',
 )
+// Put it back EXACTLY as found: the control above leaves the tool granted, which is only the original state if it was held.
+if (!heldBefore) {
+  await asPerson('staff_tool_set', {
+    p_slug: 'growth-director',
+    p_tool: 'notebook.read',
+    p_granted: false,
+  })
+}
 record(
   'CONTROL: an allowed tool revokes and re-grants, so the refusal above discriminates',
   `revoked=${revoked} restored=${restored}`,

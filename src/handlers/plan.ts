@@ -55,6 +55,7 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const FIRST_ASK_DELAY = '3 minutes'
 
 const payloadOf = async (db: SqlExecutor, job: Job): Promise<Record<string, unknown>> => {
+  // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
   const { rows } = await db.execute(
     `select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
   )
@@ -85,7 +86,7 @@ const recordChannelAuthority = async (
 ): Promise<void> => {
   await db
     .execute(
-      `select app.record_channel_authority(${lit(projectId)}::uuid, null, ${lit(jobId)}::uuid)`,
+      `select app.record_channel_authority(app.job_office(${lit(jobId)}::uuid), ${lit(projectId)}::uuid, null, ${lit(jobId)}::uuid)`,
     )
     .catch(() => undefined)
 }
@@ -164,6 +165,7 @@ export function planHandler(db: SqlExecutor): Handler {
               // notebook of his we have never seen gets a project around it.
               const { rows } = await db.execute(`
                 select app.hq_create_project(
+                  app.job_office(${lit(job.jobId)}::uuid),
                   ${lit(step.name)}, 'notebooklm', ${lit(step.notebookRef)}, ${lit(step.name)}
                 ) as r
               `)
@@ -175,7 +177,8 @@ export function planHandler(db: SqlExecutor): Handler {
                 const found = await db.execute(`
                   select project_id::text as project_id from public.projects p
                    join public.project_attachments a using (project_id)
-                   where a.external_ref = ${lit(step.notebookRef)} limit 1
+                   where p.office_id = app.job_office(${lit(job.jobId)}::uuid)
+                     and a.external_ref = ${lit(step.notebookRef)} limit 1
                 `)
                 const row = found.rows[0] as { project_id?: string } | undefined
                 if (row?.project_id === undefined) throw new Error(String(made.error))
@@ -206,6 +209,7 @@ export function planHandler(db: SqlExecutor): Handler {
               effectRef = notebook.id
               const { rows } = await db.execute(`
                 select app.hq_create_project(
+                  app.job_office(${lit(job.jobId)}::uuid),
                   ${lit(step.name)}, 'notebooklm', ${lit(notebook.id)}, ${lit(step.name)}
                 ) as r
               `)
@@ -223,6 +227,8 @@ export function planHandler(db: SqlExecutor): Handler {
                 update public.project_attachments
                    set role = 'home', artifact_kind = 'artifact'
                  where project_id = ${lit(acc.projectId)}::uuid and connector = 'notebooklm'
+                   and project_id in (select op.project_id from public.projects op
+                                       where op.office_id = app.job_office(${lit(job.jobId)}::uuid))
               `)
               acc.said.push(`started “${step.name}” with a new notebook`)
               acc.references.push(`notebooklm:${notebook.id} ${step.name}`)
@@ -235,7 +241,10 @@ export function planHandler(db: SqlExecutor): Handler {
               case 'attach': {
                 const { rows } = await db.execute(`
                   select app.hq_attach(
-                    (select slug from public.projects where project_id = ${lit(acc.projectId)}::uuid),
+                    app.job_office(${lit(job.jobId)}::uuid),
+                    (select slug from public.projects
+                      where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                        and project_id = ${lit(acc.projectId)}::uuid),
                     ${lit(step.link.kind === 'notion' ? 'notion' : 'notebooklm')},
                     ${lit(step.link.ref)},
                     ${step.link.kind === 'notebooklm' ? "'home'" : "'source'"},
@@ -344,7 +353,7 @@ async function child(
   // as success.
   await db.execute(`
     select app.enqueue_child(
-      ${lit(job.jobId)}::uuid, ${lit(kind)},
+      app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, ${lit(kind)},
       ${lit(JSON.stringify(payload))}::jsonb,
       ${lit(delay)}::interval, true, ${lit(projectId)}::uuid${callerArgs(job)}
     )

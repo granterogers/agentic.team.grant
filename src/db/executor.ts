@@ -15,6 +15,10 @@
  * are the artifact, the transport is a detail.
  */
 
+import '../safety/arm.ts'
+import { assertProductionChecksAllowed, isProductionUrl } from '../safety/production-gate.ts'
+import { assertMayTouchProduction } from './suite-guard.ts'
+
 export interface SqlResult {
   readonly rows: readonly Record<string, unknown>[]
 }
@@ -75,6 +79,14 @@ export class ManagementApiExecutor implements SqlExecutor {
       )
     }
     this.endpoint = `${baseUrl}/v1/projects/${projectRef}/database/query`
+    // Fail closed at construction: holding a token is not permission to use it (docs/production-access-guard.md).
+    // Only the production hosts are gated, so a test pointing `baseUrl` at a local fake is untouched.
+    this.assertAllowed()
+  }
+
+  private assertAllowed(): void {
+    if (isProductionUrl(this.endpoint))
+      assertProductionChecksAllowed('the Supabase Management API (SQL)', undefined, this.endpoint)
   }
 
   /*
@@ -134,6 +146,8 @@ export class ManagementApiExecutor implements SqlExecutor {
   }
 
   async execute(sql: string): Promise<SqlResult> {
+    this.assertAllowed()
+    assertMayTouchProduction()
     let response!: Response
     for (let attempt = 0; ; attempt += 1) {
       response = await fetch(this.endpoint, {

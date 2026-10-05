@@ -14,6 +14,7 @@
  * afterwards.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { DeliveryService } from '../../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
@@ -42,7 +43,7 @@ if (pager === null) {
 const telegram = new TelegramClient(pager.token)
 const botId = pager.botId
 
-const chat = (await db.execute(`select app.telegram_chat_for('grant', '${botId}') as c`)).rows[0]?.c
+const chat = (await db.execute(`select app.operator_chat('${botId}') as c`)).rows[0]?.c
 if (chat === null || chat === undefined) {
   console.error('no telegram chat registered for grant — he has to message the bot first')
   process.exit(1)

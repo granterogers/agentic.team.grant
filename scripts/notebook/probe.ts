@@ -7,9 +7,11 @@
  * as an argument: arguments appear in `ps` output for every user on the box,
  * and this one is a Google session.
  */
+import '../../src/safety/require-production-writes.ts'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { operatorOffice } from '../../src/db/office.ts'
 import type { CapabilityState } from '../../src/notebook/adapter.ts'
 import { recordProbe } from '../../src/notebook/sync-queue.ts'
 
@@ -71,17 +73,21 @@ try {
   // conflating them would report a broken environment as a broken dependency.
   const message = (error as Error).message
   console.error(`the probe could not run: ${message.slice(0, 300)}`)
-  await recordProbe(db, {
-    state: 'unavailable',
-    capabilities: [],
-    adapter: 'notebooklm-py',
-    adapterVersion: null,
-    detectedTier: null,
-    notebookLimit: null,
-    sourceLimit: null,
-    detail: `the probe process failed: ${message.slice(0, 200)}`,
-    latencyMs: null,
-  })
+  await recordProbe(
+    db,
+    {
+      state: 'unavailable',
+      capabilities: [],
+      adapter: 'notebooklm-py',
+      adapterVersion: null,
+      detectedTier: null,
+      notebookLimit: null,
+      sourceLimit: null,
+      detail: `the probe process failed: ${message.slice(0, 200)}`,
+      latencyMs: null,
+    },
+    await operatorOffice(db, process.env.OFFICE_ID),
+  )
   process.exit(1)
 }
 
@@ -97,17 +103,21 @@ if (!VALID.includes(output.state as CapabilityState)) {
   process.exit(1)
 }
 
-await recordProbe(db, {
-  state: output.state as CapabilityState,
-  capabilities: output.capabilities ?? [],
-  adapter: 'notebooklm-py',
-  adapterVersion: output.adapter_version ?? null,
-  detectedTier: output.detected_tier ?? null,
-  notebookLimit: output.notebook_limit ?? null,
-  sourceLimit: output.source_limit ?? null,
-  detail: (output.detail ?? '').slice(0, 500),
-  latencyMs: output.latency_ms ?? null,
-})
+await recordProbe(
+  db,
+  {
+    state: output.state as CapabilityState,
+    capabilities: output.capabilities ?? [],
+    adapter: 'notebooklm-py',
+    adapterVersion: output.adapter_version ?? null,
+    detectedTier: output.detected_tier ?? null,
+    notebookLimit: output.notebook_limit ?? null,
+    sourceLimit: output.source_limit ?? null,
+    detail: (output.detail ?? '').slice(0, 500),
+    latencyMs: output.latency_ms ?? null,
+  },
+  await operatorOffice(db, process.env.OFFICE_ID),
+)
 
 console.log(`state:        ${output.state}`)
 console.log(`capabilities: ${(output.capabilities ?? []).join(', ') || 'none'}`)

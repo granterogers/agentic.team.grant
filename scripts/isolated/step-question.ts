@@ -27,7 +27,7 @@ const parent = await realParent(db)
 const planBlocker = String(
   (
     await one(
-      `select app.request_approval(${lit(parent)}::uuid, 'Run the plan', 'it writes into the notebook', 'office.execute_plan')::text as b`,
+      `select app.request_approval(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'Run the plan', 'it writes into the notebook', 'office.execute_plan')::text as b`,
     )
   ).b,
 )
@@ -38,7 +38,7 @@ const yes = opts.o[0] as string
 const answered = json(
   (
     await one(
-      `select app.hq_answer_blocker(${lit(planBlocker)}::uuid, ${lit(yes)}, 'grant')::text as r`,
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(planBlocker)}::uuid), app.test_office()), ${lit(planBlocker)}::uuid, ${lit(yes)}, 'grant')::text as r`,
     )
   ).r,
 )
@@ -79,8 +79,11 @@ const step = String(
   ).id,
 )
 const r = json(
-  (await one(`select app.hq_answer_blocker(${lit(step)}::uuid, 'Yes, do it', 'grant')::text as r`))
-    .r,
+  (
+    await one(
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(step)}::uuid), app.test_office()), ${lit(step)}::uuid, 'Yes, do it', 'grant')::text as r`,
+    )
+  ).r,
 )
 const row = await one(
   `select state::text as s, resolution, answered_option from public.blockers where blocker_id = ${lit(step)}::uuid`,
@@ -113,7 +116,7 @@ check(
 // The generation answer, on its own terms: a recorded decline option decides, not English.
 const p2 = await realParent(db)
 await one(
-  `select app.request_approval(${lit(p2)}::uuid, 'Run the plan', 'it writes', 'office.execute_plan')::text as b`,
+  `select app.request_approval(app.job_office(${lit(p2)}::uuid), ${lit(p2)}::uuid, 'Run the plan', 'it writes', 'office.execute_plan')::text as b`,
 )
 const b2 = String(
   (
@@ -128,7 +131,7 @@ const o2 = (await one(
 const no = json(
   (
     await one(
-      `select app.hq_answer_blocker(${lit(b2)}::uuid, ${lit(o2.d ?? (o2.o[1] as string))}, 'grant')::text as r`,
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b2)}::uuid), app.test_office()), ${lit(b2)}::uuid, ${lit(o2.d ?? (o2.o[1] as string))}, 'grant')::text as r`,
     )
   ).r,
 )

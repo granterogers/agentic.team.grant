@@ -7,7 +7,9 @@
   at their real lengths, including the awkward ones.
 */
 
+import { note } from './net.js'
 import * as people from './people.js'
+import * as sessionEpoch from './session.js'
 
 
 /*
@@ -145,6 +147,9 @@ const FALLBACK_PROJECTS = [
       { title: 'Grant Interview Questions', kind: 'pdf', origin: 'Yours', size: '11,616 words', lines: [70, 96, 88, 60] },
       { title: 'Journey VS Destination', kind: 'pdf', origin: 'Yours', size: '8,683 words', file: '/samples/journey.pdf', lines: [82, 94, 90, 68, 86] },
       { title: 'Course one-pager', kind: 'made', origin: 'Oliver · 2 days ago', size: 'A4', file: '/samples/one-pager.pdf', lines: [70, 100, 88] },
+      { id: 'proto-drive-1', title: 'Customer research report', kind: 'doc', origin: 'Google Drive', connector: 'drive', external_ref: 'proto-drive-ref-1', size: '12,480 words', modified_at: '2026-10-02T09:12:00Z', lines: [78, 96, 90, 70] },
+      { id: 'proto-drive-2', title: 'Interview schedule', kind: 'doc', origin: 'Google Drive', connector: 'drive', external_ref: 'proto-drive-ref-2', size: '3 KB', modified_at: '2026-09-29T15:40:00Z', lines: [70, 88, 60] },
+      { id: 'proto-nb-1', title: 'Interview corpus notes', kind: 'doc', origin: 'NotebookLM', connector: 'notebooklm', size: '8,200 words', lines: [80, 92, 64] },
       { title: 'Legacy Questionnaire', kind: 'pdf', origin: 'Yours', size: '3,370 words', lines: [74, 92, 84] },
       /*
         A REAL FILE ON THE AUDIO ROW. Grant, 22 September: "audio files not
@@ -413,7 +418,9 @@ const FALLBACK_PROJECTS = [
     activity: [
       { who: 'emma', verb: 'pulled', what: 'the WS02 client list into the vision map', at: AGO(2 * 60 + 12, 41), when: '2h ago' },
       { who: 'oliver', verb: 'made', what: 'the course one-pager', at: AGO(2 * 24 * 60 + 95, 7), when: '2d ago' },
-      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', at: AGO(2 * 24 * 60 + 340, 19), when: '2d ago' },
+      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', at: AGO(2 * 24 * 60 + 340, 19), when: '2d ago', category: 'sync' },
+      { who: 'grant', verb: 'edited', what: 'the event Weekly planning', at: AGO(5 * 60, 12), when: '5h ago', via: 'ChatGPT', category: 'calendar' },
+      { who: 'claire', verb: 'created', what: 'the task Book the remaining interview slots', at: AGO(26 * 60, 3), when: '1d ago', via: 'Telegram', category: 'task' },
     ],
   },
   {
@@ -677,13 +684,29 @@ export async function hydrate(endpoint, token) {
       person will wait before deciding the product is broken.
     */
     const stop = AbortSignal.timeout(10_000)
+    const began = sessionEpoch.epoch()
     const r = await fetch(`${endpoint}?section=studio`, {
       headers: { authorization: `Bearer ${token}` },
       signal: stop,
     })
+    // Somebody signed out while this was in flight: it is theirs, not whoever is here now (#405).
+    if (began !== sessionEpoch.epoch()) throw new Error('signed out while loading')
+    if (r.status === 403) {
+      /*
+        A person who has proved an address and has no office yet is not refused: they are somebody who has not finished
+        signing up. The session stays, and the page asks them to set the office up (bc/account.js).
+      */
+      const said = await r.json().catch(() => ({}))
+      if (said.error === 'no_office' && said.can_create === true) {
+        const fresh = new Error('signed in, no office yet')
+        fresh.name = 'NoOffice'
+        throw fresh
+      }
+    }
     if (r.status === 401 || r.status === 403) {
       const refused = new Error('that token was not accepted')
       refused.name = 'Refused'
+      refused.status = r.status
       throw refused
     }
     if (!r.ok) throw new Error(`http ${r.status}`)
@@ -728,6 +751,8 @@ export async function hydrate(endpoint, token) {
       PROJECTS,
       data.projects.map((p) => ({
         ...p,
+        // The catch-all where loose conversations are filed is called Unnamed in the database, which reads as a mistake.
+        name: p.slug === 'unnamed' ? 'Conversations' : p.name,
         hue: hues[p.slug] ?? hueFor(p.slug),
         // Every section the studio renders, guaranteed to be an array so a
         // renderer never has to ask. An absent section and an empty one are the
@@ -738,7 +763,9 @@ export async function hydrate(endpoint, token) {
         waiting: p.waiting ?? [],
         modules: p.modules ?? [],
         documents: p.documents ?? [],
-        tasks: p.tasks ?? [],
+        // A removed task is kept by the office for history and is not shown: it used to come back as a struck-through
+        // "done" one, so removing a task looked like completing it.
+        tasks: (p.tasks ?? []).filter((t) => t.state_raw !== 'cancelled'),
         contacts: p.contacts ?? [],
         sources: p.sources ?? [],
         activity: p.activity ?? [],
@@ -769,10 +796,13 @@ export async function hydrate(endpoint, token) {
     source.state = 'live'
     source.why = ''
     source.misses = 0
+    note('hydrate:studio')
     return true
   } catch (e) {
     source.live = false
     source.misses += 1
+    // The boundary the page stopped at, for the trace: a deadline is named as one, anything else is a failure.
+    note('hydrate:studio', e instanceof Error && e.name === 'TimeoutError' ? 'timeout' : 'failed')
     /*
       Unknown, not healthy. The office not answering says nothing about whether
       it is keeping up, and leaving the last good answer on screen would be a
@@ -794,10 +824,17 @@ export async function hydrate(endpoint, token) {
       numbers on screen WERE real, and "these are from 11 minutes ago" is a
       different warning from "there has never been anything here".
     */
-    if (e instanceof Error && (e.name === 'Refused' || /http 40[13]/.test(e.message))) {
+    if (e instanceof Error && e.name === 'NoOffice') {
+      // Signed in, nothing set up: keep the session, drop whatever was drawn, and let the page say what comes next.
+      source.state = 'no_office'
+      source.why = 'signed in, no office yet'
+      PROJECTS.length = 0
+    } else if (e instanceof Error && (e.name === 'Refused' || /http 40[13]/.test(e.message))) {
       source.state = 'refused'
       source.why = 'that token was not accepted — sign in again'
       try { localStorage.removeItem('hq.token') } catch { /* nothing to clear */ }
+      // A session the office has refused outright (401) is not worth keeping: the page says it was cleared, so clear it.
+      if (e.status === 401) sessionEpoch.forget()
     } else {
       source.state = source.at === null ? 'unreachable' : 'stale'
       source.why =

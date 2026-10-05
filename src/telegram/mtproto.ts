@@ -49,8 +49,10 @@
  * whatever filesystem happened to be running the code — including a CI runner.
  * §15 says the vault; `StringSession` is how that becomes possible.
  */
+
 import { Api, TelegramClient } from 'teleproto'
 import { StringSession } from 'teleproto/sessions/index.js'
+import { readCredential } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -74,11 +76,7 @@ export class TelegramAccountMissing extends Error {
 
 /** Read one vault secret, or null. Never logged, never returned to a page. */
 const secret = async (db: SqlExecutor, name: string): Promise<string | null> => {
-  const { rows } = await db.execute(
-    `select decrypted_secret as v from vault.decrypted_secrets where name = ${lit(name)}`,
-  )
-  const v = rows[0]?.v
-  return v === undefined || String(v) === '' ? null : String(v)
+  return await readCredential(db, name)
 }
 
 /** Write or replace one vault secret. */

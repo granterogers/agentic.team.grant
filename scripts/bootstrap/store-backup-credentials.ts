@@ -20,6 +20,7 @@
  *
  * Never logs a value. Reports name, length and a fingerprint only.
  */
+import '../../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

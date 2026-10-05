@@ -57,7 +57,7 @@ await db.execute(`insert into public.telegram_bots (bot_id, username, staff_slug
 const project = String(
   jsonOf(
     (
-      await one(`select app.hq_create_project(${lit(`Legit ${run}`)}, 'upload', ${lit(`legit-${run}`)},
+      await one(`select app.hq_create_project(app.test_office(), ${lit(`Legit ${run}`)}, 'upload', ${lit(`legit-${run}`)},
     ${lit(`Legit ${run}`)}, true) as v`)
     ).v,
   ).project_id as string,
@@ -97,7 +97,8 @@ const reaches = async (what: string, job: string | null) => {
   }
   const claim = await one(`select outcome, coalesce((select suppressed_reason from public.deliveries
       where dedupe_key = ${lit(`legit:${job}`)}), '') as why
-    from app.claim_delivery('telegram', ${lit(`legit:${job}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'result',
+    from app.claim_delivery(app.job_office(${lit(job)}::uuid),
+      'telegram', ${lit(`legit:${job}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'result',
       null, null, null, ${lit(job)}::uuid)`)
   check(
     `${what}: its answer may reach Grant`,
@@ -107,7 +108,7 @@ const reaches = async (what: string, job: string | null) => {
   const child =
     String(
       (
-        await one(`select app.enqueue_child(p_parent => ${lit(job)}::uuid, p_kind => 'office.notion_import',
+        await one(`select app.enqueue_child(p_office => app.job_office(${lit(job)}::uuid), p_parent => ${lit(job)}::uuid, p_kind => 'office.notion_import',
       p_payload => '{}'::jsonb)::text as v`)
       ).v,
     ).match(/[0-9a-f-]{36}/)?.[0] ?? ''
@@ -222,7 +223,7 @@ const reaches = async (what: string, job: string | null) => {
   const said = jsonOf(
     (
       await one(
-        `${DOOR} select app.say_in_project(${lit(project)}::uuid, ${lit(`Legit chat ${run}`)}) as v`,
+        `${DOOR} select app.say_in_project(app.test_office(), ${lit(project)}::uuid, ${lit(`Legit chat ${run}`)}) as v`,
       )
     ).v,
   )
@@ -251,7 +252,7 @@ const reaches = async (what: string, job: string | null) => {
   const sent = jsonOf(
     (
       await one(
-        `${DOOR} select app.send_to_agent('document', ${lit(String(doc.id))}::uuid, 'review') as v`,
+        `${DOOR} select app.send_to_agent(app.test_office(), 'document', ${lit(String(doc.id))}::uuid, 'review') as v`,
       )
     ).v,
   )
@@ -277,7 +278,8 @@ const reaches = async (what: string, job: string | null) => {
 /* The office's own notices and a registered test destination (no job at all) */
 {
   const op = await one(
-    `select outcome from app.claim_delivery('telegram', ${lit(`build:legit:${run}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'notice')`,
+    `select outcome from app.claim_delivery(app.operator_office(),
+       'telegram', ${lit(`build:legit:${run}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'notice')`,
   )
   check('an operator notice may reach Grant', op.outcome === 'claimed', String(op.outcome))
   await db.execute(`insert into public.test_destinations (channel, target_ref, why)
@@ -290,7 +292,8 @@ const reaches = async (what: string, job: string | null) => {
     ).target_ref,
   )
   const t = await one(
-    `select outcome from app.claim_delivery('telegram', ${lit(`anything:${run}`)}, ${lit(BOT)}, ${lit(td)}, 'notice')`,
+    `select outcome from app.claim_delivery(app.test_office(),
+       'telegram', ${lit(`anything:${run}`)}, ${lit(BOT)}, ${lit(td)}, 'notice')`,
   )
   check(
     'a registered test destination may receive anything',

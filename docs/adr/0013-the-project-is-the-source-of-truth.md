@@ -2,6 +2,8 @@
 
 **Date:** 2026-09-06 · **Status:** accepted
 **Decides the question ADR-0012 left open. Generalises ADR-0003.**
+**Amended 4 October 2026 by ADR-0066:** detaching a connector still deletes nothing, but what it indexed now leaves active
+retrieval until it is connected again; a Team HQ copy (an upload, an imported output) stays in use.
 
 ---
 

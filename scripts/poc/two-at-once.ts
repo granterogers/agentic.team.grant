@@ -28,7 +28,7 @@ const project = String(
   (
     await one(`select project_id::text as v from public.projects
                 where status = 'active' and not is_fixture
-                  and project_id <> app.unnamed_project() order by updated_at desc limit 1`)
+                  and slug <> 'unnamed' order by updated_at desc limit 1`)
   ).v ?? '',
 )
 const parent = String(
@@ -50,7 +50,7 @@ const began = Date.now()
 const answers = await Promise.all(
   Array.from({ length: AT_ONCE }, async () => {
     const r = await one(
-      `select app.enqueue_child_once(${lit(parent)}::uuid, 'artifact.report', ${lit(REQUEST)}) as v`,
+      `select app.enqueue_child_once(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'artifact.report', ${lit(REQUEST)}) as v`,
     )
     const v = r.v
     return (typeof v === 'string' ? JSON.parse(v) : v) as { job_id?: string; created?: boolean }
@@ -127,7 +127,7 @@ const together = await one(`
   select count(*) filter (where (r ->> 'created')::boolean) as made,
          count(*) filter (where not (r ->> 'created')::boolean) as reused
     from (
-      select app.enqueue_child_once(${lit(parent)}::uuid, 'office.pursue',
+      select app.enqueue_child_once(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'office.pursue',
              'one statement, eight callers') as r
         from generate_series(1, 8)
     ) x`)

@@ -167,7 +167,7 @@ await db.execute(`
   values (${lit(SLUG)}, 'Inverse verification', 'active',
           'Exercises the undo path. Deleted by the suite that made it.',
           'flask', 'p-moss')
-  on conflict (slug) do update set name = excluded.name, status = 'active',
+  on conflict (office_id, slug) do update set name = excluded.name, status = 'active',
     icon = excluded.icon, icon_hue = excluded.icon_hue;
   /*
     channel_prefix is DERIVED from the name -- hq_rename_project recomputes it
@@ -223,7 +223,7 @@ console.log('\nthe inverse is exact')
 // --- a project's name -------------------------------------------------------
 const renamed = await roundTrip(
   `select name, channel_prefix from public.projects where slug = ${lit(SLUG)}`,
-  `public.hq_rename_project(${lit(SLUG)}, 'A completely different name')`,
+  `public.hq_rename_project(app.test_office(), ${lit(SLUG)}, 'A completely different name')`,
 )
 check(
   'renaming a project and undoing it restores the name AND the channel prefix',
@@ -234,7 +234,7 @@ check(
 // --- how it looks -----------------------------------------------------------
 const looked = await roundTrip(
   `select icon, icon_hue from public.projects where slug = ${lit(SLUG)}`,
-  `public.hq_project_look(${lit(SLUG)}, 'rocket', 'p-plum')`,
+  `public.hq_project_look(app.test_office(), ${lit(SLUG)}, 'rocket', 'p-plum')`,
 )
 check(
   'changing the icon and hue and undoing it restores both',
@@ -255,7 +255,7 @@ await db.execute(
 )
 const fromEmpty = await roundTrip(
   `select icon, icon_hue from public.projects where slug = ${lit(SLUG)}`,
-  `public.hq_project_look(${lit(SLUG)}, 'anchor', 'p-iris')`,
+  `public.hq_project_look(app.test_office(), ${lit(SLUG)}, 'anchor', 'p-iris')`,
 )
 check(
   'and undoing a change to a field that was EMPTY empties it again',
@@ -327,7 +327,7 @@ const PANELS_B = `'[{"id":"tasks","x":2,"y":1,"w":4,"h":8},{"id":"docs","x":0,"y
 await db.execute(`delete from public.dashboard_layouts where project_id = ${lit(PROJECT)}::uuid`)
 const firstArrange = await roundTrip(
   LAYOUT,
-  `public.hq_dashboard_layout_set(${lit(SLUG)}, ${PANELS_A})`,
+  `public.hq_dashboard_layout_set(app.test_office(), ${lit(SLUG)}, ${PANELS_A})`,
 )
 check(
   'arranging a board for the FIRST time undoes to no saved arrangement, not an empty one',
@@ -335,10 +335,10 @@ check(
   firstArrange.after === '{"panels":"none"}',
 )
 
-await did(`public.hq_dashboard_layout_set(${lit(SLUG)}, ${PANELS_A})`)
+await did(`public.hq_dashboard_layout_set(app.test_office(), ${lit(SLUG)}, ${PANELS_A})`)
 const rearranged = await roundTrip(
   LAYOUT,
-  `public.hq_dashboard_layout_set(${lit(SLUG)}, ${PANELS_B})`,
+  `public.hq_dashboard_layout_set(app.test_office(), ${lit(SLUG)}, ${PANELS_B})`,
 )
 check(
   'and rearranging it restores the previous arrangement exactly',
@@ -365,7 +365,7 @@ const ATTACHMENT = String(attached.id)
 const detached = await roundTrip(
   `select enabled, disabled_reason from public.project_attachments
     where attachment_id = ${lit(ATTACHMENT)}::uuid`,
-  `public.hq_detach(${lit(ATTACHMENT)}::uuid)`,
+  `public.hq_detach(app.test_office(), ${lit(ATTACHMENT)}::uuid)`,
 )
 check(
   'detaching a source and undoing it re-enables the same row',
@@ -380,7 +380,7 @@ check(
 console.log('\nand nothing is offered where the inverse is not exact')
 
 const photo = {
-  r: await did(`public.hq_project_look(${lit(SLUG)}, null, null,
+  r: await did(`public.hq_project_look(app.test_office(), ${lit(SLUG)}, null, null,
     'data:image/png;base64,iVBORw0KGgo=')`),
 }
 check(
@@ -419,7 +419,7 @@ made.push(...photoRows.map((r) => r.id))
   it by signing the office out of something real would be a verification with a
   side effect Grant did not ask for.
 */
-const refused = { r: await did(`public.hq_disconnect('openrouter')`) }
+const refused = { r: await did(`public.hq_disconnect(app.owner_office('grant'), 'openrouter')`) }
 check(
   'a refused disconnect carries no undo, because it changed nothing',
   String((refused.r as Record<string, unknown>).error ?? '').slice(0, 46),
@@ -523,7 +523,11 @@ check(
 
 console.log('\nand the strip the person actually sees')
 
-const studio = ((await db.execute('select app.hq_studio() as d')).rows[0] as { d: unknown }).d
+const studio = (
+  (await db.execute('select app.hq_studio(app.operator_office()) as d')).rows[0] as {
+    d: unknown
+  }
+).d
 
 const server = createServer(async (rq, rs) => {
   let f = join('web/studio', decodeURIComponent((rq.url ?? '/').split('?')[0] ?? '/'))

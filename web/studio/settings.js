@@ -35,43 +35,57 @@
 import { CREW, DESIGN } from './data.js'
 import { MARKS } from './logos/marks.js'
 
-export const TABS = [
-  { id: 'team', name: 'Team' },
-  { id: 'behaviour', name: 'Behaviour' },
-  /*
-    What the office learned, and why it changed (#54).
+/*
+  THE PAGE'S MAP.
 
-    A sibling of Behaviour rather than part of it, which is a deliberate
-    departure from the Issue's suggestion that Behaviour "is the obvious home".
-    Behaviour is a control panel — eight switches, each a single decision — and
-    this is a reading surface with four lists on it. Folding them together
-    makes the switches hard to find and the lists hard to read. It sits
-    immediately after Behaviour, which is what the Issue was actually asking
-    for: governance lives with how-the-office-runs, not with diagnostics.
-  */
-  { id: 'governance', name: 'Governance' },
-  { id: 'connections', name: 'Connections' },
-  { id: 'channels', name: 'Channels' },
-  /*
-    "Usage", not "Models & cost".
+  Nine tabs of one width became four groups that say what kind of thing is inside. The order is the order a person
+  needs them: who works for me, how they reach the world, how it looks for me, and the machinery. `icon` names a
+  drawing in settings-ui.js. `lead` is the one sentence under the page title - written for the person, not for the
+  engineer who built the tab.
 
-    Grant asked for *"a dashboard dedicated to usage across the various API
-    keys, third party services, you know, everything"* — and "Models & cost"
-    names two things when the tab should name one. Models are now one card on
-    it among six.
-  */
-  { id: 'models', name: 'Usage' },
-  { id: 'appearance', name: 'Appearance' },
-  /*
-    The last two of the six sections that lived only on the plain page (#68).
-
-    Setting up is a checklist and belongs beside Connections, which is what it
-    is a checklist ABOUT. Help is last because it is the one you reach for when
-    the others have not answered you.
-  */
-  { id: 'setup', name: 'Setting up' },
-  { id: 'help', name: 'Help' },
+  Two tabs from the old list no longer exist and their ids still resolve (TAB_ALIAS), because a command-bar row, a link
+  in a message or a remembered tab may still name them: Governance became Requests and What it has learned, and Setting
+  up was a second checklist about the services the Services tab already lists.
+*/
+export const TAB_GROUPS = [
+  {
+    name: 'Your team',
+    tabs: [
+      { id: 'team', name: 'Team', icon: 'team', lead: 'The people who work for you. Bring in a specialist for a piece of work and they leave when it is finished.' },
+      { id: 'behaviour', name: 'Autonomy and approvals', icon: 'autonomy', lead: 'How much the team does on its own, and what always waits for you.' },
+      { id: 'requests', name: 'Requests', icon: 'requests', lead: 'Things the team is asking you to decide.' },
+      { id: 'memory', name: 'What it has learned', icon: 'memory', lead: 'The rules and decisions the team now works by. You can take any of them back.' },
+    ],
+  },
+  {
+    name: 'Connections',
+    tabs: [
+      { id: 'connections', name: 'Services', icon: 'services', lead: 'The accounts and tools your team can reach, and whether each one is working.' },
+      { id: 'channels', name: 'Messaging', icon: 'messaging', lead: 'How the team gets in touch with you, and where you can talk to it.' },
+    ],
+  },
+  {
+    name: 'You',
+    tabs: [{ id: 'appearance', name: 'Appearance', icon: 'appearance', lead: 'How Team HQ looks on this device.' }],
+  },
+  {
+    name: 'System',
+    tabs: [
+      { id: 'models', name: 'Usage and health', icon: 'system', lead: 'What the team is using, what it costs, and how well it is running.' },
+      { id: 'help', name: 'Help', icon: 'help', lead: 'Short answers to the things people ask first.' },
+    ],
+  },
 ]
+
+/** Every tab, flat - for the command bar and for anything that looks one up by id. */
+export const TABS = TAB_GROUPS.flatMap((g) => g.tabs)
+
+/** Old ids that still resolve, to the tab that now holds what they held. */
+export const TAB_ALIAS = { governance: 'requests', setup: 'connections' }
+export const tabId = (id) => {
+  const want = TAB_ALIAS[id] ?? id
+  return TABS.some((t) => t.id === want) ? want : 'team'
+}
 
 /** Shaped like `connection_health` joined to `knowledge_connectors`. */
 const FALLBACK_CONNECTIONS = [
@@ -309,7 +323,7 @@ export const MAIL_BODIES = { bulk: 0, held: null, messages: 0, unread: 0 }
   "Not connected" and "I have not asked yet" are different sentences and the
   card says so.
 */
-export const TASK_SYNC = { configured: null, url: null, project: null, linked: 0, trouble: [] }
+export const TASK_SYNC = { configured: null, url: null, project: null, linked: 0, trouble: [], health: null }
 export const BEHAVIOURS = [...FALLBACK_BEHAVIOURS]
 export const STANDING = [...FALLBACK_STANDING]
 export const DECISIONS = [...FALLBACK_DECISIONS]
@@ -340,7 +354,12 @@ export const ACTIONS = [
   { action: 'compare', label: 'Compare', needs_two: true },
 ]
 
-export const settingsSource = { live: false, why: 'not asked yet' }
+/*
+  `state` says whether the office has answered: 'pending' until it has, then 'ready' or 'failed'. A signed-in person must
+  never be shown the page's own example rows while it is pending (the prototype names things that resemble real
+  projects), so the sections draw "asking" until it is 'ready'.
+*/
+export const settingsSource = { live: false, why: 'not asked yet', state: 'pending' }
 
 const replace = (target, rows) => {
   target.length = 0
@@ -377,7 +396,41 @@ const readable = (n) => {
 */
 export const CONVO_CHANNELS = []
 
+/*
+  Whether the person looking after this deployment is the one looking. The deployment-wide controls (who is on the team,
+  tool grants, the shared Slack and Google connections, the switches that govern every office) are refused by the gateway
+  to anybody else, so the page does not draw them as if they would work. True until the gateway says otherwise.
+*/
+export const VIEWER = { operator: true }
+
+/*
+  Whether THIS person's Telegram is connected, waiting for a tap, or not connected (#410). `telegram` is null until the
+  office has answered, and the page says nothing in that state rather than guessing. `pending` is the link a person was
+  just given (kept only in this page; the office stores a hash and cannot give it back), so a reload says "waiting" and
+  offers to start again.
+*/
+export const LINK = { telegram: null, pending: null, slack: null, slackPending: null, slackSaid: null }
+
 export async function hydrateSettings(read) {
+  // Whether THIS person's own Slack workspace is installed (ADR-0065). Null until the office has answered.
+  void read('slack_link')
+    .then((d) => {
+      LINK.slack = d && typeof d === 'object' && d.slack ? d.slack : null
+      if (LINK.slack?.state === 'connected') LINK.slackPending = null
+    })
+    .catch(() => {
+      LINK.slack = null
+    })
+
+  void read('channel_link')
+    .then((d) => {
+      LINK.telegram = d && typeof d === 'object' && d.telegram ? d.telegram : null
+      if (LINK.telegram?.state === 'connected') LINK.pending = null
+    })
+    .catch(() => {
+      LINK.telegram = null
+    })
+
   void read('conversation_channels')
     .then((rows) => {
       if (Array.isArray(rows)) {
@@ -416,6 +469,8 @@ export async function hydrateSettings(read) {
     )
     replace(SPARE_BOTS, d.spare_bots ?? [])
     replace(BEHAVIOURS, d.behaviours ?? [])
+    // Only an explicit false changes what is drawn: a payload from an older gateway says nothing and offers everything.
+    VIEWER.operator = d.viewer?.operator !== false
 
     /*
       Its own call, because it is its own section (#15).
@@ -428,7 +483,14 @@ export async function hydrateSettings(read) {
       Failing to read it leaves the prototype rows in place and the pane still
       renders, the same rule `hydrateGovernance` follows -- a settings tab
       showing a stack trace is worse than one saying it could not ask.
+
+      But the rows left in place are INVENTED ones (names that resemble a real person's projects), and the payload
+      above has just proved this is a live office. So until its own answer arrives, and if it never does, a signed-in
+      person sees an empty list and not somebody else's example. Found by signing in as a second person: the Autonomy
+      page named "Legacy Coaching Course" for as long as the read took.
     */
+    replace(STANDING, [])
+    replace(DECISIONS, [])
     read('standing')
       .then((rows) => {
         if (Array.isArray(rows)) replace(STANDING, rows)
@@ -447,6 +509,17 @@ export async function hydrateSettings(read) {
         TASK_SYNC.project = typeof d2.project_id === 'number' ? d2.project_id : null
         TASK_SYNC.linked = typeof d2.linked === 'number' ? d2.linked : 0
         replace(TASK_SYNC.trouble, Array.isArray(d2.trouble) ? d2.trouble : [])
+        // Whether Vikunja is answering, from the last round (0981). Null until a round has run: the card then says nothing it does not know.
+        TASK_SYNC.health =
+          d2.health !== null && typeof d2.health === 'object' && typeof d2.health.state === 'string'
+            ? {
+                state: d2.health.state,
+                kind: typeof d2.health.kind === 'string' ? d2.health.kind : null,
+                detail: typeof d2.health.detail === 'string' ? d2.health.detail : '',
+                checkedAt: typeof d2.health.checked_at === 'string' ? d2.health.checked_at : null,
+                lastOkAt: typeof d2.health.last_ok_at === 'string' ? d2.health.last_ok_at : null,
+              }
+            : null
       })
       .catch(() => undefined)
 
@@ -553,10 +626,14 @@ export async function hydrateSettings(read) {
 
     settingsSource.live = true
     settingsSource.why = ''
+    settingsSource.state = 'ready'
+    if (typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('hq:viewer'))
     return true
   } catch (e) {
     settingsSource.live = false
+    settingsSource.state = 'failed'
     settingsSource.why = e instanceof Error ? e.message : String(e)
+    if (typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('hq:viewer'))
     return false
   }
 }
@@ -688,6 +765,11 @@ export const ROUTES = {
     where this used to point.
   */
   mcp: { how: 'mcp', label: 'How to connect a client' },
+  upload: {
+    how: 'none',
+    label: 'Always available',
+    why: 'Dropping a file into a project needs no connection. It is kept with that project.',
+  },
   zoom: {
     how: 'none',
     label: 'Not supported yet',

@@ -38,12 +38,15 @@ export async function pressAsPerson(
 ): Promise<unknown> {
   const fn = (await actionFunctions()).get(action)
   if (fn === undefined) throw new Error(`no gateway action called ${action}`)
-  const named = Object.entries(args)
-    .map(
+  // The gateway writes the verified office for a signed-in person. The suite reads through the office key, which acts in
+  // the TEST office, so the press names that office: a harness press never lands in a person's office.
+  const named = [
+    'p_office => app.test_office()',
+    ...Object.entries(args).map(
       ([k, v]) =>
         `${k} => ${v === null ? 'null' : typeof v === 'boolean' ? String(v) : lit(String(v))}`,
-    )
-    .join(', ')
+    ),
+  ].join(', ')
   const { rows } = await db.execute(`select to_jsonb(public.${fn}(${named})) as r`)
   const r = (rows[0] as { r?: unknown } | undefined)?.r
   return typeof r === 'string' ? JSON.parse(r) : r

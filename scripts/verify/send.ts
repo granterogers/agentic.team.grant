@@ -74,7 +74,7 @@ const send = async (
 ): Promise<Sent> => {
   const r = (
     await one(
-      `select public.send_to_agent(${lit(kind)}, ${lit(id)}::uuid, ${lit(action)}, ${extra}) as r`,
+      `select public.send_to_agent(app.test_office(), ${lit(kind)}, ${lit(id)}::uuid, ${lit(action)}, ${extra}) as r`,
     )
   ).r as Sent
   if (typeof r.job === 'string') jobs.push(r.job)
@@ -89,7 +89,7 @@ let otherId = ''
 
 try {
   await one(`
-    select app.hq_create_project(${lit(`Fixture send ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Fixture send ${run}`)}, 'upload',
                                  ${lit(SLUG)}, ${lit(`Fixture send ${run}`)}, true) as r
   `)
   projectId = String(
@@ -183,9 +183,11 @@ try {
   // =========================================================================
   console.log('\nsource, job and output are one chain')
 
-  const fromDoc = await all(`select * from public.relations_of('document', ${lit(docId)}::uuid)`)
+  const fromDoc = await all(
+    `select * from public.relations_of(app.test_office(), 'document', ${lit(docId)}::uuid)`,
+  )
   const fromJob = await all(
-    `select * from public.relations_of('job', ${lit(String(sent.job))}::uuid)`,
+    `select * from public.relations_of(app.test_office(), 'job', ${lit(String(sent.job))}::uuid)`,
   )
   check(
     'the document says which job it went into',
@@ -211,7 +213,7 @@ try {
      where document_id = ${lit(otherId)}::uuid
   `)
   const closed = await all(
-    `select * from public.relations_of('job', ${lit(String(sent.job))}::uuid)`,
+    `select * from public.relations_of(app.test_office(), 'job', ${lit(String(sent.job))}::uuid)`,
   )
   check(
     'and once the job writes something, the whole chain is traversable',
@@ -242,7 +244,7 @@ try {
     paired.ok === true,
   )
   const bothIn = await all(
-    `select * from public.relations_of('job', ${lit(String(paired.job))}::uuid)`,
+    `select * from public.relations_of(app.test_office(), 'job', ${lit(String(paired.job))}::uuid)`,
   )
   check(
     'and BOTH assets are recorded as inputs to that job',

@@ -85,6 +85,19 @@ const one = async (sql: string): Promise<Record<string, unknown> | undefined> =>
 const all = async (sql: string): Promise<Record<string, unknown>[]> =>
   (await db.execute(sql)).rows as Record<string, unknown>[]
 
+/*
+  A RUN THAT DIES BEFORE ITS TEARDOWN LEAVES ACTIVE PROJECTS, AND THE NEXT RUN IS THE ONLY THING THAT WILL EVER MEET THEM.
+  Eight `identity-proof-*` projects sat active in the quarantine test office from two runs a minute apart on 2 October
+  (neither reached the teardown at the bottom). They are not Grant's - this suite always acts in `app.test_office()` - but a
+  teardown that only runs on success is not a teardown. So every run first archives what an earlier run left: the TEST
+  office only, the `identity-proof-` slug only, and only projects older than ten minutes so a concurrent run is untouched.
+  Archived, never deleted: each carries a job, and a job cannot be removed.
+*/
+await db.execute(`
+  update public.projects set status = 'archived', updated_at = app.now_utc()
+   where office_id = app.test_office() and status = 'active'
+     and slug like 'identity-proof-%' and created_at < app.now_utc() - interval '10 minutes'`)
+
 const checks: { what: string; outcome: string; passed: boolean }[] = []
 const record = (what: string, outcome: string, passed: boolean): void => {
   checks.push({ what, outcome, passed })
@@ -150,18 +163,19 @@ for (const [a, b, why] of [
     Same correction as #45's, from the other side.
   */
   const missing = await all(`
-    select p.slug, p.name
-      from public.projects p
-     where p.status = 'active'
-       and not p.is_fixture
+    select o.slug, o.name
+      from public.projects o
+     where o.status = 'active'
+       and not o.is_fixture
        and not exists (
          select 1 from public.projects q
-          where q.status = 'active' and q.project_id <> p.project_id
-            and app.normalise_name(q.name) = app.normalise_name(p.name)
+          where q.status = 'active' and q.project_id <> o.project_id
+            and q.office_id = o.office_id
+            and app.normalise_name(q.name) = app.normalise_name(o.name)
        )
        and not exists (
-         select 1 from app.resolve_project_by_name(p.name) r
-          where r.project_id = p.project_id and r.confidence >= 0.90
+         select 1 from app.resolve_project_by_name(o.office_id, o.name) r
+          where r.project_id = o.project_id and r.confidence >= 0.90
        )
   `)
   record(
@@ -178,7 +192,7 @@ for (const [a, b, why] of [
 // ===========================================================================
 
 const created = await one(`
-  select app.hq_create_project(
+  select app.hq_create_project(app.test_office(), 
     ${lit(`Identity proof ${run}`)}, 'upload', ${lit(`${SUBJECT}`)}, null, true
   ) as r
 `)
@@ -199,7 +213,7 @@ if (projectId === '') {
 // would not resolve.
 {
   const rows = await all(
-    `select r.confidence::float8 c from app.resolve_project_by_name(${lit(`Identity proof ${run}`)}) r
+    `select r.confidence::float8 c from app.resolve_project_by_name(app.test_office(), ${lit(`Identity proof ${run}`)}) r
       where r.project_id = ${lit(projectId)}::uuid`,
   )
   record(
@@ -216,7 +230,9 @@ if (projectId === '') {
 const alias = `the ${run} thing`
 {
   const added = (
-    await one(`select app.add_project_alias(${lit(projectId)}::uuid, ${lit(alias)}) as r`)
+    await one(
+      `select app.add_project_alias(app.test_office(), ${lit(projectId)}::uuid, ${lit(alias)}) as r`,
+    )
   )?.r as { ok?: boolean; error?: string }
   record(
     'an alias can be taught',
@@ -230,7 +246,7 @@ const alias = `the ${run} thing`
   // a working alias as broken.
   const found = await all(
     `select r.project_id::text p, r.confidence::float8 c, r.how
-       from app.resolve_project_by_name(${lit(alias)}) r
+       from app.resolve_project_by_name(app.test_office(), ${lit(alias)}) r
       order by r.confidence desc`,
   )
   record(
@@ -251,12 +267,14 @@ const alias = `the ${run} thing`
 // "the finance thing" is the ambiguity that made the duplicate.
 {
   const second = await one(`
-    select app.hq_create_project(${lit(`Identity proof other ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Identity proof other ${run}`)}, 'upload',
       ${lit(`${SUBJECT}-other`)}, null, true) as r
   `)
   const otherId = String(((second?.r ?? {}) as { project_id?: string }).project_id ?? '')
   const clash = (
-    await one(`select app.add_project_alias(${lit(otherId)}::uuid, ${lit(alias)}) as r`)
+    await one(
+      `select app.add_project_alias(app.test_office(), ${lit(otherId)}::uuid, ${lit(alias)}) as r`,
+    )
   )?.r as { error?: string; conflicts_with?: string }
   record(
     'the same phrase cannot mean two projects',
@@ -279,7 +297,7 @@ const alias = `the ${run} thing`
 {
   const attempt = (
     await one(`
-    select app.hq_create_project(${lit(`Identity proof ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Identity proof ${run}`)}, 'upload',
       ${lit(`${SUBJECT}-dup`)}) as r
   `)
   )?.r as { needs_confirmation?: boolean; candidates?: unknown[]; project_id?: string }
@@ -309,7 +327,7 @@ const alias = `the ${run} thing`
 {
   const near = (
     await one(`
-    select app.hq_create_project(${lit(`identity proof ${run} tracker`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`identity proof ${run} tracker`)}, 'upload',
       ${lit(`${SUBJECT}-near`)}) as r
   `)
   )?.r as { needs_confirmation?: boolean; candidates?: { name?: string }[] }
@@ -327,7 +345,7 @@ const alias = `the ${run} thing`
 {
   const forced = (
     await one(`
-    select app.hq_create_project(${lit(`Identity proof ${run}`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Identity proof ${run}`)}, 'upload',
       ${lit(`${SUBJECT}-forced`)}, null, true) as r
   `)
   )?.r as { project_id?: string }
@@ -351,13 +369,13 @@ const alias = `the ${run} thing`
   // and asserted so, because the new step must not have turned "I do not know"
   // into a guess.
   const blank = await one(
-    `select app.resolve_project('telegram_chat', ${lit(scope)}, null, null)::text as p`,
+    `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null, null)::text as p`,
   )
   record('with nothing to go on it still asks', String(blank?.p ?? 'null'), blank?.p === null)
 
   // A name on its own resolves it.
   const bare = await one(
-    `select app.resolve_project('telegram_chat', ${lit(scope)}, null, ${lit(alias)})::text as p`,
+    `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null, ${lit(alias)})::text as p`,
   )
   record(
     'a name on its own resolves the project',
@@ -370,7 +388,7 @@ const alias = `the ${run} thing`
   // utterance as one string, so "the wellness thing" worked and "have a look at
   // the wellness thing" found nothing.
   const inSentence = await one(`
-    select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+    select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,
       ${lit(`can you have a look at ${alias} before tomorrow`)})::text as p
   `)
   record(
@@ -381,7 +399,7 @@ const alias = `the ${run} thing`
 
   // But a short one does not get found by accident inside unrelated words.
   const shortAlias = await one(
-    `select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+    `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,
        'we should talk about the hq and the roadmap')::text as p`,
   )
   record(
@@ -407,13 +425,13 @@ const alias = `the ${run} thing`
   // project while looking entirely reasonable, so it must return null.
   const vague = `identity proof`
   const close = await all(
-    `select r.confidence::float8 c from app.resolve_project_by_name(${lit(vague)}) r
+    `select r.confidence::float8 c from app.resolve_project_by_name(app.test_office(), ${lit(vague)}) r
       order by r.confidence desc`,
   )
   const confident = close.filter((c) => Number(c.c) >= 0.9)
   const plausible = close.filter((c) => Number(c.c) >= 0.55)
   const guessed = await one(`
-    select app.resolve_project('telegram_chat', ${lit(scope)}, null, ${lit(vague)})::text as p
+    select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null, ${lit(vague)})::text as p
   `)
   record(
     'a phrase with no confident match resolves to nobody, however plausible the near misses',
@@ -457,14 +475,18 @@ const alias = `the ${run} thing`
     matching a prefix only covers subjects named to fall under it.
   */
   const rival = await one(`
-    select app.hq_create_project(${lit(`Identity proof ${run} rival`)}, 'upload',
+    select app.hq_create_project(app.test_office(), ${lit(`Identity proof ${run} rival`)}, 'upload',
       ${lit(`${SUBJECT}-rival`)}, null, true) as r
   `)
   const rivalId = String(((rival?.r ?? {}) as { project_id?: string }).project_id ?? '')
 
-  await one(`select app.add_project_alias(${lit(projectId)}::uuid, ${lit(taken)}) as r`)
+  await one(
+    `select app.add_project_alias(app.test_office(), ${lit(projectId)}::uuid, ${lit(taken)}) as r`,
+  )
   const blocked = (
-    await one(`select app.add_project_alias(${lit(rivalId)}::uuid, ${lit(taken)}) as r`)
+    await one(
+      `select app.add_project_alias(app.test_office(), ${lit(rivalId)}::uuid, ${lit(taken)}) as r`,
+    )
   )?.r as { error?: string; conflicts_with?: string }
   record(
     'CONTROL: while the holder is active, the phrase is not free',
@@ -476,7 +498,9 @@ const alias = `the ${run} thing`
     update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid
   `)
   const freed = (
-    await one(`select app.add_project_alias(${lit(rivalId)}::uuid, ${lit(taken)}) as r`)
+    await one(
+      `select app.add_project_alias(app.test_office(), ${lit(rivalId)}::uuid, ${lit(taken)}) as r`,
+    )
   )?.r as { error?: string }
   record(
     'and an archived project stops holding a phrase a live one should get',
@@ -496,11 +520,19 @@ const alias = `the ${run} thing`
     for his chat. The message carried the exact id of an attached notebook and
     the resolver never looked at it (0162).
   */
+  // The notebook is the suite's OWN, in the test office: the resolver reads only the speaker's office, so a notebook borrowed
+  // from whichever office had one attached (a person's real project, as this used to) is correctly invisible to it.
+  const ownNotebook = crypto.randomUUID()
+  await db.execute(`
+    insert into public.project_attachments (project_id, connector, external_ref, display_name, role, enabled)
+    values (${lit(rivalId)}::uuid, 'notebooklm', ${lit(ownNotebook)}, 'identity proof notebook', 'source', true)
+    on conflict do nothing
+  `)
   const attachedRef = (await one(`
       select a.external_ref, p.project_id::text pid
         from public.project_attachments a
         join public.projects p using (project_id)
-       where p.status = 'active' and a.enabled and a.connector = 'notebooklm'
+       where p.project_id = ${lit(rivalId)}::uuid and a.enabled and a.connector = 'notebooklm'
        limit 1
     `)) as { external_ref?: string; pid?: string } | undefined
 
@@ -510,11 +542,11 @@ const alias = `the ${run} thing`
     // The switch points at the fixture; the sentence names a different
     // project's notebook by id. The id must win.
     await db.execute(`
-      insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
-      values ('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
+      insert into public.project_switches (office_id, scope_kind, scope_ref, project_id, switched_by, reason)
+      values (app.test_office(), 'telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
     `)
     const byRef = await one(`
-      select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+      select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,
         ${lit(`have a look at the notebook (id ${attachedRef.external_ref}) and tell me what is in it`)}
       )::text as p
     `)
@@ -527,7 +559,7 @@ const alias = `the ${run} thing`
     // And a sentence with no identifier still respects the switch, or the fix
     // has simply broken the thing it sits above.
     const noRef = await one(
-      `select app.resolve_project('telegram_chat', ${lit(scope)}, null, 'how is that going')::text as p`,
+      `select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null, 'how is that going')::text as p`,
     )
     record(
       'and a sentence with no identifier still respects the switch',
@@ -539,7 +571,7 @@ const alias = `the ${run} thing`
 
   // An identifier we do not hold resolves to nothing — it never invents.
   const unknown = await all(
-    `select 1 from app.references_in('look at 11111111-2222-3333-4444-555555555555')`,
+    `select 1 from app.references_in(app.test_office(), 'look at 11111111-2222-3333-4444-555555555555')`,
   )
   record(
     'an identifier we are not attached to resolves to nothing',
@@ -549,7 +581,7 @@ const alias = `the ${run} thing`
 
   // An explicit id still wins over everything, including a contradicting name.
   const explicit = await one(`
-    select app.resolve_project('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid,
+    select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid,
       'something else entirely')::text as p
   `)
   record(
@@ -561,11 +593,11 @@ const alias = `the ${run} thing`
   // And a deliberate switch outranks a passing mention, so "let's look at X"
   // inside a project's own chat does not repoint the chat.
   await db.execute(`
-    insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
-    values ('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
+    insert into public.project_switches (office_id, scope_kind, scope_ref, project_id, switched_by, reason)
+    values (app.test_office(), 'telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
   `)
   const switched = await one(`
-    select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+    select app.resolve_project(app.test_office(), 'telegram_chat', ${lit(scope)}, null,
       'while we are here, what about something else') ::text as p
   `)
   record(
@@ -616,20 +648,20 @@ const OTHER_NAME = `Identity proof other ${run}`
 const resolves = (name: string, alias: string): string => `
   (select coalesce(
      (select (array_agg(r.project_id))[1]::text
-        from app.resolve_project_by_name(${lit(name)}) r
+        from app.resolve_project_by_name(app.test_office(), ${lit(name)}) r
        where r.confidence >= 0.90), 'null')) as ${alias}`
 
 const arc = await one(`
 begin;
-create temp table _dupe as select app.hq_create_project(
+create temp table _dupe as select app.hq_create_project(app.test_office(), 
   ${lit(`Identity proof ${run}`)}, 'upload', ${lit(`${SUBJECT}-dupe`)}, null, false) as r;
-create temp table _ren as select app.hq_rename_project(${lit(SLUG)}, ${lit(RENAMED)}) as r;
+create temp table _ren as select app.hq_rename_project(app.test_office(), ${lit(SLUG)}, ${lit(RENAMED)}) as r;
 create temp table _mid as
   select (select name from public.projects where project_id = ${lit(projectId)}::uuid) as nm,
          ${resolves(`Identity proof ${run}`, 'old_goes')},
          ${resolves(RENAMED, 'new_goes')};
 create temp table _clash as
-  select app.hq_rename_project(${lit(SLUG)}, ${lit(OTHER_NAME)}) as r;
+  select app.hq_rename_project(app.test_office(), ${lit(SLUG)}, ${lit(OTHER_NAME)}) as r;
 update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid;
 create temp table _arch as select ${resolves(RENAMED, 'after_archive')};
 create temp table _out as

@@ -11,9 +11,11 @@
  * with no browser whenever `__Secure-1PSIDTS` rotates. A cookie export cannot,
  * which is why the export path died within the hour.
  */
+import '../../src/safety/require-production-writes.ts'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { operatorOffice } from '../../src/db/office.ts'
 import { recordProbe } from '../../src/notebook/sync-queue.ts'
 
 const run = promisify(execFile)
@@ -169,17 +171,21 @@ if (typeof masterToken !== 'string' || masterToken === '') {
   )
 }
 
-await recordProbe(db, {
-  state: 'auth_required',
-  capabilities: [],
-  adapter: 'notebooklm-py',
-  adapterVersion: null,
-  detectedTier: null,
-  notebookLimit: null,
-  sourceLimit: null,
-  detail: 'a master-token-minted jar was vaulted; no NotebookLM call has been made with it yet',
-  latencyMs: null,
-})
+await recordProbe(
+  db,
+  {
+    state: 'auth_required',
+    capabilities: [],
+    adapter: 'notebooklm-py',
+    adapterVersion: null,
+    detectedTier: null,
+    notebookLimit: null,
+    sourceLimit: null,
+    detail: 'a master-token-minted jar was vaulted; no NotebookLM call has been made with it yet',
+    latencyMs: null,
+  },
+  await operatorOffice(db, process.env.OFFICE_ID),
+)
 
 console.log('\nNext: `npm run notebook:probe`, then `npm run poc:gate-2`.')
 console.log('The adapter stays auth_required until a real NotebookLM call succeeds.')

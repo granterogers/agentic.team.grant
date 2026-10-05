@@ -28,12 +28,36 @@
  * work to do.
  */
 
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import type { OfficeId } from '../office/context.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/**
+ * Why a Google duty could not do its job, as a word (#413). The four `GoogleUnavailable` codes plus the two ways an
+ * apparently working connection fails: a permission the person unchecked, and an error from the API itself.
+ */
+export type GoogleProblem =
+  | 'not_configured'
+  | 'not_connected'
+  | 'revoked'
+  | 'refused'
+  | 'missing_scope'
+  | 'api_error'
+
 export interface GoogleUnavailable {
   readonly ok: false
+  /**
+   * What KIND of unavailable, as a word code can branch on (#413). `reason` is prose for the Connections panel and
+   * changes with wording; a caller deciding whether the person has to do something reads this, never the sentence.
+   *
+   *   not_configured  the OAuth client was never set up
+   *   not_connected   set up, but nobody has connected an account
+   *   revoked         Google no longer accepts the stored connection (revoked, expired, or the app is in testing)
+   *   refused         Google refused for some other reason
+   */
+  readonly code: 'not_configured' | 'not_connected' | 'revoked' | 'refused'
   /** Which of the four steps on the Settings page is outstanding. */
   readonly reason: string
 }
@@ -62,19 +86,31 @@ export async function googleAccess(
       select
         coalesce((select value #>> '{}' from public.system_config
                    where key = 'google.client_id'), '') as client_id,
-        coalesce(app.vault_secret('google.client_secret'), '') as client_secret,
-        coalesce(app.vault_secret('google.refresh_token'), '') as refresh_token
+        coalesce(${credentialSql('google.client_secret')}, '') as client_secret,
+        coalesce(${credentialSql('google.refresh_token')}, '') as refresh_token
     `)
   ).rows[0] as { client_id: string; client_secret: string; refresh_token: string }
 
   if (config.client_id === '') {
-    return { ok: false, reason: 'no OAuth client id yet — step 2 of 4 on the Settings page' }
+    return {
+      ok: false,
+      code: 'not_configured',
+      reason: 'no OAuth client id yet — step 2 of 4 on the Settings page',
+    }
   }
   if (config.client_secret === '') {
-    return { ok: false, reason: 'no client secret yet — step 3 of 4 on the Settings page' }
+    return {
+      ok: false,
+      code: 'not_configured',
+      reason: 'no client secret yet — step 3 of 4 on the Settings page',
+    }
   }
   if (config.refresh_token === '') {
-    return { ok: false, reason: 'not connected — press Connect Google, step 4 of 4' }
+    return {
+      ok: false,
+      code: 'not_connected',
+      reason: 'not connected — press Connect Google, step 4 of 4',
+    }
   }
 
   const response = await fetchImpl('https://oauth2.googleapis.com/token', {
@@ -103,6 +139,7 @@ export async function googleAccess(
     const code = String(body.error ?? `http ${String(response.status)}`)
     return {
       ok: false,
+      code: code === 'invalid_grant' ? 'revoked' : 'refused',
       reason:
         code === 'invalid_grant'
           ? 'Google refused the stored refresh token (invalid_grant): it has been revoked, or ' +
@@ -127,20 +164,30 @@ export async function googleAccess(
   }
 }
 
-/** Record what happened, so the Connections panel is not guessing. */
+/**
+ * Record what happened, so the Connections panel is not guessing.
+ *
+ * Written under the office the refresh ran for (the caller names it: the claimed job's, or a script's). The table's
+ * key is still (service, credential) for the whole deployment, so a row another office already holds is not
+ * overwritten: the `do update` only touches a row of the SAME office, and a second office's health is a follow-up to
+ * that key (reported, not widened here).
+ */
 export async function recordGoogleHealth(
   db: SqlExecutor,
   access: GoogleAccess | GoogleUnavailable,
+  office: OfficeId,
 ): Promise<void> {
   await db.execute(`
     insert into public.connection_health
-      (service, credential, state, detail, owner, action, checked_at)
+      (service, credential, state, detail, owner, action, checked_at, office_id)
     values ('google_calendar', 'oauth_client',
             ${access.ok ? "'ok'" : "'dead'"},
             ${lit(access.ok ? `connected; scopes: ${access.scopes.join(' ')}` : access.reason).slice(0, 400)},
-            'grant', 'Settings → Google on the web front end', app.now_utc())
-    on conflict (service, credential) do update
+            app.office_actor(${lit(office)}::uuid),
+            'Settings → Google on the web front end', app.now_utc(), ${lit(office)}::uuid)
+    on conflict (office_id, service, credential) do update
       set state = excluded.state, detail = excluded.detail,
           action = excluded.action, checked_at = app.now_utc()
+      where public.connection_health.office_id = excluded.office_id
   `)
 }

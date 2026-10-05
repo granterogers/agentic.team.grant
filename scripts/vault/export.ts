@@ -39,6 +39,7 @@
  * field where the description belongs.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -134,8 +135,7 @@ try {
     console.error('no pager bot; cannot deliver. Nothing was written outside a temp directory.')
     process.exit(1)
   }
-  const chat = (await db.execute(`select app.telegram_chat_for('grant', '${pager.botId}') as c`))
-    .rows[0]?.c
+  const chat = (await db.execute(`select app.operator_chat('${pager.botId}') as c`)).rows[0]?.c
   if (chat === null || chat === undefined) {
     console.error('no registered chat for grant; cannot deliver.')
     process.exit(1)

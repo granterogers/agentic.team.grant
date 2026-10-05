@@ -20,7 +20,10 @@ const check = (what: string, ok: boolean, detail: string) => {
   results.push({ ok })
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what} - ${detail}`)
 }
-const unnamed = String((await one(`select app.unnamed_project()::text as p`)).p)
+// a real turn from Grant's chat belongs to the operator's office, so its Unnamed project is the operator's
+const unnamed = String(
+  (await one(`select app.unnamed_project(app.operator_office())::text as p`)).p,
+)
 
 const parent = await realParent(db)
 const p = await one(
@@ -34,7 +37,7 @@ check(
 const kid = String(
   (
     await one(
-      `select app.enqueue_child(${lit(parent)}::uuid, 'verify.own', '{}'::jsonb)::text as c`,
+      `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.own', '{}'::jsonb)::text as c`,
     )
   ).c,
 ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -43,8 +46,11 @@ const k = await one(
 )
 check("a child with no project of its own inherits its parent's", k.p === unnamed, String(k.p))
 const grand = String(
-  (await one(`select app.enqueue_child(${lit(kid)}::uuid, 'verify.own', '{}'::jsonb)::text as c`))
-    .c,
+  (
+    await one(
+      `select app.enqueue_child(app.job_office(${lit(kid)}::uuid), ${lit(kid)}::uuid, 'verify.own', '{}'::jsonb)::text as c`,
+    )
+  ).c,
 ).match(/[0-9a-f-]{36}/)?.[0] as string
 const g = await one(
   `select project_id::text as p from public.jobs where job_id = ${lit(grand)}::uuid`,

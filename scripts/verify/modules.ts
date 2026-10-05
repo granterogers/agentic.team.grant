@@ -315,7 +315,9 @@ try {
     refusal that says why.
   */
   const nowhere = (
-    await one(`select public.hq_task_add('', 'Homeless module', null, null, null, true) as r`)
+    await one(
+      `select public.hq_task_add(app.test_office(), '', 'Homeless module', null, null, null, true) as r`,
+    )
   ).r as { error?: string }
   check(
     'a module with no project is refused, not filed nowhere',
@@ -330,7 +332,7 @@ try {
   // one red check does not hide a second bug in the other half.
   console.log('\nand the page draws it')
 
-  const studio = (await one('select app.hq_studio() as d')).d as {
+  const studio = (await one('select app.hq_studio(app.operator_office()) as d')).d as {
     projects: { slug: string; layout: unknown; modules: unknown }[]
   }
   const subject = studio.projects[0]

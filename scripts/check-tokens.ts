@@ -109,6 +109,16 @@ const used: { token: string; file: string; line: number; within: Set<string> }[]
  */
 const BASE_SELECTOR = /^(:root|html|\*)(\s*,\s*(:root|html|\*))*$/
 
+/*
+  A COMPONENT SCOPE: a token declared on a plain id or class list (`#settings, .stg-confirm { --st-panel: ... }`), with no
+  attribute, pseudo-class, `:root` or descendant narrowing it. The settings sheet declares its 299 `--st-*` reads this way and
+  reads them only inside its own stylesheet, so they are defined for that FILE and nowhere else. This is deliberately not a
+  rule that any declaration in the same file counts: #124's defect was a base token swallowed by an attribute-narrowed
+  `:root[data-density=...]` block, which this pattern does not match, so that defect is still caught.
+*/
+const COMPONENT_SCOPE = /^(#[a-z0-9_-]+|\.[a-z0-9_-]+)(\s*,\s*(#[a-z0-9_-]+|\.[a-z0-9_-]+))*$/i
+const fileScope = new Map<string, Set<string>>()
+
 for (const file of files) {
   const raw0 = readFileSync(file, 'utf8')
   /*
@@ -143,7 +153,11 @@ for (const file of files) {
         const named = decl[1]
         if (!inAtRule && named !== undefined) {
           if (BASE_SELECTOR.test(here)) defined.add(named)
-          else {
+          else if (COMPONENT_SCOPE.test(here)) {
+            const set = fileScope.get(file) ?? new Set<string>()
+            set.add(named)
+            fileScope.set(file, set)
+          } else {
             const asExperience = EXPERIENCE_BASE.exec(here)
             const which = asExperience?.[1]
             if (which !== undefined) {
@@ -225,6 +239,7 @@ const BASELINE: Record<string, string> = {
 
 const inReach = (u: { token: string; within: Set<string>; file: string }): boolean => {
   if (defined.has(u.token)) return true
+  if (fileScope.get(u.file)?.has(u.token) === true) return true
   for (const [experience, tokens] of experienceBase) {
     if (!tokens.has(u.token)) continue
     if (u.within.has(experience)) return true

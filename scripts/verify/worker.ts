@@ -139,8 +139,8 @@ if (stillMine > 0) {
 
 const project = await one(`
   with created as (
-    insert into public.projects (slug, name, status)
-    values (${lit(`fixture-worker-${run}`)}, 'Fixture: worker', 'active')
+    insert into public.projects (office_id, slug, name, status)
+    values (app.test_office(), ${lit(`fixture-worker-${run}`)}, 'Fixture: worker', 'active')
     returning project_id
   ),
   attached as (
@@ -157,8 +157,8 @@ const projectId = String(project?.id)
 const enqueue = async (kind: string, key: string): Promise<string> => {
   const r = await one(`
     insert into public.jobs
-      (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
-    values (gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(key)}, ${lit(kind)},
+      (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, priority)
+    values (app.test_office(), gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(key)}, ${lit(kind)},
             'verify:worker', 100)
     returning job_id::text as id
   `)
@@ -802,8 +802,8 @@ const FOREIGN = 'verify:worker-someone-else'
 const PROBE_KIND = 'research.scope_probe'
 const foreignJob = await one(`
   insert into public.jobs
-    (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
-  values (gen_random_uuid(), ${lit(projectId)}::uuid,
+    (office_id, correlation_id, project_id, idempotency_key, kind, requested_by, priority)
+  values (app.test_office(), gen_random_uuid(), ${lit(projectId)}::uuid,
           ${lit(`fixture-foreign-${run}`)}, ${lit(PROBE_KIND)}, ${lit(FOREIGN)}, 100)
   returning job_id::text as id
 `)
@@ -865,7 +865,8 @@ record(
   over an hour means the last one was not taken before the next arrived. An
   hour is the floor for a kind no duty creates.
 */
-const stuck = (await db.execute('select * from app.jobs_stuck_queued()')).rows as {
+const stuck = (await db.execute('select * from app.jobs_stuck_queued(app.operator_office())'))
+  .rows as {
   kind: string
   n: number
   oldest_minutes: number
@@ -892,7 +893,8 @@ record(
   the office fell behind. Asserting the FIELD exists, not that it is zero --
   a green office and a broken health function look identical from the outside.
 */
-const health = (await db.execute('select app.office_health() as h')).rows[0] as {
+const health = (await db.execute('select app.office_health(app.operator_office()) as h'))
+  .rows[0] as {
   h: Record<string, unknown>
 }
 record(

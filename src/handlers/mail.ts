@@ -20,7 +20,9 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { officeOfJob } from '../db/office.ts'
 import { refreshMail } from '../google/mail.ts'
+import { googleProblemOutput, googleRecoveryOutput } from '../incidents/google.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -29,9 +31,13 @@ export function mailHandler(db: SqlExecutor): Handler {
   return {
     kind: 'google.read_mail',
     handle: async (job: Job): Promise<HandlerOutput> => {
-      const outcome = await refreshMail(db)
+      // The office is the claimed job's, fixed when the duty made it. Never the "only person" guess: with two real
+      // offices that is no_office, and the duty failed every hour (#407).
+      const office = await officeOfJob(db, job.jobId)
+      const outcome = await refreshMail(db, { officeId: office })
 
       if (outcome.ok) {
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await db.execute(
           `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
         )
@@ -41,17 +47,15 @@ export function mailHandler(db: SqlExecutor): Handler {
         // Not thrown. Mail that cannot be read is a §18 degradation, not a job
         // failure: what is cached stays readable, the connection light goes red
         // with the reason, and retrying five times would not help.
-        return {
-          body:
-            `I could not read the mail: ${outcome.note}. What we already had is still here, ` +
-            'and the connection light on the front end says the same thing.',
-          confidence: 'high',
-          evidence: 'verified',
-          sources: ['google:gmail'],
-          contradictions: null,
-          path: 'deterministic_retrieval',
-          model: null,
-        } satisfies HandlerOutput
+        //
+        // What the PERSON hears is decided by the incident layer (#413): told once, reminded sensibly, and never in the
+        // words of an OAuth error. The raw note stays in the incident's evidence.
+        return googleProblemOutput(db, {
+          office,
+          duty: 'mail',
+          problem: outcome.problem ?? 'api_error',
+          note: outcome.note,
+        })
       }
 
       /*
@@ -76,7 +80,9 @@ export function mailHandler(db: SqlExecutor): Handler {
       */
       let pruned = 0
       try {
-        const { rows } = await db.execute(`select app.forget_mail_before(180) as r`)
+        const { rows } = await db.execute(
+          `select app.forget_mail_before(app.job_office(${lit(job.jobId)}::uuid), 180) as r`,
+        )
         const raw = rows[0]?.r
         const r = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { removed?: unknown }
         pruned = typeof r?.removed === 'number' ? r.removed : 0
@@ -95,13 +101,19 @@ export function mailHandler(db: SqlExecutor): Handler {
       */
       let forgotten = 0
       try {
-        const { rows } = await db.execute(`select app.forget_mail_bodies_before(90) as r`)
+        const { rows } = await db.execute(
+          `select app.forget_mail_bodies_before(app.job_office(${lit(job.jobId)}::uuid), 90) as r`,
+        )
         const raw = rows[0]?.r
         const r = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { forgotten?: unknown }
         forgotten = typeof r?.forgotten === 'number' ? r.forgotten : 0
       } catch {
         // As above.
       }
+
+      // A run that worked closes any incident it proves is over, and says so once if the person had been told (#413).
+      const recovered = await googleRecoveryOutput(db, { office, duty: 'mail' })
+      if (recovered !== null) return recovered
 
       return {
         body: `Mail refreshed: ${outcome.note}${

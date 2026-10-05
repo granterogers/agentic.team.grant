@@ -43,7 +43,7 @@ const withdrawAsPerson = async (id: string, by: string) =>
   json(
     (
       await one(
-        `select app.withdraw_refusal(${lit(id)}::uuid, ${lit(by)})::text as r
+        `select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, ${lit(by)})::text as r
            from (select set_config('request.jwt.claims', '{"role":"service_role"}', true)) c`,
       )
     ).r,
@@ -76,6 +76,7 @@ const decide = async (a: {
   json(
     (
       await one(`select app.authorize_effect(
+        p_office => ${a.project === undefined || a.project === null ? 'app.operator_office()' : `(select x.office_id from public.projects x where x.project_id = ${lit(a.project)}::uuid)`},
         p_project => ${a.project === undefined || a.project === null ? 'null' : `${lit(a.project)}::uuid`},
         p_tool => ${lit(a.tool)},
         p_staff => ${a.staff === undefined ? 'null' : lit(a.staff)},
@@ -197,7 +198,9 @@ for (const tool of ['notion.write', 'slack.post', 'notebook.write', 'drive.inges
     const t = (await r.text()).slice(0, 80)
     check(
       `anon key calling ${fn} is refused (nothing it names exists or changes)`,
-      r.status === 401 || r.status === 403 || /permission denied/i.test(t),
+      // A function an anon key cannot see is answered 404 PGRST202 ("not found, with these arguments"): since P3 the
+      // doors take an office first, so the old argument shape names nothing - which is a refusal, not an exposure.
+      r.status === 401 || r.status === 403 || /permission denied|PGRST202/i.test(t),
       `http ${String(r.status)} ${t}`,
     )
   }
@@ -249,15 +252,15 @@ const question = async (fp: string | null, kind: 'plan' | 'duty' = 'plan') => {
   const c = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(rootJob)}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(rootJob)}::uuid), p_parent => ${lit(rootJob)}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
   children.push(c)
   const b = await one(`
     with k as (update public.jobs set state = 'cancelled', state_reason = 'run2-live fixture' where job_id = ${lit(c)}::uuid and state = 'queued' returning job_id)
-    insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
-    select ${lit(project)}::uuid, job_id, ${lit(`Run 2 live proof ${kind} ${run}`)}, 'run2-live fixture', 'Nothing happens until somebody answers this question.',
+    insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
+    select app.job_office(job_id), ${lit(project)}::uuid, job_id, ${lit(`Run 2 live proof ${kind} ${run}`)}, 'run2-live fixture', 'Nothing happens until somebody answers this question.',
            array['Yes, do it','No, leave it'], 'chief-of-staff', ${kind === 'duty' ? 'true' : 'false'}, ${fp === null ? 'null' : lit(fp)}, 'No, leave it' from k
     returning blocker_id::text as id, job_id::text as job`)
   return { id: String(b.id), job: String(b.job) }
@@ -363,10 +366,17 @@ await answer(qn.id, 'No, leave it')
   // the same duty does not nag, through the real governOutward
   // A duty-shaped job (requested by a schedule, so nobody "asked" for it), named as a harness
   // job from birth, and cancelled at once so the deployed worker never runs it.
+  // A specialist holds a tool per OFFICE and the project's office is the test office, which holds none: grant it for
+  // this block and take it back at the end.
+  await db.execute(`
+    insert into public.staff_tools (office_id, staff_slug, tool, granted_by, note)
+    select p.office_id, 'research-director', 'notion.write', 'verify:run2-live', 'fixture grant for the duty proof'
+      from public.projects p where p.project_id = ${lit(project)}::uuid
+    on conflict do nothing`)
   const dutyJob = String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values ('verify.ask', ${lit(`duty:verify-run2-${run}`)}, ${lit(project)}::uuid, ${lit(`r2-duty-${run}`)}, gen_random_uuid())
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+        values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), 'verify.ask', ${lit(`duty:verify-run2-${run}`)}, ${lit(project)}::uuid, ${lit(`r2-duty-${run}`)}, gen_random_uuid())
         returning job_id::text as id`)
     ).id,
   )
@@ -383,7 +393,7 @@ await answer(qn.id, 'No, leave it')
     agent: String(
       (
         await one(
-          `select staff_slug as s from public.staff_tools where tool = 'notion.write' limit 1`,
+          `select staff_slug as s from public.staff_tools where tool = 'notion.write' and office_id = (select office_id from public.projects where project_id = ${lit(project)}::uuid) limit 1`,
         )
       ).s,
     ),
@@ -404,7 +414,7 @@ await answer(qn.id, 'No, leave it')
     agent: String(
       (
         await one(
-          `select staff_slug as s from public.staff_tools where tool = 'notion.write' limit 1`,
+          `select staff_slug as s from public.staff_tools where tool = 'notion.write' and office_id = (select office_id from public.projects where project_id = ${lit(project)}::uuid) limit 1`,
         )
       ).s,
     ),
@@ -424,13 +434,18 @@ await answer(qn.id, 'No, leave it')
     `select b.blocker_id::text as id from public.blockers b where b.job_id = ${lit(dutyJob)}::uuid and b.standing_tool = 'notion.write' order by b.created_at limit 1`,
   )
   ;(globalThis as { __dutyNo?: string }).__dutyNo = String(duties.id)
+  await db.execute(`delete from public.staff_tools where granted_by = 'verify:run2-live'`)
 }
 // reversal
 {
   const anon = await gateway(null, 'withdraw_refusal', { p_blocker_id: qn.id })
   check('unauthenticated: cannot reopen the No', anon.status === 401, `http ${String(anon.status)}`)
   const sql = json(
-    (await one(`select app.withdraw_refusal(${lit(qn.id)}::uuid, 'grant')::text as r`)).r,
+    (
+      await one(
+        `select app.withdraw_refusal(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(qn.id)}::uuid), app.test_office()), ${lit(qn.id)}::uuid, 'grant')::text as r`,
+      )
+    ).r,
   )
   check(
     'plain SQL (what a handler or a synthetic job can do) cannot erase it, even naming Grant',
@@ -520,15 +535,15 @@ await answer(qn.id, 'No, leave it')
   const c = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(rootJob)}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(rootJob)}::uuid), p_parent => ${lit(rootJob)}::uuid, p_kind => 'verify.ask', p_payload => '{}'::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
   const mk = async () => {
     const b = await one(`
       with k as (update public.jobs set state = 'cancelled', state_reason = 'run2-live fixture' where job_id = ${lit(c)}::uuid and state = 'queued' returning job_id)
-      insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-      select ${lit(project)}::uuid, job_id, ${lit(`Run 2 live tick ${run}`)}, 'run2-live fixture', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false from k
+      insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      select app.job_office(job_id), ${lit(project)}::uuid, job_id, ${lit(`Run 2 live tick ${run}`)}, 'run2-live fixture', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false from k
       returning blocker_id::text as id`)
     const t = String(
       (
@@ -548,7 +563,11 @@ await answer(qn.id, 'No, leave it')
     )
   else {
     const refused = json(
-      (await one(`select app.hq_task_state(${lit(x.t)}, 'done', null, null)::text as r`)).r,
+      (
+        await one(
+          `select app.hq_task_state((select office_id from public.tasks where task_id = ${lit(x.t)}::uuid), ${lit(x.t)}, 'done', null, null)::text as r`,
+        )
+      ).r,
     )
     const s1 = await one(
       `select b.state::text as bs, t.state::text as ts from public.blockers b, public.tasks t where b.blocker_id = ${lit(x.b)}::uuid and t.task_id = ${lit(x.t)}::uuid`,
@@ -564,7 +583,7 @@ await answer(qn.id, 'No, leave it')
     const unknown = json(
       (
         await one(
-          `select app.hq_task_state(${lit(x.t)}, 'done', null, 'somebody-unknown')::text as r`,
+          `select app.hq_task_state((select office_id from public.tasks where task_id = ${lit(x.t)}::uuid), ${lit(x.t)}, 'done', null, 'somebody-unknown')::text as r`,
         )
       ).r,
     )
@@ -594,6 +613,24 @@ await answer(qn.id, 'No, leave it')
   }
 }
 // ---- teardown and containment ---------------------------------------------------------------------------------------
+/*
+  THE TO-DO A QUESTION MAKES IS ON HIS LIST, AND THIS SUITE'S QUESTIONS ARE NOT HIS.
+
+  Raising a blocker also files a to-do on the personal list of the person who must answer it, and this suite raises
+  blockers against fixture jobs. Nothing removed those to-dos: ten of them (the same ten twice, in two gate runs)
+  sat on Grant's personal list until check:leaks reported them (0530's class). Swept by CLASS, not by this run's token,
+  so an earlier crashed run's are collected too: a to-do that satisfies one of this suite's fixture questions, or that
+  carries this suite's title, and that was made by a harness job.
+*/
+const sweptTodos = await db.execute(`
+  delete from public.tasks t
+   where t.assigned_to_human
+     and exists (select 1 from public.jobs j where j.job_id = t.job_id and app.harness_job(j.job_id))
+     and (t.satisfies_blocker in (select b.blocker_id from public.blockers b where b.why_needed in ('run1-live fixture', 'run2-live fixture'))
+          or t.title ~ '^(Run 2 live (proof|tick)|Send the renewal note to the venue)')
+   returning t.task_id`)
+console.log(`swept ${String(sweptTodos.rows.length)} fixture to-do(s) from his personal list`)
+
 await origins.release()
 const leftover = await one(
   `select count(*)::int as n from public.jobs where kind = 'verify.ask' and state in ('queued','running','retrying')`,

@@ -10,6 +10,7 @@
  * use, set before the first paint, so what is captured is the real page under
  * the real shell rather than a renderer called in a harness.
  */
+import '../../src/safety/arm.ts'
 import { mkdir } from 'node:fs/promises'
 import { chromium, devices } from 'playwright'
 import { serveStudio } from './serve-studio.ts'

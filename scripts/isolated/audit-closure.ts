@@ -19,7 +19,7 @@ const check = (what: string, ok: boolean, detail: string) => {
   results.push({ ok })
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what} - ${detail}`)
 }
-const project = String((await one(`select app.unnamed_project()::text as p`)).p)
+const project = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
 const may = async (job: string, tool = 'drive.ingest') =>
   JSON.parse(
     String(
@@ -42,8 +42,11 @@ const rootJob = async (requestedBy: string, kind = 'verify.ask') =>
 // ---- B11 -------------------------------------------------------------------------------------------------------------------
 const turn = await realParent(db) // his own words through a production door
 const kid = String(
-  (await one(`select app.enqueue_child(${lit(turn)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`))
-    .c,
+  (
+    await one(
+      `select app.enqueue_child(app.job_office(${lit(turn)}::uuid), ${lit(turn)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+    )
+  ).c,
 ).match(/[0-9a-f-]{36}/)?.[0] as string
 {
   const own = await may(kid)
@@ -93,8 +96,11 @@ const kid = String(
 {
   const a = await rootJob(`teamhq:verify-cycle-${run}`)
   const b = String(
-    (await one(`select app.enqueue_child(${lit(a)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`))
-      .c,
+    (
+      await one(
+        `select app.enqueue_child(app.job_office(${lit(a)}::uuid), ${lit(a)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+      )
+    ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
   const said = await db
     .execute(
@@ -137,7 +143,7 @@ const kid = String(
 {
   const name = `fixture audit ${run}`
   const created = await one(
-    `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`audit-${run}`)}, ${lit(name)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`audit-${run}`)}, ${lit(name)}, true)::text as r`,
   ).catch(() => null)
   const slug = `fixture-audit-${run}`
   const p = await one(
@@ -231,7 +237,7 @@ const kid = String(
     const id = String(
       (
         await one(
-          `select app.enqueue_child(${lit(root)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(root)}::uuid), ${lit(root)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
         )
       ).c,
     ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -307,9 +313,11 @@ const kid = String(
     })
   const [a = { r: '' }, b = { r: '' }] = (
     await Promise.all([
-      psql(`select app.approve_tool(${lit(req)}::uuid, 'grant')::text`),
       psql(
-        `select app.decline_tool(${lit(req)}::uuid, 'grant', 'declined for the race proof')::text`,
+        `select app.approve_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(req)}::uuid), app.test_office()), ${lit(req)}::uuid, 'grant')::text`,
+      ),
+      psql(
+        `select app.decline_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(req)}::uuid), app.test_office()), ${lit(req)}::uuid, 'grant', 'declined for the race proof')::text`,
       ),
     ])
   ).map((r) => ({ r }))
@@ -342,7 +350,7 @@ const kid = String(
   const kid = String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', '{}'::jsonb)::text as c`,
       )
     ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -356,7 +364,7 @@ const kid = String(
   )
   const nm = `fixture audit inherit ${run}`
   await one(
-    `select app.hq_create_project(${lit(nm)}, 'upload', ${lit(`inh-${run}`)}, ${lit(nm)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(nm)}, 'upload', ${lit(`inh-${run}`)}, ${lit(nm)}, true)::text as r`,
   )
   const other = String(
     (
@@ -368,7 +376,7 @@ const kid = String(
   const over = String(
     (
       await one(
-        `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', '{"x":1}'::jsonb, interval '0', true, ${lit(other)}::uuid)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', '{"x":1}'::jsonb, interval '0', true, ${lit(other)}::uuid)::text as c`,
       )
     ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -413,7 +421,7 @@ const kid = String(
 {
   const name = `Audit real ${run}`
   await one(
-    `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`real-${run}`)}, ${lit(name)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`real-${run}`)}, ${lit(name)}, true)::text as r`,
   )
   const real = String(
     (
@@ -424,7 +432,7 @@ const kid = String(
   )
   const fxName = `fixture task ${run}`
   await one(
-    `select app.hq_create_project(${lit(fxName)}, 'upload', ${lit(`fxt-${run}`)}, ${lit(fxName)}, true)::text as r`,
+    `select app.hq_create_project(app.test_office(), ${lit(fxName)}, 'upload', ${lit(`fxt-${run}`)}, ${lit(fxName)}, true)::text as r`,
   )
   const fx = String(
     (
@@ -437,7 +445,7 @@ const kid = String(
     String(
       (
         await one(
-          `select (app.task_add(p_project => ${lit(project)}::uuid, p_title => ${lit(title)}, p_added_by => 'grant')) ->> 'id' as id`,
+          `select (app.task_add(p_office => app.test_office(), p_project => ${lit(project)}::uuid, p_title => ${lit(title)}, p_added_by => 'grant')) ->> 'id' as id`,
         )
       ).id,
     )
@@ -522,14 +530,14 @@ const kid = String(
     return String(
       (
         await one(
-          `select app.enqueue_child(${lit(root)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(root)}::uuid), ${lit(root)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
         )
       ).c,
     ).match(/[0-9a-f-]{36}/)?.[0] as string
   }
   const ask = async (job: string) => {
     const r = await one(
-      `select app.request_generation_approval(${lit(job)}::uuid, 'notebook.generate', 'a deck for the audit proof', 'free')::text as r`,
+      `select app.request_generation_approval(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid, 'notebook.generate', 'a deck for the audit proof', 'free')::text as r`,
     )
     return { blocker: String(r.r).match(/[0-9a-f-]{36}/)?.[0] ?? '' } as {
       blocker?: string
@@ -550,8 +558,11 @@ const kid = String(
   const lb = String(lr.blocker ?? lr.blocker_id ?? '')
   const liveAns = JSON.parse(
     String(
-      (await one(`select app.hq_answer_blocker(${lit(lb)}::uuid, 'Go ahead', 'grant')::text as r`))
-        .r,
+      (
+        await one(
+          `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(lb)}::uuid), app.test_office()), ${lit(lb)}::uuid, 'Go ahead', 'grant')::text as r`,
+        )
+      ).r,
     ),
   ) as Record<string, unknown>
   check(
@@ -573,8 +584,11 @@ const kid = String(
   )
   const ans = JSON.parse(
     String(
-      (await one(`select app.hq_answer_blocker(${lit(db2)}::uuid, 'Go ahead', 'grant')::text as r`))
-        .r,
+      (
+        await one(
+          `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(db2)}::uuid), app.test_office()), ${lit(db2)}::uuid, 'Go ahead', 'grant')::text as r`,
+        )
+      ).r,
     ),
   ) as Record<string, unknown>
   const st = await one(
@@ -601,7 +615,7 @@ const kid = String(
     String(
       (
         await one(
-          `select app.answer_generation_approval(${lit(db3)}::uuid, true, 'grant')::text as r`,
+          `select app.answer_generation_approval(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(db3)}::uuid), app.test_office()), ${lit(db3)}::uuid, true, 'grant')::text as r`,
         )
       ).r,
     ),

@@ -84,7 +84,7 @@ const SETUP = (extra: Readonly<Record<string, string>> = {}): string => {
 }
 
 const SIGNAL = (ref: string, extra = 'null, null'): string => `
-  app.record_signal('office', 'document.added', ${lit(ref)}, ${PROJECT},
+  app.record_signal(app.test_office(), 'office', 'document.added', ${lit(ref)}, ${PROJECT},
                     'A document called something', '{"connector": "drive"}'::jsonb, ${extra})`
 
 // ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ section = 'the ways it must refuse'
     -- One event fires and makes a job. That job then causes another event.
     insert into r select 'one', app.fire_triggers_for((${SIGNAL('doc-loop-1')} ->> 'signal')::uuid);
     insert into r select 'two', app.fire_triggers_for((
-      app.record_signal('office', 'document.added', 'doc-loop-2', ${PROJECT},
+      app.record_signal(app.test_office(), 'office', 'document.added', 'doc-loop-2', ${PROJECT},
         'Something the job itself made', '{"connector": "drive"}'::jsonb,
         ((select v from r where k = 'one') -> 'triggers' -> 0 ->> 'job')::uuid, null)
       ->> 'signal')::uuid);
@@ -248,7 +248,7 @@ section = 'the ways it must refuse'
     ${SETUP({ not_before_event_at: 'app.now_utc()' })}
     create temp table r (k text, v jsonb) on commit drop;
     insert into r select 'old', app.fire_triggers_for((
-      app.record_signal('office', 'document.added', 'doc-old', ${PROJECT},
+      app.record_signal(app.test_office(), 'office', 'document.added', 'doc-old', ${PROJECT},
         'Something from last week', '{"connector": "drive"}'::jsonb, null,
         app.now_utc() - interval '7 days') ->> 'signal')::uuid);
     select (select v from r where k = 'old') -> 'triggers' -> 0 ->> 'decision' as decided,
@@ -350,7 +350,7 @@ section = 'what the office notices by itself'
     insert into r select 'old', ${SIGNAL('doc-stale')};
     update public.signals set received_at = app.now_utc() - interval '3 hours'
      where external_ref = 'doc-stale';
-    insert into r select 'swept', app.fire_pending_signals(20);
+    insert into r select 'swept', app.fire_pending_signals(app.test_office(), 20);
     select (select count(*) from public.trigger_firings f
              join public.signals s using (signal_id) where s.external_ref = 'doc-fresh') as fresh,
            (select count(*) from public.trigger_firings f
@@ -380,7 +380,7 @@ section = 'a person can see what every trigger is doing'
     ${SETUP({ cooldown_seconds: '3600' })}
     select app.fire_triggers_for((${SIGNAL('doc-h1')} ->> 'signal')::uuid);
     select app.fire_triggers_for((${SIGNAL('doc-h2')} ->> 'signal')::uuid);
-    select x as health from jsonb_array_elements(app.trigger_health()) x
+    select x as health from jsonb_array_elements(app.trigger_health(app.owner_office('grant'))) x
      where x ->> 'name' = ${lit(`fixture-trigger-${run}`)};
     rollback;`)
 
@@ -434,7 +434,7 @@ section = 'event content is data'
       'perms', (select count(*) from public.tool_permissions where enabled),
       'standing', (select count(*) from public.autonomy_settings));
     insert into h select 'sig',
-      app.record_signal('office', 'document.added', 'doc-hostile', ${PROJECT},
+      app.record_signal(app.test_office(), 'office', 'document.added', 'doc-hostile', ${PROJECT},
                         ${lit(HOSTILE)},
                         jsonb_build_object('connector', 'drive', 'body', ${lit(HOSTILE)}),
                         null, null);

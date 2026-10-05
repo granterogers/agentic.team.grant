@@ -58,7 +58,10 @@ describe('the rename path asks for a referent, not for a recent row', () => {
   })
 
   it('passes the conversation, because that is what grounds it', () => {
-    expect(withoutComments).toMatch(/my_task_referent\(\$\{lit\(String\(payload\.command_id/)
+    // ...inside the CLAIMED job's office (0783): the office is derived from the job, then the command it was handed.
+    expect(withoutComments).toMatch(
+      /my_task_referent\(app\.job_office\(\$\{lit\(job\.jobId\)\}::uuid\), \$\{lit\(String\(payload\.command_id/,
+    )
   })
 })
 

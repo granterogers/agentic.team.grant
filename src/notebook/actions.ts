@@ -25,6 +25,7 @@
 
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { AmbiguousWriteError } from './adapter.ts'
 
@@ -310,10 +311,8 @@ export class NotebookActions {
   static async fromVault(db: SqlExecutor): Promise<NotebookActions | null> {
     const { rows } = await db.execute(`
       select
-        (select decrypted_secret from vault.decrypted_secrets
-          where name = 'notebook.storage_state') as jar,
-        (select decrypted_secret from vault.decrypted_secrets
-          where name = 'notebook.reader_secret') as secret,
+        ${credentialSql('notebook.storage_state')} as jar,
+        ${credentialSql('notebook.reader_secret')} as secret,
         (select value #>> '{}' from public.system_config
           where key = 'notebook.writer_url') as url
     `)

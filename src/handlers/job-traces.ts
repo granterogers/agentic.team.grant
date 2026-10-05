@@ -70,6 +70,7 @@ export function jobTracesHandler(db: SqlExecutor): Handler {
           true for a duty on the reasoning that a duty's output is usually the
           point (0100) — true of a briefing, false of a cleanup.
         */
+        // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds.
         await db.execute(
           `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
         )

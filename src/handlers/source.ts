@@ -39,6 +39,7 @@ import { recordDecision } from '../agents/router.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { scrub } from '../text/scrub.ts'
 
@@ -62,6 +63,7 @@ export function sourceHandler(deps: {
   return {
     kind: 'knowledge.read_source',
     handle: async (job: Job): Promise<HandlerOutput> => {
+      // raw-sql[2]: keyed by the claimed job; it reads the payload of the job the worker holds.
       const { rows } = await deps.db.execute(
         `select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
       )
@@ -74,8 +76,10 @@ export function sourceHandler(deps: {
         select d.title, left(d.content, ${String(DOCUMENT_CHARS)}) as content,
                d.connector, d.external_ref, p.name as project_name
           from public.documents d
-          left join public.projects p using (project_id)
-         where d.document_id = ${lit(documentId)}::uuid
+          left join public.projects p
+            on p.project_id = d.project_id and p.office_id = app.job_office(${lit(job.jobId)}::uuid)
+         where d.office_id = app.job_office(${lit(job.jobId)}::uuid)
+           and d.document_id = ${lit(documentId)}::uuid
       `)
       const doc = found.rows[0] as Doc | undefined
       if (doc === undefined) {
@@ -103,9 +107,9 @@ export function sourceHandler(deps: {
       // is the one part of a document written to say what it is about — and a
       // full-text search seeded with six thousand characters of body matches
       // everything and ranks nothing.
-      const hits = (await retrieve(deps.db, String(doc.title ?? ''), job.projectId, 6)).filter(
-        (h) => h.documentId !== documentId,
-      )
+      const hits = (
+        await retrieve(deps.db, { jobId: job.jobId }, String(doc.title ?? ''), job.projectId, 6)
+      ).filter((h) => h.documentId !== documentId)
       const context = contextBlock(hits)
 
       await recordDecision(deps.db, job.jobId, {
@@ -143,8 +147,8 @@ export function sourceHandler(deps: {
               (who.communication_style === null
                 ? ''
                 : `How you talk: ${who.communication_style} `) +
-              'A new source has just landed in the project. Grant did not ask you anything — ' +
-              'you are telling him it arrived and whether it matters.\n\n' +
+              `A new source has just landed in the project. ${currentPerson().name} did not ask you anything — ` +
+              'you are telling them it arrived and whether it matters.\n\n' +
               'Answer one question: WHAT DOES THIS CHANGE? Not what it says. If it confirms ' +
               'what we already had, say that plainly and stop — "nothing new here, it agrees ' +
               'with the pricing note" is a complete and useful answer, and inventing ' +

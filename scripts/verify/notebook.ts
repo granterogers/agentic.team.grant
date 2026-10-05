@@ -372,6 +372,8 @@ ok(
 console.log('\nadopting what the notebook made (#260)')
 
 {
+  // An artifact is adopted inside the office that holds the project (migration 0802).
+  const ARTIFACT_OFFICE = `(select office_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)})`
   const got = await one(`
     begin;
     insert into public.projects (name, slug, status)
@@ -380,26 +382,30 @@ console.log('\nadopting what the notebook made (#260)')
     -- One Grant made, finished, with a link. One finished with NO link, which
     -- is the case NotebookLM produces for types it exposes no URL for.
     select app.record_notebook_artifact(
+      ${ARTIFACT_OFFICE},
       (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
       ${lit(`nb-${run}`)}, 'a1', 'audio', 'An overview he made himself',
       'https://notebooklm.google.com/notebook/x', 'ready', null);
     select app.record_notebook_artifact(
+      ${ARTIFACT_OFFICE},
       (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
       ${lit(`nb-${run}`)}, 'a2', 'mindmap', 'A mind map', null, 'ready', null);
     select app.record_notebook_artifact(
+      ${ARTIFACT_OFFICE},
       (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
       ${lit(`nb-${run}`)}, 'a3', 'slides', 'A deck', null, 'generating', null);
 
     -- The listing later reports the finished one as pending, which a notebook
     -- does. It must not un-finish it: the CHECK would then strip the URL.
     select app.record_notebook_artifact(
+      ${ARTIFACT_OFFICE},
       (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
       ${lit(`nb-${run}`)}, 'a1', 'audio', 'An overview he made himself', null, 'generating', null);
 
     select
-      jsonb_array_length(app.artifacts_in(
+      jsonb_array_length(app.artifacts_in(app.test_office(), 
         (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}))) as all_kinds,
-      jsonb_array_length(app.artifacts_in(
+      jsonb_array_length(app.artifacts_in(app.test_office(), 
         (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
         array['audio'])) as just_audio,
       (select state from public.artifacts where notebook_ref = ${lit(`nb-${run}`)} and external_ref = 'a1') as a1_state,
@@ -408,7 +414,7 @@ console.log('\nadopting what the notebook made (#260)')
       (select detail from public.artifacts where notebook_ref = ${lit(`nb-${run}`)} and external_ref = 'a2') as a2_detail,
       (select count(*) from public.artifacts
         where notebook_ref = ${lit(`nb-${run}`)} and requested_by_job is not null) as claimed_as_ours,
-      (app.artifacts_in(
+      (app.artifacts_in(app.test_office(), 
         (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
         array['mindmap']) -> 0 ->> 'openable') as mindmap_openable;
     rollback;

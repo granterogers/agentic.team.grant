@@ -70,7 +70,7 @@ const proj = await one(`
 const pid = String(proj.project_id)
 const noticed = async (kind: string) =>
   await all(
-    `select body, weight from app.notice(40)
+    `select body, weight from app.notice(app.test_office(), 40)
       where kind = ${lit(kind)} and project_id = ${lit(pid)}::uuid`,
   )
 
@@ -213,7 +213,7 @@ await db.execute(
     delete from public.documents where project_id = ${lit(pid)}::uuid
   `)
   const got = await all(
-    `select kind, weight from app.notice(40) where project_id = ${lit(pid)}::uuid`,
+    `select kind, weight from app.notice(app.test_office(), 40) where project_id = ${lit(pid)}::uuid`,
   )
   ok('two things at once are both noticed', got.length >= 2, `${got.length} noticed`)
   ok(
@@ -223,7 +223,7 @@ await db.execute(
   )
   ok(
     'and the caller can take only the loudest',
-    (await all(`select kind from app.notice(1)`)).length === 1,
+    (await all(`select kind from app.notice(app.test_office(), 1)`)).length === 1,
   )
 }
 
@@ -294,7 +294,7 @@ await db.execute(
       String(r.id),
     ),
   )
-  await db.execute('select app.raise_suggestions(40)')
+  await db.execute('select app.raise_suggestions(app.test_office(), 40)')
   const mine = await all(`
     select suggestion_id::text as id, kind from public.suggestions
      where project_id = ${lit(pid)}::uuid and kind = 'deadline_unowned' and state = 'open'
@@ -431,7 +431,7 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
     made it invisible to 0491's guard on purpose -- and two crashed runs then
     sat in Grant's morning briefing for five days as the ONLY two rows in it,
     named to him as things that had failed three times. The office writes a
-    signature from exactly one place, app.failure_seen(job.kind, ...), so a
+    signature from exactly one place, failure_seen (job.kind, ...), so a
     genuine one always names a kind some job has had; the reader enforces that
     now, and this control has to use a real kind or it is asserting against
     the fix.
@@ -505,14 +505,14 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
       do $notice$
       begin
         begin
-          perform app.failure_seen(${lit(realKind)}, 'noticeproof',
+          perform app.failure_seen(app.job_office(${lit(String(real.id))}::uuid), ${lit(realKind)}, 'noticeproof',
                                    ${lit(subject)}, ${lit(String(real.id))}::uuid);
-          perform app.failure_seen(${lit(realKind)}, 'noticeproof',
+          perform app.failure_seen(app.job_office(${lit(String(real.id))}::uuid), ${lit(realKind)}, 'noticeproof',
                                    ${lit(subject)}, ${lit(String(real.id))}::uuid);
-          perform app.failure_seen(${lit(realKind)}, 'noticeproof',
+          perform app.failure_seen(app.job_office(${lit(String(real.id))}::uuid), ${lit(realKind)}, 'noticeproof',
                                    ${lit(subject)}, ${lit(String(real.id))}::uuid);
 
-          if (select count(*) from app.recurring_failures(3, 14) f
+          if (select count(*) from app.recurring_failures(app.test_office(), 3, 14) f
                where f.job_kind = ${lit(realKind)}
                  and f.subject = ${lit(subject)}) = 1 then
             raise exception 'SURFACED';
@@ -545,11 +545,11 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
   */
   for (let i = 0; i < 3; i++) {
     await db.execute(`
-      select app.failure_seen(${lit(neverRan)}, 'drive', 'sub',
+      select app.failure_seen(app.job_office(${lit(String(real.id))}::uuid), ${lit(neverRan)}, 'drive', 'sub',
                               ${lit(String(real.id))}::uuid)`)
   }
   const hidden = await all(`
-    select 1 from app.recurring_failures(3, 14) f where f.job_kind = ${lit(neverRan)}`)
+    select 1 from app.recurring_failures(app.test_office(), 3, 14) f where f.job_kind = ${lit(neverRan)}`)
   ok('and a kind the office has never run does not', hidden.length === 0)
   await sweepSignatures()
   const bothGone = await all(`
@@ -577,7 +577,7 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
   )
   ok('the harness signature really was planted', planted.length === 1)
   const leaked = await all(
-    `select 1 from app.recurring_failures(3, 14) f where f.job_kind = ${lit(fixKind)}`,
+    `select 1 from app.recurring_failures(app.test_office(), 3, 14) f where f.job_kind = ${lit(fixKind)}`,
   )
   ok('and the reader refuses to hand it to Grant', leaked.length === 0)
 

@@ -171,7 +171,7 @@ try {
     const id = String(
       (
         await one(
-          `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb)::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb)::text as c`,
         )
       ).c,
     ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -259,7 +259,7 @@ try {
       String(
         (
           await one(
-            `select app.enqueue_child(${lit(P)}::uuid, 'verify.ask', ${lit(payload)}::jsonb)::text as c`,
+            `select app.enqueue_child(app.job_office(${lit(P)}::uuid), ${lit(P)}::uuid, 'verify.ask', ${lit(payload)}::jsonb)::text as c`,
           )
         ).c,
       ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -306,8 +306,8 @@ try {
     const raise = async () =>
       String(
         (
-          await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
-            values (${lit(project)}::uuid, ${lit(A)}::uuid, ${lit(`Run 4 live proof ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'run4-live fixture', 'nothing happens until answered', array['Yes, do it','No, leave it'], 'chief-of-staff', false, 'No, leave it')
+          await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+            values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(A)}::uuid,${lit(`Run 4 live proof ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'run4-live fixture', 'nothing happens until answered', array['Yes, do it','No, leave it'], 'chief-of-staff', false, 'No, leave it')
             returning blocker_id::text as id`)
         ).id,
       )
@@ -320,7 +320,9 @@ try {
     await db.execute(
       `select app.pause_job(${lit(A)}::uuid, 'awaiting_approval', 'asks a question', 'when he answers', false, null, null, ${lit(FP)})`,
     )
-    const polled = json(await one(`select app.mcp_job_status(${lit(A)}::uuid) as s`))
+    const polled = json(
+      await one(`select app.mcp_job_status(app.job_office(${lit(A)}::uuid), ${lit(A)}::uuid) as s`),
+    )
     check(
       'a job that asked reads paused / waiting_for_grant to a client that polls it (state and situation differ, truthfully)',
       polled.state === 'paused' && polled.situation === 'waiting_for_grant',
@@ -407,16 +409,16 @@ try {
       )
       const b = String(
         (
-          await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
-            values (${lit(project)}::uuid, ${lit(c)}::uuid, ${lit(`Run 4 live typed ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'run4-live fixture', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false, 'No')
+          await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+            values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(c)}::uuid,${lit(`Run 4 live typed ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'run4-live fixture', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false, 'No')
             returning blocker_id::text as id`)
         ).id,
       )
       if (shown) {
         // A row only: nothing is sent, and the target is a declared test chat.
         // The bot the turn came through (0623: what he was shown is per bot) and the question the message named.
-        await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
-          values ('telegram', ${lit(`run4-live-${crypto.randomUUID()}`)}, coalesce(app.command_account(${lit(String(turnJob.command))}::uuid), 'run4-live'), ${lit(chat)}, 'blocker', ${lit(c)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
+        await db.execute(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
+          values (app.job_office(${lit(c)}::uuid), 'telegram', ${lit(`run4-live-${crypto.randomUUID()}`)}, coalesce(app.command_account((select ic.office_id from public.inbound_commands ic where ic.command_id = ${lit(String(turnJob.command))}::uuid), ${lit(String(turnJob.command))}::uuid), 'run4-live'), ${lit(chat)}, 'blocker', ${lit(c)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
       }
       return b
     }
@@ -424,7 +426,7 @@ try {
     const yes1 = await turn('yes')
     const got1 = (
       await db.execute(
-        `select id from app.open_questions_for_reply(${lit(String(yes1.command))}::uuid) where bindable`,
+        `select id from app.open_questions_for_reply((select office.office_id from public.inbound_commands office where office.command_id = ${lit(String(yes1.command))}::uuid), ${lit(String(yes1.command))}::uuid) where bindable`,
       )
     ).rows.map((r) => String((r as { id: string }).id))
     check(
@@ -436,7 +438,7 @@ try {
     const yes2 = await turn('yes')
     const got2 = (
       await db.execute(
-        `select id from app.open_questions_for_reply(${lit(String(yes2.command))}::uuid) where bindable`,
+        `select id from app.open_questions_for_reply((select office.office_id from public.inbound_commands office where office.command_id = ${lit(String(yes2.command))}::uuid), ${lit(String(yes2.command))}::uuid) where bindable`,
       )
     ).rows
     check(
@@ -448,7 +450,7 @@ try {
     const fwd = await turn('yes', { forward_origin: { type: 'user', date: 1_700_000_000 } })
     const got3 = (
       await db.execute(
-        `select id from app.open_questions_for_reply(${lit(String(fwd.command))}::uuid) where bindable`,
+        `select id from app.open_questions_for_reply((select office.office_id from public.inbound_commands office where office.command_id = ${lit(String(fwd.command))}::uuid), ${lit(String(fwd.command))}::uuid) where bindable`,
       )
     ).rows
     check(

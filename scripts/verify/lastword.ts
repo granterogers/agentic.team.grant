@@ -53,17 +53,17 @@ console.log('he spoke into his phone and heard nothing —\n')
 /* The fixture turn: an inbound voice note that arrived and a job that died. */
 const cmd = await one(`
   insert into public.inbound_commands
-    (origin_channel, origin_ref, actor, subject, instruction, voice_file_id,
+    (office_id, origin_channel, origin_ref, actor, subject, instruction, voice_file_id,
      voice_seconds, dedupe_key)
-  values ('telegram', ${lit(`999${run}:7`)}, ${lit(`verify-lastword-${run}`)},
+  values (app.test_office(), 'telegram', ${lit(`999${run}:7`)}, ${lit(`verify-lastword-${run}`)},
           'grant', '', ${lit(`voicefile-${run}`)}, 17, ${lit(`verify:lastword:${run}`)})
   returning command_id::text as id`)
 const commandId = String(cmd.id)
 
 const made = await one(`
-  insert into public.jobs (kind, requested_by, state, pinned_config, max_attempts,
+  insert into public.jobs (office_id, kind, requested_by, state, pinned_config, max_attempts,
                           correlation_id, idempotency_key)
-  values ('office.instruction', ${lit(BY)}, 'queued',
+  values (app.test_office(), 'office.instruction', ${lit(BY)}, 'queued',
           jsonb_build_object('command_id', ${lit(commandId)}), 1,
           gen_random_uuid(), ${lit(`verify-lastword-${run}`)})
   returning job_id::text as id`)
@@ -145,9 +145,9 @@ check(
   guard is the delivery itself rather than a flag somebody has to maintain.
 */
 await db.execute(`
-  insert into public.deliveries (job_id, channel, account_ref, target_ref, dedupe_key,
+  insert into public.deliveries (office_id, job_id, channel, account_ref, target_ref, dedupe_key,
                                  purpose, state, lease_expires_at, sent_at, message_ref)
-  values (${lit(jobId)}::uuid, 'telegram', '9990001', '9990001', ${lit(`stub-${run}`)},
+  values (app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, 'telegram', '9990001', '9990001', ${lit(`stub-${run}`)},
           'notice', 'sent', app.now_utc(), app.now_utc(), ${lit(`stub-${run}`)})`)
 const again = await one(`select count(*)::int as n from app.owed_a_word(${lit(jobId)}::uuid)`)
 check('a turn already answered is owed nothing more', `${String(again.n)} owed`, again.n === 0)

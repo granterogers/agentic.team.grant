@@ -17,6 +17,7 @@
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { fingerprint } from '../../src/jobs/checkpoint.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
+import { officeOfProject, personOffice } from '../test-office.ts'
 import { harnessSession } from './lib/harness-session.ts'
 import { officeKey } from './lib/sign-in.ts'
 import { testOrigins } from './lib/test-origin.ts'
@@ -344,7 +345,7 @@ try {
     const id = String(
       (
         await one(
-          `select app.enqueue_child(${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb, interval '0', true, null${caller})::text as c`,
+          `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'verify.ask', ${lit(payload)}::jsonb, interval '0', true, null${caller})::text as c`,
         )
       ).c,
     ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -354,7 +355,7 @@ try {
     )
     return id
   }
-  const project = String((await one(`select app.unnamed_project()::text as p`)).p)
+  const project = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   const root = await turn(`final-audit-live ${origins.token}: start something`)
   const rootJob = String(root.job)
 
@@ -597,31 +598,42 @@ try {
       const d = String(
         (
           await one(
-            `insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref) values ('telegram', ${lit(`final-audit-live-${crypto.randomUUID()}`)}, coalesce(app.command_account(${lit(String(root.command))}::uuid), 'final-audit-live'), ${lit(chat)}, 'blocker', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(String(n))}) returning delivery_id::text as id`,
+            `insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref) values ('telegram', ${lit(`final-audit-live-${crypto.randomUUID()}`)}, coalesce(app.command_account((select ic.office_id from public.inbound_commands ic where ic.command_id = ${lit(String(root.command))}::uuid), ${lit(String(root.command))}::uuid), 'final-audit-live'), ${lit(chat)}, 'blocker', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(String(n))}) returning delivery_id::text as id`,
           )
         ).id,
       )
-      await one(`select app.bind_delivery(${lit(d)}::uuid, ${lit(blocker)}::uuid) as b`)
+      await one(
+        `select app.bind_delivery((select office.office_id from public.deliveries office where office.delivery_id = ${lit(d)}::uuid), ${lit(d)}::uuid, ${lit(blocker)}::uuid) as b`,
+      )
       return { d, ref: String(n) }
     }
     const da = await show(ja, qa)
     const db2 = await show(jb, qb)
     const named = async (d: string) =>
-      (await one(`select app.approval_for_delivery(${lit(d)}::uuid)::text as b`)).b
+      (
+        await one(
+          `select app.approval_for_delivery((select dl.office_id from public.deliveries dl where dl.delivery_id = ${lit(d)}::uuid), ${lit(d)}::uuid)::text as b`,
+        )
+      ).b
     check(
       'exact binding: each message answers the question it asked, not the newer one',
       (await named(da.d)) === qa && (await named(db2.d)) === qb,
       'A/B',
     )
-    const stale = await one(`select app.bind_delivery(${lit(da.d)}::uuid, ${lit(qb)}::uuid) as b`)
+    const stale = await one(
+      `select app.bind_delivery((select office.office_id from public.deliveries office where office.delivery_id = ${lit(da.d)}::uuid), ${lit(da.d)}::uuid, ${lit(qb)}::uuid) as b`,
+    )
     check(
       'a foreign-job question cannot be named by a message (foreign-project answer fails)',
       stale.b === false,
       String(stale.b),
     )
     const cands = async (cmd: string) =>
-      (await db.execute(`select id, bindable from app.open_questions_for_reply(${lit(cmd)}::uuid)`))
-        .rows as { id: string; bindable: boolean }[]
+      (
+        await db.execute(
+          `select id, bindable from app.open_questions_for_reply((select office.office_id from public.inbound_commands office where office.command_id = ${lit(cmd)}::uuid), ${lit(cmd)}::uuid)`,
+        )
+      ).rows as { id: string; bindable: boolean }[]
     const bare = await turn('yes')
     const got = await cands(String(bare.command))
     check(
@@ -643,7 +655,7 @@ try {
         String(
           (
             await one(
-              `select app.hq_answer_blocker(${lit(b)}::uuid, 'Yes', 'verify-operator')::text as r`,
+              `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, 'Yes', 'verify-operator')::text as r`,
             )
           ).r,
         ),
@@ -680,7 +692,7 @@ try {
         String(
           (
             await one(
-              `select app.authorize_effect(p_project => ${lit(project)}::uuid, p_tool => 'notion.write', p_fingerprint => ${lit(f)}, p_job => ${job === null ? 'null' : `${lit(job)}::uuid`})::text as d`,
+              `select app.authorize_effect(p_office => (select x.office_id from public.projects x where x.project_id = ${lit(project)}::uuid), p_project => ${lit(project)}::uuid, p_tool => 'notion.write', p_fingerprint => ${lit(f)}, p_job => ${job === null ? 'null' : `${lit(job)}::uuid`})::text as d`,
             )
           ).d,
         ),
@@ -691,7 +703,7 @@ try {
       'ask',
     )
     await one(
-      `select app.hq_answer_blocker(${lit(q)}::uuid, 'No, leave it', 'verify-operator')::text as r`,
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q)}::uuid), app.test_office()), ${lit(q)}::uuid, 'No, leave it', 'verify-operator')::text as r`,
     )
     const no = await decide(ja, fp)
     check(
@@ -710,7 +722,7 @@ try {
         String(
           (
             await one(
-              `select app.step_begin(${lit(job)}::uuid, 'final-audit-send', 0, 'external', 1, 'final-audit@1')::text as r`,
+              `select app.step_begin(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid, 'final-audit-send', 0, 'external', 1, 'final-audit@1')::text as r`,
             )
           ).r,
         ),
@@ -789,7 +801,7 @@ try {
     // An agent's retrieval is never "every project" (invariant 17): read-only, real documents.
     const doc = await one(
       `select d.title, d.project_id::text as p from public.documents d join public.projects p on p.project_id = d.project_id
-        where p.project_id <> app.unnamed_project() and not p.is_fixture and d.title ~ '[A-Za-z]{7,}' and d.content is not null
+        where p.slug <> 'unnamed' and not p.is_fixture and d.title ~ '[A-Za-z]{7,}' and d.content is not null
         order by d.fetched_at desc nulls last limit 1`,
     )
     if (doc?.title === undefined) {
@@ -797,9 +809,12 @@ try {
     } else {
       const word = String(doc.title).match(/[A-Za-z]{7,}/)?.[0] ?? ''
       const { retrieve } = await import('../../src/knowledge/retrieval.ts')
-      const unnamed = String((await one(`select app.unnamed_project()::text as p`)).p)
-      const inOwn = await retrieve(db, word, String(doc.p), 50)
-      const inNull = await retrieve(db, word, null, 50)
+      const office = await officeOfProject(db, String(doc.p))
+      const unnamed = String(
+        (await one(`select app.unnamed_project('${office.officeId}'::uuid)::text as p`)).p,
+      )
+      const inOwn = await retrieve(db, office, word, String(doc.p), 50)
+      const inNull = await retrieve(db, office, word, null, 50)
       const leaked = []
       for (const h of inNull) {
         const pr = await one(
@@ -817,7 +832,9 @@ try {
     // "stated" means a person (B10): every rule the prompt presents as his order was given by an admitted person.
     {
       const { guidanceFor } = await import('../../src/agents/guidance.ts')
-      const g = await guidanceFor(db, 'chief-of-staff', null, null, { lessons: 50 })
+      const g = await guidanceFor(db, await personOffice(db), 'chief-of-staff', null, null, {
+        lessons: 50,
+      })
       const stated = g.lessons.filter((l) => l.stated)
       let bad = 0
       for (const l of stated) {
@@ -898,7 +915,7 @@ try {
       const planBlocker = String(
         (
           await one(
-            `select app.request_approval(${lit(j)}::uuid, 'Run the plan', 'final-audit-live fixture', 'office.execute_plan')::text as b`,
+            `select app.request_approval(app.job_office(${lit(j)}::uuid), ${lit(j)}::uuid, 'Run the plan', 'final-audit-live fixture', 'office.execute_plan')::text as b`,
           )
         ).b,
       )

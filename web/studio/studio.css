@@ -3930,6 +3930,22 @@ body.docked { padding-right: min(380px, 100vw); }
 }
 .dockwhere { color: var(--ink-3); }
 
+/* The project picker the dock shows when no project is loaded (#416). Rows, not floating pills: it is the only thing
+   in the panel, so it should read as the way in. Full width, 44px targets, ink that can be read. */
+.dockblank.dockpick {
+  justify-items: stretch; text-align: left; padding: var(--s4); gap: var(--s4); align-content: start;
+}
+.dockblank.dockpick .t-meta { max-width: none; color: var(--ink-2); font-size: 14px; line-height: 1.5; }
+.dockpicks { display: grid; gap: var(--s2); }
+.dockpicks .btn.quiet {
+  inline-size: 100%; min-block-size: 48px; justify-content: flex-start; text-align: left;
+  color: var(--ink); background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border-color: color-mix(in srgb, var(--edge) 90%, transparent);
+  padding-inline: var(--s4); font-weight: 600;
+}
+.dockpicks .btn.quiet:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.dockblank.dockpick .dockwhere { color: var(--ink-2); font-size: 13.5px; line-height: 1.8; }
+
 /* --- how a project looks (#83) ----------------------------------------------
 
    An image, an icon, or the generated art. `.covimg` rather than reusing

@@ -10,6 +10,7 @@
  * Narrow on purpose: it touches channels named `identity_proof_%` and nothing
  * else, and it says what it did to each one.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN

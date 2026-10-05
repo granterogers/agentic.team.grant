@@ -28,7 +28,7 @@ const project = async (label: string): Promise<string> =>
   String(
     json(
       (
-        await one(`select app.hq_create_project(${lit(`Authority ${label} ${run}`)}, 'upload', ${lit(`authority-${label}-${run}`)},
+        await one(`select app.hq_create_project(app.test_office(), ${lit(`Authority ${label} ${run}`)}, 'upload', ${lit(`authority-${label}-${run}`)},
           ${lit(`Authority ${label} ${run}`)}, true) as v`)
       ).v,
     ).project_id,
@@ -42,9 +42,10 @@ const job = async (p: string, by: string, kind = 'office.instruction'): Promise<
     ? // a person's work is a child of a real adapter turn: a root that only NAMES him is unknown provenance
       (String(
         (
-          await one(
-            `select app.enqueue_child(${lit(await realParent(db))}::uuid, ${lit(kind)}, '{}'::jsonb, interval '0', true, ${lit(p)}::uuid)::text as id`,
-          )
+          await (async (parent: string) =>
+            one(
+              `select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, ${lit(kind)}, '{}'::jsonb, interval '0', true, ${lit(p)}::uuid)::text as id`,
+            ))(await realParent(db))
         ).id,
       ).match(/[0-9a-f-]{36}/)?.[0] ?? '')
     : String(
@@ -128,7 +129,7 @@ for (const [level, want] of Object.entries(EXPECT)) {
   const p = await project('standing')
   await setDial(p, 'suggest')
   await db.execute(
-    `select app.grant_standing('notebook.write', ${lit(p)}::uuid, 'characterisation', 'grant', null)`,
+    `select app.grant_standing(app.test_office(), 'notebook.write', ${lit(p)}::uuid, 'characterisation', 'grant', null)`,
   )
   const up = await mayAct(db as never, { projectId: p, tool: 'notebook.write' })
   check(

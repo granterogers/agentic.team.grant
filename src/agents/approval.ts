@@ -173,8 +173,23 @@ export const mayAct = async (
     Named arguments: seven of them, two of which are both jobs with different
     meanings (the one whose PURPOSE the tool is, and the one running).
   */
+  /*
+    WHOSE POLICY. The office is the running job's, else the job whose purpose the tool is, else the project's - always a
+    row the caller holds, never an id taken from a request or a model. A call that holds none of the three asks no
+    office at all (null), which `authorize_effect` refuses: it cannot read a dial or a standing yes without one, and a
+    guess here would be one person's "do not ask again" spent on another's behalf (multi-user P3).
+  */
+  const office =
+    where.job !== undefined && where.job !== null
+      ? `app.job_office(${lit(where.job)}::uuid)`
+      : where.jobAskedFor !== undefined && where.jobAskedFor !== null
+        ? `app.job_office(${lit(where.jobAskedFor)}::uuid)`
+        : where.projectId !== undefined && where.projectId !== null
+          ? `(select p.office_id from public.projects p where p.project_id = ${lit(where.projectId)}::uuid)`
+          : 'null::uuid'
   const { rows } = await db.execute(
     `select app.authorize_effect(
+       p_office => ${office},
        p_project => ${uuidOrNull(where.projectId)},
        p_tool => ${lit(where.tool)},
        p_asked_job => ${uuidOrNull(where.jobAskedFor)},

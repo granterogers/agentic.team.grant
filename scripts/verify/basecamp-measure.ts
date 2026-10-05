@@ -10,6 +10,7 @@
  * states as absolutes: no page-level horizontal overflow, the first useful
  * module above 40% of the phone viewport, and no clipped interactive control.
  */
+import '../../src/safety/arm.ts'
 import { chromium, devices } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

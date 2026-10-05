@@ -86,7 +86,7 @@ const projectWithNotebook = async (label: string): Promise<string> => {
   const made = json(
     (
       await one(
-        `select app.hq_create_project(${lit(name)}, 'notebooklm', ${lit(`nb-fixture-${label}-${run}`)}, ${lit(name)}, true) as v`,
+        `select app.hq_create_project(app.test_office(), ${lit(name)}, 'notebooklm', ${lit(`nb-fixture-${label}-${run}`)}, ${lit(name)}, true) as v`,
       )
     ).v,
   )
@@ -107,8 +107,9 @@ const jobRow = async (
   // that merely NAMES telegram:grant is an origin no production component creates, and "a person asked" is no longer
   // read off the name.
   if (by === 'telegram:grant') {
+    const hangOn = parent ?? (await realParent(db))
     const hung = await one(
-      `select app.enqueue_child(${lit(parent ?? (await realParent(db)))}::uuid, ${lit(kind)}, ${lit(JSON.stringify(config))}::jsonb, interval '0', true, ${lit(p)}::uuid)::text as id`,
+      `select app.enqueue_child(app.job_office(${lit(hangOn)}::uuid), ${lit(hangOn)}::uuid, ${lit(kind)}, ${lit(JSON.stringify(config))}::jsonb, interval '0', true, ${lit(p)}::uuid)::text as id`,
     )
     const id = String(hung.id).match(/[0-9a-f-]{36}/)?.[0] as string
     const row = await one(
@@ -160,8 +161,11 @@ const blockerOf = async (job: string) =>
   )
 const answer = async (id: string, option: string, by = 'grant') =>
   json(
-    (await one(`select app.hq_answer_blocker(${lit(id)}::uuid, ${lit(option)}, ${lit(by)}) as r`))
-      .r,
+    (
+      await one(
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, ${lit(option)}, ${lit(by)}) as r`,
+      )
+    ).r,
   )
 const childOf = async (parent: string) =>
   (
@@ -180,7 +184,13 @@ const approvedGeneration = async (config: Record<string, unknown>) => {
   return { j0, q, child: await asJob(cid) }
 }
 const verdict = async (job: string) =>
-  json((await one(`select app.approval_verdict(${lit(job)}::uuid) as v`)).v)
+  json(
+    (
+      await one(
+        `select app.approval_verdict(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid) as v`,
+      )
+    ).v,
+  )
 
 // ---- 1. generation: an honest approval starts exactly one --------------------------------------------
 {
@@ -229,6 +239,7 @@ const verdict = async (job: string) =>
   // different job carrying the same approval. One yes is one generation, whichever job carries it.
   const sib = await one(`
     select app.enqueue_child(
+      app.job_office(${lit(child.jobId)}::uuid),
       (select parent_job_id from public.jobs where job_id = ${lit(child.jobId)}::uuid),
       'notebook.generate',
       (select pinned_config from public.jobs where job_id = ${lit(child.jobId)}::uuid),
@@ -547,7 +558,7 @@ const steps = (name: string) => [
 const approvedPlan = async (planSteps: unknown[]) => {
   const j0 = await jobRow(project, 'office.instruction', { plan_steps: planSteps })
   await db.execute(
-    `select app.request_approval(${lit(j0.jobId)}::uuid, 'Carry out 2 steps', 'proof', 'office.execute_plan')`,
+    `select app.request_approval(app.job_office(${lit(j0.jobId)}::uuid), ${lit(j0.jobId)}::uuid, 'Carry out 2 steps', 'proof', 'office.execute_plan')`,
   )
   const q = await blockerOf(j0.jobId)
   await answer(String(q.id), 'Go ahead')

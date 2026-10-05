@@ -48,6 +48,7 @@
  * is in Grant's Notion workspace and it is his to authorise.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import {
   ADAPTER_SHAPE,
@@ -322,7 +323,7 @@ const piles = await db.execute(`
       where t.assigned_to_human and t.state <> 'done' and t.job_id is null
         and t.title ~ '\\m[a-z0-9]{8}$')
       as tasks_ending_in_a_tokenish_word,
-    (select jsonb_array_length((app.hq_governance(400))->'lessons')) as live_lessons,
+    (select jsonb_array_length((app.hq_governance(app.owner_office('grant'), 400))->'lessons')) as live_lessons,
     /*
       Counted on the PAGE, not in the view (0389).
 
@@ -333,7 +334,7 @@ const piles = await db.execute(`
       property that matters is that harness traffic does not reach the screen
       Grant reads, not that it does not exist.
     */
-    (select count(*) from jsonb_array_elements((app.hq_governance(400))->'lessons') x
+    (select count(*) from jsonb_array_elements((app.hq_governance(app.owner_office('grant'), 400))->'lessons') x
       where coalesce(x->>'by', '') like 'verify%'
          or coalesce(x->>'learned_by', '') like 'verify%') as harness_lessons,
     /*
@@ -378,7 +379,7 @@ const piles = await db.execute(`
       No backticks in this comment: it lives inside a template literal.
     */
     (select count(*)
-       from app.lessons_for(null, 'chief-of-staff', 'office.instruction', 500) f
+       from app.lessons_for(app.operator_office(), null, 'chief-of-staff', 'office.instruction', 500) f
        join public.lessons l on l.lesson_id = f.lesson_id
       where l.from_job is not null and app.harness_job(l.from_job))
       as harness_lessons_in_a_real_prompt,
@@ -392,7 +393,7 @@ const piles = await db.execute(`
       nothing about the filter.
     */
     (select count(*)
-       from app.lessons_for(null, 'chief-of-staff', 'office.instruction', 500, true) f
+       from app.lessons_for(app.operator_office(), null, 'chief-of-staff', 'office.instruction', 500, true) f
        join public.lessons l on l.lesson_id = f.lesson_id
       where l.from_job is not null and app.harness_job(l.from_job))
       as harness_lessons_the_filter_removes,
@@ -468,7 +469,7 @@ const piles = await db.execute(`
       goes stale the first time Grant hires somebody, which is the assertion
       that came back three times in this repository already.
     */
-    (select count(*) from jsonb_array_elements((app.hq_team())->'staff') x
+    (select count(*) from jsonb_array_elements((app.hq_team(app.owner_office('grant')))->'staff') x
       where coalesce(x->>'slug', '') ~ '^(fixture|verify|probe)-') as harness_on_team,
     /*
       Harness tools in the registry, which reach every prompt (0472's evening).
@@ -528,7 +529,7 @@ const piles = await db.execute(`
       This check passed throughout, because it did not know the reader existed.
     */
     (select count(*)
-       from jsonb_array_elements(app.hq_studio_lately(200) -> 'office') e,
+       from jsonb_array_elements(app.hq_studio_lately(app.operator_office(), 200) -> 'office') e,
             jsonb_to_record(e) as x(who text)
       where app.harness_label(x.who)) as harness_on_his_activity_panel,
     /*

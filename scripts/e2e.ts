@@ -39,6 +39,7 @@
  * their own section rather than folding them into the failures.
  */
 
+import '../src/safety/require-production-writes.ts'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -577,6 +578,30 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ],
   ['check:answerable', 'every question open on his dashboard has somewhere for an answer to go'],
   ['check:anon-exposure', 'no function in public can be executed with a public key (#384)'],
+  [
+    'check:machine-key',
+    'the office key reaches no person-defaulting function that is not pinned with a reason (#400)',
+  ],
+  [
+    'check:system-secrets',
+    'every human-integration credential is read through the one resolver, and every vault secret has a class (#400)',
+  ],
+  [
+    'check:ownership',
+    'every table has an ownership class and a derived table proves its owner (multi-user P0)',
+  ],
+  [
+    'check:office-edges',
+    'every owned edge is enforced by the database - composite keys, write-once, derived guards, row security (multi-user P2)',
+  ],
+  [
+    'check:office-raw-sql',
+    'no new inline SQL touches an owned table without naming an office; the unscoped set only shrinks (multi-user P3)',
+  ],
+  [
+    'check:office-conversion',
+    'no new office-sensitive function ships unclassified; the legacy-unscoped set only shrinks (multi-user P3)',
+  ],
   /*
     AND NOTHING IS WRITING INTO A VOID.
 
@@ -779,7 +804,8 @@ const run = (suite: string, script = `verify:${suite}`): Promise<Result> =>
     */
     const child = spawn('npm', ['run', script], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      // The gate is itself the statement of intent: someone ran `npm run gate` or `npm run e2e` knowing what it presses on.
+      env: { ...process.env, HQ_PRODUCTION_INTENT: '1' },
       detached: true,
     })
     const take = (b: Buffer): void => {

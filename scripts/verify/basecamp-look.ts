@@ -380,17 +380,17 @@ if (db === null) {
          where p.status = 'active' and not p.is_fixture order by p.created_at limit 1;
         if s is null then raise exception 'no real project to test with'; end if;
 
-        perform app.hq_project_look(s, 'rocket', 'p-plum', null, null);
+        perform app.hq_project_look(app.test_office(), s, 'rocket', 'p-plum', null, null);
         select icon, icon_hue into got from public.projects where slug = s;
         if got.icon is distinct from 'rocket' or got.icon_hue is distinct from 'p-plum' then
           raise exception 'a mark and a colour did not persist: % / %', got.icon, got.icon_hue;
         end if;
 
-        perform app.hq_project_look(s, null, null, 'data:image/png;base64,iVBORw0KGgo=', null);
+        perform app.hq_project_look(app.test_office(), s, null, null, 'data:image/png;base64,iVBORw0KGgo=', null);
         select image into got from public.projects where slug = s;
         if coalesce(got.image, '') = '' then raise exception 'a picture did not persist'; end if;
 
-        perform app.hq_project_look(s, null, null, null, array['icon','image']);
+        perform app.hq_project_look(app.test_office(), s, null, null, null, array['icon','image']);
         select icon, image into got from public.projects where slug = s;
         if got.icon is not null or coalesce(got.image, '') <> '' then
           raise exception 'going back to the generated art did not clear it: % / %',

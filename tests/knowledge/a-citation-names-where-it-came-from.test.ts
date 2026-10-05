@@ -86,8 +86,11 @@ describe('and every site that writes one uses the same format', () => {
       back to a template — which is the defect this file exists for, and there
       were two of them.
     */
-    const calls = text.match(/citationRef\(\{ connector: d\.connector/g) ?? []
+    // Both lists go through `citedSource` (which calls `citationRef` once, in retrieval.ts, and carries a web page's
+    // address in the label) - one formatter, two callers, and no hand-built citation left in this file.
+    const calls = text.match(/\)\.map\(citedSource\)/g) ?? []
     expect(calls.length).toBe(2)
+    expect(text).not.toMatch(/citationRef\(\{ connector: d\.connector/)
     expect(text).not.toMatch(/ref: `\$\{d\.connector\}:\$\{d\.id\}`/)
   })
 })

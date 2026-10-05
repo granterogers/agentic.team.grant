@@ -1,6 +1,7 @@
 # ADR-0050 — An open dock is pinned to the thread it was opened on
 
-**Status:** accepted · **Date:** 29 September 2026 · **Issue:** #376
+**Status:** superseded by [ADR-0063](0063-the-loaded-project-is-the-project.md) for every screen that has a project
+(the pin now carries only the deliberately chosen general Conversation) · **Date:** 29 September 2026 · **Issue:** #376
 
 ## Context
 

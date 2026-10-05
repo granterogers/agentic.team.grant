@@ -215,7 +215,13 @@ const park = (id: string, reason: string, resumable: boolean) =>
     ).c,
   )
   const work = JSON.parse(
-    String((await one(`select app.conversation_work(${lit(cmd)}::uuid)::text as w`)).w),
+    String(
+      (
+        await one(
+          `select app.conversation_work((select office.office_id from public.inbound_commands office where office.command_id = ${lit(cmd)}::uuid), ${lit(cmd)}::uuid)::text as w`,
+        )
+      ).w,
+    ),
   ) as { obligation: string | null; waiting_on_you: number }
   check(
     'a turn parked with no child of its own is what "what is happening with that?" reports: waiting on a person',
@@ -227,7 +233,7 @@ const park = (id: string, reason: string, resumable: boolean) =>
   const kid = String(
     (
       await one(
-        `select app.enqueue_child(${lit(root.jobId)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
+        `select app.enqueue_child(app.job_office(${lit(root.jobId)}::uuid), ${lit(root.jobId)}::uuid, 'notebook.generate', '{"kind":"slides","instructions":"x"}'::jsonb)::text as c`,
       )
     ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -245,7 +251,11 @@ const park = (id: string, reason: string, resumable: boolean) =>
 // ---- and the control he is told to press works on it (0635) ---------------------------------------------------------
 {
   const stop = async (id: string) =>
-    (await one(`select app.request_stop(${lit(id)}::uuid, 'grant')::text as r`)).r as string
+    (
+      await one(
+        `select app.request_stop(coalesce((select zz_o.office_id from public.jobs zz_o where zz_o.job_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, 'grant')::text as r`,
+      )
+    ).r as string
   const stateOf = async (id: string) =>
     String(
       (await one(`select state::text as s from public.jobs where job_id = ${lit(id)}::uuid`)).s,

@@ -451,7 +451,7 @@ record(
 
 const earlyKey = `verify:${stamp}:suppressed-early`
 const tombstone = await one<{ r: string }>(
-  `select app.suppress_delivery(${lit(earlyKey)}, 'undo arrived first', 'slack', ${lit(TEAM_ID)}, ${lit(CHANNEL)}) as r`,
+  `select app.suppress_delivery(app.operator_office(), ${lit(earlyKey)}, 'undo arrived first', 'slack', ${lit(TEAM_ID)}, ${lit(CHANNEL)}) as r`,
 )
 const afterSuppression = await office.deliver(
   deliverOpts(earlyKey, CHANNEL, 'This must never be posted.'),
@@ -469,7 +469,7 @@ const sentThenSuppressed = await office.deliver(
   deliverOpts(lateKey, CHANNEL, 'Posted, then undone. It must be deleted, not forgotten.'),
 )
 const tooLate = await one<{ r: string }>(
-  `select app.suppress_delivery(${lit(lateKey)}, 'undo arrived after the post') as r`,
+  `select app.suppress_delivery(app.operator_office(), ${lit(lateKey)}, 'undo arrived after the post') as r`,
 )
 record(
   'an undo that loses the race is told so, rather than silently succeeding',
@@ -1380,12 +1380,23 @@ record(
 // left first could never rename, and the rename check would fail for a reason
 // that has nothing to do with renaming.
 
+// The channel bookkeeping is the office of the channel's own project (0804), read off the mapping.
+const channelOffice = String(
+  (
+    await one<{ office_id: string }>(
+      `select p.office_id from public.slack_channel_map m
+         join public.projects p on p.project_id = m.project_id
+        where m.channel_id = ${lit(CHANNEL)}`,
+    )
+  )?.office_id,
+)
+
 const NEW_NAME = `${created.channelName}-renamed`
 let renameNoticed = false
 let renameError = ''
 try {
   await slack.call('conversations.rename', { channel: CHANNEL, name: NEW_NAME })
-  renameNoticed = await office.recordRename(CHANNEL, NEW_NAME)
+  renameNoticed = await office.recordRename(channelOffice, CHANNEL, NEW_NAME)
 } catch (error) {
   renameError = (error as Error).message.slice(0, 80)
 }
@@ -1462,7 +1473,7 @@ record(
   `${stillReaches.outcome} error=${String(stillReaches.errorCode)}`,
   stillReaches.outcome === 'sent',
 )
-await office.recordRemoval(CHANNEL)
+await office.recordRemoval(channelOffice, CHANNEL)
 const removalRecorded = await one<{ bot_present: boolean; active: boolean }>(
   `select bot_present, active from public.slack_channel_map where channel_id = ${lit(CHANNEL)}`,
 )
@@ -1478,7 +1489,7 @@ record(
 // `conversations.invite` refuses an inviter who is not in the channel. What is
 // tested here is therefore not recovery — it is that the system reports which
 // human action is required instead of retrying something that cannot work.
-const rejoin = await office.rejoin(CHANNEL)
+const rejoin = await office.rejoin(channelOffice, CHANNEL)
 record(
   'a bot removed from a channel gets itself back in — the scope Grant installed on 2026-09-05',
   `rejoin=${rejoin}`,
@@ -1497,12 +1508,12 @@ if (rejoin === 'rejoined') {
 
 const leaseKey = `verify:${stamp}:lease`
 const held = await one<{ outcome: string }>(`
-  select outcome from app.claim_delivery(
+  select outcome from app.claim_delivery(app.test_office(),
     'slack', ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result', null, null, null, null,
     interval '0 seconds')
 `)
 const reclaimed = await one<{ outcome: string; attempt: number }>(`
-  select outcome, attempt from app.claim_delivery(
+  select outcome, attempt from app.claim_delivery(app.test_office(),
     'slack', ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result')
 `)
 record(
@@ -1511,7 +1522,7 @@ record(
   held?.outcome === 'claimed' && reclaimed?.outcome === 'reclaimed' && reclaimed.attempt === 2,
 )
 const stillHeld = await one<{ outcome: string }>(`
-  select outcome from app.claim_delivery(
+  select outcome from app.claim_delivery(app.test_office(),
     'slack', ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result')
 `)
 record(
@@ -1547,7 +1558,7 @@ record(
   canRead.includes('no error'),
 )
 const canClaim = await asApp(
-  `select * from app.claim_delivery('slack', ${lit(`verify:${stamp}:asapp`)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'notice')`,
+  `select * from app.claim_delivery(app.test_office(),'slack', ${lit(`verify:${stamp}:asapp`)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'notice')`,
 )
 record(
   'CONTROL: and it CAN claim through the function, so the office is not locked out',

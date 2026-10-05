@@ -14,6 +14,7 @@
  * a caller would have to report as "no results".
  */
 
+import '../../src/safety/require-production-checks.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
@@ -41,27 +42,36 @@ const db: SqlExecutor = new ManagementApiExecutor(
   token,
 )
 
+/*
+  Whose documents: ONE office's, never the deployment's. A project named with --project brings its own office;
+  otherwise it is the sole person's (the office this search box has always been for).
+*/
 let projectFilter = 'null'
+let officeSql = 'app.operator_office()'
 if (projectSlug !== '') {
   const { rows } = await db.execute(
-    `select project_id::text as id from public.projects where slug = ${lit(projectSlug)}`,
+    `select project_id::text as id, office_id::text as office from public.projects where slug = ${lit(projectSlug)}
+      order by (office_id = app.operator_office()) desc limit 1`,
   )
-  const id = (rows[0] as { id?: string } | undefined)?.id
-  if (id === undefined) {
+  const found = rows[0] as { id?: string; office?: string } | undefined
+  if (found?.id === undefined || found.office === undefined) {
     console.error(`no such project: ${projectSlug}`)
     process.exit(1)
   }
-  projectFilter = `${lit(id)}::uuid`
+  projectFilter = `${lit(found.id)}::uuid`
+  officeSql = `${lit(found.office)}::uuid`
 }
 
 const { rows } = await db.execute(
-  `select * from app.search_documents(${lit(query)}, ${projectFilter}, 10)`,
+  `select * from app.search_documents(${officeSql}, ${lit(query)}, ${projectFilter}, 10)`,
 )
 
 if (rows.length === 0) {
   // Said plainly, and with what was searched, because "no results" and "the
   // corpus is empty" look identical from here and mean very different things.
-  const total = await db.execute(`select count(*)::int as n from public.documents`)
+  const total = await db.execute(
+    `select count(*)::int as n from public.documents where office_id = ${officeSql}`,
+  )
   console.log(
     `no matches for ${JSON.stringify(query)} across ${String((total.rows[0] as { n: number }).n)} document(s).`,
   )

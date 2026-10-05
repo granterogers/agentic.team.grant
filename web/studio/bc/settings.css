@@ -139,7 +139,7 @@
 }
 [data-experience='basecamp'] .settings .t-label,
 [data-experience='basecamp'] .bcsetframe .t-label {
-  font: 600 11px/1.4 var(--bc-font);
+  font: 600 12px/1.4 var(--bc-font);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--bc-text-muted);
@@ -258,93 +258,7 @@
   color: var(--bc-accent-ink);
 }
 
-/* ------------------------------------------- the global sheet's shell -- */
-
 /*
-  A DIALOG, not a drawer. The sheet was flush to the top and the right edge of
-  the window with no radius and no shadow, so it read as a different
-  application opening over this one rather than as a surface belonging to it -
-  which is exactly the "obviously legacy" impression Grant is describing. The
-  geometry here is the same as this experience's own expanded views, so the
-  two kinds of dialog in the product now agree with each other.
+  The global Settings page is no longer drawn here. It is a full page with its own frame and design layer
+  (../settings-ui.css); the rules in this file now serve Project settings only (.bcsetframe).
 */
-[data-experience='basecamp'] #settings .sheet.settings {
-  width: min(1180px, 94vw);
-  max-height: min(90vh, 980px);
-  margin: 5vh auto;
-  border-radius: var(--bc-r-sheet);
-  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 22%, transparent);
-  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.5);
-  /*
-    `!important`, and it is load-bearing rather than lazy: the legacy rule for
-    this sheet is itself `background: transparent !important`, because in the
-    default studio the sheet IS the page and the page has the background. Here
-    it is a dialog over a project, and a transparent dialog shows the board
-    through its own cards - which is what the first capture showed.
-  */
-  background: var(--bc-surface) !important;
-  padding: var(--bc-6);
-}
-[data-experience='basecamp'] #settings .sheethead {
-  background: var(--bc-surface) !important;
-  border-bottom: 1px solid var(--bc-border-subtle);
-  padding-bottom: var(--bc-4);
-  margin-bottom: var(--bc-4);
-}
-[data-experience='basecamp'] #settings .close {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 26%, transparent);
-  background: color-mix(in srgb, var(--bc-text) 6%, transparent);
-  color: var(--bc-text-strong);
-}
-[data-experience='basecamp'] #settings .close:hover {
-  background: color-mix(in srgb, var(--bc-text) 14%, transparent);
-}
-
-@media (max-width: 860px) {
-  [data-experience='basecamp'] #settings .sheet.settings {
-    width: 100vw;
-    max-height: 100vh;
-    margin: 0;
-    border-radius: 0;
-    border: 0;
-    padding: var(--bc-4);
-  }
-  [data-experience='basecamp'] .bcsetframe .subnav,
-  [data-experience='basecamp'] .settings .settabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-  }
-}
-
-/*
-  AND THE CONTAINER, which is the other half of "a drawer rather than a
-  dialog".
-
-  `#settings.page` is fixed with `inset: 0 0 0 var(--rail)` - flush to the
-  right of the default studio's rail, which this experience does not have - so
-  the sheet appeared pinned to the right edge with the project showing down
-  the left. Under the experiment it is a centred overlay with its own scrim,
-  which is the same geometry as the expanded views the rest of this experience
-  uses. Everything about it is scoped, so the default studio's own settings
-  page is exactly as it was.
-*/
-[data-experience='basecamp'] #settings.page {
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(3, 8, 11, 0.62);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  padding: 24px;
-  overflow: auto;
-}
-[data-experience='basecamp'] #settings.page .sheet {
-  overflow: auto;
-  max-inline-size: none;
-}
-@media (max-width: 860px) {
-  [data-experience='basecamp'] #settings.page { padding: 0; }
-}

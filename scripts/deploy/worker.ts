@@ -18,9 +18,9 @@
  * This is the same rule ADR-0010 set for the telegram adapter — the running
  * code IS the tested code — applied to a graph instead of a file.
  */
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { bundlePath, walk } from './lib/bundle.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -34,43 +34,7 @@ const db = new ManagementApiExecutor(ref, token)
 
 const ENTRY = 'supabase/functions/worker/index.ts'
 
-/**
- * Every relative import, transitively.
- *
- * Only relative specifiers are followed: a bare specifier is a Deno remote or
- * a built-in and is not ours to upload. Both `import` and `export ... from`
- * count — an `export type { X } from './y.ts'` is as much an edge as any other.
- */
-const walk = async (
-  file: string,
-  found = new Map<string, string>(),
-): Promise<Map<string, string>> => {
-  const abs = path.resolve(file)
-  if (found.has(abs)) return found
-  const source = await readFile(abs, 'utf8')
-  found.set(abs, source)
-  for (const match of source.matchAll(/\bfrom\s+'(\.[^']+)'/g)) {
-    const spec = match[1]
-    if (spec === undefined) continue
-    await walk(path.resolve(path.dirname(abs), spec), found)
-  }
-  return found
-}
-
 const files = await walk(ENTRY)
-
-/**
- * Where each file goes in the uploaded bundle.
- *
- * The entrypoint sits at the root and imports `../../src/...`, so the bundle
- * has to keep that shape: a file at `src/jobs/pass.ts` is uploaded as
- * `../../src/jobs/pass.ts` relative to the entrypoint. Supabase accepts the
- * paths verbatim, so preserving the repository's own layout is both the
- * simplest mapping and the one that needs no rewriting of import statements —
- * and rewriting imports is exactly how an uploaded copy stops being the tested
- * file.
- */
-const bundlePath = (abs: string): string => path.relative(process.cwd(), abs)
 
 const form = new FormData()
 form.append(
@@ -184,5 +148,16 @@ if (refused.status !== 401 || live.configured !== true || body.ok !== true) {
   console.error('\nthe worker is not usable — see above')
   process.exit(1)
 }
+// The deployed worker answers a person in their own Slack workspace with that person's token (src/slack/installs.ts,
+// ADR-0065). The Settings page says "replying in Slack is not switched on" until this is true, so it is stated HERE, by the
+// deploy that proved the worker runs, and by nothing earlier: a flag set before the code is live is a promise the product
+// cannot keep (a migration is not a deploy).
+await db.execute(`
+  insert into public.system_config (key, value, description)
+  values ('slack.per_office_delivery', 'true'::jsonb,
+          'The deployed worker answers a person in their own Slack workspace with their own token (ADR-0065). Set by deploy:worker after its probe passes.')
+  on conflict (key) do update set value = excluded.value`)
+console.log('slack.per_office_delivery: true (this worker answers personal Slack workspaces)')
+
 console.log(`\nworker: ${url}`)
 console.log('kick secret is in the vault as `worker.kick_secret`, deliberately not printed.')

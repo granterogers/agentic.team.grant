@@ -38,6 +38,7 @@
  * forbids a second engine and the smallest thing that satisfies it is a loop.
  */
 
+import { readCredential } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { assertHeld, type Claimed } from './fence.ts'
 
@@ -150,7 +151,7 @@ export async function beginStep(
   held?: Claimed,
 ): Promise<StepGate> {
   const { rows } = await db.execute(
-    `select app.step_begin(${lit(claimOn)}::uuid, ${lit(name)}, ${String(index)},
+    `select app.step_begin(app.job_office(${lit(jobId)}::uuid), ${lit(claimOn)}::uuid, ${lit(name)}, ${String(index)},
                            ${lit(effect)}, ${String(CHECKPOINT_SCHEMA)},
                            ${lit(codeVersion)}) as r`,
   )
@@ -240,7 +241,7 @@ export async function finishStep(
   effectRef?: string,
 ): Promise<void> {
   await db.execute(
-    `select app.step_done(${lit(jobId)}::uuid, ${lit(name)}, ${json(outcome)},
+    `select app.step_done(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, ${lit(name)}, ${json(outcome)},
                           ${effectRef === undefined ? 'null' : lit(effectRef)})`,
   )
 }
@@ -391,10 +392,7 @@ export async function credential(
   name: string,
   whatFor: string,
 ): Promise<{ value: string } | Paused> {
-  const { rows } = await db.execute(
-    `select decrypted_secret as v from vault.decrypted_secrets where name = ${lit(name)}`,
-  )
-  const value = String((rows[0] as { v?: string } | undefined)?.v ?? '').trim()
+  const value = ((await readCredential(db, name)) ?? '').trim()
   if (value !== '') return { value }
   return {
     detail: `${whatFor} needs ${name}, and the vault does not have it`,
@@ -412,7 +410,9 @@ export async function credential(
 
 /** Ask for a job to stop. It ends after its current step. */
 export async function requestStop(db: SqlExecutor, jobId: string, who: string): Promise<void> {
-  await db.execute(`select app.request_stop(${lit(jobId)}::uuid, ${lit(who)})`)
+  await db.execute(
+    `select app.request_stop(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid, ${lit(who)})`,
+  )
 }
 
 /** Stop the job where it is, with a reason a person can act on. */

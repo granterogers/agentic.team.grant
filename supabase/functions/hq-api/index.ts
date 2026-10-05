@@ -38,6 +38,17 @@
  * rejects everything rather than waving requests through.
  */
 
+// Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
+import { fileText } from './file-text.ts'
+import { authorizeUrl, revokeToken } from './oauth.ts'
+import {
+  driveProvider,
+  type Failure,
+  type PreviewPlan,
+  previewDocument,
+  streamDocument,
+} from './preview.ts'
+
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -109,7 +120,10 @@ const kickWorker = (): void => {
   Short-lived by construction - Google's token lasts an hour and nothing caches
   it beyond one request, so a browse and a pick each mint their own.
 */
-const googleToken = async (): Promise<{ token: string } | { error: string }> => {
+const googleToken = async (
+  operator: string,
+  office: string,
+): Promise<{ token: string } | { error: string }> => {
   const ask = async (fn: string, body: unknown): Promise<unknown> => {
     const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
       method: 'POST',
@@ -124,8 +138,23 @@ const googleToken = async (): Promise<{ token: string } | { error: string }> => 
   }
   const config = (await ask('hq_google', {})) as { client_id?: string } | null
   const id = String(config?.client_id ?? '')
-  const secret = String((await ask('vault_secret', { p_name: 'google.client_secret' })) ?? '')
-  const refresh = String((await ask('vault_secret', { p_name: 'google.refresh_token' })) ?? '')
+  /*
+    ONE resolver (0648): the database serves a Google credential only to a named operator or to work the
+    deployment owns. A refusal arrives as an error OBJECT, never as a string, so only a string counts.
+  */
+  const held = async (p_name: string): Promise<string> => {
+    // The office is the verified session's, never a caller-named one (P3): the resolver serves this office's own
+    // credential to its operator and nothing of any other office's.
+    const v = await ask('deployment_credential', {
+      p_office: office,
+      p_name,
+      p_operator: operator,
+      p_job: null,
+    })
+    return typeof v === 'string' ? v : ''
+  }
+  const secret = await held('google.client_secret')
+  const refresh = await held('google.refresh_token')
   if (id === '' || secret === '' || refresh === '') {
     return { error: 'Google is not connected yet. Connect it in Settings and try again.' }
   }
@@ -159,6 +188,8 @@ const SECTIONS: Readonly<
     string,
     {
       fn: string
+      /** The function takes `p_office` first; the gateway writes the verified one (P3). */
+      office?: true
       args?: Record<string, unknown>
       /** A uuid, read from `?id=`. */
       arg?: string
@@ -217,21 +248,25 @@ const SECTIONS: Readonly<
     }
   >
 > = {
-  overview: { fn: 'hq_overview' },
-  staff: { fn: 'hq_staff' },
-  usage: { fn: 'hq_usage' },
-  activity: { fn: 'hq_activity', args: { p_limit: 50 } },
-  series: { fn: 'hq_series', args: { p_days: 30 } },
-  connections: { fn: 'hq_connections' },
-  projects: { fn: 'hq_projects' },
-  artifacts: { fn: 'hq_artifacts' },
-  settings: { fn: 'hq_settings' },
-  team: { fn: 'hq_team' },
+  overview: { fn: 'hq_overview', office: true },
+  staff: { fn: 'hq_staff', office: true },
+  usage: { fn: 'hq_usage', office: true },
+  activity: { fn: 'hq_activity', office: true, args: { p_limit: 50 } },
+  series: { fn: 'hq_series', office: true, args: { p_days: 30 } },
+  connections: { fn: 'hq_connections', office: true },
+  // Whether THIS person's Telegram is connected, waiting for a tap, or not (#410).
+  channel_link: { fn: 'channel_link_status', office: true },
+  // Whether THIS person's own Slack workspace is installed, waiting for the consent, or not, and what it can do (ADR-0065).
+  slack_link: { fn: 'slack_link_status', office: true },
+  projects: { fn: 'hq_projects', office: true },
+  artifacts: { fn: 'hq_artifacts', office: true },
+  settings: { fn: 'hq_settings', office: true },
+  team: { fn: 'hq_team', office: true },
   // Everything the studio renders, in the shape web/studio/data.js already
   // exports (#68, ADR-0019). One call rather than nine: the studio paints the
   // whole shell at once and a page that fetches per section feels broken while
   // being correct — the argument 0120 made for the tool catalogue.
-  studio: { fn: 'hq_studio' },
+  studio: { fn: 'hq_studio', office: true },
   /*
     "Has anything changed" (#117, migration 0262).
 
@@ -242,9 +277,9 @@ const SECTIONS: Readonly<
     Its own section rather than a field on `studio`, because the whole point is
     that it can be asked without paying for the payload it guards.
   */
-  pulse: { fn: 'hq_pulse' },
+  pulse: { fn: 'hq_pulse', office: true },
   // The Settings viewer, in the shapes settings.js already exports (#68).
-  studio_settings: { fn: 'hq_studio_settings' },
+  studio_settings: { fn: 'hq_studio_settings', office: true },
   /*
     The usage dashboard (#61), from `usage_overview` rather than `hq_usage`.
 
@@ -254,7 +289,7 @@ const SECTIONS: Readonly<
     *"a fraction of what's being spent over a monthly, weekly, daily quota"*.
     `web/studio/usage.js` was written in its exact shape.
   */
-  usage_overview: { fn: 'usage_overview', args: { p_days: 30 } },
+  usage_overview: { fn: 'usage_overview', office: true, args: { p_days: 30 } },
   /*
     One document, in full (#95).
 
@@ -268,7 +303,25 @@ const SECTIONS: Readonly<
     characters, and forty of those is not a first paint. So the grid gets
     metadata and opening one fetches it — the same reasoning as `lately`.
   */
-  document: { fn: 'studio_document', arg: 'p_document_id' },
+  document: { fn: 'studio_document', office: true, arg: 'p_document_id' },
+  /*
+    THE UNIFIED DOCUMENTS LIST (0900). One item per logical document for a project, across Drive references, NotebookLM
+    material, uploads and what the team generated, with source classification, import and index state and version
+    count. `?slug=` names the project (free text, hence textArg, not a uuid).
+  */
+  project_documents: {
+    fn: 'hq_project_documents',
+    office: true,
+    textArg: { param: 'slug', arg: 'p_slug' },
+  },
+  // The versions of one logical document, v1..vN, from any one of them (0900). A uuid, so `arg`.
+  document_versions: { fn: 'hq_document_versions', office: true, arg: 'p_document_id' },
+  /*
+    HOW A MADE REPORT WAS MADE (0940, 0970): whether it has provenance, and whether the style it was set in was recorded
+    (`has_style_snapshot`). The page asks before offering "Use this report's style for the project". A document with no
+    provenance answers `{ has_provenance: false }`, not an error. A uuid, so `arg`.
+  */
+  document_provenance: { fn: 'hq_document_provenance', office: true, arg: 'p_document_id' },
   /*
     ONE OUTPUT, so the thing the team made can be READ (§19).
 
@@ -276,7 +329,7 @@ const SECTIONS: Readonly<
     one: importing it and deciding on it were both verdicts on something
     nobody could see.
   */
-  output: { fn: 'hq_output', arg: 'p_output_id' },
+  output: { fn: 'hq_output', office: true, arg: 'p_output_id' },
   /*
     One project's conversation, both sides, in order (#192).
 
@@ -299,8 +352,8 @@ const SECTIONS: Readonly<
     empty mapping, which is the row-list-built-twice defect with a screen in
     front of it.
   */
-  task_sync: { fn: 'task_sync_panel' },
-  conversation: { fn: 'conversation_history', arg: 'p_project_id' },
+  task_sync: { fn: 'task_sync_panel', office: true },
+  conversation: { fn: 'conversation_history', office: true, arg: 'p_project_id' },
   /*
     How fast the conversation is growing, and how much room is left (#204).
 
@@ -311,7 +364,7 @@ const SECTIONS: Readonly<
     interface for maintaining and extending the system." A number an agent has
     to run something to get is a number Grant does not have.
   */
-  conversation_growth: { fn: 'conversation_growth' },
+  conversation_growth: { fn: 'conversation_growth', office: true },
   /*
     Which state each conversation surface is in (#198).
 
@@ -320,7 +373,7 @@ const SECTIONS: Readonly<
     wrong with it right now" — which needs the credential AND the traffic AND
     the last day of delivery failures together. Two questions, two sections.
   */
-  conversation_channels: { fn: 'conversation_channels' },
+  conversation_channels: { fn: 'conversation_channels', office: true },
   /*
     The MCP server, as a page (#91).
 
@@ -331,23 +384,23 @@ const SECTIONS: Readonly<
     Nothing in the RPC selects `token_sha256`. This tab gets captured by
     `npm run shots` and attached to a build step on a public page.
   */
-  mcp: { fn: 'hq_mcp' },
+  mcp: { fn: 'hq_mcp', office: true },
   // What the office did and what is being built, as one page (#68).
-  lately: { fn: 'hq_studio_lately', args: { p_limit: 40 } },
+  lately: { fn: 'hq_studio_lately', office: true, args: { p_limit: 40 } },
   // The first-run checklist, for the Setting up pane (#68). `setup` already
   // exists above and serves the same function; named apart so the studio's
   // fetch is legible next to `studio` and `studio_settings`.
-  studio_setup: { fn: 'hq_setup' },
+  studio_setup: { fn: 'hq_setup', office: true },
   google: { fn: 'hq_google' },
   // What to do next, for a person who has just opened this for the first time.
-  setup: { fn: 'hq_setup' },
+  setup: { fn: 'hq_setup', office: true },
   // What each kind of work costs, measured and modelled (§11).
-  cost: { fn: 'hq_cost_per_outcome', args: { p_days: 30 } },
+  cost: { fn: 'hq_cost_per_outcome', office: true, args: { p_days: 30 } },
   // Which bot speaks as whom, and which are spare.
   bots: { fn: 'hq_bots' },
   // Who may message Grant directly, how loud a thing has to be to reach his
   // phone, and which recurring duties run at all (0151).
-  routing: { fn: 'hq_routing' },
+  routing: { fn: 'hq_routing', office: true },
   // What the build session is doing, as it does it — so Grant can open the page
   // instead of a terminal (0170).
   build: { fn: 'hq_build' },
@@ -359,7 +412,7 @@ const SECTIONS: Readonly<
     portfolio task list is a screen you navigate TO. Folding it in would make
     every page load pay for a list most loads never render.
   */
-  portfolio_tasks: { fn: 'hq_portfolio_tasks', args: { p_limit: 200 } },
+  portfolio_tasks: { fn: 'hq_portfolio_tasks', office: true, args: { p_limit: 200 } },
   /*
     What the office learned, what it wants, what it noticed and what each agent
     could not do (#54, migration 0302).
@@ -368,7 +421,7 @@ const SECTIONS: Readonly<
     and `portfolio_tasks` are: it reads four tables nobody else on the first
     paint touches, and governance is a screen you navigate TO.
   */
-  governance: { fn: 'hq_governance', args: { p_limit: 40 } },
+  governance: { fn: 'hq_governance', office: true, args: { p_limit: 40 } },
   /*
     What the office may do without asking, and what Grant has said not to ask
     about again (#15, migrations 0421 and 0422).
@@ -382,7 +435,7 @@ const SECTIONS: Readonly<
     on the one page that lists every permission in force — a security surface
     that can only be read a project at a time is one nobody audits.
   */
-  standing: { fn: 'hq_standing' },
+  standing: { fn: 'hq_standing', office: true },
   /*
     What the office has settled, and what that ruled out (#129).
 
@@ -392,7 +445,7 @@ const SECTIONS: Readonly<
     crosses every project (ADR-0036), so folding it into a payload that is
     otherwise project-shaped would invite somebody to scope it.
   */
-  decisions: { fn: 'hq_decisions', args: { p_limit: 40 } },
+  decisions: { fn: 'hq_decisions', office: true, args: { p_limit: 40 } },
   /*
     What a project has MADE, as opposed to what it was given (#260).
 
@@ -411,7 +464,7 @@ const SECTIONS: Readonly<
     type, and a page that drew an anchor regardless would be the fabricated
     link this Issue forbids.
   */
-  project_artifacts: { fn: 'project_artifacts', arg: 'p_project' },
+  project_artifacts: { fn: 'project_artifacts', office: true, arg: 'p_project' },
   /*
     What the team has made and Grant has not decided about (#28, #276).
 
@@ -424,7 +477,7 @@ const SECTIONS: Readonly<
     life: it filtered a state nothing writes. 0471 widened it to the states
     that exist and gave it the row the page needs.
   */
-  review: { fn: 'awaiting_review', arg: 'p_project' },
+  review: { fn: 'awaiting_review', office: true, arg: 'p_project' },
   /*
     WHO IS ASSIGNED TO A PROJECT, which is not the same question as who has
     touched it (§16).
@@ -440,7 +493,7 @@ const SECTIONS: Readonly<
     configured, and a configuration screen that cannot see the thing it
     configures is the dial-with-no-reader defect with the parts swapped.
   */
-  assigned: { fn: 'staff_on_project', arg: 'p_project_id' },
+  assigned: { fn: 'staff_on_project', office: true, arg: 'p_project_id' },
   /*
     THE WAY BACK FROM ARCHIVING (#276, migration 0480).
 
@@ -459,7 +512,7 @@ const SECTIONS: Readonly<
     No argument: it is global, like the governance sections, because a project
     you are trying to find is one you are not inside.
   */
-  archived: { fn: 'recoverable_projects' },
+  archived: { fn: 'recoverable_projects', office: true },
   /*
     MY TASKS (#259, ADR-0041).
 
@@ -473,6 +526,7 @@ const SECTIONS: Readonly<
   */
   my_tasks: {
     fn: 'my_tasks',
+    office: true,
     oneOf: {
       param: 'id',
       arg: 'p_bucket',
@@ -489,7 +543,7 @@ const SECTIONS: Readonly<
       { arg: 'p_sort', param: 'sort', values: ['smart', 'priority', 'title', 'created'] },
     ],
   },
-  my_task_counts: { fn: 'my_tasks_counts' },
+  my_task_counts: { fn: 'my_tasks_counts', office: true },
   /*
     How far a job got, and why it stopped (#263).
 
@@ -501,7 +555,7 @@ const SECTIONS: Readonly<
     reasoning — the Issue says "do not expose private reasoning traces" and the
     function that serves this holds none.
   */
-  job_progress: { fn: 'job_progress', arg: 'p_job' },
+  job_progress: { fn: 'job_progress', office: true, arg: 'p_job' },
   /*
     Every trigger and how it is doing (#264).
 
@@ -509,7 +563,7 @@ const SECTIONS: Readonly<
     twice and declined ninety times is either working exactly as designed or
     badly misconfigured, and only both numbers can tell them apart.
   */
-  triggers: { fn: 'trigger_health' },
+  triggers: { fn: 'trigger_health', office: true },
   /*
     Registered providers, what they offer, and what of that is USABLE (#265).
 
@@ -517,7 +571,7 @@ const SECTIONS: Readonly<
     the office can offer six, and none of them be reachable until Grant
     approves. Showing only what was offered would read as reach.
   */
-  connectors: { fn: 'mcp_inventory' },
+  connectors: { fn: 'mcp_inventory', office: true },
   /*
     The sessions a project has with sites the office is signed in to (#135).
 
@@ -526,7 +580,7 @@ const SECTIONS: Readonly<
     stored" from "and here is a bit of it" would make every screenshot of the
     Browser tab a leak.
   */
-  browser_sessions: { fn: 'browser_sessions_for', arg: 'p_project' },
+  browser_sessions: { fn: 'browser_sessions_for', office: true, arg: 'p_project' },
   /*
     What the office has actually opened, most recent first (#135).
 
@@ -534,7 +588,7 @@ const SECTIONS: Readonly<
     this repository has had to arrange that and the first time it was arranged
     before anybody saw a suite's rows on a real page.
   */
-  browser_lately: { fn: 'browser_lately', arg: 'p_project', args: { p_limit: 30 } },
+  browser_lately: { fn: 'browser_lately', office: true, arg: 'p_project', args: { p_limit: 30 } },
   /*
     The present tense (#135).
 
@@ -542,7 +596,7 @@ const SECTIONS: Readonly<
     for, and pages it already read. Grant asked to SEE the browser, and what it
     is doing this second appeared nowhere on the surface built to show it.
   */
-  browser_now: { fn: 'browser_now', arg: 'p_project' },
+  browser_now: { fn: 'browser_now', office: true, arg: 'p_project' },
   /*
     What is left of today's ten free browser-minutes (#16).
 
@@ -550,7 +604,7 @@ const SECTIONS: Readonly<
     sessions so the answer to "why did it not open anything" is on the same
     screen as the question.
   */
-  browser_budget: { fn: 'browser_budget' },
+  browser_budget: { fn: 'browser_budget', office: true },
   /*
     Where this month's GitHub Actions minutes went (#17).
 
@@ -577,6 +631,7 @@ const SECTIONS: Readonly<
   */
   search: {
     fn: 'studio_search',
+    office: true,
     args: { p_limit: 12 },
     textArg: { param: 'q', arg: 'p_query' },
     scoped: true,
@@ -585,6 +640,35 @@ const SECTIONS: Readonly<
     filtered: true,
   },
   /*
+    ONE SEARCH OVER EVERY STORE A PROJECT HAS (migration 0921).
+
+    `search` (above) finds documents and the team's answers. This finds those plus tasks, the project conversation,
+    saved webpages, Post-its, calendar events and the team's research, as typed rows
+    `{kind, id, title, snippet, project_slug, url_hint, score, at}`. `?project=<uuid>` scopes it, `?kinds=task,page`
+    narrows it. The office is the verified session's; a project of another office answers like one that does not
+    exist.
+  */
+  project_search: {
+    fn: 'project_search',
+    office: true,
+    args: { p_limit: 20 },
+    textArg: { param: 'q', arg: 'p_query' },
+    scoped: true,
+    also: [{ param: 'kinds', arg: 'p_kinds' }],
+  },
+  /*
+    THE HOUSE STYLE (migration 0923). `?slug=<project>` returns the profile RESOLVED for that project - the office's
+    default with the project's fields laid over it, each field saying which it came from - and `vocabulary`, the
+    fonts, colours and treatments a profile may use. No `slug` is the office default alone.
+  */
+  style: {
+    fn: 'hq_style_get',
+    office: true,
+    also: [{ param: 'slug', arg: 'p_slug' }],
+  },
+  // Which kinds that search can serve in THIS database (calendar needs 0897) - the page draws only filters that find something.
+  project_search_providers: { fn: 'project_search_providers', office: true },
+  /*
     Everything an object relates to, both directions (#29, migrations 0310-11).
 
     Takes two arguments where every other section takes at most one, so it uses
@@ -592,7 +676,12 @@ const SECTIONS: Readonly<
     a fixed vocabulary, and the RPC's own CHECK constraint is what validates it
     rather than a second copy of the list here.
   */
-  relations: { fn: 'relations_of', arg: 'p_id', textArg: { param: 'kind', arg: 'p_kind' } },
+  relations: {
+    fn: 'relations_of',
+    office: true,
+    arg: 'p_id',
+    textArg: { param: 'kind', arg: 'p_kind' },
+  },
   /*
     HOW A PROJECT GOT HERE (#156, migrations 0401-0402).
 
@@ -601,7 +690,7 @@ const SECTIONS: Readonly<
     its whole history on every page load, for a panel most visits never open.
     `documents` and `plane` are lazy for the same reason.
   */
-  history: { fn: 'project_history', arg: 'p_project' },
+  history: { fn: 'project_history', office: true, arg: 'p_project' },
   /** The named actions, so no page hard-codes them (#27). */
   actions: { fn: 'asset_actions' },
   /*
@@ -612,7 +701,7 @@ const SECTIONS: Readonly<
     payload every project switch carries would make a drag on the home board a
     reason to re-read every project.
   */
-  workspace: { fn: 'hq_workspace_layout' },
+  workspace: { fn: 'hq_workspace_layout', office: true },
   /*
     Whether the office can think at all (#240, migration 0372).
 
@@ -628,7 +717,7 @@ const SECTIONS: Readonly<
     slow-moving structural one means re-reading every project to find out
     whether the model provider is answering.
   */
-  thinking: { fn: 'office_health' },
+  thinking: { fn: 'office_health', office: true },
   /*
     Project Settings (#36, migrations 0323-26).
 
@@ -647,13 +736,46 @@ const SECTIONS: Readonly<
     a screen nobody may open.
   */
   // What has arrived on each project since he last opened it (#122, 0381).
-  unseen: { fn: 'studio_unseen' },
+  unseen: { fn: 'studio_unseen', office: true },
   // What each agent has actually done lately (#155, 0385).
-  team_work: { fn: 'studio_team_work' },
-  plane: { fn: 'studio_plane', arg: 'p_project_id' },
-  plane_layout: { fn: 'hq_plane_layout', arg: 'p_project_id' },
-  project_team: { fn: 'project_team', arg: 'p_project_id' },
-  project_automations: { fn: 'project_automations', arg: 'p_project_id' },
+  team_work: { fn: 'studio_team_work', office: true },
+  plane: { fn: 'studio_plane', office: true, arg: 'p_project_id' },
+  plane_layout: { fn: 'hq_plane_layout', office: true, arg: 'p_project_id' },
+  project_team: { fn: 'project_team', office: true, arg: 'p_project_id' },
+  /*
+    A project's calendar (0897): its own events plus the Google events filed under it (scope=project), every project's
+    (scope=all), or the whole Google cache including what no project has claimed (scope=google).
+    ?project=<slug> (or ?p_slug=) names the project and is needed only for scope=project; ?from= and ?to= bound the window
+    (dates or timestamps; the function refuses a bad one, a window over 400 days, and an unknown scope by name).
+  */
+  project_events: {
+    fn: 'hq_project_events',
+    office: true,
+    also: [
+      { param: 'project', arg: 'p_slug' },
+      { param: 'p_slug', arg: 'p_slug' },
+      { param: 'from', arg: 'p_from' },
+      { param: 'to', arg: 'p_to' },
+      { param: 'scope', arg: 'p_scope', values: ['project', 'all', 'google'] },
+    ],
+  },
+  /*
+    What the web gave a project, and where each piece came from (0930). One entry per saved page or downloaded file with its
+    address, title, retrieval time, the agent and job that fetched it, the research task and question, how it was reached
+    (search rank or the page whose link led to it), whether it is indexed, a screenshot if one was taken, and which outputs
+    cite it. ?project=<slug> (or ?p_slug=) is required; ?limit= bounds the list (default 100, at most 500). Harness
+    traffic is excluded by the reader, not here.
+  */
+  web_sources: {
+    fn: 'hq_project_sources_web',
+    office: true,
+    also: [
+      { param: 'project', arg: 'p_slug' },
+      { param: 'p_slug', arg: 'p_slug' },
+      { param: 'limit', arg: 'p_limit' },
+    ],
+  },
+  project_automations: { fn: 'project_automations', office: true, arg: 'p_project_id' },
   /*
     The whole project, as the neutral package §13 names.
 
@@ -661,7 +783,12 @@ const SECTIONS: Readonly<
     Coaching Course today, and it grows with the corpus. It is fetched when
     Grant presses Export and at no other time.
   */
-  project_export: { fn: 'project_export', arg: 'p_project_id' },
+  project_export: { fn: 'project_export', office: true, arg: 'p_project_id' },
+  /*
+    How a turn the team was given is getting on (0874). The chat follows the job it was handed and shows exactly this.
+    One office, one job; a job that is not this office's answers as one that does not exist.
+  */
+  turn_status: { fn: 'turn_status', office: true, arg: 'p_job' },
 }
 
 /**
@@ -692,7 +819,14 @@ const SECTIONS: Readonly<
  * sent: it is for an action the office key may also do (a machine making a test project) where the person's identity
  * adds provenance and its absence adds nothing - a machine never makes a project that counts as a person's.
  */
-type ActionSpec = { fn: string; required: readonly string[]; by?: string; personBy?: string }
+type ActionSpec = {
+  fn: string
+  required: readonly string[]
+  by?: string
+  personBy?: string
+  /** The function takes `p_office` first; the gateway writes the verified one (P3). */
+  office?: true
+}
 const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // `p_force` is optional and deliberately not required: without it the RPC
   // returns the candidates and creates nothing (0153), which is the behaviour
@@ -702,18 +836,49 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // may still make a test project; it carries no principal and so records nothing.
   create_project: {
     fn: 'hq_create_project',
+    office: true,
     required: ['p_name', 'p_connector', 'p_ref'],
     personBy: 'p_by',
   },
-  rename_project: { fn: 'hq_rename_project', required: ['p_slug', 'p_name'] },
+  rename_project: { fn: 'hq_rename_project', office: true, required: ['p_slug', 'p_name'] },
+  // The house style (0923). `p_slug` absent writes the OFFICE default. The channel is the door's fact and is written by
+  // the database wrapper ('teamhq'), never sent. `personBy` records who; the office key is a machine and styles nothing.
+  style_set: { fn: 'hq_style_set', office: true, required: ['p_patch'], personBy: 'p_by' },
+  style_clear: { fn: 'hq_style_clear', office: true, required: [], personBy: 'p_by' },
+  /*
+    "I love this report. Save this as this project's report style." (0970). Copies the style a MADE report was recorded
+    with into the project's profile. Nothing is extracted from the PDF. It asks first when the project already has a
+    style (`needs_confirmation`; sent again with `p_confirm: true` it replaces), says so and does nothing for a report
+    made before its style was recorded, and is a person's press only - the office key is a machine and styles nothing.
+  */
+  style_adopt_from_document: {
+    fn: 'hq_style_adopt_from_document',
+    office: true,
+    required: ['p_slug', 'p_document'],
+    personBy: 'p_by',
+  },
+  // A person connecting their OWN Telegram (#410, 0885). The office is the verified session's; the office key is not in
+  // SERVICE_MAY, so a machine cannot start or end a person's connection.
+  channel_link_begin: { fn: 'channel_link_begin', office: true, required: ['p_channel'] },
+  channel_link_disconnect: { fn: 'channel_link_disconnect', office: true, required: ['p_channel'] },
+  // A person installing Slack into their OWN workspace (ADR-0065, 0891). Both are handled in the gateway's own branch below
+  // (the link is composed here; the bot token is revoked here), so `fn` names the database half. Not in SERVICE_MAY.
+  slack_link_begin: { fn: 'slack_link_begin', office: true, required: [] },
+  slack_link_disconnect: { fn: 'slack_link_disconnect', office: true, required: [] },
   // `by`: connecting a Notion database is the yes to writing into it, and only a person's connecting counts (0641).
-  attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'], by: 'p_by' },
-  detach: { fn: 'hq_detach', required: ['p_attachment_id'] },
+  attach: {
+    fn: 'hq_attach',
+    office: true,
+    required: ['p_slug', 'p_connector', 'p_ref'],
+    by: 'p_by',
+  },
+  detach: { fn: 'hq_detach', office: true, required: ['p_attachment_id'] },
   // Recording that a project deliberately has no Notion page — §3's fifth
   // option, and the only one that does not end in an attachment. `p_reason` is
   // optional because "not now" is a complete answer on its own.
   connection_choose: {
     fn: 'hq_connection_choose',
+    office: true,
     required: ['p_slug', 'p_connector', 'p_choice'],
   },
   // One setter over an allow-list of six keys, enforced in the function rather
@@ -729,7 +894,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     that reached Telegram and not Slack does not send the Telegram one twice;
     the idempotency is #195's and is used rather than restated.
   */
-  retry_send: { fn: 'retry_job_deliveries', required: ['p_job_id'] },
+  retry_send: { fn: 'retry_job_deliveries', office: true, required: ['p_job_id'] },
   // Editing a person, and retiring one. There is no delete and there will not
   // be: outputs, routing decisions and deliveries all name a staff member, and
   // a roster that can lose a row is a history that stops explaining itself.
@@ -738,12 +903,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // line: `skills` is append-only, so this writes a retirement row rather than
   // removing anything, and writing the procedure again undoes it. `p_reason` is
   // optional — the RPC supplies an honest default rather than an empty string.
-  retire_skill: { fn: 'hq_retire_skill', required: ['p_skill_id'] },
+  retire_skill: { fn: 'hq_retire_skill', office: true, required: ['p_skill_id'] },
   // How much the office does without asking (#15). Its own action rather than a
   // `set_setting` key: it lives in `autonomy_settings`, it is scoped — a project
   // can override the global — and every change is a new row so "when did it
   // start acting on its own" stays answerable.
-  autonomy_set: { fn: 'hq_autonomy_set', required: ['p_level'], by: 'p_by' },
+  autonomy_set: { fn: 'hq_autonomy_set', office: true, required: ['p_level'], by: 'p_by' },
   /*
     Answering the office when it asks for a capability (ADR-0018, #272).
 
@@ -777,8 +942,18 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     `hq_approve_tool` does — an agent cannot widen its own permissions because
     there is no argument through which to try.
   */
-  grant_standing: { fn: 'hq_grant_standing', required: ['p_tool', 'p_reason'], by: 'p_by' },
-  revoke_standing: { fn: 'hq_revoke_standing', required: ['p_authorization'], by: 'p_by' },
+  grant_standing: {
+    fn: 'hq_grant_standing',
+    office: true,
+    required: ['p_tool', 'p_reason'],
+    by: 'p_by',
+  },
+  revoke_standing: {
+    fn: 'hq_revoke_standing',
+    office: true,
+    required: ['p_authorization'],
+    by: 'p_by',
+  },
   /*
     Registering and disconnecting an outside provider (#265).
 
@@ -789,6 +964,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   register_connector: {
     fn: 'register_mcp_provider',
+    office: true,
     required: ['p_name', 'p_endpoint'],
   },
   /*
@@ -801,6 +977,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   browser_session_establish: {
     fn: 'browser_session_establish',
+    office: true,
     required: ['p_project', 'p_site', 'p_purpose', 'p_jar'],
   },
   /*
@@ -810,21 +987,23 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   browser_session_forget: {
     fn: 'browser_session_forget',
+    office: true,
     required: ['p_session'],
   },
   /*
     Stop. A column the runner reads between steps, not a socket.
   */
-  stop_job: { fn: 'request_stop', required: ['p_job'], by: 'p_who' },
-  revoke_connector: { fn: 'revoke_mcp_provider', required: ['p_provider'] },
-  offer_connector_tool: { fn: 'offer_mcp_tool', required: ['p_discovered'] },
-  approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'], by: 'p_by' },
-  decline_tool: { fn: 'hq_decline_tool', required: ['p_request_id'], by: 'p_by' },
-  revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'], by: 'p_by' },
+  stop_job: { fn: 'request_stop', office: true, required: ['p_job'], by: 'p_who' },
+  revoke_connector: { fn: 'revoke_mcp_provider', office: true, required: ['p_provider'] },
+  offer_connector_tool: { fn: 'offer_mcp_tool', office: true, required: ['p_discovered'] },
+  approve_tool: { fn: 'hq_approve_tool', office: true, required: ['p_request_id'], by: 'p_by' },
+  decline_tool: { fn: 'hq_decline_tool', office: true, required: ['p_request_id'], by: 'p_by' },
+  revoke_tool: { fn: 'hq_revoke_tool', office: true, required: ['p_slug', 'p_tool'], by: 'p_by' },
   // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
   // the two, and refuses a grant for a globally disabled tool (§11).
   staff_tool_set: {
     fn: 'hq_staff_tool_set',
+    office: true,
     required: ['p_slug', 'p_tool', 'p_granted'],
     by: 'p_by',
   },
@@ -850,12 +1029,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     which project" and "this belongs to none" the same request, and only one of
     those should file a task where Grant is not looking.
   */
-  task_add: { fn: 'hq_task_add', required: ['p_project', 'p_title'] },
+  task_add: { fn: 'hq_task_add', office: true, required: ['p_project', 'p_title'] },
   // Contacts (#24, #99). A name and a project; everything else — role, org,
   // email, phone, Instagram, website, kind, note — is optional, because a form
   // that demands nine fields before it will take "Ben, referrer" is a form
   // people route around.
-  contact_add: { fn: 'hq_contact_add', required: ['p_project', 'p_name'] },
+  contact_add: { fn: 'hq_contact_add', office: true, required: ['p_project', 'p_name'] },
   /*
     Labels Grant defines, and fields he adds (#110, migration 0285).
 
@@ -880,8 +1059,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     other argument is null-means-leave-it-alone, so a caller changing one note
     sends one field.
   */
-  contact_update: { fn: 'hq_contact_update', required: ['p_contact_id'] },
-  contact_archive: { fn: 'hq_contact_archive', required: ['p_contact_id'] },
+  contact_update: { fn: 'hq_contact_update', office: true, required: ['p_contact_id'] },
+  contact_archive: { fn: 'hq_contact_archive', office: true, required: ['p_contact_id'] },
   /*
     Registered here as well as handled above, because the dispatcher checks
     this map BEFORE anything else runs - an action missing from it is
@@ -889,7 +1068,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     precedent and it is listed for the same reason: the storage half happens
     before the RPC, and the RPC named here is the one the handler ends in.
   */
-  contact_photo: { fn: 'hq_contact_photo_set', required: ['p_contact_id', 'p_project_id'] },
+  contact_photo: {
+    fn: 'hq_contact_photo_set',
+    office: true,
+    required: ['p_contact_id', 'p_project_id'],
+  },
   /*
     PICKING A FILE OUT OF DRIVE.
 
@@ -898,15 +1081,34 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     canonical writer and picking the same file twice is one document, because
     the index says so.
   */
+  /*
+    CONNECTING GOOGLE starts here, not at a bare link (0648). The page asks for a one-time state - minted only
+    for a verified operator - and carries it through Google's consent screen to the callback, which refuses a
+    code that arrives without one. Without it the callback would store whatever account's code it was handed.
+  */
+  google_connect_start: { fn: 'hq_google_connect_start', required: [], by: 'p_by' },
   drive_link: {
     fn: 'hq_document_link',
+    office: true,
     required: ['p_project_id', 'p_external_ref', 'p_title'],
   },
-  contact_label_add: { fn: 'hq_contact_label_add', required: ['p_name'] },
-  contact_label_rename: { fn: 'hq_contact_label_rename', required: ['p_label_id', 'p_name'] },
-  contact_label_remove: { fn: 'hq_contact_label_remove', required: ['p_label_id'] },
-  contact_labels_set: { fn: 'hq_contact_labels_set', required: ['p_contact_id', 'p_labels'] },
-  contact_fields_set: { fn: 'hq_contact_fields_set', required: ['p_contact_id', 'p_fields'] },
+  contact_label_add: { fn: 'hq_contact_label_add', office: true, required: ['p_name'] },
+  contact_label_rename: {
+    fn: 'hq_contact_label_rename',
+    office: true,
+    required: ['p_label_id', 'p_name'],
+  },
+  contact_label_remove: { fn: 'hq_contact_label_remove', office: true, required: ['p_label_id'] },
+  contact_labels_set: {
+    fn: 'hq_contact_labels_set',
+    office: true,
+    required: ['p_contact_id', 'p_labels'],
+  },
+  contact_fields_set: {
+    fn: 'hq_contact_fields_set',
+    office: true,
+    required: ['p_contact_id', 'p_fields'],
+  },
   /*
     Answering a blocker, wherever you are standing (#151, migration 0289).
 
@@ -921,11 +1123,21 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     would resolve the row and strand the job, which is the worst outcome
     available: the interface would report success.
   */
-  answer_blocker: { fn: 'hq_answer_blocker', required: ['p_blocker_id', 'p_answer'], by: 'p_by' },
-  withdraw_refusal: { fn: 'hq_withdraw_refusal', required: ['p_blocker_id'], by: 'p_by' },
+  answer_blocker: {
+    fn: 'hq_answer_blocker',
+    office: true,
+    required: ['p_blocker_id', 'p_answer'],
+    by: 'p_by',
+  },
+  withdraw_refusal: {
+    fn: 'hq_withdraw_refusal',
+    office: true,
+    required: ['p_blocker_id'],
+    by: 'p_by',
+  },
   // `p_reason` is optional here and required by the RPC when the state is
   // `blocked` — the schema's own check constraint, said in a sentence.
-  task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'], by: 'p_by' },
+  task_state: { fn: 'hq_task_state', office: true, required: ['p_task_id', 'p_state'], by: 'p_by' },
   /*
     The arrangement of a project's dashboard (#81, migration 0250).
 
@@ -939,15 +1151,43 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     half-saved layout is worse than an unsaved one -- so this list does not
     try to check it here. §5: the page translates, the RPC decides.
   */
-  dashboard_layout_set: { fn: 'hq_dashboard_layout_set', required: ['p_slug', 'p_panels'] },
+  dashboard_layout_set: {
+    fn: 'hq_dashboard_layout_set',
+    office: true,
+    required: ['p_slug', 'p_panels'],
+  },
   /*
     The order Grant put a project's documents in (§§29-31). A list of ids
     rather than a position per document, so "the order he chose" and "the order
     they arrived in" stay two different facts.
   */
-  document_order_set: { fn: 'hq_document_order_set', required: ['p_slug', 'p_ids'] },
-  document_order_reset: { fn: 'hq_document_order_reset', required: ['p_slug'] },
-  dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', required: ['p_slug'] },
+  /*
+    A project's calendar (0897). A person's own acts: none is in SERVICE_MAY, so the office key (a machine) is refused.
+    The channel the act came from rides in `p_channel` (default teamhq) and is kept on the event and in Activity.
+    Google follows by itself: the calendar.sync_events duty pushes what is pending, and an agent's proposal asks the
+    approval policy first. Deleting an event already in Google tombstones it until the deletion has reached Google.
+  */
+  event_add: {
+    fn: 'hq_event_add',
+    office: true,
+    required: ['p_slug', 'p_title', 'p_starts_at'],
+  },
+  event_update: { fn: 'hq_event_update', office: true, required: ['p_event'] },
+  event_delete: { fn: 'hq_event_delete', office: true, required: ['p_event'] },
+  // Filing an EXISTING Google event under a project; the event stays Google's.
+  event_assign: {
+    fn: 'hq_event_assign',
+    office: true,
+    required: ['p_calendar_id', 'p_event_id', 'p_slug'],
+  },
+  event_unassign: {
+    fn: 'hq_event_unassign',
+    office: true,
+    required: ['p_calendar_id', 'p_event_id'],
+  },
+  document_order_set: { fn: 'hq_document_order_set', office: true, required: ['p_slug', 'p_ids'] },
+  document_order_reset: { fn: 'hq_document_order_reset', office: true, required: ['p_slug'] },
+  dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', office: true, required: ['p_slug'] },
   /*
     And the home screen's own (#219, migration 0376).
 
@@ -962,8 +1202,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     conflict target would have stopped constraining anything for precisely these
     rows.
   */
-  workspace_layout_set: { fn: 'hq_workspace_layout_set', required: ['p_panels'] },
-  workspace_layout_reset: { fn: 'hq_workspace_layout_reset', required: [] },
+  workspace_layout_set: { fn: 'hq_workspace_layout_set', office: true, required: ['p_panels'] },
+  workspace_layout_reset: { fn: 'hq_workspace_layout_reset', office: true, required: [] },
   // Bringing someone in (0233). The other half of `staff_retire`, which has
   // existed alone since 0079 — the studio had a "+ Bring someone in" button
   // wired to nothing at all.
@@ -982,10 +1222,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // Where he dragged the cards, and how far he zoomed (#25, 0380).
   plane_layout_set: {
     fn: 'hq_plane_layout_set',
+    office: true,
     required: ['p_project_id', 'p_at', 'p_view'],
   },
-  plane_layout_reset: { fn: 'hq_plane_layout_reset', required: ['p_project_id'] },
-  project_seen: { fn: 'hq_project_seen', required: ['p_project_id'] },
+  plane_layout_reset: { fn: 'hq_plane_layout_reset', office: true, required: ['p_project_id'] },
+  project_seen: { fn: 'hq_project_seen', office: true, required: ['p_project_id'] },
   /*
     A document is a row you can edit, not only one you can read (#152).
 
@@ -1000,15 +1241,37 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     than adding a second function that writes the same column — which is the
     trap this repository has recorded twice.
   */
-  document_move: { fn: 'hq_document_move', required: ['p_document_id', 'p_project_id'] },
+  document_move: {
+    fn: 'hq_document_move',
+    office: true,
+    required: ['p_document_id', 'p_project_id'],
+  },
   document_supersede: {
     fn: 'hq_document_supersede',
+    office: true,
     required: ['p_document_id', 'p_by_document_id'],
   },
   // `p_state` optional: an undo carries the state the document was in, and a
   // press of "this one is current again" carries nothing and means approved.
-  document_restore: { fn: 'hq_document_restore', required: ['p_document_id'] },
-  document_pin: { fn: 'hq_document_pin', required: ['p_document_id', 'p_pinned'] },
+  document_restore: { fn: 'hq_document_restore', office: true, required: ['p_document_id'] },
+  document_pin: { fn: 'hq_document_pin', office: true, required: ['p_document_id', 'p_pinned'] },
+  /*
+    VERSIONS AND IMPORT (0900). All three are a person's explicit press: none is on SERVICE_MAY, so the office key
+    (a machine) is refused, and nothing in the product calls them but this page.
+    - document_new_version: the next version from new text (`p_content`) OR by adopting an existing approved document in
+      the same project (`p_by_document_id`). `p_approve` approves a draft being adopted. The old one is archived, never
+      deleted.
+    - document_rollback: make an older version current by writing it as a NEW version.
+    - document_import: make the durable Team HQ copy of an external document (or record the request when the text is not
+      held yet). Never silent: this is the only caller.
+  */
+  document_new_version: {
+    fn: 'hq_document_new_version',
+    office: true,
+    required: ['p_document_id'],
+  },
+  document_rollback: { fn: 'hq_document_rollback', office: true, required: ['p_document_id'] },
+  document_import: { fn: 'hq_document_import', office: true, required: ['p_document_id'] },
   /*
     Handled above rather than dispatched, because it carries bytes (#126). It
     is listed here so the whitelist is still the one place that says which
@@ -1016,6 +1279,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   document_upload: {
     fn: 'record_file_document',
+    office: true,
     required: ['p_project_id', 'p_name', 'p_base64'],
   },
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
@@ -1038,11 +1302,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // connection. Reinstalling produces both at the same moment.
   set_slack_credentials: {
     fn: 'hq_set_slack_credentials',
+    office: true,
     required: ['p_bot_token', 'p_signing_secret'],
   },
   // The way back out. There was a way in and none out, which made a consent
   // granted through a browser effectively permanent from this page's side.
-  forget_google: { fn: 'hq_forget_google', required: [] },
+  forget_google: { fn: 'hq_forget_google', office: true, required: [] },
   /*
     Disconnecting anything (#90, migration 0252).
 
@@ -1055,7 +1320,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     is how it reaches him. It returns a refusal with the reason rather than a
     cheerful ok, and this list does not second-guess it. §5.
   */
-  disconnect: { fn: 'hq_disconnect', required: ['p_service'] },
+  disconnect: { fn: 'hq_disconnect', office: true, required: ['p_service'] },
   /*
     How a dashboard project looks (#83, migration 0253).
 
@@ -1065,7 +1330,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     the page; the RPC caps it at 96 KB, which can only be exceeded if that
     resize did not run and is worth refusing loudly rather than storing.
   */
-  project_look: { fn: 'hq_project_look', required: ['p_slug'] },
+  project_look: { fn: 'hq_project_look', office: true, required: ['p_slug'] },
   /*
     Editing a task (#106, migration 0255).
 
@@ -1078,11 +1343,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     functions writing one column is how a constraint gets violated by the one
     that forgot.
   */
-  task_update: { fn: 'hq_task_update', required: ['p_task_id'] },
+  task_update: { fn: 'hq_task_update', office: true, required: ['p_task_id'] },
   // One setter over three kinds of routing change, allow-listed inside the
   // function for the same reason `set_setting` is: the page is not the only
   // possible caller.
-  routing_set: { fn: 'hq_routing_set', required: ['p_what', 'p_value'] },
+  routing_set: { fn: 'hq_routing_set', office: true, required: ['p_what', 'p_value'] },
   /*
     Taking something back (#118, migrations 0263-0265).
 
@@ -1099,8 +1364,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     is listed so that undoing a detach goes through the same door as everything
     else rather than through a private one.
   */
-  undo: { fn: 'hq_undo', required: ['p_action_id'] },
-  reattach: { fn: 'hq_reattach', required: ['p_attachment_id'] },
+  undo: { fn: 'hq_undo', office: true, required: ['p_action_id'] },
+  reattach: { fn: 'hq_reattach', office: true, required: ['p_attachment_id'] },
   /*
     Governance (#54, migration 0302).
 
@@ -1159,9 +1424,10 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     Grant does not pick — a composer that forces you to name somebody makes the
     common case the awkward one.
   */
-  say: { fn: 'say_in_project', required: ['p_project_id', 'p_text'], by: 'p_by' },
+  say: { fn: 'say_in_project', office: true, required: ['p_project_id', 'p_text'], by: 'p_by' },
   send_to_agent: {
     fn: 'send_to_agent',
+    office: true,
     required: ['p_kind', 'p_id', 'p_action'],
     by: 'p_by',
   },
@@ -1185,20 +1451,25 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     closes: importing with nothing chosen means "yes, and I have nothing to
     add".
   */
-  output_import: { fn: 'import_output', required: ['p_output'] },
-  output_decide: { fn: 'decide_output', required: ['p_output', 'p_verdict'] },
-  document_approve: { fn: 'approve_document', required: ['p_document'], by: 'p_by' },
-  document_discard: { fn: 'discard_document', required: ['p_document'], by: 'p_by' },
-  document_rename: { fn: 'rename_document', required: ['p_document', 'p_title'] },
-  document_tag: { fn: 'tag_document', required: ['p_document', 'p_tag'] },
-  collection_put: { fn: 'put_in_collection', required: ['p_document', 'p_collection_name'] },
-  collection_take: {
-    fn: 'take_out_of_collection',
+  output_import: { fn: 'import_output', office: true, required: ['p_output'] },
+  output_decide: { fn: 'decide_output', office: true, required: ['p_output', 'p_verdict'] },
+  document_approve: { fn: 'approve_document', office: true, required: ['p_document'], by: 'p_by' },
+  document_discard: { fn: 'discard_document', office: true, required: ['p_document'], by: 'p_by' },
+  document_rename: { fn: 'rename_document', office: true, required: ['p_document', 'p_title'] },
+  document_tag: { fn: 'tag_document', office: true, required: ['p_document', 'p_tag'] },
+  collection_put: {
+    fn: 'put_in_collection',
+    office: true,
     required: ['p_document', 'p_collection_name'],
   },
-  reference_add: { fn: 'add_project_reference', required: ['p_slug', 'p_url'] },
-  reference_remove: { fn: 'remove_project_reference', required: ['p_reference_id'] },
-  lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
+  collection_take: {
+    fn: 'take_out_of_collection',
+    office: true,
+    required: ['p_document', 'p_collection_name'],
+  },
+  reference_add: { fn: 'add_project_reference', office: true, required: ['p_slug', 'p_url'] },
+  reference_remove: { fn: 'remove_project_reference', office: true, required: ['p_reference_id'] },
+  lesson_retract: { fn: 'retract_lesson', office: true, required: ['p_lesson_id'] },
   /*
     ACCEPT OR DECLINE A DRAFTED STANDING RULE (#147).
 
@@ -1211,7 +1482,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     Accepting is the ONLY path by which a correction becomes a rule. Nothing in
     the answering handler stores one.
   */
-  suggestion_decide: { fn: 'decide_suggestion', required: ['p_suggestion_id', 'p_accept'] },
+  suggestion_decide: {
+    fn: 'decide_suggestion',
+    office: true,
+    required: ['p_suggestion_id', 'p_accept'],
+  },
   /*
     HOW THE STUDIO LOOKS (#124, migration 0400).
 
@@ -1221,8 +1496,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
 
     ADR-0021: localStorage is the cache in front of this and never the record.
   */
-  appearance_set: { fn: 'hq_appearance_set', required: ['p_settings'] },
-  proposal_decide: { fn: 'decide_proposal', required: ['p_proposal_id', 'p_state'] },
+  appearance_set: { fn: 'hq_appearance_set', office: true, required: ['p_settings'] },
+  proposal_decide: { fn: 'decide_proposal', office: true, required: ['p_proposal_id', 'p_state'] },
   /*
     Project Settings (#36, migrations 0323-26).
 
@@ -1240,7 +1515,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     reversible and is what this sheet offers; `app.project_delete` exists for a
     person at a terminal who has read ADR-0014, which is not a button.
   */
-  project_staff: { fn: 'set_project_staff', required: ['p_slug', 'p_staff_slug', 'p_on'] },
+  project_staff: {
+    fn: 'set_project_staff',
+    office: true,
+    required: ['p_slug', 'p_staff_slug', 'p_on'],
+  },
   /*
     `p_instruction` is deliberately NOT required, and it is the only argument in
     this map for which that is true.
@@ -1252,19 +1531,27 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     "no brief sent" and "clear the brief" mean the same thing — which is the
     only reading under which both are true.
   */
-  project_instruction: { fn: 'set_project_instruction', required: ['p_slug', 'p_staff_slug'] },
-  automation_create: { fn: 'create_automation', required: ['p_slug', 'p_instruction'] },
-  automation_set: { fn: 'set_automation', required: ['p_automation', 'p_on'] },
-  automation_remove: { fn: 'remove_automation', required: ['p_automation'] },
-  project_archive: { fn: 'archive_project', required: ['p_slug'] },
-  project_unarchive: { fn: 'unarchive_project', required: ['p_slug'] },
+  project_instruction: {
+    fn: 'set_project_instruction',
+    office: true,
+    required: ['p_slug', 'p_staff_slug'],
+  },
+  automation_create: {
+    fn: 'create_automation',
+    office: true,
+    required: ['p_slug', 'p_instruction'],
+  },
+  automation_set: { fn: 'set_automation', office: true, required: ['p_automation', 'p_on'] },
+  automation_remove: { fn: 'remove_automation', office: true, required: ['p_automation'] },
+  project_archive: { fn: 'archive_project', office: true, required: ['p_slug'] },
+  project_unarchive: { fn: 'unarchive_project', office: true, required: ['p_slug'] },
   /*
     And the two writes it needs (#259). Completing and reopening go through
     `task_state`, which already exists and already does both for either kind of
     task — ADR-0041's "one set of writers".
   */
-  my_task_add: { fn: 'my_task_add', required: ['p_title'] },
-  my_task_set: { fn: 'my_task_set', required: ['p_task_id'] },
+  my_task_add: { fn: 'my_task_add', office: true, required: ['p_title'] },
+  my_task_set: { fn: 'my_task_set', office: true, required: ['p_task_id'] },
   /*
     And the two 0513/0514 added, because a task you cannot remove and a
     relationship you cannot make are both features that exist only in the
@@ -1272,8 +1559,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     boundary is enforced in the function rather than by this list being
     careful.
   */
-  my_task_delete: { fn: 'my_task_delete', required: ['p_task_id'] },
-  my_task_reparent: { fn: 'my_task_reparent', required: ['p_task_id'] },
+  my_task_delete: { fn: 'my_task_delete', office: true, required: ['p_task_id'] },
+  my_task_reparent: { fn: 'my_task_reparent', office: true, required: ['p_task_id'] },
   /*
     Connecting a task provider, and letting it go (#259, Phase 2).
 
@@ -1288,11 +1575,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   */
   vikunja_connect: {
     fn: 'hq_set_vikunja',
+    office: true,
     required: ['p_base_url', 'p_project_id', 'p_api_token'],
     // Connecting the board is the yes to create/update on it, and only a person's connecting counts (0641).
     by: 'p_by',
   },
-  vikunja_forget: { fn: 'hq_forget_vikunja', required: [] },
+  vikunja_forget: { fn: 'hq_forget_vikunja', office: true, required: [] },
 }
 
 /**
@@ -1358,8 +1646,36 @@ const tokenMatches = async (presented: string | null): Promise<boolean> => {
   are cached: a refusal must stay cheap to change.
 */
 const SESSION_TTL_MS = 60_000
+
+/*
+  THE OFFICE THE MACHINE KEY ACTS IN: the test office, and no other. The key names no person (ADR-0054) and no real
+  office (P3), so anything it does through an office-explicit function lands in the office harness traffic belongs to.
+  Resolved from the database, cached for a minute; a database that cannot answer yields no office and the call is refused.
+*/
+let machineOfficeHeld: { until: number; office: string } | null = null
+const machineOffice = async (): Promise<string | null> => {
+  if (machineOfficeHeld !== null && machineOfficeHeld.until > Date.now())
+    return machineOfficeHeld.office
+  const asked = await askUpstream(`${DB_URL}/rest/v1/rpc/resolve_machine_office`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  })
+  if ('unreachable' in asked || !asked.response.ok) return null
+  const r = (await asked.response.json().catch(() => ({}))) as { ok?: boolean; office_id?: string }
+  if (r.ok !== true || typeof r.office_id !== 'string' || r.office_id === '') return null
+  machineOfficeHeld = { until: Date.now() + SESSION_TTL_MS, office: r.office_id }
+  return r.office_id
+}
 /** A verified session, and the owner key of the person it belongs to. */
-const seen = new Map<string, { until: number; owner: string; kind: PrincipalKind }>()
+const seen = new Map<
+  string,
+  { until: number; owner: string; kind: PrincipalKind; office: string }
+>()
 
 const looksLikeSession = (presented: string): boolean =>
   presented.split('.').length === 3 && presented.length > 60
@@ -1382,7 +1698,7 @@ const looksLikeSession = (presented: string): boolean =>
   of a "no". `unknown` grants nothing -- it is answered with 503, which says
   the office could not check rather than that it checked and said no.
 */
-type Verdict = 'yes' | 'no' | 'unknown'
+type Verdict = 'yes' | 'no' | 'unknown' | 'no_office'
 
 /** One request, retried once on a throttle, because a 429 is a wait. */
 const askUpstream = async (
@@ -1427,6 +1743,17 @@ interface Answer {
   readonly principal: string | null
   /** What kind of credential it was, when the verdict is 'yes'. */
   readonly kind: PrincipalKind | null
+  /**
+    The office the VERIFIED LOGIN belongs to (P3). Resolved from the auth user id, never from a request. A session
+    that resolves to no active office is refused ('no_office'); the machine key names none.
+  */
+  readonly office?: string | null
+  /**
+    Set only with 'no_office': the session is a VERIFIED login (confirmed address) that no office member matches, so the
+    person may open an office of their own (self-service account creation). Never set for a member whose office was
+    retired - that is a decision, not a missing step.
+  */
+  readonly canCreate?: boolean
 }
 
 const sessionAllowed = async (presented: string): Promise<Answer> => {
@@ -1436,6 +1763,7 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
       verdict: 'yes',
       principal: cached.owner === '' ? null : cached.owner,
       kind: cached.kind,
+      office: cached.office,
     }
   }
 
@@ -1460,6 +1788,7 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
     }
   }
   const user = (await who.json().catch(() => ({}))) as {
+    id?: string
     email?: string
     email_confirmed_at?: string
   }
@@ -1489,7 +1818,18 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
     owner_key?: string | null
     kind?: string | null
   }[]
-  if (rows[0]?.ok !== true) return { verdict: 'no', principal: null, kind: null }
+  if (rows[0]?.ok !== true) {
+    /*
+      NOT A MEMBER. A stranger whose address Supabase has CONFIRMED is a real login with no office yet, which is
+      answered with a distinct 'no_office' + canCreate (403, so the page keeps the session and offers to create one).
+      An unconfirmed address stays refused. Nothing is cached: only a 'yes' is remembered, so the moment the office
+      exists the next request resolves it.
+    */
+    const confirmed = String(user.email_confirmed_at ?? '').trim() !== ''
+    return confirmed
+      ? { verdict: 'no_office', principal: null, kind: null, canCreate: true }
+      : { verdict: 'no', principal: null, kind: null }
+  }
   const owner = String(rows[0]?.owner_key ?? '').trim()
   // A member with no owner key is admitted to read and is nobody to answer as.
   const principal = owner === '' ? null : owner
@@ -1500,10 +1840,33 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
   */
   const kind: PrincipalKind = rows[0]?.kind === 'person' ? 'person' : 'harness'
 
-  seen.set(presented, { until: Date.now() + SESSION_TTL_MS, owner: principal ?? '', kind })
+  /*
+    THE OFFICE comes from the verified auth user id and from nothing the caller said. No office, a disabled one, or an
+    ambiguous answer is a refusal - never a default, never Grant. A failure to ASK is unknown, not no (0304).
+  */
+  const asked = await askUpstream(`${DB_URL}/rest/v1/rpc/resolve_office`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ p_auth_user_id: String(user.id ?? '') }),
+  })
+  if ('unreachable' in asked || !asked.response.ok)
+    return { verdict: 'unknown', principal: null, kind: null }
+  const resolved = (await asked.response.json().catch(() => ({}))) as {
+    ok?: boolean
+    office_id?: string
+  }
+  if (resolved.ok !== true || typeof resolved.office_id !== 'string' || resolved.office_id === '')
+    return { verdict: 'no_office', principal: null, kind: null }
+  const office = resolved.office_id
+
+  seen.set(presented, { until: Date.now() + SESSION_TTL_MS, owner: principal ?? '', kind, office })
   // Bounded, because this map lives as long as the isolate does.
   if (seen.size > 64) for (const k of [...seen.keys()].slice(0, 32)) seen.delete(k)
-  return { verdict: 'yes', principal, kind }
+  return { verdict: 'yes', principal, kind, office }
 }
 
 /*
@@ -1529,6 +1892,95 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
   the person, hiring, connecting, credentials, uploading material as theirs -
   needs a session.
 */
+/*
+  WHAT ONLY THE DEPLOYMENT'S OPERATOR MAY DO (multi-user P1.3, #400).
+
+  "A person may do everything" was the same thing as "the operator" while the deployment had one human. It
+  is not once it has two: a second signed-in person would reach the first one's settings, the Google and Slack
+  credential forms, connector registration, the roster and the routing table. These actions change what is
+  SHARED by every office, or hold a credential the whole deployment acts through, so they need a person who is
+  also named in `deployment_operators` (0647) - asked of the database by owner key, never inferred from a
+  name, a header, or a field of the request.
+
+  This is not a role system: one set, one question. Everything per-office stays with any person - their
+  projects, tasks, documents, contacts, autonomy dial, standing yeses and lessons - and the test that pins
+  this file (tests/gateway/operator-only.test.ts) refuses an action whose name or function looks like a
+  deployment-wide change but is in neither this set nor the reasoned exceptions beside it.
+
+  A harness member is never an operator (the database says so even if a row were planted), and the machine
+  key is not a person, so Sample and test offices cannot reach any of these by principal-kind confusion.
+*/
+const OPERATOR_ONLY: ReadonlySet<string> = new Set([
+  'set_setting',
+  'set_google_secret',
+  'set_google_credentials',
+  'set_slack_credentials',
+  'forget_google',
+  'disconnect',
+  'vikunja_connect',
+  'vikunja_forget',
+  'register_connector',
+  'revoke_connector',
+  'offer_connector_tool',
+  'routing_set',
+  'bot_assign',
+  'staff_hire',
+  'staff_update',
+  'staff_retire',
+  'staff_tool_set',
+  // approve_tool, decline_tool and revoke_tool are NOT here: a request for reach is raised in ONE office and is
+  // answered by the person that office belongs to. The functions are office-scoped in the database (the request is
+  // matched on `office_id = p_office`, the answerer must be that office's own person, and revoking acts on that
+  // office's grants), so answering carries no deployment authority. The tool switches that govern every office
+  // (`tool_permissions.enabled`) stay the ceiling and are reached only through `set_setting`, which is still here.
+  'drive_link',
+  'google_connect_start',
+])
+
+const operators = new Map<string, number>()
+const OPERATOR_TTL_MS = 60_000
+
+/*
+  The read-only pages that describe the DEPLOYMENT rather than an office. None carries `office: true` because there is
+  nothing to scope them to, so the office boundary never covered them (found by the P4 second-person acceptance).
+  tests/gateway/operator-only.test.ts refuses a section whose function takes no office and which is in neither this set
+  nor the reasoned list beside it.
+*/
+const OPERATOR_SECTIONS: ReadonlySet<string> = new Set([
+  'google',
+  'build',
+  'ci_lately',
+  'ci_budget',
+  'bots',
+])
+
+/*
+  Asked of the database by owner key. Fails CLOSED: a lookup that does not answer is a refusal, and only a
+  positive answer is remembered (for a minute) - a revoked operator must not stay one because a cache said so.
+*/
+const isOperator = async (owner: string): Promise<boolean> => {
+  const held = operators.get(owner)
+  if (held !== undefined && held > Date.now()) return true
+  const asked = await fetch(`${DB_URL}/rest/v1/rpc/deployment_operator`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_owner_key: owner }),
+  }).catch(() => null)
+  if (asked === null || !asked.ok) return false
+  const answer = await asked.json().catch(() => false)
+  if (answer !== true) {
+    operators.delete(owner)
+    return false
+  }
+  operators.set(owner, Date.now() + OPERATOR_TTL_MS)
+  if (operators.size > 64) for (const k of [...operators.keys()].slice(0, 32)) operators.delete(k)
+  return true
+}
+
 const MACHINE_FIXTURE_ONLY: ReadonlySet<string> = new Set([
   'create_project',
   'rename_project',
@@ -1602,6 +2054,130 @@ const json = (body: unknown, status = 200): Response =>
     },
   })
 
+/*
+  AUTHORIZE THE TARGET BEFORE ANYTHING IS WRITTEN (multi-user P1.4, 0650).
+
+  An upload used to build its storage path from the request's own project and contact ids, write the object, and
+  only afterwards ask the database whether either was real. The order is the defect: authenticate, then
+  authorize the DATABASE target, then write the object. `hq_upload_target` answers with the canonical project
+  (read from the row, never from the request) or the SAME refusal for a missing, mismatched or off-limits target.
+  Nothing is written to storage unless it says ok, and the path is built from what it returned.
+*/
+const uploadTarget = async (
+  office: string,
+  uploadKind: 'contact_photo' | 'document_upload',
+  projectId: string,
+  contactId: string | null,
+  by: string | null,
+): Promise<{ projectId: string } | { error: string }> => {
+  const asked = await fetch(`${DB_URL}/rest/v1/rpc/hq_upload_target`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      // The verified office: a target is judged inside it (a foreign project and a missing one are the same refusal).
+      p_office: office,
+      p_kind: uploadKind,
+      p_project_id: projectId,
+      p_contact_id: contactId,
+      p_by: by,
+    }),
+  }).catch(() => null)
+  if (asked === null || !asked.ok) return { error: 'could not check the target' }
+  const answer = (await asked.json().catch(() => ({}))) as {
+    ok?: boolean
+    project_id?: string
+    error?: string
+  }
+  return answer.ok === true && typeof answer.project_id === 'string'
+    ? { projectId: answer.project_id }
+    : { error: String(answer.error ?? 'no such target') }
+}
+
+/*
+  SELF-SERVICE ACCOUNT CREATION. One person, one private office.
+
+  Authority is the VERIFIED SESSION and nothing else: the session is checked with Supabase Auth, the address must be
+  confirmed, and the database function derives the owner key from the auth id. A machine key is not a session and is
+  refused. An id, an email, an owner key or an office in the body is never read. Idempotent in the database (one lock
+  per login), so a repeated or concurrent press returns the same office.
+*/
+const createOffice = async (
+  presented: string,
+  body: Record<string, unknown>,
+): Promise<Response> => {
+  if (presented === '' || !looksLikeSession(presented)) return json({ error: 'unauthorized' }, 401)
+  const asking = await askUpstream(`${DB_URL}/auth/v1/user`, {
+    headers: {
+      apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Authorization: `Bearer ${presented}`,
+    },
+  })
+  const couldNot = (): Response =>
+    json({ error: 'The office could not check who you are just now. Try again in a moment.' }, 503)
+  if ('unreachable' in asking) return couldNot()
+  if (!asking.response.ok) {
+    return asking.response.status === 401 || asking.response.status === 403
+      ? json({ error: 'unauthorized' }, 401)
+      : couldNot()
+  }
+  const user = (await asking.response.json().catch(() => ({}))) as {
+    id?: string
+    email?: string
+    email_confirmed_at?: string
+  }
+  const authId = String(user.id ?? '')
+  const email = String(user.email ?? '')
+    .trim()
+    .toLowerCase()
+  if (authId === '' || email === '') return json({ error: 'unauthorized' }, 401)
+  if (String(user.email_confirmed_at ?? '').trim() === '') {
+    return json(
+      { ok: false, error: 'Please confirm your email address first, then try again.' },
+      403,
+    )
+  }
+  const named = body.name ?? (body.args as Record<string, unknown> | undefined)?.name
+  const name = typeof named === 'string' ? named.slice(0, 400) : ''
+  const made = await askUpstream(`${DB_URL}/rest/v1/rpc/self_provision_office`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ p_auth: authId, p_email: email, p_name: name }),
+  })
+  if ('unreachable' in made || !made.response.ok) {
+    return json(
+      {
+        ok: false,
+        error: 'We could not set up your office just now. Please try again in a moment.',
+      },
+      503,
+    )
+  }
+  const answer = (await made.response.json().catch(() => ({}))) as {
+    ok?: boolean
+    created?: boolean
+    office_id?: string
+    error?: string
+  }
+  if (answer.ok === true && typeof answer.office_id === 'string') {
+    return json({ ok: true, created: answer.created === true, office_id: answer.office_id })
+  }
+  return json(
+    {
+      ok: false,
+      error: typeof answer.error === 'string' ? answer.error : 'We could not set up your office.',
+    },
+    400,
+  )
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return json({ ok: true })
 
@@ -1613,7 +2189,30 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  const { verdict, principal, kind } = await allowed(presented)
+
+  /*
+    THE ONE ROUTE A PERSON WITH NO OFFICE MAY REACH: create_office (self-service account creation).
+    It is answered BEFORE the normal flow because that flow refuses somebody with no office. It takes nothing from the
+    body but a display name: the login, the address and the confirmation come from Supabase's own verification of the
+    session, and the office and owner key are derived in the database from the verified auth id.
+  */
+  if (request.method === 'POST') {
+    const peek = (await request
+      .clone()
+      .json()
+      .catch(() => null)) as Record<string, unknown> | null
+    if (peek !== null && typeof peek === 'object' && peek.action === 'create_office') {
+      return await createOffice(presented, peek)
+    }
+  }
+
+  const { verdict, principal, kind, office: sessionOffice, canCreate } = await allowed(presented)
+  if (verdict === 'no_office') {
+    return json(
+      canCreate === true ? { error: 'no_office', can_create: true } : { error: 'no_office' },
+      403,
+    )
+  }
   if (verdict === 'no') {
     return json({ error: 'unauthorized' }, 401)
   }
@@ -1630,6 +2229,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
       503,
     )
   }
+
+  /*
+    THE OFFICE THIS REQUEST ACTS IN, once, from the verified credential (P3). A signed-in member's is the one their login
+    resolved to; the machine key's is the test office. Nothing in the body, the query or a header can change it.
+  */
+  const office = kind === 'service' ? await machineOffice() : (sessionOffice ?? null)
 
   // --- configuration -------------------------------------------------------
   //
@@ -1697,6 +2302,21 @@ Deno.serve(async (request: Request): Promise<Response> => {
         403,
       )
     }
+    if (OPERATOR_ONLY.has(actionName)) {
+      const operator =
+        kind === 'person' && principal !== null && principal !== '' && (await isOperator(principal))
+      if (!operator) {
+        return json(
+          {
+            error: 'operator_required',
+            message:
+              'This changes something shared by the whole deployment, so only its operator can do it.',
+            action: actionName,
+          },
+          403,
+        )
+      }
+    }
     const args = { ...((body.args ?? {}) as Record<string, unknown>) }
     /*
       WHO IS ANSWERING is the gateway's fact, not the page's claim (0608).
@@ -1707,6 +2327,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (action.by !== undefined) {
       delete args[action.by]
       if (principal !== null && principal !== '') args[action.by] = principal
+    }
+    // The client never supplies an office. Whatever arrived under these names is discarded here; the resolved office is
+    // written only into a function that declares it (P3 wave 2 onward).
+    for (const k of ['p_office', 'office_id', 'owner_key']) delete args[k]
+    if (action.office === true) {
+      if (!office) return json({ error: 'no_office' }, 403)
+      args.p_office = office
     }
     if (action.personBy !== undefined) {
       delete args[action.personBy]
@@ -1739,7 +2366,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           Authorization: `Bearer ${SERVICE_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ p_ref: ref }),
+        body: JSON.stringify({ p_office: office, p_ref: ref }),
       })
         .then((r) => (r.ok ? r.json() : false))
         .catch(() => false)
@@ -1797,6 +2424,25 @@ Deno.serve(async (request: Request): Promise<Response> => {
       if (!/^[0-9a-f-]{36}$/i.test(contactId)) return json({ error: 'which contact?' }, 400)
       if (!/^[0-9a-f-]{36}$/i.test(projectId)) return json({ error: 'which project?' }, 400)
 
+      /*
+        The contact must be this project's, and a test member only reaches a test project. Asked BEFORE the
+        photograph is decoded or stored, and the path below is built from the project the database returns.
+      */
+      if (!office) return json({ error: 'no_office' }, 403)
+      const target = await uploadTarget(
+        office,
+        'contact_photo',
+        projectId,
+        contactId,
+        kind === 'service' ? null : principal,
+      )
+      if ('error' in target) {
+        return json(
+          { error: target.error },
+          target.error === 'could not check the target' ? 503 : 404,
+        )
+      }
+
       /* Removing one is the same action with nothing attached. */
       /*
         Whether the RPC accepted the write. The response below is unchanged
@@ -1821,6 +2467,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
       if (b64 === '') {
         const removed = await callRpc('hq_contact_photo_set', {
+          p_office: office,
           p_contact_id: contactId,
           p_path: null,
         })
@@ -1849,7 +2496,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           .split('/')[1]
           ?.replace(/[^a-z0-9]+/g, '')
           .slice(0, 5) ?? 'jpg'
-      const path = `${projectId}/contacts/${contactId}.${ext}`
+      const path = `${target.projectId}/contacts/${contactId}.${ext}`
       const put = await fetch(`${DB_URL}/storage/v1/object/files/${path}`, {
         method: 'POST',
         headers: {
@@ -1858,13 +2505,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
           'Content-Type': mime,
           'x-upsert': 'true',
         },
-        body: bytes,
+        body: bytes as unknown as BodyInit, // a typed array is a valid body at runtime; newer Deno typings reject the generic form
       })
       if (!put.ok) {
         console.error(`hq-api contact_photo: storage ${String(put.status)}`)
         return json({ error: 'the photograph could not be stored' }, 502)
       }
       const recorded = await callRpc('hq_contact_photo_set', {
+        p_office: office,
         p_contact_id: contactId,
         p_path: path,
       })
@@ -1923,6 +2571,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
         }
       }
 
+      /* Authorized against the database BEFORE the bytes are decoded or stored (0650). */
+      if (!office) return json({ error: 'no_office' }, 403)
+      const target = await uploadTarget(office, 'document_upload', projectId, null, principal)
+      if ('error' in target) {
+        return json(
+          { error: target.error },
+          target.error === 'could not check the target' ? 503 : 404,
+        )
+      }
+
       /*
         Decoded here so the SIZE is the real one. A base64 string is a third
         larger than what it stands for, and refusing on the encoded length
@@ -1965,7 +2623,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '')
         .slice(0, 8)
-      const path = `${projectId}/upload/${crypto.randomUUID()}${ext === '' ? '' : `.${ext}`}`
+      const path = `${target.projectId}/upload/${crypto.randomUUID()}${ext === '' ? '' : `.${ext}`}`
 
       const put = await fetch(`${DB_URL}/storage/v1/object/files/${path}`, {
         method: 'POST',
@@ -1975,7 +2633,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           'Content-Type': mime,
           'x-upsert': 'true',
         },
-        body: bytes,
+        body: bytes as unknown as BodyInit, // a typed array is a valid body at runtime; newer Deno typings reject the generic form
       })
       if (!put.ok) {
         console.error(`hq-api document_upload: storage ${String(put.status)}`)
@@ -1990,6 +2648,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          p_office: office,
           p_project_id: projectId,
           p_title: name.slice(0, 200),
           p_storage_path: path,
@@ -2020,8 +2679,52 @@ Deno.serve(async (request: Request): Promise<Response> => {
         )
         return json({ error: 'the file was stored but could not be filed' }, 502)
       }
+      const filed = (await recorded.json()) as Record<string, unknown>
+      /*
+        A text file is READ here, because here is the only moment the bytes are in hand (#408). Stored with no text, a
+        document can never be found by what it says, and the office told a person it had no budget while holding one.
+        Only types a person writes in: a PDF or an image needs a reader this function does not have, and says so by
+        leaving `content` null rather than inventing an empty string (0207). A failure to index never costs the file:
+        it is stored and filed, which is what was asked.
+      */
+      /*
+        #419: text, Markdown, HTML, Word and PDF are all read (`fileText`); anything else, and a PDF that is a picture of a
+        page, is stored and filed but NOT searchable, and the reply says so rather than leaving the person to find out when
+        a question about it goes unanswered. `searchable` is a fact about this file at this moment, not a promise.
+      */
+      let searchable: { searchable: boolean; why?: string } = {
+        searchable: false,
+        why: 'the file was filed but its text could not be read',
+      }
+      if (typeof filed.document_id === 'string') {
+        try {
+          const read = await fileText(bytes, mime, name)
+          if (read.text === null) {
+            searchable = { searchable: false, why: read.why }
+          } else {
+            const idx = await fetch(`${DB_URL}/rest/v1/rpc/index_file_text`, {
+              method: 'POST',
+              headers: {
+                apikey: SERVICE_KEY,
+                Authorization: `Bearer ${SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                p_office: office,
+                p_document_id: filed.document_id,
+                p_text: read.text,
+              }),
+            })
+            searchable = idx.ok
+              ? { searchable: true }
+              : { searchable: false, why: 'the file was filed but its text could not be stored' }
+          }
+        } catch {
+          console.error(`hq-api document_upload: ${path} was filed but could not be indexed`)
+        }
+      }
       kickWorker()
-      return json({ action: actionName, result: await recorded.json() })
+      return json({ action: actionName, result: { ...filed, ...searchable } })
     }
 
     const done = await fetch(`${DB_URL}/rest/v1/rpc/${action.fn}`, {
@@ -2036,6 +2739,55 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (!done.ok) {
       console.error(`hq-api ${actionName}: upstream ${String(done.status)}`)
       return json({ error: 'the action failed' }, 502)
+    }
+
+    /*
+      Slack, ADR-0065. The database half has answered; the two things only the gateway can do are done here.
+
+      BEGIN: compose Slack's authorise link from the one-time state and the app's public settings. The state reaches ONLY the
+      signed-in person's own browser (inside the link) and is single use.
+
+      DISCONNECT: the database retired everything and handed back the bot token, once, so it can be revoked at Slack. The
+      token is used for that one call and is not in the reply, a log line or an error message.
+    */
+    if (actionName === 'slack_link_begin' || actionName === 'slack_link_disconnect') {
+      const said = (await done.json().catch(() => null)) as Record<string, unknown> | null
+      if (said === null) return json({ error: 'the action failed' }, 502)
+      if (actionName === 'slack_link_begin') {
+        if (said.ok !== true) return json({ action: actionName, result: said })
+        const settings = await fetch(`${DB_URL}/rest/v1/rpc/slack_link_client`, {
+          method: 'POST',
+          headers: {
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: '{}',
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null)
+        const link = authorizeUrl({
+          clientId: String(said.client_id ?? ''),
+          redirectUri: `${DB_URL}/functions/v1/slack-oauth`,
+          state: String(said.state ?? ''),
+          scopes: typeof settings?.scopes === 'string' ? settings.scopes : null,
+        })
+        return json({
+          action: actionName,
+          result: { ok: true, url: link, expires_at: said.expires_at },
+        })
+      }
+      const token = typeof said.bot_token === 'string' ? said.bot_token : ''
+      const revoked = token === '' ? null : await revokeToken(fetch, token)
+      return json({
+        action: actionName,
+        result: {
+          ok: said.ok === true,
+          removed: said.removed ?? 0,
+          revoked_at_slack: revoked,
+          message: said.message,
+        },
+      })
     }
     // After the write succeeded, never before: a kick for an action that was
     // refused would start a pass for work that does not exist.
@@ -2208,12 +2960,184 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const name = url.searchParams.get('section') ?? 'overview'
+  /*
+    THE DEPLOYMENT'S OWN PAGES (P4, second-user acceptance).
+
+    A second real person signed in and read these: `google` (the deployment's single Google connection, shown as
+    connected, with its OAuth client id), `build` (the operator's development feed, with screenshots), `ci_lately` and
+    `ci_budget` (the CI ledger, naming the suites that ran) and `bots` (the deployment's bot handle). None is an office's
+    data - they carry no `office: true` because there is no office to scope them to - which is exactly why an office
+    boundary never covered them. They describe the deployment, so they are the operator's, like Drive (#400) and the
+    deployment-wide actions (E14). The machine key may still read them (it is the deployment's own credential and the
+    suites and the deploy probes use it); a person who is not an operator, and a harness member, may not.
+  */
+  if (OPERATOR_SECTIONS.has(name)) {
+    const mayRead =
+      kind === 'service' ||
+      (kind === 'person' && principal !== null && principal !== '' && (await isOperator(principal)))
+    if (!mayRead) {
+      return json(
+        {
+          error: 'operator_required',
+          message: 'That page describes the deployment itself, so only its operator can read it.',
+          section: name,
+        },
+        403,
+      )
+    }
+  }
   // `Object.hasOwn`, not a bare lookup. `SECTIONS['constructor']` and
   // `SECTIONS['__proto__']` are both truthy through the prototype chain, so a
   // bare `!== undefined` let three inherited names past the guard and on to a
   // fetch of `/rpc/undefined` with the service key. Nothing came back and
   // nothing leaked — but the comment above says "a section not named here does
   // not exist", and until now that was not true.
+  /*
+    PREVIEWING AN EXTERNAL DOCUMENT ON DEMAND (0990). Not an import.
+
+    `document_preview` answers one of five states (ready, loading, failed, unsupported, stale) for a document id; the
+    decisions live in `src/documents/preview.ts`, uploaded beside this file, and the facts in `public.hq_document_preview_plan`.
+    `document_preview_file` streams the bytes of a PDF or an image from Drive to the browser in the response and keeps
+    NOTHING: no Storage write, no path, no URL. Only derived text and the source's version markers are recorded, through
+    `public.hq_document_preview_record`, so agents can search the text.
+
+    The office is the verified session's, never a caller-named one, and the document must belong to it (and to the project
+    the page says it is looking at). Reaching Drive uses the same short-lived token as the browse above, so it is the
+    operator's act until an office holds a Google connection of its own (#400); anyone else gets a plain `failed` that
+    cannot be retried, and still sees what is held for a connected source.
+  */
+  if (name === 'document_preview' || name === 'document_preview_file') {
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const id = url.searchParams.get('id') ?? ''
+    const projectSlug = (url.searchParams.get('project') ?? '').trim()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return json({ error: 'that section needs a valid id', section: name }, 400)
+    }
+    if (projectSlug !== '' && !/^[a-z0-9][a-z0-9-]{0,80}$/i.test(projectSlug)) {
+      return json({ error: 'project must be a project slug', section: name }, 400)
+    }
+    const callPreviewRpc = async (fn: string, body: Record<string, unknown>): Promise<unknown> => {
+      const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+      if (!r.ok) throw new Error(`${fn} ${String(r.status)}`)
+      return await r.json()
+    }
+    let plan: PreviewPlan
+    try {
+      plan = (await callPreviewRpc('hq_document_preview_plan', {
+        p_office: office,
+        p_document_id: id,
+        p_project_slug: projectSlug === '' ? null : projectSlug,
+      })) as PreviewPlan
+    } catch {
+      return json({
+        data: {
+          state: 'failed',
+          reason_code: 'unavailable',
+          reason: 'Team HQ could not look this document up just now. Try again shortly.',
+          retryable: true,
+          alternatives: ['retry'],
+        },
+      })
+    }
+    const providerFor = async () => {
+      if (
+        !(
+          kind === 'person' &&
+          principal !== null &&
+          principal !== '' &&
+          (await isOperator(principal))
+        )
+      ) {
+        return {
+          code: 'operator_required',
+          retryable: false,
+          message:
+            "The Drive connection here is the deployment operator's own, so only they can read from it. Open the source instead.",
+        } satisfies Failure
+      }
+      const access = await googleToken(String(principal), office)
+      if ('error' in access) {
+        return {
+          code: access.error.startsWith('Google is not connected')
+            ? 'not_connected'
+            : 'unauthorised',
+          retryable: false,
+          message: access.error,
+        } satisfies Failure
+      }
+      return driveProvider(access.token)
+    }
+    const extractText = async (bytes: Uint8Array, mime: string, fileName: string) => {
+      const read = await fileText(bytes, mime, fileName)
+      return read.text === null ? { text: null, why: read.why } : { text: read.text }
+    }
+    const record = async (a: {
+      meta: {
+        modifiedTime: string | null
+        mime: string
+        version: string | null
+        size: number | null
+      }
+      kind: 'text' | 'pdf' | 'image'
+      text: string | null
+      truncated: boolean
+    }): Promise<boolean> => {
+      const done = (await callPreviewRpc('hq_document_preview_record', {
+        p_office: office,
+        p_document_id: id,
+        p_meta: {
+          modifiedTime: a.meta.modifiedTime,
+          mime: a.meta.mime,
+          version: a.meta.version,
+          size: a.meta.size,
+        },
+        p_kind: a.kind,
+        p_text: a.text,
+        p_truncated: a.truncated,
+      })) as { ok?: boolean }
+      return done?.ok === true
+    }
+
+    if (name === 'document_preview') {
+      const result = await previewDocument({
+        plan,
+        provider: providerFor,
+        extractText,
+        record,
+        now: Date.now(),
+      })
+      return json({ data: result })
+    }
+
+    const made = await providerFor()
+    if (!('describe' in made)) return json({ error: made.message }, 403)
+    const streamed = await streamDocument({ plan, provider: made, extractText, record })
+    if (!streamed.ok) return json({ error: streamed.failure.message }, streamed.status)
+    const safeName = streamed.name.replace(/[^\w. -]+/g, '_').slice(0, 120) || 'document'
+    return new Response(streamed.bytes as unknown as BodyInit, {
+      status: 200,
+      headers: {
+        'content-type': streamed.mime,
+        'content-length': String(streamed.bytes.byteLength),
+        'content-disposition': `inline; filename="${safeName}"`,
+        // Short-lived by construction: nothing keeps this, and nothing downstream may either.
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; sandbox",
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'authorization, content-type',
+      },
+    })
+  }
+
   /*
     BROWSING GOOGLE DRIVE.
 
@@ -2230,7 +3154,31 @@ Deno.serve(async (request: Request): Promise<Response> => {
     would otherwise break the query it appears in.
   */
   if (name === 'drive') {
-    const access = await googleToken()
+    /*
+      THE DRIVE BEHIND THIS IS THE DEPLOYMENT'S, not the caller's (#400). The refresh token below is one
+      fixed credential, so browsing is the operator's act until an office holds a Google connection of its
+      own: any other member would be browsing the operator's files. A GET section has no per-kind rule of
+      its own, so this one names it.
+    */
+    if (
+      !(
+        kind === 'person' &&
+        principal !== null &&
+        principal !== '' &&
+        (await isOperator(principal))
+      )
+    ) {
+      return json(
+        {
+          error: 'operator_required',
+          message: "Drive here is the deployment operator's own, so only they can browse it.",
+          action: 'drive',
+        },
+        403,
+      )
+    }
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const access = await googleToken(String(principal), office)
     if ('error' in access) return json({ error: access.error }, 502)
     const folder = (url.searchParams.get('folder') ?? '').replace(/['\\]/g, '')
     const q = (url.searchParams.get('q') ?? '').replace(/['\\]/g, '').slice(0, 120)
@@ -2458,6 +3406,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (Object.keys(filters).length > 0) args = { ...args, p_filters: filters }
   }
 
+  if (section.office === true) {
+    if (!office) return json({ error: 'no_office' }, 403)
+    args = { ...args, p_office: office }
+  }
+
   const response = await fetch(`${DB_URL}/rest/v1/rpc/${section.fn}`, {
     method: 'POST',
     headers: {
@@ -2576,6 +3529,24 @@ Deno.serve(async (request: Request): Promise<Response> => {
       }
       row.shot_path = undefined
     }
+  }
+
+  /*
+    What the page may OFFER. The deployment-wide actions (OPERATOR_ONLY) are refused to anybody who is not the
+    operator, and the Settings page used to offer them anyway: a second person saw Approve, Configure and the Slack
+    credential boxes, pressed one and was told it was not theirs to change. Said once, on the one payload Settings
+    reads, from the same fact the refusal uses. It only decides what is DRAWN; the gateway still refuses.
+  */
+  if (
+    name === 'studio_settings' &&
+    data !== null &&
+    typeof data === 'object' &&
+    !Array.isArray(data)
+  ) {
+    const operator =
+      kind === 'service' ||
+      (kind === 'person' && principal !== null && principal !== '' && (await isOperator(principal)))
+    ;(data as Record<string, unknown>).viewer = { operator }
   }
 
   return json({ section: name, data })

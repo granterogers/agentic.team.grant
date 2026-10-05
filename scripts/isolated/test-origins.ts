@@ -48,19 +48,19 @@ const raises = async (sql: string): Promise<string> => {
 }
 
 // Grant's chat is a chat the office knows, as it is in production.
-await db.execute(`insert into public.telegram_chats (chat_id, chat_type, bot_id, subject)
-  values (${lit(CHAT)}, 'private', ${lit(BOT)}, 'grant') on conflict do nothing`)
+await db.execute(`insert into public.telegram_chats (office_id, chat_id, chat_type, bot_id, subject)
+  values (app.operator_office(), ${lit(CHAT)}, 'private', ${lit(BOT)}, 'grant') on conflict do nothing`)
 const REAL_SLACK = 'C0C2DAPDN02'
 const realProject = String(
   jsonOf(
     (
-      await one(`select app.hq_create_project(${lit(`Origin real ${run}`)}, 'upload', ${lit(`origin-real-${run}`)},
+      await one(`select app.hq_create_project(app.test_office(), ${lit(`Origin real ${run}`)}, 'upload', ${lit(`origin-real-${run}`)},
     ${lit(`Origin real ${run}`)}, true) as v`)
     ).v,
   ).project_id,
 )
-await db.execute(`insert into public.slack_workspaces (team_id, team_name, bot_user_id)
-  values ('T0ISOLATED', 'Isolated', 'U0BOTUSER') on conflict do nothing`)
+await db.execute(`insert into public.slack_workspaces (office_id, team_id, team_name, bot_user_id)
+  values (app.test_office(), 'T0ISOLATED', 'Isolated', 'U0BOTUSER') on conflict do nothing`)
 await db.execute(`insert into public.slack_channel_map (project_id, channel_id, team_id, channel_name)
   values (${lit(realProject)}::uuid, ${lit(REAL_SLACK)}, 'T0ISOLATED', ${lit(`origin-real-${run}`)}) on conflict do nothing`)
 
@@ -75,7 +75,20 @@ const pick = (c: Row) => ({
   received_at: c.received_at,
 })
 /** A command row as its door writes it, then enqueued as the door does. */
-const store = async (row: Row, via = db): Promise<{ command: string; job: string | null }> => {
+/** Where a row's door would have placed it: a Slack channel's mapped project (TEST office), anything else the operator's Unnamed. */
+const place = async (r: Row): Promise<Row> => {
+  const slack = r.origin_channel === 'slack'
+  const q = (
+    await db.execute(
+      slack
+        ? `select app.test_office()::text as o, coalesce((select project_id::text from public.slack_channel_map where channel_id = split_part(${lit(String(r.origin_ref))}, ':', 1) limit 1), app.unnamed_project(app.test_office())::text) as p`
+        : `select app.operator_office()::text as o, app.unnamed_project(app.operator_office())::text as p`,
+    )
+  ).rows[0] as Row
+  return { office_id: q.o, project_id: q.p }
+}
+const store = async (r: Row, via = db): Promise<{ command: string; job: string | null }> => {
+  const row = { ...r, ...(await place(r)) }
   const cols = Object.keys(row)
   const on = async (sql: string) => (await via.execute(sql)).rows[0] as Row
   const cmd = await on(`${DOOR}
@@ -124,12 +137,13 @@ const origin = async (job: string) =>
 const claim = async (job: string, key: string, target = CHAT, channel = 'telegram') =>
   one(`select outcome, coalesce((select suppressed_reason from public.deliveries
         where dedupe_key = ${lit(key)}), '') as why
-      from app.claim_delivery(${lit(channel)}, ${lit(key)}, ${lit(BOT)}, ${lit(target)}, 'result',
+      from app.claim_delivery(app.job_office(${lit(job)}::uuid),
+        ${lit(channel)}, ${lit(key)}, ${lit(BOT)}, ${lit(target)}, 'result',
         null, null, null, ${lit(job)}::uuid)`)
 const child = async (parent: string, kind = 'office.synthesise') =>
   String(
     (
-      await one(`select app.enqueue_child(p_parent => ${lit(parent)}::uuid, p_kind => ${lit(kind)},
+      await one(`select app.enqueue_child(p_office => app.job_office(${lit(parent)}::uuid), p_parent => ${lit(parent)}::uuid, p_kind => ${lit(kind)},
         p_payload => '{}'::jsonb)::text as v`)
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] ?? ''
@@ -229,8 +243,8 @@ check(
     actions: [{ action_id: 'feedback.useful', value: JSON.stringify({ a: 'feedback.useful' }) }],
   } as never) as unknown as Row | null
   const row = await one(`${DOOR} insert into public.inbound_commands
-      (origin_channel, origin_ref, actor, instruction, dedupe_key, callback_action, subject)
-    values ('slack', ${lit(String(press?.origin_ref))}, 'U0ZTFIXTURE', '', ${lit(String(press?.dedupe_key))},
+      (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, callback_action, subject)
+    values (app.test_office(), app.unnamed_project(app.test_office()), 'slack',${lit(String(press?.origin_ref))}, 'U0ZTFIXTURE', '', ${lit(String(press?.dedupe_key))},
             ${lit(String(press?.callback_action ?? 'useful'))}, 'grant')
     returning synthetic, dedupe_key as k`)
   check('a button press in a declared channel is synthetic', row.synthetic === true, String(row.k))
@@ -243,7 +257,9 @@ check(
   )
   const rec = await one(`select deliverable, undeliverable_reason as why from public.telegram_chats
     where chat_id = ${lit(chatA)} and bot_id = ${lit(BOT)}`)
-  const pager = await one(`select app.telegram_chat_for('grant', ${lit(BOT)}) as c`)
+  const pager = await one(
+    `select app.telegram_chat_for(app.operator_office(), 'grant', ${lit(BOT)}) as c`,
+  )
   check(
     "a declared chat the webhook records is never where Grant's messages go",
     rec.deliverable === false && pager.c === CHAT,
@@ -251,7 +267,7 @@ check(
   )
   const quietReal = `-5${n()}${n()}`
   await db.execute(
-    `${DOOR} select public.record_telegram_chat(${lit(quietReal)}, 'group', ${lit(BOT)})`,
+    `${DOOR} select public.record_telegram_chat(${lit(quietReal)}, 'group', ${lit(BOT)}, null, null, null, ${lit(CHAT)})`,
   )
   check(
     'control: an undeclared chat is recorded deliverable, as before',
@@ -331,8 +347,9 @@ check(
 const dupKey = String(kt.k)
 check(
   'the same webhook delivered again is still one turn',
-  (await raises(`${DOOR} insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-     values ('telegram', ${lit(`${chatA}:1`)}, '4242', 'dup', ${lit(dupKey)}, 'grant')`)) !== '' &&
+  (await raises(`${DOOR} insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+     values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram',${lit(`${chatA}:1`)}, '4242', 'dup', ${lit(dupKey)}, 'grant')`)) !==
+    '' &&
     Number(
       (
         await one(
@@ -401,7 +418,7 @@ await refusal('a Slack channel that has carried a real turn', 'slack', REAL_SLAC
   const quietProject = String(
     jsonOf(
       (
-        await one(`select app.hq_create_project(${lit(`Origin quiet ${run}`)}, 'upload', ${lit(`origin-quiet-${run}`)},
+        await one(`select app.hq_create_project(app.test_office(), ${lit(`Origin quiet ${run}`)}, 'upload', ${lit(`origin-quiet-${run}`)},
       ${lit(`Origin quiet ${run}`)}, true) as v`)
       ).v,
     ).project_id,
@@ -463,16 +480,25 @@ check(
   const p = String(
     jsonOf(
       (
-        await one(`select app.hq_create_project(${lit(`Origin dash ${run}`)}, 'upload', ${lit(`origin-dash-${run}`)},
-      ${lit(`Origin dash ${run}`)}, true) as v`)
+        await one(`select app.hq_create_project(app.test_office(), ${lit(`fixture origin dash ${run}`)}, 'upload', ${lit(`origin-dash-${run}`)},
+      ${lit(`fixture origin dash ${run}`)}, true) as v`)
       ).v,
     ).project_id,
   )
   await D.declare('teamhq', p)
+  // Grant's own project, in his office: a test principal may not speak in a real one.
+  const grantProject = String(
+    jsonOf(
+      (
+        await one(`select app.hq_create_project(app.operator_office(), ${lit(`Origin grant ${run}`)}, 'upload', ${lit(`origin-grant-${run}`)},
+      ${lit(`Origin grant ${run}`)}, true) as v`)
+      ).v,
+    ).project_id,
+  )
   const said = jsonOf(
     (
       await one(
-        `${DOOR} select app.say_in_project(${lit(p)}::uuid, ${lit(`Dashboard test ${run}`)}) as v`,
+        `${DOOR} select app.say_in_project(app.test_office(), ${lit(p)}::uuid, ${lit(`Dashboard test ${run}`)}) as v`,
       )
     ).v,
   )
@@ -484,7 +510,7 @@ check(
   const other = jsonOf(
     (
       await one(
-        `${DOOR} select app.say_in_project(${lit(realProject)}::uuid, ${lit(`Grant on the dashboard ${run}`)}) as v`,
+        `${DOOR} select app.say_in_project(app.operator_office(), ${lit(grantProject)}::uuid, ${lit(`Grant on the dashboard ${run}`)}) as v`,
       )
     ).v,
   )
@@ -495,20 +521,21 @@ check(
   )
 
   const client = `isolated-381-${run}`
-  await db.execute(`insert into public.mcp_clients (client_id, display_name, token_sha256, scopes)
-    values (${lit(client)}, 'Isolated 381', encode(extensions.digest(${lit(client)}, 'sha256'), 'hex'), array['read','write'])`)
+  await db.execute(`insert into public.mcp_clients (office_id, client_id, display_name, token_sha256, scopes)
+    values (app.test_office(),${lit(client)}, 'Isolated 381', encode(extensions.digest(${lit(client)}, 'sha256'), 'hex'), array['read','write'])`)
   await D.declare('mcp', client)
   const mj =
-    await one(`${DOOR} insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-    values (gen_random_uuid(), ${lit(`mcp381:${run}`)}, 'notebook.generate', ${lit(`mcp:${client}`)})
+    await one(`${DOOR} insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+    values (app.test_office(), gen_random_uuid(), ${lit(`mcp381:${run}`)}, 'notebook.generate', ${lit(`mcp:${client}`)})
     returning job_id::text as id, synthetic`)
   check(
     'an MCP job from a declared client is synthetic and harness',
     mj.synthetic === true && (await origin(String(mj.id))) === 'harness',
     await origin(String(mj.id)),
   )
-  const doc = await one(`insert into public.documents (project_id, title, connector, added_by)
-    values (${lit(realProject)}::uuid, ${lit(`Declared client doc ${run}`)}, 'mcp', ${lit(client)})
+  const doc =
+    await one(`insert into public.documents (office_id, project_id, title, connector, added_by)
+    values (app.test_office(), ${lit(realProject)}::uuid, ${lit(`Declared client doc ${run}`)}, 'mcp', ${lit(client)})
     returning document_id::text as id`)
   check(
     'and a document it added is not the office’s own',

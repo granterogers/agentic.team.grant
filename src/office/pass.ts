@@ -48,6 +48,7 @@ import { briefingHandler } from '../handlers/briefing.ts'
 import { browserGatherHandler } from '../handlers/browser-gather.ts'
 import { buildShotsHandler } from '../handlers/build-shots.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
+import { calendarEventsHandler } from '../handlers/calendar-events.ts'
 import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { channelsHandler } from '../handlers/channels.ts'
@@ -55,6 +56,7 @@ import { choresHandler } from '../handlers/chores.ts'
 import { ciDispatchHandler } from '../handlers/ci-dispatch.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
+import { driveIndexHandler } from '../handlers/drive-index.ts'
 import { driveReadHandler } from '../handlers/drive-read.ts'
 import { extractTasksHandler } from '../handlers/extract-tasks.ts'
 import { googleRevokeHandler } from '../handlers/google-revoke.ts'
@@ -72,18 +74,22 @@ import { pursueHandler } from '../handlers/pursue.ts'
 import { remindersHandler } from '../handlers/reminders.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
+import { styleAdoptHandler } from '../handlers/style-adopt.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
 import { synthesiseHandler } from '../handlers/synthesise.ts'
 import { tasksSyncHandler } from '../handlers/tasks-sync.ts'
 import { vaultExportHandler } from '../handlers/vault-export.ts'
+import { webResearchHandler } from '../handlers/web-research.ts'
 import type { Handler, Reviewer } from '../jobs/worker.ts'
 import { drain } from '../jobs/worker.ts'
 import { HttpNotebookAdapter } from '../notebook/http-adapter.ts'
 import { ProviderRouter } from '../providers/router.ts'
 import { SlackClient } from '../slack/api.ts'
+import { installAwareSlackChannel } from '../slack/installs.ts'
 import { narrateHandoffs, narrateOutcomes } from '../slack/narrate.ts'
 import { slackChannel } from '../slack/notifier.ts'
 import { SlackOffice } from '../slack/office.ts'
+import { avatarBaseUrl } from '../staff/presentation.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { TelegramPager } from '../telegram/pager.ts'
@@ -223,6 +229,8 @@ export const buildPass = async (
   // three of them is three times the latency of one for no reason — and the
   // measurement that prompted this said setup was six seconds of a
   // twenty-second empty pass.
+  // raw-sql[3]: deployment composition root; it reads the Slack app's installation id and deployment secrets to build
+  // clients, before any job is claimed. Nothing read here reaches a prompt or moves between offices.
   const setup = (
     await db.execute(`
       select
@@ -251,6 +259,11 @@ export const buildPass = async (
   const cannotThink = orKey === '' && vaultKey === ''
 
   let slackTeamId = ''
+  // The deployment's own Slack (the operator's workspace), when there is one. Held, not pushed: the channel the worker uses is
+  // the install-aware one below, which serves a person's own workspace with THEIR token and only the operator's office with
+  // this one (ADR-0065).
+  let deploymentSlack: ReturnType<typeof slackChannel> | null = null
+  // raw-sql[3]: deployment composition root; it reads the Slack app's installation to build the client, before any job is claimed.
   const botToken = String(
     (
       await db.execute(
@@ -261,6 +274,7 @@ export const buildPass = async (
   )
   if (botToken !== '') {
     const slack = new SlackClient(botToken)
+    // raw-sql[3]: deployment composition root; the workspace id of the installation read just above.
     const teamId = String(
       (
         await db.execute(
@@ -279,7 +293,7 @@ export const buildPass = async (
       composition root, and a channel that reached the vault itself would be a
       channel that cannot be tested without one.
     */
-    channels.push(slackChannel(db, office, { teamId, projectRef, serviceKey }))
+    deploymentSlack = slackChannel(db, office, { teamId, projectRef, serviceKey })
 
     // Grant: *"create an additional channel in Slack where I see the
     // communications between the Chief of Staff and the rest of the members."*
@@ -301,6 +315,31 @@ export const buildPass = async (
         if (s.outcome === 'sent') log(`floor: outcome ${s.jobId.slice(0, 8)}`)
       }
     }
+  }
+
+  /*
+    Slack, per office (ADR-0065). A person who installed the Slack app into their own workspace is answered with their own
+    bot token, chosen by the delivering job's office in SQL; an office with no install is never served by the operator's
+    token. Built even when the deployment has no Slack of its own, because a personal workspace does not need one.
+  */
+  {
+    const avatarBase = await avatarBaseUrl(db)
+    channels.push(
+      installAwareSlackChannel({
+        db,
+        deployment: deploymentSlack,
+        make: ({ teamId, token }) =>
+          slackChannel(
+            db,
+            new SlackOffice(db, new SlackClient(token), { avatarBaseUrl: avatarBase }),
+            {
+              teamId,
+              projectRef,
+              serviceKey,
+            },
+          ),
+      }),
+    )
   }
 
   const pager = await pagerBot(db)
@@ -334,7 +373,7 @@ export const buildPass = async (
       if (existing !== undefined) return existing
       const made = new TelegramPager(db, new TelegramClient(bot.token), {
         botId: bot.botId,
-        subject: 'grant',
+        // No subject named: the pager asks for the CLAIMED job's own office's person, not for a literal 'grant'.
       })
       pagers.set(bot.botId, made)
       return made
@@ -376,6 +415,8 @@ export const buildPass = async (
     // #96. The other half of what drive.watch asks about: "Add them to the
     // project as source documents" was an option nothing implemented.
     driveReadHandler({ db, projectRef, serviceKey }),
+    // HQ-DOC-026. Reads connected Drive documents in the background and keeps only derived text; never imports.
+    driveIndexHandler({ db }),
     collectHandler({ db, projectRef, serviceKey }),
     calendarHandler(db),
     /*
@@ -388,9 +429,13 @@ export const buildPass = async (
       and the parked token would sit there with no job that can reach it.
     */
     googleRevokeHandler(db),
+    // HQ-STYLE-018. The performance of a yes to "replace the project style"; only ever enqueued by that answer.
+    styleAdoptHandler(db),
     // The other direction: dated tasks into the diary (#94, ADR-0020). Off
     // until `calendar.sync_tasks` is turned on.
     calendarTasksHandler(db),
+    // Project calendars both ways: a project's own events to Google, and Google's edits back (0897).
+    calendarEventsHandler(db),
     jobTracesHandler(db),
     /*
       #21. The build diary pruned its rows and kept its pictures — 38 orphans
@@ -407,6 +452,11 @@ export const buildPass = async (
       outage.
     */
     browserGatherHandler({ db, projectRef, serviceKey }),
+    /*
+      Searching the open web and keeping what is useful as project sources (web research). Reads only; it shares the
+      browser tier's budget, ledger and no-acting boundary, and refuses a harness job before anything leaves.
+    */
+    webResearchHandler({ db, projectRef, serviceKey }),
     /*
       Running a workflow on demand, under the month's minute ceiling (#17).
 

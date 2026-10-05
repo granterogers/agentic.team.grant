@@ -84,8 +84,9 @@ async function setUp(): Promise<void> {
   projectId = String(
     (
       await one(`
-        insert into public.projects (name, slug, status)
-        values ('Probe waiting ${run}', ${lit(slug)}, 'paused')
+        insert into public.projects (office_id, name, slug, status)
+        -- A real-looking subject on purpose (#45): the old bridge put it in Grant's office, so the operator office.
+        values (app.test_office(), 'Probe waiting ${run}', ${lit(slug)}, 'paused')
         returning project_id
       `)
     ).project_id,
@@ -94,8 +95,9 @@ async function setUp(): Promise<void> {
     (
       await one(`
         insert into public.jobs
-          (project_id, correlation_id, kind, requested_by, idempotency_key, state)
-        values (${lit(projectId)}::uuid, extensions.gen_random_uuid(),
+          (office_id, project_id, correlation_id, kind, requested_by, idempotency_key, state)
+        values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+                ${lit(projectId)}::uuid, extensions.gen_random_uuid(),
                 'research.summarise', 'grant', 'waiting-probe-${run}', 'waiting_user')
         returning job_id
       `)
@@ -105,9 +107,10 @@ async function setUp(): Promise<void> {
     (
       await one(`
         insert into public.blockers
-          (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+          (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
            approval_options, originating_agent, work_can_continue, state)
-        values (${lit(projectId)}::uuid, ${lit(jobId)}::uuid,
+        values ((select office_id from public.projects where project_id = ${lit(projectId)}::uuid),
+                ${lit(projectId)}::uuid, ${lit(jobId)}::uuid,
                 'Probe: may the team read the shared folder?',
                 'It is the only place the source material is.',
                 'Nothing happens until you answer.',
@@ -206,7 +209,7 @@ try {
 
   const refused = (
     await one(
-      `select public.hq_answer_blocker(${lit(blockerId)}::uuid, 'Whatever I like', 'grant') as r`,
+      `select public.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(blockerId)}::uuid), app.test_office()), ${lit(blockerId)}::uuid, 'Whatever I like', 'grant') as r`,
     )
   ).r as { error?: string }
   check(
@@ -229,12 +232,16 @@ try {
   check('and it changed nothing', `state=${stillOpen}`, stillOpen === 'open')
 
   const blank = (
-    await one(`select public.hq_answer_blocker(${lit(blockerId)}::uuid, '  ', 'grant') as r`)
+    await one(
+      `select public.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(blockerId)}::uuid), app.test_office()), ${lit(blockerId)}::uuid, '  ', 'grant') as r`,
+    )
   ).r as { error?: string }
   check('so is an empty one', blank.error ?? '(accepted)', blank.error !== undefined)
 
   const done = (
-    await one(`select public.hq_answer_blocker(${lit(blockerId)}::uuid, 'Not now', 'grant') as r`)
+    await one(
+      `select public.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(blockerId)}::uuid), app.test_office()), ${lit(blockerId)}::uuid, 'Not now', 'grant') as r`,
+    )
   ).r as { ok?: boolean }
   check('one it did offer is taken', JSON.stringify(done), done.ok === true)
 
@@ -260,7 +267,9 @@ try {
   )
 
   const again = (
-    await one(`select public.hq_answer_blocker(${lit(blockerId)}::uuid, 'Go ahead', 'grant') as r`)
+    await one(
+      `select public.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(blockerId)}::uuid), app.test_office()), ${lit(blockerId)}::uuid, 'Go ahead', 'grant') as r`,
+    )
   ).r as { already?: boolean; resolution?: string }
   check(
     'answering it twice says what it was answered with, rather than erroring',
@@ -269,14 +278,16 @@ try {
   )
 
   const gone = (
-    await one(`select public.hq_answer_blocker(${lit(blockerId)}::uuid, 'x', 'grant') as r`)
+    await one(
+      `select public.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(blockerId)}::uuid), app.test_office()), ${lit(blockerId)}::uuid, 'x', 'grant') as r`,
+    )
   ).r
   check('a bad answer to a closed one is still not applied', JSON.stringify(gone), true)
 
   let threw = false
   try {
     await db.execute(
-      `select public.hq_answer_blocker('11111111-1111-4111-8111-111111111111'::uuid, 'yes', 'grant') as r`,
+      `select public.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '11111111-1111-4111-8111-111111111111'::uuid), app.test_office()), '11111111-1111-4111-8111-111111111111'::uuid, 'yes', 'grant') as r`,
     )
   } catch (error) {
     threw = error instanceof SqlExecutionError
@@ -285,7 +296,7 @@ try {
     ? { error: 'raised' }
     : ((
         await one(
-          `select public.hq_answer_blocker('11111111-1111-4111-8111-111111111111'::uuid, 'yes', 'grant') as r`,
+          `select public.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '11111111-1111-4111-8111-111111111111'::uuid), app.test_office()), '11111111-1111-4111-8111-111111111111'::uuid, 'yes', 'grant') as r`,
         )
       ).r as { error?: string })
   check(
@@ -298,7 +309,7 @@ try {
   console.log('\nand it is where the work is')
 
   const studio = (
-    (await db.execute('select app.hq_studio() as d')).rows[0] as {
+    (await db.execute('select app.hq_studio(app.operator_office()) as d')).rows[0] as {
       d: { projects: { slug: string; name: string; layout: unknown; waiting: unknown }[] }
     }
   ).d

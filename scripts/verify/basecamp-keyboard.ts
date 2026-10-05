@@ -12,6 +12,7 @@
  * keyboard-only journey at the end is the check that matters, because it is
  * the only one that fails when the parts work and the whole does not.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

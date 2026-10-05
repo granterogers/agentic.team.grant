@@ -8,6 +8,7 @@
  * moved on to a row per service. A function nobody can redeploy from the
  * repository is a function that drifts from the code describing it.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -27,7 +28,8 @@ form.append(
     entrypoint_path: 'index.ts',
     // No JWT: Google sends the browser here with a code, and a browser
     // following a redirect carries no bearer token. The authorisation is the
-    // one-time code plus the client secret, which never leaves the vault.
+    // one-time STATE the office minted for a signed-in operator (0648), which
+    // the callback consumes before it exchanges anything.
     verify_jwt: false,
   }),
 )

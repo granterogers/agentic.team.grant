@@ -45,7 +45,7 @@ const question = async () => {
   const id = String(
     (
       await one(
-        `select app.request_generation_approval(${lit(job)}::uuid, 'notebook.generate', ${lit(`a deck ${run}`)}, 'proof') as id`,
+        `select app.request_generation_approval(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid, 'notebook.generate', ${lit(`a deck ${run}`)}, 'proof') as id`,
       )
     ).id,
   )
@@ -77,7 +77,11 @@ for (const [label, by] of [
 ] as const) {
   const q = await question()
   const r = json(
-    (await one(`select app.hq_answer_blocker(${lit(q.id)}::uuid, 'Go ahead', ${by}) as r`)).r,
+    (
+      await one(
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q.id)}::uuid), app.test_office()), ${lit(q.id)}::uuid, 'Go ahead', ${by}) as r`,
+      )
+    ).r,
   )
   check(
     `hq_answer_blocker: ${label} is refused, and it says so`,
@@ -103,7 +107,11 @@ check(
 {
   const q = await question()
   const r = json(
-    (await one(`select app.hq_answer_blocker(${lit(q.id)}::uuid, 'Go ahead', 'grant') as r`)).r,
+    (
+      await one(
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q.id)}::uuid), app.test_office()), ${lit(q.id)}::uuid, 'Go ahead', 'grant') as r`,
+      )
+    ).r,
   )
   check(
     'hq_answer_blocker: Grant is accepted',
@@ -116,7 +124,11 @@ check(
     await approvedBy(q.job),
   )
   const again = json(
-    (await one(`select app.hq_answer_blocker(${lit(q.id)}::uuid, 'Go ahead', 'grant') as r`)).r,
+    (
+      await one(
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(q.id)}::uuid), app.test_office()), ${lit(q.id)}::uuid, 'Go ahead', 'grant') as r`,
+      )
+    ).r,
   )
   check(
     'a second answer is harmless (already answered, one child)',
@@ -128,9 +140,9 @@ check(
 // ---- a standing authorization is never granted on an anonymous answer ------------
 {
   const job = await realParent(db)
-  await db.execute(`insert into public.blockers (job_id, project_id, requested_action, why_needed, consequences_of_delay,
+  await db.execute(`insert into public.blockers (office_id, job_id, project_id, requested_action, why_needed, consequences_of_delay,
       approval_options, originating_agent, work_can_continue, standing_tool, standing_option)
-    select ${lit(job)}::uuid, j.project_id, ${lit(`Stand ${run}`)}, 'proof', 'proof',
+    select j.office_id, ${lit(job)}::uuid, j.project_id, ${lit(`Stand ${run}`)}, 'proof', 'proof',
            array['Yes, once', 'Yes, and do not ask again', 'No'], 'chief-of-staff', true, 'calendar.write', 'Yes, and do not ask again'
       from public.jobs j where j.job_id = ${lit(job)}::uuid`)
   const bid = String(
@@ -144,7 +156,7 @@ check(
   const refused = json(
     (
       await one(
-        `select app.hq_answer_blocker(${lit(bid)}::uuid, 'Yes, and do not ask again', 'mallory') as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(bid)}::uuid), app.test_office()), ${lit(bid)}::uuid, 'Yes, and do not ask again', 'mallory') as r`,
       )
     ).r,
   )
@@ -158,7 +170,7 @@ check(
   const ok = json(
     (
       await one(
-        `select app.hq_answer_blocker(${lit(bid)}::uuid, 'Yes, and do not ask again', 'grant') as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(bid)}::uuid), app.test_office()), ${lit(bid)}::uuid, 'Yes, and do not ask again', 'grant') as r`,
       )
     ).r,
   )
@@ -173,9 +185,9 @@ check(
   // A plain question, answered by a different known person: the row must say THEM.
   {
     const j2 = await realParent(db)
-    await db.execute(`insert into public.blockers (job_id, project_id, requested_action, why_needed, consequences_of_delay,
+    await db.execute(`insert into public.blockers (office_id, job_id, project_id, requested_action, why_needed, consequences_of_delay,
         approval_options, originating_agent, work_can_continue)
-      select ${lit(j2)}::uuid, j.project_id, ${lit(`Plain ${run}`)}, 'proof', 'proof', array['Yes','No'], 'chief-of-staff', true
+      select j.office_id, ${lit(j2)}::uuid, j.project_id, ${lit(`Plain ${run}`)}, 'proof', 'proof', array['Yes','No'], 'chief-of-staff', true
         from public.jobs j where j.job_id = ${lit(j2)}::uuid`)
     const pb = String(
       (
@@ -184,7 +196,9 @@ check(
         )
       ).id,
     )
-    await one(`select app.hq_answer_blocker(${lit(pb)}::uuid, 'Yes', 'second') as r`)
+    await one(
+      `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(pb)}::uuid), app.test_office()), ${lit(pb)}::uuid, 'Yes', 'second') as r`,
+    )
     const res = await one(
       `select resolution from public.blockers where blocker_id = ${lit(pb)}::uuid`,
     )
@@ -206,10 +220,14 @@ check(
 
 // ---- the gateway's other answers to questions of authority -------------------------
 for (const [fn, args] of [
-  ['hq_approve_tool', `'00000000-0000-0000-0000-000000000000'::uuid, null`],
-  ['hq_decline_tool', `'00000000-0000-0000-0000-000000000000'::uuid, 'no'`],
-  ['hq_grant_standing', `'calendar.write', 'proof'`],
-  ['hq_revoke_standing', `'00000000-0000-0000-0000-000000000000'::uuid, 'proof'`],
+  // every one takes the office first (the office model); the question is only who is deciding
+  ['hq_approve_tool', `app.operator_office(), '00000000-0000-0000-0000-000000000000'::uuid, null`],
+  ['hq_decline_tool', `app.operator_office(), '00000000-0000-0000-0000-000000000000'::uuid, 'no'`],
+  ['hq_grant_standing', `app.operator_office(), 'calendar.write', 'proof'`],
+  [
+    'hq_revoke_standing',
+    `app.operator_office(), '00000000-0000-0000-0000-000000000000'::uuid, 'proof'`,
+  ],
 ] as const) {
   const none = json((await one(`select public.${fn}(${args}) as r`)).r)
   const unknown = json((await one(`select public.${fn}(${args}, p_by => 'mallory') as r`)).r)
@@ -275,10 +293,15 @@ const act = async (bearer: string, action: string, args: Record<string, unknown>
     p_answer: 'Go ahead',
     p_by: 'grant',
   })
+  // The office model: a second PERSON has their OWN office, so they are not a second approver in Grant's. Their session
+  // cannot answer Grant's question, and nothing is recorded as them or as him, whatever p_by the page claimed.
   check(
-    'gateway, a member session: recorded as THAT member, whatever the page claimed',
-    viaSecond.status === 200 && (await approvedBy(q2.job)) === 'second',
-    `approved_by ${await approvedBy(q2.job)}`,
+    "gateway, a second person's session cannot answer a question in Grant's office, and nothing is recorded as anybody",
+    (await stateOf(q2.id)) === 'open' &&
+      (await childrenOf(q2.job)) === 0 &&
+      (await approvedBy(q2.job)) !== 'second' &&
+      (await approvedBy(q2.job)) !== 'grant',
+    `status ${viaSecond.status}; state ${await stateOf(q2.id)}; approved_by ${await approvedBy(q2.job)}`,
   )
   const q3 = await question()
   const viaGrantSession = await act(SESSION_GRANT, 'answer_blocker', {
@@ -298,7 +321,8 @@ const act = async (bearer: string, action: string, args: Record<string, unknown>
   })
   check(
     'gateway, a valid session that is not a member: refused before anything is answered',
-    viaStranger.status === 401 &&
+    // 401 (no usable session) or 403 (a session for somebody the office does not work for): refused either way
+    (viaStranger.status === 401 || viaStranger.status === 403) &&
       (await stateOf(q4.id)) === 'open' &&
       (await childrenOf(q4.job)) === 0,
     `status ${viaStranger.status}`,
@@ -313,7 +337,7 @@ const act = async (bearer: string, action: string, args: Record<string, unknown>
   await act(SESSION_GRANT, 'answer_blocker', { p_blocker_id: q5.id, p_answer: 'Go ahead' })
   const race = await Promise.all([
     act(SESSION_GRANT, 'answer_blocker', { p_blocker_id: q5.id, p_answer: 'Go ahead' }),
-    act(SESSION_SECOND, 'answer_blocker', { p_blocker_id: q5.id, p_answer: 'Go ahead' }),
+    act(SESSION_GRANT, 'answer_blocker', { p_blocker_id: q5.id, p_answer: 'Go ahead' }),
   ])
   check(
     'gateway, duplicate answers after the first: harmless, still one child',
@@ -323,13 +347,13 @@ const act = async (bearer: string, action: string, args: Record<string, unknown>
   const q6 = await question()
   const raceOpen = await Promise.all([
     act(SESSION_GRANT, 'answer_blocker', { p_blocker_id: q6.id, p_answer: 'Go ahead' }),
-    act(SESSION_SECOND, 'answer_blocker', { p_blocker_id: q6.id, p_answer: 'Go ahead' }),
+    act(SESSION_GRANT, 'answer_blocker', { p_blocker_id: q6.id, p_answer: 'Go ahead' }),
   ])
   check(
-    'gateway, two people answering one open question at once: one child, one recorded approver',
+    'gateway, two answers to one open question at once: one child, one recorded approver',
     raceOpen.every((r) => r.status === 200) &&
       (await childrenOf(q6.job)) === 1 &&
-      ['grant', 'second'].includes(await approvedBy(q6.job)),
+      (await approvedBy(q6.job)) === 'grant',
     `approved_by ${await approvedBy(q6.job)}`,
   )
 }
@@ -346,8 +370,8 @@ const planQuestion = async (options: string[], declineOption: string | null) => 
   const job = await realParent(db)
   const id = String(
     (
-      await one(`insert into public.blockers (job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
-        values (${lit(job)}::uuid, ${lit(`Plan step ${run}`)}, 'proof', 'Nothing happens until somebody answers this question.',
+      await one(`insert into public.blockers (office_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+        values ((select office_id from public.jobs where job_id = ${lit(job)}::uuid), ${lit(job)}::uuid, ${lit(`Plan step ${run}`)}, 'proof', 'Nothing happens until somebody answers this question.',
           array[${options.map(lit).join(',')}], 'chief-of-staff', false, ${declineOption === null ? 'null' : lit(declineOption)})
         returning blocker_id::text as id`)
     ).id,
@@ -363,11 +387,11 @@ const buttonCase = async (
 ) => {
   const q = await make()
   msg += 1
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at)
-    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q.job)}::uuid, ${lit(q.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at, office_id)
+    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q.job)}::uuid, ${lit(q.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc(), app.operator_office())`)
   await db.execute(`set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
-    values ('telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(actor)}, '', ${lit(`telegram:callback:${run}${msg}:${actor}`)}, ${subject === null ? 'null' : lit(subject)}, ${lit(action)})`)
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(actor)}, '', ${lit(`telegram:callback:${run}${msg}:${actor}`)}, ${subject === null ? 'null' : lit(subject)}, ${lit(action)})`)
   const done = await processCallbacks(db)
   return { q, done: done.find((d) => d.action === action), label }
 }
@@ -464,18 +488,18 @@ const buttonCase = async (
       `select state::text as s, answered_option as o from public.blockers where blocker_id = ${lit(id)}::uuid`,
     )
   const secondQuestion = (job: string) =>
-    one(`insert into public.blockers (job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
-      values (${lit(job)}::uuid, ${lit(`Second question ${run}`)}, 'proof', 'Nothing happens until somebody answers this question.',
+    one(`insert into public.blockers (office_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+      values ((select office_id from public.jobs where job_id = ${lit(job)}::uuid), ${lit(job)}::uuid, ${lit(`Second question ${run}`)}, 'proof', 'Nothing happens until somebody answers this question.',
         array['Yes, do it','No, leave it'], 'chief-of-staff', false, 'No, leave it') returning blocker_id::text as id`)
   // 1. The first message's button is pressed AFTER a second question was raised on the same job.
   const q1 = await planQuestion(['Yes, do it', 'No, leave it'], 'No, leave it')
   msg += 1
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at)
-    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q1.job)}::uuid, ${lit(q1.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at, office_id)
+    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(q1.job)}::uuid, ${lit(q1.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc(), app.operator_office())`)
   const q2 = String((await secondQuestion(q1.job)).id)
   await db.execute(`set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
-    values ('telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(CHAT)}, '', ${lit(`telegram:callback:${run}${msg}:s1`)}, 'grant', 'approve')`)
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(CHAT)}, '', ${lit(`telegram:callback:${run}${msg}:s1`)}, 'grant', 'approve')`)
   const p1 = (await processCallbacks(db)).find((d) => d.action === 'approve')
   check(
     'button: an Approve on the FIRST message answers the first question and leaves a newer one untouched',
@@ -487,13 +511,15 @@ const buttonCase = async (
   // 2. The first question was answered some other way; the same stale button must not reach the second.
   const r1 = await planQuestion(['Yes, do it', 'No, leave it'], 'No, leave it')
   msg += 1
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at)
-    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(r1.job)}::uuid, ${lit(r1.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc())`)
-  await db.execute(`select app.hq_answer_blocker(${lit(r1.id)}::uuid, 'No, leave it', 'grant')`)
+  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, blocker_id, purpose, state, message_ref, sent_at, lease_expires_at, office_id)
+    values ('telegram', ${lit(`b2:${run}:${msg}`)}, ${lit(BOT)}, ${lit(CHAT)}, ${lit(r1.job)}::uuid, ${lit(r1.id)}::uuid, 'result', 'sent', ${lit(String(msg))}, app.now_utc(), app.now_utc(), app.operator_office())`)
+  await db.execute(
+    `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(r1.id)}::uuid), app.test_office()), ${lit(r1.id)}::uuid, 'No, leave it', 'grant')`,
+  )
   const r2 = String((await secondQuestion(r1.job)).id)
   await db.execute(`set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
-    values ('telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(CHAT)}, '', ${lit(`telegram:callback:${run}${msg}:s2`)}, 'grant', 'approve')`)
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, callback_action)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(CHAT)}, '', ${lit(`telegram:callback:${run}${msg}:s2`)}, 'grant', 'approve')`)
   const p2 = (await processCallbacks(db)).find((d) => d.action === 'approve')
   check(
     'button: a stale Approve after the question was answered says so, and does NOT approve the newer question',

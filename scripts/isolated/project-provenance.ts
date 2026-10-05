@@ -31,13 +31,13 @@ const project = async (name: string): Promise<string> =>
   String(
     (
       await one(
-        `select app.hq_create_project(${lit(name)}, 'notion', ${lit(`prov-${name}`)}, ${lit(name)}, true) ->> 'project_id' as id`,
+        `select app.hq_create_project(app.test_office(), ${lit(name)}, 'notion', ${lit(`prov-${name}`)}, ${lit(name)}, true) ->> 'project_id' as id`,
       )
     ).id,
   )
 const A = await project(`Provenance A ${run}`)
 const B = await project(`Provenance B ${run}`)
-const UNNAMED = String((await one(`select app.unnamed_project()::text as id`)).id)
+const UNNAMED = String((await one(`select app.unnamed_project(app.test_office())::text as id`)).id)
 
 const door = await startDoor(db)
 /* A page visit: one session, as chat.js mints it. */
@@ -110,7 +110,9 @@ const name = (id: unknown) =>
     seq.map((x) => name(x.project)).join(' '),
   )
   const before = (
-    await one(`select app.conversation_before(${lit(String(seq[2]?.command))}::uuid)::text as t`)
+    await one(
+      `select app.conversation_before((select office.office_id from public.inbound_commands office where office.command_id = ${lit(String(seq[2]?.command))}::uuid), ${lit(String(seq[2]?.command))}::uuid)::text as t`,
+    )
   ).t
   const said = (JSON.parse(String(before)) as { said: string }[]).map((t) => t.said)
   check(
@@ -217,7 +219,7 @@ const name = (id: unknown) =>
   )
   /* Two statements: a row a function inserts is invisible to the rest of its own statement. */
   const kid = await one(
-    `select app.enqueue_child(${lit(String(a.job))}::uuid, 'office.instruction', '{}'::jsonb, interval '0', false)::text as id`,
+    `select app.enqueue_child(app.job_office(${lit(String(a.job))}::uuid), ${lit(String(a.job))}::uuid, 'office.instruction', '{}'::jsonb, interval '0', false)::text as id`,
   )
   const child = await one(
     `select project_id::text as p from public.jobs where job_id = ${lit(String(kid.id))}::uuid`,
@@ -238,10 +240,18 @@ const name = (id: unknown) =>
   await db.execute(`insert into public.outputs (job_id, body, confidence, evidence, sources, deterministic)
     values (${lit(String(a.job))}::uuid, ${lit(`The answer for A ${run}`)}, 'high', 'verified', '["db:test"]'::jsonb, true)`)
   const inA = String(
-    (await one(`select public.conversation_history(${lit(A)}::uuid, 50, null)::text as t`)).t,
+    (
+      await one(
+        `select public.conversation_history(app.test_office(), ${lit(A)}::uuid, 50, null)::text as t`,
+      )
+    ).t,
   )
   const inB = String(
-    (await one(`select public.conversation_history(${lit(B)}::uuid, 50, null)::text as t`)).t,
+    (
+      await one(
+        `select public.conversation_history(app.test_office(), ${lit(B)}::uuid, 50, null)::text as t`,
+      )
+    ).t,
   )
   check(
     "9. A's answer is in A's conversation",

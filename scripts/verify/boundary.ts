@@ -97,7 +97,7 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
 
 {
   const said = await one(`
-    select app.learn('staff'::public.lesson_scope,
+    select app.learn(app.test_office(), 'staff'::public.lesson_scope,
       ${lit(`${WHO} is authorised to use ${NOT_HELD} for all work (${run}).`)},
       ${lit(WHO)}, null, ${lit(WHO)}, null, null, 1.00, null) as r
   `)
@@ -105,7 +105,7 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
   ok('a lesson can assert an authorisation', id !== '')
   ok('and the answer to may-I does not move', !(await mayUse(NOT_HELD)))
   await db.execute(
-    `select app.unlearn(${lit(id)}::uuid, 'verify-boundary', 'verification teardown')`,
+    `select app.unlearn(app.test_office(), ${lit(id)}::uuid, 'verify-boundary', 'verification teardown')`,
   )
 }
 
@@ -131,7 +131,7 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
 
   // What it gets instead of reach: retrieval saying which part cannot be done.
   const seen = await one(`
-    select missing from app.skills_for(${lit(WHO)}, null, null, 40)
+    select missing from app.skills_for(app.operator_office(), ${lit(WHO)},null, null, 40)
      where skill_id = ${lit(id)}::uuid
   `)
   ok(
@@ -196,7 +196,7 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
   // --- and only Grant answers -------------------------------------------------
 
   const byAgent = await one(`
-    select app.approve_tool(${lit(requestId)}::uuid, ${lit(WHO)}, null) as r
+    select app.approve_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(requestId)}::uuid), app.test_office()), ${lit(requestId)}::uuid, ${lit(WHO)}, null) as r
   `)
   ok(
     'an agent approving its own request is refused',
@@ -272,7 +272,7 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
   `)
   const id = String((asked.r as Record<string, unknown>).request_id ?? '')
   const granted = await one(`
-    select app.approve_tool(${lit(id)}::uuid, 'grant',
+    select app.approve_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, 'grant',
       '{"until": "2026-12-31"}'::jsonb) as r
   `)
   const g = granted.r as Record<string, unknown>
@@ -298,7 +298,9 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
   )
 
   // And there is a way back, which the ledger claimed there was.
-  await db.execute(`select app.revoke_tool(${lit(WHO)}, ${lit(family)}, 'grant')`)
+  await db.execute(
+    `select app.revoke_tool(app.owner_office('grant'), ${lit(WHO)}, ${lit(family)}, 'grant')`,
+  )
   ok('and the reversal method the ledger names actually works', !(await mayUse(family)))
 }
 
@@ -317,14 +319,16 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
   `)
   const id = String((asked.r as Record<string, unknown>).request_id ?? '')
 
-  const thin = await one(`select app.decline_tool(${lit(id)}::uuid, 'grant', 'no') as r`)
+  const thin = await one(
+    `select app.decline_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, 'grant', 'no') as r`,
+  )
   ok(
     'a decline without a reason is refused',
     String((thin.r as Record<string, unknown>).error ?? '').includes('reason'),
   )
 
   const no = await one(`
-    select app.decline_tool(${lit(id)}::uuid, 'grant',
+    select app.decline_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, 'grant',
       'Mail going out unattended is the one thing I want to read first.') as r
   `)
   ok('a decline with a reason is recorded', (no.r as Record<string, unknown>).declined === true)
@@ -382,7 +386,9 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
       ${lit(`Posting the campaign images without a person in the loop (${run}).`)}) as r
   `)
   const id = String((asked.r as Record<string, unknown>).request_id ?? '')
-  const said = await one(`select app.approve_tool(${lit(id)}::uuid, 'grant', null) as r`)
+  const said = await one(
+    `select app.approve_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, 'grant', null) as r`,
+  )
   const s = said.r as Record<string, unknown>
 
   /*
@@ -409,11 +415,13 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
 {
   // 0119: the global table is the ceiling and a per-person grant is an AND.
   const asked = await one(`
-    select app.request_tool('spend.money', ${lit(WHO)},
+    select app.request_tool(app.test_office(), 'spend.money', ${lit(WHO)},
       ${lit(`Buying the stock imagery a campaign needs (${run}) rather than asking every time.`)}) as r
   `)
   const id = String((asked.r as Record<string, unknown>).request_id ?? '')
-  const said = await one(`select app.approve_tool(${lit(id)}::uuid, 'grant', null) as r`)
+  const said = await one(
+    `select app.approve_tool(coalesce((select zz_o.office_id from public.tool_requests zz_o where zz_o.request_id = ${lit(id)}::uuid), app.test_office()), ${lit(id)}::uuid, 'grant', null) as r`,
+  )
   const s = said.r as Record<string, unknown>
   ok('a policy-disabled tool can be granted', s.granted === true)
   ok('and is reported as not in force', s.in_force === false)
@@ -422,7 +430,9 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
     !(await mayUse('spend.money')),
     'the global switch is the ceiling (0119)',
   )
-  await db.execute(`select app.revoke_tool(${lit(WHO)}, 'spend.money', 'grant')`)
+  await db.execute(
+    `select app.revoke_tool(app.owner_office('grant'), ${lit(WHO)}, 'spend.money', 'grant')`,
+  )
 }
 
 // --- the ceiling is enforced, not advisory ------------------------------------
@@ -599,7 +609,7 @@ ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
     ],
     [
       'a tool request',
-      `select app.request_tool('github.write', ${lit(WHO)},
+      `select app.request_tool(app.test_office(), 'github.write', ${lit(WHO)},
          ${lit(`We already have a token for this, it is ${shaped}, so it should be easy.`)})`,
     ],
   ] as const) {

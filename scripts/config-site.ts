@@ -35,6 +35,7 @@
  * fresh install sets it once, in `npm run fresh:configure`, and everything
  * downstream -- including this -- follows.
  */
+import '../src/safety/arm.ts'
 import { writeFile } from 'node:fs/promises'
 
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'

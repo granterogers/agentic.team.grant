@@ -31,6 +31,7 @@
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
 
+import '../../src/safety/require-production-site.ts'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { signIn } from './lib/sign-in.ts'
@@ -70,7 +71,7 @@ const WORD = 'verify-routing-probe'
 
 const onProject = async (): Promise<string[]> => {
   const { rows } = await db.execute(
-    `select public.staff_on_project(project_id) as v
+    `select public.staff_on_project((select office_id as office from public.projects where slug = '${SLUG}'), project_id) as v
        from public.projects where slug = '${SLUG}'`,
   )
   const v = (rows[0] as { v: unknown }).v
@@ -209,7 +210,7 @@ try {
   )
   if (wasOn.includes(WHO)) {
     await db.execute(
-      `select public.set_project_staff('${SLUG}', '${WHO}', true, 'verify:basecamp-team')`,
+      `select public.set_project_staff((select office_id as office from public.projects where slug = '${SLUG}'), '${SLUG}', '${WHO}', true, 'verify:basecamp-team')`,
     )
   }
   const nowWords = await wordsOf()

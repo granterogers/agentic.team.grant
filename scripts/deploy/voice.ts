@@ -8,8 +8,9 @@
  * second thing to lose.
  */
 
-import { readFile } from 'node:fs/promises'
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { bundleForm } from './lib/bundle.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 if (supabaseToken === undefined || supabaseToken === '') {
@@ -23,17 +24,16 @@ const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
  *
  * The canonical HQ page first, because a browser gets one origin and an
  * unmatched request is answered with this one. Vercel preview deployments get
- * their own hostnames and are deliberately NOT here: this endpoint takes no
- * authentication, so the allowlist is the only thing between a stranger's page
- * and a credential minted against Grant's OpenAI key.
+ * their own hostnames and are deliberately NOT here: the allowlist limits which
+ * pages a browser will let read the answer; the credential check (#400) is what
+ * refuses a stranger a credential minted against Grant's OpenAI key.
  */
 const PAGE_ORIGINS = [
   'https://ai-team-hq.vercel.app',
   /*
     The basecamp experiment's own origin (`claude/basecamp-team-hq`).
-    `voice-token` takes NO authentication - the allowlist is the only thing
-    between a stranger's page and a credential minted against Grant's OpenAI
-    key - so an origin that is not on this list cannot mint one, and live voice
+    `voice-token` now authenticates (#400), but the allowlist still decides which
+    pages a browser lets read the answer - so an origin that is not on this list cannot mint one, and live voice
     on the experiment could never have worked from the deployed preview
     however good the client was. Adding it is what makes the microphone at the
     top of `/basecamp` able to open a real session at all.
@@ -77,16 +77,10 @@ const setSecrets = await fetch(`${api}/secrets`, {
 })
 console.log(`function secrets set: http ${String(setSecrets.status)}`)
 
-const entrypoint = await readFile('supabase/functions/voice/index.ts', 'utf8')
-const form = new FormData()
-form.append(
-  'metadata',
-  // `verify_jwt: false` because the browser presents the HQ bearer token, not a
-  // Supabase JWT — the same arrangement hq-api has, and the token comparison
-  // inside the function is the whole of the authorisation.
-  JSON.stringify({ name: 'voice', entrypoint_path: 'index.ts', verify_jwt: false }),
-)
-form.append('file', new File([entrypoint], 'index.ts', { type: 'application/typescript' }))
+// Both functions ship their import graph, because both ask `src/auth/speaker.ts` who is calling.
+const voiceBundle = await bundleForm('voice', 'supabase/functions/voice/index.ts')
+const form = voiceBundle.form
+console.log(`voice: bundling ${String(voiceBundle.files)} file(s) from the import graph`)
 
 const deployed = await fetch(`${api}/functions/deploy?slug=voice`, {
   method: 'POST',
@@ -135,15 +129,9 @@ if (unauthorized.status !== 401 || answer.did !== 'answered') {
 // minting a session whose instructions said it was a proof of concept. It is
 // the same feature as `/voice` — one of them takes the call, the other decides
 // who is on it — so it ships in the same command.
-const mintSource = await readFile('supabase/functions/voice-token/index.ts', 'utf8')
-const mintForm = new FormData()
-mintForm.append(
-  'metadata',
-  // No JWT: the page is public and the endpoint hands out a credential that
-  // expires in about a minute and can do nothing but hold one conversation.
-  JSON.stringify({ name: 'voice-token', entrypoint_path: 'index.ts', verify_jwt: false }),
-)
-mintForm.append('file', new File([mintSource], 'index.ts', { type: 'application/typescript' }))
+const mintBundle = await bundleForm('voice-token', 'supabase/functions/voice-token/index.ts')
+const mintForm = mintBundle.form
+console.log(`voice-token: bundling ${String(mintBundle.files)} file(s) from the import graph`)
 
 const mintDeployed = await fetch(`${api}/functions/deploy?slug=voice-token`, {
   method: 'POST',
@@ -171,7 +159,7 @@ const preflight = await fetch(`https://${ref}.supabase.co/functions/v1/voice-tok
   headers: {
     Origin: PAGE_ORIGINS[0] ?? '',
     'Access-Control-Request-Method': 'POST',
-    'Access-Control-Request-Headers': 'content-type',
+    'Access-Control-Request-Headers': 'content-type, authorization',
   },
 })
 const allowOrigin = preflight.headers.get('access-control-allow-origin') ?? ''
@@ -185,8 +173,22 @@ if (allowOrigin !== PAGE_ORIGINS[0] && allowOrigin !== '*') {
   process.exit(1)
 }
 
+// A stranger must be refused, and the refusal must carry CORS headers so the page can read it.
+const strangerProbe = await fetch(`https://${ref}.supabase.co/functions/v1/voice-token`, {
+  method: 'POST',
+  headers: { Origin: PAGE_ORIGINS[0] ?? '' },
+})
+console.log(`  unauthenticated mint: http ${String(strangerProbe.status)} (must be 401)`)
+if (strangerProbe.status !== 401) {
+  console.error(
+    'voice-token minted (or failed) for a caller with no credential - it must answer 401',
+  )
+  process.exit(1)
+}
+
 const mintProbe = await fetch(`https://${ref}.supabase.co/functions/v1/voice-token`, {
   method: 'POST',
+  headers: { Authorization: `Bearer ${token}` },
 })
 const mintBody = (await mintProbe.json()) as {
   client_secret?: string
@@ -211,4 +213,4 @@ if (mintBody.degraded === true) {
   process.exit(1)
 }
 
-console.log('\nvoice is listening.')
+console.log('\nvoice is listening (and refuses strangers).')

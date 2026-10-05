@@ -54,7 +54,7 @@ const project = async (label: string): Promise<{ id: string; slug: string }> => 
   const r = json(
     (
       await one(
-        `select app.hq_create_project(${lit(name)}, 'upload', ${lit(`n-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
+        `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`n-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
       )
     ).r,
   )
@@ -77,7 +77,7 @@ const attachAsPerson = (slug: string, ref: string, kind: string, role = 'home') 
   })
 const attachAsSystem = (slug: string, ref: string, kind: string) =>
   one(
-    `select app.hq_attach(${lit(slug)}, 'notion', ${lit(ref)}, 'home', ${lit(kind)}, ${lit(`system ${ref}`)}) as r`,
+    `select app.hq_attach(app.test_office(), ${lit(slug)}, 'notion', ${lit(ref)}, 'home', ${lit(kind)}, ${lit(`system ${ref}`)}) as r`,
   )
 const standing = (project: string) =>
   rows(
@@ -141,9 +141,9 @@ check(
   mixed.body.slice(0, 110),
 )
 // The most permissive dial speaks for a class of work; this authority is about one destination, so it does not widen it.
-await one(`select app.hq_autonomy_set('act', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'act', null, 'grant') as r`)
 const atAct = await importAs(await w.dutyJob('office.notion_import', B.id))
-await one(`select app.hq_autonomy_set('suggest', null, 'grant') as r`)
+await one(`select app.hq_autonomy_set(app.owner_office('grant'), 'suggest', null, 'grant') as r`)
 check(
   'even with the dial at "Act", an import into a database nobody connected still waits',
   atAct.wrote === 0 && /not imported/.test(atAct.body),
@@ -199,12 +199,16 @@ check(
 
 // ---- 5. no tool-wide yes can exist; machines cannot connect ---------------------------------------------------
 const wide = json(
-  (await one(`select app.grant_standing('notion.write', null, 'anywhere', 'grant') as r`)).r,
+  (
+    await one(
+      `select app.grant_standing(app.test_office(), 'notion.write', null, 'anywhere', 'grant') as r`,
+    )
+  ).r,
 )
 const wideProject = json(
   (
     await one(
-      `select app.grant_standing('notion.write', ${lit(A.id)}::uuid, 'anywhere', 'grant') as r`,
+      `select app.grant_standing(app.test_office(), 'notion.write', ${lit(A.id)}::uuid, 'anywhere', 'grant') as r`,
     )
   ).r,
 )
@@ -277,7 +281,7 @@ const adoptJob = await w.childOf(turn2, 'office.notion_adopt', E.id)
 const adoptDuty = json(
   (
     await one(
-      `select app.record_destination_authority('notion.write', ${lit(E.id)}::uuid, ${lit(`notion:db-adopt-duty-${w.run}`)}, null, ${lit((await w.dutyJob('office.notion_adopt', E.id)).jobId)}::uuid, 'adopted') as r`,
+      `select app.record_destination_authority(app.test_office(), 'notion.write', ${lit(E.id)}::uuid, ${lit(`notion:db-adopt-duty-${w.run}`)}, null, ${lit((await w.dutyJob('office.notion_adopt', E.id)).jobId)}::uuid, 'adopted') as r`,
     )
   ).r,
 )

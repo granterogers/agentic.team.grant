@@ -13,6 +13,7 @@
  * It refuses to deploy when its file NAMES differ from the live deployment's, because a
  * different set is a different page. The previous deployment is printed as the rollback point.
  */
+import '../../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
@@ -87,7 +88,15 @@ if (onlyMine.length > 0 || onlyLive.length > 0) {
   // Vercel lists the serverless functions' sources and build outputs differently; only refuse on
   // something the page itself would gain or lose.
   const pageLoss = onlyLive.filter((f) => !f.startsWith('.') && !f.startsWith('out/'))
-  if (onlyMine.length > 0 || pageLoss.length > 0) {
+  // A file the change is MEANT to add is named on the command line, exactly: --allow-new=a.js,b.js. Anything else
+  // gained or lost still refuses, so an accidental file set is not deployed.
+  const allowed = new Set(
+    (process.argv.find((a) => a.startsWith('--allow-new='))?.slice('--allow-new='.length) ?? '')
+      .split(',')
+      .filter((f) => f !== ''),
+  )
+  const unexpected = onlyMine.filter((f) => !allowed.has(f))
+  if (unexpected.length > 0 || pageLoss.length > 0) {
     console.error('the file set differs from the live page; not deploying')
     process.exit(1)
   }
@@ -157,5 +166,5 @@ while (state !== 'READY' && state !== 'ERROR' && Date.now() - started < 300_000)
 console.log(`build: ${state}`)
 if (state !== 'READY') process.exit(1)
 const served = await (await fetch(`https://${String(dep.url)}/app.js`)).text()
-console.log(`serves the new page: ${String(served.includes('What you said no to'))}`)
+console.log(`serves the new page: ${String(served.includes('settings-ui.js'))}`)
 console.log(`rollback: promote ${liveId}`)

@@ -19,6 +19,7 @@
  * call was accepted; only a read-back shows what the app is actually configured
  * to do.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN

@@ -19,7 +19,7 @@
  *   - `GET /auth/v1/user` answers from `authUsers`, keyed by bearer token;
  *   - `POST /auth/v1/admin/generate_link` answers a link and records the address.
  */
-import { copyFile, mkdir } from 'node:fs/promises'
+import { copyFile, mkdir, readFile } from 'node:fs/promises'
 import type { PgExecutor } from '../../src/db/pg-executor.ts'
 
 export const DB_URL = 'http://replica.invalid'
@@ -45,6 +45,8 @@ export interface Edge {
   readonly refusedUrls: string[]
   /** Emails an admin sign-in link was generated for (the identity service's `generate_link`). */
   readonly linksMinted: string[]
+  /** Every object a function tried to write to storage (never forwarded anywhere). */
+  readonly storageWrites: { method: string; path: string; bytes: number }[]
   outage(on: boolean, onlyFunction?: string): void
 }
 
@@ -53,6 +55,7 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
   let down: boolean | string = false
   const refusedUrls: string[] = []
   const linksMinted: string[] = []
+  const storageWrites: { method: string; path: string; bytes: number }[] = []
   const env: Record<string, string> = { SUPABASE_URL: DB_URL, ...o.env }
   ;(globalThis as unknown as { Deno: unknown }).Deno = {
     env: { get: (k: string) => env[k] },
@@ -85,7 +88,18 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
       const headers = init?.headers as Record<string, string> | undefined
       const token = String(headers?.Authorization ?? '').replace(/^Bearer\s+/i, '')
       const email = o.authUsers?.[token]
-      return email === undefined ? reply(401, {}) : reply(200, { email, email_confirmed_at: 'x' })
+      if (email === undefined) return reply(401, {})
+      // The identity service also answers the auth user's id (P3: the office is resolved from the id, not the address).
+      const found = await o.db
+        .execute(
+          `select id::text as id from auth.users where lower(email) = ${lit(email.toLowerCase())} limit 1`,
+        )
+        .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+      return reply(200, {
+        id: (found.rows[0] as { id?: string } | undefined)?.id,
+        email,
+        email_confirmed_at: 'x',
+      })
     }
     if (path === '/auth/v1/admin/generate_link') {
       const asked = JSON.parse(String(init?.body ?? '{}')) as { email?: string }
@@ -121,16 +135,40 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
         return reply(400, { message: String((e as Error).message) })
       }
     }
+    if (path.startsWith('/storage/v1/')) {
+      // Storage is not replicated: it is RECORDED, so a proof can count the objects a function tried to write.
+      const method = init?.method ?? 'GET'
+      const raw = init?.body
+      const size = raw instanceof Uint8Array ? raw.byteLength : String(raw ?? '').length
+      if (method === 'POST' && path.includes('/object/sign/')) {
+        return reply(200, { signedURL: `${path.replace('/storage/v1', '')}?token=isolated` })
+      }
+      storageWrites.push({ method, path, bytes: size })
+      return reply(200, { Key: path.replace('/storage/v1/object/', '') })
+    }
     const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
     const prefer = String((init?.headers as Record<string, string> | undefined)?.Prefer ?? '')
     try {
       if (path.startsWith('/rest/v1/rpc/')) {
         const fn = path.slice('/rest/v1/rpc/'.length)
-        const args = Object.entries(body)
-          .map(
-            ([k, v]) =>
-              `${k} => ${v === null ? 'null' : typeof v === 'boolean' || typeof v === 'number' ? String(v) : typeof v === 'object' ? `${lit(JSON.stringify(v))}::jsonb` : lit(String(v))}`,
+        // PostgREST converts a JSON array to the parameter's own type; the stand-in does the same for text[] parameters.
+        const signature = (
+          await o.db.execute(
+            `select string_agg(pg_get_function_arguments(p.oid), ' | ') as a from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = ${lit(fn)}`,
           )
+        ).rows[0] as { a?: string | null } | undefined
+        const textArray = (k: string): boolean =>
+          new RegExp(`\\b${k} text\\[\\]`).test(signature?.a ?? '')
+        const args = Object.entries(body)
+          .map(([k, v]) => {
+            if (v === null) return `${k} => null`
+            if (typeof v === 'boolean' || typeof v === 'number') return `${k} => ${String(v)}`
+            if (Array.isArray(v) && textArray(k))
+              return `${k} => array[${v.map((x) => lit(String(x))).join(', ')}]::text[]`
+            return typeof v === 'object'
+              ? `${k} => ${lit(JSON.stringify(v))}::jsonb`
+              : `${k} => ${lit(String(v))}`
+          })
           .join(', ')
         const sql = setReturning.has(fn)
           ? `${AS_POSTGREST} select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) as r from public.${fn}(${args}) t`
@@ -171,12 +209,38 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
   */
   const name = o.edgeFile.split('/').slice(-2, -1)[0] ?? 'edge'
   const dir = new URL(`../../.out/edge-${name}/`, import.meta.url)
-  await mkdir(dir, { recursive: true })
-  await copyFile(new URL(`../../${o.edgeFile}`, import.meta.url), new URL('index.ts', dir))
-  for (const [src, as] of o.beside ?? []) {
-    await copyFile(new URL(`../../${src}`, import.meta.url), new URL(as, dir))
+  /*
+    A function that imports shared code by its repository path (`../../../src/...`, as voice, voice-token and
+    anything bundled the way the worker is) must run WHERE it lives, or the import points outside the checkout.
+    One that imports nothing keeps the unmodified-copy arrangement it always had.
+  */
+  const sourceText = await readFile(new URL(`../../${o.edgeFile}`, import.meta.url), 'utf8')
+  if (/from '\.\.\/\.\.\/\.\.\/src\//.test(sourceText)) {
+    await import(new URL(`../../${o.edgeFile}?run=${Date.now()}`, import.meta.url).href)
+  } else {
+    await mkdir(dir, { recursive: true })
+    await copyFile(new URL(`../../${o.edgeFile}`, import.meta.url), new URL('index.ts', dir))
+    const laid = new Set<string>()
+    for (const [src, as] of o.beside ?? []) {
+      await copyFile(new URL(`../../${src}`, import.meta.url), new URL(as, dir))
+      laid.add(as)
+    }
+    /*
+      The deploy uploads every file the entry imports from its own folder (hq-api's `./file-text.ts` and `./oauth.ts` are
+      symlinks to the one source in src/), so the emulator lays the same ones down: a proof that boots the real handler must
+      not fail because a later import was added and nobody listed it. A file the proof named itself wins.
+    */
+    const folder = o.edgeFile.slice(0, o.edgeFile.lastIndexOf('/'))
+    for (const m of sourceText.matchAll(/from '\.\/([A-Za-z0-9_-]+\.ts)'/g)) {
+      const name = m[1]
+      if (name === undefined || laid.has(name) || name === 'index.ts') continue
+      await copyFile(new URL(`../../${folder}/${name}`, import.meta.url), new URL(name, dir)).catch(
+        () => undefined,
+      )
+      laid.add(name)
+    }
+    await import(new URL(`index.ts?run=${Date.now()}`, dir).href)
   }
-  await import(new URL(`index.ts?run=${Date.now()}`, dir).href)
   if (handler === null) {
     globalThis.fetch = realFetch
     throw new Error(`${o.edgeFile} did not call Deno.serve`)
@@ -186,6 +250,7 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
     call: h,
     refusedUrls,
     linksMinted,
+    storageWrites,
     outage: (on, onlyFunction) => {
       down = on ? (onlyFunction ?? true) : false
     },

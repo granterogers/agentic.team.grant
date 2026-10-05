@@ -47,105 +47,42 @@
  * question, and this is the answer to it.
  */
 
+import { resolveSpeaker, type Speaker } from '../../../src/auth/speaker.ts'
+
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-/** One human, for V1 — the same subject Slack and Telegram attribute to. */
-const SUBJECT = Deno.env.get('VOICE_SUBJECT') ?? 'grant'
-
-const tokenMatches = async (presented: string | null): Promise<boolean> => {
-  if (HQ_TOKEN === '' || presented === null || presented === '') return false
-  const digest = async (v: string): Promise<Uint8Array> =>
-    new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)))
-  const [a, b] = await Promise.all([digest(presented), digest(HQ_TOKEN)])
-  let diff = 0
-  for (let i = 0; i < a.length; i += 1) diff |= (a[i] ?? 0) ^ (b[i] ?? 0)
-  return diff === 0
-}
-
 /*
-  A PERSON'S SESSION, as well as the office's key.
-
-  The chat and the live call both come here, and they come from the PAGE. Once
-  a person signs in the page presents their own session and not the office
-  token -- which this function did not understand, so chat answered 401 for a
-  signed-in person while every other surface worked. ADR-0043.
-
-  THE DUPLICATION IS DELIBERATE AND UNAVOIDABLE. Each edge function is uploaded
-  as one file, so `hq-api` and this cannot import a shared verifier. What keeps
-  them honest is that both ask the SAME two questions of the same two places:
-  Supabase, whether it issued this session; and `office_members`, whether the
-  address is somebody the office works for. Neither decodes the JWT itself -- a
-  token a function merely decoded is a token anybody can write.
-*/
-const SESSION_TTL_MS = 60_000
-/*
-  WHO IS SPEAKING (#385, 0614). A turn here is an INSTRUCTION, and an instruction from
+  WHO IS SPEAKING (#385, 0614; #400). A turn here is an INSTRUCTION, and an instruction from
   a person is what turns outward work from "ask first" into "he asked for it", so the
   speaker is the verified credential's fact and never a constant:
 
-    person  - a signed-in member speaks as the configured subject (Grant);
+    person  - a signed-in member speaks as THEIR OWN owner key. There is no configured subject:
+              `VOICE_SUBJECT` defaulted to 'grant' and so attributed every member's voice to him
+              (#400, E2). A member with no owner key is not a speaker at all;
     harness - a signed-in TEST member speaks as itself, which the harness predicate
               names on sight;
     service - the office key speaks only as a declared test speaker, and only for a
               session id that already carries a harness prefix. It cannot speak as
               anybody real: possession of a generic key is not a voice.
+
+  THE VERIFIER IS SHARED, not copied. This file used to carry its own session check on the
+  grounds that an edge function is uploaded as one file and so could not import one. The
+  worker's deploy has bundled its import graph for some time, and `deploy:voice` now does too:
+  `voice-token` had NO check at all while this one had a private copy. Both ask
+  `src/auth/speaker.ts`: Supabase, whether it issued this session, and `office_members`,
+  whether the address is somebody the office works for. Neither decodes the JWT itself -- a
+  token a function merely decoded is a token anybody can write. ADR-0043.
 */
-type Speaker = { readonly kind: 'person' | 'harness' | 'service'; readonly actor: string }
-const seenSessions = new Map<string, { until: number; speaker: Speaker }>()
 const TEST_SESSION = /^(fixture|verify|probe|gate|ledger-proof)-/
 
-const sessionAllowed = async (presented: string): Promise<Speaker | null> => {
-  const held = seenSessions.get(presented)
-  if (held !== undefined && held.until > Date.now()) return held.speaker
-  const base = Deno.env.get('SUPABASE_URL') ?? ''
-  const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  const who = await fetch(`${base}/auth/v1/user`, {
-    headers: {
-      apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      Authorization: `Bearer ${presented}`,
-    },
-  }).catch(() => null)
-  if (who === null || !who.ok) return null
-  const user = (await who.json().catch(() => ({}))) as { email?: string }
-  const email = String(user.email ?? '')
-    .trim()
-    .toLowerCase()
-  if (email === '') return null
-  const asked = await fetch(`${base}/rest/v1/rpc/office_member`, {
-    method: 'POST',
-    headers: {
-      apikey: service,
-      Authorization: `Bearer ${service}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ p_email: email }),
-  }).catch(() => null)
-  if (asked === null || !asked.ok) return null
-  const rows = (await asked.json().catch(() => [])) as {
-    ok?: boolean
-    owner_key?: string | null
-    kind?: string | null
-  }[]
-  if (rows[0]?.ok !== true) return null
-  // A kind the database did not say is a test member: the restrictive reading.
-  const speaker: Speaker =
-    rows[0]?.kind === 'person'
-      ? { kind: 'person', actor: SUBJECT }
-      : { kind: 'harness', actor: String(rows[0]?.owner_key ?? '') || 'verify-operator' }
-  seenSessions.set(presented, { until: Date.now() + SESSION_TTL_MS, speaker })
-  if (seenSessions.size > 64) {
-    for (const k of [...seenSessions.keys()].slice(0, 32)) seenSessions.delete(k)
-  }
-  return speaker
-}
-
-const allowed = async (presented: string | null): Promise<Speaker | null> => {
-  if (presented === null || presented === '') return null
-  if (await tokenMatches(presented)) return { kind: 'service', actor: 'verify-service' }
-  if (presented.split('.').length !== 3 || presented.length <= 60) return null
-  return await sessionAllowed(presented)
-}
+const allowed = async (presented: string | null): Promise<Speaker | null> =>
+  await resolveSpeaker(presented, {
+    hqToken: HQ_TOKEN,
+    supabaseUrl: Deno.env.get('SUPABASE_URL') ?? '',
+    anonKey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  })
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -185,6 +122,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
   const speaker = await allowed(presented)
   if (speaker === null) return json({ error: 'unauthorized' }, 401)
+  /*
+    THE OFFICE THIS CALL BELONGS TO (P3): the signed-in speaker's login resolved to it, and the machine key (which names no
+    office) is the test office's. Nothing the page sends can change it. A speaker with no office is refused, never defaulted.
+  */
+  let office: string | null = speaker.office
+  if (office === null && speaker.kind === 'service') {
+    const machine = (await rpc('resolve_machine_office', {}).catch(() => null)) as {
+      ok?: boolean
+      office_id?: string
+    } | null
+    office =
+      machine?.ok === true && typeof machine.office_id === 'string' ? machine.office_id : null
+  }
+  if (office === null) return json({ error: 'no_office' }, 403)
 
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
@@ -210,7 +161,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (url.pathname.endsWith('/look')) {
     const asked = (await request.json().catch(() => ({}))) as { about?: unknown }
     const about = typeof asked.about === 'string' ? asked.about.trim() : ''
-    const found = await rpc('voice_lookup', { p_about: about })
+    const found = await rpc('voice_lookup', { p_office: office, p_about: about })
     return json({ found })
   }
 
@@ -453,6 +404,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
   */
   const talk = project === null ? session : `${session}/${project}`
   const row = (stated: string | null, addressee: string | null): Record<string, unknown> => ({
+    // Explicit, from the verified speaker: the compatibility bridge is not asked to guess.
+    office_id: office,
     origin_channel: 'voice',
     origin_ref: `${talk}:${turn}`,
     actor: speaker.actor,
@@ -535,7 +488,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   // 2. Ask the canonical layer whether this is answerable. The decision is
   //    there, not here.
-  const answer = (await rpc('voice_answer', { p_command_id: commandId })) as {
+  const answer = (await rpc('voice_answer', { p_office: office, p_command_id: commandId })) as {
     speak?: string
     kind?: string
   } | null
@@ -564,9 +517,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   return json({
     speak:
-      'Right — I have put that to the team. It takes a few minutes, and the answer ' +
-      'appears in Slack. If it turns out to be important you will get a Telegram ' +
-      'as well.',
+      'Right — I have put that to the team. It takes a few minutes. The answer will ' +
+      'appear in your project’s chat and on its Team page, and in Slack or Telegram if ' +
+      'you have connected them.',
     did: 'delegated',
     job_id: queued.job_id,
     command_id: commandId,

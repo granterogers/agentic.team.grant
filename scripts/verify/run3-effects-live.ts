@@ -77,7 +77,7 @@ const gateway = async (auth: string | null, action: string, args: Record<string,
   )
   check('migrations 0616, 0617 and 0618 are applied', Number(m.n) === 3, `${String(m.n)} of 3`)
   const f = await one(
-    `select to_regprocedure('app.approval_verdict(uuid)') is not null as v, to_regprocedure('app.approval_for_delivery(uuid)') is not null as d, exists (select 1 from public.system_config where key = 'approval.fingerprints_from') as c`,
+    `select to_regprocedure('app.approval_verdict(uuid,uuid)') is not null as v, to_regprocedure('app.approval_for_delivery(uuid,uuid)') is not null as d, exists (select 1 from public.system_config where key = 'approval.fingerprints_from') as c`,
   )
   check(
     'the verdict, the delivery binding and the legacy cutoff exist',
@@ -120,7 +120,9 @@ const gateway = async (auth: string | null, action: string, args: Record<string,
   const after = Number((await one(`select count(*)::int as n from public.inbound_commands`)).n)
   check(
     'a test principal cannot speak in a REAL project (0618), and nothing was written',
-    /test principal/i.test(JSON.stringify(said.body)) && after === before,
+    // Refused either by the principal's rule (0618) or because a real project is in another office, which a test
+    // principal cannot even name ("no such project"): both leave nothing written.
+    /test principal|no such project/i.test(JSON.stringify(said.body)) && after === before,
     `${JSON.stringify(said.body).slice(0, 90)} / commands ${String(before)} -> ${String(after)}`,
   )
 }
@@ -169,7 +171,7 @@ const fixtureJob = async (kind: string, config: Record<string, unknown>) => {
   const c = String(
     (
       await one(
-        `select app.enqueue_child(p_parent => ${lit(rootJob)}::uuid, p_kind => ${lit(kind)}, p_payload => ${lit(JSON.stringify(config))}::jsonb)::text as v`,
+        `select app.enqueue_child(p_office => app.job_office(${lit(rootJob)}::uuid), p_parent => ${lit(rootJob)}::uuid, p_kind => ${lit(kind)}, p_payload => ${lit(JSON.stringify(config))}::jsonb)::text as v`,
       )
     ).v,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
@@ -181,7 +183,13 @@ const fixtureJob = async (kind: string, config: Record<string, unknown>) => {
   return c
 }
 const verdict = async (job: string) =>
-  json((await one(`select app.approval_verdict(${lit(job)}::uuid)::text as v`)).v)
+  json(
+    (
+      await one(
+        `select app.approval_verdict(app.job_office(${lit(job)}::uuid), ${lit(job)}::uuid)::text as v`,
+      )
+    ).v,
+  )
 
 // ---- approval binding: the verdict is decided by the question, not by the claim --------------------------------
 {
@@ -205,8 +213,8 @@ const verdict = async (job: string) =>
     String(claimed.state),
   )
   const other = await one(`
-    insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
-    values (${lit(project)}::uuid, ${lit(rootJob)}::uuid, ${lit(`Run 3 effects proof ${run}`)}, 'run3-effects-live fixture', 'Nothing happens until somebody answers.', array['Yes','No'], 'chief-of-staff', false, 'not-the-fingerprint-of-anything', 'No')
+    insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
+    values ((select office_id from public.projects where project_id = ${lit(project)}::uuid), ${lit(project)}::uuid, ${lit(rootJob)}::uuid, ${lit(`Run 3 effects proof ${run}`)}, 'run3-effects-live fixture', 'Nothing happens until somebody answers.', array['Yes','No'], 'chief-of-staff', false, 'not-the-fingerprint-of-anything', 'No')
     returning blocker_id::text as id`)
   const wrong = await verdict(
     await fixtureJob('notebook.generate', {
@@ -221,7 +229,7 @@ const verdict = async (job: string) =>
     String(wrong.state),
   )
   const stale = await one(
-    `select app.approval_for_delivery('00000000-0000-0000-0000-000000000000'::uuid)::text as b`,
+    `select app.approval_for_delivery(app.test_office(), '00000000-0000-0000-0000-000000000000'::uuid)::text as b`,
   )
   check(
     'a button whose delivery is unknown is bound to no question (a stale press answers nothing)',

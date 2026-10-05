@@ -13,6 +13,9 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const nul = (v: string | undefined): string => (v === undefined ? 'null' : lit(v))
 
 export interface ApplyContext {
+  /** The office these preferences belong to (a uuid): the pressed message's, or the claimed job's. Never a default. */
+  readonly office: string
+  /** Who, as the office knows them. Absent means the office's own person, never a literal. */
   readonly subject?: string
   readonly originChannel: 'slack' | 'telegram' | 'voice' | 'teamhq'
   readonly instruction: string
@@ -42,16 +45,17 @@ export const applyPreference = async (
   parse: ParseResult,
   ctx: ApplyContext,
 ): Promise<ApplyOutcome> => {
-  const subject = ctx.subject ?? 'grant'
+  const office = `${lit(ctx.office)}::uuid`
+  const subject = ctx.subject === undefined ? `app.office_actor(${office})` : lit(ctx.subject)
   const by = ctx.interpretedBy ?? 'rules'
 
   if (parse.notUnderstood !== null) {
     const { rows } = await db.execute(`
       insert into public.preference_instructions
-        (subject, origin_channel, command_id, instruction, interpreted_as,
+        (office_id, subject, origin_channel, command_id, instruction, interpreted_as,
          interpreted_by, not_understood)
       values
-        (${lit(subject)}, ${lit(ctx.originChannel)}, ${nul(ctx.commandId)}::uuid,
+        (${office}, ${subject}, ${lit(ctx.originChannel)}, ${nul(ctx.commandId)}::uuid,
          ${lit(ctx.instruction)}, '{}'::jsonb, ${lit(by)}, ${lit(parse.notUnderstood)})
       returning instruction_id::text as instruction_id
     `)
@@ -99,23 +103,26 @@ export const applyPreference = async (
   // right now" needs a query that can be wrong.
   const conflictTarget =
     ctx.projectId === undefined
-      ? '(subject) where project_id is null'
+      ? '(office_id, subject) where project_id is null'
       : '(subject, project_id) where project_id is not null'
 
   await db.execute(`
     insert into public.notification_preferences
-      (subject, project_id, ${cols.map((c) => c.col).join(', ')})
+      (office_id, subject, project_id, ${cols.map((c) => c.col).join(', ')})
     values
-      (${lit(subject)}, ${nul(ctx.projectId)}::uuid, ${cols.map((c) => c.value).join(', ')})
+      (${office}, ${subject}, ${nul(ctx.projectId)}::uuid, ${cols.map((c) => c.value).join(', ')})
     on conflict ${conflictTarget}
       do update set ${sets.join(', ')}
+      -- the global-scope key is per office (0862); a project-scoped key is unique by its project, so a collision can
+      -- only ever be this office's own row, and a row of another office's is never overwritten
+      where notification_preferences.office_id = excluded.office_id
   `)
 
   const { rows } = await db.execute(`
     insert into public.preference_instructions
-      (subject, origin_channel, command_id, instruction, interpreted_as, interpreted_by)
+      (office_id, subject, origin_channel, command_id, instruction, interpreted_as, interpreted_by)
     values
-      (${lit(subject)}, ${lit(ctx.originChannel)}, ${nul(ctx.commandId)}::uuid,
+      (${office}, ${subject}, ${lit(ctx.originChannel)}, ${nul(ctx.commandId)}::uuid,
        ${lit(ctx.instruction)}, ${lit(JSON.stringify(auditShape(p, parse.matched)))}::jsonb,
        ${lit(by)})
     returning instruction_id::text as instruction_id
@@ -143,12 +150,14 @@ const auditShape = (p: ParsedPreference, matched: readonly string[]): Record<str
 /** Clear a scope's preference. Used by "tell me everything" and by tests. */
 export const clearPreference = async (
   db: SqlExecutor,
-  subject = 'grant',
+  office: string,
+  subject: string,
   projectId?: string,
 ): Promise<void> => {
   await db.execute(`
     delete from public.notification_preferences
-    where subject = ${lit(subject)}
+    where office_id = ${lit(office)}::uuid
+      and subject = ${lit(subject)}
       and project_id ${projectId === undefined ? 'is null' : `= ${lit(projectId)}::uuid`}
   `)
 }

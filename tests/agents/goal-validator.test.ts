@@ -525,6 +525,7 @@ describe('validate — a task for a colleague is delegation misfiled (remediatio
       NAMES,
     )
     expect(got.steps.map((s) => s.id)).toEqual(['s1'])
-    expect(got.refused.join(' ')).toContain("Grant's own list")
+    // no person in scope (a unit test): the neutral words, never a name
+    expect(got.refused.join(' ')).toContain("the person you work for's own list")
   })
 })

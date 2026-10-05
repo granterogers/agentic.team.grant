@@ -189,15 +189,15 @@ console.log('\nand it is written down where an approval can read it')
   has to be a real row because `job_plans` has a foreign key to it.
 */
 const jobRow = await one(`
-  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, priority)
-  values (gen_random_uuid(), ${lit(`dryrun-${String(Date.now())}`)},
+  insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by, priority)
+  values (app.test_office(), gen_random_uuid(), ${lit(`dryrun-${String(Date.now())}`)},
           'verification.dryrun', 'verify:dryrun', 900)
   returning job_id::text as id
 `)
 const JOB = String(jobRow.id)
 
 const wrote = await one(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'notion.write', array['notion'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'notion.write', array['notion'],
     ${lit(JSON.stringify(sample.steps))}::jsonb, ${lit(summarise(sample))},
     ${String(plannedWrites(sample))}) as r
 `)
@@ -223,7 +223,7 @@ check(
   which is live.
 */
 await db.execute(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'calendar.write', array['google:calendar'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'calendar.write', array['google:calendar'],
     '[{"verb":"remove","what":"one event","where":"Google Calendar","writes":1}]'::jsonb,
     '1 to take away in Google Calendar', 1)
 `)
@@ -243,7 +243,7 @@ check(
 // A malformed step must refuse the WHOLE plan. A half-recorded plan is exactly
 // the shape that makes an approval screen lie.
 const malformed = await one(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'notion.write', array['notion'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'notion.write', array['notion'],
     '[{"verb":"create","what":"fine","where":"Notion","writes":1},
       {"verb":"create","what":"no writes key","where":"Notion"}]'::jsonb, 'x', 2) as r
 `)
@@ -263,7 +263,7 @@ check(
 )
 
 const bogusVerb = await one(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'notion.write', array['notion'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'notion.write', array['notion'],
     '[{"verb":"obliterate","what":"x","where":"Notion","writes":1}]'::jsonb, 'x', 1) as r
 `)
 check(
@@ -288,12 +288,12 @@ console.log('\nand the person being asked can see what they are agreeing to')
   shape all over again.
 */
 await db.execute(`
-  select app.job_plan_set(${lit(JOB)}::uuid, 'notion.write', array['notion'],
+  select app.job_plan_set(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'notion.write', array['notion'],
     ${lit(JSON.stringify(sample.steps))}::jsonb, ${lit(summarise(sample))},
     ${String(plannedWrites(sample))})
 `)
 await db.execute(`
-  select app.request_approval(${lit(JOB)}::uuid, 'write the course modules into Notion',
+  select app.request_approval(app.job_office(${lit(JOB)}::uuid), ${lit(JOB)}::uuid, 'write the course modules into Notion',
     'you asked for the curriculum to live where the team can edit it',
     'office.execute_plan')
 `)
@@ -343,8 +343,8 @@ check(
   followed by nothing reads as a bug in the office.
 */
 const noPlanJob = await one(`
-  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, priority)
-  values (gen_random_uuid(), ${lit(`dryrun-noplan-${String(Date.now())}`)},
+  insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by, priority)
+  values (app.test_office(), gen_random_uuid(), ${lit(`dryrun-noplan-${String(Date.now())}`)},
           'verification.dryrun', 'verify:dryrun', 900)
   returning job_id::text as id
 `)
@@ -538,11 +538,13 @@ console.log(
 /*
   The real decision, which is SQL and can be asked without touching anything.
 
-  `app.calendar_task_plan()` is what decides create/update/remove, and the
+  `app.calendar_task_plan` is what decides create/update/remove, and the
   planner's whole job is to shape its answer -- so exercising it here covers the
   half the switched-off branch skips, with no write and no toggle.
 */
-const sqlPlan = (await one('select app.calendar_task_plan() as p')).p as {
+const sqlPlan = (
+  await one("select app.calendar_task_plan(app.owner_office('p4-second-person')) as p")
+).p as {
   create?: unknown[]
   update?: unknown[]
   remove?: unknown[]

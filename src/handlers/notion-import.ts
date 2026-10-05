@@ -38,6 +38,7 @@
  */
 
 import { howComposed } from '../agents/provenance.ts'
+import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
@@ -137,12 +138,14 @@ async function prepare(db: SqlExecutor, job: Job): Promise<Prepared> {
   const setup = (
     await db.execute(`
           select
-            (select decrypted_secret from vault.decrypted_secrets
-              where name = 'notion.integration_token') as token,
+            ${credentialSql('notion.integration_token')} as token,
             (select name from public.projects
-              where project_id = ${lit(job.projectId)}::uuid) as project_name,
+              where office_id = app.job_office(${lit(job.jobId)}::uuid)
+                and project_id = ${lit(job.projectId)}::uuid) as project_name,
             (select jsonb_object_agg(a.artifact_kind, a.external_ref)
                from public.project_attachments a
+               join public.projects ap
+                 on ap.project_id = a.project_id and ap.office_id = app.job_office(${lit(job.jobId)}::uuid)
               where a.project_id = ${lit(job.projectId)}::uuid
                 and a.connector = 'notion' and a.enabled and a.role = 'home') as targets
         `)
@@ -175,7 +178,8 @@ async function prepare(db: SqlExecutor, job: Job): Promise<Prepared> {
     await db.execute(`
       select title, coalesce(content, '') as content
         from public.documents
-       where project_id = ${lit(job.projectId)}::uuid
+       where office_id = app.job_office(${lit(job.jobId)}::uuid)
+         and project_id = ${lit(job.projectId)}::uuid
          and coalesce(content, '') <> ''
        order by content_chars desc
     `)

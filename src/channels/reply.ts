@@ -49,20 +49,25 @@ async function originOf(db: SqlExecutor, job: Job): Promise<Origin | null> {
   const { rows } = await db.execute(`
     with recursive lineage as (
       select job_id, parent_job_id, 0 as depth
-        from public.jobs where job_id = ${lit(job.jobId)}::uuid
+        from public.jobs
+       where job_id = ${lit(job.jobId)}::uuid
+         and office_id = app.job_office(${lit(job.jobId)}::uuid)
       union all
       select j.job_id, j.parent_job_id, l.depth + 1
         from public.jobs j join lineage l on j.job_id = l.parent_job_id
        where l.depth < 8
+         and j.office_id = app.job_office(${lit(job.jobId)}::uuid)
     )
     select c.origin_channel, c.origin_ref, c.addressed_to,
            t.bot_id, app.resolve_secret(t.token_ref) as token,
            s.name as staff_name
       from lineage l
-      join public.inbound_commands c on c.job_id = l.job_id
+      join public.inbound_commands c
+        on c.job_id = l.job_id and c.office_id = app.job_office(${lit(job.jobId)}::uuid)
       ${BOT_FOR_INBOUND}
       join public.telegram_chats ch
-        on ch.bot_id = t.bot_id
+        on ch.office_id = app.job_office(${lit(job.jobId)}::uuid)
+       and ch.bot_id = t.bot_id
        and ch.chat_id = split_part(c.origin_ref, ':', 1)
       left join public.staff s on s.slug = c.addressed_to
      where c.origin_channel = 'telegram'

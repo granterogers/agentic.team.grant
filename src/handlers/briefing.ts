@@ -46,9 +46,12 @@
 import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
+
+const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 interface Waiting {
   what: string
@@ -301,7 +304,7 @@ export function briefingLines(f: Facts): string[] {
   /*
     Recommendations — his word, and the part that has to earn its place.
 
-    One source now, not two: `app.notice()` (#52), which arrives already
+    One source now, not two: the noticing pass, `app.notice` (#52), which arrives already
     ranked and already stripped of anything he has dismissed. This section
     used to render `adrift` and `office_cannot` directly, and both were
     subsets of the noticing pass — so the briefing said the same thing twice
@@ -326,7 +329,11 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
   return {
     kind: 'briefing.morning',
     handle: async (job: Job): Promise<HandlerOutput> => {
-      const facts = (await db.execute('select app.morning_briefing_facts() as f')).rows[0] as {
+      const facts = (
+        await db.execute(
+          `select app.morning_briefing_facts(app.job_office(${lit(job.jobId)}::uuid)) as f`,
+        )
+      ).rows[0] as {
         f?: Facts
       }
       const f = facts.f
@@ -368,15 +375,15 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
       */
       const written = (
         await db.execute(`
-          select app.write_briefing('morning', '${f.for_date}'::date,
+          select app.write_briefing(app.job_office(${lit(job.jobId)}::uuid), 'morning', '${f.for_date}'::date,
             $briefing$${assembled}$briefing$,
-            (select app.morning_briefing_facts())) as r
+            (select app.morning_briefing_facts(app.job_office(${lit(job.jobId)}::uuid)))) as r
         `)
       ).rows[0] as { r?: { already_written?: boolean } }
 
       if (written.r?.already_written === true) {
         return {
-          body: `Grant has already been briefed for ${f.for_date}. Not sending a second one.`,
+          body: `${currentPerson().name} has already been briefed for ${f.for_date}. Not sending a second one.`,
           // The whole point of the unique key. A duty re-attempted after a
           // crash must not brief him twice.
           announce: false,
@@ -392,9 +399,9 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
       return {
         body: await sayAs(db, router, 'chief-of-staff', {
           purpose:
-            'Write Grant his morning briefing. You send this every morning, so ' +
+            `Write ${currentPerson().name} their morning briefing. You send this every morning, so ` +
             'vary the opening — some days there is something to remark on and ' +
-            'most there is not. Lead with whatever actually needs him. Do not ' +
+            'most there is not. Lead with whatever actually needs them. Do not ' +
             'add anything that is not in the facts, and do not pad a quiet ' +
             'morning into a busy-sounding one. Where a fact says a number is ' +
             'an estimate or our own count, keep that — dropping the hedge ' +

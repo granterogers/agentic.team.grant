@@ -113,7 +113,9 @@ const jobIds: string[] = []
 try {
   console.log('\none dashboard project, four surfaces, the same sentence')
 
-  projectId = String((await one(`select app.unnamed_project()::text as v`)).v ?? '')
+  projectId = String(
+    (await one(`select app.unnamed_project(app.test_office())::text as v`)).v ?? '',
+  )
   check(
     'the reserved Unnamed project is where they land',
     projectId === '' ? 'MISSING' : projectId.slice(0, 8),
@@ -226,7 +228,7 @@ try {
   // --- and the reader shows one conversation -------------------------------
   const readBack = (
     await one(`
-    select app.conversation_history(${lit(projectId)}::uuid, 100) as v`)
+    select app.conversation_history(app.test_office(), ${lit(projectId)}::uuid, 100) as v`)
   ).v as {
     kind?: string
     body?: string

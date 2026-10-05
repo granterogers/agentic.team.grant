@@ -44,7 +44,9 @@ const STATES: ReadonlySet<string> = new Set([
 ])
 
 export const checkApproval = async (db: SqlExecutor, jobId: string): Promise<ApprovalCheck> => {
-  const { rows } = await db.execute(`select app.approval_verdict(${lit(jobId)}::uuid) as v`)
+  const { rows } = await db.execute(
+    `select app.approval_verdict(app.job_office(${lit(jobId)}::uuid), ${lit(jobId)}::uuid) as v`,
+  )
   const raw = rows[0]?.v
   const v = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {})) as Record<string, unknown>
   // An answer nobody recognises is not an approval.
@@ -104,6 +106,7 @@ export const refusedApproval = async (
          'chief-of-staff', ${lit(`did not ${what}`)}, ${lit(why.slice(0, 280))})`,
     )
     .catch(() => undefined)
+  // raw-sql[2]: keyed by the claimed job; it sets one column of the job the worker holds and touches nothing else.
   await db
     .execute(`update public.jobs set announce = true where job_id = ${lit(job.jobId)}::uuid`)
     .catch(() => undefined)
@@ -243,6 +246,7 @@ export const governEffect = async (
   }
 
   // Asked, and not yet answered for THIS job: a child started by an answer carries it on its parent.
+  // raw-sql[2]: keyed by the claimed job; it reads the parent pointer of the job the worker holds.
   const parent = String(
     (
       (
@@ -278,7 +282,8 @@ export const governEffect = async (
   const open = (
     await db.execute(
       `select blocker_id::text as id from public.blockers
-        where action_fingerprint = ${lit(fp)} and state = 'open' limit 1`,
+        where office_id = app.job_office(${lit(job.jobId)}::uuid)
+          and action_fingerprint = ${lit(fp)} and state = 'open' limit 1`,
     )
   ).rows[0] as { id?: string } | undefined
   if (open?.id !== undefined) {

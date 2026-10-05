@@ -79,8 +79,10 @@ const ADVERTISED = `jsonb_build_array(
     'description', 'Frobnicates the widget'))`
 
 const PROVIDER = `(select provider_id from public.mcp_providers where name = ${lit(NAME)})`
+/** The office that holds that provider: discovery is recorded inside it (migration 0802). */
+const PROVIDER_OFFICE = `(select office_id from public.mcp_providers where name = ${lit(NAME)})`
 const REGISTER = `
-  select app.register_mcp_provider(${lit(NAME)}, 'https://example.test/mcp',
+  select app.register_mcp_provider(app.test_office(), ${lit(NAME)}, 'https://example.test/mcp',
                                    'A Probe Provider', 'none', null, 'fixture');`
 
 // ---------------------------------------------------------------------------
@@ -92,13 +94,13 @@ section = 'registering and discovering'
   const got = await one(`
     begin;
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'reg', app.register_mcp_provider(${lit(NAME)},
+    insert into r select 'reg', app.register_mcp_provider(app.test_office(), ${lit(NAME)},
       'https://example.test/mcp', 'A Probe Provider', 'none', null, 'fixture');
-    insert into r select 'again', app.register_mcp_provider(${lit(NAME)},
+    insert into r select 'again', app.register_mcp_provider(app.test_office(), ${lit(NAME)},
       'https://example.test/mcp', 'A Probe Provider', 'none', null, 'fixture');
-    insert into r select 'plain', app.register_mcp_provider('plain${run}',
+    insert into r select 'plain', app.register_mcp_provider(app.test_office(), 'plain${run}',
       'http://example.test/mcp', '', 'bearer', null, '');
-    insert into r select 'rec', app.record_mcp_tools(${PROVIDER}, ${ADVERTISED});
+    insert into r select 'rec', app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${ADVERTISED});
 
     select (select v from r where k = 'reg') ->> 'ok' as registered,
            (select v from r where k = 'again') ->> 'error' as twice,
@@ -146,7 +148,7 @@ section = 'what the office thinks each one does'
   const got = await one(`
     begin;
     ${REGISTER}
-    select app.record_mcp_tools(${PROVIDER}, ${ADVERTISED});
+    select app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${ADVERTISED});
     select jsonb_object_agg(external_name, reach) as reaches,
            (select why_that_reach from public.mcp_discovered_tools
              where provider_id = ${PROVIDER} and external_name = 'delete_contact') as why
@@ -226,15 +228,15 @@ section = 'offering one'
   const got = await one(`
     begin;
     ${REGISTER}
-    select app.record_mcp_tools(${PROVIDER}, ${ADVERTISED});
+    select app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${ADVERTISED});
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'offer', app.offer_mcp_tool(
+    insert into r select 'offer', app.offer_mcp_tool(app.test_office(), 
       (select discovered_id from public.mcp_discovered_tools
         where provider_id = ${PROVIDER} and external_name = 'delete_contact'));
-    insert into r select 'again', app.offer_mcp_tool(
+    insert into r select 'again', app.offer_mcp_tool(app.test_office(), 
       (select discovered_id from public.mcp_discovered_tools
         where provider_id = ${PROVIDER} and external_name = 'delete_contact'));
-    insert into r select 'unknown', app.offer_mcp_tool(
+    insert into r select 'unknown', app.offer_mcp_tool(app.test_office(), 
       (select discovered_id from public.mcp_discovered_tools
         where provider_id = ${PROVIDER} and external_name = 'frobnicate'));
 
@@ -300,13 +302,13 @@ section = 'the authority still says no'
   const got = await one(`
     begin;
     ${REGISTER}
-    select app.record_mcp_tools(${PROVIDER}, ${ADVERTISED});
+    select app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${ADVERTISED});
     create temp table r (k text, v text) on commit drop;
-    insert into r select 'before', app.staff_may_use('chief-of-staff',
+    insert into r select 'before', app.staff_may_use(app.test_office(),'chief-of-staff',
       ${lit(`${NAME}.delete_contact`)})::text;
-    select app.offer_mcp_tool((select discovered_id from public.mcp_discovered_tools
+    select app.offer_mcp_tool(app.test_office(), (select discovered_id from public.mcp_discovered_tools
       where provider_id = ${PROVIDER} and external_name = 'delete_contact'));
-    insert into r select 'after', app.staff_may_use('chief-of-staff',
+    insert into r select 'after', app.staff_may_use(app.test_office(),'chief-of-staff',
       ${lit(`${NAME}.delete_contact`)})::text;
     select (select v from r where k = 'before') as before,
            (select v from r where k = 'after') as after;
@@ -333,12 +335,12 @@ section = 'disappearing and disconnecting'
   const got = await one(`
     begin;
     ${REGISTER}
-    select app.record_mcp_tools(${PROVIDER}, ${ADVERTISED});
+    select app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${ADVERTISED});
     -- A second discovery in which the delete is no longer offered.
-    select app.record_mcp_tools(${PROVIDER}, jsonb_build_array(
+    select app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},jsonb_build_array(
       jsonb_build_object('name', 'search_messages', 'description', 'Search the mailbox')));
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'gone_offer', app.offer_mcp_tool(
+    insert into r select 'gone_offer', app.offer_mcp_tool(app.test_office(), 
       (select discovered_id from public.mcp_discovered_tools
         where provider_id = ${PROVIDER} and external_name = 'delete_contact'));
     select (select count(*) from public.mcp_discovered_tools
@@ -364,15 +366,15 @@ section = 'disappearing and disconnecting'
   const got = await one(`
     begin;
     ${REGISTER}
-    select app.record_mcp_tools(${PROVIDER}, ${ADVERTISED});
-    select app.offer_mcp_tool((select discovered_id from public.mcp_discovered_tools
+    select app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${ADVERTISED});
+    select app.offer_mcp_tool(app.test_office(), (select discovered_id from public.mcp_discovered_tools
       where provider_id = ${PROVIDER} and external_name = 'search_messages'));
     -- Approved the ordinary way, so there is something to lose.
     update public.tool_permissions set enabled = true, disabled_reason = null
      where tool = ${lit(`${NAME}.search_messages`)};
     create temp table r (k text, v jsonb) on commit drop;
-    insert into r select 'revoke', app.revoke_mcp_provider(${PROVIDER}, 'no longer needed');
-    insert into r select 'after', app.offer_mcp_tool(
+    insert into r select 'revoke', app.revoke_mcp_provider(app.test_office(), ${PROVIDER}, 'no longer needed');
+    insert into r select 'after', app.offer_mcp_tool(app.test_office(), 
       (select discovered_id from public.mcp_discovered_tools
         where provider_id = ${PROVIDER} and external_name = 'send_message'));
 
@@ -410,10 +412,10 @@ section = 'what a person is shown'
   const got = await one(`
     begin;
     ${REGISTER}
-    select app.record_mcp_tools(${PROVIDER}, ${ADVERTISED});
-    select app.offer_mcp_tool((select discovered_id from public.mcp_discovered_tools
+    select app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${ADVERTISED});
+    select app.offer_mcp_tool(app.test_office(), (select discovered_id from public.mcp_discovered_tools
       where provider_id = ${PROVIDER} and external_name = 'search_messages'));
-    select x as inv from jsonb_array_elements(app.mcp_inventory()) x
+    select x as inv from jsonb_array_elements(app.mcp_inventory(app.test_office())) x
      where x ->> 'name' = ${lit(NAME)};
     rollback;`)
 
@@ -463,8 +465,8 @@ let clientMade = false
 
 try {
   await db.execute(`
-    insert into public.mcp_clients (client_id, display_name, token_sha256, scopes, enabled)
-    values (${lit(`verify-connectors-${run}`)}, ${lit(CLIENT)}, ${lit(disposableHash)},
+    insert into public.mcp_clients (office_id, client_id, display_name, token_sha256, scopes, enabled)
+    values (app.test_office(), ${lit(`verify-connectors-${run}`)}, ${lit(CLIENT)}, ${lit(disposableHash)},
             array['read']::text[], true)`)
   // Declared before it knocks (#381); read-only, so it can make no work, but the door is real.
   await (await testOrigins(db, 'verify:connectors')).declare('mcp', `verify-connectors-${run}`)
@@ -544,8 +546,8 @@ if (clientMade) {
       begin;
       ${REGISTER}
       create temp table d (k text primary key, v jsonb) on commit drop;
-      insert into d values ('first', app.record_mcp_tools(${PROVIDER}, ${lit(all)}::jsonb));
-      insert into d values ('second', app.record_mcp_tools(${PROVIDER}, ${lit(fewer)}::jsonb));
+      insert into d values ('first', app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${lit(all)}::jsonb));
+      insert into d values ('second', app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${lit(fewer)}::jsonb));
       select (select v from d where k = 'first') as first,
              (select v from d where k = 'second') as second,
              (select count(*)::int from public.mcp_discovered_tools
@@ -599,21 +601,23 @@ section = 'one grant, and only that one'
   const got = await one(`
     begin;
     ${REGISTER}
-    select app.record_mcp_tools(${PROVIDER}, ${ADVERTISED});
+    select app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${ADVERTISED});
     create temp table g (k text primary key, v jsonb) on commit drop;
-    insert into g values ('offered', app.offer_mcp_tool(
+    insert into g values ('offered', app.offer_mcp_tool(app.test_office(), 
       (select discovered_id from public.mcp_discovered_tools
         where provider_id = ${PROVIDER} and external_name = 'search_messages')));
     -- Granted the way a person grants anything: the existing approval path.
     update public.tool_permissions set enabled = true
      where tool = (select g.v ->> 'tool' from g where g.k = 'offered');
-    insert into public.staff_tools (staff_slug, tool)
-    select 'research-director', (select g.v ->> 'tool' from g where g.k = 'offered')
+    insert into public.staff_tools (office_id, staff_slug, tool)
+    -- The office staff_may_use is asked of just below (rolled back with the rest): the TEST office, where the tool
+    -- was offered, never the operator's (#414).
+    select app.test_office(), 'research-director', (select g.v ->> 'tool' from g where g.k = 'offered')
     on conflict do nothing;
     select (select g.v ->> 'tool' from g where g.k = 'offered') as granted,
-           app.staff_may_use('research-director',
+           app.staff_may_use(app.test_office(),'research-director',
              (select g.v ->> 'tool' from g where g.k = 'offered')) as may_the_granted,
-           app.staff_may_use('chief-of-staff',
+           app.staff_may_use(app.test_office(),'chief-of-staff',
              (select g.v ->> 'tool' from g where g.k = 'offered')) as may_another_agent,
            (select count(*)::int from public.mcp_discovered_tools
              where provider_id = ${PROVIDER} and reach = 'destructive') as destructive_seen;
@@ -674,7 +678,7 @@ section = 'a hostile provider'
     insert into x values ('before', jsonb_build_object(
       'enabled', (select count(*) from public.tool_permissions where enabled),
       'staff', (select count(*) from public.staff_tools)));
-    insert into x values ('recorded', app.record_mcp_tools(${PROVIDER}, ${HOSTILE}));
+    insert into x values ('recorded', app.record_mcp_tools(${PROVIDER_OFFICE}, ${PROVIDER},${HOSTILE}));
     insert into x values ('after', jsonb_build_object(
       'enabled', (select count(*) from public.tool_permissions where enabled),
       'staff', (select count(*) from public.staff_tools)));
@@ -760,9 +764,11 @@ section = 'the presses'
     action: string,
     args: Record<string, unknown>,
   ): Promise<Record<string, unknown>> => {
-    const named = Object.entries(args)
-      .map(([k, v]) => `${k} => ${v === null ? 'null' : lit(String(v))}`)
-      .join(', ')
+    // The gateway writes the verified office; this suite reads through the office key, which acts in the TEST office.
+    const named = [
+      'p_office => app.test_office()',
+      ...Object.entries(args).map(([k, v]) => `${k} => ${v === null ? 'null' : lit(String(v))}`),
+    ].join(', ')
     const { rows } = await db.execute(`select public.${FUNCTIONS[action]}(${named})::text as r`)
     const raw = (rows[0] as { r?: string } | undefined)?.r ?? '{}'
     const parsed = (() => {
@@ -835,9 +841,11 @@ section = 'the presses'
   )
 
   // A tool to offer. Recorded in SQL because discovery needs a live provider,
-  // and the endpoint above is deliberately unreachable.
+  // and the endpoint above is deliberately unreachable. Discovery is recorded inside the provider's own office.
+  const PRESS_OFFICE = `(select office_id from public.mcp_providers where name = ${lit(`press${run}`)})`
   await db.execute(`
     select app.record_mcp_tools(
+      ${PRESS_OFFICE},
       (select provider_id from public.mcp_providers where name = ${lit(`press${run}`)}),
       jsonb_build_array(jsonb_build_object(
         'name', 'look_up_weather',

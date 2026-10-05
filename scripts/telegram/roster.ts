@@ -11,6 +11,7 @@
  * Prints usernames and ids, which are public. Never a token.
  */
 
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { roster } from '../../src/telegram/roster.ts'
 

@@ -1,0 +1,761 @@
+/*
+  THE WORKSPACE, WIRED.
+
+  Pointer, keyboard and wheel behaviour for the freeform stage that
+  `compose.js` draws and `layout.js` stores (4 October 2026). It is a module of
+  its own because `wire.js` is already 3,000 lines and this is a coherent unit:
+  everything here is about ONE element, `[data-bc-board]`, and nothing in it
+  needs the rest of the page.
+
+  The decisions worth stating, because each is a trap this repository has paid
+  for:
+
+   1. **A drag never re-renders.** The old board redrew the page on every
+      drop, which resets every module's scroll position. Here a gesture paints
+      inline styles directly, saves once on release, and the page is not
+      redrawn at all. What was under the pointer is what is stored.
+
+   2. **The header is both the press and the handle.** A pointer that moves
+      more than four pixels is a drag and the click that follows is swallowed;
+      one that does not is an ordinary press and opens the module. One element,
+      two meanings, decided by what the person did.
+
+   3. **Pointer capture** keeps the gesture with the module when the pointer
+      leaves it, and gives touch and pen the same path as the mouse.
+
+   4. **Zoom is applied by the page and committed late.** A trackpad pinch is
+      dozens of wheel events a second; each one scaling the stage is cheap, and
+      each one writing the document is not. The stage follows the gesture and
+      the store hears about it 250ms after it stops.
+
+   5. **Nothing here is allowed to take a note's text.** Reset, tidy and layout
+      loading touch rectangles. The Post-it text lives in `layout.postits` and
+      only `removePostit`, pressed on a note's own cross, deletes any of it.
+
+  Comments inside any template literal in this file use plain words: a backtick
+  inside one ends the string.
+*/
+
+import * as cal from './calendar.js'
+import * as grid from './layout.js'
+import { NAMES, note } from './compose.js'
+import { esc } from './parts.js'
+
+const PHONE = '(max-width: 860px)'
+/** Pixels kept under the stage for the tray and the page's own bottom margin. */
+const RESERVE = 92
+const SWALLOW_MS = 350
+
+const calm = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
+
+export const wireStage = (root, ctx) => {
+  const board = root.querySelector('[data-bc-board]')
+  if (board === null) return
+  const slug = board.dataset.bcBoard ?? ctx.state.project
+  /* The dock lives in the project's head row, not in the board. */
+  const dock = board.closest('.bchome') ?? root
+  const stageEl = board.querySelector('.bcstage')
+  const guides = board.querySelector('.bcguides')
+  if (stageEl === null) return
+  const stacked = () => globalThis.matchMedia?.(PHONE)?.matches === true
+
+  let zoomLive = grid.zoomOf(slug)
+  let zoomTimer = null
+
+  /* ------------------------------------------------------------- painting */
+
+  const css = (el, r) => {
+    el.style.left = `${String(r.x)}px`
+    el.style.top = `${String(r.y)}px`
+    el.style.width = `${String(r.w)}px`
+    el.style.height = `${String(r.h)}px`
+    if (r.z !== undefined) el.style.zIndex = String(r.z)
+  }
+
+  const modEl = (id) => stageEl.querySelector(`[data-mod="${id}"]`)
+  const noteEl = (id) => stageEl.querySelector(`[data-bc-note-id="${id}"]`)
+
+  const paintAll = () => {
+    for (const m of grid.layout(slug)) {
+      const el = modEl(m.id)
+      if (el === null) continue
+      css(el, m)
+      const hue = grid.tintHue(m.tint)
+      if (hue === '') {
+        el.style.removeProperty('--bc-tint')
+        el.classList.remove('bcmod--tinted')
+      } else {
+        el.style.setProperty('--bc-tint', hue)
+        el.classList.add('bcmod--tinted')
+      }
+    }
+    for (const n of grid.postits(slug)) {
+      const el = noteEl(n.id)
+      if (el !== null) css(el, n)
+    }
+    const quiet = dock.querySelector('[data-bc-viewreset]')
+    if (quiet !== null) {
+      if (grid.customised(slug)) quiet.removeAttribute('data-quiet')
+      else quiet.setAttribute('data-quiet', '1')
+    }
+  }
+
+  /** Let a rearrangement ease into place rather than jump. */
+  const glide = () => {
+    if (calm()) return
+    stageEl.classList.add('bcstage--glide')
+    globalThis.setTimeout(() => {
+      stageEl.classList.remove('bcstage--glide')
+    }, 380)
+  }
+
+  /*
+    FIT: measure the real room, tell the engine, repaint. Runs synchronously
+    after the markup is in, so the first paint is already the measured one.
+  */
+  const fit = () => {
+    if (stacked()) {
+      board.classList.add('bcpanes--stack')
+      board.style.height = ''
+      stageEl.style.width = ''
+      stageEl.style.height = ''
+      stageEl.style.transform = ''
+      return
+    }
+    board.classList.remove('bcpanes--stack')
+    const top = board.getBoundingClientRect().top + (globalThis.scrollY ?? 0)
+    const boxW = board.clientWidth
+    const boxH = Math.max(420, Math.round((globalThis.innerHeight ?? 900) - top - RESERVE))
+    grid.setStage(boxW / zoomLive, boxH / zoomLive, true)
+    const st = grid.stageSize()
+    board.style.height = `${String(boxH)}px`
+    stageEl.style.width = `${String(st.w)}px`
+    stageEl.style.height = `${String(st.h)}px`
+    stageEl.style.transform = `scale(${String(zoomLive)})`
+    stageEl.style.setProperty('--bc-zoom', String(zoomLive))
+    paintAll()
+  }
+
+  /* --------------------------------------------------------------- gesture */
+
+  /** One pointer gesture at a time. Held on the closure: a drag that starts on one header ends over another. */
+  let live = null
+
+  const drawGuides = (list) => {
+    if (guides === null) return
+    const st = grid.stageSize()
+    guides.innerHTML = list
+      .map((g) =>
+        g.axis === 'x'
+          ? `<i class="bcguide bcguide--x" style="left:${String(Math.round(g.at))}px;height:${String(st.h)}px"></i>`
+          : `<i class="bcguide bcguide--y" style="top:${String(Math.round(g.at))}px;width:${String(st.w)}px"></i>`,
+      )
+      .join('')
+  }
+
+  const others = (id) => [
+    ...grid.layout(slug).filter((m) => m.id !== id),
+    ...grid.postits(slug).filter((n) => n.id !== id),
+  ]
+
+  const begin = (kind, handle, e, target) => {
+    const el = target ?? handle.closest('[data-mod]')
+    if (el === null) return
+    const isNote = el.hasAttribute('data-bc-note-id')
+    const id = isNote ? el.dataset.bcNoteId : el.dataset.mod
+    const start = (isNote ? grid.postits(slug) : grid.layout(slug)).find((m) => m.id === id)
+    if (start === undefined) return
+    live = {
+      kind,
+      id,
+      el,
+      isNote,
+      startX: e.clientX,
+      startY: e.clientY,
+      rect: start,
+      moved: false,
+      handle,
+      next: start,
+    }
+    handle.setPointerCapture?.(e.pointerId)
+    /* A drag must never select the text it passes over. */
+    document.documentElement.classList.add('bc-dragging')
+  }
+
+  const during = (e) => {
+    if (live === null) return
+    const z = zoomLive
+    const dx = (e.clientX - live.startX) / z
+    const dy = (e.clientY - live.startY) / z
+    if (!live.moved && Math.hypot(dx * z, dy * z) < 4) return
+    if (!live.moved) {
+      live.moved = true
+      board.classList.add('bcpanes--moving')
+      live.el.classList.add('bcmod--dragging')
+    }
+    const st = grid.stageSize()
+    const want =
+      live.kind === 'move'
+        ? { ...live.rect, x: live.rect.x + dx, y: live.rect.y + dy }
+        : { ...live.rect, w: live.rect.w + dx, h: live.rect.h + dy }
+    /*
+      ALT SWITCHES THE GUIDES OFF, for the moment somebody wants exactly where
+      their hand put it. Without Alt they are gentle: six visible pixels, and
+      only while something is within reach.
+    */
+    const snapped = e.altKey
+      ? { rect: want, guides: [] }
+      : grid.align(want, others(live.id), st, live.kind, 6 / z)
+    const rect = grid.clampRect({ ...snapped.rect, id: live.id }, st)
+    live.next = rect
+    css(live.el, rect)
+    drawGuides(snapped.guides)
+    e.preventDefault()
+  }
+
+  const finish = (e) => {
+    if (live === null) return
+    const was = live
+    live = null
+    board.classList.remove('bcpanes--moving')
+    was.el.classList.remove('bcmod--dragging')
+    document.documentElement.classList.remove('bc-dragging')
+    drawGuides([])
+    if (!was.moved) return
+    if (was.isNote) {
+      const id = grid.movePostit(slug, was.id, was.next)
+      if (id !== was.id) was.el.dataset.bcNoteId = id
+    } else {
+      grid.place(slug, was.id, was.next)
+    }
+    paintAll()
+    cal.recheck()
+    /*
+      SUPPRESS THE CLICK THAT FOLLOWS A DRAG. A pointerup after a real gesture
+      is still followed by a click on the header, which would open the module
+      the person has just finished moving.
+    */
+    const swallow = (c) => {
+      c.stopPropagation()
+      c.preventDefault()
+    }
+    was.el.addEventListener('click', swallow, { capture: true, once: true })
+    globalThis.setTimeout(() => {
+      was.el.removeEventListener('click', swallow, { capture: true })
+    }, SWALLOW_MS)
+    e?.preventDefault?.()
+  }
+
+  const bind = (handle) => {
+    handle.addEventListener('pointermove', during)
+    handle.addEventListener('pointerup', finish)
+    handle.addEventListener('pointercancel', finish)
+  }
+
+  /* A press anywhere on a module brings it to the front. */
+  const front = (el, isNote) => {
+    const id = isNote ? el.dataset.bcNoteId : el.dataset.mod
+    const all = [...grid.layout(slug), ...grid.postits(slug)]
+    const top = Math.max(...all.map((m) => m.z ?? 0))
+    const mine = all.find((m) => m.id === id)
+    if (mine === undefined || mine.z === top || id === 'n_starter') return
+    if (isNote) grid.movePostit(slug, id, {})
+    else grid.raise(slug, id)
+    paintAll()
+  }
+
+  for (const m of stageEl.querySelectorAll('[data-mod]')) {
+    m.addEventListener('pointerdown', () => {
+      front(m, false)
+    })
+  }
+
+  for (const h of stageEl.querySelectorAll('.bcmodhead')) {
+    h.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || stacked()) return
+      /*
+        A CONTROL INSIDE THE HEADER IS NOT THE HEADER. Grant, 22 September:
+        "Do not allow interactive controls within the header, such as
+        three-dot menus, to accidentally trigger expansion."
+        The title's own button IS the header's target (its keyboard stop), so a
+        press on the title still drags; every other control does not.
+      */
+      if (e.target.closest('button:not(.bcmodopen), a, input, select, [data-bc-modoff]') !== null)
+        return
+      begin('move', h, e)
+    })
+    bind(h)
+  }
+  for (const r of stageEl.querySelectorAll('[data-bc-resize]')) {
+    r.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return
+      e.stopPropagation()
+      begin('size', r, e, r.closest('[data-mod]'))
+    })
+    bind(r)
+    r.addEventListener('click', (e) => {
+      e.stopPropagation()
+    })
+  }
+
+  /* ----------------------------------------------------------------- keys */
+
+  /*
+    THE KEYBOARD CAN MOVE AND RESIZE TOO, because a workspace only a mouse can
+    arrange is a workspace half the people cannot arrange. Alt with an arrow
+    moves; Alt and Shift resizes. Twelve logical pixels a press, ninety with
+    Ctrl held for a long way.
+  */
+  for (const h of stageEl.querySelectorAll('.bcmodhead')) {
+    h.addEventListener('keydown', (e) => {
+      const id = h.closest('[data-mod]')?.dataset.mod
+      if (id === undefined) return
+      if ((e.key === 'Enter' || e.key === ' ') && !e.altKey) {
+        e.preventDefault()
+        ctx.openExpanded?.(id)
+        return
+      }
+      if (!e.altKey) return
+      const unit = e.ctrlKey ? 90 : 12
+      const step = {
+        ArrowLeft: [-unit, 0],
+        ArrowRight: [unit, 0],
+        ArrowUp: [0, -unit],
+        ArrowDown: [0, unit],
+      }[e.key]
+      if (step === undefined) return
+      e.preventDefault()
+      const now = grid.layout(slug).find((m) => m.id === id)
+      if (now === undefined) return
+      const want = e.shiftKey
+        ? { w: now.w + step[0], h: now.h + step[1] }
+        : { x: now.x + step[0], y: now.y + step[1] }
+      grid.place(slug, id, want)
+      paintAll()
+      const rz = stageEl.querySelector(`[data-mod="${id}"] [data-bc-resize]`)
+      rz?.setAttribute('aria-valuenow', String(grid.layout(slug).find((m) => m.id === id)?.w ?? 0))
+    })
+  }
+
+  /* Putting one back, from the chips that appear when something is off the page. */
+  for (const b of dock.querySelectorAll('[data-bc-arr-on]')) {
+    b.addEventListener('click', () => {
+      grid.add(slug, b.dataset.bcArrOn)
+      ctx.render()
+    })
+  }
+
+  /* Taking a module off the page, from the cross on its header. */
+  for (const b of stageEl.querySelectorAll('[data-bc-modoff]')) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      grid.remove(slug, b.dataset.bcModoff)
+      ctx.render()
+    })
+    b.addEventListener('pointerdown', (e) => {
+      e.stopPropagation()
+    })
+  }
+  /* Maximise is the module's expanded view, so there is one implementation of it. */
+  for (const b of stageEl.querySelectorAll('[data-bc-max]')) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      ctx.openExpanded?.(b.dataset.bcMax)
+    })
+    b.addEventListener('pointerdown', (e) => {
+      e.stopPropagation()
+    })
+  }
+
+  /* ----------------------------------------------------------------- zoom */
+
+  const setLive = (z) => {
+    zoomLive = Math.round(Math.min(grid.ZOOM.max, Math.max(grid.ZOOM.min, z)) * 100) / 100
+    fit()
+    const val = dock.querySelector('.bczoomval')
+    if (val !== null) {
+      val.textContent = `${String(Math.round(zoomLive * 100))}%`
+    }
+    if (zoomTimer !== null) globalThis.clearTimeout(zoomTimer)
+    zoomTimer = globalThis.setTimeout(() => {
+      grid.setZoom(slug, zoomLive)
+      paintAll()
+    }, 250)
+  }
+
+  for (const b of dock.querySelectorAll('[data-bc-zoom]')) {
+    b.addEventListener('click', () => {
+      const how = b.dataset.bcZoom
+      stageEl.classList.add('bcstage--zooming')
+      globalThis.setTimeout(() => {
+        stageEl.classList.remove('bcstage--zooming')
+      }, 260)
+      if (how === 'reset') setLive(1)
+      else setLive(zoomLive + (how === 'in' ? grid.ZOOM.step : -grid.ZOOM.step))
+    })
+  }
+
+  /*
+    MODIFIER-WHEEL ZOOMS; A PLAIN WHEEL NEVER DOES. A trackpad pinch arrives as
+    a wheel event with ctrlKey set, and Cmd/Ctrl with a mouse wheel is the same
+    gesture, so one listener covers both. A plain wheel is left entirely alone,
+    which is what keeps Tasks, Documents, Calendar and Activity scrolling.
+  */
+  board.addEventListener(
+    'wheel',
+    (e) => {
+      if (!(e.ctrlKey || e.metaKey) || stacked()) return
+      e.preventDefault()
+      setLive(zoomLive * Math.exp(-e.deltaY * 0.0022))
+    },
+    { passive: false },
+  )
+
+  /* -------------------------------------------------------------- the dock */
+
+  const tidy = dock.querySelector('[data-bc-tidy]')
+  tidy?.addEventListener('click', () => {
+    glide()
+    grid.autoArrange(slug)
+    paintAll()
+  })
+  dock.querySelector('[data-bc-viewreset]')?.addEventListener('click', () => {
+    grid.reset(slug)
+    zoomLive = 1
+    /* A module that had been taken off comes back with the default, so the page needs drawing again. */
+    if (grid.layout(slug).length !== stageEl.querySelectorAll('[data-mod]').length) {
+      ctx.render()
+      return
+    }
+    glide()
+    fit()
+    const val = dock.querySelector('.bczoomval')
+    if (val !== null) val.textContent = '100%'
+  })
+
+  /* ------------------------------------------------------------ popovers */
+
+  let pop = null
+  const shut = () => {
+    if (pop !== null) pop.remove()
+    pop = null
+    dock.querySelector('[data-bc-layouts]')?.setAttribute('aria-expanded', 'false')
+  }
+  const outside = (e) => {
+    if (pop !== null && !pop.contains(e.target) && e.target.closest('[data-bc-layouts], [data-bc-tint]') === null) shut()
+  }
+  document.addEventListener('pointerdown', outside, true)
+  const onKey = (e) => {
+    if (e.key === 'Escape' && pop !== null) {
+      shut()
+    }
+  }
+  document.addEventListener('keydown', onKey)
+  /*
+    These two listeners are on the document, which a redraw does not replace, so
+    each draw would add another pair. They remove themselves the first time they
+    run after the board they belong to has left the page.
+  */
+  const gone = () => {
+    if (board.isConnected) return
+    document.removeEventListener('pointerdown', outside, true)
+    document.removeEventListener('keydown', onKey)
+    document.removeEventListener('pointerdown', gone, true)
+  }
+  document.addEventListener('pointerdown', gone, true)
+
+  const popAt = (anchor, html, cls) => {
+    shut()
+    pop = document.createElement('div')
+    pop.className = `bcpop ${cls}`
+    pop.innerHTML = html
+    board.append(pop)
+    const b = board.getBoundingClientRect()
+    const a = anchor.getBoundingClientRect()
+    const w = pop.offsetWidth
+    const h = pop.offsetHeight
+    const left = Math.max(6, Math.min(b.width - w - 6, a.right - b.left - w))
+    const below = a.bottom - b.top + 6
+    const top = below + h > b.height ? Math.max(6, a.top - b.top - h - 6) : below
+    pop.style.left = `${String(Math.round(left))}px`
+    pop.style.top = `${String(Math.round(top))}px`
+    return pop
+  }
+
+  /* ---- the colour of a module */
+  for (const b of stageEl.querySelectorAll('[data-bc-tint]')) {
+    b.addEventListener('pointerdown', (e) => {
+      e.stopPropagation()
+    })
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const id = b.dataset.bcTint
+      const now = grid.layout(slug).find((m) => m.id === id)?.tint ?? null
+      const sw = (t, label, hue) =>
+        `<button type="button" class="bcswatch${t === now ? ' is-on' : ''}" data-tint="${esc(t ?? '')}"
+          aria-label="${esc(label)}" aria-pressed="${t === now ? 'true' : 'false'}" title="${esc(label)}"
+          style="--sw:${hue === '' ? 'transparent' : hue}"></button>`
+      const custom = typeof now === 'string' && now.startsWith('#') ? now : '#8aa0b8'
+      const p = popAt(
+        b,
+        `<div class="bcswatches" role="group" aria-label="Colour of ${esc(NAMES[id] ?? id)}">
+          ${sw(null, 'No colour', '')}
+          ${grid.TINTS.map((t) => sw(t.id, t.name, t.hue)).join('')}
+          <label class="bcswatch bcswatch--custom" title="Choose any colour">
+            <input type="color" value="${esc(custom)}" aria-label="Custom colour">
+          </label>
+        </div>`,
+        'bcpop--tint',
+      )
+      const apply = (t) => {
+        grid.setTint(slug, id, t)
+        paintAll()
+        for (const s of p.querySelectorAll('.bcswatch[data-tint]')) {
+          const on = (s.dataset.tint || null) === t
+          s.classList.toggle('is-on', on)
+          s.setAttribute('aria-pressed', on ? 'true' : 'false')
+        }
+      }
+      for (const s of p.querySelectorAll('.bcswatch[data-tint]')) {
+        s.addEventListener('click', () => {
+          apply(s.dataset.tint === '' ? null : s.dataset.tint)
+        })
+      }
+      p.querySelector('input[type=color]')?.addEventListener('input', (ev) => {
+        apply(ev.target.value)
+      })
+    })
+  }
+
+  /* ---- layouts, presets and the modules that are off the page */
+  const layoutsBody = (renaming = '') => {
+    const names = grid.layoutNames(slug)
+    const off = grid.off(slug)
+    return `<p class="bcpoplabel">Presets</p>
+      <div class="bcpopgrid">${Object.entries(grid.PRESETS)
+        .map(
+          ([k, v]) =>
+            `<button type="button" class="bcpopbtn" data-preset="${esc(k)}">${esc(v.name)}</button>`,
+        )
+        .join('')}</div>
+      <p class="bcpoplabel">Your layouts</p>
+      ${
+        names.length === 0
+          ? '<p class="bcpopnone">None saved yet.</p>'
+          : names
+              .map((n) =>
+                n === renaming
+                  ? `<form class="bcpoprow" data-rename="${esc(n)}"><input class="bcpopinput" value="${esc(n)}" maxlength="40" aria-label="New name for ${esc(n)}"><button class="bcpopbtn" type="submit">Rename</button></form>`
+                  : `<div class="bcpoprow">
+                      <button type="button" class="bcpopbtn bcpopname" data-load="${esc(n)}">${esc(n)}</button>
+                      <button type="button" class="bcpopmini" data-rn="${esc(n)}" aria-label="Rename ${esc(n)}" title="Rename">Rename</button>
+                      <button type="button" class="bcpopmini" data-del="${esc(n)}" aria-label="Delete layout ${esc(n)}" title="Delete this layout">Delete</button>
+                    </div>`,
+              )
+              .join('')
+      }
+      <form class="bcpoprow" data-save>
+        <input class="bcpopinput" maxlength="40" placeholder="Name this layout" aria-label="Name for the current layout">
+        <button type="submit" class="bcpopbtn">Save</button>
+      </form>
+      ${
+        off.length === 0
+          ? ''
+          : `<p class="bcpoplabel">Not on this page</p>
+             <div class="bcpopgrid">${off
+               .map(
+                 (id) =>
+                   `<button type="button" class="bcpopbtn" data-addback="${esc(id)}" aria-label="Put ${esc(NAMES[id] ?? id)} back on this page">+ ${esc(NAMES[id] ?? id)}</button>`,
+               )
+               .join('')}</div>
+             <p class="bcpopnote">Taking a module off only hides it. Nothing in it is deleted.</p>`
+      }`
+  }
+  const openLayouts = (anchor, renaming = '') => {
+    const p = popAt(anchor, layoutsBody(renaming), 'bcpop--layouts')
+    anchor.setAttribute('aria-expanded', 'true')
+    const again = (r = '') => {
+      openLayouts(anchor, r)
+    }
+    for (const b of p.querySelectorAll('[data-preset]')) {
+      b.addEventListener('click', () => {
+        glide()
+        grid.applyPreset(slug, b.dataset.preset)
+        zoomLive = grid.zoomOf(slug)
+        ctx.render()
+      })
+    }
+    for (const b of p.querySelectorAll('[data-load]')) {
+      b.addEventListener('click', () => {
+        glide()
+        grid.loadLayout(slug, b.dataset.load)
+        zoomLive = grid.zoomOf(slug)
+        ctx.render()
+      })
+    }
+    for (const b of p.querySelectorAll('[data-rn]')) {
+      b.addEventListener('click', () => {
+        again(b.dataset.rn)
+      })
+    }
+    for (const b of p.querySelectorAll('[data-del]')) {
+      b.addEventListener('click', () => {
+        grid.deleteLayout(slug, b.dataset.del)
+        again()
+      })
+    }
+    for (const b of p.querySelectorAll('[data-addback]')) {
+      b.addEventListener('click', () => {
+        grid.add(slug, b.dataset.addback)
+        ctx.render()
+      })
+    }
+    p.querySelector('form[data-save]')?.addEventListener('submit', (ev) => {
+      ev.preventDefault()
+      const name = ev.target.querySelector('input').value
+      if (grid.saveLayout(slug, name) !== '') again()
+    })
+    for (const f of p.querySelectorAll('form[data-rename]')) {
+      f.querySelector('input')?.focus()
+      f.addEventListener('submit', (ev) => {
+        ev.preventDefault()
+        grid.renameLayout(slug, f.dataset.rename, f.querySelector('input').value)
+        again()
+      })
+    }
+  }
+  dock.querySelector('[data-bc-layouts]')?.addEventListener('click', (e) => {
+    if (pop !== null && pop.classList.contains('bcpop--layouts')) {
+      shut()
+      return
+    }
+    openLayouts(e.currentTarget)
+  })
+
+  /* ---------------------------------------------------------------- notes */
+
+  const offerUndo = (gone) => {
+    stageEl.querySelector('.bcpostitundo')?.remove()
+    const bar = document.createElement('div')
+    bar.className = 'bcpostitundo'
+    bar.setAttribute('role', 'status')
+    bar.innerHTML = '<span>Note removed.</span> <button type="button" class="bcpostitundobtn">Undo</button>'
+    stageEl.append(bar)
+    const clear = globalThis.setTimeout(() => {
+      bar.remove()
+    }, 7000)
+    bar.querySelector('button').addEventListener('click', () => {
+      globalThis.clearTimeout(clear)
+      grid.restorePostit(slug, gone)
+      bar.remove()
+      ctx.render()
+    })
+  }
+
+  const wireNote = (el) => {
+    const grip = el.querySelector('[data-bc-note-grip]')
+    const text = el.querySelector('.bcpostittext')
+    const rz = el.querySelector('[data-bc-note-resize]')
+    el.addEventListener('pointerdown', () => {
+      front(el, true)
+    })
+    grip.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || stacked() || e.target.closest('button') !== null) return
+      begin('move', grip, e, el)
+    })
+    bind(grip)
+    /*
+      THE KEYBOARD MOVES AND RESIZES A NOTE TOO, the same keys as a module (Alt and an arrow; Alt Shift to resize), so a
+      note is not the one object on the page only a mouse can place.
+    */
+    grip.addEventListener('keydown', (e) => {
+      if (!e.altKey) return
+      const unit = e.ctrlKey ? 90 : 12
+      const step = {
+        ArrowLeft: [-unit, 0],
+        ArrowRight: [unit, 0],
+        ArrowUp: [0, -unit],
+        ArrowDown: [0, unit],
+      }[e.key]
+      if (step === undefined) return
+      e.preventDefault()
+      const id = el.dataset.bcNoteId
+      const now = grid.postits(slug).find((n) => n.id === id)
+      if (now === undefined) return
+      const want = e.shiftKey
+        ? { x: now.x, y: now.y, w: now.w + step[0], h: now.h + step[1] }
+        : { x: now.x + step[0], y: now.y + step[1], w: now.w, h: now.h }
+      const next = grid.movePostit(slug, id, want)
+      if (next !== id) {
+        el.dataset.bcNoteId = next
+        el.querySelector('.bcpostittext').dataset.bcNoteText = next
+      }
+      const moved = grid.postits(slug).find((n) => n.id === next)
+      if (moved === undefined) return
+      el.style.left = `${String(moved.x)}px`
+      el.style.top = `${String(moved.y)}px`
+      el.style.width = `${String(moved.w)}px`
+      el.style.height = `${String(moved.h)}px`
+    })
+    rz.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || stacked()) return
+      e.stopPropagation()
+      begin('size', rz, e, el)
+    })
+    bind(rz)
+    /*
+      AUTOSAVE WHILE TYPING, no button and no modal. The store writes the
+      browser immediately and the office 700ms after the last keystroke. The
+      starter note becomes a real stored note on its first character, and the
+      element is re-keyed so the next keystroke addresses the real one.
+    */
+    text.addEventListener('input', () => {
+      const id = grid.setPostit(slug, el.dataset.bcNoteId, { text: text.value })
+      if (id !== el.dataset.bcNoteId) {
+        el.dataset.bcNoteId = id
+        text.dataset.bcNoteText = id
+      }
+    })
+    el.querySelector('[data-bc-note-del]').addEventListener('click', () => {
+      // Taken off the page at once, and given back for a few seconds: a note is somebody's writing, and one stray press
+      // on a 20px control must not be the end of it.
+      const gone = grid.postits(slug).find((n) => n.id === el.dataset.bcNoteId)
+      grid.removePostit(slug, el.dataset.bcNoteId)
+      if (gone !== undefined && gone.text.trim() !== '') offerUndo(gone)
+      el.classList.add('bcpostit--leaving')
+      globalThis.setTimeout(
+        () => {
+          el.remove()
+        },
+        calm() ? 0 : 160,
+      )
+    })
+  }
+  for (const el of stageEl.querySelectorAll('.bcpostit')) wireNote(el)
+
+  for (const nb of dock.querySelectorAll('[data-bc-newnote]'))
+    nb.addEventListener('click', () => {
+    const n = grid.addPostit(slug)
+    const tpl = document.createElement('template')
+    tpl.innerHTML = note(n).trim()
+    const el = tpl.content.firstElementChild
+    el.classList.add('bcpostit--new')
+    stageEl.insertBefore(el, guides)
+    wireNote(el)
+    el.querySelector('.bcpostittext').focus()
+  })
+
+  fit()
+  /*
+    The window changing size re-measures. Registered once per board and removed
+    when the board leaves the page, for the reason the listeners above are.
+  */
+  const onResize = () => {
+    if (!board.isConnected) {
+      globalThis.removeEventListener('resize', onResize)
+      return
+    }
+    fit()
+  }
+  globalThis.addEventListener('resize', onResize)
+}

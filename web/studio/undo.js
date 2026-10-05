@@ -116,7 +116,16 @@ export function offer(result, refresh) {
       const said = await act('undo', { p_action_id: current })
       hide()
       if (typeof refresh === 'function') await refresh()
-      if (said?.ok === false) window.alert(said.note ?? 'That could not be undone.')
+      if (said?.ok === false) {
+        // In the page's own dialog, loaded on use so this file does not depend on the settings module at start-up.
+        const ui = await import('./settings-ui.js').catch(() => null)
+        const note = said.note ?? 'That could not be undone.'
+        if (ui !== null && typeof ui.noticeDialog === 'function') {
+          await ui.noticeDialog({ title: 'Could not undo that', body: note })
+        } else {
+          window.alert(note)
+        }
+      }
     } catch (error) {
       // Left on screen deliberately. A failed undo is the one case where the
       // offer must survive the press: the thing is still changed, and hiding

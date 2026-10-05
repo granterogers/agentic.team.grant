@@ -11,7 +11,8 @@ const src = readFileSync(new URL('../../src/handlers/instruction.ts', import.met
 describe('the typed yes is bound by one function', () => {
   it("the handler calls app.open_questions_for_reply with this turn's command", () => {
     expect(src).toMatch(
-      /from app\.open_questions_for_reply\(\$\{lit\(String\(payload\.command_id \?\? '[0-9-]{36}'\)\)\}::uuid\)/,
+      // the office first (the claimed job's, 0783), then this turn's command
+      /from app\.open_questions_for_reply\(app\.job_office\(\$\{lit\(job\.jobId\)\}::uuid\), \$\{lit\(String\(payload\.command_id \?\? '[0-9-]{36}'\)\)\}::uuid\)/,
     )
   })
   it('and holds no second copy of the previous-turn tree query', () => {

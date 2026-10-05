@@ -27,8 +27,9 @@
  * rows, so the two deployments cannot disagree about the token they compare.
  */
 
-import { readFile } from 'node:fs/promises'
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { bundleForm } from './lib/bundle.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 if (supabaseToken === undefined || supabaseToken === '') {
@@ -60,13 +61,9 @@ const setSecrets = await fetch(`${api}/secrets`, {
 })
 console.log(`function secrets set: http ${String(setSecrets.status)}`)
 
-const entrypoint = await readFile('supabase/functions/voice/index.ts', 'utf8')
-const form = new FormData()
-form.append(
-  'metadata',
-  JSON.stringify({ name: SLUG, entrypoint_path: 'index.ts', verify_jwt: false }),
-)
-form.append('file', new File([entrypoint], 'index.ts', { type: 'application/typescript' }))
+// The voice function asks `src/auth/speaker.ts` who is calling, so this copy ships its import graph too.
+const { form, files } = await bundleForm(SLUG, 'supabase/functions/voice/index.ts')
+console.log(`${SLUG}: bundling ${String(files)} file(s) from the import graph`)
 
 const deployed = await fetch(`${api}/functions/deploy?slug=${SLUG}`, {
   method: 'POST',

@@ -42,6 +42,8 @@ import { MARKS } from '../logos/marks.js'
 import * as when from '../when.js'
 import { prose } from '../prose.js'
 import * as todos from './todos.js'
+import * as cal from './calendar.js'
+import * as docsrc from './docsources.js'
 import * as docorder from './docorder.js'
 import { esc, status } from './parts.js'
 
@@ -284,7 +286,7 @@ export const mineAndTeam = (p) => {
       )}</button>`
   return `<span class="bcsplit2">
     ${half('mine', mine, 'yours')}
-    ${half('theirs', open.length - mine, "the team's")}
+    ${half('theirs', open.length - mine, "team's")}
   </span>`
 }
 
@@ -482,65 +484,7 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
  * has no events table, so this is scheduled WORK and not a diary, and saying
  * so is cheaper than a calendar Grant reasonably reads as his appointments.
  */
-export const calendarMini = (p, { items = 4 } = {}) => {
-  const dated = (p.tasks ?? [])
-    .filter((t) => t.milestone !== true)
-    .map((t) => ({ t, iso: String(t.due_on ?? t.starts_on ?? '').slice(0, 10) }))
-    .filter((x) => x.iso !== '' && !Number.isNaN(new Date(`${x.iso}T00:00:00Z`).getTime()))
-    .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0))
-  const now = new Date()
-  const y = now.getUTCFullYear()
-  const m = now.getUTCMonth()
-  const first = new Date(Date.UTC(y, m, 1))
-  const lead = (first.getUTCDay() + 6) % 7
-  const len = new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
-  const marks = new Set(dated.filter((x) => x.iso.slice(0, 7) === `${y}-${String(m + 1).padStart(2, '0')}`).map((x) => Number(x.iso.slice(8, 10))))
-  const today = now.getUTCDate()
-  const cells = []
-  for (let i = 0; i < lead; i += 1) cells.push('<span class="bccal-pad"></span>')
-  for (let d = 1; d <= len; d += 1) {
-    const cls = ['bccal-day']
-    if (marks.has(d)) cls.push('bccal-day--has')
-    if (d === today) cls.push('bccal-day--today')
-    cells.push(`<span class="${cls.join(' ')}">${d}</span>`)
-  }
-  return `<div class="bccalwrap">
-    <div class="bccal" role="presentation">
-      <div class="bccalmonth">${esc(first.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }))}</div>
-      <div class="bccalgrid">
-        ${DAYS.map((d) => `<span class="bccal-dow">${esc(d.charAt(0))}</span>`).join('')}
-        ${cells.join('')}
-      </div>
-    </div>
-    <div class="bcagenda">
-      ${
-        dated.length === 0
-          ? emptyWith('Nothing on this project has a date yet.', 'Give a to-do a date', `/p/${p.slug}/schedule`)
-          : dated
-              .slice(0, items)
-              .map(
-                ({ t, iso }) => `<div class="bcagendaitem${isLate(t) ? ' bcagendaitem--late' : ''}">
-                  <span class="bcagendadate">
-                    <span class="bcagendadd">${esc(String(Number(iso.slice(8, 10))))}</span>
-                    <span class="bcagendamm">${esc(new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short' }))}</span>
-                  </span>
-                  <!--
-                    Clickable, because v2 says the schedule must work in
-                    miniature: *"Clicking Schedule or its contents should
-                    actually perform an action rather than doing nothing."*
-                    It opens the to-do the date belongs to.
-                  -->
-                  <button type="button" class="bcitemtitle bclinky bcagendawhat"
-                    data-bc-task-open="${esc(todos.keyOf(t))}">${esc(t.title)}</button>
-                  ${t.who ? `<span class="bcagendawho">${esc(named(t.who) || t.who)}</span>` : ''}
-                </div>`,
-              )
-              .join('')
-      }
-      <p class="bccalnote">Scheduled work. The office keeps no separate diary.</p>
-    </div>
-  </div>`
-}
+export const calendarMini = (p) => cal.block(p)
 
 /* ======================================================================== *
  * Chat: the team, present  (§7)
@@ -618,8 +562,8 @@ export const said_ = (m) => {
       </div>
     </div>`
   }
-  return `<div class="bcsaid${mine ? ' bcsaid--mine' : ''}">
-    ${face(mine ? { name: 'Grant', slug: 'grant' } : person(who))}
+  return `<div class="bcsaid${mine ? ' bcsaid--mine' : ''}" data-message-id="${esc(m.id ?? '')}">
+    ${face(mine ? { name: 'You', slug: 'grant' } : person(who))}
     <div class="bcsaidbody">
       <span class="bcsaidwho">${esc(mine ? 'You' : named(who) || who)}</span>${
         mine || !person(who)?.role ? '' : `<span class="bcsaidrole">${esc(person(who).role)}</span>`
@@ -1005,8 +949,19 @@ export const glyphFor = (face) => (face === undefined ? '' : (GLYPH[face.glyph] 
 export const docRef = (d) =>
   d?.file ?? (d?.id ? `id:${d.id}` : `d:${d?.title ?? ''}`)
 
-/** The drawn page, from the document's own line lengths where it has them. */
-const drawnPage = (d, most = 9) => {
+/**
+ * The drawn page, from the document's own line lengths where it has them.
+ *
+ * A document the office holds the text of carries a cached excerpt of it (0960: the first words, derived in the database
+ * and never written). On a tile that is shown as the page's own first words rather than invented lines, so a thumbnail
+ * of an external file is a real glimpse of it without the file having been copied. A row thumbnail is too small to read
+ * words on, so it keeps the drawn lines. The excerpt is text, always escaped, never markup.
+ */
+const drawnPage = (d, most = 9, small = false) => {
+  const excerpt = typeof d.excerpt === 'string' ? d.excerpt.trim() : ''
+  if (excerpt !== '' && !small) {
+    return `<span class="bcpage bcxpage" aria-hidden="true"><span class="bcxpagetext">${esc(excerpt)}</span></span>`
+  }
   const lines = (Array.isArray(d.lines) && d.lines.length > 0 ? d.lines : [92, 100, 96, 84, 98, 70, 90]).slice(0, most)
   return `<span class="bcpage" aria-hidden="true">
     ${lines
@@ -1028,8 +983,8 @@ export const thumbFace = (d, i, extra = '') => {
   const ref = docRef(d)
   const tone = object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`
   return `<span class="bcthumb${tone}${extra === '' ? '' : ` ${esc(extra)}`}"
-    data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
-    ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9) : (GLYPH[object.glyph] ?? '')}
+    data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}" data-bc-thumbmod="${esc(String(d.modified ?? ''))}">
+    ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9, extra === 'bcrowthumb') : (GLYPH[object.glyph] ?? '')}
   </span>`
 }
 
@@ -1044,7 +999,7 @@ export const thumbFace = (d, i, extra = '') => {
   The label is visually hidden rather than absent: "Custom" on its own tells
   somebody reading the page aloud nothing about what it orders.
 */
-export const sortControl = (slug, how, where) => `<span class="bcdocsort">
+export const sortControl = (slug, how, where, allProjects = false) => `<span class="bcdocsort">
     <!--
       A VISIBLE WORD before the value. The select said only "Custom", which
       names a value and not the question; the full label stays for a screen
@@ -1054,7 +1009,7 @@ export const sortControl = (slug, how, where) => `<span class="bcdocsort">
     <label class="bcvh" for="bc-docsort-${esc(where)}-${esc(slug)}">Order these documents by</label>
     <select class="bcdocsortpick" id="bc-docsort-${esc(where)}-${esc(slug)}"
       data-bc-docsort="${esc(slug)}">
-      ${docorder.MODES.map(
+      ${docorder.MODES.filter((m) => m.id !== 'project' || allProjects).map(
         (m) =>
           `<option value="${esc(m.id)}"${m.id === how ? ' selected' : ''}>${esc(m.name)}</option>`,
       ).join('')}
@@ -1081,13 +1036,15 @@ const thumb = (d, i) => {
     a title is not unique.
   */
   return `<figure class="bcdoc bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-doc-title="${esc(d.title ?? '')}"
-    data-bc-docid="${esc(String(d.id ?? ''))}" draggable="true">
+    data-bc-dochay="${esc(docsrc.hay(d))}" data-bc-docid="${esc(String(d.id ?? ''))}" data-bc-docproject="${esc(String(d.project ?? ''))}" draggable="true">
     <button type="button" class="bcdocpress" data-bc-doc-open="${esc(ref)}"
       aria-label="${esc(`Open ${d.title ?? 'document'}`)}">
       ${thumbFace(d, i)}
+      ${docsrc.mark(d, esc)}
       <figcaption>
         <span class="bcdoctitle">${esc(d.title)}</span>
         <span class="bcdocmeta">${esc([kindWordOf(d), d.size].filter(Boolean).join(' · '))}</span>
+        ${docsrc.versionChip(d, esc)}${docsrc.projectChip(d, esc)}
       </figcaption>
     </button>
   </figure>`
@@ -1111,10 +1068,16 @@ const emptyWith = (line, label, to) =>
   `<div class="bcmptywrap"><p class="bcmpty">${esc(line)}</p>
     <a class="bcmptyact" href="${esc(to)}" data-bc-go="${esc(to)}">${esc(label)}</a></div>`
 
+/** The project's documents as one logical item each, with source and type worked out. */
+export const docsOf = (p) => {
+  const office = docsrc.officeList(p.slug)
+  return docsrc.dedupe((office ?? p.documents ?? []).map(docsrc.enrich))
+}
+
 export const docThumbs = (docs) => docs.map((d, i) => thumb(d, i)).join('')
 
 export const docsMini = (p, { items = 6 } = {}) => {
-  const docs = p.documents ?? []
+  const docs = docsOf(p)
   if (docs.length === 0) {
     return emptyWith(
       'Nothing filed on this project yet. What you upload, or the team writes, appears here.',
@@ -1239,7 +1202,9 @@ export const timelineMini = (p, { items = 5 } = {}) => {
                 const target = eventTarget(p, a)
                 const words = `${a.verb ?? 'changed'} ${a.what ?? ''}`.trim()
                 const stamp = a.at ? when.precise(a.at) : ''
-                const body = `<b>${esc(prettyWho(a.who) || 'The team')}</b> ${esc(words)}`
+                const body = `<b>${esc(prettyWho(a.who) || 'The team')}</b> ${esc(words)}${
+                  a.via ? ` <span class="bcvia" title="${esc(`This was done through ${a.via}`)}">via ${esc(a.via)}</span>` : ''
+                }`
                 return `<li class="bcevent">
                   <span class="bcdot" aria-hidden="true"></span>
                   <span class="bceventbody">

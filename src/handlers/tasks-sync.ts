@@ -23,8 +23,10 @@
  * `hq_set_vikunja` is what starts it. A handler that raised here would fill
  * the impediment ledger with a decision Grant made on purpose.
  */
+import { readCredential } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { outcomeOfError, outcomeOfReport, recordVikunjaHealth } from '../tasks/health.ts'
 import type { TaskProvider } from '../tasks/provider.ts'
 import { type SyncGate, syncOnce } from '../tasks/sync.ts'
 import { VikunjaProvider } from '../tasks/vikunja.ts'
@@ -50,7 +52,11 @@ export function syncBody(r: {
   failed: number
   held?: number
   down: string | null
+  downKind?: 'unreachable' | 'refused' | null
 }): string {
+  if (r.down !== null && r.downKind === 'refused') {
+    return `Vikunja turned the connection down (${r.down}). Nothing was changed here. Connect it again with a new token in Settings, under Your tasks in another app.`
+  }
   if (r.down !== null) return `Vikunja could not be reached (${r.down}). Nothing was changed here.`
   const said: string[] = []
   if (r.pushed > 0) said.push(`sent ${String(r.pushed)}`)
@@ -100,16 +106,7 @@ export function tasksSyncHandler(db: SqlExecutor, deps: TasksSyncDeps = {}): Han
         `vikunja_settings`, whose answer can end up on a page. One value, read
         once, used once, and not returned in anything this function produces.
       */
-      const token = String(
-        (
-          (
-            await db.execute(
-              `select decrypted_secret as v from vault.decrypted_secrets
-              where name = 'vikunja.api_token'`,
-            )
-          ).rows[0] as { v?: string } | undefined
-        )?.v ?? '',
-      )
+      const token = (await readCredential(db, 'vikunja.api_token')) ?? ''
       if (token === '') {
         return { ...base, announce: false, body: 'No task provider is connected.' }
       }
@@ -164,11 +161,28 @@ export function tasksSyncHandler(db: SqlExecutor, deps: TasksSyncDeps = {}): Han
         token,
         projectId: Number(settings.project_id ?? 0),
       }
-      const report = await syncOnce(
-        db,
-        deps.provider === undefined ? new VikunjaProvider(config) : deps.provider(config),
-        gate,
+      // The duty runs for one office: the claimed job's. The pull writes into that office and no other.
+      const office = String(
+        (await db.execute(`select app.job_office('${job.jobId}'::uuid) as o`)).rows[0]?.o ?? '',
       )
+      let report: Awaited<ReturnType<typeof syncOnce>>
+      try {
+        report = await syncOnce(
+          db,
+          deps.provider === undefined ? new VikunjaProvider(config) : deps.provider(config),
+          gate,
+          { office },
+        )
+      } catch (error) {
+        /*
+          A round that THROWS (the server answered and refused it: the project is gone) is still a reading Settings must
+          show. Recorded, then re-thrown so the job-failure path says what it always said.
+        */
+        await recordVikunjaHealth(db, office, outcomeOfError(error))
+        throw error
+      }
+      // Settings reads this (0981): an outage must not leave the card green. Recording never fails the round.
+      await recordVikunjaHealth(db, office, outcomeOfReport(report))
       const moved =
         report.pushed +
         report.created +

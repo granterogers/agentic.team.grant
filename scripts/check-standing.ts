@@ -19,6 +19,7 @@
  * nothing about which prompt is carrying what.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { opensByDroppingIt } from '../src/agents/clarify.ts'
 import { guidanceFor } from '../src/agents/guidance.ts'
 import { readTeaching } from '../src/agents/teaching.ts'
@@ -104,10 +105,19 @@ if (wrong.length > 0) {
   can reach it. This drives the real query against the real rows, which is the
   only way that half is checked at all.
 */
+/*
+  Whose prompt: the sole person's office. The reader is asked of ONE office now and never of the deployment, so the
+  rules this check judges against a prompt are the ones that office's prompt actually carries.
+*/
+const person = {
+  officeId: String(
+    ((await db.execute('select app.operator_office()::text as id')).rows[0] as { id: string }).id,
+  ),
+}
 const briefs = await Promise.all(
   [...new Set(held.map((l) => (l.who === '' ? 'chief-of-staff' : l.who)))].map(async (slug) => ({
     slug,
-    guidance: await guidanceFor(db, slug),
+    guidance: await guidanceFor(db, person, slug),
   })),
 )
 let misfiled = 0

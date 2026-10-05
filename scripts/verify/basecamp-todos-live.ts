@@ -21,6 +21,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import '../../src/safety/require-production-site.ts'
 import type { Page } from 'playwright'
 import { chromium } from 'playwright'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
@@ -114,7 +115,7 @@ page.on('pageerror', (e) => errors.push(String(e.message)))
 try {
   for (const [title, due, who] of SUBJECTS) {
     const answer = await db.execute(
-      `select app.task_add(
+      `select app.task_add(p_office => app.test_office(), 
          p_project => '${projectId}'::uuid,
          p_title => '${`${title} [${MARK}]`.replace(/'/g, "''")}',
          p_detail => '',

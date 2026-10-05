@@ -111,8 +111,8 @@ try {
     `correlation_id` are both NOT NULL and neither defaults.
   */
   const made = await one(`
-    insert into public.jobs (kind, state, requested_by, correlation_id, idempotency_key)
-    values ('note', 'queued', 'slack:verify-transport-${run}', gen_random_uuid(),
+    insert into public.jobs (office_id, kind, state, requested_by, correlation_id, idempotency_key)
+    values (app.test_office(), 'note', 'queued', 'slack:verify-transport-${run}', gen_random_uuid(),
             'verify-transport-${run}')
     returning job_id::text as id, is_fixture`)
   jobId = String(made.id ?? '')
@@ -159,7 +159,7 @@ try {
 
   // --- the claim ----------------------------------------------------------
   const claimed = await one(`
-    select * from app.claim_delivery(
+    select * from app.claim_delivery(app.job_office(${lit(jobId)}::uuid),
       'slack', ${lit(KEY(1))}, 'T_verify', 'CVERIFY001', 'result',
       null, null, null, ${lit(jobId)}::uuid, interval '2 minutes')`)
   deliveryId = String(claimed.delivery_id ?? '')
@@ -175,7 +175,7 @@ try {
     HERE rather than assumed by the retry checks below.
   */
   const again = await one(`
-    select * from app.claim_delivery(
+    select * from app.claim_delivery(app.job_office(${lit(jobId)}::uuid),
       'slack', ${lit(KEY(1))}, 'T_verify', 'CVERIFY001', 'result',
       null, null, null, ${lit(jobId)}::uuid, interval '2 minutes')`)
   check(
@@ -206,7 +206,7 @@ try {
   const outcomes: string[] = []
   for (let i = 1; i <= max + 1; i += 1) {
     const said = await one(`
-      select app.record_delivery_failure(${lit(deliveryId)}::uuid, 'timeout (simulated)', true) as v`)
+      select app.record_delivery_failure(app.job_office(${lit(jobId)}::uuid), ${lit(deliveryId)}::uuid, 'timeout (simulated)', true) as v`)
     outcomes.push(String(said.v))
     if (String(said.v) === 'gave_up') break
     /*
@@ -220,7 +220,7 @@ try {
         where delivery_id = ${lit(deliveryId)}::uuid`,
     )
     await one(`
-      select * from app.claim_delivery(
+      select * from app.claim_delivery(app.job_office(${lit(jobId)}::uuid),
         'slack', ${lit(KEY(1))}, 'T_verify', 'CVERIFY001', 'result',
         null, null, null, ${lit(jobId)}::uuid, interval '2 minutes')`)
   }
@@ -260,7 +260,7 @@ try {
     again, or "gave up" means nothing and the bound is not a bound.
   */
   const afterGiveUp = await one(`
-    select * from app.claim_delivery(
+    select * from app.claim_delivery(app.job_office(${lit(jobId)}::uuid),
       'slack', ${lit(KEY(1))}, 'T_verify', 'CVERIFY001', 'result',
       null, null, null, ${lit(jobId)}::uuid, interval '2 minutes')`)
   check(
@@ -276,11 +276,11 @@ try {
     delivery or the canonical record.
   */
   const telegram = await one(`
-    select * from app.claim_delivery(
+    select * from app.claim_delivery(app.job_office(${lit(jobId)}::uuid),
       'telegram', ${lit(KEY(2))}, 'bot_verify', '12345', 'result',
       null, null, null, ${lit(jobId)}::uuid, interval '2 minutes')`)
   await one(
-    `select app.record_delivery_sent(${lit(String(telegram.delivery_id))}::uuid, 'msg_1', null)`,
+    `select app.record_delivery_sent(app.job_office(${lit(jobId)}::uuid), ${lit(String(telegram.delivery_id))}::uuid, 'msg_1', null)`,
   )
   const both = await one(`
     select
@@ -449,7 +449,9 @@ try {
     readingNow.every((d) => d.delivery_id !== undefined),
   )
 
-  const retried = await one(`select app.retry_job_deliveries(${lit(jobId)}::uuid) as v`)
+  const retried = await one(
+    `select app.retry_job_deliveries(app.test_office(), ${lit(jobId)}::uuid) as v`,
+  )
   const r = (retried.v ?? {}) as { queued?: number; skipped?: number; says?: string }
   check(
     'a person can send it again, and only the failed one is queued',
@@ -493,7 +495,7 @@ try {
     that it did, rather than losing the message.
   */
   const kept = await one(`
-    select app.say_in_project(app.unnamed_project(),
+    select app.say_in_project(app.test_office(), app.unnamed_project(app.test_office()),
       ${lit(`transport proof ${run}`)}, 'nobody-by-that-name') as v`)
   /*
     `addressee_dropped` is the SLUG that was dropped, not a boolean. The first

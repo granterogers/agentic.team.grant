@@ -54,13 +54,18 @@ const provenanceFor = (reported: number | null): 'authoritative' | 'estimated' =
 
 export const recordUsage = async (db: SqlExecutor, record: UsageRecord): Promise<void> => {
   const reported = record.providerReportedCost
+  // The usage belongs to the office of the job it was spent for, named explicitly (and the composite key
+  // (job_id, office_id) refuses any other). A call with no job is the DEPLOYMENT's own - a capability probe, a health
+  // check - and is filed in the system office, explicitly: left to the compatibility bridge it would be filed under the
+  // sole person, which is how 81 of one person's rows came to be deployment overhead.
+  const office = record.jobId ?? null
   await db.execute(`
     insert into public.inference_usage
-      (provider, model_id, correlation_id, job_id, outcome,
+      (office_id, provider, model_id, correlation_id, job_id, outcome,
        prompt_tokens, completion_tokens, cost_usd, provider_reported_cost, provenance,
        latency_ms)
     values
-      (${lit(record.provider)}, ${lit(record.modelId)}, ${lit(record.correlationId)},
+      (${office === null ? 'app.require_office(app.system_office())' : `app.job_office(${lit(office)}::uuid)`}, ${lit(record.provider)}, ${lit(record.modelId)}, ${lit(record.correlationId)},
        ${nullableLit(record.jobId)}::uuid, ${lit(record.outcome)},
        ${String(record.promptTokens ?? 0)}, ${String(record.completionTokens ?? 0)},
        ${String(reported ?? 0)}, ${reported === null ? 'null' : String(reported)},
@@ -105,11 +110,12 @@ export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promis
   }
   const { rows } = await db.execute(`
     insert into public.blockers
-      (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+      (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
        approval_options, originating_agent, work_can_continue,
        standing_tool, standing_option, on_answer, action_fingerprint, decline_option)
     values
-      (${nullableLit(draft.projectId)}::uuid, ${lit(draft.jobId)}::uuid,
+      (app.job_office(${lit(draft.jobId)}::uuid),
+       ${nullableLit(draft.projectId)}::uuid, ${lit(draft.jobId)}::uuid,
        ${lit(draft.requestedAction)}, ${lit(draft.whyNeeded)},
        ${lit(draft.consequencesOfDelay)},
        array[${options}]::text[], ${lit(draft.originatingAgent)},

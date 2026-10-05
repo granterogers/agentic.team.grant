@@ -155,6 +155,30 @@
 }
 
 /*
+  ACCENT COLOUR (Settings > Appearance).
+
+  The only appearance choice that changes Team HQ: five accents, selected by the stored palette id. The default
+  (slate) is the blue above and needs no rule. Each pair is an accent and the ink that sits on it, both checked for
+  contrast (scripts/p5/settings-qa.ts). tests/web/settings-accents.test.ts keeps this list and settings-copy.js in step.
+*/
+:root[data-experience='basecamp'][data-palette='moss'] {
+  --bc-accent: #8cc96f;
+  --bc-accent-ink: #0d1b07;
+}
+:root[data-experience='basecamp'][data-palette='clay'] {
+  --bc-accent: #f0a07e;
+  --bc-accent-ink: #2a1209;
+}
+:root[data-experience='basecamp'][data-palette='ink'] {
+  --bc-accent: #e8c88f;
+  --bc-accent-ink: #241a06;
+}
+:root[data-experience='basecamp'][data-palette='paper'] {
+  --bc-accent: #b9a6f2;
+  --bc-accent-ink: #150c33;
+}
+
+/*
   §5: under reduced motion, remove translation and nonessential fade and set
   durations to effectively zero, keeping only instantaneous state cues.
 

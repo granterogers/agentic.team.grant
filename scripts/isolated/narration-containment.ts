@@ -168,8 +168,8 @@ check(
 
 /* --- a job id that names nothing ---------------------------------------- */
 {
-  const ghost =
-    await one(`select outcome from app.claim_delivery('slack', ${lit(`ghost:${run}`)}, ${lit(TEAM)},
+  const ghost = await one(`select outcome from app.claim_delivery(app.operator_office(),
+    'slack', ${lit(`ghost:${run}`)}, ${lit(TEAM)},
     ${lit(FLOOR)}, 'notice', null, null, null, '00000000-0000-4000-8000-000000000378'::uuid)`)
   const row = await one(
     `select coalesce(suppressed_reason, '') as r from public.deliveries where dedupe_key = ${lit(`ghost:${run}`)}`,

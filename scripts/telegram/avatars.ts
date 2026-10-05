@@ -27,6 +27,7 @@
  * A face is not ownership. The pager speaks as the Chief of Staff, so it wears
  * her face, and the roster row stays exactly as it was.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN ?? ''

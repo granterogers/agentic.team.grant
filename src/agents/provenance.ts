@@ -68,6 +68,8 @@
  * it.
  */
 
+import { currentPerson } from '../office/person.ts'
+
 /**
  * The kinds of thing the office can hold, as provenance is actually shaped.
  *
@@ -171,11 +173,12 @@ export const consulted = (c: Context): readonly Domain[] => c.consultedDomains
  * `assertsRecordsUnseen` makes the dishonest one fail — recovery first, then
  * the gate, which is the order #237 established.
  */
-export const PROVENANCE_NOTE =
+// A function, not a constant: it names the person the running job is for (#404).
+export const provenanceNote = (): string =>
   'What has been SAID in this conversation is not evidence that it exists. A name, ' +
   'a document, a meeting or a figure that appears only because one of us mentioned ' +
   'it — in a question, as a possibility, or in an answer of your own — is not part ' +
-  'of the record. Facts Grant states ARE usable; your own earlier replies are not a ' +
+  `of the record. Facts ${currentPerson().name} states ARE usable; your own earlier replies are not a ` +
   'source. If you have not been shown something, say you have no record of it, and ' +
   'never fill the gap with plausible detail.'
 
@@ -215,6 +218,7 @@ export const howComposed = async (
   db: { execute: (sql: string) => Promise<{ readonly rows: readonly Record<string, unknown>[] }> },
   jobId: string,
 ): Promise<'deterministic_retrieval' | 'inference'> =>
+  // raw-sql[2]: keyed by the claimed job; it counts the usage recorded under the correlation id read from the job row the worker holds.
   await db
     .execute(`
       select count(*)::int as n from public.inference_usage u
