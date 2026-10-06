@@ -54,6 +54,8 @@
  * has already proved they own the mailbox.
  */
 
+import { safeRedirectTarget } from '../../../src/auth/redirect-target.ts'
+
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const ANON = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -149,7 +151,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({ error: 'that does not look like an email address' }, 400, request)
     }
     const back = String(body.back ?? '')
-    const redirect = ALLOWED_ORIGINS.some((o) => back.startsWith(o)) ? back : origin
+    const redirect = safeRedirectTarget(back, ALLOWED_ORIGINS, origin)
 
     const asked = await upstream(`${DB_URL}/auth/v1/otp`, {
       method: 'POST',
@@ -253,9 +255,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     const back = String(body.back ?? '')
-    const redirect = ALLOWED_ORIGINS.some((o) => back.startsWith(o))
-      ? back
-      : (ALLOWED_ORIGINS[0] ?? '')
+    const redirect = safeRedirectTarget(back, ALLOWED_ORIGINS, ALLOWED_ORIGINS[0] ?? '')
     const made = await upstream(`${DB_URL}/auth/v1/admin/generate_link`, {
       method: 'POST',
       headers: {

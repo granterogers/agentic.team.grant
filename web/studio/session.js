@@ -43,6 +43,7 @@
 */
 
 import { HQ_API as API, SIGNIN as ENDPOINT } from './backend.js'
+import { begin as beginFlow, decide, returnAddress } from './flow.js'
 import { bounded, note, unreachable } from './net.js'
 
 const KEY = 'hq.session'
@@ -125,26 +126,31 @@ const post = async (body, auth = '') => {
   assigning would add a history entry and put the token one Back press away.
 */
 export const adopt = () => {
-  const raw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : ''
-  if (raw === '') return false
-  const q = new URLSearchParams(raw)
-  const access = q.get('access_token') ?? ''
-  const refresh = q.get('refresh_token') ?? ''
-  const failed = q.get('error_description') ?? q.get('error') ?? ''
-  if (access === '' && failed === '') return false
-  const clean = `${window.location.pathname}${window.location.search}`
-  window.history.replaceState(null, '', clean)
-  if (access === '') {
-    landed.problem = failed.replace(/\+/g, ' ')
+  /*
+    A SESSION IS ADOPTED ONLY FOR A SIGN-IN THIS BROWSER STARTED (B-05, flow.js). The decision is pure and lives there;
+    this applies it: store what it says to store, always take the fragment (and the nonce) out of the address, and
+    keep any sentence for the person.
+  */
+  let flows
+  try {
+    flows = localStorage
+  } catch {
+    flows = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
+  }
+  const decided = decide({
+    hash: window.location.hash,
+    search: window.location.search,
+    store: flows,
+    now: Date.now(),
+  })
+  if (!decided.touched) return false
+  window.history.replaceState(null, '', `${window.location.pathname}${decided.search}`)
+  if (decided.session === null) {
+    landed.problem = decided.problem
     return false
   }
-  const seconds = Number(q.get('expires_in') ?? '3600')
   note('callback:adopt')
-  write({
-    access_token: access,
-    refresh_token: refresh,
-    expires_at: Date.now() + Math.max(60, seconds) * 1000,
-  })
+  write(decided.session)
   return true
 }
 
@@ -268,10 +274,24 @@ export async function startSample() {
 
 /** Ask the office to email a link. It answers the same way for any address. */
 export async function askForLink(email) {
+  /*
+    THIS BROWSER STARTS THE SIGN-IN, and remembers it (flow.js): the link will come back to `?flow=<nonce>` and is
+    adopted here only for that nonce. If the browser will not remember it, say so now rather than send a link that
+    this page would then refuse.
+  */
+  let nonce = ''
+  try {
+    nonce = beginFlow(localStorage, { email }, Date.now(), crypto.getRandomValues(new Uint8Array(24)))
+  } catch {
+    nonce = ''
+  }
+  if (nonce === '') {
+    throw new Error('This browser is blocking the storage sign-in needs. Allow site data for this page and try again.')
+  }
   const { body } = await post({
     action: 'link',
     email,
-    back: `${window.location.origin}${window.location.pathname}`,
+    back: returnAddress(window.location.origin, window.location.pathname, nonce),
   })
   if (body.error !== undefined) throw new Error(String(body.error))
   // A link that was not sent is not "check your email". The office says so with ok false and a sentence; say that.
