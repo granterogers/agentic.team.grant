@@ -42,6 +42,8 @@ import {
   putObject,
   tablesToBackUp,
 } from '../backup/portable.ts'
+import { DEFAULT_POLICY, planRetention } from '../backup/retention.ts'
+import { listRuns } from '../backup/runs.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
@@ -136,7 +138,16 @@ export function backupHandler(deps: BackupDeps): Handler {
             run: async () => {
               const dump = await dumpTable(db, prefix, t.table_schema, t.table_name)
               await putObject(projectRef, serviceKey, dump)
-              return { outcome: { rows: dump.rows, bytes: dump.bytes.length }, effectRef: dump.key }
+              return {
+                // sha256 and fingerprint ride in the checkpoint so the manifest can vouch for this object (G-2)
+                outcome: {
+                  rows: dump.rows,
+                  bytes: dump.bytes.length,
+                  sha256: dump.sha256,
+                  fingerprint: dump.fingerprint ?? null,
+                },
+                effectRef: dump.key,
+              }
             },
           })),
           {
@@ -150,11 +161,24 @@ export function backupHandler(deps: BackupDeps): Handler {
             effect: 'local' as const,
             run: async (done) => {
               const counts: Record<string, number> = {}
+              const objects: Record<string, { sha256: string; bytes: number }> = {}
+              const fingerprints: Record<string, string> = {}
               for (const t of tables) {
-                const o = done[`table:${t.table_schema}.${t.table_name}`]
-                counts[`${t.table_schema}.${t.table_name}`] = Number(o?.rows ?? 0)
+                const q = `${t.table_schema}.${t.table_name}`
+                const o = done[`table:${q}`]
+                counts[q] = Number(o?.rows ?? 0)
+                if (typeof o?.sha256 === 'string') {
+                  objects[`${prefix}/${q}.json.gz`] = {
+                    sha256: o.sha256,
+                    bytes: Number(o.bytes ?? 0),
+                  }
+                }
+                if (typeof o?.fingerprint === 'string') fingerprints[q] = o.fingerprint
               }
-              const m = await buildManifest(db, projectRef, prefix, counts)
+              const m = await buildManifest(db, projectRef, prefix, counts, {
+                objects,
+                fingerprints,
+              })
               await putObject(projectRef, serviceKey, m)
               return { outcome: { rows: m.rows, tables: Object.keys(counts).length } }
             },
@@ -190,6 +214,36 @@ export function backupHandler(deps: BackupDeps): Handler {
         .reduce((a, [, o]) => a + Number(o.bytes ?? 0), 0)
       const kept = await listArchives(projectRef, serviceKey)
 
+      /*
+        What a retention policy WOULD do, said and never done (G-1).
+
+        Backups share the 1 GB Storage allowance and are never deleted, which G-1 shows may be what fills it. This
+        reports the size, and what keeping the newest seven plus one a week would free, so the decision Grant makes with
+        `npm run backup:prune` has a number in front of it. The run just written counts as the verified one for this
+        sentence only: it was written seconds ago with its checksums in the manifest, and the deleting command verifies
+        the newest backup again, by reading it, before it removes anything.
+
+        Swallowed on failure: a retention figure must never turn a finished backup into a failed one.
+      */
+      let retentionNote = ''
+      try {
+        const runs = await listRuns(projectRef, serviceKey)
+        const plan = planRetention(
+          runs.map((r) => ({ ...r, verified: r.name === prefix })),
+          new Date(),
+        )
+        const total = runs.reduce((a, r) => a + r.bytes, 0)
+        if (plan.remove.length > 0) {
+          retentionNote =
+            `\n\nThe backups hold ${String(Math.round(total / 1_000_000))}MB of the 1GB storage allowance across ` +
+            `${count(runs.length, 'run', 'runs')}. Keeping the newest ${String(DEFAULT_POLICY.keepLast)} and one a week ` +
+            `would free ${String(Math.round(plan.freedBytes / 1_000_000))}MB by removing ` +
+            `${count(plan.remove.length, 'run', 'runs')}. Nothing is deleted until you run \`npm run backup:prune\`.`
+        }
+      } catch {
+        retentionNote = ''
+      }
+
       return {
         ...base,
         body:
@@ -201,7 +255,8 @@ export function backupHandler(deps: BackupDeps): Handler {
           'Nothing is ever deleted automatically.\n\n' +
           'It holds no credentials, and it lives in the same Supabase project it ' +
           'came from — so it survives losing the code or this machine, and not ' +
-          'losing the project.',
+          'losing the project.' +
+          retentionNote,
         // Nightly and identical. The Set up page carries "last taken 18
         // minutes ago" for whoever wants to check.
         announce: false,
