@@ -185,6 +185,87 @@ describe('integrity refusal', () => {
     const result = await runMigrations([file('0001_a.sql'), file('0003_c.sql')], executor, hash)
     expect(result.applied.map((a) => a.name)).toEqual(['0001_a.sql', '0003_c.sql'])
   })
+
+  /*
+    The public Sample Office incident (5 October 2026): two migrations were applied to production from a working tree that
+    was never committed, so the ledger held `0897_a_visitor...` and `0898_only_a_person...` and the repository held neither.
+    Whatever else is pending, nothing may run until the history is whole again, and nothing may be "repaired" by editing the
+    ledger. These two are the property, named in the Sample's own words.
+  */
+  const SAMPLE_0897 = '0897_a_visitor_can_explore_a_sample_office_and_nothing_else.sql'
+  const SAMPLE_0898 = '0898_only_a_person_office_is_offered_a_slack_channel.sql'
+  const base = (): Record<string, string> => ({
+    '0001_a.sql': hash('-- 0001_a.sql'),
+    '0002_b.sql': hash('-- 0002_b.sql'),
+  })
+
+  it('refuses to run anything while an applied migration has no file in the repository', async () => {
+    const executor = new FakeExecutor({
+      ...base(),
+      [SAMPLE_0897]: hash('x'.repeat(30)),
+      [SAMPLE_0898]: hash('y'.repeat(30)),
+    })
+    const files = [
+      file('0001_a.sql', '-- 0001_a.sql'),
+      file('0002_b.sql', '-- 0002_b.sql'),
+      file('0003_c.sql'),
+    ]
+    await expect(runMigrations(files, executor, hash)).rejects.toThrow(
+      new RegExp(`${SAMPLE_0897.replace('.', '\\.')}.*checksum/missing|checksum/missing`),
+    )
+    expect(executor.statements.filter((s) => /insert into app\.schema_migrations/.test(s))).toEqual(
+      [],
+    )
+  })
+
+  it('a file recreated by hand with different bytes is refused, not accepted as the recovery', async () => {
+    const executor = new FakeExecutor({
+      ...base(),
+      [SAMPLE_0897]: hash('the bytes that were applied'),
+    })
+    const files = [
+      file('0001_a.sql', '-- 0001_a.sql'),
+      file('0002_b.sql', '-- 0002_b.sql'),
+      file(SAMPLE_0897, 'a reconstruction from the catalogue'),
+    ]
+    await expect(runMigrations(files, executor, hash)).rejects.toThrow(/checksum\/modified/)
+  })
+
+  it('the exact bytes recorded at the time are accepted: recovery is the only way back', async () => {
+    const exact = 'the bytes that were applied'
+    const executor = new FakeExecutor({ ...base(), [SAMPLE_0897]: hash(exact) })
+    const files = [
+      file('0001_a.sql', '-- 0001_a.sql'),
+      file('0002_b.sql', '-- 0002_b.sql'),
+      file(SAMPLE_0897, exact),
+      file('0898_next.sql'),
+    ]
+    const result = await runMigrations(files, executor, hash)
+    expect(result.applied.map((a) => a.name)).toEqual(['0898_next.sql'])
+  })
+
+  it('an UNAPPLIED file that reuses an applied number is refused (the 0897/0900 collision)', async () => {
+    const executor = new FakeExecutor({ ...base(), [SAMPLE_0897]: hash('applied bytes') })
+    const files = [
+      file('0001_a.sql', '-- 0001_a.sql'),
+      file('0002_b.sql', '-- 0002_b.sql'),
+      file(SAMPLE_0897, 'applied bytes'),
+      file('0897_project_calendar_events.sql'),
+    ]
+    await expect(runMigrations(files, executor, hash)).rejects.toThrow(/sequence\/duplicate/)
+  })
+
+  it('the same file under a free number is accepted (the renumbering that resolved it)', async () => {
+    const executor = new FakeExecutor({ ...base(), [SAMPLE_0897]: hash('applied bytes') })
+    const files = [
+      file('0001_a.sql', '-- 0001_a.sql'),
+      file('0002_b.sql', '-- 0002_b.sql'),
+      file(SAMPLE_0897, 'applied bytes'),
+      file('0906_project_calendar_events.sql'),
+    ]
+    const result = await runMigrations(files, executor, hash)
+    expect(result.applied.map((a) => a.name)).toEqual(['0906_project_calendar_events.sql'])
+  })
 })
 
 describe('failure handling', () => {
