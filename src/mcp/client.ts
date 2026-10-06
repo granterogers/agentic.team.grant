@@ -28,6 +28,13 @@
  * key.
  */
 
+import {
+  type GuardedFetchDeps,
+  guardedFetch,
+  type Resolver,
+  readCapped,
+} from '../net/destination.ts'
+
 /** What the protocol version field said. Sent, and echoed back in the record. */
 export const PROTOCOL_VERSION = '2025-06-18'
 
@@ -47,6 +54,26 @@ export interface Discovery {
   readonly error: string | null
 }
 
+/** A reply is read at most this far. */
+const MAX_REPLY_BYTES = 200_000
+
+/** The destination policy or the network said no. The message is ours, never the remote server's. */
+class Refused extends Error {}
+
+/**
+ * A short sentence for a status and nothing else. Whatever a provider put in its body or its JSON-RPC error message is
+ * remote text: it would reach the person in an announced job body and the provider's health row, so it is not carried.
+ */
+const saidNo = (status: number, code: number | undefined): string =>
+  code === undefined
+    ? `the server answered ${String(status)}`
+    : `the server answered ${String(status)} with an error (code ${String(code)})`
+
+const rpcCode = (r: { body: RpcResult }): number | undefined =>
+  typeof r.body.error?.code === 'number' && Number.isFinite(r.body.error.code)
+    ? r.body.error.code
+    : undefined
+
 interface RpcResult {
   result?: Record<string, unknown>
   error?: { code?: number; message?: string }
@@ -65,21 +92,32 @@ async function rpc(
   method: string,
   params: Record<string, unknown>,
   headers: Record<string, string>,
-  fetchImpl: typeof fetch,
+  deps: GuardedFetchDeps,
   sessionId: string | null,
 ): Promise<{ body: RpcResult; session: string | null; status: number; raw: string }> {
-  const r = await fetchImpl(endpoint, {
-    body: JSON.stringify({ id: Math.floor(Math.random() * 1e9), jsonrpc: '2.0', method, params }),
-    headers: {
-      accept: 'application/json, text/event-stream',
-      'content-type': 'application/json',
-      'mcp-protocol-version': PROTOCOL_VERSION,
-      ...(sessionId === null ? {} : { 'mcp-session-id': sessionId }),
-      ...headers,
+  /*
+    The endpoint was typed by a person and is judged as untrusted on every request: shape, resolution and each
+    redirect hop (src/net/destination.ts). A refusal is thrown as a `Refused` so `discoverTools` can say it in its own
+    fixed words; nothing the remote server said is carried in it.
+  */
+  const got = await guardedFetch(
+    endpoint,
+    {
+      body: JSON.stringify({ id: Math.floor(Math.random() * 1e9), jsonrpc: '2.0', method, params }),
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+        'mcp-protocol-version': PROTOCOL_VERSION,
+        ...(sessionId === null ? {} : { 'mcp-session-id': sessionId }),
+        ...headers,
+      },
+      method: 'POST',
     },
-    method: 'POST',
-  })
-  const raw = (await r.text()).slice(0, 200_000)
+    deps,
+  )
+  if (!got.ok) throw new Refused(got.reason)
+  const r = got.response
+  const raw = await readCapped(r, MAX_REPLY_BYTES)
   const session = r.headers.get('mcp-session-id') ?? sessionId
   if (!r.ok) return { body: {}, raw, session, status: r.status }
 
@@ -115,10 +153,16 @@ export async function discoverTools(
   options: {
     readonly bearer?: string | undefined
     readonly fetchImpl?: typeof fetch
+    /** Resolves names for the destination check; see `guardedFetch`. A test with an injected fetch injects this too. */
+    readonly resolve?: Resolver
     readonly timeoutMs?: number
   } = {},
 ): Promise<Discovery> {
-  const fetchImpl = options.fetchImpl ?? fetch
+  const deps: GuardedFetchDeps = {
+    ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
+    ...(options.resolve === undefined ? {} : { resolve: options.resolve }),
+    timeoutMs: options.timeoutMs ?? 20_000,
+  }
   const headers: Record<string, string> =
     options.bearer === undefined || options.bearer === ''
       ? {}
@@ -130,10 +174,6 @@ export async function discoverTools(
     tools: [] as DiscoveredTool[],
   }
 
-  const stop = AbortSignal.timeout(options.timeoutMs ?? 20_000)
-  const guarded: typeof fetch = (input, init) =>
-    fetchImpl(input, { ...init, signal: stop } as RequestInit)
-
   try {
     const hello = await rpc(
       endpoint,
@@ -144,26 +184,20 @@ export async function discoverTools(
         protocolVersion: PROTOCOL_VERSION,
       },
       headers,
-      guarded,
+      deps,
       null,
     )
     if (hello.status !== 200 || hello.body.result === undefined) {
-      return {
-        ...nothing,
-        error:
-          hello.body.error?.message ??
-          `the server answered ${String(hello.status)}: ${hello.raw.slice(0, 160)}`,
-        ok: false,
-      }
+      return { ...nothing, error: saidNo(hello.status, rpcCode(hello)), ok: false }
     }
     const info = (hello.body.result.serverInfo ?? {}) as { name?: string; version?: string }
 
-    const listed = await rpc(endpoint, 'tools/list', {}, headers, guarded, hello.session)
+    const listed = await rpc(endpoint, 'tools/list', {}, headers, deps, hello.session)
     if (listed.status !== 200 || listed.body.result === undefined) {
       return {
-        error:
-          listed.body.error?.message ??
-          `it introduced itself and then refused to list its tools (${String(listed.status)})`,
+        error: `it introduced itself and then refused to list its tools (${String(listed.status)}${
+          rpcCode(listed) === undefined ? '' : `, code ${String(rpcCode(listed))}`
+        })`,
         ok: false,
         protocolVersion: String(hello.body.result.protocolVersion ?? ''),
         serverName: info.name ?? null,
@@ -208,6 +242,12 @@ export async function discoverTools(
       tools,
     }
   } catch (error) {
-    return { ...nothing, error: String((error as Error).message).slice(0, 300), ok: false }
+    // Only our own sentences are repeated. Any other exception came from the runtime or the network and can carry the
+    // address, a header or a piece of the response, so it becomes one fixed phrase.
+    return {
+      ...nothing,
+      error: error instanceof Refused ? error.message : 'the server could not be reached',
+      ok: false,
+    }
   }
 }
