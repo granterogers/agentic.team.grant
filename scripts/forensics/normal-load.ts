@@ -35,6 +35,9 @@ const PROBES = [
 ]
 
 const probe = (db: string, only: string[]): Record<string, Cost> => {
+  // The probe runs against a local replica only; no provider credential belongs in its environment.
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  for (const key of Object.keys(env)) if (key.startsWith('SUPABASE_')) delete env[key]
   const r = spawnSync(
     'npx',
     [
@@ -45,10 +48,7 @@ const probe = (db: string, only: string[]): Record<string, Cost> => {
       '--quiesce',
       `--only=${only.join(',')}`,
     ],
-    {
-      encoding: 'utf8',
-      env: { ...process.env, SUPABASE_ACCESS_TOKEN: '', SUPABASE_PROJECT_REF: '' },
-    },
+    { encoding: 'utf8', env },
   )
   if (r.status !== 0) {
     console.error(`probe on ${db} failed:\n${r.stderr.slice(0, 600)}`)

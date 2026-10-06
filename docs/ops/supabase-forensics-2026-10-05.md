@@ -227,7 +227,9 @@ Raw: `evidence/2026-10-05/logs/win-tempfiles-*`. 41 temp-file lines in the windo
   09:37:40 and 09:38:40 pair is one minute apart and not explained). One extra 4 MB file at 09:34:41 is a platform cycle landing on mine.
 * **DERIVED:** the baseline is 10.03 MB per 120 s = **5.0 MB a minute = about 7.2 GB a day, 1.5 files a minute**. Each scrape of mine adds the same 10.03 MB, so
   1/min scraping would add 14 GB a day; the 12.4 GB a day average since 25 August (389.6 GB over 31.5 days) is the platform baseline plus extra, and I did
-  not measure the earlier extra, so that gap (about 5 GB a day) is **UNKNOWN**. This corrects the earlier "5 MB and 1.5 files per scrape": it is 10 MB and 3 files per
+  not measure the earlier extra, so that gap (about 5 GB a day) is **UNKNOWN**. **CORRECTION (6 Oct, independent review): the counter was reset on
+  25 August 20:33 and read on 5 October 07:36, which is 40.4 days, not 31.5, so the average is 9.6 GB a day and the unexplained gap over the 7.2 GB a day
+  baseline is about 2.4 GB a day, not 5.** This corrects the earlier "5 MB and 1.5 files per scrape": it is 10 MB and 3 files per
   scrape, and the platform scrapes every other minute at the spill level.
 * **MEASURED, and the statement:** the provider's log does not keep the STATEMENT line (the lines are bare), so the text is not logged. A controlled single
   read of `extensions.pg_stat_statements` selecting the query text, as `supabase_read_only_user` at 09:48:38, wrote **a temp file of exactly 4,041,588 bytes**,
@@ -362,6 +364,9 @@ Three cautions, none of which is resolved:
    load (a budget, a cache, a swap state) is not excluded by "no traffic in the minutes before".
 2. The bursts are largely our own verification traffic, and one page load costs about 25 gateway requests (12.6), so 3,000 requests in ten minutes is on the order of a hundred
    page loads. The E2 and E4 bursts were run **against a host that was already stalled**.
+   *(6 Oct review, INFERRED: "gateway requests" here are auth + rest + storage, and the auth:rest ratio of about 1:3 implies about four upstream requests per
+   hq-api read, so a page load is nearer a hundred of THESE requests than twenty-five and 3,000 in ten minutes is nearer thirty page loads. The conclusion that
+   most of the burst is page fan-out stands; the factor is not a hundred.)*
 3. A gateway request count is not total load. The worker and the exporter reach the database without the gateway.
 
 ### 12.4 Refining the leading model: memory starvation feeding root-volume IO, amplified by the Nano IO envelope

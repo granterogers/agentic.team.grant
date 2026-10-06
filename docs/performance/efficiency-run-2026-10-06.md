@@ -29,7 +29,9 @@ parameter), or fence the windowed rows (`MATERIALIZED` / `OFFSET 0`) and ask the
 | 1025 | `studio_unseen` | 1,969,521 hits, 1478 ms | 70,956 hits, ~320 ms | `page-readers-equivalence.ts` |
 | 1025 | `hq_studio_lately` | 681,997 hits, 422 ms | 22,386 hits, 24 ms | same |
 | 1025 | `studio_team_work` | 733,276 hits, 450 ms | 128,790 hits, 78 ms | same |
-| 1026 | `self_improvement_spent` (every worker pass) | idle pass: 6,006 hits, 1 seq scan of `jobs` | 2,633 hits, 0 seq scans | `self-improvement-equivalence.ts` |
+| 1026 | `self_improvement_spent` (every worker pass) | idle pass: 6,006 hits, 1 seq scan of `jobs` | 2,633 hits, 0 seq scans | `self-improvement-equivalence.ts`. **CORRECTION (6 Oct, Pass 3): the saving does NOT reproduce.** On a freshly seeded and analysed replica, with the predecessor restored by the exact rollback files on a copy of the same data, the old definition is already an index nested loop (773 buffer hits against 812) and the idle pass is 2.6k touched both ways. The 6,006-hit hash plan was a statistics-dependent state. 1026 is defensive plan stability, not a measured saving; it is not in the stabilisation release. What actually dominated the idle pass is migration 1030 below. |
+| 1030 | `dequeue_job` (every worker pass) | idle pass 2.6k buffers touched, 2.4k of it the self-improvement ceiling asked on every call | 0.47k (-83%); the ceiling is asked only when a self-improvement job is a candidate | `dequeue-ceiling-equivalence.ts` (44 cases, ceiling-evaluation counter, sabotage copies) |
+| 1031 | `studio_unseen` (page load) | 150,177 statements, 498 ms (a per-row `app.now_utc()` call, because the CTE `mine` is inlined and its `since` is re-evaluated for every row compared) | 54 statements, 170 ms | `page-readers-equivalence.ts` |
 | 1027 | `hq_pulse` (every 20 s per tab) | 24,937 hits, 4 seq scans, 53 ms | 13,741 hits, 2 seq scans, 31 ms | `pulse-equivalence.ts` (keeps the fixture asymmetry byte for byte) |
 | 1028 | `thinking` section (every 20 s per tab) | 81,475 hits (after 1023), 1,058 statements | 56 hits, 7 statements | `thinking-equivalence.ts` |
 
@@ -82,7 +84,8 @@ Not done: adaptive polling (the poll already stops while the tab is hidden; slow
 ## 5. Write churn (MEASURED, `job-lifecycle-cost.ts`, now attributed per table)
 
 One job's life: 1 insert, 10 updates, **0 HOT**, 8 `job_state_transitions` inserts, about 22 to 27 KB WAL, 10 `jobs` indexes. Production's
-counters agree (1.08 M updates on 22.6k rows, 5.1% HOT). Seven of the ten updates are the state walk, which changes an indexed and
+HOT percentage agrees (5.1%), but its update count does NOT: 1.08 M updates on 22.6k rows is 47.8 updates per job against 10 measured here, so
+about 38 per job are unexplained by this lifecycle (CORRECTION, Pass 6; the earlier text said the counters agreed). Seven of the ten updates are the state walk, which changes an indexed and
 predicate column by definition; three are lease heartbeats, which change `leased_until` (a key of `jobs_in_flight_idx`). So the HOT
 rate cannot be raised by a `fillfactor`. The one structural lever is moving the lease out of `jobs` into a narrow table, which changes
 what recovery reads and is **not attempted** (it touches the recovery contract). Auditability is untouched by this run.
@@ -98,9 +101,11 @@ what recovery reads and is **not attempted** (it touches the recovery contract).
 ## 7. Working set (MEASURED cold, `pg_buffercache` after a restart, distinct pages)
 
 Idle worker pass about 10.5 MB distinct (2.9 MB of that is a near-empty control). A cold Team HQ load about 84 MB; the studio payload alone
-68 MB, of which 45 MB is `jobs` TOAST (`pinned_config` read by `harness_job`; the seeded width is UNKNOWN against production, so the
-magnitude does not transfer, the mechanism does). Against 224 MB `shared_buffers` a cold page load can occupy a third of the cache
-(INFERRED for production). The remaining dominant cost is `harness_job` once per output inside `studio_activity` (9,055 calls, 173 of
+68 MB. **CORRECTION (Pass 6): the earlier attribution of 45 MB of that to `jobs` TOAST is FALSIFIED.** The seeded `jobs` table has no TOAST
+at all (0 bytes; `pinned_config` averages 1,383 bytes, under the 2 kB threshold), so those pages are heap and index pages, and nothing
+here shows `pinned_config` width at production is large. Production's 108 MB for `jobs` is `pg_total_relation_size` (heap, indexes and
+TOAST together); the replica's equivalent is 94 MB, of which the heap is 88 MB, so the seed's "heap near 94 MB" was a mislabel of a total.
+Whether a cold page load occupies a third of the 224 MB `shared_buffers` at production is INFERRED from that and is UNKNOWN. The remaining dominant cost is `harness_job` once per output inside `studio_activity` (9,055 calls, 173 of
 360 ms in `hq_studio`).
 
 ## 8. Rejected (with the evidence)
