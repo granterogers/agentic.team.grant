@@ -30,6 +30,8 @@ interface Mutation {
   old: string
   new: string
   invariant: string
+  /** A mutation with no observable effect (defence in depth): surviving is the expected, documented result. */
+  equivalent?: boolean
   expect: string
 }
 
@@ -103,7 +105,14 @@ try {
       } finally {
         writeFileSync(path, original)
       }
-      const result = run === undefined ? 'DID_NOT_LAND' : run.status === 0 ? 'SURVIVED' : 'CAUGHT'
+      const result =
+        run === undefined
+          ? 'DID_NOT_LAND'
+          : run.status === 0
+            ? m.equivalent === true
+              ? 'SURVIVED_EQUIVALENT'
+              : 'SURVIVED'
+            : 'CAUGHT'
       const expected = run?.failing.some((f) => f.includes(m.expect)) ?? false
       console.log(
         `${m.id}: ${result}${run?.failing.length ? ` by ${run.failing.join(', ')}` : ''}${result === 'CAUGHT' && !expected ? ` (not by the expected test ${m.expect})` : ''}`,

@@ -44,6 +44,27 @@ describe('the fan-out goes through the once-door', () => {
     expect(withoutComments).toMatch(/deliberate === null\s*\?\s*'app\.enqueue_child_once'/)
   })
 
+  it('every office.instruction child (a hand-off to a colleague) is started through the once-door (M25)', () => {
+    /*
+      The `toContain('app.enqueue_child_once')` above is satisfied by ANY occurrence, so changing the OTHER call site
+      (the "put somebody else on it" hand-off) to plain `enqueue_child` left this file green. The property is per
+      KIND: each enqueue of an `office.instruction` child, wherever it is, uses `enqueue_child_once`. The floor of two
+      is the found-nothing guard: a regex that matches nothing would pass the loop below.
+    */
+    const calls = [
+      ...withoutComments.matchAll(
+        /select (app\.enqueue_child(?:_once)?)\(\s*app\.job_office\(\$\{lit\(job\.jobId\)\}::uuid\), \$\{lit\(job\.jobId\)\}::uuid,\s*'([a-z_.]+)'/g,
+      ),
+    ]
+    const handoffs = calls.filter((m) => m[2] === 'office.instruction')
+    expect(handoffs.length).toBeGreaterThanOrEqual(2)
+    for (const m of handoffs) expect(m[1]).toBe('app.enqueue_child_once')
+    // CONTROL: the same extraction does see a plain call for a kind that is meant to use one.
+    expect(calls.some((m) => m[1] === 'app.enqueue_child' && m[2] === 'notebook.generate')).toBe(
+      true,
+    )
+  })
+
   it('and passes the request as the obligation, so the key means something', () => {
     const call = /select \$\{deliberate[\s\S]{0,700}?\) as r/.exec(withoutComments)?.[0] ?? ''
     expect(call).toContain("'office.pursue'")

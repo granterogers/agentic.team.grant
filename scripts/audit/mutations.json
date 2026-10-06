@@ -223,12 +223,13 @@
     },
     {
       "id": "M21",
-      "critical": true,
-      "severity": "high",
+      "critical": false,
+      "severity": "low",
+      "equivalent": true,
       "file": "src/channels/telegram.ts",
       "old": "  if (expected === '') return false\n",
       "new": "",
-      "invariant": "an empty expected Telegram secret never matches",
+      "invariant": "EQUIVALENT MUTANT, expected to survive: with no configured secret the next line already refuses an empty presented value and a non-empty one hashes differently from the empty secret, so the line is defence in depth with no observable effect",
       "expect": "tests/channels/telegram.test.ts"
     },
     {
