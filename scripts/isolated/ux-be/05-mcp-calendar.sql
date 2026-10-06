@@ -1,6 +1,6 @@
--- Proof for 0924: the MCP calendar tools call the REAL calendar (0897). Local replica only; everything rolls back.
+-- Proof for 0924: the MCP calendar tools call the REAL calendar (0906, written as 0897). Local replica only; everything rolls back.
 --   psql -h /tmp/pgs -p 55432 -U postgres -d cand_mcp -v ON_ERROR_STOP=1 -f scripts/isolated/ux-be/05-mcp-calendar.sql
--- Needs 0897, 0920 and 0922 and 0924 applied.
+-- Needs 0906, 0920 and 0922 and 0924 applied.
 \set ON_ERROR_STOP on
 begin;
 set local application_name = 'PostgREST proof';

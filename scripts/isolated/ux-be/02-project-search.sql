@@ -40,7 +40,7 @@ begin
   -- another owner's layout in the same office must not be read
   insert into public.dashboard_layouts (owner, project_id, surface, panels)
     values ('someone-else', pa2, 'basecamp', jsonb_build_array(jsonb_build_object('id','__workspace','postits', jsonb_build_array(jsonb_build_object('id','x','text','zyxqnote hidden')))));
-  -- calendar: the REAL table from 0897 (0925 is what hides a tombstoned event)
+  -- calendar: the REAL table from 0906, written as 0897 (0925 is what hides a tombstoned event)
   insert into public.project_events (office_id, project_id, title, notes, starts_at, ends_at, origin_channel, created_by)
     values (a, pa, 'Kickoff zyxqcal', 'room 4', now(), now() + interval '1 hour', 'teamhq', 'proof'),
            (b, pb, 'Foreign zyxqcal', null, now(), now() + interval '1 hour', 'teamhq', 'proof');

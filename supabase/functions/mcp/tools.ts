@@ -378,7 +378,7 @@ export const TOOLS: Readonly<Record<string, ToolSpec>> = {
   },
 
   // Calendar: served only where the database has the calendar (see OPTIONAL_TOOLS). These call the project calendar
-  // (0897) through app.mcp_event_* (0924), which checks the client, records the door ("via ChatGPT") and marks every
+  // (0906, written as 0897) through app.mcp_event_* (0924), which checks the client, records the door ("via ChatGPT") and marks every
   // write as an agent's, so the approval policy decides before anything reaches Google. There is deliberately no
   // delete: the calendar hard-deletes an event that never reached Google, which would leave nothing to restore.
   list_events: {

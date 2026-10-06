@@ -1,4 +1,6 @@
--- 0900 - Documents is one VIEW over every source: logical items, real versions, and an import that is only ever a press.
+-- 0907 (written as 0900; renumbered 6 Oct 2026 because the Public Sample Office applied its own 0900 to production first,
+-- contents unchanged apart from the numbers in comments and one error message) - Documents is one VIEW over every source:
+-- logical items, real versions, and an import that is only ever a press.
 --
 -- What Grant asked for (the Documents module requirements, 4 October 2026): Documents is not "what is in Supabase
 -- storage". It is a unified view over Drive references, NotebookLM material, uploads and what the team generated.
@@ -65,7 +67,7 @@ create unique index documents_one_import_per_original
   where imported_from_document_id is not null;
 
 comment on column public.documents.imported_from_document_id is
-  'This row is the durable Team HQ-managed copy of that external document, made by an explicit import (0900). The opposite direction to mirrors_document_id (0169: a copy the office wrote OUT to a connector). One copy per original: documents_one_import_per_original.';
+  'This row is the durable Team HQ-managed copy of that external document, made by an explicit import (0907). The opposite direction to mirrors_document_id (0169: a copy the office wrote OUT to a connector). One copy per original: documents_one_import_per_original.';
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- 2. Why a version exists.
@@ -901,7 +903,7 @@ begin
     return jsonb_build_object('error', 'that would make the two documents each the replacement of the other');
   end if;
   select d.title, d.state into v_title, v_was$a$);
-  if v_new = v_def then raise exception '0900: hq_document_supersede splice did not land'; end if;
+  if v_new = v_def then raise exception '0907: hq_document_supersede splice did not land'; end if;
   execute v_new;
 end $s$;
 
@@ -915,7 +917,7 @@ end $s$;
 --  b. mirrors_document_id (0169). The office-written copy of X steps aside only when X itself is visible in this
 --     project payload (0464's rule). If the original is not visible the mirror is the only thing the project has, so it
 --     stays.
---  c. imported_from_document_id (0900). The Team HQ copy steps aside while its original is present and not missing -
+--  c. imported_from_document_id (0907). The Team HQ copy steps aside while its original is present and not missing -
 --     the original is the item and says imported:true. When the original is gone (missing_since) or out of play (its
 --     connection was disconnected, 0896) the copy IS the item: that is what "survives the original disappearing" means.
 --  d. same (connector, external_ref). A provider's file id is its identity; two rows with it are one file (e.g. watched

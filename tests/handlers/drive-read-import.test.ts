@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 
-// 0900: reading a file completes a person's recorded import request, and only asks about the very document it recorded.
+// 0907 (written as 0900): reading a file completes a person's recorded import request, and only asks about the very document it recorded.
 const drive = vi.hoisted(() => ({ got: null as unknown }))
 vi.mock('../../src/google/drive.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/google/drive.ts')>()),
@@ -56,7 +56,7 @@ const run = async (
   return { seen, body: String((out as { body: string }).body) }
 }
 
-describe('a Drive read finishes an explicit import request (0900)', () => {
+describe('a Drive read finishes an explicit import request (0907)', () => {
   beforeEach(() => {
     drive.got = { bytes: null, text: 'Plain exported words here.', mime: 'text/plain', error: null }
   })
@@ -72,7 +72,7 @@ describe('a Drive read finishes an explicit import request (0900)', () => {
     expect((await run('nothing')).body).not.toMatch(/import/i)
   })
 
-  it('a database without 0900 is not alarmed about on every read', async () => {
+  it('a database without 0907 is not alarmed about on every read', async () => {
     expect((await run('absent')).body).not.toMatch(/import/i)
   })
 

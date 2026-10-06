@@ -14,7 +14,7 @@ limit is now a constraint on rows instead of an accident of there being one vaul
 
 ### What changed (migration `1000_a_google_credential_is_one_connection_of_an_office.sql`)
 
-- `public.integration_connections` (office_id, provider, account_ref, state active|revoked, scopes[], secret_name,
+- `public.integration_connections` (office_id, provider, account_ref, state active|unverified|dead|revoked, scopes[], secret_name,
   created_at, revoked_at). `secret_name` is the NAME of the vault secret, never the secret. RLS on, every API role
   revoked, `office_id` write-once (`a1_office_write_once`), unique (office, provider, account_ref).
 - The V1 rule: partial unique index `integration_connections_one_active_per_provider` on (office, provider) where
@@ -29,9 +29,16 @@ limit is now a constraint on rows instead of an accident of there being one vaul
 - The three writers record the connection (spliced from their live definitions, each splice asserted): 
   `hq_store_google_refresh` upserts it active (a reconnect reactivates its own row), `google_revoke_begin` and
   `google_revoke_finish` mark it revoked.
-- Backfill: one active connection per office whose legacy-named Google secret exists in the vault (scopes carried over
-  from `google.granted_scopes` for the home office). Inserts nothing on a database with no Google credential. The secret
-  is not renamed or copied.
+- Backfill: one connection per office whose legacy-named Google secret exists in the vault (scopes carried over from
+  `google.granted_scopes` for the home office). Inserts nothing on a database with no Google credential. The secret is not
+  renamed or copied. **Corrected 6 Oct 2026, before the migration was applied:** the first draft marked every one `active`,
+  which would have recorded a revoked token as healthy. The state now comes only from the office's own durable
+  `connection_health` row (never Google, never the vault value): a fresh `ok` is `active`; `dead` naming `invalid_grant` is
+  `revoked`; any other `dead` is `dead`; a stale `ok`, `missing`, `unknown`, `parked`, `attested` or no row is `unverified`.
+  Only `active` resolves. A trigger then moves the connection with the credential's recorded health (ok promotes
+  unverified/dead, never revoked and never a second active; dead demotes active). The table states are therefore
+  `active | unverified | dead | revoked`. Proof: `scripts/isolated/google-connection-backfill.ts` and
+  `tests/migrations/migration-1000-backfill.test.ts`.
 - Ownership manifest: `integration_connections` is `OFFICE_CARRIER`. `scripts/check-ownership.ts --replica` reports only
   the three tables other branches added (`calendar_event_projects`, `project_events`, `style_profiles`), none of them mine.
 

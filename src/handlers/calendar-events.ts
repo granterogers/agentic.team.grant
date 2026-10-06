@@ -49,7 +49,7 @@
  *
  * ## How it is started
  *
- * By a duty (`calendar-event-sync`, 0897) every fifteen minutes, and by anything that enqueues a job of this kind
+ * By a duty (`calendar-event-sync`, 0906, written as 0897) every fifteen minutes, and by anything that enqueues a job of this kind
  * (a future "sync now" press). It reads the Google connection itself and does nothing, loudly in the Connections
  * panel and quietly here, when Google is not connected.
  */

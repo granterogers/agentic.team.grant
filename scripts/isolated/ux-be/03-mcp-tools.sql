@@ -99,7 +99,7 @@ begin
   if app.mcp_project_search(b, 'surveyor', null, 10, null)::text like '%surveyor%' then raise exception 'office B found A''s task'; end if;
 
   -- ---- optional tools reflect the database
-  -- 0897 (the calendar) is applied on this replica, so all three calendar tools are served; the calendar itself is
+  -- 0906 (the calendar, written as 0897) is applied on this replica, so all three calendar tools are served; the calendar itself is
   -- proved in 05-mcp-calendar.sql.
   if app.mcp_optional_tools(a) <> '["list_events","create_event","update_event"]'::jsonb then raise exception 'optional tools: %', app.mcp_optional_tools(a); end if;
   raise notice 'PASS 03-mcp-tools';

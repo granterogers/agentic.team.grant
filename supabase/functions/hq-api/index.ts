@@ -305,7 +305,7 @@ const SECTIONS: Readonly<
   */
   document: { fn: 'studio_document', office: true, arg: 'p_document_id' },
   /*
-    THE UNIFIED DOCUMENTS LIST (0900). One item per logical document for a project, across Drive references, NotebookLM
+    THE UNIFIED DOCUMENTS LIST (0907, written as 0900). One item per logical document for a project, across Drive references, NotebookLM
     material, uploads and what the team generated, with source classification, import and index state and version
     count. `?slug=` names the project (free text, hence textArg, not a uuid).
   */
@@ -314,7 +314,7 @@ const SECTIONS: Readonly<
     office: true,
     textArg: { param: 'slug', arg: 'p_slug' },
   },
-  // The versions of one logical document, v1..vN, from any one of them (0900). A uuid, so `arg`.
+  // The versions of one logical document, v1..vN, from any one of them (0907). A uuid, so `arg`.
   document_versions: { fn: 'hq_document_versions', office: true, arg: 'p_document_id' },
   /*
     HOW A MADE REPORT WAS MADE (0940, 0970): whether it has provenance, and whether the style it was set in was recorded
@@ -666,7 +666,7 @@ const SECTIONS: Readonly<
     office: true,
     also: [{ param: 'slug', arg: 'p_slug' }],
   },
-  // Which kinds that search can serve in THIS database (calendar needs 0897) - the page draws only filters that find something.
+  // Which kinds that search can serve in THIS database (calendar needs 0906) - the page draws only filters that find something.
   project_search_providers: { fn: 'project_search_providers', office: true },
   /*
     Everything an object relates to, both directions (#29, migrations 0310-11).
@@ -743,7 +743,7 @@ const SECTIONS: Readonly<
   plane_layout: { fn: 'hq_plane_layout', office: true, arg: 'p_project_id' },
   project_team: { fn: 'project_team', office: true, arg: 'p_project_id' },
   /*
-    A project's calendar (0897): its own events plus the Google events filed under it (scope=project), every project's
+    A project's calendar (0906, written as 0897): its own events plus the Google events filed under it (scope=project), every project's
     (scope=all), or the whole Google cache including what no project has claimed (scope=google).
     ?project=<slug> (or ?p_slug=) names the project and is needed only for scope=project; ?from= and ?to= bound the window
     (dates or timestamps; the function refuses a bad one, a window over 400 days, and an unknown scope by name).
@@ -1175,7 +1175,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     they arrived in" stay two different facts.
   */
   /*
-    A project's calendar (0897). A person's own acts: none is in SERVICE_MAY, so the office key (a machine) is refused.
+    A project's calendar (0906). A person's own acts: none is in SERVICE_MAY, so the office key (a machine) is refused.
     The channel the act came from rides in `p_channel` (default teamhq) and is kept on the event and in Activity.
     Google follows by itself: the calendar.sync_events duty pushes what is pending, and an agent's proposal asks the
     approval policy first. Deleting an event already in Google tombstones it until the deletion has reached Google.
@@ -1269,7 +1269,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   document_restore: { fn: 'hq_document_restore', office: true, required: ['p_document_id'] },
   document_pin: { fn: 'hq_document_pin', office: true, required: ['p_document_id', 'p_pinned'] },
   /*
-    VERSIONS AND IMPORT (0900). All three are a person's explicit press: none is on SERVICE_MAY, so the office key
+    VERSIONS AND IMPORT (0907). All three are a person's explicit press: none is on SERVICE_MAY, so the office key
     (a machine) is refused, and nothing in the product calls them but this page.
     - document_new_version: the next version from new text (`p_content`) OR by adopting an existing approved document in
       the same project (`p_by_document_id`). `p_approve` approves a draft being adopted. The old one is archived, never

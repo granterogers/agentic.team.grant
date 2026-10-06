@@ -1,5 +1,5 @@
 -- 1010. A NEW import of an external document is refused, by the server, when the source it must come from is
--- disconnected. UNAPPLIED to production. Depends on 0896, 0900, 0960, 0990, 0991 and 1000.
+-- disconnected. UNAPPLIED to production. Depends on 0896, 0907 (written as 0900), 0960, 0990, 0991 and 1000.
 --
 -- Grant, 5 October 2026: the page hides the Import press for a disconnected source, and that is a courtesy, not a
 -- boundary. A stale client, a direct RPC, a job somebody enqueued, an agent or an assistant on the MCP door would all

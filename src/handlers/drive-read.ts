@@ -237,7 +237,7 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
       }
 
       /*
-        An explicit import request (0900, `app.hq_document_import`) waits for exactly this: the material to be held.
+        An explicit import request (0907, written as 0900, `app.hq_document_import`) waits for exactly this: the material to be held.
         `document_import_fulfil` does nothing unless a person's request is recorded for this very document, so reading
         a file never imports one that nobody asked for. A failure is said, not swallowed: the request stays pending.
       */
@@ -252,7 +252,7 @@ export function driveReadHandler(deps: DriveReadDeps): Handler {
             ? ' Your import request is done: a Team HQ copy now exists.'
             : ''
         } catch (e) {
-          // A database that has not had 0900 yet has no request to complete: say nothing rather than alarm on every read.
+          // A database that has not had 0907 yet has no request to complete: say nothing rather than alarm on every read.
           if (
             e instanceof Error &&
             /document_import_fulfil/.test(e.message) &&

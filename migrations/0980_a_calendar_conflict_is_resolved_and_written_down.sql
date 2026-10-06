@@ -1,4 +1,6 @@
 -- 0980: optimistic concurrency for the project-calendar sync. UNAPPLIED to production.
+-- Numbering note (6 Oct 2026): below, "0897" means the project calendar, now migration 0906. The Public Sample Office's
+-- applied 0897 is a different migration.
 --
 -- The duty now sends If-Match with the etag it stored (public.project_events.external_etag, which 0897 already records
 -- from every successful push), so a change made in Google since the last sync is a 412 rather than being overwritten.
