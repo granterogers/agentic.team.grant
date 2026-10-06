@@ -62,12 +62,27 @@ const handlerFile = (kind: string) =>
         (/office\.(provision|rename)_channels/.test(kind) && f.p.endsWith('handlers/channels.ts'))),
   )
 
+/*
+  THE GATE MUST BE IN THE KIND'S OWN HANDLER, not merely somewhere in its file (deep systems audit, M5). One file can
+  host several kinds (notebook.ts holds five), and a gate consumed by one of them used to satisfy the check for all: the
+  approval gate of `notebook.generate` could be replaced with `{ ok: true }` and the file still "had a gate" because
+  `notebook.add_source` did. So the text examined is the handler's block: from its `kind: '<kind>'` to the next
+  `kind: '`. A kind whose handler is built elsewhere (the channel kinds) is judged by its whole file, as before.
+*/
+const blockOf = (text: string, kind: string): string => {
+  const at = text.search(new RegExp(`kind: '${kind.replace('.', '\\.')}'`))
+  if (at === -1) return text
+  const rest = text.slice(at + 6)
+  const next = rest.search(/\bkind: '/)
+  return text.slice(at, next === -1 ? undefined : at + 6 + next)
+}
+
 const ungatedExternalKinds = (reach: Record<string, { reach: string }>): string[] =>
   Object.keys(reach)
     .filter((k) => reach[k]?.reach === 'external')
     .filter((k) => {
       const f = handlerFile(k)
-      return f === undefined || !isGated(f.text)
+      return f === undefined || !isGated(blockOf(f.text, k))
     })
     .sort()
 
@@ -115,6 +130,23 @@ describe('every external kind is gated or named', () => {
     expect(isGated('const d = await governEffect(db, job, {})\nif (!d.ok) return refused()')).toBe(
       true,
     )
+  })
+
+  it('a gate in a NEIGHBOURING handler of the same file does not gate this one (M5)', () => {
+    const file = [
+      "{ kind: 'a.generate', handle: async () => {",
+      '  const start = { ok: true }',
+      '  if (!start.ok) return refused()',
+      '} },',
+      "{ kind: 'a.add', handle: async () => {",
+      '  const may = await mayWrite(db, job)',
+      '  if (!may.ok) return refused()',
+      '} },',
+    ].join('\n')
+    expect(isGated(blockOf(file, 'a.add'))).toBe(true)
+    expect(isGated(blockOf(file, 'a.generate'))).toBe(false)
+    // The file-level answer, which is what hid it, is "gated" for both.
+    expect(isGated(file)).toBe(true)
   })
 
   it('a new external kind with no gate and no entry is caught (the detector can fail)', () => {
