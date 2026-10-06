@@ -76,7 +76,7 @@
   },
   "app.dequeue_job(p_worker text, p_can_transcribe boolean, p_can_subprocess boolean, p_kinds text[], p_requested_by text)": {
     "class": "GLOBAL",
-    "reason": "Deployment scan: the one worker queue is global by design. It takes a queued job of an ACTIVE office only (a disabled office's work waits where it is, 0681), returns the job whole with its office_id, and the worker passes that office to every later call. It carries nothing from one office to another.",
+    "reason": "Deployment scan: the one worker queue is global by design. It takes a queued job of an ACTIVE office only (a disabled office's work waits where it is, 0681), returns the job whole with its office_id, and the worker passes that office to every later call. It carries nothing from one office to another. Since 1025, among jobs of equal priority an office already holding its fair share of the in-flight slots is served after one that is not (an ordering term, never a refusal; scripts/isolated/office-fairness.ts).",
     "proof": "k-proof: app.dequeue_job returns the claimed job whole with its office, and a disabled office's queued job is not claimed"
   },
   "public.dequeue_job(p_worker text, p_can_transcribe boolean, p_can_subprocess boolean, p_kinds text[], p_requested_by text)": {
@@ -171,7 +171,7 @@
   },
   "app.defer_over_budget()": {
     "class": "GLOBAL",
-    "reason": "Deployment budget by design (the free-tier quota is shared): it delays queued jobs of an over-budget specialist and never moves a job or its office.",
+    "reason": "Deployment scan, per-office budget since 1025: it delays an over-budget OFFICE's own queued background jobs for that specialist (spend is counted by office, so one office never holds another's work) and never parks a person's conversation; it never moves a job or its office.",
     "proof": "k-proof: app.defer_over_budget only delays queued work: it moved no job from one office to another"
   },
   "app.claim_pending_notification(p_worker text, p_lease_seconds integer)": {
