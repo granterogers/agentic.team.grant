@@ -64,7 +64,7 @@ for (const [k, v] of Object.entries(process.env)) {
 const suite = (bail: boolean) => {
   const args = ['vitest', 'run', '--reporter=dot', ...(bail ? ['--bail=1'] : [])]
   const r = spawnSync('npx', args, { cwd: dir, env, encoding: 'utf8', timeout: 540_000 })
-  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`.replace(/\x1b\[[0-9;]*m/g, '')
+  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g'), '')
   const failing = [...new Set([...out.matchAll(/FAIL\s+(tests\/\S+)/g)].map((m) => m[1] as string))]
   return { status: r.status, failing, tail: out.split('\n').slice(-6).join('\n') }
 }
