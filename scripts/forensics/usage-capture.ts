@@ -9,15 +9,17 @@
  * seconds apart; a 429 or a server error stops the run. The raw response is saved whole, with the status and duration, and the
  * granularity the API actually returns is recorded rather than assumed.
  *
- * `usage.api-requests-count` is also read once (a single count, no time axis).
+ * `usage.api-requests-count` is read only with --with-count (a single count, no time axis).
+ *
+ * METERED. These endpoints read the log service, whose usage is billed by data scanned (6 October 2026: 102 GB against a 100 GB
+ * allowance). They go through the log query budget (src/safety/log-query-budget.ts): LOG_QUERY_REASON is required, the default is
+ * one hour, and 3day and 7day are refused. Check the saved usage evidence under docs/ops/evidence first.
  */
 import '../../src/safety/require-production-checks.ts'
 import { mgmt, REF, record, requireToken, saveRaw, sleep } from './common.ts'
 
 requireToken()
-const INTERVALS = (
-  process.argv.find((a) => a.startsWith('--intervals='))?.slice(12) ?? '1day,3day,7day'
-)
+const INTERVALS = (process.argv.find((a) => a.startsWith('--intervals='))?.slice(12) ?? '1hr')
   .split(',')
   .filter((x) => x !== '')
 const run = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16)
@@ -27,14 +29,21 @@ const asks: { name: string; path: string }[] = [
     name: `api-counts-${i}`,
     path: `/v1/projects/${REF}/analytics/endpoints/usage.api-counts?interval=${i}`,
   })),
-  {
-    name: 'api-requests-count',
-    path: `/v1/projects/${REF}/analytics/endpoints/usage.api-requests-count`,
-  },
+  // The single count has no time axis, so the log query budget treats it as a whole day and refuses it unless the window
+  // ceiling has been raised with a stated reason. It is asked for only on request.
+  ...(process.argv.includes('--with-count')
+    ? [
+        {
+          name: 'api-requests-count',
+          path: `/v1/projects/${REF}/analytics/endpoints/usage.api-requests-count`,
+        },
+      ]
+    : []),
 ]
 let first = true
 for (const a of asks) {
-  if (!first) await sleep(5000)
+  // 65 s: the log query budget refuses a second query inside that spacing, and a usage read is metered like a log query.
+  if (!first) await sleep(65_000)
   first = false
   const r = await mgmt(a.path, 60_000)
   let points = 0
