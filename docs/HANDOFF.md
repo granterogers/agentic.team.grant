@@ -5,9 +5,9 @@
 > a Monday automation, a date-keeping daily job. Migrations **0899 to 0905** (0900 also fixes a latent `''::uuid` defect that
 > broke hand-off delegation for everybody; #428 was a database cast, not a worker defect). Page `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x`
 > (My Tasks project name, #426 failed-read, Settings notice; rollback chain in PUBLIC-SAMPLE.md). Nothing held was deployed.
-> Account, limits and the capability matrix: `docs/multi-user/PUBLIC-SAMPLE.md`. **Paused:** Supabase auth, rest and storage read
-> UNHEALTHY and sign-in answered 503, so the final desktop and phone walkthroughs (`npm run sample:public-showcase-ui -- --only=...`)
-> were NOT completed on the final build; run them when the health API reads healthy. Open: #425 (the team's identity and its
+> Account, limits and the capability matrix: `docs/multi-user/PUBLIC-SAMPLE.md`. **Paused:** Supabase recovered after a dashboard restart
+> (6 Oct 12:29Z) and the final walkthroughs passed on the final build: desktop 73/73, phone 73/73, plus contact Save/Remove and
+> Automations refusals. 0902's first scheduled run failed with a platform startup timeout; watch the 7 Oct 03:23Z run. Open: #425 (the team's identity and its
 > own Activity), #424 (dates: solved for tasks by 0902; close once the daily job has been seen to run).
 >
 > ## 2026-10-05 - PUBLIC SAMPLE OFFICE LIVE (branch `claude/multi-user-p4`)

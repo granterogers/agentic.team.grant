@@ -170,6 +170,90 @@ const run = async (label: string, phone: boolean): Promise<void> => {
   }
   await noOverflow('a project page')
 
+  // The gateway's own refusal, polled for anywhere on the page (a toast or an inline line), never the standing Sample notice.
+  const refused = () =>
+    page
+      .waitForFunction(
+        "/sample office, so changes are not saved/.test((document.body.innerText||'').replace(/\\s+/g,' '))",
+        undefined,
+        { timeout: 8000 },
+      )
+      .then(() => true)
+      .catch(() => false)
+  const press = (sel: string) =>
+    page
+      .locator(sel)
+      .first()
+      .click({ timeout: 8000, force: true })
+      .then(() => true)
+      .catch(() => false)
+
+  // A contact: Save changes and Remove contact (two presses) are refused in a sentence and the contact is still there.
+  const crm = await go(
+    '/p/riverside-caf-launch/contacts',
+    undefined,
+    /@|\+44|Nair|Webb|Harvest|Priya|Hannah/i,
+  )
+  const contactName = /(Nair|Webb|Harvest|Priya|Hannah)/i.exec(crm)?.[1] ?? ''
+  const opened = await press('[data-bc-contact]')
+  await page.waitForSelector('[data-bc-contact-save]', { timeout: 8000 }).catch(() => null)
+  check(
+    opened && (await page.locator('[data-bc-contact-save]').count()) > 0,
+    'Contact: opens with Save changes and Remove contact',
+  )
+  let saveSaid = false
+  for (let n = 0; n < 3 && !saveSaid; n++) {
+    await press('[data-bc-contact-save]')
+    saveSaid = await refused()
+  }
+  check(saveSaid, 'Contact: Save changes is refused in a sentence, and saves nothing')
+  await press('[data-bc-contact-away]')
+  await page.waitForTimeout(400)
+  await press('[data-bc-contact-away]')
+  await page.waitForTimeout(2500)
+  const afterRemove = await go('/p/riverside-caf-launch/contacts', undefined, /./)
+  check(
+    contactName !== '' && afterRemove.includes(contactName),
+    `Contact: Remove is refused and the contact is still listed (${contactName})`,
+  )
+
+  // Project Settings > Automations: setting one going is refused in a sentence and the existing automation is unchanged.
+  const sett = await go('/p/riverside-caf-launch/settings', undefined, /Team|Automations/)
+  check(/Automations/.test(sett), 'Project Settings: opens with Automations')
+  await press('[data-setpane="automations"]')
+  await page.waitForSelector('[data-auto-what]', { timeout: 10000 }).catch(() => null)
+  const autoBefore =
+    (await page.locator('[data-auto-set]').count()) +
+    (await page.locator('[data-auto-remove]').count())
+  await page
+    .locator('[data-auto-what]')
+    .first()
+    .fill('Tell me every Friday how the week went')
+    .catch(() => null)
+  // A forced press can land just before a redraw and do nothing (the studio never stops moving): refill and press again, up to three times.
+  let autoSaid = false
+  for (let n = 0; n < 3 && !autoSaid; n++) {
+    await page
+      .locator('[data-auto-what]')
+      .first()
+      .fill('Tell me every Friday how the week went')
+      .catch(() => null)
+    await press('[data-auto-add]')
+    autoSaid = await refused()
+  }
+  check(autoSaid, 'Automations: Set it going is refused in a sentence')
+  const autoAfter =
+    (await page.locator('[data-auto-set]').count()) +
+    (await page.locator('[data-auto-remove]').count())
+  check(
+    autoAfter === autoBefore,
+    `Automations: nothing was added (${autoBefore} controls before, ${autoAfter} after)`,
+  )
+  clean(
+    (await page.locator('body').innerText()).replace(/\s+/g, ' '),
+    'Project Settings (Automations)',
+  )
+
   // My Tasks names the project of a task as a name, not an object.
   const mine = await go('/tasks', 'Gareth Webb', /Riverside Café Launch/)
   check(
@@ -375,29 +459,50 @@ const run = async (label: string, phone: boolean): Promise<void> => {
     .first()
     .click({ timeout: 5000, force: true })
     .catch(() => null)
-  await page.waitForTimeout(1800)
+  // The gateway's own sentence, not the page's standing notice (which also says "changes are not saved").
+  const autonomySaid = await page
+    .waitForFunction(
+      "/sample office, so changes are not saved/.test((document.body.innerText||'').replace(/\\s+/g,' '))",
+      undefined,
+      { timeout: 8000 },
+    )
+    .then(() => true)
+    .catch(() => false)
   check(
-    /changes are not saved/.test(
-      (await page.locator('#settings').innerText()).replace(/\s+/g, ' '),
-    ),
-    'Settings: a refused change answers in a sentence',
+    autonomySaid,
+    `Settings: a refused change answers in a sentence${autonomySaid ? '' : ` (${(await page.locator('#settings').innerText()).replace(/\s+/g, ' ').slice(0, 300)})`}`,
   )
   const requests = await settingsTab('requests', 'Sending email')
   check(
     /Oliver is asking to use/.test(requests) && /Sending email/.test(requests),
     `Settings: the tool request waiting for a decision is listed (${requests.slice(330, 520)})`,
   )
-  await page
-    .locator('#settings button', { hasText: /^Approve$/ })
-    .first()
-    .click({ force: true })
-    .catch(() => null)
-  await page.waitForTimeout(2500)
+  // The studio never stops moving, so a forced press can land just before a redraw and do nothing: press again (once) if no sentence came.
+  let approveSaid = false
+  for (let press = 0; press < 3 && !approveSaid; press++) {
+    await page
+      .locator('#settings button', { hasText: /^Approve$/ })
+      .first()
+      .click({ force: true })
+      .catch(() => null)
+    // Approving asks first, in the page's own dialog; the visitor says yes and is then refused.
+    await page
+      .locator('.stg-confirm button', { hasText: /^Approve$/ })
+      .first()
+      .click({ timeout: 4000, force: true })
+      .catch(() => null)
+    approveSaid = await page
+      .waitForFunction(
+        "/sample office, so changes are not saved/.test((document.body.innerText||'').replace(/\\s+/g,' '))",
+        undefined,
+        { timeout: 6000 },
+      )
+      .then(() => true)
+      .catch(() => false)
+  }
   check(
-    /changes are not saved/.test(
-      (await page.locator('#settings').innerText()).replace(/\s+/g, ' '),
-    ),
-    'Settings: Approve on the request is refused in a sentence, and approves nothing',
+    approveSaid,
+    `Settings: Approve on the request is refused in a sentence, and approves nothing${approveSaid ? '' : ` (${(await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(-240)})`}`,
   )
   const learned = await settingsTab('memory', 'Oak boards')
   check(
@@ -417,7 +522,7 @@ const run = async (label: string, phone: boolean): Promise<void> => {
     .catch(() => null)
   await page.waitForTimeout(4000)
   check(
-    /changes are not saved/.test(
+    /sample office, so changes are not saved/.test(
       (await page.locator('#settings').innerText()).replace(/\s+/g, ' '),
     ),
     'Settings: Connect Telegram answers in a sentence',

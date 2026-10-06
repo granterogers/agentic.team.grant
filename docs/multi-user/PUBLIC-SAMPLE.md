@@ -116,10 +116,14 @@ private connection, which the Sample must never hold), and Settings changes (rea
 ## Capability matrix (5 October 2026)
 
 Nothing is marked complete by inference. "Tested" says what was pressed or read as a visitor, in a real browser against the
-deployed page unless stated. The final desktop and phone walkthroughs (`sample:public-showcase-ui`) were **not completed on the
-final build**: the platform health API read auth, rest and storage UNHEALTHY and sign-in answered 503, so production contact
-stopped. The last full desktop walk before that passed 72 of 73 checks; the one failure was an assertion about the Requests pane
-that has since been corrected and has not been re-run.
+deployed page unless stated. **Final walkthroughs, 6 October 2026, after the platform recovered:** desktop 73 of 73, phone 73 of 73
+(`sample:public-showcase-ui`, harness at its final commit). The run added the contact Save changes / Remove contact presses and
+project Settings > Automations "Set it going"; each is refused in the gateway's sentence and writes nothing (the gmail.send
+request stays open; the automation count is unchanged; the contact is still listed). Two harness defects were found and fixed:
+the Approve press never answered the page's own "Approve this?" dialog, and several refusal checks matched the page's standing
+Sample notice instead of the gateway's sentence, so they could pass without a refusal. No product defect was found.
+**0902's first scheduled run (03:23Z, 6 October) failed with "job startup timeout"**, which is the platform stall of that night,
+not the function; the date anchor still reads 2026-10-05. A real run has not yet been seen to succeed (next due 03:23Z, 7 October).
 
 | Capability | Classification | Sample content | Interactive? | Tested | Notes |
 |---|---|---|---|---|---|
