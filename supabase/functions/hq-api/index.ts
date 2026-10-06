@@ -41,6 +41,13 @@
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
 import { fileText } from './file-text.ts'
 import { authorizeUrl, revokeToken } from './oauth.ts'
+import {
+  driveProvider,
+  type Failure,
+  type PreviewPlan,
+  previewDocument,
+  streamDocument,
+} from './preview.ts'
 
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -297,6 +304,24 @@ const SECTIONS: Readonly<
     metadata and opening one fetches it — the same reasoning as `lately`.
   */
   document: { fn: 'studio_document', office: true, arg: 'p_document_id' },
+  /*
+    THE UNIFIED DOCUMENTS LIST (0900). One item per logical document for a project, across Drive references, NotebookLM
+    material, uploads and what the team generated, with source classification, import and index state and version
+    count. `?slug=` names the project (free text, hence textArg, not a uuid).
+  */
+  project_documents: {
+    fn: 'hq_project_documents',
+    office: true,
+    textArg: { param: 'slug', arg: 'p_slug' },
+  },
+  // The versions of one logical document, v1..vN, from any one of them (0900). A uuid, so `arg`.
+  document_versions: { fn: 'hq_document_versions', office: true, arg: 'p_document_id' },
+  /*
+    HOW A MADE REPORT WAS MADE (0940, 0970): whether it has provenance, and whether the style it was set in was recorded
+    (`has_style_snapshot`). The page asks before offering "Use this report's style for the project". A document with no
+    provenance answers `{ has_provenance: false }`, not an error. A uuid, so `arg`.
+  */
+  document_provenance: { fn: 'hq_document_provenance', office: true, arg: 'p_document_id' },
   /*
     ONE OUTPUT, so the thing the team made can be READ (§19).
 
@@ -615,6 +640,35 @@ const SECTIONS: Readonly<
     filtered: true,
   },
   /*
+    ONE SEARCH OVER EVERY STORE A PROJECT HAS (migration 0921).
+
+    `search` (above) finds documents and the team's answers. This finds those plus tasks, the project conversation,
+    saved webpages, Post-its, calendar events and the team's research, as typed rows
+    `{kind, id, title, snippet, project_slug, url_hint, score, at}`. `?project=<uuid>` scopes it, `?kinds=task,page`
+    narrows it. The office is the verified session's; a project of another office answers like one that does not
+    exist.
+  */
+  project_search: {
+    fn: 'project_search',
+    office: true,
+    args: { p_limit: 20 },
+    textArg: { param: 'q', arg: 'p_query' },
+    scoped: true,
+    also: [{ param: 'kinds', arg: 'p_kinds' }],
+  },
+  /*
+    THE HOUSE STYLE (migration 0923). `?slug=<project>` returns the profile RESOLVED for that project - the office's
+    default with the project's fields laid over it, each field saying which it came from - and `vocabulary`, the
+    fonts, colours and treatments a profile may use. No `slug` is the office default alone.
+  */
+  style: {
+    fn: 'hq_style_get',
+    office: true,
+    also: [{ param: 'slug', arg: 'p_slug' }],
+  },
+  // Which kinds that search can serve in THIS database (calendar needs 0897) - the page draws only filters that find something.
+  project_search_providers: { fn: 'project_search_providers', office: true },
+  /*
     Everything an object relates to, both directions (#29, migrations 0310-11).
 
     Takes two arguments where every other section takes at most one, so it uses
@@ -688,6 +742,39 @@ const SECTIONS: Readonly<
   plane: { fn: 'studio_plane', office: true, arg: 'p_project_id' },
   plane_layout: { fn: 'hq_plane_layout', office: true, arg: 'p_project_id' },
   project_team: { fn: 'project_team', office: true, arg: 'p_project_id' },
+  /*
+    A project's calendar (0897): its own events plus the Google events filed under it (scope=project), every project's
+    (scope=all), or the whole Google cache including what no project has claimed (scope=google).
+    ?project=<slug> (or ?p_slug=) names the project and is needed only for scope=project; ?from= and ?to= bound the window
+    (dates or timestamps; the function refuses a bad one, a window over 400 days, and an unknown scope by name).
+  */
+  project_events: {
+    fn: 'hq_project_events',
+    office: true,
+    also: [
+      { param: 'project', arg: 'p_slug' },
+      { param: 'p_slug', arg: 'p_slug' },
+      { param: 'from', arg: 'p_from' },
+      { param: 'to', arg: 'p_to' },
+      { param: 'scope', arg: 'p_scope', values: ['project', 'all', 'google'] },
+    ],
+  },
+  /*
+    What the web gave a project, and where each piece came from (0930). One entry per saved page or downloaded file with its
+    address, title, retrieval time, the agent and job that fetched it, the research task and question, how it was reached
+    (search rank or the page whose link led to it), whether it is indexed, a screenshot if one was taken, and which outputs
+    cite it. ?project=<slug> (or ?p_slug=) is required; ?limit= bounds the list (default 100, at most 500). Harness
+    traffic is excluded by the reader, not here.
+  */
+  web_sources: {
+    fn: 'hq_project_sources_web',
+    office: true,
+    also: [
+      { param: 'project', arg: 'p_slug' },
+      { param: 'p_slug', arg: 'p_slug' },
+      { param: 'limit', arg: 'p_limit' },
+    ],
+  },
   project_automations: { fn: 'project_automations', office: true, arg: 'p_project_id' },
   /*
     The whole project, as the neutral package §13 names.
@@ -767,6 +854,22 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     personBy: 'p_by',
   },
   rename_project: { fn: 'hq_rename_project', office: true, required: ['p_slug', 'p_name'] },
+  // The house style (0923). `p_slug` absent writes the OFFICE default. The channel is the door's fact and is written by
+  // the database wrapper ('teamhq'), never sent. `personBy` records who; the office key is a machine and styles nothing.
+  style_set: { fn: 'hq_style_set', office: true, required: ['p_patch'], personBy: 'p_by' },
+  style_clear: { fn: 'hq_style_clear', office: true, required: [], personBy: 'p_by' },
+  /*
+    "I love this report. Save this as this project's report style." (0970). Copies the style a MADE report was recorded
+    with into the project's profile. Nothing is extracted from the PDF. It asks first when the project already has a
+    style (`needs_confirmation`; sent again with `p_confirm: true` it replaces), says so and does nothing for a report
+    made before its style was recorded, and is a person's press only - the office key is a machine and styles nothing.
+  */
+  style_adopt_from_document: {
+    fn: 'hq_style_adopt_from_document',
+    office: true,
+    required: ['p_slug', 'p_document'],
+    personBy: 'p_by',
+  },
   // A person connecting their OWN Telegram (#410, 0885). The office is the verified session's; the office key is not in
   // SERVICE_MAY, so a machine cannot start or end a person's connection.
   channel_link_begin: { fn: 'channel_link_begin', office: true, required: ['p_channel'] },
@@ -1071,6 +1174,30 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     rather than a position per document, so "the order he chose" and "the order
     they arrived in" stay two different facts.
   */
+  /*
+    A project's calendar (0897). A person's own acts: none is in SERVICE_MAY, so the office key (a machine) is refused.
+    The channel the act came from rides in `p_channel` (default teamhq) and is kept on the event and in Activity.
+    Google follows by itself: the calendar.sync_events duty pushes what is pending, and an agent's proposal asks the
+    approval policy first. Deleting an event already in Google tombstones it until the deletion has reached Google.
+  */
+  event_add: {
+    fn: 'hq_event_add',
+    office: true,
+    required: ['p_slug', 'p_title', 'p_starts_at'],
+  },
+  event_update: { fn: 'hq_event_update', office: true, required: ['p_event'] },
+  event_delete: { fn: 'hq_event_delete', office: true, required: ['p_event'] },
+  // Filing an EXISTING Google event under a project; the event stays Google's.
+  event_assign: {
+    fn: 'hq_event_assign',
+    office: true,
+    required: ['p_calendar_id', 'p_event_id', 'p_slug'],
+  },
+  event_unassign: {
+    fn: 'hq_event_unassign',
+    office: true,
+    required: ['p_calendar_id', 'p_event_id'],
+  },
   document_order_set: { fn: 'hq_document_order_set', office: true, required: ['p_slug', 'p_ids'] },
   document_order_reset: { fn: 'hq_document_order_reset', office: true, required: ['p_slug'] },
   dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', office: true, required: ['p_slug'] },
@@ -1141,6 +1268,23 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // press of "this one is current again" carries nothing and means approved.
   document_restore: { fn: 'hq_document_restore', office: true, required: ['p_document_id'] },
   document_pin: { fn: 'hq_document_pin', office: true, required: ['p_document_id', 'p_pinned'] },
+  /*
+    VERSIONS AND IMPORT (0900). All three are a person's explicit press: none is on SERVICE_MAY, so the office key
+    (a machine) is refused, and nothing in the product calls them but this page.
+    - document_new_version: the next version from new text (`p_content`) OR by adopting an existing approved document in
+      the same project (`p_by_document_id`). `p_approve` approves a draft being adopted. The old one is archived, never
+      deleted.
+    - document_rollback: make an older version current by writing it as a NEW version.
+    - document_import: make the durable Team HQ copy of an external document (or record the request when the text is not
+      held yet). Never silent: this is the only caller.
+  */
+  document_new_version: {
+    fn: 'hq_document_new_version',
+    office: true,
+    required: ['p_document_id'],
+  },
+  document_rollback: { fn: 'hq_document_rollback', office: true, required: ['p_document_id'] },
+  document_import: { fn: 'hq_document_import', office: true, required: ['p_document_id'] },
   /*
     Handled above rather than dispatched, because it carries bytes (#126). It
     is listed here so the whitelist is still the one place that says which
@@ -2415,7 +2559,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           'Content-Type': mime,
           'x-upsert': 'true',
         },
-        body: bytes,
+        body: bytes as unknown as BodyInit, // a typed array is a valid body at runtime; newer Deno typings reject the generic form
       })
       if (!put.ok) {
         console.error(`hq-api contact_photo: storage ${String(put.status)}`)
@@ -2543,7 +2687,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           'Content-Type': mime,
           'x-upsert': 'true',
         },
-        body: bytes,
+        body: bytes as unknown as BodyInit, // a typed array is a valid body at runtime; newer Deno typings reject the generic form
       })
       if (!put.ok) {
         console.error(`hq-api document_upload: storage ${String(put.status)}`)
@@ -2902,6 +3046,152 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // fetch of `/rpc/undefined` with the service key. Nothing came back and
   // nothing leaked — but the comment above says "a section not named here does
   // not exist", and until now that was not true.
+  /*
+    PREVIEWING AN EXTERNAL DOCUMENT ON DEMAND (0990). Not an import.
+
+    `document_preview` answers one of five states (ready, loading, failed, unsupported, stale) for a document id; the
+    decisions live in `src/documents/preview.ts`, uploaded beside this file, and the facts in `public.hq_document_preview_plan`.
+    `document_preview_file` streams the bytes of a PDF or an image from Drive to the browser in the response and keeps
+    NOTHING: no Storage write, no path, no URL. Only derived text and the source's version markers are recorded, through
+    `public.hq_document_preview_record`, so agents can search the text.
+
+    The office is the verified session's, never a caller-named one, and the document must belong to it (and to the project
+    the page says it is looking at). Reaching Drive uses the same short-lived token as the browse above, so it is the
+    operator's act until an office holds a Google connection of its own (#400); anyone else gets a plain `failed` that
+    cannot be retried, and still sees what is held for a connected source.
+  */
+  if (name === 'document_preview' || name === 'document_preview_file') {
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const id = url.searchParams.get('id') ?? ''
+    const projectSlug = (url.searchParams.get('project') ?? '').trim()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return json({ error: 'that section needs a valid id', section: name }, 400)
+    }
+    if (projectSlug !== '' && !/^[a-z0-9][a-z0-9-]{0,80}$/i.test(projectSlug)) {
+      return json({ error: 'project must be a project slug', section: name }, 400)
+    }
+    const callPreviewRpc = async (fn: string, body: Record<string, unknown>): Promise<unknown> => {
+      const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+      if (!r.ok) throw new Error(`${fn} ${String(r.status)}`)
+      return await r.json()
+    }
+    let plan: PreviewPlan
+    try {
+      plan = (await callPreviewRpc('hq_document_preview_plan', {
+        p_office: office,
+        p_document_id: id,
+        p_project_slug: projectSlug === '' ? null : projectSlug,
+      })) as PreviewPlan
+    } catch {
+      return json({
+        data: {
+          state: 'failed',
+          reason_code: 'unavailable',
+          reason: 'Team HQ could not look this document up just now. Try again shortly.',
+          retryable: true,
+          alternatives: ['retry'],
+        },
+      })
+    }
+    const providerFor = async () => {
+      if (
+        !(
+          kind === 'person' &&
+          principal !== null &&
+          principal !== '' &&
+          (await isOperator(principal))
+        )
+      ) {
+        return {
+          code: 'operator_required',
+          retryable: false,
+          message:
+            "The Drive connection here is the deployment operator's own, so only they can read from it. Open the source instead.",
+        } satisfies Failure
+      }
+      const access = await googleToken(String(principal), office)
+      if ('error' in access) {
+        return {
+          code: access.error.startsWith('Google is not connected')
+            ? 'not_connected'
+            : 'unauthorised',
+          retryable: false,
+          message: access.error,
+        } satisfies Failure
+      }
+      return driveProvider(access.token)
+    }
+    const extractText = async (bytes: Uint8Array, mime: string, fileName: string) => {
+      const read = await fileText(bytes, mime, fileName)
+      return read.text === null ? { text: null, why: read.why } : { text: read.text }
+    }
+    const record = async (a: {
+      meta: {
+        modifiedTime: string | null
+        mime: string
+        version: string | null
+        size: number | null
+      }
+      kind: 'text' | 'pdf' | 'image'
+      text: string | null
+      truncated: boolean
+    }): Promise<boolean> => {
+      const done = (await callPreviewRpc('hq_document_preview_record', {
+        p_office: office,
+        p_document_id: id,
+        p_meta: {
+          modifiedTime: a.meta.modifiedTime,
+          mime: a.meta.mime,
+          version: a.meta.version,
+          size: a.meta.size,
+        },
+        p_kind: a.kind,
+        p_text: a.text,
+        p_truncated: a.truncated,
+      })) as { ok?: boolean }
+      return done?.ok === true
+    }
+
+    if (name === 'document_preview') {
+      const result = await previewDocument({
+        plan,
+        provider: providerFor,
+        extractText,
+        record,
+        now: Date.now(),
+      })
+      return json({ data: result })
+    }
+
+    const made = await providerFor()
+    if (!('describe' in made)) return json({ error: made.message }, 403)
+    const streamed = await streamDocument({ plan, provider: made, extractText, record })
+    if (!streamed.ok) return json({ error: streamed.failure.message }, streamed.status)
+    const safeName = streamed.name.replace(/[^\w. -]+/g, '_').slice(0, 120) || 'document'
+    return new Response(streamed.bytes as unknown as BodyInit, {
+      status: 200,
+      headers: {
+        'content-type': streamed.mime,
+        'content-length': String(streamed.bytes.byteLength),
+        'content-disposition': `inline; filename="${safeName}"`,
+        // Short-lived by construction: nothing keeps this, and nothing downstream may either.
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; sandbox",
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'authorization, content-type',
+      },
+    })
+  }
+
   /*
     BROWSING GOOGLE DRIVE.
 

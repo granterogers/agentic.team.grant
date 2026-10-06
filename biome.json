@@ -8,7 +8,8 @@
       "!node_modules",
       "!coverage",
       "!package-lock.json",
-      "!infra"
+      "!infra",
+      "!docs/ops/evidence"
     ]
   },
   "formatter": {

@@ -21,6 +21,7 @@
  *
  * Prints the URI on stdout. Callers must mask it; it contains the password.
  */
+import '../../src/safety/arm.ts'
 export interface PoolerConfig {
   readonly db_user: string
   readonly db_host: string

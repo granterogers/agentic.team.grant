@@ -44,6 +44,7 @@
  * however complete its implementation.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { execFileSync } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../src/db/executor.ts'

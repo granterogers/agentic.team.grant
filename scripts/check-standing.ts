@@ -19,6 +19,7 @@
  * nothing about which prompt is carrying what.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { opensByDroppingIt } from '../src/agents/clarify.ts'
 import { guidanceFor } from '../src/agents/guidance.ts'
 import { readTeaching } from '../src/agents/teaching.ts'

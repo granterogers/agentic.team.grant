@@ -10,6 +10,7 @@
  * why rather than quietly ignoring the setting.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { NotionClient } from '../../src/notion/api.ts'
 import { CONNECTOR, syncNotion } from '../../src/notion/sync.ts'

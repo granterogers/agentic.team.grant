@@ -37,6 +37,7 @@
  * prefixes, and both are things we wrote.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { SlackClient } from '../../src/slack/api.ts'
 import { channelNameFor } from '../../src/slack/provision.ts'

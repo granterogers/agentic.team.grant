@@ -62,7 +62,7 @@ export async function cases(c: Ctx): Promise<void> {
                 select project_id, 'upload', ${q(`${slug}-src`)}, ${q(`${name} uploads`)}, 'source', true
                   from public.projects where slug = ${q(slug)} and office_id = '${office}' on conflict do nothing;`
            : ''
-}`,
+       }`,
     )
     return String(
       (

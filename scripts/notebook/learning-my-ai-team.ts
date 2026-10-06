@@ -40,6 +40,7 @@
  * repository will move. Re-running adds what is new; it does not duplicate.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'

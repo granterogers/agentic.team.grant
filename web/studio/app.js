@@ -35,6 +35,7 @@ import * as bc from './bc/shell.js'
 import * as bcJump from './bc/jump.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
+import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
 import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
@@ -6275,7 +6276,7 @@ function slackSetupPanel() {
 }
 
 /** One connection: logo, words, state, next step. `detail` is shown when it adds something. */
-function serviceRow(c, { showDetail = true } = {}) {
+function serviceRow(c, { showDetail = true, sub = false } = {}) {
   const ui = settingsUi
   const [tone, word] = copy.state[c.state] ?? ['off', c.state]
   const route = config.routeFor(c.key)
@@ -6302,7 +6303,9 @@ function serviceRow(c, { showDetail = true } = {}) {
   } else if (route.how === 'tab' && route.to !== 'setup') {
     action = ui.button({ label: 'Manage', tone: 'quiet', a: { 'data-goto-setting': route.to } })
   }
-  const unreachable = !connected && action === ''
+  // A part of the one Google card: the card has the one Connect and the one Disconnect, so a part carries none.
+  if (sub) action = ''
+  const unreachable = !connected && action === '' && !sub
   const whyNot = !op && route.how === 'oauth' ? 'Connected by whoever runs this Team HQ.' : route.why
   // An expired permission is not a missing one: say so, and say that nothing already read is lost.
   const expiredNote = expired
@@ -6331,7 +6334,9 @@ function serviceRow(c, { showDetail = true } = {}) {
 function connectionsTab() {
   const ui = settingsUi
   const all = config.services()
-  const main = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key))
+  const isGoogleSvc = (c) => config.routeFor(c.key).family === 'google'
+  const main = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key) && !isGoogleSvc(c))
+  const googleRows = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key) && isGoogleSvc(c))
   const machinery = all.filter((c) => MACHINERY_KEYS.has(c.key))
   const attention = main.filter((c) => ['degraded', 'dead'].includes(String(c.state)))
   const working = main.filter((c) => !attention.includes(c) && config.isConnected(c.state))
@@ -6375,19 +6380,45 @@ function connectionsTab() {
     }
     if (v.configured === true) {
       const trouble = v.trouble ?? []
+      // The last round's reading of the connection (0981). A down Vikunja is the loudest thing on this card.
+      const h = v.health
+      const down = h !== null && h !== undefined && h.state === 'down'
+      const downChip = {
+        refused: 'Token refused',
+        failed: 'Refused the last round',
+        unreachable: 'Not answering',
+      }
+      const lastOk =
+        h !== null && h !== undefined && h.lastOkAt !== null && h.lastOkAt !== undefined
+          ? ` Last in step ${when.words(h.lastOkAt)}.`
+          : ''
+      const why = down
+        ? h.kind === 'refused'
+          ? 'Vikunja turned the token down. Nothing was changed here and nothing is lost. To fix it, disconnect, then connect again with a fresh token (Vikunja, Settings, API tokens).'
+          : h.kind === 'failed'
+            ? 'Vikunja answered but refused the sync. Nothing was changed here and nothing is lost. Check the address and the project number: disconnect, then connect again.'
+            : 'Vikunja is not answering. Nothing was changed here and nothing is lost. The team tries again every quarter of an hour and this clears itself when it answers.'
+        : ''
       return ui.section({
         title: 'Your tasks in another app',
         body: ui.card([
           ui.row({
             name: title,
-            desc: `Connected to ${String(v.url ?? '')} (project ${String(v.project ?? '')}). ${v.linked} task${v.linked === 1 ? ' is' : 's are'} linked. Your tasks live here; the other app holds a copy, and disconnecting never loses anything.`,
+            desc: `Connected to ${String(v.url ?? '')} (project ${String(v.project ?? '')}). ${v.linked} task${v.linked === 1 ? ' is' : 's are'} linked. Your tasks live here; the other app holds a copy, and disconnecting never loses anything.${lastOk}`,
             wrap: true,
             said: true,
+            // The words are long and the control is a chip plus a button: on a phone the control goes under them.
+            kind: 'wide',
             status: '',
             control:
-              ui.chip(trouble.length === 0 ? 'ok' : 'warn', trouble.length === 0 ? 'In step' : `${trouble.length} to look at`) +
+              (down
+                ? ui.chip('bad', downChip[h.kind] ?? 'Not answering')
+                : ui.chip(trouble.length === 0 ? 'ok' : 'warn', trouble.length === 0 ? 'In step' : `${trouble.length} to look at`)) +
               (canWrite() && operator ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-vikunja-off': true } }) : ''),
           }),
+          ...(down
+            ? [ui.row({ name: 'Why it stopped', desc: `What it said: ${String(h.detail ?? '')}. ${why}`, kind: 'fact', attr: { 'data-tsync-down': h.kind ?? 'unreachable' } })]
+            : []),
           ...trouble.slice(0, 5).map((t) => ui.row({ name: String(t.title ?? ''), desc: String(t.why ?? t.state ?? ''), kind: 'fact' })),
         ]),
       })
@@ -6487,8 +6518,42 @@ function connectionsTab() {
   const sectionFor = (title, list, note) =>
     list.length === 0 ? '' : ui.section({ title, note, count: list.length, body: ui.card(list.map((c) => serviceRow(c))) })
 
+  /*
+    ONE GOOGLE, NOT THREE (4 October; made a single card on 5 October). Drive, Calendar and Gmail are one connection
+    made by one consent screen, and all three rows already pointed at the SAME disconnect ("google"), so three rows
+    with three Connect buttons were one account presented as three onboardings. There is now one card: one Connect
+    (or Reconnect), one Disconnect, and under it the state of each part, because each can be in a different state (a
+    scope withdrawn). The parts carry no buttons of their own. NotebookLM is not part of this card: Google offers no
+    API for it, so it is set up separately and is never ticked here.
+  */
+  const googleCard = (() => {
+    if (googleRows.length === 0) return ''
+    const on = googleRows.filter((c) => config.isConnected(c.state))
+    const dead = googleRows.some((c) => c.state === 'dead')
+    const degraded = googleRows.some((c) => c.state === 'degraded')
+    const op = config.VIEWER.operator
+    const [tone, word] = on.length === googleRows.length ? (degraded || dead ? ['warn', 'Needs attention'] : ['ok', 'Connected']) : on.length > 0 ? ['warn', 'Partly connected'] : dead ? ['bad', 'Needs reconnecting'] : ['off', 'Not connected']
+    const head = ui.row({
+      name: 'Google',
+      desc: 'One sign-in covers Drive, Calendar and Gmail. Notebook is connected separately and is not covered by this sign-in.',
+      kind: 'stack',
+      control: `<span data-google-summary>${ui.chip(tone, word)}</span>
+        ${on.length < googleRows.length && op ? ui.button({ label: dead ? 'Reconnect Google' : 'Connect Google', tone: 'primary', a: { 'data-google-connect': true } }) : ''}
+        ${on.length > 0 && canWrite() && op ? ui.button({ label: 'Disconnect Google', tone: 'quiet', a: { 'data-disconnect': 'google', 'data-service': 'Google' } }) : ''}
+        ${on.length < googleRows.length && !op ? '<span class="st-meta">Connected by whoever runs this Team HQ.</span>' : ''}`,
+    })
+    return ui.section({
+      title: 'Google',
+      body: ui.card([
+        head,
+        ...googleRows.map((c) => serviceRow(c, { sub: true })),
+      ]),
+    })
+  })()
+  const googleLine = googleCard
   return [
     said,
+    googleLine,
     sectionFor('Needs attention', attention, 'These were connected and are not working properly.'),
     sectionFor('Connected', working),
     sectionFor('Not connected', idle),
@@ -8944,6 +9009,7 @@ function keepUrl() {
   }
   if (path === shownPath) return
   const first = shownPath === null
+  const before = shownPath
   shownPath = path
   try {
     /*
@@ -8952,8 +9018,20 @@ function keepUrl() {
       a path the host has never heard of.
     */
     const to = REVIEW ? `#${path}` : path
-    if (first) history.replaceState({ path }, '', to)
-    else history.pushState({ path }, '', to)
+    /*
+      Each entry remembers the address it was pushed from, so closing a maximised module can GO BACK to it rather than
+      pushing a second entry (Back after Close used to reopen the module just put away). A page that was OPENED on a
+      module has no earlier entry of its own: closing it replaces the entry instead of adding one.
+    */
+    const deepLinkClosing =
+      !first &&
+      before !== null &&
+      before.includes('/x/') &&
+      !path.includes('/x/') &&
+      history.state?.path === before &&
+      history.state?.from === undefined
+    if (first || deepLinkClosing) history.replaceState({ path }, '', to)
+    else history.pushState({ path, from: before }, '', to)
   } catch {
     /* A page opened from a file has no history to write to. It still works. */
   }
@@ -13227,6 +13305,8 @@ document.addEventListener('drop', (e) => {
 
 document.addEventListener('keydown', (e) => {
   const cmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
+  /* Team HQ's own palette (bc/jump.js) answers Cmd or Ctrl and K there; this older bar is the classic studio's. */
+  if (cmdK && state.experience === 'basecamp') return
   if (cmdK) { e.preventDefault(); state.cmd.open ? (closeCmd(), render()) : openCmd(); return }
   // Escape closes whatever is open, outermost first.
   if (e.key === 'Escape' && state.cmd.open) { closeCmd(); render() }
@@ -13485,7 +13565,21 @@ if (typeof window !== 'undefined') {
     */
     const path = e.state?.path ?? addressNow()
     shownPath = path
+    const was = state.bcExpanded
     goToPath(path)
+    /*
+      BACK FROM A MAXIMISED MODULE settles it back towards its card rather than
+      blinking out, exactly as the close button does. Only when the dialog
+      itself is what went away: stepping between two levels is not a close.
+    */
+    if (was && !state.bcExpanded) {
+      state.bcExpanded = was
+      bcExpand.exit(was, () => {
+        state.bcExpanded = null
+        render()
+      })
+      return
+    }
     render()
   })
 }
@@ -13529,7 +13623,12 @@ const bcContext = {
     and closing is a repaint rather than a navigation - which is what makes
     closing return "naturally to the underlying project homepage".
   */
+  /* An object (a tile, a row) that is about to become a detailed view remembers where it was, so the view grows from it. */
+  rememberOrigin: (el) => {
+    bcExpand.rememberEl(el)
+  },
   openExpanded: (id) => {
+    bcExpand.remember(id)
     state.bcExpanded = id
     render()
   },
@@ -13595,8 +13694,29 @@ const bcContext = {
       render()
       return
     }
-    state.bcExpanded = null
-    render()
+    /*
+      PUT AWAY TOWARDS THE CARD it grew from, then redraw. The animation always
+      calls back, so a close can never wait on motion that does not happen.
+    */
+    const was = state.bcExpanded
+    /*
+      If this very dialog was opened by a history entry of ours, closing is Back: the popstate handler plays the same
+      settle-to-card exit, and the history holds no stale 'open' entry for the next Back to land on.
+    */
+    const entry = typeof history === 'undefined' ? null : history.state
+    if (
+      entry?.path === shownPath &&
+      typeof entry?.from === 'string' &&
+      !entry.from.includes('/x/') &&
+      (shownPath ?? '').includes('/x/')
+    ) {
+      history.back()
+      return
+    }
+    bcExpand.exit(was, () => {
+      state.bcExpanded = null
+      render()
+    })
   },
   /*
     PROJECT SETTINGS, RENDERED AND WIRED BY ITS OWN MODULE.

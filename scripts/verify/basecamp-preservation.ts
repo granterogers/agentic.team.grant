@@ -26,6 +26,7 @@
  * be edited whenever a section is added is a check that will be edited to
  * agree with whatever shipped.
  */
+import '../../src/safety/arm.ts'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'

@@ -1,0 +1,680 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!--[if IE 6]><html class="ie6" xmlns="http://www.w3.org/1999/xhtml"><![endif]-->
+<!--[if IE 7]><html class="lt-ie8 lt-ie9" xmlns="http://www.w3.org/1999/xhtml"><![endif]-->
+<!--[if IE 8]><html class="lt-ie9" xmlns="http://www.w3.org/1999/xhtml"><![endif]-->
+<!--[if gt IE 8]><!--><html xmlns="http://www.w3.org/1999/xhtml"><!--<![endif]-->
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=1" />
+  <meta name="referrer" content="origin" />
+  <meta name="HandheldFriendly" content="true" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>rust programming language book at DuckDuckGo</title>
+  <link title="DuckDuckGo (HTML)" type="application/opensearchdescription+xml" rel="search" href="//duckduckgo.com/opensearch_html_v2.xml" />
+  <link href="//duckduckgo.com/favicon.ico" rel="shortcut icon" />
+  <link rel="icon" href="//duckduckgo.com/favicon.ico" type="image/x-icon" />
+  <link id="icon60" rel="apple-touch-icon" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_60x60.png?v=2"/>
+  <link id="icon76" rel="apple-touch-icon" sizes="76x76" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_76x76.png?v=2"/>
+  <link id="icon120" rel="apple-touch-icon" sizes="120x120" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_120x120.png?v=2"/>
+  <link id="icon152" rel="apple-touch-icon" sizes="152x152" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_152x152.png?v=2"/>
+  <link rel="image_src" href="//duckduckgo.com/assets/icons/meta/DDG-icon_256x256.png">
+  <link rel="stylesheet" media="handheld, all" href="//duckduckgo.com/dist/h.12e359033b8c1146e5f7.css" type="text/css"/>
+</head>
+
+<body class="body--html">
+  <a name="top" id="top"></a>
+
+  <form action="/html/" method="post">
+    <input type="text" name="state_hidden" id="state_hidden" />
+  </form>
+
+  <div>
+    <div class="site-wrapper-border"></div>
+
+    <div id="header" class="header cw header--html">
+      <a title="DuckDuckGo" href="/html/" class="header__logo-wrap"></a>
+
+      <form name="x" class="header__form" action="/html/" method="post">
+        <div class="search search--header">
+          <input name="q" autocomplete="off" class="search__input" id="search_form_input_homepage" type="text" value="rust programming language book" />
+          <input name="b" id="search_button_homepage" class="search__button search__button--html" value="" title="Search" alt="Search" type="submit" />
+        </div>
+
+        
+        
+        
+        
+
+        <div class="frm__select">
+          <select name="kl">
+            
+              <option value="" >All Regions</option>
+            
+              <option value="ar-es" >Argentina</option>
+            
+              <option value="au-en" >Australia</option>
+            
+              <option value="at-de" >Austria</option>
+            
+              <option value="be-fr" >Belgium (fr)</option>
+            
+              <option value="be-nl" >Belgium (nl)</option>
+            
+              <option value="br-pt" >Brazil</option>
+            
+              <option value="bg-bg" >Bulgaria</option>
+            
+              <option value="ca-en" >Canada (en)</option>
+            
+              <option value="ca-fr" >Canada (fr)</option>
+            
+              <option value="ct-ca" >Catalonia</option>
+            
+              <option value="cl-es" >Chile</option>
+            
+              <option value="cn-zh" >China</option>
+            
+              <option value="co-es" >Colombia</option>
+            
+              <option value="hr-hr" >Croatia</option>
+            
+              <option value="cz-cs" >Czech Republic</option>
+            
+              <option value="dk-da" >Denmark</option>
+            
+              <option value="ee-et" >Estonia</option>
+            
+              <option value="fi-fi" >Finland</option>
+            
+              <option value="fr-fr" >France</option>
+            
+              <option value="de-de" >Germany</option>
+            
+              <option value="gr-el" >Greece</option>
+            
+              <option value="hk-tzh" >Hong Kong</option>
+            
+              <option value="hu-hu" >Hungary</option>
+            
+              <option value="is-is" >Iceland</option>
+            
+              <option value="in-en" >India (en)</option>
+            
+              <option value="id-en" >Indonesia (en)</option>
+            
+              <option value="ie-en" >Ireland</option>
+            
+              <option value="il-en" >Israel (en)</option>
+            
+              <option value="it-it" >Italy</option>
+            
+              <option value="jp-jp" >Japan</option>
+            
+              <option value="kr-kr" >Korea</option>
+            
+              <option value="lv-lv" >Latvia</option>
+            
+              <option value="lt-lt" >Lithuania</option>
+            
+              <option value="my-en" >Malaysia (en)</option>
+            
+              <option value="mx-es" >Mexico</option>
+            
+              <option value="nl-nl" >Netherlands</option>
+            
+              <option value="nz-en" >New Zealand</option>
+            
+              <option value="no-no" >Norway</option>
+            
+              <option value="pk-en" >Pakistan (en)</option>
+            
+              <option value="pe-es" >Peru</option>
+            
+              <option value="ph-en" >Philippines (en)</option>
+            
+              <option value="pl-pl" >Poland</option>
+            
+              <option value="pt-pt" >Portugal</option>
+            
+              <option value="ro-ro" >Romania</option>
+            
+              <option value="ru-ru" >Russia</option>
+            
+              <option value="xa-ar" >Saudi Arabia</option>
+            
+              <option value="sg-en" >Singapore</option>
+            
+              <option value="sk-sk" >Slovakia</option>
+            
+              <option value="sl-sl" >Slovenia</option>
+            
+              <option value="za-en" >South Africa</option>
+            
+              <option value="es-ca" >Spain (ca)</option>
+            
+              <option value="es-es" >Spain (es)</option>
+            
+              <option value="se-sv" >Sweden</option>
+            
+              <option value="ch-de" >Switzerland (de)</option>
+            
+              <option value="ch-fr" >Switzerland (fr)</option>
+            
+              <option value="tw-tzh" >Taiwan</option>
+            
+              <option value="th-en" >Thailand (en)</option>
+            
+              <option value="tr-tr" >Turkey</option>
+            
+              <option value="us-en" >US (English)</option>
+            
+              <option value="us-es" >US (Spanish)</option>
+            
+              <option value="ua-uk" >Ukraine</option>
+            
+              <option value="uk-en" >United Kingdom</option>
+            
+              <option value="vn-en" >Vietnam (en)</option>
+            
+          </select>
+        </div>
+
+        <div class="frm__select frm__select--last">
+          <select class="" name="df">
+            
+              <option value="" selected>Any Time</option>
+            
+              <option value="d" >Past Day</option>
+            
+              <option value="w" >Past Week</option>
+            
+              <option value="m" >Past Month</option>
+            
+              <option value="y" >Past Year</option>
+            
+          </select>
+        </div>
+      </form>
+    </div>
+
+    
+
+    
+      <!-- Web results are present -->
+      <div>
+        <div class="serp__results">
+          <div id="links" class="results">
+            
+
+            
+              
+                
+                  <div class="result results_links results_links_deep result--ad ">
+                    <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                      <h2 class="result__title">
+                        
+                          <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fduckduckgo.com%2Fy.js%3Fad_domain%3Debay.com%26ad_provider%3Dbingv7aa%26ad_type%3Dtxad%26click_metadata%3DKsz4zXStrgdfHkBTCi_0vw8aMkQKjbVCRIZdlHmXcaWkeN6kVDf37bvaXWIYruZlmiy_l_bI3gM7N01qI9l568HGT_h5e75Oyzexopa7VQ_BIcsBys4krYShMERHXL_WNkC22HouwdPT9BQM%252DLqSwtVsAYmjlhOoB%252DVPbmRaSEo.VBhCv4J4qKE3QLNOYvVGyA%26rut%3Df3320ba528b53da540e8357aa3818694aa864a302006318e82d7038bf6567cd6%26u3%3Dhttps%253A%252F%252Fwww.bing.com%252Faclick%253Fld%253De8Cl2rjuvsszuCTeu7CS2ydjVUCUzDuReeg_%252DTXdT9xETnNb59Ad8qjocbWlry7pAQzfDAr4v2t8i4l15l9suoumQKn2URmwj63sBm763uFMJJiBd63oku42rtkLKCXwposLXmuE4OAgrC2sFJrbu3qWnQYyaml8ibDTQf%252DszosWhn7PPlvQt1XgMCk1GmnfDZNtsHQ_sDPn7yHFUomaJZp3YEMKo%2526u%253DaHR0cHMlM2ElMmYlMmZ3d3cuZWJheS5jb20lMmZzY2glMmZpLmh0bWwlM2Zfbmt3JTNkdGhlJTJicnVzdCUyYnByb2dyYW1taW5nJTJibGFuZ3VhZ2UlMmIyJTJibmQlMjZub3JvdmVyJTNkMSUyNm1rZXZ0JTNkMSUyNm1rcmlkJTNkNzExLTE1MzY3Ny0zMjM2NjEtMCUyNm1rY2lkJTNkMiUyNm1rc2NpZCUzZDEwMiUyNmtleXdvcmQlM2RNZWRpYSUyY1NSUCUyNmNybHAlM2RfJTI2TVRfSUQlM2QlMjZnZW9faWQlM2QlMjZybHNhdGFyZ2V0JTNkZGF0LTIzMjg1NTk0Njk1NTA2NDclM2Fsb2MtMTkwJTI2YWRwb3MlM2QlMjZkZXZpY2UlM2RjJTI2bWt0eXBlJTNkJTI2bG9jJTNkOTQ1MTQlMjZwb2klM2QlMjZhYmNJZCUzZCUyNmNtcGduJTNkNjAzNTE4MTI2JTI2c2l0ZWxuayUzZCUyNmFkZ3JvdXBpZCUzZDEyMjgxNTU0OTkyNjY1NzklMjZuZXR3b3JrJTNkcyUyNm1hdGNodHlwZSUzZGIlMjZtc2Nsa2lkJTNkMWRmNjJkODhhNTJmMTJlNmJlM2U0NzRiOTk3Zjg0YTg%2526rlid%253D1df62d88a52f12e6be3e474b997f84a8%26vqd%3D4%2D172873677396416600691482909454205649040%26iurl%3D%257B1%257DIG%253D477C1D5982394A53B9296CBCE3FC2681%2526CID%253D1011E01D03086D0C194DF7F402836C98%2526ID%253DDevEx%252C5037.1&amp;rut=314f2e6c97f2e4c633df714650ff479029a0dc2004d9e1ab3671f16ad07288b5">Rust Books - Rust Programming Language</a>
+                        
+                        <div class="result__badge-wrap">
+                          <button class="badge--ad">Ad</button>
+                          <div class="badge--ad__tooltip-wrap">
+                            <div class="tooltip tooltip--right">
+                              <div class="tooltip__triangle-outer"></div>
+                              <div class="tooltip__triangle-inner"></div>
+                              Viewing ads is privacy protected by DuckDuckGo. Ad clicks are managed by Microsoft's ad network (<a href="https://duckduckgo.com/duckduckgo-help-pages/company/ads-by-microsoft-on-duckduckgo-private-search" class="tooltip-link">more info</a>).
+                            </div>
+                          </div>
+                        </div>
+                      </h2>
+
+                      
+
+                      
+                        <div class="result__extras">
+                          <div class="result__extras__url">
+                            <!-- Disable Ad Favicon
+                            <span class="result__icon">
+                              
+                                <a rel="nofollow" class="result__icon__img" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fduckduckgo.com%2Fy.js%3Fad_domain%3Debay.com%26ad_provider%3Dbingv7aa%26ad_type%3Dtxad%26click_metadata%3DKsz4zXStrgdfHkBTCi_0vw8aMkQKjbVCRIZdlHmXcaWkeN6kVDf37bvaXWIYruZlmiy_l_bI3gM7N01qI9l568HGT_h5e75Oyzexopa7VQ_BIcsBys4krYShMERHXL_WNkC22HouwdPT9BQM%252DLqSwtVsAYmjlhOoB%252DVPbmRaSEo.VBhCv4J4qKE3QLNOYvVGyA%26rut%3Df3320ba528b53da540e8357aa3818694aa864a302006318e82d7038bf6567cd6%26u3%3Dhttps%253A%252F%252Fwww.bing.com%252Faclick%253Fld%253De8Cl2rjuvsszuCTeu7CS2ydjVUCUzDuReeg_%252DTXdT9xETnNb59Ad8qjocbWlry7pAQzfDAr4v2t8i4l15l9suoumQKn2URmwj63sBm763uFMJJiBd63oku42rtkLKCXwposLXmuE4OAgrC2sFJrbu3qWnQYyaml8ibDTQf%252DszosWhn7PPlvQt1XgMCk1GmnfDZNtsHQ_sDPn7yHFUomaJZp3YEMKo%2526u%253DaHR0cHMlM2ElMmYlMmZ3d3cuZWJheS5jb20lMmZzY2glMmZpLmh0bWwlM2Zfbmt3JTNkdGhlJTJicnVzdCUyYnByb2dyYW1taW5nJTJibGFuZ3VhZ2UlMmIyJTJibmQlMjZub3JvdmVyJTNkMSUyNm1rZXZ0JTNkMSUyNm1rcmlkJTNkNzExLTE1MzY3Ny0zMjM2NjEtMCUyNm1rY2lkJTNkMiUyNm1rc2NpZCUzZDEwMiUyNmtleXdvcmQlM2RNZWRpYSUyY1NSUCUyNmNybHAlM2RfJTI2TVRfSUQlM2QlMjZnZW9faWQlM2QlMjZybHNhdGFyZ2V0JTNkZGF0LTIzMjg1NTk0Njk1NTA2NDclM2Fsb2MtMTkwJTI2YWRwb3MlM2QlMjZkZXZpY2UlM2RjJTI2bWt0eXBlJTNkJTI2bG9jJTNkOTQ1MTQlMjZwb2klM2QlMjZhYmNJZCUzZCUyNmNtcGduJTNkNjAzNTE4MTI2JTI2c2l0ZWxuayUzZCUyNmFkZ3JvdXBpZCUzZDEyMjgxNTU0OTkyNjY1NzklMjZuZXR3b3JrJTNkcyUyNm1hdGNodHlwZSUzZGIlMjZtc2Nsa2lkJTNkMWRmNjJkODhhNTJmMTJlNmJlM2U0NzRiOTk3Zjg0YTg%2526rlid%253D1df62d88a52f12e6be3e474b997f84a8%26vqd%3D4%2D172873677396416600691482909454205649040%26iurl%3D%257B1%257DIG%253D477C1D5982394A53B9296CBCE3FC2681%2526CID%253D1011E01D03086D0C194DF7F402836C98%2526ID%253DDevEx%252C5037.1&amp;rut=314f2e6c97f2e4c633df714650ff479029a0dc2004d9e1ab3671f16ad07288b5">
+                                  <img width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/.ico" name="i15" />
+                                </a>
+                              
+                            </span>
+                            -->
+                            <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fduckduckgo.com%2Fy.js%3Fad_domain%3Debay.com%26ad_provider%3Dbingv7aa%26ad_type%3Dtxad%26click_metadata%3DKsz4zXStrgdfHkBTCi_0vw8aMkQKjbVCRIZdlHmXcaWkeN6kVDf37bvaXWIYruZlmiy_l_bI3gM7N01qI9l568HGT_h5e75Oyzexopa7VQ_BIcsBys4krYShMERHXL_WNkC22HouwdPT9BQM%252DLqSwtVsAYmjlhOoB%252DVPbmRaSEo.VBhCv4J4qKE3QLNOYvVGyA%26rut%3Df3320ba528b53da540e8357aa3818694aa864a302006318e82d7038bf6567cd6%26u3%3Dhttps%253A%252F%252Fwww.bing.com%252Faclick%253Fld%253De8Cl2rjuvsszuCTeu7CS2ydjVUCUzDuReeg_%252DTXdT9xETnNb59Ad8qjocbWlry7pAQzfDAr4v2t8i4l15l9suoumQKn2URmwj63sBm763uFMJJiBd63oku42rtkLKCXwposLXmuE4OAgrC2sFJrbu3qWnQYyaml8ibDTQf%252DszosWhn7PPlvQt1XgMCk1GmnfDZNtsHQ_sDPn7yHFUomaJZp3YEMKo%2526u%253DaHR0cHMlM2ElMmYlMmZ3d3cuZWJheS5jb20lMmZzY2glMmZpLmh0bWwlM2Zfbmt3JTNkdGhlJTJicnVzdCUyYnByb2dyYW1taW5nJTJibGFuZ3VhZ2UlMmIyJTJibmQlMjZub3JvdmVyJTNkMSUyNm1rZXZ0JTNkMSUyNm1rcmlkJTNkNzExLTE1MzY3Ny0zMjM2NjEtMCUyNm1rY2lkJTNkMiUyNm1rc2NpZCUzZDEwMiUyNmtleXdvcmQlM2RNZWRpYSUyY1NSUCUyNmNybHAlM2RfJTI2TVRfSUQlM2QlMjZnZW9faWQlM2QlMjZybHNhdGFyZ2V0JTNkZGF0LTIzMjg1NTk0Njk1NTA2NDclM2Fsb2MtMTkwJTI2YWRwb3MlM2QlMjZkZXZpY2UlM2RjJTI2bWt0eXBlJTNkJTI2bG9jJTNkOTQ1MTQlMjZwb2klM2QlMjZhYmNJZCUzZCUyNmNtcGduJTNkNjAzNTE4MTI2JTI2c2l0ZWxuayUzZCUyNmFkZ3JvdXBpZCUzZDEyMjgxNTU0OTkyNjY1NzklMjZuZXR3b3JrJTNkcyUyNm1hdGNodHlwZSUzZGIlMjZtc2Nsa2lkJTNkMWRmNjJkODhhNTJmMTJlNmJlM2U0NzRiOTk3Zjg0YTg%2526rlid%253D1df62d88a52f12e6be3e474b997f84a8%26vqd%3D4%2D172873677396416600691482909454205649040%26iurl%3D%257B1%257DIG%253D477C1D5982394A53B9296CBCE3FC2681%2526CID%253D1011E01D03086D0C194DF7F402836C98%2526ID%253DDevEx%252C5037.1&amp;rut=314f2e6c97f2e4c633df714650ff479029a0dc2004d9e1ab3671f16ad07288b5">ebay.com</a>
+                            
+                          </div>
+                        </div>
+                      
+
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fduckduckgo.com%2Fy.js%3Fad_domain%3Debay.com%26ad_provider%3Dbingv7aa%26ad_type%3Dtxad%26click_metadata%3DKsz4zXStrgdfHkBTCi_0vw8aMkQKjbVCRIZdlHmXcaWkeN6kVDf37bvaXWIYruZlmiy_l_bI3gM7N01qI9l568HGT_h5e75Oyzexopa7VQ_BIcsBys4krYShMERHXL_WNkC22HouwdPT9BQM%252DLqSwtVsAYmjlhOoB%252DVPbmRaSEo.VBhCv4J4qKE3QLNOYvVGyA%26rut%3Df3320ba528b53da540e8357aa3818694aa864a302006318e82d7038bf6567cd6%26u3%3Dhttps%253A%252F%252Fwww.bing.com%252Faclick%253Fld%253De8Cl2rjuvsszuCTeu7CS2ydjVUCUzDuReeg_%252DTXdT9xETnNb59Ad8qjocbWlry7pAQzfDAr4v2t8i4l15l9suoumQKn2URmwj63sBm763uFMJJiBd63oku42rtkLKCXwposLXmuE4OAgrC2sFJrbu3qWnQYyaml8ibDTQf%252DszosWhn7PPlvQt1XgMCk1GmnfDZNtsHQ_sDPn7yHFUomaJZp3YEMKo%2526u%253DaHR0cHMlM2ElMmYlMmZ3d3cuZWJheS5jb20lMmZzY2glMmZpLmh0bWwlM2Zfbmt3JTNkdGhlJTJicnVzdCUyYnByb2dyYW1taW5nJTJibGFuZ3VhZ2UlMmIyJTJibmQlMjZub3JvdmVyJTNkMSUyNm1rZXZ0JTNkMSUyNm1rcmlkJTNkNzExLTE1MzY3Ny0zMjM2NjEtMCUyNm1rY2lkJTNkMiUyNm1rc2NpZCUzZDEwMiUyNmtleXdvcmQlM2RNZWRpYSUyY1NSUCUyNmNybHAlM2RfJTI2TVRfSUQlM2QlMjZnZW9faWQlM2QlMjZybHNhdGFyZ2V0JTNkZGF0LTIzMjg1NTk0Njk1NTA2NDclM2Fsb2MtMTkwJTI2YWRwb3MlM2QlMjZkZXZpY2UlM2RjJTI2bWt0eXBlJTNkJTI2bG9jJTNkOTQ1MTQlMjZwb2klM2QlMjZhYmNJZCUzZCUyNmNtcGduJTNkNjAzNTE4MTI2JTI2c2l0ZWxuayUzZCUyNmFkZ3JvdXBpZCUzZDEyMjgxNTU0OTkyNjY1NzklMjZuZXR3b3JrJTNkcyUyNm1hdGNodHlwZSUzZGIlMjZtc2Nsa2lkJTNkMWRmNjJkODhhNTJmMTJlNmJlM2U0NzRiOTk3Zjg0YTg%2526rlid%253D1df62d88a52f12e6be3e474b997f84a8%26vqd%3D4%2D172873677396416600691482909454205649040%26iurl%3D%257B1%257DIG%253D477C1D5982394A53B9296CBCE3FC2681%2526CID%253D1011E01D03086D0C194DF7F402836C98%2526ID%253DDevEx%252C5037.1&amp;rut=314f2e6c97f2e4c633df714650ff479029a0dc2004d9e1ab3671f16ad07288b5">Free Shipping Available. Buy Top Products On eBay. Money Back Guarantee!</a>
+                      
+
+                      <div class="clear"></div>
+                    </div>
+                  </div>
+                
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdoc.rust%2Dlang.org%2Fstable%2Fbook%2F&amp;rut=43588fb9554d287b323f833088043d6ec1cd0f658bc68429b56b8145b5fb6c5e">The Rust Programming Language</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdoc.rust%2Dlang.org%2Fstable%2Fbook%2F&amp;rut=43588fb9554d287b323f833088043d6ec1cd0f658bc68429b56b8145b5fb6c5e">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/doc.rust-lang.org.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdoc.rust%2Dlang.org%2Fstable%2Fbook%2F&amp;rut=43588fb9554d287b323f833088043d6ec1cd0f658bc68429b56b8145b5fb6c5e">
+                            doc.rust-lang.org/stable/book/
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdoc.rust%2Dlang.org%2Fstable%2Fbook%2F&amp;rut=43588fb9554d287b323f833088043d6ec1cd0f658bc68429b56b8145b5fb6c5e">Learn <b>Rust</b> from the official <b>book</b> by the <b>Rust</b> community, covering the basics, features, and idioms of the <b>language</b>. The <b>book</b> is available online, offline, and in paperback and ebook formats.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdoc.rust%2Dlang.org%2Fbook%2Fch00%2D00%2Dintroduction.html&amp;rut=d662d86dd83aed136a1dd67065f1dc9d1e9a6fa541d2ab36e7ed15ef502671be">Introduction - The Rust Programming Language</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdoc.rust%2Dlang.org%2Fbook%2Fch00%2D00%2Dintroduction.html&amp;rut=d662d86dd83aed136a1dd67065f1dc9d1e9a6fa541d2ab36e7ed15ef502671be">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/doc.rust-lang.org.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdoc.rust%2Dlang.org%2Fbook%2Fch00%2D00%2Dintroduction.html&amp;rut=d662d86dd83aed136a1dd67065f1dc9d1e9a6fa541d2ab36e7ed15ef502671be">
+                            doc.rust-lang.org/book/ch00-00-introduction.html
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdoc.rust%2Dlang.org%2Fbook%2Fch00%2D00%2Dintroduction.html&amp;rut=d662d86dd83aed136a1dd67065f1dc9d1e9a6fa541d2ab36e7ed15ef502671be">Learn <b>Rust</b>, a fast and reliable <b>language</b> that balances high-level ergonomics and low-level control. This <b>book</b> covers <b>Rust</b> features, concepts, tools, and projects for beginners and experienced developers.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.scs.stanford.edu%2F~zyedidia%2Fdocs%2Frust%2Frust_book.pdf&amp;rut=22283a13c8c100456f1ba2f818fc62d83a150e4550b20cbbb5a09f0ac818a169"><span class="result__type">PDF</span> The Rust Programming Language - Stanford University</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.scs.stanford.edu%2F~zyedidia%2Fdocs%2Frust%2Frust_book.pdf&amp;rut=22283a13c8c100456f1ba2f818fc62d83a150e4550b20cbbb5a09f0ac818a169">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.scs.stanford.edu.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.scs.stanford.edu%2F~zyedidia%2Fdocs%2Frust%2Frust_book.pdf&amp;rut=22283a13c8c100456f1ba2f818fc62d83a150e4550b20cbbb5a09f0ac818a169">
+                            www.scs.stanford.edu/~zyedidia/docs/rust/rust_book.pdf
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.scs.stanford.edu%2F~zyedidia%2Fdocs%2Frust%2Frust_book.pdf&amp;rut=22283a13c8c100456f1ba2f818fc62d83a150e4550b20cbbb5a09f0ac818a169">Learn <b>Rust</b>, a fast and reliable <b>language</b> for systems <b>programming</b> and more. This <b>book</b> covers the basics, features, tools, and applications of <b>Rust</b>, with examples and exercises.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Frust%2Dbook.cs.brown.edu%2Ftitle%2Dpage.html&amp;rut=09a1a2db1041565a66c9f6fb0236609448ab66cdff3f029ca4ba3432e0fef91e">The Rust Programming Language - Brown University</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Frust%2Dbook.cs.brown.edu%2Ftitle%2Dpage.html&amp;rut=09a1a2db1041565a66c9f6fb0236609448ab66cdff3f029ca4ba3432e0fef91e">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/rust-book.cs.brown.edu.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Frust%2Dbook.cs.brown.edu%2Ftitle%2Dpage.html&amp;rut=09a1a2db1041565a66c9f6fb0236609448ab66cdff3f029ca4ba3432e0fef91e">
+                            rust-book.cs.brown.edu/title-page.html
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Frust%2Dbook.cs.brown.edu%2Ftitle%2Dpage.html&amp;rut=09a1a2db1041565a66c9f6fb0236609448ab66cdff3f029ca4ba3432e0fef91e">The <b>Rust</b> <b>Programming</b> <b>Language</b> by Steve Klabnik, Carol Nichols, and Chris Krycho, with contributions from the <b>Rust</b> Community (and with experimental modifications!) This version of the text assumes you&#x27;re using <b>Rust</b> 1.90.0 (released 2025-09-18) or later with edition = &quot;2024&quot; in the Cargo.toml file of all projects to configure them to use <b>Rust</b> 2024 Edition idioms. See the &quot;Installation ...</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=http%3A%2F%2Frust%2Dlang.github.io%2Fbook%2F&amp;rut=3db2de32e3e7d3d1f650021e9a093da4c1bb704677a9071ca6e380ed8cc7128e">The Rust Programming Language - GitHub Pages</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=http%3A%2F%2Frust%2Dlang.github.io%2Fbook%2F&amp;rut=3db2de32e3e7d3d1f650021e9a093da4c1bb704677a9071ca6e380ed8cc7128e">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/rust-lang.github.io.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=http%3A%2F%2Frust%2Dlang.github.io%2Fbook%2F&amp;rut=3db2de32e3e7d3d1f650021e9a093da4c1bb704677a9071ca6e380ed8cc7128e">
+                            rust-lang.github.io/book/
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=http%3A%2F%2Frust%2Dlang.github.io%2Fbook%2F&amp;rut=3db2de32e3e7d3d1f650021e9a093da4c1bb704677a9071ca6e380ed8cc7128e">The <b>Rust</b> <b>Programming</b> <b>Language</b> by Steve Klabnik, Carol Nichols, and Chris Krycho, with contributions from the <b>Rust</b> Community This version of the text assumes you&#x27;re using <b>Rust</b> 1.81.0 (released 2024-09-04) or later. See the &quot;Installation&quot; section of Chapter 1 to install or update <b>Rust</b>.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.amazon.com%2FRust%2DProgramming%2DLanguage%2D3rd%2Fdp%2F1718504446&amp;rut=b375018de121aa9b2bbab0c6e5f87d7e41d284645a6144e390fb3f5f3e7659fa">The Rust Programming Language, 3rd Edition - Amazon</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.amazon.com%2FRust%2DProgramming%2DLanguage%2D3rd%2Fdp%2F1718504446&amp;rut=b375018de121aa9b2bbab0c6e5f87d7e41d284645a6144e390fb3f5f3e7659fa">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.amazon.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.amazon.com%2FRust%2DProgramming%2DLanguage%2D3rd%2Fdp%2F1718504446&amp;rut=b375018de121aa9b2bbab0c6e5f87d7e41d284645a6144e390fb3f5f3e7659fa">
+                            www.amazon.com/Rust-Programming-Language-3rd/dp/1718504446
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2026-03-31T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.amazon.com%2FRust%2DProgramming%2DLanguage%2D3rd%2Fdp%2F1718504446&amp;rut=b375018de121aa9b2bbab0c6e5f87d7e41d284645a6144e390fb3f5f3e7659fa">Build stable, production-grade systems with <b>Rust</b>. The <b>Rust</b> <b>Programming</b> <b>Language</b>, 3rd Edition, teaches you to write code that the compiler can verify, teams can maintain, and systems can evolve safely over time. Written by longtime <b>Rust</b> community members, this <b>book</b> shows you how to work effectively with <b>Rust&#x27;s</b> type system, concurrency model, and tooling, using patterns and idioms chosen for ...</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.amazon.com%2FRust%2DProgramming%2DLanguage%2DSteve%2DKlabnik%2Fdp%2F1593278284&amp;rut=da70c7e7f609a2c15cc6b3593156f427b608c907d8436dbb2ecfc806e316eba2">The Rust Programming Language: Klabnik, Steve, Nichols, Carol ... - Amazon</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.amazon.com%2FRust%2DProgramming%2DLanguage%2DSteve%2DKlabnik%2Fdp%2F1593278284&amp;rut=da70c7e7f609a2c15cc6b3593156f427b608c907d8436dbb2ecfc806e316eba2">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.amazon.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.amazon.com%2FRust%2DProgramming%2DLanguage%2DSteve%2DKlabnik%2Fdp%2F1593278284&amp;rut=da70c7e7f609a2c15cc6b3593156f427b608c907d8436dbb2ecfc806e316eba2">
+                            www.amazon.com/Rust-Programming-Language-Steve-Klabnik/dp/1593278284
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.amazon.com%2FRust%2DProgramming%2DLanguage%2DSteve%2DKlabnik%2Fdp%2F1593278284&amp;rut=da70c7e7f609a2c15cc6b3593156f427b608c907d8436dbb2ecfc806e316eba2">The <b>Rust</b> <b>Programming</b> <b>Language</b> is the official <b>book</b> on <b>Rust</b>, an open-source, community-developed systems <b>programming</b> <b>language</b> that runs blazingly fast, prevents segfaults, and guarantees thread safety.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Frust%2Dlang%2Fbook&amp;rut=d8b20babcb54f0ef913dbb367c735d320c6582dd6221b0e984261dfc7465f7b6">GitHub - rust-lang/book: The Rust Programming Language</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Frust%2Dlang%2Fbook&amp;rut=d8b20babcb54f0ef913dbb367c735d320c6582dd6221b0e984261dfc7465f7b6">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/github.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Frust%2Dlang%2Fbook&amp;rut=d8b20babcb54f0ef913dbb367c735d320c6582dd6221b0e984261dfc7465f7b6">
+                            github.com/rust-lang/book
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Frust%2Dlang%2Fbook&amp;rut=d8b20babcb54f0ef913dbb367c735d320c6582dd6221b0e984261dfc7465f7b6">The <b>Rust</b> <b>Programming</b> <b>Language</b>. Contribute to <b>rust</b>-lang/<b>book</b> development by creating an account on GitHub.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fcomputingforgeeks.com%2Fbest%2Drust%2Dprogramming%2Dbooks%2Dto%2Dread%2F&amp;rut=f5e1e5c3e0726e2e3bef0716318021cbbd98aa0b4235982b7d24047d2af1f556">Best Rust Programming Books for 2026 - ComputingForGeeks</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fcomputingforgeeks.com%2Fbest%2Drust%2Dprogramming%2Dbooks%2Dto%2Dread%2F&amp;rut=f5e1e5c3e0726e2e3bef0716318021cbbd98aa0b4235982b7d24047d2af1f556">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/computingforgeeks.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fcomputingforgeeks.com%2Fbest%2Drust%2Dprogramming%2Dbooks%2Dto%2Dread%2F&amp;rut=f5e1e5c3e0726e2e3bef0716318021cbbd98aa0b4235982b7d24047d2af1f556">
+                            computingforgeeks.com/best-rust-programming-books-to-read/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2026-09-23T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fcomputingforgeeks.com%2Fbest%2Drust%2Dprogramming%2Dbooks%2Dto%2Dread%2F&amp;rut=f5e1e5c3e0726e2e3bef0716318021cbbd98aa0b4235982b7d24047d2af1f556">Top <b>Rust</b> <b>books</b> for 2026. Covers The <b>Rust</b> <b>Programming</b> <b>Language</b> 3rd Ed, <b>Programming</b> <b>Rust</b>, <b>Rust</b> for Rustaceans, and <b>Rust</b> in Action.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Frust%2Dlang.org%2Flearn%2F&amp;rut=9a0336ac8411665dfe783a18a9403999179614ce1b07e21fdee036b806eac05a">Learn Rust - Rust Programming Language</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Frust%2Dlang.org%2Flearn%2F&amp;rut=9a0336ac8411665dfe783a18a9403999179614ce1b07e21fdee036b806eac05a">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/rust-lang.org.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Frust%2Dlang.org%2Flearn%2F&amp;rut=9a0336ac8411665dfe783a18a9403999179614ce1b07e21fdee036b806eac05a">
+                            rust-lang.org/learn/
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Frust%2Dlang.org%2Flearn%2F&amp;rut=9a0336ac8411665dfe783a18a9403999179614ce1b07e21fdee036b806eac05a">Find various resources to learn <b>Rust</b>, a reliable and efficient <b>language</b> for software development. Explore the <b>book</b>, the documentation, the courses, and the application domains of <b>Rust</b>.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+
+            
+              
+              
+                <div class="nav-link">
+                  <form action="/html/" method="post">
+                    <input type="submit" class='btn btn--alt' value="Next" />
+                    <input type="hidden" name="q" value="rust programming language book" />
+                    <input type="hidden" name="s" value="10" />
+                    <input type="hidden" name="nextParams" value="" />
+                    <input type="hidden" name="v" value="l" />
+                    <input type="hidden" name="o" value="json" />
+                    <input type="hidden" name="dc" value="12" />
+                    <input type="hidden" name="api" value="d.js" />
+                    <input type="hidden" name="vqd" value="4-209121641155002470626986038029956988590" />
+
+                    
+                    
+                    
+                      <input name="kl" value="wt-wt" type="hidden" />
+                    
+                    
+                    
+                    
+                  </form>
+                </div>
+              
+            
+
+            <div class="feedback-btn">
+              <a rel="nofollow" href="//duckduckgo.com/feedback.html" target="_new">Feedback</a>
+            </div>
+            <div class="clear"></div>
+          </div>
+        </div>
+      </div> <!-- links wrapper //-->
+    
+  </div>
+
+  <div id="bottom_spacing2"></div>
+
+  
+    <img src="//duckduckgo.com/t/sl_h"/>
+  
+</body>
+</html>

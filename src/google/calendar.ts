@@ -43,6 +43,10 @@ export interface CalendarOutcome {
   readonly seen: number
   readonly stored: number
   readonly removed: number
+  /** True only when Google was actually asked and answered: the cache is as fresh as this run. Absent otherwise. */
+  readonly refreshed?: true
+  /** The calendar that was refreshed (the cache's `calendar_id`), when `refreshed`. */
+  readonly calendarId?: string
 }
 
 interface GoogleEvent {
@@ -228,6 +232,8 @@ export async function refreshCalendar(
 
   return {
     ok: true,
+    refreshed: true,
+    calendarId,
     note: `${count(stored, 'event', 'events')} over the next ${String(days)} days${
       removed === 0 ? '' : `, and ${count(removed, 'that has', 'that have')} come off the diary`
     }`,

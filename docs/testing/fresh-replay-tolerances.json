@@ -1,0 +1,91 @@
+{
+  "_comment": "Pre-0592 migrations that end in a self-check needing production rows. On a FRESH project each fails on an empty table, and ONLY the messages listed here (a substring of the error) may be tolerated, per file, when the file is replayed a statement at a time (src/migrations/fresh.ts). Discovered by scripts/isolated/fresh-replay.ts --discover and reviewed by a person. Everything from 0592 on is atomic and tolerates nothing.",
+  "files": {
+    "0054_staff_have_their_own_bots.sql": [
+      "23514: new row for relation \"telegram_bots\" violates check c"
+    ],
+    "0137_work_a_worker_cannot_do.sql": ["42P07: relation \"_dq_probe\" already exists"],
+    "0167_claire_can_see_the_place.sql": [
+      "P0001: voice_state knows of no projects, so a call would kno"
+    ],
+    "0169_a_mirror_is_not_a_second_source.sql": [
+      "P0001: nothing was adopted as a mirror: 0 documents, 0 origi"
+    ],
+    "0487_the_telegram_disconnect_removed_nothing_and_said_it_had.sql": [
+      "P0001: 0487: a real disconnect should have succeeded, got {\""
+    ],
+    "0488_slack_could_lie_the_same_way_telegram_did.sql": [
+      "P0001: 0488: a real Slack disconnect should have succeeded, "
+    ],
+    "0489_a_proposal_marked_sent_that_was_never_delivered.sql": [
+      "P0001: 0489: a proposal claimed by a job that never delivere"
+    ],
+    "0490_a_proposal_is_harness_traffic_when_its_evidence_is.sql": [
+      "P0001: 0490: no fixture job to evidence the harness case wit"
+    ],
+    "0491_every_failure_the_office_recognises_is_a_suites.sql": [
+      "P0001: 0491: need one harness job and one real job to drive "
+    ],
+    "0492_a_filter_that_ignores_its_own_include_parameter.sql": [
+      "P0001: 0492: need one harness job and one real job"
+    ],
+    "0498_the_notebook_says_slide_deck_and_we_say_slides.sql": [
+      "P0001: there are now no slide decks or mind maps at all, whi"
+    ],
+    "0516_the_task_that_that_means.sql": [
+      "P0001: CONTROL FAILED: a task from two hours ago answered \"t"
+    ],
+    "0523_harness_traffic_may_not_reach_a_production_destination.sql": [
+      "P0001: 0523: it was refused for the WRONG reason: 0523: Gran"
+    ],
+    "0524_the_guard_knows_when_it_started.sql": [
+      "P0001: 0524: the historical count reads 0, which is too low "
+    ],
+    "0539_a_lesson_a_harness_taught_is_not_a_lesson.sql": [
+      "P0001: p_include_harness widened nothing: 0 with it, 0 witho"
+    ],
+    "0545_the_flag_cannot_see_whose_job_taught_it.sql": [
+      "P0001: the filter left nothing at all, which is a filter nob"
+    ],
+    "0547_a_conversation_remembers_its_project.sql": [
+      "P0001: the conversation did not remember the project it reso"
+    ],
+    "0554_reference_needs_an_antecedent.sql": [
+      "P0001: 0554: a task older than the conversation was offered:"
+    ],
+    "0566_a_known_escape_is_not_a_new_one.sql": [
+      "23503: insert or update on table \"known_escapes\" violates fo"
+    ],
+    "0571_a_turn_that_died_owes_him_a_sentence.sql": [
+      "P0001: the voice note that died is owed a word, and owed_a_w"
+    ],
+    "0572_an_undo_it_offers_it_can_perform.sql": [
+      "P0001: no recorded reversals at all - the check above proved"
+    ],
+    "0573_the_two_the_rows_could_not_show.sql": ["42809: \"array_agg\" is an aggregate function"],
+    "0574_a_suite_that_signs_its_own_messages.sql": [
+      "P0001: no suite-signed commands at all - the checks above pr"
+    ],
+    "0582_a_suite_that_labels_itself_in_the_second_segment.sql": [
+      "P0001: the check matched nothing, so it proves nothing"
+    ],
+    "0583_acknowledging_what_the_guard_could_not_see.sql": [
+      "P0001: known escapes fell to 0, so the evidence was lost rat"
+    ],
+    "0584_a_duty_may_not_say_the_same_thing_every_hour.sql": ["P0001: no subject to drive with"],
+    "0585_two_projects_saying_the_same_thing_are_two_facts.sql": [
+      "P0001: no subject to drive with"
+    ],
+    "0586_his_activity_feed_was_mostly_test_traffic.sql": [
+      "P0001: the panel has nothing real left on it"
+    ],
+    "0588_a_failure_nobody_can_attribute_is_not_his.sql": ["P0001: no real job to drive with"],
+    "0589_dedupe_on_what_it_is_about.sql": ["P0001: no subject to drive with"],
+    "0590_a_credential_that_administers_is_not_one_that_acts.sql": [
+      "P0001: 0590: Slack still reads unreachable on a live bot tok"
+    ],
+    "0591_go_ahead_that_started_nothing.sql": [
+      "P0001: 0591: DRIVE:no notebook.generate job to drive against"
+    ]
+  }
+}

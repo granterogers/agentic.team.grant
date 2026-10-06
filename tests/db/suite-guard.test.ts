@@ -53,11 +53,31 @@ describe('the executor refuses a heavy suite started directly', () => {
       env: {
         ...process.env,
         HQ_PRODUCTION_INTENT: '',
+        // The production gate (src/safety) is the first line of defence and has its own tests; it is opened here so
+        // this test still reaches, and so still pins, the heavy-suite classification behind it.
+        ALLOW_PRODUCTION_CHECKS: '1',
+        ALLOW_PRODUCTION_WRITES: '',
         SUPABASE_ACCESS_TOKEN: 'sbp_not_a_real_token',
       },
       encoding: 'utf8',
       timeout: 90000,
     })
     expect(`${out.stdout}${out.stderr}`).toContain('REFUSED: this is a production-heavy suite')
+  }, 120000)
+
+  it('and stated intent is still not enough: a heavy suite writes, so it needs the second flag too', () => {
+    const out = spawnSync('npx', ['tsx', file], {
+      env: {
+        ...process.env,
+        HQ_PRODUCTION_INTENT: '1',
+        ALLOW_PRODUCTION_CHECKS: '1',
+        ALLOW_PRODUCTION_WRITES: '',
+        SUPABASE_ACCESS_TOKEN: 'sbp_not_a_real_token',
+        HTTPS_PROXY: 'http://127.0.0.1:9',
+      },
+      encoding: 'utf8',
+      timeout: 90000,
+    })
+    expect(`${out.stdout}${out.stderr}`).toContain('ALLOW_PRODUCTION_WRITES=1')
   }, 120000)
 })

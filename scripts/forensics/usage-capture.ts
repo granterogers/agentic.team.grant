@@ -11,6 +11,7 @@
  *
  * `usage.api-requests-count` is also read once (a single count, no time axis).
  */
+import '../../src/safety/require-production-checks.ts'
 import { mgmt, REF, record, requireToken, saveRaw, sleep } from './common.ts'
 
 requireToken()

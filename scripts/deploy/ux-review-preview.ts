@@ -20,6 +20,7 @@
  * refused over 10 MB (#370 item 8), and every file is read as BYTES, because
  * reading a .wav or a .zip as text corrupts it (#370 item 9).
  */
+import '../../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'

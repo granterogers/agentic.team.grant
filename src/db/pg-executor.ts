@@ -7,6 +7,7 @@
  * verification scripts run unchanged in either place.
  */
 import pg from 'pg'
+import { assertProductionChecksAllowed, isRemotePgTarget } from '../safety/production-gate.ts'
 import type { SqlExecutor, SqlResult } from './executor.ts'
 import { SqlExecutionError } from './executor.ts'
 
@@ -21,6 +22,9 @@ export class PgExecutor implements SqlExecutor {
    *   connection strings out of code, config and logs entirely.
    */
   constructor(connectionString?: string) {
+    // A Unix socket or localhost is never production; any other Postgres host is, and needs the flag (docs/production-access-guard.md).
+    if (isRemotePgTarget(connectionString))
+      assertProductionChecksAllowed('a remote Postgres connection', undefined, connectionString)
     this.client =
       connectionString === undefined ? new pg.Client() : new pg.Client({ connectionString })
   }

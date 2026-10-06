@@ -1,379 +1,930 @@
 /*
-  THE PROJECT HOME'S LAYOUT ENGINE.
+  THE PROJECT HOME'S WORKSPACE: a freeform stage, not a grid.
 
-  Grant, 22 September 2026:
+  Grant, 4 October 2026: modules should move and resize CONTINUOUSLY - no
+  mandatory increments - with gentle alignment guides, free placement and
+  overlap permitted ("no forced reflow merely because modules overlap"). Add a
+  subtle Auto Arrange that lightly tidies, a Reset View that touches
+  presentation only, project-specific layouts, named layouts and presets,
+  per-module tints, and a zoom that scales the actual workspace. Still bound to
+  the viewport: this is NOT an infinite canvas.
 
-    "The project homepage is intended to behave as a configurable workspace,
-    not a static collection of cards... drag-and-drop module repositioning;
-    dynamic module resizing; sensible minimum sizes; sensible maximum sizes;
-    collision prevention; responsive rearrangement; persistence... Do not
-    substitute crude up/down controls for genuine spatial rearrangement."
-
-  What this replaces is an ORDERED LIST OF IDS rendered into a three-column
-  CSS grid. That model cannot express any of the above: there is no position
-  to drag to and no size to resize, because a module has neither. So the unit
-  of storage changes from a name to a RECTANGLE.
+  This replaces the 12-column, 44px-row model whose unit of storage was a grid
+  cell and whose only collision tool was downward compaction. That model was
+  Grant's 22 September request ("collision prevention"); this is his
+  4 October one, and the two cannot both hold, so the old arithmetic
+  (`compact`, `squeeze`, `COLS`, `ROW`) is gone rather than kept beside it.
 
   ## The model
 
-  A layout is a list of `{ id, x, y, w, h }` on a 12-column grid with a fixed
-  row unit. `x` and `w` are columns; `y` and `h` are rows. Nothing else is
-  stored - the module's content, name and renderer are looked up by id, so a
-  tool that is removed from the product cannot leave a hole, and a tool that
-  is added simply is not placed until somebody places it.
+  A project's workspace is ONE document:
 
-  ## Why a fixed row unit rather than content height
+    { mods:    null | [{ id, x, y, w, h, z, tint }]   - logical pixels
+      zoom:    0.5 .. 1.5
+      layouts: { [name]: { mods, zoom } }              - named layouts
+      postits: [{ id, x, y, w, h, z, text }]
+      seeded:  true once the starter Post-it has been used or removed }
 
-  Because requirement 7 depends on it. Grant:
+  `mods === null` means "never arranged": the layout is COMPUTED from the
+  current stage on every read, so a default adapts to a window of any size. The
+  first drag materialises it into pixels. Pixels are LOGICAL - the stage is
+  `viewport / zoom` wide, so zooming out gives more room and the stored numbers
+  keep their meaning.
 
-    "Remove patterns such as One More being used merely because additional
-    content does not fit. Modules containing more data than their visible area
-    should instead become internally scrollable."
+  ## Overlap
 
-  A pane whose height is decided by its content can never scroll internally -
-  it has no height to overflow. A pane whose height is decided by the LAYOUT
-  can, and the same decision is what makes a resize handle mean something.
+  Permitted and unresolved. Nothing here moves a module because another one is
+  in the way. `z` decides who is on top, and pressing a module raises it.
 
-  ## Collision
+  ## Persistence
 
-  Resolved by downward compaction, the same rule every spatial dashboard uses
-  and the only one that is stable under repeated drags: sort by row then
-  column, and lower each module to the highest row where it does not overlap
-  anything already placed. Two consequences worth stating because they are
-  deliberate:
+  The office's existing `dashboard_layout_set(surface 'basecamp')` takes any
+  non-empty jsonb array, so the document is stored as the module entries plus
+  one reserved `{ id: '__workspace', v: 2, ... }` entry carrying everything
+  else. No migration. The browser is the synchronous cache in front of it and
+  ADR-0021's three rules still hold: the office is read first, an empty
+  document is a reset, and this session's own change outranks both until the
+  next load. Last write wins on the whole document - recorded in the ledger as
+  a trade-off, not an oversight.
 
-   - dragging a module ONTO another pushes the other down rather than swapping
-     them. Swapping reads as magic and is ambiguous when the sizes differ;
-   - a layout is compacted on every read, so a stored layout written by an
-     older version, or one holding a module that has since grown a minimum
-     size, is repaired rather than rejected.
-
-  ## Persistence — the office, with the browser as a cache in front of it
-
-  ADR-0021, and #341: an arrangement belongs to the PERSON and the project, not
-  to the machine they happened to be sitting at. It used to live only in
-  `localStorage` here, and the panel that explained it said why -- one row per
-  (owner, project) and the default dashboard already using it, so writing this
-  to the office would have taken panels off that. 0582 is what 299 was waiting
-  for: `surface` joins the key, and the two boards stop being the same row.
-
-  The order is ADR-0021's, and each of its three parts was a bug before it was
-  a rule:
-
-  1. **The office is read first, then the browser, then the default.** Anything
-     else and the machine you last touched wins over the machine you are on.
-  2. **An empty layout is a reset, never a stored value.** Enforced in the RPC.
-  3. **This session's own change outranks both, until the next load.** Reading
-     the office's copy back during the redraw after a drop made the panel snap
-     to where it had been, because the save had not landed yet.
-
-  The reading here stays SYNCHRONOUS -- the renderer cannot await -- so the
-  office's copy is adopted into the cache when the payload arrives, and every
-  write goes to both.
+  Reset View clears `mods` and `zoom`. It never touches `postits` or `layouts`,
+  which is requirement HQ-LAYOUT-011 and is why the office is not told to DELETE
+  the row (that would take the notes with it): it is told to store the
+  document without the arrangement.
 */
 
-/** The grid. Twelve columns divides by 2, 3, 4 and 6, which is why it is 12. */
-export const COLS = 12
+/** Every module the home can hold. */
+export const ALL = ['tasks', 'board', 'documents', 'schedule', 'contacts', 'activity']
 
-/** One row unit, in pixels. The CSS must agree; it reads the same token. */
-export const ROW = 44
+export const MIN = { w: 240, h: 150 }
+export const POSTIT_MIN = { w: 130, h: 120 }
+export const POSTIT_DEFAULT = { w: 210, h: 190 }
+export const ZOOM = { min: 0.5, max: 1.5, step: 0.1 }
+export const GAP = 12
 
-/**
- * What each module needs, and what it may not exceed.
- *
- * A minimum is a statement about the CONTENT: below it the pane stops being
- * able to say anything, which is the failure CLAUDE.md records as eight agent
- * names wrapping one character per line. A maximum is a statement about the
- * PAGE: a pane wider than this is a pane that has stopped being a pane.
- */
-export const BOUNDS = {
-  tasks: { minW: 3, minH: 4, maxW: 12, maxH: 14 },
-  board: { minW: 3, minH: 4, maxW: 12, maxH: 12 },
-  documents: { minW: 3, minH: 4, maxW: 12, maxH: 14 },
-  schedule: { minW: 3, minH: 4, maxW: 12, maxH: 12 },
-  contacts: { minW: 3, minH: 4, maxW: 12, maxH: 14 },
-  activity: { minW: 4, minH: 4, maxW: 12, maxH: 14 },
-}
-
-/** Every module the home can hold. The order is the order they are put back. */
-export const ALL = Object.keys(BOUNDS)
-
-/*
-  The default, which is also the reference composition: three columns of four,
-  the tools in the order the project is read in, and Latest Activity full
-  width underneath because it is a history rather than a tool.
-*/
-/*
-  THE HEIGHTS ARE SET BY THE FOLD, not by taste. §21 requires every tool to be
-  understandable inside the first 1440x900 view, and a 1440 window leaves
-  about 580px under the project head for two rows and the gap between them -
-  so five rows each. A row unit is 44px and the grid's own 18px gap falls
-  BETWEEN the rows a module spans, so h=5 is 5*44 + 4*18 = 292px rather than
-  220 - which is the arithmetic that made a first attempt at six rows overrun
-  the fold by 77px. The audit measures it rather than trusting this comment.
-*/
-export const DEFAULT = [
-  { id: 'tasks', x: 0, y: 0, w: 4, h: 5 },
-  { id: 'board', x: 4, y: 0, w: 4, h: 5 },
-  { id: 'documents', x: 8, y: 0, w: 4, h: 5 },
-  { id: 'schedule', x: 0, y: 5, w: 4, h: 5 },
-  { id: 'contacts', x: 4, y: 5, w: 4, h: 5 },
-  { id: 'activity', x: 8, y: 5, w: 4, h: 5 },
+/** The curated tints. `null` is "none". The values are hues, mixed in by CSS. */
+export const TINTS = [
+  { id: 'slate', name: 'Slate', hue: '#8aa0b8' },
+  { id: 'sky', name: 'Sky', hue: '#5aa9e6' },
+  { id: 'teal', name: 'Teal', hue: '#3fb8a8' },
+  { id: 'mint', name: 'Mint', hue: '#6cc08b' },
+  { id: 'moss', name: 'Moss', hue: '#9bb35a' },
+  { id: 'sand', name: 'Sand', hue: '#d2b36a' },
+  { id: 'amber', name: 'Amber', hue: '#e8a04a' },
+  { id: 'coral', name: 'Coral', hue: '#e57a6a' },
+  { id: 'rose', name: 'Rose', hue: '#d9739b' },
+  { id: 'violet', name: 'Violet', hue: '#9a82e0' },
+  { id: 'indigo', name: 'Indigo', hue: '#6f7fe0' },
 ]
 
-const KEY = (slug) => `bc.layout.${slug}`
+/** A custom tint must be a six-digit hex colour. Nothing else is stored. */
+export const validTint = (t) =>
+  t === null ||
+  t === undefined ||
+  (typeof t === 'string' && (TINTS.some((x) => x.id === t) || /^#[0-9a-fA-F]{6}$/.test(t)))
 
-const bounds = (id) => BOUNDS[id] ?? { minW: 3, minH: 3, maxW: 12, maxH: 14 }
-
-/** One module, clamped into the grid and into its own bounds. */
-export const clamp = (m) => {
-  const b = bounds(m.id)
-  const w = Math.max(b.minW, Math.min(b.maxW, Math.round(m.w ?? b.minW)))
-  const h = Math.max(b.minH, Math.min(b.maxH, Math.round(m.h ?? b.minH)))
-  const x = Math.max(0, Math.min(COLS - w, Math.round(m.x ?? 0)))
-  const y = Math.max(0, Math.round(m.y ?? 0))
-  return { id: m.id, x, y, w, h }
-}
-
-const hits = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
-
-/**
- * Resolve overlaps and close vertical gaps, in one pass.
- *
- * `held` is the module the person is dragging: it keeps the row it was put on
- * so the drop lands where the pointer is, and everything else settles around
- * it. Without that exception the dragged module compacts to the top with the
- * rest and the drop appears to have been ignored.
- */
-export const compact = (list, held = null) => {
-  const sorted = [...list].map(clamp).sort((a, b) => a.y - b.y || a.x - b.x)
-  const placed = []
-  for (const m of sorted) {
-    let y = m.id === held ? m.y : 0
-    for (;;) {
-      const at = { ...m, y }
-      const clash = placed.find((q) => hits(at, q))
-      if (clash === undefined) break
-      y = clash.y + clash.h
-    }
-    placed.push({ ...m, y })
-  }
-  return placed.sort((a, b) => a.y - b.y || a.x - b.x)
-}
-
-/** The stored layout for a project, repaired, or the default. */
-export const layout = (slug) => {
-  const s = typeof slug === 'string' ? slug : (slug?.slug ?? '')
-  try {
-    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
-    if (raw === '') return compact(DEFAULT)
-    const saved = JSON.parse(raw)
-    if (!Array.isArray(saved)) return compact(DEFAULT)
-    /*
-      Filtered against ALL on the way OUT rather than on the way in, which is
-      the one thing the id-list version got right: a stored id for a tool that
-      has since been removed renders nothing and would otherwise hold a
-      rectangle of empty grid.
-    */
-    const kept = saved.filter((m) => m !== null && typeof m === 'object' && ALL.includes(m.id))
-    return kept.length === 0 ? compact(DEFAULT) : compact(kept)
-  } catch {
-    return compact(DEFAULT)
-  }
+/** The CSS colour for a stored tint. */
+export const tintHue = (t) => {
+  if (typeof t !== 'string') return ''
+  const known = TINTS.find((x) => x.id === t)
+  if (known !== undefined) return known.hue
+  return /^#[0-9a-fA-F]{6}$/.test(t) ? t : ''
 }
 
 /*
-  WHERE A WRITE GOES BESIDES THE BROWSER.
-
-  Handed in rather than imported, for the reason `office.js` hands its
-  after-write hook in: this module is about geometry and must not know how the
-  page talks to the office. `app.js` supplies it once at boot.
+  Fractions of the stage, [x, y, w, h]. The default and the presets are written
+  as fractions so that they fit any window; they become pixels only when read.
 */
+/*
+  The default leaves the right-hand fifth of the stage free: that is where the
+  first Post-it sits, so a note is there to be typed in without covering a
+  module. Anybody who does not want a note can remove it and drag the modules
+  wherever they like; the presets below use the whole width.
+*/
+const COLW = 0.8 / 3
+const THIRDS = {
+  tasks: [0, 0, COLW, 0.5],
+  board: [COLW, 0, COLW, 0.5],
+  documents: [2 * COLW, 0, COLW, 0.5],
+  schedule: [0, 0.5, COLW, 0.5],
+  contacts: [COLW, 0.5, COLW, 0.5],
+  activity: [2 * COLW, 0.5, COLW, 0.5],
+}
+
+export const PRESETS = {
+  overview: { name: 'Overview', frac: THIRDS },
+  planning: {
+    name: 'Planning',
+    frac: {
+      tasks: [0, 0, 0.36, 1],
+      schedule: [0.36, 0, 0.38, 0.6],
+      board: [0.74, 0, 0.26, 0.6],
+      activity: [0.36, 0.6, 0.38, 0.4],
+      contacts: [0.74, 0.6, 0.26, 0.4],
+    },
+  },
+  research: {
+    name: 'Research',
+    frac: {
+      documents: [0, 0, 0.56, 1],
+      activity: [0.56, 0, 0.44, 0.5],
+      tasks: [0.56, 0.5, 0.44, 0.5],
+    },
+  },
+  documents: {
+    name: 'Documents',
+    frac: {
+      documents: [0, 0, 0.7, 1],
+      tasks: [0.7, 0, 0.3, 0.5],
+      activity: [0.7, 0.5, 0.3, 0.5],
+    },
+  },
+}
+
+export const isPostit = (id) => typeof id === 'string' && id.startsWith('n_')
+const minOf = (id) => (isPostit(id) ? POSTIT_MIN : MIN)
+
+/**
+ * One rectangle, brought inside the stage and above its minimum.
+ *
+ * Never refuses: a stored rectangle is untrusted (an older window size, a
+ * hand-edited store), and clamping keeps every module and moves the one that is
+ * wrong. A module can never be dragged wholly off the stage, which is what
+ * keeps this a viewport-bound workspace rather than a canvas.
+ */
+export const clampRect = (m, st) => {
+  const min = minOf(m.id)
+  const w = Math.max(min.w, Math.min(Math.max(min.w, st.w), Math.round(m.w ?? min.w)))
+  const h = Math.max(min.h, Math.min(Math.max(min.h, st.h), Math.round(m.h ?? min.h)))
+  const x = Math.max(0, Math.min(Math.max(0, st.w - w), Math.round(m.x ?? 0)))
+  const y = Math.max(0, Math.min(Math.max(0, st.h - h), Math.round(m.y ?? 0)))
+  return { ...m, x, y, w, h }
+}
+
+const crossing = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+const anyCrossing = (list) => list.some((a, i) => list.slice(i + 1).some((b) => crossing(a, b)))
+
+/**
+ * A GIVEN arrangement that does not fit the stage, laid out again so that it does.
+ *
+ * Clamping a rectangle to its minimum width is right for a module the person has made small; it is wrong for the
+ * arrangement the page starts with, because the thirds are fractions of a stage and a narrow stage (a tablet, a window
+ * dragged in) cannot hold three columns of 240px. The clamp then pushed each module into its neighbour and the default
+ * page opened overlapping itself. Overlap is something a person chooses (HQ-LAYOUT-005), never something the page starts
+ * with, so a start that cannot fit is wrapped into rows in reading order, each module keeping its own size, and the
+ * rows share the stage's height if they are too tall for it.
+ */
+export const flowFit = (rects, st) => {
+  const list = [...rects].sort((a, b) => a.y - b.y || a.x - b.x)
+  const out = []
+  let x = 0
+  let y = 0
+  let rowH = 0
+  for (const m of list) {
+    const w = Math.min(m.w, st.w)
+    if (x > 0 && x + w > st.w) {
+      x = 0
+      y += rowH + GAP
+      rowH = 0
+    }
+    out.push({ ...m, x, y, w })
+    x += w + GAP
+    rowH = Math.max(rowH, m.h)
+  }
+  const bottom = y + rowH
+  if (bottom > st.h && out.length > 0) {
+    const rows = [...new Set(out.map((m) => m.y))].sort((a, b) => a - b)
+    const room = Math.max(0, st.h - GAP * (rows.length - 1))
+    const each = Math.max(MIN.h, Math.floor(room / rows.length))
+    for (const m of out) {
+      const row = rows.indexOf(m.y)
+      m.y = row * (each + GAP)
+      m.h = Math.min(m.h, each)
+    }
+  }
+  return out
+}
+
+/** A fractional layout as pixels for this stage, with a gap between neighbours. */
+export const fromFractions = (frac, st) => {
+  const placed = Object.entries(frac).map(([id, [fx, fy, fw, fh]], i) =>
+    clampRect(
+      {
+        id,
+        x: Math.round(fx * st.w + GAP / 2),
+        y: Math.round(fy * st.h + GAP / 2),
+        w: Math.round(fw * st.w - GAP),
+        h: Math.round(fh * st.h - GAP),
+        z: i + 1,
+        tint: null,
+      },
+      st,
+    ),
+  )
+  // The fractions never overlap each other; if the clamp made them, the stage is too small for this arrangement.
+  return anyCrossing(placed) ? flowFit(placed, st).map((m) => clampRect(m, st)) : placed
+}
+
+/* ------------------------------------------------------ alignment guides --- */
+
+/**
+ * Snap a moving or resizing rectangle to its neighbours, gently.
+ *
+ * `kind` is 'move' (left, centre and right edges can snap) or 'size' (only the
+ * right and bottom edges move, so only they snap). A snap happens only within
+ * `threshold` logical pixels, which is what makes it a guide rather than a
+ * grid: away from every candidate the rectangle goes exactly where the pointer
+ * put it. Returns the adjusted rectangle and the guide lines to draw.
+ */
+export const align = (rect, others, st, kind = 'move', threshold = 6) => {
+  const xs = [0, st.w / 2, st.w]
+  const ys = [0, st.h / 2, st.h]
+  for (const o of others) {
+    xs.push(o.x, o.x + o.w / 2, o.x + o.w)
+    ys.push(o.y, o.y + o.h / 2, o.y + o.h)
+  }
+  const best = (probes, list) => {
+    let hit = null
+    for (const p of probes) {
+      for (const c of list) {
+        const d = Math.abs(c - p.at)
+        if (d <= threshold && (hit === null || d < hit.d)) hit = { d, at: c, off: p.off }
+      }
+    }
+    return hit
+  }
+  const out = { ...rect }
+  const guides = []
+  if (kind === 'move') {
+    const hx = best(
+      [
+        { off: 0, at: rect.x },
+        { off: rect.w / 2, at: rect.x + rect.w / 2 },
+        { off: rect.w, at: rect.x + rect.w },
+      ],
+      xs,
+    )
+    if (hx !== null) {
+      out.x = Math.round(hx.at - hx.off)
+      guides.push({ axis: 'x', at: hx.at })
+    }
+    const hy = best(
+      [
+        { off: 0, at: rect.y },
+        { off: rect.h / 2, at: rect.y + rect.h / 2 },
+        { off: rect.h, at: rect.y + rect.h },
+      ],
+      ys,
+    )
+    if (hy !== null) {
+      out.y = Math.round(hy.at - hy.off)
+      guides.push({ axis: 'y', at: hy.at })
+    }
+  } else {
+    const hx = best([{ off: rect.w, at: rect.x + rect.w }], xs)
+    if (hx !== null) {
+      out.w = Math.round(hx.at - rect.x)
+      guides.push({ axis: 'x', at: hx.at })
+    }
+    const hy = best([{ off: rect.h, at: rect.y + rect.h }], ys)
+    if (hy !== null) {
+      out.h = Math.round(hy.at - rect.y)
+      guides.push({ axis: 'y', at: hy.at })
+    }
+  }
+  return { rect: out, guides }
+}
+
+/* ------------------------------------------------------------- tidy up --- */
+
+/**
+ * Lightly tidy a layout. It does not redesign it.
+ *
+ * What it does, in order: group modules that already sit on roughly one row;
+ * line each row's tops up; close horizontal overlaps by moving a module to the
+ * right of its neighbour (never reordering them); make a row's heights equal;
+ * then stop rows overlapping vertically. Everything keeps its rough position
+ * and its width - a person who arranged six modules should recognise them
+ * afterwards. If a row is too wide it narrows its modules proportionally and if
+ * the rows are too tall they share the stage's height.
+ */
+export const tidy = (mods, st) => {
+  const list = mods
+    .filter((m) => !isPostit(m.id))
+    .map((m) => ({ ...m }))
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+  const rows = []
+  for (const m of list) {
+    const row = rows.find((r) => {
+      const over = Math.min(r.anchor.y + r.anchor.h, m.y + m.h) - Math.max(r.anchor.y, m.y)
+      return over > 0.4 * Math.min(r.anchor.h, m.h)
+    })
+    if (row === undefined) rows.push({ anchor: m, items: [m] })
+    else row.items.push(m)
+  }
+  rows.sort((a, b) => a.anchor.y - b.anchor.y)
+  const placed = []
+  let bottom = -GAP
+  for (const row of rows) {
+    const items = row.items.sort((a, b) => a.x - b.x)
+    const top = Math.max(Math.min(...items.map((m) => m.y)), bottom + GAP)
+    const height = Math.max(...items.map((m) => m.h))
+    const gaps = GAP * (items.length - 1)
+    const total = items.reduce((n, m) => n + m.w, 0) + gaps
+    const scale = total > st.w ? (st.w - gaps) / (total - gaps) : 1
+    /*
+      Left to right, each module keeps its own x unless it would overlap the one
+      before. Then right to left, so a row that ran off the right edge is pulled
+      back without anything landing on its neighbour: clamping afterwards would
+      move the last module on top of the one beside it.
+    */
+    let cursor = 0
+    const row2 = items.map((m) => {
+      const w = Math.max(MIN.w, Math.round(m.w * scale))
+      const x = Math.max(cursor, m.x)
+      cursor = x + w + GAP
+      return { ...m, x, w }
+    })
+    let limit = st.w
+    for (let i = row2.length - 1; i >= 0; i -= 1) {
+      const m = row2[i]
+      m.x = Math.max(0, Math.min(m.x, limit - m.w))
+      limit = m.x - GAP
+    }
+    for (const m of row2) {
+      placed.push({ ...m, x: Math.round(m.x), y: Math.round(top), h: height })
+    }
+    bottom = top + height
+  }
+  /* Too tall for the stage: share the height rather than run off it. */
+  if (bottom > st.h && rows.length > 0) {
+    const f = Math.max(0.4, st.h / bottom)
+    for (const m of placed) {
+      m.y = Math.round(m.y * f)
+      m.h = Math.max(MIN.h, Math.round(m.h * f))
+    }
+  }
+  return placed.map((m) => clampRect(m, st))
+}
+
+/* ----------------------------------------------------------- the document --- */
+
+const KEY = (slug) => `bc.stage.${slug}`
+const slugOf = (s) => (typeof s === 'string' ? s : (s?.slug ?? ''))
+
+const emptyDoc = () => ({ mods: null, zoom: 1, layouts: {}, postits: [], gone: {}, seeded: false })
+const clampZoom = (z) => Math.min(ZOOM.max, Math.max(ZOOM.min, z))
+
+let stage = { w: 1200, h: 620 }
+let measured = false
+/** The logical stage size, set by the page once it has measured the board. */
+export const setStage = (w, h, real = false) => {
+  stage = { w: Math.max(MIN.w, Math.round(w)), h: Math.max(MIN.h, Math.round(h)) }
+  if (real) measured = true
+}
+export const stageSize = () => ({ ...stage })
+/** Has the page measured the stage, or is the size still an estimate? */
+export const stageMeasured = () => measured
+
+const cleanMod = (m) => ({
+  id: m.id,
+  x: m.x,
+  y: m.y,
+  w: m.w,
+  h: m.h,
+  z: Number.isFinite(m.z) ? m.z : 1,
+  tint: validTint(m.tint) ? (m.tint ?? null) : null,
+})
+
+/** The longest note kept. The textarea says the same (compose.js), so nothing is typed that is not saved. */
+export const NOTE_MAX = 5000
+
+const cleanPostit = (n) => ({
+  id: String(n.id),
+  x: Number(n.x) || 0,
+  y: Number(n.y) || 0,
+  w: Number(n.w) || POSTIT_DEFAULT.w,
+  h: Number(n.h) || POSTIT_DEFAULT.h,
+  z: Number.isFinite(n.z) ? n.z : 1,
+  text: typeof n.text === 'string' ? n.text.slice(0, NOTE_MAX) : '',
+  // When this note last changed: what lets two copies of the document be merged note by note rather than overwritten.
+  at: Number.isFinite(n.at) ? n.at : 0,
+})
+
+/** An untrusted stored document, repaired. */
+export const normalise = (raw) => {
+  const d = emptyDoc()
+  if (raw === null || typeof raw !== 'object') return d
+  if (Array.isArray(raw.mods)) {
+    d.mods = raw.mods
+      .filter((m) => m !== null && typeof m === 'object' && ALL.includes(m.id))
+      .map(cleanMod)
+  }
+  if (Number.isFinite(raw.zoom)) d.zoom = clampZoom(raw.zoom)
+  if (raw.layouts !== null && typeof raw.layouts === 'object') {
+    for (const [name, l] of Object.entries(raw.layouts)) {
+      if (l === null || typeof l !== 'object' || !Array.isArray(l.mods)) continue
+      d.layouts[String(name).slice(0, 40)] = {
+        mods: l.mods.filter((m) => m && ALL.includes(m.id)).map(cleanMod),
+        zoom: Number.isFinite(l.zoom) ? clampZoom(l.zoom) : 1,
+      }
+    }
+  }
+  if (Array.isArray(raw.postits)) {
+    d.postits = raw.postits
+      .filter((n) => n && typeof n.id === 'string' && isPostit(n.id))
+      .map(cleanPostit)
+  }
+  if (raw.gone !== null && typeof raw.gone === 'object') {
+    for (const [id, at] of Object.entries(raw.gone)) {
+      if (isPostit(id) && Number.isFinite(at)) d.gone[id] = at
+    }
+  }
+  d.seeded = raw.seeded === true
+  return d
+}
+
+/**
+ * Two copies of one project's notes, merged note by note.
+ *
+ * The workspace is stored as ONE document, so a plain overwrite means whichever tab (or device) saved last erases the
+ * notes the other one wrote. A note is kept when it is the newest copy of itself and nothing newer removed it. `gone`
+ * records removals (id -> when) so that a stale copy cannot bring a removed note back.
+ */
+export const mergeNotes = (a, b) => {
+  const gone = { ...a.gone }
+  for (const [id, at] of Object.entries(b.gone ?? {})) gone[id] = Math.max(gone[id] ?? 0, at)
+  const byId = new Map()
+  for (const n of [...a.postits, ...b.postits]) {
+    const have = byId.get(n.id)
+    if (have === undefined || n.at > have.at) byId.set(n.id, n)
+  }
+  const postits = [...byId.values()].filter((n) => !((gone[n.id] ?? -1) >= n.at && n.id in gone))
+  const kept = Object.fromEntries(
+    Object.entries(gone)
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, 200),
+  )
+  return { postits, gone: kept }
+}
+
+/** The document as the array the office stores. */
+export const toPanels = (d) => [
+  ...(d.mods ?? []).map(cleanMod),
+  {
+    id: '__workspace',
+    v: 2,
+    hasMods: d.mods !== null,
+    zoom: d.zoom,
+    layouts: d.layouts,
+    postits: d.postits,
+    gone: d.gone,
+    seeded: d.seeded,
+  },
+]
+
+/** The document from the office's array, or null when it is not a v2 workspace. */
+export const fromPanels = (panels) => {
+  if (!Array.isArray(panels)) return null
+  const meta = panels.find((m) => m !== null && typeof m === 'object' && m.id === '__workspace')
+  if (meta === undefined) return null
+  return normalise({
+    mods: meta.hasMods === true ? panels.filter((m) => m && m.id !== '__workspace') : null,
+    zoom: meta.zoom,
+    layouts: meta.layouts,
+    postits: meta.postits,
+    gone: meta.gone,
+    seeded: meta.seeded,
+  })
+}
+
+/** Is there anything worth keeping? An empty document is a reset, never stored. */
+const isBlank = (d) =>
+  d.mods === null &&
+  d.zoom === 1 &&
+  d.postits.length === 0 &&
+  Object.keys(d.gone).length === 0 &&
+  Object.keys(d.layouts).length === 0 &&
+  d.seeded === false
+
+const cache = new Map()
+const mine = new Set()
+
+/** The stored document for a project. */
+export const doc = (slug) => {
+  const s = slugOf(slug)
+  if (cache.has(s)) return cache.get(s)
+  let d = emptyDoc()
+  try {
+    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    if (raw !== '') d = normalise(JSON.parse(raw))
+  } catch {
+    d = emptyDoc()
+  }
+  cache.set(s, d)
+  return d
+}
+
 let keep = null
 let forget = null
+let timer = null
+const pending = new Map()
 
-/** Tell this module how to put an arrangement in the office. */
+/** Tell this module how to put the document in the office. */
 export const persistence = ({ save: saveAway, reset: resetAway } = {}) => {
   keep = typeof saveAway === 'function' ? saveAway : null
   forget = typeof resetAway === 'function' ? resetAway : null
 }
 
-/*
-  WHICH PROJECTS THIS SESSION HAS TOUCHED.
-
-  ADR-0021's third rule. The payload arrives again after every write, carrying
-  what the office had a moment ago; adopting it over a change made in this
-  session is how a dropped panel snaps back to where it was.
-*/
-const mine = new Set()
-
-/**
- * Take the office's copy, unless this session has already changed it.
- *
- * Called when the payload lands. A project nobody has rearranged here adopts
- * what the office holds, which is what makes the other machine agree.
- */
-export const adopt = (slug, panels) => {
-  const s = typeof slug === 'string' ? slug : (slug?.slug ?? '')
-  if (s === '' || mine.has(s)) return false
-  if (!Array.isArray(panels) || panels.length === 0) return false
-  const kept = panels.filter((m) => m !== null && typeof m === 'object' && ALL.includes(m.id))
-  if (kept.length === 0) return false
-  try {
-    globalThis.localStorage?.setItem(KEY(s), JSON.stringify(kept))
-    return true
-  } catch {
-    return false
+const sendNow = () => {
+  timer = null
+  for (const [s, d] of pending) {
+    if (isBlank(d)) {
+      if (forget !== null) void forget(s)
+    } else if (keep !== null) {
+      void keep(s, toPanels(d))
+    }
   }
+  pending.clear()
 }
 
-export const save = (slug, list) => {
-  const clean = compact(list).map((m) => ({ id: m.id, x: m.x, y: m.y, w: m.w, h: m.h }))
-  try {
-    globalThis.localStorage?.setItem(KEY(slug), JSON.stringify(clean))
-  } catch {
-    /* A viewer who cannot store it still gets the default arrangement. */
-  }
-  mine.add(typeof slug === 'string' ? slug : (slug?.slug ?? ''))
+/** Write the document to the browser now and to the office shortly after. */
+const commit = (slug, mine_) => {
+  const s = slugOf(slug)
   /*
-    Best effort, and deliberately not awaited: an arrangement that stuck on
-    screen and failed to reach the office is better than a gesture that waits
-    for a round trip. The next load reads the office and the two agree or the
-    browser's copy wins for this session, which is rule 3.
+    Another tab may have written notes since this one last read the document. Fold its notes in before writing, or this
+    save erases them (and a blank result would delete the office's copy, notes included).
   */
-  if (keep !== null) void keep(slug, clean)
-  return clean
-}
-
-export const reset = (slug) => {
+  let d = mine_
   try {
-    globalThis.localStorage?.removeItem(KEY(slug))
+    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    if (raw !== '') d = { ...d, ...mergeNotes(d, normalise(JSON.parse(raw))) }
   } catch {
-    /* Already the default. */
+    /* Nothing readable to fold in. */
   }
-  mine.add(typeof slug === 'string' ? slug : (slug?.slug ?? ''))
-  if (forget !== null) void forget(slug)
+  cache.set(s, d)
+  mine.add(s)
+  try {
+    if (isBlank(d)) globalThis.localStorage?.removeItem(KEY(s))
+    else globalThis.localStorage?.setItem(KEY(s), JSON.stringify(d))
+  } catch {
+    /* A viewer who cannot store it still has it for this session. */
+  }
+  pending.set(s, d)
+  if (timer !== null) globalThis.clearTimeout(timer)
+  /* Debounced, because a Post-it saves on every keystroke. */
+  timer = globalThis.setTimeout(sendNow, 700)
+  return d
 }
 
-/** Take a module off the page. Everything else closes up behind it. */
+/** Send anything waiting, immediately (page hide, tests). */
+export const flush = () => {
+  if (timer !== null) globalThis.clearTimeout(timer)
+  sendNow()
+}
+
+/* A tab closed inside the save delay would otherwise leave the last moments of typing only in this browser. */
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('pagehide', () => flush())
+  globalThis.addEventListener?.('visibilitychange', () => {
+    if (globalThis.document?.visibilityState === 'hidden') flush()
+  })
+}
+
+/** Take the office's copy, unless this session has already changed it. */
+export const adopt = (slug, panels) => {
+  const s = slugOf(slug)
+  if (s === '' || mine.has(s)) return false
+  const theirs = fromPanels(panels)
+  if (theirs === null) return false
+  /*
+    The browser may hold notes the office never received (offline, a tab closed inside the save delay). Taking the office's
+    copy whole would throw them away; fold them in, and send the result when it differs.
+  */
+  let d = theirs
+  let ahead = false
+  try {
+    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    if (raw !== '') {
+      const merged = mergeNotes(theirs, normalise(JSON.parse(raw)))
+      ahead = JSON.stringify(merged.postits) !== JSON.stringify(theirs.postits)
+      d = { ...theirs, ...merged }
+    }
+  } catch {
+    d = theirs
+  }
+  cache.set(s, d)
+  try {
+    globalThis.localStorage?.setItem(KEY(s), JSON.stringify(d))
+  } catch {
+    /* Cached in memory regardless. */
+  }
+  if (ahead) {
+    pending.set(s, d)
+    if (timer !== null) globalThis.clearTimeout(timer)
+    timer = globalThis.setTimeout(sendNow, 700)
+  }
+  return true
+}
+
+/** Forget every in-memory document (tests). */
+export const forgetAll = () => {
+  cache.clear()
+  mine.clear()
+  pending.clear()
+}
+
+/* ------------------------------------------------------------- the modules --- */
+
+/** The modules on the page, in pixels for the current stage, clamped. */
+export const layout = (slug) => {
+  const d = doc(slug)
+  const base = d.mods === null ? fromFractions(THIRDS, stage) : d.mods
+  return base.map((m) => clampRect(m, stage))
+}
+
+const materialised = (slug) => {
+  const d = doc(slug)
+  return {
+    ...d,
+    mods: d.mods === null ? fromFractions(THIRDS, stage) : d.mods.map((m) => ({ ...m })),
+  }
+}
+
+const topZ = (d) =>
+  Math.max(0, ...(d.mods ?? []).map((m) => m.z ?? 0), ...d.postits.map((n) => n.z ?? 0))
+
+/** Move or resize one module. Neighbours are left alone: overlap is permitted. */
+export const place = (slug, id, rect) => {
+  const d = materialised(slug)
+  const z = topZ(d) + 1
+  d.mods = d.mods.map((m) => (m.id === id ? clampRect({ ...m, ...rect, id, z }, stage) : m))
+  commit(slug, d)
+  return layout(slug)
+}
+
+/** Bring a module to the front without moving it. */
+export const raise = (slug, id) => {
+  const d = materialised(slug)
+  const z = topZ(d) + 1
+  d.mods = d.mods.map((m) => (m.id === id ? { ...m, z } : m))
+  commit(slug, d)
+}
+
+export const setTint = (slug, id, tint) => {
+  if (!validTint(tint)) return false
+  const d = materialised(slug)
+  d.mods = d.mods.map((m) => (m.id === id ? { ...m, tint: tint ?? null } : m))
+  commit(slug, d)
+  return true
+}
+
+/** Take a module off the page. Nothing in it is deleted. */
 export const remove = (slug, id) => {
-  save(slug, layout(slug).filter((m) => m.id !== id))
+  const d = materialised(slug)
+  d.mods = d.mods.filter((m) => m.id !== id)
+  commit(slug, d)
 }
 
-/**
- * Put a module back, in the first place it fits.
- *
- * At the END rather than in a gap: a tool reappearing in the middle of a
- * board somebody has arranged is a tool that moved their work, and the
- * compaction will close the gap if there is one under it anyway.
- */
+/** Put a module back where its default would be, on top. */
 export const add = (slug, id) => {
-  const now = layout(slug)
-  if (now.some((m) => m.id === id)) return
-  const b = bounds(id)
-  const bottom = now.reduce((n, m) => Math.max(n, m.y + m.h), 0)
-  save(slug, [...now, { id, x: 0, y: bottom, w: Math.max(b.minW, 4), h: Math.max(b.minH, 6) }])
+  if (!ALL.includes(id)) return
+  const d = materialised(slug)
+  if (d.mods.some((m) => m.id === id)) return
+  const [r] = fromFractions({ [id]: THIRDS[id] }, stage)
+  d.mods = [...d.mods, { ...r, z: topZ(d) + 1 }]
+  commit(slug, d)
 }
 
-/**
- * Has this page been arranged at all, or is it still as it was given?
- *
- * WHY THIS EXISTS: the way back used to be reachable only while a module was
- * OFF the page, because the panel holding it renders only then. So a person
- * who dragged and resized six modules and removed none had no way to undo any
- * of it -- the one-way door this repository has already shipped once, when
- * choosing Panels removed the control that had just been pressed.
- *
- * It compares the arrangement to the default rather than merely asking whether
- * anything is stored, so that a board saved back into its original shape stops
- * offering to restore a shape it is already in. Geometry, by id, because two
- * lists in the same order with the same rectangles ARE the same arrangement.
- */
-export const customised = (slug) => {
-  const now = layout(slug)
-  const was = compact(DEFAULT)
-  if (now.length !== was.length) return true
-  const same = (a, b) => a.id === b.id && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
-  return now.some((m, i) => !same(m, was[i]))
-}
-
-/** Which of ALL is not currently on the page. */
+/** Which modules are not on the page. */
 export const off = (slug) => {
   const on = new Set(layout(slug).map((m) => m.id))
   return ALL.filter((id) => !on.has(id))
 }
 
-/**
- * Move or resize one module and settle the rest.
- *
- * One function for both, because both are the same operation on the same
- * rectangle and having two would be two places for the clamping and the
- * compaction to disagree - which is the defect CLAUDE.md records as a row
- * list built twice.
- */
-/**
- * Make room for a module by asking its neighbours to give way, not to leave.
- *
- * Grant, 23 September: *"when two panels occupy the same row and one is
- * widened, the neighbouring panel should intelligently shrink to compensate
- * where possible... Only move a panel to another row when the available width
- * genuinely cannot accommodate both panels at their minimum viable widths."*
- *
- * What happened before: `place` clamped the new rectangle and handed it to
- * `compact`, whose only tool is vertical. A panel widened by one column shoved
- * its neighbour onto a row of its own - the whole board reflowing because of a
- * gesture that meant "a bit wider".
- *
- * So the negotiation happens first, and it is horizontal:
- *
- *   - a neighbour sharing this row band and sitting to the RIGHT is moved to
- *     the right edge of the resized module and narrowed to whatever is left;
- *   - one sitting to the LEFT is narrowed against the resized module's edge;
- *   - a neighbour that cannot reach its own minimum width is left alone, and
- *     `compact` then moves it down - which is the case Grant says is the ONLY
- *     one where a row change is right.
- *
- * Pure, and takes the list rather than a slug, so it can be tested without a
- * browser.
- */
-export const squeeze = (list, id) => {
-  const me = list.find((m) => m.id === id)
-  if (me === undefined) return list
-  return list.map((o) => {
-    if (o.id === id) return o
-    if (!hits(o, me)) return o
-    /* Only a neighbour on the same band is a neighbour to negotiate with. */
-    const sharesRow = o.y < me.y + me.h && me.y < o.y + o.h
-    if (!sharesRow) return o
-    const b = bounds(o.id)
-    if (o.x >= me.x) {
-      /*
-        ITS RIGHT EDGE STAYS PUT.
+/** Lightly tidy this page. */
+export const autoArrange = (slug) => {
+  const d = materialised(slug)
+  d.mods = tidy(d.mods, stage)
+  commit(slug, d)
+  return layout(slug)
+}
 
-        A first version moved the neighbour rightwards and kept its width,
-        which merely passed the problem along: with three panels on a row the
-        third was shoved off the row instead of the second - the same jump,
-        one module further away. Holding the right edge and shrinking from the
-        left means nothing beyond the neighbour moves at all, which is what
-        "spatially predictable" has to mean.
-      */
-      const edge = o.x + o.w
-      const x = me.x + me.w
-      const room = edge - x
-      return room >= b.minW ? { ...o, x, w: room } : o
-    }
-    const room = me.x - o.x
-    return room >= b.minW ? { ...o, w: room } : o
+/**
+ * Reset the VIEW: arrangement, tints, z-order and zoom.
+ *
+ * Post-its and saved layouts are not part of the view and are never touched
+ * here. If nothing else is left the document is blank and the office is told
+ * to drop the row; otherwise it is told to store the document without an
+ * arrangement.
+ */
+export const reset = (slug) => {
+  commit(slug, { ...doc(slug), mods: null, zoom: 1 })
+}
+
+/**
+ * Has this page been arranged, tinted or zoomed, or is it as it was given?
+ * Compared as geometry by id, so a board dragged back into its original shape
+ * stops offering to restore a shape it is already in.
+ */
+export const customised = (slug) => {
+  const d = doc(slug)
+  if (d.zoom !== 1) return true
+  if (d.mods === null) return false
+  const was = fromFractions(THIRDS, stage)
+  if (d.mods.length !== was.length) return true
+  return d.mods.some((m) => {
+    const w = was.find((x) => x.id === m.id)
+    return (
+      w === undefined ||
+      m.tint !== null ||
+      Math.abs(w.x - m.x) > 1 ||
+      Math.abs(w.y - m.y) > 1 ||
+      Math.abs(w.w - m.w) > 1 ||
+      Math.abs(w.h - m.h) > 1
+    )
   })
 }
 
-export const place = (slug, id, rect) => {
-  const now = layout(slug)
-  const next = now.map((m) => (m.id === id ? clamp({ ...m, ...rect, id }) : m))
-  /*
-    Squeeze, THEN compact: the neighbours give way horizontally where they can,
-    and only what still cannot fit is moved to another row.
-  */
-  save(slug, compact(squeeze(next, id).map(clamp), id))
-  return layout(slug)
+/* ------------------------------------------------------------------- zoom --- */
+
+export const zoomOf = (slug) => doc(slug).zoom
+
+export const setZoom = (slug, z) => {
+  const zoom = Math.round(clampZoom(z) * 100) / 100
+  commit(slug, { ...doc(slug), zoom })
+  return zoom
+}
+
+/* ------------------------------------------------------- named layouts --- */
+
+const cleanName = (n) =>
+  String(n ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 40)
+
+export const layoutNames = (slug) => Object.keys(doc(slug).layouts)
+
+export const saveLayout = (slug, name) => {
+  const n = cleanName(name)
+  if (n === '') return ''
+  const d = doc(slug)
+  const snap = layout(slug).map(cleanMod)
+  commit(slug, { ...d, layouts: { ...d.layouts, [n]: { mods: snap, zoom: d.zoom } } })
+  return n
+}
+
+export const loadLayout = (slug, name) => {
+  const d = doc(slug)
+  const l = d.layouts[name]
+  if (l === undefined) return false
+  commit(slug, { ...d, mods: l.mods.map((m) => ({ ...m })), zoom: l.zoom })
+  return true
+}
+
+export const renameLayout = (slug, from, to) => {
+  const n = cleanName(to)
+  const d = doc(slug)
+  if (n === '' || d.layouts[from] === undefined) return false
+  if (n !== from && d.layouts[n] !== undefined) return false
+  const layouts = {}
+  for (const [k, v] of Object.entries(d.layouts)) layouts[k === from ? n : k] = v
+  commit(slug, { ...d, layouts })
+  return true
+}
+
+export const deleteLayout = (slug, name) => {
+  const d = doc(slug)
+  if (d.layouts[name] === undefined) return false
+  const layouts = { ...d.layouts }
+  delete layouts[name]
+  commit(slug, { ...d, layouts })
+  return true
+}
+
+/** One of the built-in presets, as the arrangement. */
+export const applyPreset = (slug, key) => {
+  const p = PRESETS[key]
+  if (p === undefined) return false
+  commit(slug, { ...doc(slug), mods: fromFractions(p.frac, stage) })
+  return true
+}
+
+/* -------------------------------------------------------------- Post-its --- */
+
+const newId = () => `n_${Math.random().toString(36).slice(2, 9)}`
+
+/**
+ * The notes on this project's page.
+ *
+ * The first time a project is opened there is one blank note to type into. It
+ * is not stored until somebody types in it, and removing it (or the last one)
+ * sets `seeded` so it does not come back. Deliberately dumb notes: text and a
+ * rectangle, nothing else.
+ */
+export const postits = (slug) => {
+  const d = doc(slug)
+  if (d.postits.length === 0 && !d.seeded) {
+    /*
+      Put where nothing is. The first draft assumed the thirds leave a free fifth on the right, which a tablet's three
+      240px columns do not: the blank note opened on top of Docs & Files. So: beside the modules if there is room for it,
+      else underneath them, and when neither exists the page simply has no starter (the Note button adds one): an empty
+      note is never worth covering somebody's documents for.
+    */
+    // Judged against the arrangement the page is GIVEN, not the one a person has since made: a note that vanished the moment
+    // somebody rearranged their modules would be stranger than one that was never offered.
+    const mods = fromFractions(THIRDS, stage)
+    const right = mods.reduce((n, m) => Math.max(n, m.x + m.w), 0)
+    const bottom = mods.reduce((n, m) => Math.max(n, m.y + m.h), 0)
+    const beside = stage.w - right - GAP - 8
+    let spot
+    if (mods.length === 0 || beside >= POSTIT_MIN.w + 20) {
+      const sw = Math.min(POSTIT_DEFAULT.w, Math.max(150, Math.round(stage.w * 0.2) - 14), mods.length === 0 ? 999 : beside)
+      spot = { x: stage.w - sw - 8, y: 6, w: sw, h: POSTIT_DEFAULT.h }
+    } else if (stage.h - bottom - GAP >= POSTIT_MIN.h + 10) {
+      spot = { x: stage.w - POSTIT_DEFAULT.w - 8, y: bottom + GAP, w: POSTIT_DEFAULT.w, h: Math.min(POSTIT_DEFAULT.h, stage.h - bottom - GAP) }
+    } else {
+      // Nowhere clear: no starter. The Note button in the toolbar still adds one, wherever its owner puts it.
+      return []
+    }
+    const starter = clampRect({ id: 'n_starter', ...spot, z: 7, text: '' }, stage)
+    return [{ ...starter, starter: true }]
+  }
+  return d.postits.map((n) => clampRect(n, stage))
+}
+
+export const addPostit = (slug) => {
+  const d = doc(slug)
+  const z = topZ(d) + 1
+  const offset = (d.postits.length % 6) * 22
+  const n = clampRect(
+    {
+      id: newId(),
+      x: stage.w - POSTIT_DEFAULT.w - 24 - offset,
+      y: 24 + offset,
+      ...POSTIT_DEFAULT,
+      z,
+      text: '',
+      at: Date.now(),
+    },
+    stage,
+  )
+  commit(slug, { ...d, postits: [...d.postits, n], seeded: true })
+  return n
+}
+
+/** Change a note. Returns its id, which differs only when the starter became real. */
+export const setPostit = (slug, id, patch) => {
+  const d = doc(slug)
+  if (id === 'n_starter' && !d.postits.some((n) => n.id === id)) {
+    const real = cleanPostit({ ...postits(slug)[0], ...patch, id: newId(), at: Date.now() })
+    commit(slug, { ...d, postits: [real], seeded: true })
+    return real.id
+  }
+  commit(slug, {
+    ...d,
+    postits: d.postits.map((n) => (n.id === id ? cleanPostit({ ...n, ...patch, at: Date.now() }) : n)),
+  })
+  return id
+}
+
+export const movePostit = (slug, id, rect) => {
+  const d = doc(slug)
+  const z = topZ(d) + 1
+  if (id === 'n_starter' && !d.postits.some((n) => n.id === id)) {
+    const real = cleanPostit({ ...postits(slug)[0], ...rect, id: newId(), z, at: Date.now() })
+    commit(slug, { ...d, postits: [real], seeded: true })
+    return real.id
+  }
+  commit(slug, {
+    ...d,
+    postits: d.postits.map((n) =>
+      n.id === id ? cleanPostit({ ...clampRect({ ...n, ...rect, id, z }, stage), at: Date.now() }) : n,
+    ),
+  })
+  return id
+}
+
+/** Put a removed note back exactly as it was (the Undo beside the removal). Its removal record is cleared, and it is newer than that record. */
+export const restorePostit = (slug, note) => {
+  const d = doc(slug)
+  if (d.postits.some((n) => n.id === note.id)) return false
+  const gone = { ...d.gone }
+  // Strictly newer than the removal it undoes, even inside the same millisecond.
+  const at = Math.max(Date.now(), (gone[note.id] ?? 0) + 1)
+  delete gone[note.id]
+  commit(slug, { ...d, postits: [...d.postits, cleanPostit({ ...note, at })], gone, seeded: true })
+  return true
+}
+
+/** Remove a note. This is the only thing in this module that deletes content, and it is explicit. */
+export const removePostit = (slug, id) => {
+  const d = doc(slug)
+  commit(slug, {
+    ...d,
+    postits: d.postits.filter((n) => n.id !== id),
+    gone: { ...d.gone, [id]: Date.now() },
+    seeded: true,
+  })
 }

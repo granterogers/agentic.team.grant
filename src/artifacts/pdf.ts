@@ -31,6 +31,7 @@
  * file that opens in nothing.
  */
 
+import type { PdfImage } from './image.ts'
 import { type Face, widthOf } from './metrics.ts'
 
 /** A colour, 0–1 per channel, because that is what PDF operators take. */
@@ -58,6 +59,18 @@ const enc = new TextEncoder()
 const WIN_ANSI: Readonly<Record<number, number>> = {
   338: 0x8c,
   339: 0x9c,
+  352: 0x8a, // S caron
+  353: 0x9a,
+  376: 0x9f,
+  381: 0x8e, // Z caron
+  382: 0x9e,
+  402: 0x83, // florin
+  710: 0x88, // modifier circumflex
+  732: 0x98, // small tilde
+  8224: 0x86, // dagger
+  8225: 0x87,
+  8240: 0x89, // per mille
+  8364: 0x80, // euro sign
   8211: 0x96, // en dash
   8212: 0x97, // em dash
   8216: 0x91,
@@ -101,7 +114,7 @@ const STANDS_IN: Readonly<Record<number, number>> = {
   65279: 0x20, // byte order mark
 }
 
-const pdfString = (text: string): Uint8Array => {
+export const pdfString = (text: string): Uint8Array => {
   const out: number[] = [0x28] // (
   for (const ch of text) {
     const cp = ch.codePointAt(0) ?? 32
@@ -139,8 +152,27 @@ const n = (v: number): string => {
  * needs to know about widows, page breaks and section headings and a drawing
  * surface should not.
  */
+/** Where a piece of text was put, for the layout QA (`qa.ts`). `y` is the baseline from the bottom. */
+export interface TextBox {
+  readonly text: string
+  readonly x: number
+  readonly y: number
+  readonly size: number
+  readonly width: number
+}
+
+/** Where an image was put, for the layout QA. `y` is the bottom edge. */
+export interface ImageBox {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
 export class Page {
   private readonly ops: string[] = []
+  private readonly placed: TextBox[] = []
+  private readonly pictures: { readonly image: PdfImage; readonly box: ImageBox }[] = []
 
   constructor(
     readonly width: number,
@@ -150,6 +182,7 @@ export class Page {
   /** Text at a baseline, in a face and size. `x`/`y` are from the bottom left. */
   text(value: string, x: number, y: number, face: Face, size: number, colour: Rgb): this {
     if (value === '') return this
+    this.placed.push({ size, text: value, width: widthOf(value, face, size), x, y })
     this.ops.push(
       'BT',
       `${n(colour.r)} ${n(colour.g)} ${n(colour.b)} rg`,
@@ -207,6 +240,28 @@ export class Page {
     return this
   }
 
+  /** An image, scaled into the box whose bottom-left is `x`,`y`. The caller keeps the proportions. */
+  image(image: PdfImage, x: number, y: number, w: number, h: number): this {
+    this.pictures.push({ box: { height: h, width: w, x, y }, image })
+    this.ops.push(
+      'q',
+      `${n(w)} 0 0 ${n(h)} ${n(x)} ${n(y)} cm`,
+      `/Im${String(this.pictures.length)} Do`,
+      'Q',
+    )
+    return this
+  }
+
+  /** Every image drawn, with its box, so the layout check can see a picture under text. */
+  imageBoxes(): readonly ImageBox[] {
+    return this.pictures.map((p) => p.box)
+  }
+
+  /** The images this page draws, in the order `/Im1`, `/Im2`... name them. */
+  images(): readonly PdfImage[] {
+    return this.pictures.map((p) => p.image)
+  }
+
   private readonly raw: { at: number; value: string }[] = []
 
   /**
@@ -222,6 +277,11 @@ export class Page {
    */
   said(): string {
     return this.raw.map((r) => r.value).join('\n')
+  }
+
+  /** Every text object drawn, with its box, so a layout check can compare them without decoding the stream. */
+  boxes(): readonly TextBox[] {
+    return this.placed
   }
 
   /** The finished content stream, as bytes. */
@@ -290,9 +350,61 @@ export function assemble(pages: readonly Page[], info: DocumentInfo): Uint8Array
     .map(([k, id]) => `/${k} ${String(id)} 0 R`)
     .join(' ')} >> >>`
 
+  /*
+    Images become XObjects once each, however many pages draw them (a logo is the same object on every page that
+    uses it). A page that draws none gets exactly the resources it always had, so a report with no image is
+    byte-for-byte what it was before images existed.
+  */
+  const imageIds = new Map<PdfImage, number>()
+  const addImage = (img: PdfImage): number => {
+    const known = imageIds.get(img)
+    if (known !== undefined) return known
+    let maskId: number | null = null
+    if (img.smask !== undefined) {
+      maskId = add(
+        join([
+          enc.encode(
+            `<< /Type /XObject /Subtype /Image /Width ${String(img.width)} /Height ${String(img.height)} ` +
+              `/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length ${String(img.smask.length)} >>\nstream\n`,
+          ),
+          img.smask,
+          enc.encode('\nendstream'),
+        ]),
+      )
+    }
+    let space: string = `/${img.colorSpace}`
+    if (img.colorSpace === 'Indexed' && img.palette !== undefined) {
+      const hex = [...img.palette].map((b) => b.toString(16).padStart(2, '0')).join('')
+      space = `[/Indexed /DeviceRGB ${String(img.palette.length / 3 - 1)} <${hex}>]`
+    }
+    const id = add(
+      join([
+        enc.encode(
+          `<< /Type /XObject /Subtype /Image /Width ${String(img.width)} /Height ${String(img.height)} ` +
+            `/ColorSpace ${space} /BitsPerComponent 8 /Filter /${img.filter} ` +
+            `${img.extra === '' ? '' : `${img.extra} `}${maskId === null ? '' : `/SMask ${String(maskId)} 0 R `}` +
+            `/Length ${String(img.data.length)} >>\nstream\n`,
+        ),
+        img.data,
+        enc.encode('\nendstream'),
+      ]),
+    )
+    imageIds.set(img, id)
+    return id
+  }
+
   const pageIds: number[] = []
   for (const page of pages) {
     const body = page.stream()
+    const drawn = page.images()
+    const pageResources =
+      drawn.length === 0
+        ? resources
+        : `<< /Font << ${Object.entries(fontIds)
+            .map(([k, id]) => `/${k} ${String(id)} 0 R`)
+            .join(' ')} >> /XObject << ${drawn
+            .map((img, i) => `/Im${String(i + 1)} ${String(addImage(img))} 0 R`)
+            .join(' ')} >> >>`
     const contentId = add(
       join([
         enc.encode(`<< /Length ${String(body.length)} >>\nstream\n`),
@@ -303,7 +415,7 @@ export function assemble(pages: readonly Page[], info: DocumentInfo): Uint8Array
     pageIds.push(
       add(
         `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(page.width)} ${n(page.height)}] ` +
-          `/Resources ${resources} /Contents ${String(contentId)} 0 R >>`,
+          `/Resources ${pageResources} /Contents ${String(contentId)} 0 R >>`,
       ),
     )
   }

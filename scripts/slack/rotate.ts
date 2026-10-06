@@ -17,6 +17,7 @@
  *
  * Never logs a token: length, expiry and an 8-char fingerprint only.
  */
+import '../../src/safety/require-production-writes.ts'
 import { createHash } from 'node:crypto'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'

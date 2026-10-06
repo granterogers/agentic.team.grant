@@ -25,6 +25,7 @@
  * Prints nothing secret: names, status, owner, and what to do.
  */
 
+import '../../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { roster } from '../../src/telegram/roster.ts'
 

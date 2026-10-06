@@ -7,7 +7,7 @@
  * functions are CALLED. Against production's own schema (pre-0613) the first
  * group must go red; that is what makes it evidence.
  */
-import { EXPOSURE_SQL, reachableByAPublicKey, readReach } from '../check-anon-exposure.ts'
+import { EXPOSURE_SQL, reachableByAPublicKey, readReach } from '../../src/safety/anon-exposure.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'anon613')

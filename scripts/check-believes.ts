@@ -40,6 +40,7 @@
  * Harness deliveries are excluded through `app.harness_job`, because a suite
  * proving a send is not the office doing its work.
  */
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 /** A service in the reach list, beside what it has actually carried. */

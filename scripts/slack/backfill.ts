@@ -31,6 +31,7 @@
  * do and stops until told `--go`.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { SlackClient } from '../../src/slack/api.ts'
 

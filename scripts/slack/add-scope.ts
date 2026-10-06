@@ -22,6 +22,7 @@
  * Only an export shows what the app is configured to ask for — the same rule
  * `slack:configure-events` follows, and the reason it exists.
  */
+import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const supabase = process.env.SUPABASE_ACCESS_TOKEN

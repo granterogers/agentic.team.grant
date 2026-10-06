@@ -38,6 +38,7 @@
  * archive: retention is Grant's decision, not a script's.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import {
   checksum,
   downloadArchive,

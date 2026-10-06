@@ -11,6 +11,7 @@
  * `voice-token`.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

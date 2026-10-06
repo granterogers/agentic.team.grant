@@ -36,6 +36,7 @@
  * measurement is for. Same reasoning as `.out/e2e-history.jsonl` (#226).
  */
 
+import '../src/safety/require-production-checks.ts'
 import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../src/db/executor.ts'

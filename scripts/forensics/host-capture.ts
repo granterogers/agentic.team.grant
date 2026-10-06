@@ -23,6 +23,7 @@
  * stdout. The access token is read from SUPABASE_ACCESS_TOKEN and is never printed. Log lines pass through `redactSecrets` and
  * are truncated, because a Postgres error line can carry a statement.
  */
+import '../../src/safety/require-production-checks.ts'
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { redactSecrets } from '../../src/text/secrets.ts'
 import { answered, parseMetrics, qualify, rates, snapshot } from './metrics.ts'

@@ -15,6 +15,7 @@
  * 339,010 bytes of auth wall.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { createHash, randomBytes } from 'node:crypto'
 import { DeliveryService } from '../../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'

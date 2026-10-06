@@ -22,6 +22,7 @@
  *
  * Prints length and a fingerprint. Never the password.
  */
+import '../../src/safety/require-production-writes.ts'
 import { createHash, randomInt } from 'node:crypto'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

@@ -384,6 +384,33 @@ over `cat`, `grep` and `head`.
 
 ---
 
+## Production access is forbidden by default
+
+**Holding production credentials is not permission to use them.** Commands that contact production refuse to run
+(`src/safety/production-gate.ts`, `docs/production-access-guard.md`) unless a person has switched access on:
+
+- `ALLOW_PRODUCTION_CHECKS=1` - read-only contact with production (`check:*`, `q`, `qq`, `forensics:*`, suites aimed at the deployed site).
+- `ALLOW_PRODUCTION_WRITES=1` as well - deploys, migrations, purges, config changes, anything that writes.
+
+Rules, and they bind **sub-agents exactly as they bind you**:
+
+1. **Never set either flag yourself to make a check pass.** `ALLOW_PRODUCTION_CHECKS=1` is used only when Grant has
+   explicitly authorised that production READ; `ALLOW_PRODUCTION_WRITES=1` only for the specific production WRITE he named.
+   Authorisation for one operation is not authorisation for the next.
+2. **A refusal is the guard working. Do not bypass it** (no flag, no editing the guard, no `fetch` of your own, no
+   removing a gate import, no unsetting then re-exporting credentials). Report what verification remains undone and why.
+3. Local replicas (`scripts/isolated/*`) and staging use their own targets and need no production flag. Staging is a
+   separate Supabase project, Vercel preview, OAuth client, bots and storage; if a staging command needs a flag the
+   guard cannot tell staging from production (it recognises Supabase hosts), so staging commands run in a shell with
+   `TARGET_ENVIRONMENT=staging` that `npm run staging:preflight` has attested: from then on they refuse any target that is
+   not the attested project, flags or not (`src/safety/staging-binding.ts`).
+4. Every new script that can contact production must put a gate module first in its imports
+   (`require-production-checks` for reads, `require-production-writes` for writes). `tests/safety` fails if one does not,
+   and fails if a gate import is removed.
+5. Unset `SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_REF SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_URL` when running anything local.
+
+---
+
 ## Before you push
 
 ```bash
@@ -416,7 +443,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **763 applied** (0898 is the latest applied; 0892 is committed and waits for the platform to recover). 0897/0898 are the public Sample (`docs/multi-user/PUBLIC-SAMPLE.md`).
+`npm run migrate` applies plain SQL from `migrations/`. **Production has 770 applied** (the Sample's `0897_a_visitor…` to `0905_…` are the latest; 0892 waits for the platform to recover). The 0897 to 0905 Sample files are applied and immutable; `main`'s own UX migrations (`0897_project_calendar_events`, `0900_documents_…`, 0920 to 1022) are committed and NOT applied to production, and share some numeric prefixes with the Sample's (see the numbering-collision trap below and `docs/multi-user/PUBLIC-SAMPLE.md`). Do not apply them without a separate decision.
 
 ## Testing signed in, without Grant's office
 
@@ -4659,6 +4686,30 @@ Each of these cost real time. They are here so they cost it once.
   `cmp` the two: byte-identical proves the transcription and keeps the no-in-place-formatter rule.
 - **Deploy from live bytes plus your diff.** The page deploy printed "uploading 7 / 1 / 1 / 1 file(s)", which is the proof only
   the intended files went out; the working tree carried held work in `office.js` and `shell.js`.
+- **Two branches numbered migrations independently, and the filename, not the number, is the identity.** The Sample branch
+  applied `0897_a_visitor_can_explore_a_sample_office_and_nothing_else` to `0905` to production; `main` independently holds
+  `0897_project_calendar_events` and `0900_documents_are_logical_items_with_versions_and_an_explicit_import`. The runner records
+  and compares `name` plus `checksum` (never the number) and applies unapplied files in sorted filename order, so the pairs
+  coexist and order deterministically (`0897_a…` before `0897_p…`, `0900_an…` before `0900_d…`). **Applied Sample files are never
+  renamed or renumbered** (`check:migrations` would refuse it, and the repository would then claim a number production did not
+  run under). Details and the replay evidence: `docs/multi-user/PUBLIC-SAMPLE.md`, "Migration numbering collision".
+- **A structural check that is refused for the wrong reason reads as "the structure is red".** `check:office-edges` documents a
+  `--replica` mode and imported the production-only guard, so for as long as the guard has existed the replica run was refused,
+  and the mutation proof read the refusal as a failing check and "passed" its sabotages for the wrong reason. Corrected, it found
+  a composite-key gap in a table the UX work had added. When a check has a mode that must run without a flag, run it in that mode
+  once and read the first line it prints.
+- **A control that picks "the first" of an unordered list is two different controls on two databases.** The bridge control took
+  `officeColumns[0]`, which was a carrier in one catalogue and `offices` (not a carrier) in another, so it "did not fire". Pick by
+  class, not by position.
+- **One stored document with several authors is last-writer-wins, and a Post-it is somebody's writing.** The workspace is stored as one
+  document, so a second tab, a second device or an offline session erased notes. Merge by item with a timestamp and record removals
+  (`gone`), or the next save is a delete.
+- **A stricter rule can break the fixture that modelled the loose one.** 1021 made a replacement document have to be approved and
+  a revoked login refuse an import of held text; two existing proofs failed because their fixtures were drafts. Change the fixture
+  deliberately and say why; never relax the rule to the fixture.
+- **A tolerated error list must be bounded by WHAT may be skipped as well as by the message.** `src/migrations/fresh.ts` skips a
+  statement only if it is a `do` self-check or a seed `insert`; a failing `create` or `alter` is never skippable, whatever the list
+  says. Prove replay parity with a catalogue fingerprint (`scripts/isolated/schema-fingerprint.sql`), not by "it applied".
 
 ---
 

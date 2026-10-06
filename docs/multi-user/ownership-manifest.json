@@ -121,6 +121,23 @@
       "class": "SYSTEM",
       "why": "The build session log (what Claude is building); describes the developer session, not an office."
     },
+    "calendar_event_projects": {
+      "class": "OFFICE_CARRIER",
+      "why": "Which projects an event is shown in (HQ-CAL-009): office_id is written with the row and is its owner.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["calendar_id", "event_id"],
+          "parent": "calendar_events",
+          "constraint": "calendar_event_projects_event_same_office"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "calendar_event_projects_project_same_office"
+        }
+      ]
+    },
     "calendar_events": {
       "class": "OFFICE_CARRIER",
       "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
@@ -268,6 +285,18 @@
         }
       ]
     },
+    "document_index_state": {
+      "class": "OFFICE_CARRIER",
+      "why": "The background indexer's schedule for a document (HQ-DOC-026): office_id is written with the row; closed to every API role.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_index_state_document_same_office"
+        }
+      ]
+    },
     "document_orders": {
       "class": "OFFICE_DERIVED",
       "path": [
@@ -275,6 +304,18 @@
           "columns": ["project_id"],
           "parent": "projects",
           "constraint": "document_orders_project_id_fkey"
+        }
+      ]
+    },
+    "document_previews": {
+      "class": "OFFICE_CARRIER",
+      "why": "The derived, cached preview of an external document (HQ-DOC-029): office_id is written with the row; closed to every API role.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_previews_document_same_office"
         }
       ]
     },
@@ -287,6 +328,11 @@
           "columns": ["mirrors_document_id"],
           "parent": "documents",
           "constraint": "documents_mirrors_document_id_fkey"
+        },
+        {
+          "columns": ["imported_from_document_id"],
+          "parent": "documents",
+          "constraint": "documents_imported_from_document_id_fkey"
         },
         {
           "columns": ["produced_by_job"],
@@ -440,6 +486,18 @@
         }
       ]
     },
+    "project_events": {
+      "class": "OFFICE_CARRIER",
+      "why": "Calendar events of a project (HQ-CAL-001): office_id is written with the row and is its owner.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_events_project_same_office"
+        }
+      ]
+    },
     "slack_installs": {
       "class": "OFFICE_CARRIER",
       "why": "A person's own Slack workspace install (ADR-0065); written only by app.slack_install_redeem, which takes the office from the verified state's row, and tied to its workspace by a same-office composite key so an install cannot belong to a different office than its workspace.",
@@ -464,6 +522,57 @@
         }
       ]
     },
+    "document_version_notes": {
+      "class": "OFFICE_CARRIER",
+      "why": "Provenance of a document version (0900); written only by app.document_version_link, which copies the head document's own office, and tied to its documents by same-office composite keys so a note cannot belong to a different office than the version it describes.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_version_notes_document_id_fkey"
+        },
+        {
+          "columns": ["previous_document_id"],
+          "parent": "documents",
+          "constraint": "document_version_notes_previous_document_id_fkey"
+        },
+        {
+          "columns": ["rolled_back_to"],
+          "parent": "documents",
+          "constraint": "document_version_notes_rolled_back_to_fkey"
+        }
+      ]
+    },
+    "document_import_requests": {
+      "class": "OFFICE_CARRIER",
+      "why": "A person's explicit request to import an external document that Team HQ does not hold yet (0900); written only by app.hq_document_import under the verified office, and tied to its documents by same-office composite keys.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_import_requests_document_id_fkey"
+        },
+        {
+          "columns": ["copy_document_id"],
+          "parent": "documents",
+          "constraint": "document_import_requests_copy_document_id_fkey"
+        }
+      ]
+    },
+    "document_provenance": {
+      "class": "OFFICE_CARRIER",
+      "why": "How a made document was made - the house style hash, the design and the cited sources (0940); written once by app.document_provenance_record under the verified office, read by app.document_provenance_of.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["document_id"],
+          "parent": "documents",
+          "constraint": "document_provenance_document_id_fkey"
+        }
+      ]
+    },
     "channel_link_challenges": {
       "class": "OFFICE_CARRIER",
       "why": "A person's one-time request to connect their own messaging identity; it has no parent row that decides its owner, so it records the office itself, from the verified session.",
@@ -484,6 +593,10 @@
           "constraint": "inference_usage_job_id_fkey"
         }
       ]
+    },
+    "integration_connections": {
+      "class": "OFFICE_CARRIER",
+      "why": "An office's connection to a provider account (HQ-GOOG-003): office_id is written at creation and write-once, and is the only owner the row has."
     },
     "job_branches": {
       "class": "OFFICE_DERIVED",
@@ -1145,6 +1258,17 @@
           "columns": ["project_id"],
           "parent": "projects",
           "constraint": "standing_authorizations_project_id_fkey"
+        }
+      ]
+    },
+    "style_profiles": {
+      "class": "OFFICE_CARRIER",
+      "why": "A project's kept report style (HQ-STYLE-013): office_id is written with the row and is its owner.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "style_project_in_same_office"
         }
       ]
     },

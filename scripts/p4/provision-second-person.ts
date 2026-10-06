@@ -9,6 +9,7 @@
  * The password is generated here, stored in the Vault as `p4.second_person.password` and never printed. The service key is
  * read from the Management API and never printed either.
  */
+import '../../src/safety/require-production-writes.ts'
 import { randomBytes } from 'node:crypto'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

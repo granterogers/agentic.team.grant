@@ -18,6 +18,7 @@
  * `--prove-it` runs them and prints, for each, the problem that was raised - never a count alone
  * (a sabotage that did not apply is not a passing control).
  */
+import '../src/safety/require-production-unless-replica.ts'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../src/db/executor.ts'

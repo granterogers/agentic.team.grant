@@ -12,6 +12,7 @@
  * after that the existing one is reused, because rotating a token nobody asked
  * to rotate would silently lock Grant's phone out of the dashboard.
  */
+import '../../src/safety/require-production-writes.ts'
 import { randomBytes } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
@@ -77,6 +78,14 @@ form.append(
 form.append(
   'file',
   new File([await readFile('src/slack/oauth.ts', 'utf8')], 'oauth.ts', {
+    type: 'application/typescript',
+  }),
+)
+
+// The on-demand document preview (0990): one source in src/, uploaded beside the entrypoint as ./preview.ts.
+form.append(
+  'file',
+  new File([await readFile('src/documents/preview.ts', 'utf8')], 'preview.ts', {
     type: 'application/typescript',
   }),
 )

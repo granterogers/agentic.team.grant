@@ -24,6 +24,7 @@
  * nothing reaches any office. The property asserted is that the page repeats
  * the answer the office HOLDS, and does not claim this press was taken.
  */
+import '../../src/safety/arm.ts'
 import { chromium, type Page } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 

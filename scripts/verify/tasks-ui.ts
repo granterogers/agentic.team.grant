@@ -22,6 +22,7 @@
  * the end, and the teardown asserts it left nothing.
  */
 
+import '../../src/safety/require-production-if-targeted.ts'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'

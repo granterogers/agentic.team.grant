@@ -5,6 +5,7 @@
  * call is evidence and not an absence of activity), the append-only evidence file, and redaction of anything a log line or an
  * error body might carry. The access token is read from SUPABASE_ACCESS_TOKEN and is never printed or written.
  */
+import '../../src/safety/arm.ts'
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { redactSecrets } from '../../src/text/secrets.ts'
 

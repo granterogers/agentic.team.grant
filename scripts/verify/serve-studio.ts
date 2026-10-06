@@ -12,6 +12,7 @@
  * fonts/ serves index.html, and everything else is looked up on disk. A check
  * written against this is a check of the addresses Grant will actually open.
  */
+import '../../src/safety/arm.ts'
 import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { extname, join } from 'node:path'

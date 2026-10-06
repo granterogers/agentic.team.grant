@@ -11,6 +11,7 @@
  */
 import {
   type CanonicalTask,
+  ProviderAuthError,
   ProviderDownError,
   type RemoteTask,
   type TaskProvider,
@@ -126,6 +127,31 @@ export const markerOf = (description: string | undefined): string | null =>
 export const withMark = (detail: string, id: string): string =>
   `${detail.replace(MARK, ' ').trim()}\n\n[agentic:${id.toLowerCase()}]`.trim()
 
+/**
+ * A description as plain text, keeping what a person wrote.
+ *
+ * Vikunja's editor writes HTML; the API stores whatever it is sent. Two things must both hold: HTML from the editor
+ * becomes readable text (block ends become line breaks, entities are decoded), and PLAIN text the office pushed comes
+ * back exactly as it went. The first version collapsed every run of whitespace, so a two-paragraph note was one line
+ * after its first round trip and the flattened copy was then written back over the original; and it removed anything
+ * between a "<" and a ">", so "stock < 5 and price > 3" lost its middle. Only something shaped like a tag is a tag.
+ */
+export const plainText = (description: string | undefined): string =>
+  String(description ?? '')
+    .replace(MARK, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6]|tr|blockquote|pre)\s*>/gi, '\n')
+    .replace(/<\/?[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>/gi, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
 /** The shape of one Vikunja task, as this office reads it. */
 export const readTask = (t: VikunjaTask): RemoteTask => ({
   externalId: String(t.id ?? ''),
@@ -136,12 +162,7 @@ export const readTask = (t: VikunjaTask): RemoteTask => ({
     plain text, so the tags come off rather than being stored and rendered as
     literal angle brackets on Grant's phone.
   */
-  detail: String(t.description ?? '')
-    .replace(MARK, ' ')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim(),
+  detail: plainText(t.description),
   done: t.done === true,
   priority: priorityIn(typeof t.priority === 'number' ? t.priority : null),
   dueOn: dueIn(t.due_date),
@@ -158,7 +179,12 @@ export interface VikunjaOptions {
   readonly projectId: number
   /** Injectable for the suite; the real one is `globalThis.fetch`. */
   readonly fetch?: typeof fetch
+  /** How long one request may take before it counts as an outage. A server that accepts and never answers is down. */
+  readonly timeoutMs?: number
 }
+
+const PER_PAGE = 50
+const MAX_PAGES = 100
 
 export class VikunjaProvider implements TaskProvider {
   readonly name = 'vikunja'
@@ -166,12 +192,14 @@ export class VikunjaProvider implements TaskProvider {
   private readonly token: string
   private readonly projectId: number
   private readonly http: typeof fetch
+  private readonly timeoutMs: number
 
   constructor(opts: VikunjaOptions) {
     this.api = `${opts.baseUrl.replace(/\/+$/, '')}/api/v1`
     this.token = opts.token
     this.projectId = opts.projectId
     this.http = opts.fetch ?? globalThis.fetch
+    this.timeoutMs = opts.timeoutMs ?? 20_000
   }
 
   /*
@@ -182,6 +210,14 @@ export class VikunjaProvider implements TaskProvider {
     here from the status and a trimmed body, never from the caught error.
   */
   private async call(method: string, path: string, body?: unknown): Promise<unknown> {
+    return (await this.callRaw(method, path, body)).json
+  }
+
+  private async callRaw(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<{ json: unknown; pages: number | null }> {
     let res: Response
     try {
       res = await this.http(`${this.api}${path}`, {
@@ -191,6 +227,8 @@ export class VikunjaProvider implements TaskProvider {
           ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        // Without this a server that accepts the connection and never answers holds the duty for ever.
+        signal: AbortSignal.timeout(this.timeoutMs),
       })
     } catch (error) {
       throw new ProviderDownError(
@@ -206,13 +244,17 @@ export class VikunjaProvider implements TaskProvider {
         outage may leave the canonical side untouched and try again later — a
         400 retried for ever is a task that never syncs and never says why.
       */
+      if (res.status === 401 || res.status === 403)
+        throw new ProviderAuthError('vikunja', res.status)
       if (res.status >= 500 || res.status === 429) {
         throw new ProviderDownError('vikunja', `http ${String(res.status)}`)
       }
       throw new Error(`vikunja refused: http ${String(res.status)} ${said.replace(this.token, '')}`)
     }
-    if (res.status === 204) return null
-    return await res.json().catch(() => null)
+    const total = Number(res.headers.get('x-pagination-total-pages'))
+    const pages = Number.isInteger(total) && total > 0 ? total : null
+    if (res.status === 204) return { json: null, pages }
+    return { json: await res.json().catch(() => null), pages }
   }
 
   async reachable(): Promise<boolean> {
@@ -293,15 +335,25 @@ export class VikunjaProvider implements TaskProvider {
       has no business reading the rest of somebody's account.
     */
     const out: RemoteTask[] = []
-    for (let page = 1; page <= 20; page += 1) {
-      const got = (await this.call(
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+      const { json: got, pages } = await this.callRaw(
         'GET',
-        `/projects/${String(this.projectId)}/tasks?per_page=50&page=${String(page)}`,
-      )) as VikunjaTask[] | null
-      if (got === null || !Array.isArray(got) || got.length === 0) break
-      for (const t of got) out.push(readTask(t))
-      if (got.length < 50) break
+        `/projects/${String(this.projectId)}/tasks?per_page=${String(PER_PAGE)}&page=${String(page)}`,
+      )
+      /*
+        The end is an EMPTY page (or the server's own page count), never a short one: `service.maxitemsperpage` can cap
+        the page below what was asked for, and "fewer than 50 means last" then stopped after the first page and called
+        the rest of the board nonexistent - which the pull never imports and the adoption check never finds.
+      */
+      if (!Array.isArray(got) || got.length === 0) return out
+      for (const t of got as VikunjaTask[]) out.push(readTask(t))
+      // The server's own page count is authoritative. Without it (a proxy that drops headers) a short page is the best
+      // available sign of the end - the old rule, kept only as the fallback.
+      if (pages !== null ? page >= pages : got.length < PER_PAGE) return out
     }
-    return out
+    // A cut-off list presented as the whole list is the one thing a listing may not do.
+    throw new Error(
+      `vikunja holds more than ${String(MAX_PAGES * PER_PAGE)} tasks in this project; refusing to read part of it`,
+    )
   }
 }

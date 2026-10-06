@@ -7,6 +7,7 @@
  * as an argument: arguments appear in `ps` output for every user on the box,
  * and this one is a Google session.
  */
+import '../../src/safety/require-production-writes.ts'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'

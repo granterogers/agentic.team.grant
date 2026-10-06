@@ -323,7 +323,7 @@ export const MAIL_BODIES = { bulk: 0, held: null, messages: 0, unread: 0 }
   "Not connected" and "I have not asked yet" are different sentences and the
   card says so.
 */
-export const TASK_SYNC = { configured: null, url: null, project: null, linked: 0, trouble: [] }
+export const TASK_SYNC = { configured: null, url: null, project: null, linked: 0, trouble: [], health: null }
 export const BEHAVIOURS = [...FALLBACK_BEHAVIOURS]
 export const STANDING = [...FALLBACK_STANDING]
 export const DECISIONS = [...FALLBACK_DECISIONS]
@@ -509,6 +509,17 @@ export async function hydrateSettings(read) {
         TASK_SYNC.project = typeof d2.project_id === 'number' ? d2.project_id : null
         TASK_SYNC.linked = typeof d2.linked === 'number' ? d2.linked : 0
         replace(TASK_SYNC.trouble, Array.isArray(d2.trouble) ? d2.trouble : [])
+        // Whether Vikunja is answering, from the last round (0981). Null until a round has run: the card then says nothing it does not know.
+        TASK_SYNC.health =
+          d2.health !== null && typeof d2.health === 'object' && typeof d2.health.state === 'string'
+            ? {
+                state: d2.health.state,
+                kind: typeof d2.health.kind === 'string' ? d2.health.kind : null,
+                detail: typeof d2.health.detail === 'string' ? d2.health.detail : '',
+                checkedAt: typeof d2.health.checked_at === 'string' ? d2.health.checked_at : null,
+                lastOkAt: typeof d2.health.last_ok_at === 'string' ? d2.health.last_ok_at : null,
+              }
+            : null
       })
       .catch(() => undefined)
 

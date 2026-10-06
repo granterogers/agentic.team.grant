@@ -26,7 +26,7 @@ describe('a forwarded turn does not read as his instruction (the class, not thre
   })
   it('and the handler still reaches no reader any other way', () => {
     expect(code).not.toMatch(
-      /(?<![.\w])(readPlan|populateRequest|connectRequest|linkRequest|pageRequest|callsItOff|readTeaching|readCorrection|wantsAnotherGo|spokenAnswer)\(/,
+      /(?<![.\w])(readPlan|populateRequest|connectRequest|linkRequest|pageRequest|callsItOff|readTeaching|readCorrection|wantsAnotherGo|spokenAnswer|styleKeepRequest)\(/,
     )
   })
 })

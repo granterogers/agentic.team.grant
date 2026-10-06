@@ -6,6 +6,7 @@
  * `deploy:hq` does the same upload and then redeploys the page; a gateway change needs the first and not the second. The
  * entrypoint imports ./file-text.ts (#419), so both files go up together, as the Telegram deploy does with its adapter.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

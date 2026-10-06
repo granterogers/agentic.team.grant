@@ -39,6 +39,7 @@
  * field where the description belongs.
  */
 
+import '../../src/safety/require-production-writes.ts'
 import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'

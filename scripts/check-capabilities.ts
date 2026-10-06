@@ -46,6 +46,7 @@
  * baselined excuse stops the next person looking.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 

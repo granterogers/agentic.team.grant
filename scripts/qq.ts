@@ -13,6 +13,7 @@
  * nothing.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

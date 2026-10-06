@@ -28,6 +28,7 @@
  * that cannot tell them apart cannot measure the real corpus either.
  */
 
+import '../src/safety/require-production-checks.ts'
 import { ManagementApiExecutor, type SqlExecutor } from '../src/db/executor.ts'
 import { makeNecessityJudge, type Necessity } from '../src/eval/necessity.ts'
 import { ProviderRouter } from '../src/providers/router.ts'

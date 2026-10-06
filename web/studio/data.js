@@ -147,6 +147,9 @@ const FALLBACK_PROJECTS = [
       { title: 'Grant Interview Questions', kind: 'pdf', origin: 'Yours', size: '11,616 words', lines: [70, 96, 88, 60] },
       { title: 'Journey VS Destination', kind: 'pdf', origin: 'Yours', size: '8,683 words', file: '/samples/journey.pdf', lines: [82, 94, 90, 68, 86] },
       { title: 'Course one-pager', kind: 'made', origin: 'Oliver · 2 days ago', size: 'A4', file: '/samples/one-pager.pdf', lines: [70, 100, 88] },
+      { id: 'proto-drive-1', title: 'Customer research report', kind: 'doc', origin: 'Google Drive', connector: 'drive', external_ref: 'proto-drive-ref-1', size: '12,480 words', modified_at: '2026-10-02T09:12:00Z', lines: [78, 96, 90, 70] },
+      { id: 'proto-drive-2', title: 'Interview schedule', kind: 'doc', origin: 'Google Drive', connector: 'drive', external_ref: 'proto-drive-ref-2', size: '3 KB', modified_at: '2026-09-29T15:40:00Z', lines: [70, 88, 60] },
+      { id: 'proto-nb-1', title: 'Interview corpus notes', kind: 'doc', origin: 'NotebookLM', connector: 'notebooklm', size: '8,200 words', lines: [80, 92, 64] },
       { title: 'Legacy Questionnaire', kind: 'pdf', origin: 'Yours', size: '3,370 words', lines: [74, 92, 84] },
       /*
         A REAL FILE ON THE AUDIO ROW. Grant, 22 September: "audio files not
@@ -415,7 +418,9 @@ const FALLBACK_PROJECTS = [
     activity: [
       { who: 'emma', verb: 'pulled', what: 'the WS02 client list into the vision map', at: AGO(2 * 60 + 12, 41), when: '2h ago' },
       { who: 'oliver', verb: 'made', what: 'the course one-pager', at: AGO(2 * 24 * 60 + 95, 7), when: '2d ago' },
-      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', at: AGO(2 * 24 * 60 + 340, 19), when: '2d ago' },
+      { who: 'claire', verb: 'imported', what: '12 documents into Notion as 6 modules', at: AGO(2 * 24 * 60 + 340, 19), when: '2d ago', category: 'sync' },
+      { who: 'grant', verb: 'edited', what: 'the event Weekly planning', at: AGO(5 * 60, 12), when: '5h ago', via: 'ChatGPT', category: 'calendar' },
+      { who: 'claire', verb: 'created', what: 'the task Book the remaining interview slots', at: AGO(26 * 60, 3), when: '1d ago', via: 'Telegram', category: 'task' },
     ],
   },
   {

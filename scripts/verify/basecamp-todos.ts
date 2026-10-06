@@ -16,6 +16,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 
@@ -133,7 +134,10 @@ await home()
 check('and it is still done after a reload', await nowDone(firstKey))
 
 /* --- 4. the expanded view agrees ---------------------------------------- */
-await page.locator('[data-mod="tasks"] .bcmodhead').first().click()
+await page
+  .locator('[data-mod="tasks"] .bcmodhead')
+  .first()
+  .click({ position: { x: 80, y: 10 } })
 await page.waitForTimeout(500)
 check(
   'the To-dos module opens expanded',
