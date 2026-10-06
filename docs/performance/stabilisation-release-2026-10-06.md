@@ -46,12 +46,14 @@ Code and page dependencies:
 | thinking reading (`cannot_think`) vs the old whole-health call | 62,224 to 7 | 912,800 to 53 | 4 to 0 | 817 to 0.7 |
 | `studio_team_work` | 20,231 to 3,525 | 357,662 to 90,366 (-75%) | 1 to 1 | 302 to 68 |
 | `hq_pulse` | 8 to 13 | 138,838 to 70,734 (-49%) | 4 to 2 | 145 to 48 |
-| `studio_unseen` | 82,375 to 130,752 | 248,073 to 194,319 (-22%) | 0 to 0 | 367 to 325 |
+| `studio_unseen` | 82,375 to 70,330 | 248,073 to 55,356 (-78%) | 0 to 0 | 229 to 143 |
 | `hq_portfolio_tasks` | 10 to 10 | 73 to 73 | 0 | unchanged |
 
 Caveats, stated rather than rounded away: `read` (disk) counts depend on cache warmth and the first call after a restart is cold, which is why buffer pages
-(hit + read) are compared. `studio_unseen` touches FEWER pages but more nested statements; its benefit is the smallest of the four and it is carried because it
-runs on every page load, not because it is a large win. These are structural counts on a replica. They are NOT production measurements and no replica
+(hit + read) are compared. **CORRECTION (6 October, offline review in `stabilisation-runbook-2026-10-06.md`):** the line above this paragraph's table originally said
+`studio_unseen` ran MORE nested statements. That compared two different data states (the unmigrated replica against one my own proof runs had
+altered). Measured like for like in five states, the new function is no worse than the old in any of them, touches 75% to 79% fewer pages in
+the common ones, and the extra "statements" are `select now()` calls that are identical in old and new. These are structural counts on a replica. They are NOT production measurements and no replica
 saving (polling -91.6%, page load -71%) is claimed until measured on production (section 6).
 
 Budget: `scripts/forensics/resource-budget.stabilisation.json`, PASS for the six paths this release changes. The full `resource-budget.json` is

@@ -12,7 +12,8 @@
  * The dry run recovers the live source the same way and prints the differences by line count; it refuses to continue when
  * the staged folder has a file the live bundle does not (an extra import would be new code nobody reviewed).
  */
-import { readFile } from 'node:fs/promises'
+import '../../src/safety/require-production-checks.ts'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const dir = process.argv[2] ?? ''
@@ -94,9 +95,33 @@ for (const f of Object.keys(staged)) {
     `  ${f}: live ${String(a.length)} lines, staged ${String(b.length)}; ${String(added)} line(s) new, ${String(removed)} line(s) gone`,
   )
 }
+// --save-live=<dir> writes the recovered LIVE source there (outside git): those bytes are the rollback, deployed back with this same tool.
+const saveLive = process.argv
+  .find((a) => a.startsWith('--save-live='))
+  ?.slice('--save-live='.length)
+if (saveLive !== undefined) {
+  await mkdir(saveLive, { recursive: true })
+  for (const f of files) await writeFile(`${saveLive}/${f}`, live[f] as string)
+  console.log(`live source of v${String(meta.version)} saved to ${saveLive} (the rollback)`)
+}
 if (!go) {
   console.log('dry run: nothing uploaded. Pass --go to deploy.')
   process.exit(0)
+}
+// A deploy is a production WRITE: the writes guard, and a healthy canary, come before anything is uploaded.
+await import('../../src/safety/require-production-writes.ts')
+{
+  const { canaryPrecondition, fetchProviderHealth } = await import('../../src/safety/canary.ts')
+  const verdict = await canaryPrecondition({
+    readHealth: () => fetchProviderHealth(ref, supabaseToken),
+    readRows: async (sql: string) => (await db.execute(sql)).rows as Record<string, unknown>[],
+    sleep: (ms: number) => new Promise((r) => setTimeout(r, ms)),
+  })
+  for (const c of verdict.checks) console.log(`  ${c.ok ? 'ok  ' : 'FAIL'} ${c.name}: ${c.detail}`)
+  if (!verdict.go) {
+    console.error(`NO-GO: ${verdict.reasons.join('; ')} Nothing was uploaded.`)
+    process.exit(1)
+  }
 }
 
 const form = new FormData()
@@ -142,3 +167,17 @@ console.log(
   `  unauthenticated http ${String(unauth)} (must be 401); authenticated http ${String(authed)} (must be 200)`,
 )
 if (unauth !== 401 || authed !== 200) process.exit(1)
+
+// The `thinking` section answers with the `cannot_think` key under BOTH gateways (the old one serves the whole health reading, which
+// carries that key; the new one serves only it), so this probe is valid before and after the change and after a rollback.
+if (process.argv.includes('--probe-thinking')) {
+  const r = await fetch(`${endpoint}?section=thinking`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const j = (await r.json().catch(() => ({}))) as { data?: Record<string, unknown> }
+  const has = Array.isArray(j.data?.cannot_think)
+  console.log(
+    `  thinking section: http ${String(r.status)}, cannot_think list present: ${String(has)} (must be 200 and true)`,
+  )
+  if (r.status !== 200 || !has) process.exit(1)
+}

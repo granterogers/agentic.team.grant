@@ -13,6 +13,7 @@
  * It refuses to deploy when its file NAMES differ from the live deployment's, because a
  * different set is a different page. The previous deployment is printed as the rollback point.
  */
+import '../../src/safety/require-production-checks.ts'
 import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
@@ -105,8 +106,13 @@ if (onlyMine.length > 0 || onlyLive.length > 0) {
 }
 if (!go) {
   console.log('dry run: nothing deployed')
+  console.log(
+    `rollback point if this is deployed: ${liveId} (scripts/rollout/page-rollback.ts ${liveId} --go)`,
+  )
   process.exit(0)
 }
+// A deploy is a production WRITE: the writes guard comes before anything is uploaded.
+await import('../../src/safety/require-production-writes.ts')
 
 const create = async () =>
   fetch('https://api.vercel.com/v13/deployments', {
@@ -169,4 +175,6 @@ console.log(`build: ${state}`)
 if (state !== 'READY') process.exit(1)
 const served = await (await fetch(`https://${String(dep.url)}/app.js`)).text()
 console.log(`serves the new page: ${String(served.includes('settings-ui.js'))}`)
-console.log(`rollback: promote ${liveId}`)
+console.log(
+  `rollback: ALLOW_PRODUCTION_WRITES=1 npx tsx scripts/rollout/page-rollback.ts ${liveId} --go`,
+)
