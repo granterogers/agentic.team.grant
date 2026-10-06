@@ -159,9 +159,17 @@ ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts q4      # 20 largest i
 ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts defs    # must end "every function a step touches is the predecessor the step expects"
 ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts attrs   # security definer, volatility, search_path, grants, owner
 
-# 4. the single bounded gateway-log baseline: ONE m1_edge query over exactly the B1 to B2 window (the log service is separate from the database)
-ALLOW_PRODUCTION_CHECKS=1 npm run forensics:logs -- --set=m1_edge --start=<B1 timestamp> --end=<B2 timestamp>
+# 4. the single bounded gateway-log baseline: ONE m1_edge query over exactly the B1 to B2 window (the log service is separate from the database).
+#    LOGS QUERY IS METERED BY DATA SCANNED (6 Oct 2026: 102 GB against 100 GB), so this line is NOT run on the strength of the baseline authorisation.
+#    It needs Grant's separate go-ahead; it is one filtered ten-minute query under the log query budget (docs/performance/log-query-investigation-2026-10-06.md).
+LOG_QUERY_REASON="stabilisation baseline: hq-api request rate and 5xx share for the B1-B2 window; no capture covers it" \
+  ALLOW_PRODUCTION_CHECKS=1 npm run forensics:logs -- --set=m1_edge --start=<B1 timestamp> --end=<B2 timestamp>
 ```
+
+The guard refuses the query unless the window is 60 minutes or less (this one is about ten), the SQL filters on `source` (`m1_edge` does: `edge_logs`), a reason is stated, fewer than six
+log queries and 180 window-minutes have been spent in the last 24 hours, and no saved capture already answers it. **If Grant does not authorise a log query, the baseline omits this line,
+`classify.ts` is run without `--edge-before`/`--edge-after`, and the verdict is AMBIGUOUS by the approved rule (an unavailable metric is never a pass).** The budget for the whole rollout is
+three log queries (before, after, and the one additional pair if the 15 to 25 per cent band needs it), none of them wider than the observation window.
 
 Q5 and Q6 are **not** run. They are conditional, and only if the Tier A results show they are needed, in which case I report first and ask. If a canary deteriorates at any
 point, stop; the query set is not run.
@@ -182,7 +190,7 @@ ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/step.ts 1023 precheck      # l
 ALLOW_PRODUCTION_WRITES=1 npx tsx scripts/rollout/step.ts 1023 apply         # DRY RUN: canary-free read of the same, prints what would run
 ALLOW_PRODUCTION_WRITES=1 npx tsx scripts/rollout/step.ts 1023 apply --go    # canary first (NO-GO stops it), precheck, ONE request, postcheck, attribute check
 ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/gate.ts read --counters    # the immediate canary after (A0); wait the observation interval, then the second reading (A1)
-ALLOW_PRODUCTION_CHECKS=1 npm run forensics:logs -- --set=m1_edge --start=<A0> --end=<A1>     # the gateway request rate for the after window
+LOG_QUERY_REASON="<why>" ALLOW_PRODUCTION_CHECKS=1 npm run forensics:logs -- --set=m1_edge --start=<A0> --end=<A1>     # the after window; METERED: only if Grant authorised log queries (section 5.1 step 4)
 npx tsx scripts/rollout/classify.ts --before=<B1>,<B2> --after=<A0>,<A1> --edge-before=<m1_edge file for B1-B2> --edge-after=<m1_edge file for A0-A1>   # offline; section 8
 ```
 
@@ -331,7 +339,11 @@ clean. IMPROVED: report and hold before 1027. Every write still needs separate a
    `hq-page-delta.ts` and `forensics:logs` are guarded. `npm run migrate` and the other `deploy:*` scripts on this branch are NOT guarded: do not use them.
 6. **The page diff against production is not content-checked.** `hq-page-delta` compares file names. The page change against the p4 tip is two files (`app.js`, `bc/account.js`, 78 and 9 lines changed),
    but production's page may have drifted from the p4 tip; that is part of why the page is the last wave.
-7. **The ledger.** Until `record` is run per kept step and `applied.json` updated, `app.schema_migrations` does not list 1023-1028 and `check:migrations` will keep counting them as pending.
+7. **Logs Query is a metered resource and the allowance is spent.** The Free allowance is 100 GB scanned and the usage page showed 102 GB after the forensic work of 5 October. Every log query
+   in the rollout goes through the log query budget (`src/safety/log-query-budget.ts`), needs separate authorisation, and has a missing-metric fallback (AMBIGUOUS). The investigation is
+   `docs/performance/log-query-investigation-2026-10-06.md`. Over the allowance the vendor rate limits queries and shortens retention, so a 402 or 429 stops every further log query and the
+   health decision falls back to the canary and the counters, which do not use the log service.
+8. **The ledger.** Until `record` is run per kept step and `applied.json` updated, `app.schema_migrations` does not list 1023-1028 and `check:migrations` will keep counting them as pending.
 8. **The platform is unhealthy for reasons not established.** These changes reduce standing load; they are not shown to cure the platform's own stalls. Compute is untouched; a Micro
    recommendation can only follow post-change evidence.
 
