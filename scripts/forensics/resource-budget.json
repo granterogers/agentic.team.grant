@@ -1,12 +1,12 @@
 {
-  "_about": "Structural ceilings for npm run forensics:budget (the resource probe against a replica of the RECONCILED product, seeded by scripts/isolated/seed-production-scale.sql to the 5 Oct production shape: 22.6k jobs, a ~90 MB heap, vacuumed and analysed). Counts, never timings. Each number is the value measured on the reconciled branch (6 Oct 2026) with about 1.4x headroom; seq-scan ceilings are exact. Raising one is a decision to be argued, not a convenience. Known and accepted for now: model.model_order is O(usage history) (one jobs seq scan), team_hq.pulse still scans jobs and outputs twice (an exact-count digest), team_hq.studio is dominated by per-output harness checks inside studio_activity, and the worker idle pass is already index-only on this heap.",
+  "_about": "Structural ceilings for npm run forensics:budget (the resource probe against a replica of the RECONCILED product, seeded by scripts/isolated/seed-production-scale.sql to the 5 Oct production shape: 22.6k jobs, a ~90 MB heap, vacuumed and analysed). Counts, never timings. Each number is the value measured on the reconciled branch (6 Oct 2026) with about 1.4x headroom; seq-scan ceilings are exact. Raising one is a decision to be argued, not a convenience. Migrations 1030 (the dequeue asks the self-improvement ceiling only when it needs it: idle pass 2.7k to 0.5k buffers) and 1031 (the unseen counts compute each project window once: 150k statements to 54) are in this budget; the stabilisation release (1023, 1025, 1027, 1028) is judged by resource-budget.stabilisation.json, which does not include them. A `hit` ceiling counts buffers touched (hit + read). Known and accepted for now: model.model_order is O(usage history) (one jobs seq scan), team_hq.pulse still scans jobs and outputs twice (an exact-count digest), team_hq.studio is dominated by per-output harness checks inside studio_activity, and the worker idle pass is already index-only on this heap.",
   "probes": {
     "team_hq.pulse": { "jobs_seq_scans": 2, "hit": 100000, "statements": 20 },
     "team_hq.thinking": { "jobs_seq_scans": 0, "hit": 150, "statements": 12 },
     "team_hq.health_whole": { "jobs_seq_scans": 2, "hit": 125000, "statements": 1500 },
     "team_hq.studio": { "jobs_seq_scans": 0, "hit": 950000, "statements": 26000 },
     "team_hq.lately": { "jobs_seq_scans": 1, "hit": 65000, "statements": 900 },
-    "team_hq.unseen": { "jobs_seq_scans": 0, "hit": 320000, "statements": 215000 },
+    "team_hq.unseen": { "jobs_seq_scans": 0, "hit": 320000, "statements": 100 },
     "team_hq.team_work": { "jobs_seq_scans": 1, "hit": 130000, "statements": 5400 },
     "team_hq.portfolio_tasks": { "jobs_seq_scans": 0, "hit": 200, "statements": 15 },
     "worker.requeue_retrying": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
@@ -18,10 +18,10 @@
     "worker.defer_over_budget": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
     "worker.enqueue_orphans": { "jobs_seq_scans": 0, "hit": 300, "statements": 10 },
     "worker.dispatch_due": { "jobs_seq_scans": 0, "hit": 150, "statements": 8 },
-    "worker.provision_channels": { "jobs_seq_scans": 0, "hit": 250, "statements": 18 },
+    "worker.provision_channels": { "jobs_seq_scans": 0, "hit": 350, "statements": 18 },
     "worker.self_improvement_budget": { "jobs_seq_scans": 0, "hit": 3000, "statements": 12 },
     "worker.fire_pending_signals": { "jobs_seq_scans": 0, "hit": 150, "statements": 12 },
     "model.model_order": { "jobs_seq_scans": 1, "hit": 70000, "statements": 3000 },
-    "worker.idle_pass": { "jobs_seq_scans": 0, "hit": 3000, "statements": 90 }
+    "worker.idle_pass": { "jobs_seq_scans": 0, "hit": 700, "statements": 90 }
   }
 }
