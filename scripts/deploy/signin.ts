@@ -12,8 +12,8 @@
  */
 
 import '../../src/safety/require-production-writes.ts'
-import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { bundleForm } from './lib/bundle.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 if (supabaseToken === undefined || supabaseToken === '') {
@@ -38,6 +38,12 @@ const PAGE_ORIGINS = [
 const api = `https://api.supabase.com/v1/projects/${ref}`
 const db = new ManagementApiExecutor(ref, supabaseToken)
 
+// The function imports src/auth/redirect-target.ts (the sign-in link's redirect check), so it ships its import graph.
+// Resolved and validated HERE, before any secret is written: a bundle the platform would refuse is known locally.
+const signinBundle = await bundleForm('signin', 'supabase/functions/signin/index.ts')
+const form = signinBundle.form
+console.log(`signin: bundling ${String(signinBundle.files)} file(s) from the import graph`)
+
 const token = String(
   (
     await db.execute(
@@ -60,16 +66,7 @@ const setSecrets = await fetch(`${api}/secrets`, {
 })
 console.log(`function secrets set: http ${String(setSecrets.status)}`)
 
-const entrypoint = await readFile('supabase/functions/signin/index.ts', 'utf8')
-const form = new FormData()
-form.append(
-  'metadata',
-  // No JWT: the browser asking to be signed in has, by definition, nothing to
-  // present. The origin allowlist and Grant's tap are the whole of it.
-  JSON.stringify({ name: 'signin', entrypoint_path: 'index.ts', verify_jwt: false }),
-)
-form.append('file', new File([entrypoint], 'index.ts', { type: 'application/typescript' }))
-
+// No JWT: the browser asking to be signed in has, by definition, nothing to present (the bundle's metadata says so).
 const deployed = await fetch(`${api}/functions/deploy?slug=signin`, {
   method: 'POST',
   headers: { Authorization: `Bearer ${supabaseToken}` },

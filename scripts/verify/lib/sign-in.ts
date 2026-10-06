@@ -113,6 +113,23 @@ export async function signIn(
   const ceremonyOrigin = process.env.SIGNIN_ORIGIN ?? ''
   const elsewhere = ceremonyOrigin !== '' && !back.startsWith(ceremonyOrigin)
   const landing = elsewhere ? `${ceremonyOrigin}${new URL(back).pathname}` : back
+  /*
+    THE PAGE ADOPTS A RETURNING SESSION ONLY FOR A SIGN-IN THIS BROWSER STARTED (B-05, web/studio/flow.js). A person
+    starts one by pressing "send me a link"; this harness asks the function for the link directly, so it starts the
+    flow the way the page does: a fresh nonce remembered in the page's storage (seeded before anything on the page
+    runs) and carried on the return address. The page's decision is therefore exercised for real, not bypassed.
+  */
+  const flowFor = async (): Promise<string> => {
+    const nonce = Array.from({ length: 24 }, () =>
+      Math.floor(Math.random() * 36).toString(36),
+    ).join('')
+    await page.addInitScript(
+      `try { const k = 'hq.signin.flow'; const l = JSON.parse(localStorage.getItem(k) || '[]'); ` +
+        `if (!l.some((f) => f && f.nonce === ${JSON.stringify(nonce)})) { l.push({ nonce: ${JSON.stringify(nonce)}, ` +
+        `kind: 'link', email: '', at: Date.now(), exp: Date.now() + 3600000 }); localStorage.setItem(k, JSON.stringify(l)) } } catch {}`,
+    )
+    return `${landing}${landing.includes('?') ? '&' : '?'}flow=${nonce}`
+  }
 
   /*
     THE PROVIDER RATE-LIMITS MAGIC LINKS, AND A RATE LIMIT IS NOT A DEFECT.
@@ -131,6 +148,7 @@ export async function signIn(
     look slow for no reason.
   */
   const askForLink = async (): Promise<string> => {
+    const returnTo = await flowFor()
     const asked = await fetch(`https://${ref}.supabase.co/functions/v1/signin`, {
       method: 'POST',
       headers: {
@@ -138,7 +156,7 @@ export async function signIn(
         Origin: elsewhere ? ceremonyOrigin : origin,
         Authorization: `Bearer ${key}`,
       },
-      body: JSON.stringify({ action: 'link_for_operator', email, back: landing }),
+      body: JSON.stringify({ action: 'link_for_operator', email, back: returnTo }),
     })
     const body = (await asked.json().catch(() => ({}))) as {
       ok?: boolean
