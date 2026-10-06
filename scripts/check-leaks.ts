@@ -58,6 +58,7 @@ import {
   provenanceSql,
   testDestinationAtSend,
 } from './leak-witness.ts'
+import { commandIdUnreadableSql, commandIdUuidSql } from './lib/command-id.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -763,8 +764,31 @@ const orphans = (
        and j.created_at > (select max(applied_at) from app.schema_migrations
                             where name like '0575_%')
        and not exists (select 1 from public.inbound_commands c
-                        where c.command_id = (j.pinned_config ->> 'command_id')::uuid)`)
+                        where c.command_id = ${commandIdUuidSql(`(j.pinned_config ->> 'command_id')`)})
+       and not ${commandIdUnreadableSql('j.pinned_config')}`)
 ).rows[0] as { since_the_trigger: number }
+
+/*
+  DATA QUALITY, NOT A LEAK. A job whose command_id is empty or not a uuid cannot be matched to an inbound command, so
+  nothing can be said about its origin from it. It is counted here under its own heading and never added to the orphan
+  count above (that would report unreadable data as deleted evidence) and never allowed to stop the check (a parser
+  crash is not a verdict either). The two Sample-duty hand-off jobs of 5 October are this shape.
+*/
+const unreadable = (
+  await db.execute(`
+    select count(*)::int as n,
+           count(*) filter (where app.harness_job(j.job_id))::int as harness,
+           coalesce(max(left(j.pinned_config ->> 'command_id', 24)), '') as sample
+      from public.jobs j
+     where ${commandIdUnreadableSql('j.pinned_config')}`)
+).rows[0] as { n: number; harness: number; sample: string }
+if (Number(unreadable.n) > 0) {
+  console.log(
+    `\n  data quality (not a leak): ${String(unreadable.n)} job(s) carry a command_id that is empty or not a uuid ` +
+      `(${String(unreadable.harness)} of them read as harness); excluded from the origin checks above and below, ` +
+      `and left as they are.`,
+  )
+}
 
 if (Number(orphans.since_the_trigger) > 0) {
   noisy.push(
@@ -877,7 +901,7 @@ const disagreeRows = (
            coalesce(max(left(c.dedupe_key, 70)), '') as sample
       from public.jobs j
       join public.inbound_commands c
-        on c.command_id = (j.pinned_config ->> 'command_id')::uuid
+        on c.command_id = ${commandIdUuidSql(`(j.pinned_config ->> 'command_id')`)}
      where app.harness_label(c.dedupe_key)
        and not app.harness_job(j.job_id)
   `)
