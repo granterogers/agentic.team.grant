@@ -116,10 +116,14 @@ private connection, which the Sample must never hold), and Settings changes (rea
 ## Capability matrix (5 October 2026)
 
 Nothing is marked complete by inference. "Tested" says what was pressed or read as a visitor, in a real browser against the
-deployed page unless stated. The final desktop and phone walkthroughs (`sample:public-showcase-ui`) were **not completed on the
-final build**: the platform health API read auth, rest and storage UNHEALTHY and sign-in answered 503, so production contact
-stopped. The last full desktop walk before that passed 72 of 73 checks; the one failure was an assertion about the Requests pane
-that has since been corrected and has not been re-run.
+deployed page unless stated. **Final walkthroughs, 6 October 2026, after the platform recovered:** desktop 73 of 73, phone 73 of 73
+(`sample:public-showcase-ui`, harness at its final commit). The run added the contact Save changes / Remove contact presses and
+project Settings > Automations "Set it going"; each is refused in the gateway's sentence and writes nothing (the gmail.send
+request stays open; the automation count is unchanged; the contact is still listed). Two harness defects were found and fixed:
+the Approve press never answered the page's own "Approve this?" dialog, and several refusal checks matched the page's standing
+Sample notice instead of the gateway's sentence, so they could pass without a refusal. No product defect was found.
+**0902's first scheduled run (03:23Z, 6 October) failed with "job startup timeout"**, which is the platform stall of that night,
+not the function; the date anchor still reads 2026-10-05. A real run has not yet been seen to succeed (next due 03:23Z, 7 October).
 
 | Capability | Classification | Sample content | Interactive? | Tested | Notes |
 |---|---|---|---|---|---|
@@ -190,6 +194,35 @@ npm run sample:public-transition     # visitor -> real person -> sign out -> vis
 working tree (which carries the held Slack self-service and polish work). The page deploy tool uploaded 7, 1, 1 and 1 files; the
 function deploy tool refuses a staged file the live bundle does not have. `scripts/deploy/hq-function-staged.ts` and
 `hq-page-delta.ts --root=` are the tools; the staged tree is `.out/stage/` (not committed).
+
+## Migration numbering collision with main (6 October 2026)
+
+The Sample branch and `main`'s Team HQ UX integration numbered migrations independently from the same base (`28569e68`).
+Production holds the Sample's `0897_a_visitor_can_explore_a_sample_office_and_nothing_else` to `0905_a_sample_can_show_one_piece_of_work_from_a_hidden_thread`
+(770 migrations applied). `main` held `0897_project_calendar_events` and `0900_documents_are_logical_items_with_versions_and_an_explicit_import`,
+both **unapplied** to production.
+
+What the runner actually does (read from `src/migrations/runner.ts` and `check.ts`, not assumed): the identity of a migration is its
+**name plus checksum**; unapplied files run in `localeCompare` filename order; **but** `runMigrations` calls `checkMigrations` first and
+an unapplied duplicate sequence number is a *blocking* error (`sequence/duplicate`). Only a collision where every file is already
+applied is a note. So coexisting by filename alone would have worked in a replay and **`npm run migrate` would have refused to run**;
+`npm run check:migrations` failed on the merged tree for exactly that reason (0897 and 0900), before the resolution below.
+
+Resolution, following the repository's own rule (an applied file is never renamed, because the repository would then claim a number
+production did not run under; a pending file takes a free number): `main`'s two unapplied files were renumbered with `git mv`, contents
+byte-identical, to `0906_project_calendar_events` and `0907_documents_are_logical_items_with_versions_and_an_explicit_import`. The numbers
+are free, sit below `main`'s next file (`0920`), and keep the calendar-then-documents order `main`'s own chain used. No Sample file was
+touched. After this, `check:migrations` passes (798 files; the pre-existing both-applied notes remain).
+
+Evidence it is safe: a full replay from an empty database (`scripts/isolated/replica.sh`, local only) applies every file in order
+through `1022`, including `0897` to `0905` immediately followed by `0906`, `0907`, then `0920` onward, each in its own transaction that
+stops on the first error; the resulting schema holds both histories (the Sample's `app.sample_say`, `app.sample_refresh_dates`, the
+`sample-dates` job, and `main`'s `public.project_events`).
+
+Still true after the merge, and not done by it: **no migration was applied and nothing was deployed.** `main`'s unapplied UX migrations
+(`0906`, `0907`, `0920` to `1022`; see `docs/ops/deployment-readiness-2026-10-05.md`) remain a separate decision. Because the on-disk
+ledger `migrations/applied.json` stops at 0891 and is rewritten only by `npm run migrate` from what the database reports, it does not
+yet list the Sample's nine applied files; it is not edited by hand.
 
 ## Evidence
 

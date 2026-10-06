@@ -12,6 +12,7 @@
  * It writes nothing to any office. `--chat` sends ONE question through the real worker and reads the answer back; without it
  * no model is called. Captures go to .out/public-<label>/ and every one is meant to be opened and looked at.
  */
+import '../../src/safety/require-production-writes.ts'
 import { mkdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'

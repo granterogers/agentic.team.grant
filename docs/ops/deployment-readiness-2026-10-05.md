@@ -27,6 +27,12 @@ be rolled back by promoting that deployment.
 
 ## 3. The 28 unapplied migrations, in order
 
+> **Renumbering note, 6 October 2026.** Rows 6 and 7 below were written as `0897` and `0900`. The Public Sample Office applied its own
+> `0897` to `0905` to production first, and the runner refuses an unapplied duplicate number, so these two files are now
+> `0906_project_calendar_events` and `0907_documents_are_logical_items_with_versions_and_an_explicit_import` (contents unchanged, order
+> inside this chain unchanged). Production now also holds the Sample's nine files, so "unapplied" here means these 28 plus nothing of the Sample's.
+> See `docs/multi-user/PUBLIC-SAMPLE.md`, "Migration numbering collision with main".
+
 All are single atomic requests; the runner stops at the first failure and records each success. "S" schema, "D" data/backfill, "R" RLS or
 grants, "F" function/RPC, "I" integration, "B" duty/background, "!" potentially destructive or irreversible.
 

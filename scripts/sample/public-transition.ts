@@ -11,6 +11,7 @@
  * What it proves is the thing a shared browser can get wrong: that a visitor's Sample and a person's office never show each
  * other's content, in either direction, and that leaving one does not leave anything of it behind for the next.
  */
+import '../../src/safety/require-production-writes.ts'
 import { mkdirSync } from 'node:fs'
 import { chromium, type Page } from 'playwright'
 import type { Session } from '../p4/lib.ts'

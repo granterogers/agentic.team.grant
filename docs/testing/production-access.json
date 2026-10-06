@@ -48,6 +48,10 @@
     "project",
     "providers:discover",
     "purge:fixtures",
+    "sample:public",
+    "sample:public-showcase",
+    "sample:public-transition",
+    "sample:public-ui",
     "sample:reset",
     "sample:seed",
     "slack:add-scope",
@@ -77,6 +81,7 @@
   ],
   "checks": [
     "ask",
+    "sample:public-showcase-ui",
     "audit:credentials",
     "avatars:png",
     "backup:connection",

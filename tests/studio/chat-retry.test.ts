@@ -22,9 +22,8 @@ vi.mock('../../web/studio/backend.js', async (real) => ({
   VOICE: 'https://office.test/functions/v1/voice',
   UNCONFIGURED: 'no office configured',
 }))
-// `signedIn` is read by the thread (a signed-out visitor sees the seeded example; a signed-in person never does, #426). These tests
-// are about a person who is signed in, so it answers true. The mock lacked it when the Sample added that read, on its own branch too.
-// A person's own office, not the public Sample (a visitor asks through `sample_say`, which has its own proof): isSample is false.
+// chat.js asks whether a person is signed in (the prototype's conversations are only for somebody who is not) and whether
+// they are a public Sample visitor (who asks through a different door). A retry is an ordinary signed-in person's act.
 vi.mock('../../web/studio/session.js', () => ({
   forget: () => undefined,
   signedIn: () => true,

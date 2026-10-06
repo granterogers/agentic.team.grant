@@ -9,7 +9,7 @@ replica.
 
 | Piece | File |
 |---|---|
-| Tables, functions, wrappers, duty | `migrations/0897_project_calendar_events.sql` |
+| Tables, functions, wrappers, duty | `migrations/0906_project_calendar_events.sql` (written as 0897; renumbered 6 Oct 2026 because the Sample applied 0897 to production first) |
 | Google REST adapter (create / patch / delete, typed outcomes) | `src/google/calendar-events.ts` |
 | The sync duty, kind `calendar.sync_events` | `src/handlers/calendar-events.ts`, registered in `src/office/pass.ts`, classified in `src/jobs/containment.ts` |
 | `refreshCalendar` now says whether it really refreshed, and which calendar | `src/google/calendar.ts` (two optional fields) |
@@ -130,7 +130,7 @@ Semantics worth knowing before building the UI:
 
 ## What is unapplied
 
-* `migrations/0897_project_calendar_events.sql` is NOT applied to production (nor anything else). It adds two tables, a
+* `migrations/0906_project_calendar_events.sql` (written as 0897) is NOT applied to production (nor anything else). It adds two tables, a
   composite unique key on `public.calendar_events (calendar_id, event_id, office_id)`, 14 `app` functions, 6 `public`
   wrappers, an update to `tool_permissions.delivered_by` for `calendar.write`, and the `calendar-event-sync` duty row.
 * The worker must be deployed WITH the migration (the handler kind `calendar.sync_events` is registered in
