@@ -443,7 +443,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **Production has 770 applied** (the Sample's `0897_a_visitor…` to `0905_…` are the latest; 0892 waits for the platform to recover). The 0897 to 0905 Sample files are applied and immutable; `main`'s own UX migrations (`0897_project_calendar_events`, `0900_documents_…`, 0920 to 1022) are committed and NOT applied to production, and share some numeric prefixes with the Sample's (see the numbering-collision trap below and `docs/multi-user/PUBLIC-SAMPLE.md`). Do not apply them without a separate decision.
+`npm run migrate` applies plain SQL from `migrations/`. **Production has 770 applied** (the Sample's `0897_a_visitor…` to `0905_…` are the latest; 0892 waits for the platform to recover). The 0897 to 0905 Sample files are applied and immutable; `main`'s own UX migrations (`0906_project_calendar_events`, `0907_documents_…`, 0920 to 1022) are committed and NOT applied to production (the first two were numbered 0897 and 0900 before the Sample took those numbers; see the numbering-collision trap below and `docs/multi-user/PUBLIC-SAMPLE.md`). Do not apply them without a separate decision.
 
 ## Testing signed in, without Grant's office
 
@@ -4686,13 +4686,15 @@ Each of these cost real time. They are here so they cost it once.
   `cmp` the two: byte-identical proves the transcription and keeps the no-in-place-formatter rule.
 - **Deploy from live bytes plus your diff.** The page deploy printed "uploading 7 / 1 / 1 / 1 file(s)", which is the proof only
   the intended files went out; the working tree carried held work in `office.js` and `shell.js`.
-- **Two branches numbered migrations independently, and the filename, not the number, is the identity.** The Sample branch
-  applied `0897_a_visitor_can_explore_a_sample_office_and_nothing_else` to `0905` to production; `main` independently holds
-  `0897_project_calendar_events` and `0900_documents_are_logical_items_with_versions_and_an_explicit_import`. The runner records
-  and compares `name` plus `checksum` (never the number) and applies unapplied files in sorted filename order, so the pairs
-  coexist and order deterministically (`0897_a…` before `0897_p…`, `0900_an…` before `0900_d…`). **Applied Sample files are never
-  renamed or renumbered** (`check:migrations` would refuse it, and the repository would then claim a number production did not
-  run under). Details and the replay evidence: `docs/multi-user/PUBLIC-SAMPLE.md`, "Migration numbering collision".
+- **Two branches numbered migrations independently, and the runner refuses to run on an UNAPPLIED duplicate.** The Sample branch
+  applied `0897_a_visitor_can_explore_a_sample_office_and_nothing_else` to `0905` to production while `main` independently held
+  `0897_project_calendar_events` and `0900_documents_are_logical_items_with_versions_and_an_explicit_import`. The runner's identity is
+  `name` plus `checksum` and it orders by filename, so the files would have coexisted in a replay, but `runMigrations` calls
+  `checkMigrations` first and an unapplied duplicate sequence is a blocking error (only a collision where BOTH are applied is a
+  note): `npm run migrate` would have refused to run at all. The repository's own rule for that case is to give the PENDING file a
+  free number, so main's two unapplied files are now `0906_project_calendar_events` and `0907_documents_are_logical_items_…`
+  (free, below main's 0920, order inside main's chain unchanged; contents byte-identical). **Applied Sample files are never
+  renamed.** Details and the replay evidence: `docs/multi-user/PUBLIC-SAMPLE.md`, "Migration numbering collision".
 - **A structural check that is refused for the wrong reason reads as "the structure is red".** `check:office-edges` documents a
   `--replica` mode and imported the production-only guard, so for as long as the guard has existed the replica run was refused,
   and the mutation proof read the refusal as a failing check and "passed" its sabotages for the wrong reason. Corrected, it found

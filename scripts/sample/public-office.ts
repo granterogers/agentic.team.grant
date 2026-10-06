@@ -17,6 +17,7 @@
  * Nothing here prints a credential. The login has a random password nobody keeps: visitors are never given it, they are
  * given a session minted by the `signin` function, and the service key is read from the Management API per run.
  */
+import '../../src/safety/require-production-writes.ts'
 import { randomBytes } from 'node:crypto'
 import { act, db, ENDPOINT, REF, read } from '../p4/lib.ts'
 import { apiKeys } from '../p4/provision-second-person.ts'

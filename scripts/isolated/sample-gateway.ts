@@ -374,12 +374,30 @@ try {
   )
   if (broken.includes("'./oauth.ts'"))
     await copyFile('src/slack/oauth.ts', '.out/stage/sabotage/oauth.ts')
+  // Any other module the gateway imports from its own folder (preview.ts arrived with the Team HQ UX work) is laid beside the
+  // sabotaged copy too, or the copy cannot load and the control fails for a reason that is not the one it asserts.
+  for (const m of broken.matchAll(/from '\.\/([A-Za-z0-9_-]+\.ts)'/g)) {
+    const name = m[1]
+    if (name === undefined || name === 'file-text.ts' || name === 'oauth.ts') continue
+    await copyFile(
+      `${GATEWAY.slice(0, GATEWAY.lastIndexOf('/'))}/${name}`,
+      `.out/stage/sabotage/${name}`,
+    )
+  }
   const bad = await startEdge({ db, edgeFile: '.out/stage/sabotage/index.ts', env, authUsers })
+  // task_add takes `p_project` (a slug), not `p_project_id`: with the wrong name it answered 400 "missing: p_project" before
+  // any guard was reached, so this control passed without ever exercising the guard it names. The write must now land.
+  const spSlug = String(
+    (await one(`select slug from public.projects where project_id = ${lit(SP)}::uuid`)).slug,
+  )
   const r = await bad.call(
     new Request('https://gw.invalid/functions/v1/hq-api', {
       method: 'POST',
       headers: { Authorization: `Bearer ${S_GUEST}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'task_add', args: { p_project_id: SP, p_title: 'smuggled' } }),
+      body: JSON.stringify({
+        action: 'task_add',
+        args: { p_project: spSlug, p_title: 'smuggled' },
+      }),
     }),
   )
   const smuggled = Number(
@@ -387,8 +405,8 @@ try {
   )
   check(
     'SABOTAGE: without the guest allow-list a guest CAN write (the refusals above are what stops it)',
-    r.status !== 403 || smuggled > 0,
-    `http ${String(r.status)}, ${String(smuggled)} task(s) written`,
+    smuggled > 0,
+    `http ${String(r.status)} ${(await r.clone().text()).slice(0, 140)}, ${String(smuggled)} task(s) written`,
   )
 } catch (e) {
   console.log(`FAIL aborted - ${(e as Error).stack?.slice(0, 400) ?? String(e)}`)

@@ -4,8 +4,9 @@
 > `cccb5950`, `cf0c61f6`) together with `main`'s Team HQ UX integration (`b82c2779`). **Nothing was deployed and no migration was
 > applied by the merge.** Production still runs the p4 lineage plus the Sample (migrations through `0905`; 770 applied); `main`'s
 > 28 UX migrations remain unapplied and are a separate decision (`docs/ops/deployment-readiness-2026-10-05.md`). Migration
-> numbers `0897` and `0900` exist twice under different names: filename plus checksum is the identity, applied Sample files are
-> never renamed (`docs/multi-user/PUBLIC-SAMPLE.md`, "Migration numbering collision"). Sample scripts that touch production follow
+> numbers `0897` and `0900` had been taken twice: the Sample's are applied (never renamed), so `main`'s two unapplied files are
+> now `0906_project_calendar_events` and `0907_documents_…` (the runner refuses an unapplied duplicate number; replay proof and
+> reasoning in `docs/multi-user/PUBLIC-SAMPLE.md`, "Migration numbering collision"). Sample scripts that touch production follow
 > the production-access guard (`docs/production-access-guard.md`). The two histories' entries below are kept in order of date.
 >
 > ## 2026-10-05 (later) - SAMPLE SHOWCASE LAYER (branch `claude/multi-user-p4`) - COMPLETE (verdict 6 Oct)

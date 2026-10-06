@@ -13,6 +13,7 @@
  * WHILE IT IS OPEN nobody can enter (app.sample_login says no). `seed` always ends sealed, even after a failure.
  * Nothing prints a credential.
  */
+import '../../src/safety/require-production-writes.ts'
 import { act, db, REF } from '../p4/lib.ts'
 import { apiKeys } from '../p4/provision-second-person.ts'
 import { lit, rows } from './lib.ts'

@@ -66,8 +66,14 @@ describe('the office key is a machine (#385)', () => {
     )
     // The gate: a person may do everything; the key only SERVICE_MAY; a TEST member SERVICE_MAY plus
     // the decisions whose database function enforces the test-principal rule (the ones that carry `by`).
+    // A public Sample visitor (kind guest, 0897) is a fourth principal whose only action is on an allow list of exactly
+    // one: the clause is pinned to that list, and the list is pinned to its single member, so neither can widen quietly.
     expect(source).toMatch(
-      /const mayDo =\s*kind === 'person' \|\|\s*SERVICE_MAY\.has\(actionName\) \|\|\s*\(kind === 'harness' && action\.by !== undefined\)/,
+      /const mayDo =\s*kind === 'person' \|\|(?:\s*\/\/[^\n]*)*\s*\(kind === 'guest' && GUEST_MAY\.has\(actionName\)\) \|\|\s*SERVICE_MAY\.has\(actionName\) \|\|\s*\(kind === 'harness' && action\.by !== undefined\)/,
+    )
+    expect(source).toMatch(/const GUEST_MAY: ReadonlySet<string> = new Set\(\['sample_say'\]\)/)
+    expect(source).toMatch(
+      /if \(kind === 'guest' && !GUEST_MAY\.has\(actionName\)\) \{\s*return json\(\s*\{\s*error: 'sample_readonly'/,
     )
     expect(source).toMatch(/if \(!mayDo\) \{/)
     // A session that names nobody cannot reach a function that would default its principal.
@@ -86,7 +92,10 @@ describe('the office key is a machine (#385)', () => {
   })
 
   it('a member whose kind the database did not say is treated as a test member, never a person', () => {
-    expect(source).toMatch(/rows\[0\]\?\.kind === 'person' \? 'person' : 'harness'/)
+    // 'guest' is named by the database (kind guest, a sample office's visitor); anything else it does not name is a test member.
+    expect(source).toMatch(
+      /rows\[0\]\?\.kind === 'person' \? 'person' : rows\[0\]\?\.kind === 'guest' \? 'guest' : 'harness'/,
+    )
   })
 })
 

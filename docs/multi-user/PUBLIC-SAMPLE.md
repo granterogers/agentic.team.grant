@@ -195,6 +195,35 @@ working tree (which carries the held Slack self-service and polish work). The pa
 function deploy tool refuses a staged file the live bundle does not have. `scripts/deploy/hq-function-staged.ts` and
 `hq-page-delta.ts --root=` are the tools; the staged tree is `.out/stage/` (not committed).
 
+## Migration numbering collision with main (6 October 2026)
+
+The Sample branch and `main`'s Team HQ UX integration numbered migrations independently from the same base (`28569e68`).
+Production holds the Sample's `0897_a_visitor_can_explore_a_sample_office_and_nothing_else` to `0905_a_sample_can_show_one_piece_of_work_from_a_hidden_thread`
+(770 migrations applied). `main` held `0897_project_calendar_events` and `0900_documents_are_logical_items_with_versions_and_an_explicit_import`,
+both **unapplied** to production.
+
+What the runner actually does (read from `src/migrations/runner.ts` and `check.ts`, not assumed): the identity of a migration is its
+**name plus checksum**; unapplied files run in `localeCompare` filename order; **but** `runMigrations` calls `checkMigrations` first and
+an unapplied duplicate sequence number is a *blocking* error (`sequence/duplicate`). Only a collision where every file is already
+applied is a note. So coexisting by filename alone would have worked in a replay and **`npm run migrate` would have refused to run**;
+`npm run check:migrations` failed on the merged tree for exactly that reason (0897 and 0900), before the resolution below.
+
+Resolution, following the repository's own rule (an applied file is never renamed, because the repository would then claim a number
+production did not run under; a pending file takes a free number): `main`'s two unapplied files were renumbered with `git mv`, contents
+byte-identical, to `0906_project_calendar_events` and `0907_documents_are_logical_items_with_versions_and_an_explicit_import`. The numbers
+are free, sit below `main`'s next file (`0920`), and keep the calendar-then-documents order `main`'s own chain used. No Sample file was
+touched. After this, `check:migrations` passes (798 files; the pre-existing both-applied notes remain).
+
+Evidence it is safe: a full replay from an empty database (`scripts/isolated/replica.sh`, local only) applies every file in order
+through `1022`, including `0897` to `0905` immediately followed by `0906`, `0907`, then `0920` onward, each in its own transaction that
+stops on the first error; the resulting schema holds both histories (the Sample's `app.sample_say`, `app.sample_refresh_dates`, the
+`sample-dates` job, and `main`'s `public.project_events`).
+
+Still true after the merge, and not done by it: **no migration was applied and nothing was deployed.** `main`'s unapplied UX migrations
+(`0906`, `0907`, `0920` to `1022`; see `docs/ops/deployment-readiness-2026-10-05.md`) remain a separate decision. Because the on-disk
+ledger `migrations/applied.json` stops at 0891 and is rewritten only by `npm run migrate` from what the database reports, it does not
+yet list the Sample's nine applied files; it is not edited by hand.
+
 ## Evidence
 
 - Isolated proofs on a rebuilt replica: `scripts/isolated/sample-office.ts` 47/47 (including sabotaging `harness_job`,
