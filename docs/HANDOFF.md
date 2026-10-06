@@ -1,3 +1,15 @@
+> ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
+>
+> The Team HQ UX work was already in `main`; the audit found the old UX branch held one documentation commit and nothing else, so this branch is a
+> fresh one carrying that and the corrections. **Migration 1000 is fixed before it was ever applied**: a Google credential is `active` only when the
+> database proves it works (fresh `ok` health), `revoked` when Google said `invalid_grant`, `dead` when refused otherwise, `unverified` when nothing
+> proves it (ADR-0067); a trigger keeps it in step with the credential's recorded health. **A deploy or migration run now refuses a dirty tree or an
+> unpushed commit** (`src/safety/provenance.ts`; one bypass, a logged sentence, not used). Every stale reference to Team HQ's `0897`/`0900` is
+> corrected to `0906`/`0907` (nothing executable depended on the old numbers). `scripts/isolated/combined-browser.ts` is the first browser run of the
+> merged product: a person and a Sample visitor through the real gateway code, 9 viewports, reduced motion, 415 checks. `verify:phone-header` had been
+> red on `main` for two reasons that were the suite's, not the product's, and was corrected. `HQ-VIS-001` and `-003` remain post-deployment user
+> acceptance. State of play, what was and was not verified, and the order to deploy: `docs/ops/deployment-readiness-2026-10-05.md`.
+>
 > ## 2026-10-06 - PUBLIC SAMPLE OFFICE INTEGRATED WITH CURRENT MAIN (branch `claude/multi-user-p4`)
 >
 > Multi-User V1 itself was already in `main` (`28569e68`). This merge brings the four Sample commits (`0d98186a`, `1869d7ec`,
