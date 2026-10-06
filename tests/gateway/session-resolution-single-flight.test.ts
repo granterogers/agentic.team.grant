@@ -54,6 +54,30 @@ describe('the gateway resolves a session once for concurrent callers of the same
     expect(calls).toBe(4)
   })
 
+  it('credentials that share a long prefix are still different resolutions (a prefix key would leak one answer to the other)', async () => {
+    // Every HS256 JWT begins with the same header, so a key built from the first characters collides across people.
+    const build = new Function(
+      'resolveSession',
+      `${wrapper
+        .replace(/: Promise<Answer>/g, '')
+        .replace(/new Map<string, Promise<Answer>>\(\)/, 'new Map()')
+        .replace(/\(presented: string\)/, '(presented)')}; return sessionAllowed`,
+    ) as (r: (p: string) => Promise<string>) => (p: string) => Promise<string>
+    let calls = 0
+    const resolver = async (p: string): Promise<string> => {
+      calls += 1
+      await new Promise((r) => setTimeout(r, 5))
+      return `answer:${p.slice(-6)}`
+    }
+    const allowed = build(resolver)
+    const shared = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${'x'.repeat(40)}.`
+    const a = `${shared}aaaaaa`
+    const b = `${shared}bbbbbb`
+    const [ra, rb] = await Promise.all([allowed(a), allowed(b)])
+    expect(calls).toBe(2)
+    expect([ra, rb]).toEqual(['answer:aaaaaa', 'answer:bbbbbb'])
+  })
+
   it('control: a wrapper without the shared map resolves once per caller', async () => {
     let calls = 0
     const unshared = async (p: string): Promise<string> => {

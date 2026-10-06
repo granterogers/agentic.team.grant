@@ -31,6 +31,7 @@ const has = (name: string): boolean => args.includes(`--${name}`)
 const PASSES = Number(flag('passes') ?? 10)
 const ONLY = flag('only')?.split(',')
 const BUDGET = flag('budget')
+const MIN_BUDGET_JOBS = 20_000
 const JSON_OUT = has('json')
 
 const db = await isolated(database)
@@ -132,6 +133,19 @@ add('worker.fire_pending_signals', `select app.fire_pending_signals('${office}':
 add('model.model_order', `select app.model_order('office.instruction', 14, 3, 0.5, 6)`)
 
 const results: Record<string, Cost> = {}
+
+// A budget is only meaningful on a replica of production's size: on an empty one every `jobs_seq_scans: 0` ceiling passes because a
+// tiny table gets no scan at all. Refuse before measuring anything (`npm run forensics:budget` names `post`, which can be unseeded).
+if (BUDGET !== undefined) {
+  const n = num((await rows(`select count(*) n from public.jobs`))[0]?.n)
+  if (n < MIN_BUDGET_JOBS) {
+    console.error(
+      `REFUSED: ${database} holds ${String(n)} jobs; a budget is judged on a replica seeded to production shape (at least ${String(MIN_BUDGET_JOBS)}). ` +
+        `Seed it first: psql -d ${database} -v jobs=22600 -f scripts/isolated/seed-production-scale.sql`,
+    )
+    process.exit(2)
+  }
+}
 
 if (has('quiesce')) {
   // A pass handles any queued, retrying or paused job it can, which would measure the work and not the standing path.

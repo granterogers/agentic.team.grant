@@ -50,7 +50,7 @@ import * as config from './settings.js'
 import * as copy from './settings-copy.js'
 import * as settingsUi from './settings-ui.js'
 import { wireCall, unwireCall, syncCallButtons, callIsLive, toggleCall } from './call.js'
-import { GROWTH, hydrateUsage, say as sayAmount, USAGE } from './usage.js'
+import { GROWTH, hydrateUsage, say as sayAmount, USAGE, usageSource } from './usage.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
 import * as panels from './panels.js'
@@ -6066,11 +6066,22 @@ function healthTab() {
 
   return [
     ui.section({ title: 'Is everything running?', body: summary }),
-    ui.section({
-      title: 'Cost',
-      note: `Spent in the last 30 days: ${sayAmount(spend?.month ?? 0, 'usd')}. The aim is about £0 a month on the free tiers. Test runs are not counted.`,
-      body: ui.card(USAGE.services.map(usageRow)),
-    }),
+    // Usage is read when Settings is first drawn, beside the settings payload, and can land after it or fail. Until it has
+    // answered for this office, the figures here are the prototype's invented ones, and a card of invented money is not shown.
+    canWrite() && !usageSource.live
+      ? ui.section({
+          title: 'Cost',
+          note:
+            usageSource.why === 'not asked yet'
+              ? 'Asking Team HQ what the team has spent.'
+              : 'What the team has spent could not be read just now. Close this and open it again in a moment.',
+          body: '',
+        })
+      : ui.section({
+          title: 'Cost',
+          note: `Spent in the last 30 days: ${sayAmount(spend?.month ?? 0, 'usd')}. The aim is about £0 a month on the free tiers. Test runs are not counted.`,
+          body: ui.card(USAGE.services.map(usageRow)),
+        }),
     ui.advanced({
       title: 'Details for the curious',
       hint: 'Models, conversation volume and where the team gets stuck',
@@ -15042,6 +15053,9 @@ async function needTasks() {
   freshness as before. A person who never does costs the office none of the ten reads.
 */
 function needSettings() {
+  // A read that failed is asked again the next time something needs it: the pane says to close it and open it again, and a
+  // memoised settled promise would make that a promise nothing keeps.
+  if (settingsAsked !== null && config.settingsSource.state === 'failed') settingsAsked = null
   if (settingsAsked !== null || !canWrite()) return settingsAsked
   settingsAsked = Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
     render()
