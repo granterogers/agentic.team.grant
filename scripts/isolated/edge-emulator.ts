@@ -104,7 +104,21 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
     if (path === '/auth/v1/admin/generate_link') {
       const asked = JSON.parse(String(init?.body ?? '{}')) as { email?: string }
       linksMinted.push(String(asked.email ?? ''))
-      return reply(200, { action_link: `${DB_URL}/auth/v1/verify?token=isolated&type=magiclink` })
+      return reply(200, {
+        action_link: `${DB_URL}/auth/v1/verify?token=isolated&type=magiclink`,
+        hashed_token: 'isolated-hash',
+      })
+    }
+    if (path === '/auth/v1/verify') {
+      // Spending a one-time link: the session of whoever the last link was minted for, if the stand-in knows a session for them.
+      const last = linksMinted[linksMinted.length - 1] ?? ''
+      const bearer = Object.entries(o.authUsers ?? {}).find(([, mail]) => mail === last)?.[0]
+      if (bearer === undefined) return reply(400, { msg: 'no session for that address' })
+      return reply(200, {
+        access_token: bearer,
+        refresh_token: 'isolated-refresh',
+        expires_in: 3600,
+      })
     }
     if (down === true || (typeof down === 'string' && path.endsWith(`/rpc/${down}`))) {
       return reply(503, { message: 'the database is unavailable' })

@@ -420,11 +420,11 @@ const topRow = () => {
       ${
         canWrite()
           ? `<button type="button" class="bcbtn bcsignout" data-bc-signout="1"
-        title="Sign out and clear this browser of your work"
-        aria-label="Sign out"><svg class="bcsoicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+        title="${account.leaveWords().title}"
+        aria-label="${account.leaveWords().label}"><svg class="bcsoicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
           stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="M16 8l4 4-4 4"/><path d="M20 12H9"/>
-        </svg><span class="bcsotext">Sign out</span></button>`
+        </svg><span class="bcsotext">${account.leaveWords().text}</span></button>`
           : ''
       }
     </div>
@@ -801,6 +801,11 @@ const listed = () => PROJECTS.filter((p) => p.slug !== 'unnamed' || filedUnder(p
 const portfolio = () => {
   // A signed-in person whose office has nothing in it yet is shown the one next step, not an empty list.
   if (listed().length === 0 && source.live === true && canWrite()) return account.firstRun()
+  // A read that failed is not an office with nothing in it: say so, and offer to try again (#426).
+  if (listed().length === 0 && source.state === 'unreachable') {
+    return `<h1 class="bcsectiontitle">Your projects</h1>
+      ${errorState('Your projects could not be loaded just now.', button('Try again', { 'data-bc-retry-office': '1' }))}`
+  }
   if (listed().length === 0) {
     return `<h1 class="bcsectiontitle">Your projects</h1>
       ${empty(
@@ -3269,7 +3274,7 @@ const myTasks = () => {
                     aria-label="${esc(`${t.state === 'done' ? 'Completed' : 'Not completed'}: ${t.title}`)}">
                   <div class="bcitembody">
                     <span class="bcitemtitle">${esc(t.title)}</span>
-                    <span class="bcitemmeta">${esc([bcMini.dueWords(t), t.project].filter(Boolean).join(' · '))}</span>
+                    <span class="bcitemmeta">${esc([bcMini.dueWords(t), typeof t.project === 'string' ? t.project : (t.project?.name ?? '')].filter(Boolean).join(' · '))}</span>
                   </div>
                   <span></span>
                 </div>`,
@@ -3709,6 +3714,7 @@ export const html = () => {
 
 const shell = () =>
   `<a class="bcskip" href="#bcmain">Skip to main content</a>
+  ${account.sampleBar()}
   ${topRow()}
   ${notLive()}
   <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>

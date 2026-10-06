@@ -154,6 +154,50 @@
 .bcfirststeps b { font: 600 14px/21px var(--bc-font); color: var(--bc-heading); }
 .bcfirststeps span { font: var(--bc-compact); color: var(--bc-text-muted); }
 
+/* The two ways in: explore the Sample Office, or sign in / create your own. */
+.bcentrypath {
+  display: grid;
+  gap: var(--bc-2);
+  padding: var(--bc-4);
+  border: 1px solid var(--bc-section-accent);
+  border-radius: 14px;
+  background: var(--bc-hover);
+}
+.bcentrypathhead {
+  margin: 0;
+  font: 650 16px/22px var(--bc-font);
+  color: var(--bc-text-strong);
+}
+.bcentrypathhead--second { margin-top: var(--bc-1); }
+.bcentrypathtext { margin: 0; font: var(--bc-compact); color: var(--bc-text-muted); }
+
+/* While somebody is exploring the Sample Office: where they are, and the way out, in the same place. */
+.bcsamplebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--bc-2) var(--bc-4);
+  padding: 8px var(--bc-4);
+  background: var(--bc-hover);
+  border-bottom: 1px solid var(--bc-section-accent);
+}
+.bcsampletext { margin: 0; font: var(--bc-compact); color: var(--bc-text); }
+.bcsampletext b { color: var(--bc-text-strong); }
+.bcsampleacts { display: flex; align-items: center; gap: var(--bc-3); }
+.bcsamplecreate { min-height: 36px; }
+.bcsamplelink {
+  min-height: 36px;
+  padding: 0 var(--bc-2);
+  border: 0;
+  background: none;
+  font: 600 14px/21px var(--bc-font);
+  color: var(--bc-section-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 /* While arriving, there is no team to talk to yet, so the conversation dock stays shut. */
 :root[data-gate='entry'] #dock,
 :root[data-gate='setup'] #dock,
@@ -168,4 +212,8 @@
   .bcentrytitle { font-size: 24px; line-height: 30px; }
   .bcentryrow .bcbtn { flex: 1 1 100%; }
   .bcnewprojectrow .bcbtn { flex: 1 1 100%; }
+  .bcentrypath { padding: var(--bc-3); }
+  .bcsamplebar { padding: 8px var(--bc-3); }
+  .bcsampleacts { width: 100%; justify-content: space-between; }
+  .bcsamplecreate { flex: 1 1 auto; }
 }

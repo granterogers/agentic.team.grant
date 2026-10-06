@@ -1,3 +1,36 @@
+> ## 2026-10-06 - PUBLIC SAMPLE OFFICE INTEGRATED WITH CURRENT MAIN (branch `claude/multi-user-p4`)
+>
+> Multi-User V1 itself was already in `main` (`28569e68`). This merge brings the four Sample commits (`0d98186a`, `1869d7ec`,
+> `cccb5950`, `cf0c61f6`) together with `main`'s Team HQ UX integration (`b82c2779`). **Nothing was deployed and no migration was
+> applied by the merge.** Production still runs the p4 lineage plus the Sample (migrations through `0905`; 770 applied); `main`'s
+> 28 UX migrations remain unapplied and are a separate decision (`docs/ops/deployment-readiness-2026-10-05.md`). Migration
+> numbers `0897` and `0900` had been taken twice: the Sample's are applied (never renamed), so `main`'s two unapplied files are
+> now `0906_project_calendar_events` and `0907_documents_…` (the runner refuses an unapplied duplicate number; replay proof and
+> reasoning in `docs/multi-user/PUBLIC-SAMPLE.md`, "Migration numbering collision"). Sample scripts that touch production follow
+> the production-access guard (`docs/production-access-guard.md`). The two histories' entries below are kept in order of date.
+>
+> ## 2026-10-05 (later) - SAMPLE SHOWCASE LAYER (branch `claude/multi-user-p4`) - COMPLETE (verdict 6 Oct)
+>
+> The Sample now shows the TEAM, not only a project list: real delegation (Claire to Grace to Daniel), real agent-made work (a
+> status report, a caption, a costs report), a tool request waiting for a decision (Settings, Requests), two recorded decisions,
+> a Monday automation, a date-keeping daily job. Migrations **0899 to 0905** (0900 also fixes a latent `''::uuid` defect that
+> broke hand-off delegation for everybody; #428 was a database cast, not a worker defect). Page `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x`
+> (My Tasks project name, #426 failed-read, Settings notice; rollback chain in PUBLIC-SAMPLE.md). Nothing held was deployed.
+> Account, limits and the capability matrix: `docs/multi-user/PUBLIC-SAMPLE.md`. **Paused:** Supabase recovered after a dashboard restart
+> (6 Oct 12:29Z) and the final walkthroughs passed on the final build: desktop 73/73, phone 73/73, plus contact Save/Remove and
+> Automations refusals. 0902's first scheduled run failed with a platform startup timeout; watch the 7 Oct 03:23Z run. Open: #425 (the team's identity and its
+> own Activity), #424 (dates: solved for tasks by 0902; close once the daily job has been seen to run).
+>
+> ## 2026-10-05 - PUBLIC SAMPLE OFFICE LIVE (branch `claude/multi-user-p4`)
+>
+> A logged-out visitor can Explore a read-only Sample Office (a made-up café) with no email, link or password, and still chat
+> with the team under caps (6/hour, 15/day per visitor, 250/day overall), with no voice and no outside reach. Migrations 0897,
+> 0898; `hq-api` v891; `signin` v126; page `dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3` (original `dpl_8QwvvES1oRridjeokGzu2MMGdEYm`).
+> Held Slack/polish work was NOT deployed. Production acceptance passed on desktop and phone, including one real chat turn and a
+> real-person sign-in/sign-out round trip. Operating it: `npm run sample:public`, `sample:public-ui`, `sample:public-transition`.
+> Full account and rollback points: `docs/multi-user/PUBLIC-SAMPLE.md`. Follow-ups: #424 (dates age), #425 (sample-aware worker
+> identity, held), #426 (failed read shows prototype names).
+>
 > ## 2026-10-05 - PRODUCTION-ACCESS GUARD (branch `claude/ux-closure-guard`)
 >
 > A previous autonomous run touched production (read-only catalogue queries) only because credentials were in its environment.

@@ -22,7 +22,14 @@ vi.mock('../../web/studio/backend.js', async (real) => ({
   VOICE: 'https://office.test/functions/v1/voice',
   UNCONFIGURED: 'no office configured',
 }))
-vi.mock('../../web/studio/session.js', () => ({ forget: () => undefined }))
+// chat.js asks whether a person is signed in (the prototype's conversations are only for somebody who is not) and whether
+// they are a public Sample visitor (who asks through a different door). A retry is an ordinary signed-in person's act.
+vi.mock('../../web/studio/session.js', () => ({
+  forget: () => undefined,
+  signedIn: () => true,
+  isSample: () => false,
+  visitorId: () => '',
+}))
 
 type Row = Record<string, unknown>
 type Chat = {

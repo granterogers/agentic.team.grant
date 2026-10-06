@@ -1,6 +1,6 @@
 # Documents module - backend notes (branch claude/ux-overnight-be-docs)
 
-Migration `0900_documents_are_logical_items_with_versions_and_an_explicit_import.sql` is **unapplied to production**. It was applied only to the local replica `cand_docs`. Nothing here was deployed.
+Migration `0907_documents_are_logical_items_with_versions_and_an_explicit_import.sql` (written as 0900; renumbered 6 Oct 2026 because the Sample applied 0900 to production first) is **unapplied to production**. It was applied only to the local replica `cand_docs`. Nothing here was deployed.
 
 ## What it does
 

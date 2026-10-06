@@ -35,8 +35,20 @@ import * as session from '../session.js'
 import { signOut } from '../signout.js'
 import { esc } from './parts.js'
 
+/*
+  Which tab the entry screen opens on. `?start=create` is how the Sample Office's "Create your own office" lands on the
+  right one. Read once, when the module loads: the router rewrites the address before the first paint.
+*/
+const startTab = (() => {
+  try {
+    return new URLSearchParams(globalThis.location?.search ?? '').get('start') === 'create' ? 'create' : 'signin'
+  } catch {
+    return 'signin'
+  }
+})()
+
 /** What the person typed on the create tab, kept so a redraw does not lose it. */
-const form = { tab: 'signin', email: '', name: '', sent: '' }
+const form = { tab: startTab, email: '', name: '', sent: '', opening: false }
 
 const NAME_KEY = 'hq.signup-name'
 
@@ -65,6 +77,45 @@ export const mode = () => {
   if (source.state === 'no_office') return 'setup'
   if (canWrite()) return 'app'
   return hostedPage() || asked() ? 'entry' : 'app'
+}
+
+/* ------------------------------------------------------------------------ *
+ * The Sample Office: where a visitor is, and the way out
+ * ------------------------------------------------------------------------ */
+
+/** Whether this browser is looking at the public Sample Office rather than somebody's own office. */
+export const isSample = () => session.isSample()
+
+/** The words on the header's leave button: a visitor leaves the sample, a person signs out. */
+export const leaveWords = () =>
+  isSample()
+    ? { text: 'Leave sample', label: 'Leave the Sample Office', title: 'Leave the Sample Office' }
+    : { text: 'Sign out', label: 'Sign out', title: 'Sign out and clear this browser of your work' }
+
+/*
+  The strip above the shell while somebody is exploring. It says where they are and offers the way out in the same
+  place, so a visitor is never in the sample without knowing it and never stuck in it.
+*/
+export const sampleBar = () =>
+  isSample()
+    ? `<aside class="bcsamplebar" role="region" aria-label="You are in the Sample Office">
+        <p class="bcsampletext"><b>Sample Office</b><span class="bcsamplemore"> · a made-up café, so changes are not saved</span></p>
+        <span class="bcsampleacts">
+          <button type="button" class="bcbtn bcbtn--primary bcsamplecreate" data-bc-sample-create>Create your own office</button>
+          <button type="button" class="bcsamplelink" data-bc-sample-signin>Sign in</button>
+        </span>
+      </aside>`
+    : ''
+
+/*
+  Leaving the sample is signing out of it: the same wipe a person gets, so nothing the visitor saw or asked is left in this
+  browser for whoever comes next, and nothing of the sample can become somebody's real office. Then the entry screen, on the
+  tab they asked for.
+*/
+export async function leaveSample(tab) {
+  await signOut({ reload: false })
+  const base = String(globalThis.location?.pathname ?? '/')
+  globalThis.location.replace(`${base}?welcome=1&start=${tab === 'create' ? 'create' : 'signin'}`)
 }
 
 /* ------------------------------------------------------------------------ *
@@ -119,7 +170,14 @@ export const entry = () => {
       <p class="bcentrylead">Every project gets its own tasks, documents, calendar and conversation. Claire, your chief of staff, brings in the right specialist when there is work to do, and checks with you before she acts for you.</p>
       ${ended ? '<p class="bcentrynote" role="status">Your sign-in ended, so you have been signed out. Sign in again to carry on.</p>' : ''}
       ${session.landed.problem === '' ? '' : `<p class="bcentrynote bcentrynote--bad" role="alert">${esc(session.landed.problem)}</p>`}
-      <div class="bcentrytabs" role="tablist" aria-label="Sign in or create an account">
+      <section class="bcentrypath" aria-labelledby="bc-sample-head">
+        <h2 class="bcentrypathhead" id="bc-sample-head">New here? Explore a Sample Office</h2>
+        <p class="bcentrypathtext">See a working office for a small café: its projects, tasks, documents and a team you can ask a question. No account needed, and nothing you do there is saved.</p>
+        <button type="button" class="bcbtn bcbtn--primary bcentrygo" data-bc-sample-start${form.opening ? ' disabled' : ''}>${form.opening ? 'Opening the Sample Office…' : 'Explore the Sample Office'}</button>
+        <p class="bcentrysaid" data-bc-sample-said role="status" aria-live="polite"></p>
+      </section>
+      <h2 class="bcentrypathhead bcentrypathhead--second" id="bc-own-head">Sign in or create your own office</h2>
+      <div class="bcentrytabs" role="tablist" aria-labelledby="bc-own-head">
         <button type="button" role="tab" id="bc-tab-signin" aria-selected="${form.tab === 'signin'}" aria-controls="bc-panel-entry" data-bc-entry-tab="signin">Sign in</button>
         <button type="button" role="tab" id="bc-tab-create" aria-selected="${form.tab === 'create'}" aria-controls="bc-panel-entry" data-bc-entry-tab="create">Create account</button>
       </div>
@@ -245,10 +303,37 @@ export function wire(root) {
   document.documentElement.dataset.gate = m === 'app' ? '' : m
   if (m === 'app') {
     wireProject(root)
+    for (const b of root.querySelectorAll('[data-bc-sample-create]')) {
+      b.addEventListener('click', () => void leaveSample('create'))
+    }
+    for (const b of root.querySelectorAll('[data-bc-sample-signin]')) {
+      b.addEventListener('click', () => void leaveSample('signin'))
+    }
     return
   }
 
   const redraw = () => ctxRef?.render?.()
+
+  for (const b of root.querySelectorAll('[data-bc-sample-start]')) {
+    const said = root.querySelector('[data-bc-sample-said]')
+    b.addEventListener('click', async () => {
+      if (form.opening) return
+      form.opening = true
+      b.disabled = true
+      b.textContent = 'Opening the Sample Office…'
+      say(said, '')
+      try {
+        await session.startSample()
+        // A fresh start reads the new session the way any page load does.
+        globalThis.location.replace(String(globalThis.location?.pathname ?? '/'))
+      } catch (error) {
+        form.opening = false
+        b.disabled = false
+        b.textContent = 'Explore the Sample Office'
+        say(said, error instanceof Error ? error.message : String(error))
+      }
+    })
+  }
 
   for (const t of root.querySelectorAll('[data-bc-entry-tab]')) {
     t.addEventListener('click', () => {
