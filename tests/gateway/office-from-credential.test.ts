@@ -104,7 +104,7 @@ const write = (token: string, body: Record<string, unknown>, extra = ''): Promis
     }),
   )
 
-describe('the office is the credential\'s, whatever else the request says', () => {
+describe("the office is the credential's, whatever else the request says", () => {
   it('a read ignores an office named in the query string, headers or cookie', async () => {
     const token = jwtFor('reader')
     await read(token, hostileQuery)
@@ -146,7 +146,7 @@ describe('the office is the credential\'s, whatever else the request says', () =
     expect(offices).toEqual([MINE, SECOND_PERSON])
   })
 
-  it('CONTROL: the credential\'s office IS supplied (the test cannot pass by supplying none)', async () => {
+  it("CONTROL: the credential's office IS supplied (the test cannot pass by supplying none)", async () => {
     await read(jwtFor('control'))
     expect(rpc.find((c) => c.fn === 'hq_overview')?.body.p_office).toBe(MINE)
   })

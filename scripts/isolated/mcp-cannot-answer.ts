@@ -34,7 +34,9 @@ const DOOR = "set local application_name = 'PostgREST 14.5';"
 
 const office = String((await one(`select app.operator_office()::text as o`)).o)
 const project = String((await one(`select app.unnamed_project(${lit(office)}::uuid)::text as p`)).p)
-const slug = String((await one(`select slug from public.projects where project_id = ${lit(project)}::uuid`)).slug)
+const slug = String(
+  (await one(`select slug from public.projects where project_id = ${lit(project)}::uuid`)).slug,
+)
 const client = `d1-proof-${run}`
 await db.execute(`insert into public.mcp_clients (client_id, display_name, token_sha256, scopes, kind, office_id)
   values (${lit(client)}, 'D1 proof assistant', ${lit(createHash('sha256').update(run).digest('hex'))}, array['read','write'], 'claude', ${lit(office)}::uuid)`)
@@ -46,7 +48,9 @@ const dashboardTurn = async (text: string) => {
     insert into public.inbound_commands (office_id, origin_channel, origin_ref, actor, instruction, dedupe_key, project_id, context)
     values (${lit(office)}::uuid, 'teamhq', ${lit(key)}, app.office_actor(${lit(office)}::uuid), ${lit(text)}, ${lit(key)}, ${lit(project)}::uuid, '{}'::jsonb)
     returning command_id::text as id`)
-  const enq = json((await one(`${DOOR} select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)).v)
+  const enq = json(
+    (await one(`${DOOR} select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)).v,
+  )
   return { command: String(cmd.id), job: String(enq.job_id) }
 }
 const ask = async (job: string) =>
@@ -58,26 +62,39 @@ const ask = async (job: string) =>
     ).id,
   )
 const stateOf = async (id: string) =>
-  String((await one(`select state::text as s from public.blockers where blocker_id = ${lit(id)}::uuid`)).s)
+  String(
+    (await one(`select state::text as s from public.blockers where blocker_id = ${lit(id)}::uuid`))
+      .s,
+  )
 const settle = (id: string) =>
-  db.execute(`select app.hq_answer_blocker(${lit(office)}::uuid, ${lit(id)}::uuid, 'No', app.office_actor(${lit(office)}::uuid))`)
+  db.execute(
+    `select app.hq_answer_blocker(${lit(office)}::uuid, ${lit(id)}::uuid, 'No', app.office_actor(${lit(office)}::uuid))`,
+  )
 
 /** What an assistant's "yes" would bind to: the rows the handler asks for, and the principal it would answer as. */
 const mcpYes = async (text: string, to?: string) => {
   const r = json(
     (
-      await one(`${DOOR} select app.mcp_ask_team(${lit(office)}::uuid, ${lit(client)}, ${lit(slug)}, ${lit(text)}, ${to ? lit(to) : 'null'}) as v`)
+      await one(
+        `${DOOR} select app.mcp_ask_team(${lit(office)}::uuid, ${lit(client)}, ${lit(slug)}, ${lit(text)}, ${to ? lit(to) : 'null'}) as v`,
+      )
     ).v,
   )
   const job = String(r.job_id ?? '')
   const command = String(
-    (await one(`select command_id::text as c from public.jobs j join public.inbound_commands c on c.job_id = j.job_id where j.job_id = ${lit(job)}::uuid limit 1`)).c,
+    (
+      await one(
+        `select command_id::text as c from public.jobs j join public.inbound_commands c on c.job_id = j.job_id where j.job_id = ${lit(job)}::uuid limit 1`,
+      )
+    ).c,
   )
   const rows = await all(
     `select id, bindable from app.open_questions_for_reply(${lit(office)}::uuid, ${lit(command)}::uuid)`,
   )
   const origin = String((await one(`select app.command_origin(${lit(command)}::uuid) as o`)).o)
-  const principal = String((await one(`select app.command_principal(${lit(office)}::uuid, ${lit(command)}::uuid) as p`)).p)
+  const principal = String(
+    (await one(`select app.command_principal(${lit(office)}::uuid, ${lit(command)}::uuid) as p`)).p,
+  )
   return { command, rows, origin, principal }
 }
 
@@ -87,7 +104,11 @@ const mcpYes = async (text: string, to?: string) => {
   const q = await ask(prev.job)
   const got = await mcpYes('yes')
   const bound = got.rows.filter((r) => r.bindable === true).map((r) => String(r.id))
-  check('the assistant turn is not trusted (the door says so)', got.origin !== 'trusted', `origin ${got.origin}`)
+  check(
+    'the assistant turn is not trusted (the door says so)',
+    got.origin !== 'trusted',
+    `origin ${got.origin}`,
+  )
   check(
     'an assistant "yes" binds NO open question of the owner (D1)',
     !bound.includes(q),
@@ -102,9 +123,17 @@ const mcpYes = async (text: string, to?: string) => {
         )
       ).r,
     )
-    check('(exploit trace) the owner question was answered by the assistant turn', false, JSON.stringify(res).slice(0, 80))
+    check(
+      '(exploit trace) the owner question was answered by the assistant turn',
+      false,
+      JSON.stringify(res).slice(0, 80),
+    )
   }
-  check('the owner question is still open after the assistant turn', (await stateOf(q)) === 'open', await stateOf(q))
+  check(
+    'the owner question is still open after the assistant turn',
+    (await stateOf(q)) === 'open',
+    await stateOf(q),
+  )
   await settle(q)
 }
 // ---- variants ---------------------------------------------------------------------------------------------------
@@ -162,10 +191,16 @@ const mcpYes = async (text: string, to?: string) => {
       )
     ).r,
   )
-  check('CONTROL: answering as the owner through the answer door still works', (await stateOf(q)) !== 'open', JSON.stringify(res).slice(0, 80))
+  check(
+    'CONTROL: answering as the owner through the answer door still works',
+    (await stateOf(q)) !== 'open',
+    JSON.stringify(res).slice(0, 80),
+  )
 }
 
-await db.execute(`delete from public.mcp_clients where client_id = ${lit(client)}`).catch(() => undefined)
+await db
+  .execute(`delete from public.mcp_clients where client_id = ${lit(client)}`)
+  .catch(() => undefined)
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} ok`)
 await db.end()

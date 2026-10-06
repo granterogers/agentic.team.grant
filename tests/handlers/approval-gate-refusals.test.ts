@@ -25,16 +25,19 @@ const check = (state: ApprovalCheck['state']): ApprovalCheck => ({
 const database = (verdict: 'proceed' | 'refuse' | 'ask') => {
   const asked: string[] = []
   const db: SqlExecutor = {
+    kind: 'stub-policy-database',
     execute: async (sql: string) => {
       asked.push(sql)
       if (sql.includes('authorize_effect')) {
         return {
-          rows: [{ d: { verdict, because: `the policy said ${verdict}`, tool: 'notebook.generate' } }],
+          rows: [
+            { d: { verdict, because: `the policy said ${verdict}`, tool: 'notebook.generate' } },
+          ],
         }
       }
       return { rows: [] }
     },
-  } as SqlExecutor
+  } as unknown as SqlExecutor
   return { db, asked }
 }
 

@@ -36,7 +36,7 @@
  *    2 x a provenance defect    -> the office, must stay a failure
  */
 import { describe, expect, it } from 'vitest'
-import { weather } from '../../scripts/sessions/run.ts'
+import { weather } from '../../scripts/sessions/weather.ts'
 
 /** Verbatim from `public.jobs.state_reason`, 37 rows. */
 const OUTAGE = 'handler threw: provider openrouter is unavailable: its circuit breaker is open'

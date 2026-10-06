@@ -38,14 +38,22 @@ describe('telegram-webhook', () => {
     })
 
   it('refuses a request with no secret header, and reaches nothing', async () => {
-    const h = await loadEdge(TELEGRAM_BUNDLE, { ...BASE_ENV, TELEGRAM_WEBHOOK_SECRET: SECRET }, recorder)
+    const h = await loadEdge(
+      TELEGRAM_BUNDLE,
+      { ...BASE_ENV, TELEGRAM_WEBHOOK_SECRET: SECRET },
+      recorder,
+    )
     const res = await h(post({}))
     expect(res.status).toBe(401)
     expect(calls).toEqual([])
   })
 
   it('refuses a wrong secret, and one of a different length', async () => {
-    const h = await loadEdge(TELEGRAM_BUNDLE, { ...BASE_ENV, TELEGRAM_WEBHOOK_SECRET: SECRET }, recorder)
+    const h = await loadEdge(
+      TELEGRAM_BUNDLE,
+      { ...BASE_ENV, TELEGRAM_WEBHOOK_SECRET: SECRET },
+      recorder,
+    )
     for (const wrong of ['telegram-shared-secreT', 'x', `${SECRET}-and-more`, '']) {
       const res = await h(post({ 'X-Telegram-Bot-Api-Secret-Token': wrong }))
       expect(res.status, wrong).toBe(401)
@@ -63,7 +71,11 @@ describe('telegram-webhook', () => {
   })
 
   it('CONTROL: the right secret is let through to the first real work (it is not refusing everything)', async () => {
-    const h = await loadEdge(TELEGRAM_BUNDLE, { ...BASE_ENV, TELEGRAM_WEBHOOK_SECRET: SECRET }, recorder)
+    const h = await loadEdge(
+      TELEGRAM_BUNDLE,
+      { ...BASE_ENV, TELEGRAM_WEBHOOK_SECRET: SECRET },
+      recorder,
+    )
     const res = await h(post({ 'X-Telegram-Bot-Api-Secret-Token': SECRET }))
     expect(res.status).not.toBe(401)
     expect(calls.some((c) => c.endsWith('/rpc/staff_for_bot'))).toBe(true)

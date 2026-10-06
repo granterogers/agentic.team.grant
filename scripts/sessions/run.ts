@@ -81,8 +81,9 @@ import { ManagementApiExecutor } from '../../src/db/executor.ts'
  * and costs nothing new; too broad and a real product failure is hidden, which
  * is unrecoverable.
  */
-export const weather = (reason: string): boolean =>
-  /provider \S+ is unavailable|circuit breaker is open/i.test(reason)
+import { weather } from './weather.ts'
+
+export { weather }
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
