@@ -41,6 +41,11 @@ const SLUG = 'voice-basecamp'
 const api = `https://api.supabase.com/v1/projects/${ref}`
 const db = new ManagementApiExecutor(ref, supabaseToken)
 
+// The voice function asks `src/auth/speaker.ts` who is calling, so this copy ships its import graph too. Resolved and
+// validated BEFORE the secrets below are written.
+const { form, files } = await bundleForm(SLUG, 'supabase/functions/voice/index.ts')
+console.log(`${SLUG}: bundling ${String(files)} file(s) from the import graph`)
+
 const token = String(
   (
     await db.execute(
@@ -60,10 +65,6 @@ const setSecrets = await fetch(`${api}/secrets`, {
   body: JSON.stringify([{ name: 'HQ_API_TOKEN', value: token }]),
 })
 console.log(`function secrets set: http ${String(setSecrets.status)}`)
-
-// The voice function asks `src/auth/speaker.ts` who is calling, so this copy ships its import graph too.
-const { form, files } = await bundleForm(SLUG, 'supabase/functions/voice/index.ts')
-console.log(`${SLUG}: bundling ${String(files)} file(s) from the import graph`)
 
 const deployed = await fetch(`${api}/functions/deploy?slug=${SLUG}`, {
   method: 'POST',

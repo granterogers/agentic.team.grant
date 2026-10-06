@@ -47,6 +47,15 @@ const PAGE_ORIGINS = [
 const api = `https://api.supabase.com/v1/projects/${ref}`
 const db = new ManagementApiExecutor(ref, supabaseToken)
 
+// Both functions ship their import graph, because both ask `src/auth/speaker.ts` who is calling. They are resolved and
+// validated HERE, before the secrets below are written: a bundle the platform would refuse is known locally.
+const voiceBundle = await bundleForm('voice', 'supabase/functions/voice/index.ts')
+const form = voiceBundle.form
+console.log(`voice: bundling ${String(voiceBundle.files)} file(s) from the import graph`)
+const mintBundle = await bundleForm('voice-token', 'supabase/functions/voice-token/index.ts')
+const mintForm = mintBundle.form
+console.log(`voice-token: bundling ${String(mintBundle.files)} file(s) from the import graph`)
+
 const token = String(
   (
     await db.execute(
@@ -76,11 +85,6 @@ const setSecrets = await fetch(`${api}/secrets`, {
   ]),
 })
 console.log(`function secrets set: http ${String(setSecrets.status)}`)
-
-// Both functions ship their import graph, because both ask `src/auth/speaker.ts` who is calling.
-const voiceBundle = await bundleForm('voice', 'supabase/functions/voice/index.ts')
-const form = voiceBundle.form
-console.log(`voice: bundling ${String(voiceBundle.files)} file(s) from the import graph`)
 
 const deployed = await fetch(`${api}/functions/deploy?slug=voice`, {
   method: 'POST',
@@ -129,9 +133,6 @@ if (unauthorized.status !== 401 || answer.did !== 'answered') {
 // minting a session whose instructions said it was a proof of concept. It is
 // the same feature as `/voice` — one of them takes the call, the other decides
 // who is on it — so it ships in the same command.
-const mintBundle = await bundleForm('voice-token', 'supabase/functions/voice-token/index.ts')
-const mintForm = mintBundle.form
-console.log(`voice-token: bundling ${String(mintBundle.files)} file(s) from the import graph`)
 
 const mintDeployed = await fetch(`${api}/functions/deploy?slug=voice-token`, {
   method: 'POST',
