@@ -42,6 +42,8 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { collectAux } from './aux.ts'
+import { type PagedOptions, pagedDump } from './paged.ts'
 
 export interface Archive {
   readonly name: string
@@ -223,24 +225,38 @@ export interface TableDump {
   readonly sha256: string
   readonly rows: number
   readonly rawBytes: number
+  /** Content fingerprint of the rows (paged.ts); absent on the manifest object. */
+  readonly fingerprint?: string
 }
 
+/**
+ * One table, read in keyset pages and gzipped as a stream (G-3). The object has the same shape as before
+ * (`{"table":"s.t","rows":[...]}`, gzipped) so `readFolder`, `backup:rehearse` and every archive already stored are
+ * unaffected; what changed is that the rows are Postgres's own JSON text and are never all in memory as rows. See
+ * paged.ts for the bound and for why the text is not parsed.
+ */
 export async function dumpTable(
   db: SqlExecutor,
   prefix: string,
   schema: string,
   table: string,
+  options: PagedOptions = {},
 ): Promise<TableDump> {
-  const result = await db.execute(`select * from "${schema}"."${table}"`)
-  const json = JSON.stringify({ table: `${schema}.${table}`, rows: [...result.rows] })
-  const bytes = await gzip(json)
+  const dump = await pagedDump(db, schema, table, options)
   return {
     key: `${prefix}/${schema}.${table}.json.gz`,
-    bytes,
-    sha256: await sha256(bytes),
-    rows: result.rows.length,
-    rawBytes: json.length,
+    bytes: dump.bytes,
+    sha256: await sha256(dump.bytes),
+    rows: dump.rows,
+    rawBytes: dump.rawBytes,
+    fingerprint: dump.fingerprint,
   }
+}
+
+export interface ManifestExtra {
+  /** Per object key: checksum and size, so a manifest can vouch for every object it names. */
+  readonly objects?: Record<string, { sha256: string; bytes: number }>
+  readonly fingerprints?: Record<string, string>
 }
 
 /**
@@ -255,6 +271,7 @@ export async function buildManifest(
   projectRef: string,
   prefix: string,
   counts: Record<string, number>,
+  extra: ManifestExtra = {},
 ): Promise<TableDump> {
   const schema = (
     await db.execute(`
@@ -285,6 +302,11 @@ export async function buildManifest(
     tables: Object.keys(counts).length,
     rows: Object.values(counts).reduce((a, b) => a + b, 0),
     schema,
+    // G-2: the manifest vouches for every object it names, and records what a working system needs that is not a row
+    // in public or app (logins, schedules, secret NAMES, storage objects, sequences). See aux.ts.
+    ...(extra.objects === undefined ? {} : { objects: extra.objects }),
+    ...(extra.fingerprints === undefined ? {} : { fingerprints: extra.fingerprints }),
+    aux: await collectAux(db),
   })
   const bytes = await gzip(json)
   return {

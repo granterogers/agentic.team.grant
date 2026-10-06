@@ -51,6 +51,7 @@ import { calendarHandler } from '../handlers/calendar.ts'
 import { calendarEventsHandler } from '../handlers/calendar-events.ts'
 import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
+import { capacityWatchHandler } from '../handlers/capacity-watch.ts'
 import { channelsHandler } from '../handlers/channels.ts'
 import { choresHandler } from '../handlers/chores.ts'
 import { ciDispatchHandler } from '../handlers/ci-dispatch.ts'
@@ -437,6 +438,8 @@ export const buildPass = async (
     // Project calendars both ways: a project's own events to Google, and Google's edits back (0906, written as 0897).
     calendarEventsHandler(db),
     jobTracesHandler(db),
+    // G-1 (1026). The free tier watched on the way to its limit: samples sizes, projects days to the limit, says it on a crossing.
+    capacityWatchHandler(db),
     /*
       #21. The build diary pruned its rows and kept its pictures — 38 orphans
       against a 1 GB allowance. Registered beside the trace prune because it is

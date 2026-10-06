@@ -93,6 +93,8 @@ export const REACH: Readonly<Record<string, KindReach>> = {
   'briefing.morning': { reach: 'internal' },
   'office.backup': { reach: 'internal' },
   'office.capacity_report': { reach: 'internal' },
+  // G-1 (1026): measures this deployment's own size and says it through the delivery layer; reaches nothing else.
+  'office.capacity_watch': { reach: 'internal' },
   'office.chores': { reach: 'internal' },
   'office.extract_tasks': { reach: 'internal' },
   'office.instruction': { reach: 'internal' },

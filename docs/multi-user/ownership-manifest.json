@@ -142,6 +142,10 @@
       "class": "OFFICE_CARRIER",
       "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."
     },
+    "capacity_samples": {
+      "class": "SYSTEM",
+      "why": "Daily size readings of the deployment's database, storage and largest tables against the free-tier limits (1026). Infrastructure, no content, no office."
+    },
     "ci_runs": {
       "class": "SYSTEM",
       "why": "CI dispatch ledger and its deployment-wide minute ceiling."
