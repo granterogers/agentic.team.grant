@@ -14,8 +14,9 @@
  *                     served by the host's exporters; the Postgres series in it are read by an exporter connection, so on a
  *                     sick host it may answer 500/504, which is recorded as a finding and never retried.
  *   --logs            The analytics log endpoint (a separate service from the project's database; throttled to one query a
- *                     minute, a 24-hour window). The one capture whose evidence EXPIRES, so it is safe to run while the
- *                     database is down and is the thing to do first.
+ *                     minute). METERED by data scanned, so it runs under the log query budget: LOG_QUERY_REASON is required,
+ *                     the window defaults to ONE hour and is refused above 60 minutes, and six queries a day are allowed
+ *                     (src/safety/log-query-budget.ts). Safe to run while the database is down.
  *   --db              Runs statements on the project's database. Refuses to start unless a trivial statement answers inside
  *                     two seconds, and stops at the first slow one. Never run while the provider says anything is unhealthy.
  *
@@ -25,6 +26,7 @@
  */
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { redactSecrets } from '../../src/text/secrets.ts'
+import { LogQueryRefused, withLogGuard } from './log-guard.ts'
 import { answered, parseMetrics, qualify, rates, snapshot } from './metrics.ts'
 
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
@@ -215,7 +217,15 @@ const logsMode = async (hours: number): Promise<void> => {
     if (q === undefined) continue
     if (i > 0) await sleep(65_000)
     const url = `/v1/projects/${REF}/analytics/endpoints/logs?sql=${encodeURIComponent(q.sql)}&iso_timestamp_start=${start.toISOString()}&iso_timestamp_end=${end.toISOString()}`
-    const r = await get(url, 60_000)
+    let r: { status: number; ms: number; text: string }
+    try {
+      r = await withLogGuard(url, () => get(url, 60_000))
+    } catch (e) {
+      if (!(e instanceof LogQueryRefused)) throw e
+      console.log(`${e.message}\nSTOPPED at ${q.name}: nothing was sent.`)
+      process.exitCode = 3
+      return
+    }
     let rows: unknown[] = []
     let note = ''
     try {
@@ -471,7 +481,8 @@ const dbMode = async (): Promise<boolean> => {
 
 const minutes = Number(flag('watch') ?? 0)
 if (has('control-plane')) await controlPlane(Number(flag('gap') ?? 60))
-if (has('logs')) await logsMode(Number(flag('hours') ?? 24))
+// ONE hour by default (it was 24, which the provider meters by data scanned): see src/safety/log-query-budget.ts.
+if (has('logs')) await logsMode(Number(flag('hours') ?? 1))
 if (has('db')) await dbMode()
 if (minutes > 0) {
   const every = Math.max(60, Number(flag('every') ?? 60))

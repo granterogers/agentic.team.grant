@@ -3,7 +3,13 @@
  *
  *   npm run forensics:logs -- --set=probe                 # which sources exist, their time range, one attribute map each
  *   npm run forensics:logs -- --set=<name>[,<name>...]    # named sets from logs-queries.ts (or --set=all)
- *   npm run forensics:logs -- --set=all --hours=24        # a whole-window capture (the default window is 24 h)
+ *   npm run forensics:logs -- --set=<name> --start=<iso> --end=<iso>   # a bounded window (the default is ONE hour)
+ *
+ * METERED (6 October 2026). The provider bills Logs Query by data SCANNED, and 102 GB against a 100 GB allowance was spent in a
+ * day of exactly this tool at 24-hour windows. Every query now goes through the log query budget
+ * (src/safety/log-query-budget.ts): LOG_QUERY_REASON is required, a window over 60 minutes and a query that does not filter on
+ * `source` are refused, six queries a day are allowed, and a question already answered by a saved file is refused. The probe sets
+ * (whole-day scans) and `--set=all` are therefore not usable as they were; ask for ONE named set over ONE narrow window.
  *
  * The endpoint is `GET /v1/projects/<ref>/analytics/endpoints/logs`, the CURRENT one. `logs.all` is retired and answers 410, and
  * is never called here. SQL is the ClickHouse dialect over the unified `logs` table (`source` selects the stream). The window is at
@@ -28,6 +34,7 @@ import {
   saveRaw,
   sleep,
 } from './common.ts'
+import { LogQueryRefused } from './log-guard.ts'
 import { LOG_SETS } from './logs-queries.ts'
 
 requireToken()
@@ -35,7 +42,8 @@ const args = process.argv.slice(2)
 const flag = (n: string): string | undefined =>
   args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
 const wanted = (flag('set') ?? '').split(',').filter((x) => x !== '')
-const hours = Math.min(24, Number(flag('hours') ?? 24))
+// The default window is ONE hour. It was 24, which is what the meter charged for (docs/performance/log-query-investigation-2026-10-06.md).
+const hours = Math.min(24, Number(flag('hours') ?? 1))
 const gap = Math.max(65, Number(flag('gap') ?? 65)) * 1000
 if (wanted.length === 0) {
   console.error(`Choose --set=probe, --set=all or names from: ${Object.keys(LOG_SETS).join(', ')}`)
@@ -105,7 +113,15 @@ for (const name of names) {
   await waitForTurn()
   writeFileSync(STAMP, String(Date.now()))
   const url = `/v1/projects/${REF}/analytics/endpoints/logs?sql=${encodeURIComponent(q.sql)}&iso_timestamp_start=${start.toISOString()}&iso_timestamp_end=${end.toISOString()}`
-  const r = await mgmt(url, 70_000)
+  let r: Awaited<ReturnType<typeof mgmt>>
+  try {
+    r = await mgmt(url, 70_000)
+  } catch (e) {
+    if (!(e instanceof LogQueryRefused)) throw e
+    console.log(`${e.message}\nSTOPPED at ${name}: nothing was sent.`)
+    process.exitCode = 3
+    break
+  }
   let rows: unknown[] = []
   let note = r.error === null ? '' : `transport: ${r.error}`
   try {

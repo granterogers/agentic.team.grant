@@ -14,11 +14,13 @@
  *              seconds mean the database host is starved of CPU or of I/O credit (the 3 October stall measured 7 s for 2M rows)
  *   database   client connections against the limit (a slot-exhaustion incident shows here), active versus idle, longest running statement
  *   worker     whether the heartbeat is active and paused, the queue depth by state, and how long ago a job last completed
- *   logs       the last 30 minutes of statement timeouts and connection-slot errors, from the provider's own log stream (skipped if throttled)
+ *   logs       ONLY with --logs (metered by data scanned; needs LOG_QUERY_REASON): the last 30 minutes of statement timeouts and
+ *              connection-slot errors, from the provider's own log stream
  *
  * It does not diagnose. Read it beside docs/ops/supabase-incident-2026-10-03.md.
  */
 import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { LogQueryRefused, withLogGuard } from './forensics/log-guard.ts'
 
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN ?? ''
@@ -125,13 +127,26 @@ out.cpu = cpu.ok ? cpu.value : show(cpu)
 // 4. bounded recent log counts from the provider's stream; one query, skipped quietly if throttled
 const end = new Date()
 const start = new Date(end.getTime() - 30 * 60 * 1000)
+// OPT IN (6 October 2026). The provider meters a log query by data scanned, and a snapshot is run in exactly the moments somebody
+// is already running several things. It now asks the log service only when told to (--logs), under the log query budget.
 const logs = await timed(async () => {
+  if (!process.argv.includes('--logs'))
+    return 'not asked (pass --logs with LOG_QUERY_REASON; log queries are metered by data scanned)'
   const sql =
     "select multiIf(event_message ilike '%remaining connection slots%','conn_slots_full', event_message ilike '%statement timeout%','statement_timeout', event_message ilike '%connect timeout%','connect_timeout','') as k, count() as n from logs where source in ('postgres_logs','pgbouncer_logs') and k != '' group by k"
   const url = `https://api.supabase.com/v1/projects/${REF}/analytics/endpoints/logs?sql=${encodeURIComponent(sql)}&iso_timestamp_start=${start.toISOString()}&iso_timestamp_end=${end.toISOString()}`
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  let r: { status: number; text: string }
+  try {
+    r = await withLogGuard(url, async () => {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } })
+      return { status: res.status, text: await res.text() }
+    })
+  } catch (e) {
+    if (e instanceof LogQueryRefused) return e.message
+    throw e
+  }
   if (r.status === 429) return 'throttled (try again in a minute)'
-  const j = (await r.json()) as { result?: { k: string; n: number }[] }
+  const j = JSON.parse(r.text) as { result?: { k: string; n: number }[] }
   const rows = j.result ?? []
   return rows.length === 0 ? 'none in the last 30 min' : rows.map((x) => `${x.k}=${x.n}`).join(' ')
 }, 20_000)

@@ -6,7 +6,9 @@
  * error body might carry. The access token is read from SUPABASE_ACCESS_TOKEN and is never printed or written.
  */
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { isLogQuery } from '../../src/safety/log-query-budget.ts'
 import { redactSecrets } from '../../src/text/secrets.ts'
+import { attachSavedFile, withLogGuard } from './log-guard.ts'
 
 export const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 export const API = 'https://api.supabase.com'
@@ -31,8 +33,19 @@ export const requireToken = (): void => {
   }
 }
 
-/** One Management API request. Never throws: a transport failure comes back as status 0 with the error name. */
+/**
+ * One Management API request. Never throws on transport: a failure comes back as status 0 with the error name. The one exception
+ * is a request to the provider's LOG service (`/analytics/endpoints/logs` or `usage.*`), which is metered by data scanned and goes
+ * through the log query budget first: if a rule is not met it throws LogQueryRefused having sent nothing (src/safety/log-query-budget.ts).
+ */
 export const mgmt = async (
+  path: string,
+  ms: number,
+  init: { method?: string; body?: unknown } = {},
+): Promise<Reply> =>
+  isLogQuery(path) ? withLogGuard(path, () => mgmtSend(path, ms, init)) : mgmtSend(path, ms, init)
+
+const mgmtSend = async (
   path: string,
   ms: number,
   init: { method?: string; body?: unknown } = {},
@@ -78,6 +91,8 @@ export const saveRaw = (sub: string, name: string, content: string | Buffer): st
   mkdirSync(dir, { recursive: true })
   const path = `${dir}/${name}`
   writeFileSync(path, content)
+  // A saved log or usage result is what lets the budget answer the next identical question from the file.
+  if (sub.startsWith('logs/') || sub.startsWith('usage/')) attachSavedFile(path)
   return path
 }
 
