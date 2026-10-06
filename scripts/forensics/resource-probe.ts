@@ -230,7 +230,10 @@ if (BUDGET !== undefined) {
       continue
     }
     for (const [k, max] of Object.entries(limits)) {
-      const v = got[k as keyof Cost]
+      // `hit` in a budget means buffers TOUCHED (hit + read): whether a page was already cached depends on what ran before, and a
+      // ceiling that flaps with cache warmth is a ceiling nobody trusts. Measured on one replica: pulse 62,006 hits + 8,718 reads
+      // on one run and 70,724 hits + 0 reads on another, the same 70,724 touched.
+      const v = k === 'hit' ? got.hit + got.read : got[k as keyof Cost]
       if (v === undefined || v > (max as number)) {
         console.log(`BUDGET FAIL ${name}.${k}: ${String(v)} > ${String(max)}`)
         failed += 1
