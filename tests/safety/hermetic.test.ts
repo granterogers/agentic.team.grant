@@ -33,11 +33,16 @@ describe('the unit suite is hermetic', () => {
     expect(exited).toBeUndefined()
   })
 
-  it('CONTROL: the credential demand it replaced is real (the runner still refuses to start without one)', async () => {
-    const { readFileSync } = await import('node:fs')
-    const src = readFileSync('scripts/sessions/run.ts', 'utf8')
-    // The runner keeps its own demand; only the pure helper moved out of its import path.
-    expect(src).toMatch(/process\.exit\(2\)/)
-    expect(src).toMatch(/export \{ weather \} from '\.\/weather\.ts'/)
-  })
+  it('CONTROL: the credential demand it replaced is real (the runner itself still refuses to start without one)', async () => {
+    const { spawnSync } = await import('node:child_process')
+    // A bare environment: the runner, run for real, must end the process with status 2 and say why. The helper moved
+    // out of its import path; the demand did not move, so this proves the test above did not pass by deleting it.
+    const ran = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/sessions/run.ts'], {
+      env: { PATH: process.env.PATH ?? '' },
+      encoding: 'utf8',
+      timeout: 60_000,
+    })
+    expect(ran.status).toBe(2)
+    expect(`${ran.stdout}${ran.stderr}`).toContain('is not set')
+  }, 90_000)
 })

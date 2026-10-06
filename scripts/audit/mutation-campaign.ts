@@ -37,16 +37,18 @@ const root = resolve(import.meta.dirname, '../..')
 const arg = (name: string): string | undefined =>
   process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3)
 const only = arg('only')?.split(',')
-const manifest = JSON.parse(
-  readFileSync(join(root, 'scripts/audit/mutations.json'), 'utf8'),
-) as { mutations: Mutation[] }
+const manifest = JSON.parse(readFileSync(join(root, 'scripts/audit/mutations.json'), 'utf8')) as {
+  mutations: Mutation[]
+}
 const mutations = manifest.mutations.filter((m) => only === undefined || only.includes(m.id))
 
 const git = (args: string[], cwd = root): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 
 if (git(['status', '--porcelain', '--untracked-files=no']) !== '') {
-  console.error('REFUSED: the working tree has uncommitted changes; commit them so the worktree tests them.')
+  console.error(
+    'REFUSED: the working tree has uncommitted changes; commit them so the worktree tests them.',
+  )
   process.exit(2)
 }
 
@@ -72,7 +74,9 @@ try {
   console.log('baseline (must be green)...')
   const base = suite(false)
   if (base.status !== 0) {
-    console.error(`REFUSED: the baseline is red (${base.failing.join(', ') || 'no failing file named'}).\n${base.tail}`)
+    console.error(
+      `REFUSED: the baseline is red (${base.failing.join(', ') || 'no failing file named'}).\n${base.tail}`,
+    )
     process.exitCode = 3
   } else {
     console.log('baseline green')
@@ -85,7 +89,10 @@ try {
         results.push({ ...m, result: 'DID_NOT_LAND', anchors: count })
         continue
       }
-      writeFileSync(path, original.replace(m.old, () => m.new))
+      writeFileSync(
+        path,
+        original.replace(m.old, () => m.new),
+      )
       const landed = readFileSync(path, 'utf8') !== original
       let run: ReturnType<typeof suite> | undefined
       try {
@@ -107,7 +114,9 @@ try {
     const caught = results.filter((r) => r.result === 'CAUGHT').length
     const survived = results.filter((r) => r.result === 'SURVIVED').length
     const missed = results.filter((r) => r.result === 'DID_NOT_LAND').length
-    console.log(`\ncaught ${String(caught)}, survived ${String(survived)}, did not land ${String(missed)} of ${String(mutations.length)}`)
+    console.log(
+      `\ncaught ${String(caught)}, survived ${String(survived)}, did not land ${String(missed)} of ${String(mutations.length)}`,
+    )
     if (survived > 0 || missed > 0) process.exitCode = 1
   }
 } finally {
