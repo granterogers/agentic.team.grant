@@ -124,6 +124,8 @@ await import('../../src/safety/require-production-writes.ts')
   }
 }
 
+const { logWrite } = await import('../rollout/log.ts')
+logWrite('deploy-attempt hq-api', false)
 const form = new FormData()
 form.append(
   'metadata',
@@ -141,6 +143,7 @@ if (!deployed.ok) {
   console.error(`deploy failed: http ${String(deployed.status)} ${JSON.stringify(result)}`)
   process.exit(1)
 }
+logWrite('deploy hq-api', true)
 console.log(
   `hq-api v${String(result.version)} ${String(result.status)} (previous v${String(meta.version)})`,
 )

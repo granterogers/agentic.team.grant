@@ -113,6 +113,10 @@ if (!go) {
 }
 // A deploy is a production WRITE: the writes guard comes before anything is uploaded.
 await import('../../src/safety/require-production-writes.ts')
+{
+  const { logWrite } = await import('../rollout/log.ts')
+  logWrite('deploy-attempt page', false)
+}
 
 const create = async () =>
   fetch('https://api.vercel.com/v13/deployments', {

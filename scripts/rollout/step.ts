@@ -106,6 +106,8 @@ const isWrite = ['apply', 'rollback', 'record', 'unrecord'].includes(action)
 let db: SqlExecutor
 let ref = ''
 let token = ''
+// Production writes are logged (scripts/rollout/log.ts) so the two-GO condition can tell that something changed. A replica is not.
+let logWrite: (what: string, ok: boolean) => void = () => undefined
 if (replica !== undefined) {
   const { isolated } = await import('../isolated/guard.ts')
   db = await isolated(replica)
@@ -115,6 +117,12 @@ if (replica !== undefined) {
       ? '../../src/safety/require-production-writes.ts'
       : '../../src/safety/require-production-checks.ts'
   )
+  const log = await import('./log.ts')
+  logWrite = log.logWrite
+  // The first production write (and the precheck before it) needs two consecutive GO canaries that still hold; a later step is
+  // gated by the fresh canary `apply` takes first.
+  if (action === 'precheck' || action === 'apply')
+    log.requireTwoGo(`step ${stepId} ${action}`, true)
   token = process.env.SUPABASE_ACCESS_TOKEN ?? ''
   if (token === '') fail('SUPABASE_ACCESS_TOKEN is not set: nothing was asked', 2)
   ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
@@ -224,6 +232,7 @@ try {
       )
       process.exit(0)
     }
+    logWrite(`apply-attempt ${stepId}`, false)
     await db.execute(migrationSql)
     const after = await read()
     const post = judge(after, 'post')
@@ -248,6 +257,7 @@ try {
     const r = await reach()
     show(r)
     const good = post.ok && changedAttrs.length === 0 && r.every((l) => !l.startsWith('FAIL'))
+    logWrite(`apply ${stepId}`, good)
     if (!good)
       console.log(`ROLLBACK RECOMMENDED: npx tsx scripts/rollout/step.ts ${stepId} rollback --go`)
     process.exit(good ? 0 : 1)
@@ -280,6 +290,7 @@ try {
       console.log(`DRY RUN: would ${action} exactly one row. Add --go to do it.`)
       process.exit(0)
     }
+    logWrite(`${action}-attempt ${stepId}`, false)
     await db.execute(
       action === 'record'
         ? `insert into app.schema_migrations (name, checksum, duration_ms) values ('${name}', '${S.migrationSha256}', 0)
@@ -324,8 +335,10 @@ try {
     )
     process.exit(0)
   }
+  logWrite(`rollback-attempt ${stepId}`, false)
   await db.execute(rollbackSql)
   const back = judge(await read(), 'pre')
+  logWrite(`rollback ${stepId}`, back.ok)
   console.log(
     `rolled back ${stepId}; live state after: ${back.ok ? 'MATCHES the predecessor exactly' : 'DOES NOT MATCH'}`,
   )

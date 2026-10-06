@@ -79,6 +79,9 @@ if (replica !== undefined) {
   db = await isolated(replica)
 } else {
   await import('../../src/safety/require-production-checks.ts')
+  // The baseline is authorised only once two consecutive GO canaries exist and the condition still holds (offline check of the log).
+  const { requireTwoGo } = await import('./log.ts')
+  requireTwoGo('the read-only baseline')
   const token = process.env.SUPABASE_ACCESS_TOKEN ?? ''
   if (token === '') {
     console.error('SUPABASE_ACCESS_TOKEN is not set: nothing was asked')

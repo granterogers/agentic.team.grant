@@ -1,8 +1,19 @@
 # Stabilisation release: recommendation, command sheet, rollback sheet (PREPARED BUT HELD)
 
-**Status: HELD.** Nothing in this document has been run against production. Production contact in this phase: **zero**. The last
-reading (two earlier, single, read-only canary reads) was NO-GO with all four services UNHEALTHY. Nothing below runs until the platform
-reads healthy and Grant authorises the first write explicitly. One authorisation covers one step, never the next.
+**Status: APPROVED WITH REFINEMENTS, STILL HELD.** Nothing in this document has been run against production. Production contact since the
+two earlier NO-GO readings: **zero**. Nothing below runs until the platform has shown **two consecutive GO canaries** (section 5.1). One
+authorisation covers one step, never the next.
+
+Approved refinements (Grant, 6 October 2026), all built into the tools and tested offline:
+
+1. **Two consecutive GO canaries, about ten minutes apart, with no production change between them, before the first production write.** Each must show
+   auth, db, rest and storage `ACTIVE_HEALTHY`, cron job 1 successful, no startup timeout and the expected heartbeat count. Only then may the read-only
+   baseline run; if either deteriorates, stop and run nothing. `scripts/rollout/gate.ts`, `read.ts` and `step.ts` enforce it from a log (section 5.1).
+2. **numbackends is WORSE if it rises by more than 50% OR by more than 5 from baseline, whichever comes first.** The other thresholds are as proposed
+   (section 8, and `scripts/rollout/classify.ts` applies them).
+3. **The emergency gateway change is thinking-only** (one changed line). The session single-flight is not in this wave (section 5.3).
+4. **Authorisation is staged:** the read-only baseline (Q1 to Q4, `defs`, `attrs`, one bounded gateway-log baseline, the counter pair) once two GO canaries exist;
+   then a report and a HOLD; the 1023 write needs its own explicit authorisation. Wave order is unchanged.
 
 The candidate is frozen at tag `stabilisation-candidate-1` (commit `b2a73d8f`). Everything added after it on `claude/efficiency-stabilisation`
 is rollout, rollback or verification tooling and documentation: no product behaviour changed.
@@ -16,7 +27,7 @@ per visible tab (912,800 buffer pages and 62,224 nested statements per call on a
 | Wave | Steps | Why this order |
 |---|---|---|
 | **1** | **1023** | Largest standing-load cut for the smallest change. No code deploy. |
-| 2 | 1027, then 1028 + `hq-api` | 1027 halves the pulse (the other poll read). 1028 + `hq-api` removes the rest of the thinking poll's cost and carries the session single-flight (fewer calls to the auth service, which was one of the four unhealthy services). |
+| 2 | 1027, observed on its own; then 1028 + the thinking-only `hq-api` | 1027 halves the pulse (the other poll read). 1028 + `hq-api` removes the rest of the thinking poll's cost. The gateway change is ONE LINE (the `thinking` mapping); the session single-flight is **deferred** until Supabase is stable, because credential and session resolution is too sensitive to combine with an emergency health intervention. It is preserved on the branch. |
 | 3 | 1025 | Page-load readers only. Real but second-order; see section 3. |
 | 4 | Team HQ page | Largest blast radius (a 15,000-line client). Its benefit is fewer requests, which is not measured in the database; hold until the earlier waves are observed. |
 
@@ -34,7 +45,7 @@ how often the digest changes and the page re-reads everything. **r cannot be kno
 | today | 189.3 | 189.3 | 223.8 | 275.7 | 362.0 | n/a | n/a | n/a | n/a |
 | **A** 1023 | 40.3 | 40.3 (-79%) | 64.9 (-71%) | 101.8 (-63%) | 163.3 (-55%) | lowest: 2 function bodies, same references | one SQL file, byte-exact | none | none new (proved: no function or table referenced that the predecessor did not) |
 | **B** + 1027 | 28.0 | 28.0 (-85%) | 51.8 (-77%) | 87.5 (-68%) | 147.0 (-59%) | low: 1 more function | one SQL file | none | none new |
-| **C** + 1028 + hq-api | 12.7 | 12.7 (-93%) | 35.5 (-84%) | 69.7 (-75%) | 126.6 (-65%) | medium: adds 2 functions with grants; a gateway deploy that also carries the session single-flight | gateway first, then drop the functions | none (same answer, faster) | gateway source, in-process only |
+| **C** + 1028 + hq-api | 12.7 | 12.7 (-93%) | 35.5 (-84%) | 69.7 (-75%) | 126.6 (-65%) | low to medium: adds 2 functions with grants; a gateway deploy that is ONE changed line (thinking-only; the single-flight is deferred) | gateway first, then drop the functions | none (same answer, faster) | one line of gateway source |
 | **D** + 1025 | 12.7 | 12.7 (-93%) | 30.0 (-87%) | 55.8 (-80%) | 98.9 (-73%) | medium: 2 more function bodies | one SQL file | none | none new |
 
 Per tick (one pulse + one thinking read), pages: today 1,051,638; A 223,666; B 155,566; C and D 70,788.
@@ -116,34 +127,53 @@ read from the environment and never printed. The guard flag is given inline, per
 **no `npm run migrate`, no `deploy:*` and no wildcard** anywhere below: `migrate` would apply 0892-1022. Every database write below names exactly one step
 and refuses unless the file's sha256 equals the pin in `manifest.json`.
 
-### 5.1 Before anything (reads only; stop on any NO-GO)
+### 5.1 The two-GO gate, then the bounded read-only baseline (reads only; stop on any NO-GO)
+
+Every canary below is `gate.ts read --counters`: the same checks as before (health for auth, db, rest, storage; cron job 1 last five runs succeeded in under a
+second and ten runs in ten minutes; no "job startup timeout" in an hour), recorded in `.out/rollout/gate-log.jsonl` (outside git) with one statistics read. The two
+canaries therefore double as the baseline counter pair B1 and B2, so the rates need no extra reads. A bad health reading stops that canary before it asks the
+database anything.
 
 ```bash
-# 0. offline: what each step is, and that its SQL is function-only
+# 0. offline: what each step is, and that its SQL is function-only; and that the gate does not hold yet
 for s in 1023 1025 1027 1028; do npx tsx scripts/rollout/step.ts $s plan; done
+npx tsx scripts/rollout/gate.ts status          # expected before any reading: "DOES NOT HOLD"
 
-# 1. a fresh single canary (health API for auth/db/rest/storage; cron job 1: last 5 runs under 1 s, 10 runs in 10 min; no "job startup timeout" in 1 h)
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/forensics/canary-check.ts --counters      # baseline reading B1; exits 1 on NO-GO
+# 1. the FIRST canary (also the first baseline counter reading, B1). Exits 1 on NO-GO. If it is NO-GO, stop here.
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/gate.ts read --counters
 
-# 2. Q1 to Q4 (docs/performance/db-growth-readonly-query-set.md, unchanged; catalog and statistics only), one at a time, in this order
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts q1    # which of 0892-0905 and 1023-1029 are applied
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts q2    # heap / index / TOAST bytes per relation, 30 largest
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts q3    # live and dead rows, bytes per live row, HOT %
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts q4    # 20 largest indexes and whether they are used
-# (Q5 and Q6 are separate, conditional, and need their own authorisation.)
-
-# 3. capture the current production definitions: exact text to .out/rollout/ (outside git) and a comparison with what each step expects
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts defs     # must end "every function a step touches is the predecessor the step expects"
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts attrs    # security definer, volatility, search_path, grants, owner
-
-# 4. the gateway request rate over the last hour (the log service is separate from the database); one query, 65 s apart if more are added
-ALLOW_PRODUCTION_CHECKS=1 npm run forensics:logs -- --set=m1_edge --hours=1
-
-# 5. ten minutes later, with nothing changed in between: the second counter reading B2 (rates are differences of two readings)
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/forensics/canary-check.ts --counters
+# 2. wait about ten minutes with NOTHING changed (no write, no deploy, no other production read), then the SECOND canary (B2)
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/gate.ts read --counters
+npx tsx scripts/rollout/gate.ts status          # must say "HOLDS": two consecutive GO, 8 to 20 minutes apart, latest under 20 minutes old, no write since the first
 ```
 
-Seven reads in step 2 and 3 plus two canary reads is the whole baseline. No other production reads are made.
+**If either canary is NO-GO, or `status` does not say HOLDS, nothing below runs.** `read.ts` refuses without it (it checks the log before it sends anything),
+so the baseline cannot be run by mistake.
+
+```bash
+# 3. the bounded read-only baseline, one at a time, in this order. Authorised only once the gate holds.
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts q1      # which of 0892-0905 and 1023-1029 are applied
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts q2      # heap / index / TOAST bytes per relation, 30 largest
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts q3      # live and dead rows, bytes per live row, HOT %
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts q4      # 20 largest indexes and whether they are used
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts defs    # must end "every function a step touches is the predecessor the step expects"
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/read.ts attrs   # security definer, volatility, search_path, grants, owner
+
+# 4. the single bounded gateway-log baseline: ONE m1_edge query over exactly the B1 to B2 window (the log service is separate from the database)
+ALLOW_PRODUCTION_CHECKS=1 npm run forensics:logs -- --set=m1_edge --start=<B1 timestamp> --end=<B2 timestamp>
+```
+
+Q5 and Q6 are **not** run. They are conditional, and only if the Tier A results show they are needed, in which case I report first and ask. If a canary deteriorates at any
+point, stop; the query set is not run.
+
+**After the baseline: report and HOLD.** The report confirms: production definitions match the expected predecessors (`defs` and the manifest); the migration state is
+exactly understood (Q1); the database size and growth picture (Q2 to Q4); no unexpected drift (`defs`, `attrs`, `read.ts` exit codes); the 1023 precheck passes; and the two-GO
+condition still holds. **No write follows from the baseline succeeding.** 1023 needs its own explicit authorisation.
+
+**After that authorisation, the condition is re-established, not assumed.** A pair taken before a long pause is stale (the gate requires the latest reading under 20 minutes
+old), so after the authorisation two fresh canaries about ten minutes apart are taken (step 1 and 2 again) and `gate.ts status` must say HOLDS before the 1023 precheck and apply.
+`step.ts` enforces this for the first write: its `precheck` and `apply` refuse unless the gate holds, and once a write has been made a later step is gated by the fresh canary its own
+`apply` takes first.
 
 ### 5.2 One step (the same pattern for 1023, 1025, 1027, 1028; example 1023)
 
@@ -151,8 +181,12 @@ Seven reads in step 2 and 3 plus two canary reads is the whole baseline. No othe
 ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/step.ts 1023 precheck      # live definitions must equal the predecessor; exits 1 otherwise
 ALLOW_PRODUCTION_WRITES=1 npx tsx scripts/rollout/step.ts 1023 apply         # DRY RUN: canary-free read of the same, prints what would run
 ALLOW_PRODUCTION_WRITES=1 npx tsx scripts/rollout/step.ts 1023 apply --go    # canary first (NO-GO stops it), precheck, ONE request, postcheck, attribute check
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/forensics/canary-check.ts --counters   # canary after (A0); wait 10 minutes, repeat for A1; classify with section 8
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/rollout/gate.ts read --counters    # the immediate canary after (A0); wait the observation interval, then the second reading (A1)
+ALLOW_PRODUCTION_CHECKS=1 npm run forensics:logs -- --set=m1_edge --start=<A0> --end=<A1>     # the gateway request rate for the after window
+npx tsx scripts/rollout/classify.ts --before=<B1>,<B2> --after=<A0>,<A1> --edge-before=<m1_edge file for B1-B2> --edge-after=<m1_edge file for A0-A1>   # offline; section 8
 ```
+
+Nothing applies the next step automatically: every write needs its own authorisation.
 
 `apply --go` verifies after the write that each function equals the new fingerprint AND that security definer, volatility, search_path, grants and owner
 are unchanged, and for 1028 that `anon` and `authenticated` cannot execute either function while `service_role` can execute the public one. On any mismatch it
@@ -162,19 +196,25 @@ When a step has been observed and kept (not before): `ALLOW_PRODUCTION_WRITES=1 
 `app.schema_migrations` row, so a later `migrate` does not apply the file again. It refuses unless the live functions are the new ones. After all kept steps,
 `migrations/applied.json` in the repository is updated to match (housekeeping, not a production step).
 
-### 5.3 hq-api (after step 1028 only; deploy order is migration first, then gateway)
+### 5.3 hq-api: the THINKING-ONLY change (after step 1028 only; deploy order is migration first, then gateway)
+
+The emergency gateway differs from the p4 tip, the line production's gateway was built from, by exactly one line: `thinking: { fn: 'office_health', office: true }` becomes
+`thinking: { fn: 'cannot_think', office: true }`. The session single-flight is NOT in it (it stays in the candidate and goes out later, once Supabase is stable). It is staged
+mechanically from the p4 tip, and a test proves the result differs by that one line and contains none of the single-flight code.
 
 ```bash
-# stage the change: the working tree's two files (24 new lines, 2 gone against the p4 tip: the thinking section and the session single-flight)
-mkdir -p .out/stage/hq-api && cp supabase/functions/hq-api/index.ts supabase/functions/hq-api/file-text.ts .out/stage/hq-api/
+# stage (offline: git and the file system only): .out/stage/hq-api-thinking/{index.ts,file-text.ts}
+npx tsx scripts/rollout/stage-hq-api-thinking.ts          # prints: index.ts ... 1 line(s) differ from the p4 tip
 
 # dry run: recovers the LIVE source from the function's own source map, saves it as the rollback, and prints how the staged files differ from it
-ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/deploy/hq-function-staged.ts .out/stage/hq-api --save-live=.out/rollout/hq-api-live
-#   EXPECTED: index.ts about 24 new / 2 gone and file-text.ts 0 / 0. Anything else means the live function is not the p4 tip: STOP.
+ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/deploy/hq-function-staged.ts .out/stage/hq-api-thinking --save-live=.out/rollout/hq-api-live
+#   EXPECTED: index.ts about 1 new / 1 gone and file-text.ts 0 / 0. Anything else means the live function is not the p4 tip: STOP.
 
 # deploy: guard, canary, upload, then probes (unauthenticated 401, authenticated 200, thinking section 200 with a cannot_think list)
-ALLOW_PRODUCTION_WRITES=1 npx tsx scripts/deploy/hq-function-staged.ts .out/stage/hq-api --go --probe-thinking
+ALLOW_PRODUCTION_WRITES=1 npx tsx scripts/deploy/hq-function-staged.ts .out/stage/hq-api-thinking --go --probe-thinking
 ```
+
+(Do not stage from the working tree: `supabase/functions/hq-api/index.ts` on this branch is the candidate and carries the single-flight.)
 
 ### 5.4 Team HQ page (wave 4; not part of the first release)
 
@@ -241,9 +281,12 @@ Not in this release and not changed: `hq_studio` (902k pages) and `hq_studio_lat
 
 ## 8. Health interpretation per step
 
-Measure a step with two counter readings (`canary-check.ts --counters`) a known time apart, **before** (B1, B2, ten minutes apart) and **after** (A1, A2,
-ten minutes apart, starting at least ten minutes after the change, with no other change in the window), plus `forensics:logs --set=m1_edge --hours=1` for the
-gateway request rate. Rates are differences of cumulative counters. Latency is never the deciding signal.
+Approved by Grant on 6 October 2026 with two changes to my proposal (the two-GO gate, and the numbackends rule below). **Latency alone never decides a result.**
+
+Measure a step with two counter readings (`gate.ts read --counters`) a known time apart, **before** (B1, B2: the two GO canaries of section 5.1, about ten minutes apart) and **after**
+(A0, A1: A0 is the immediate canary after the write, A1 the second reading after the planned observation interval, ten minutes apart, with no other change in the window), plus one
+`m1_edge` capture for each window (`forensics:logs --set=m1_edge --start=... --end=...`) for the hq-api request rate and 5xx share. Rates are differences of cumulative counters.
+`scripts/rollout/classify.ts` applies the rules below to those readings offline and prints the verdict with its numbers (`classify-lib.ts`, 25 tests including every boundary).
 
 | Signal | Source |
 |---|---|
@@ -255,13 +298,18 @@ gateway request rate. Rates are differences of cumulative counters. Latency is n
 
 | Verdict | Rule (all must hold) | Action |
 |---|---|---|
-| **IMPROVED** | S1 all `ACTIVE_HEALTHY`; S2 every run succeeded and under 1 s, at least 10 runs in 10 minutes; S3 zero; S4 5xx not up; and S5 buffer traffic per `hq-api` request down by at least 25% (or absolute buffer rate down at least 25% with the request rate within +/-25% of baseline) | keep; the next step is safe after 10 more minutes of quiet |
-| **UNCHANGED** | healthy as above, and buffer traffic per request within +/-15% of baseline | keep; do not read it as failure (the step may matter at a load not present now); decide the next step on the baseline, not on this one |
-| **WORSE** | any one of: a service that was healthy is not; any heartbeat run failed or over 1.5 s; fewer than 10 runs in 10 minutes; any startup timeout; `hq-api` 5xx rate up by 3 points or above 2%; buffer traffic per request up by more than 15%; `numbackends` up by more than 50% | **stop; roll back only the immediately preceding step; do not continue** |
-| **AMBIGUOUS** | request rate differs from baseline by more than +/-40% (traffic confound); or only one counter reading exists; or the health API or metrics could not be read | change nothing and take no further step; one more reading pair 15 minutes later; hold if still unclear; roll back only if a WORSE condition appears |
+| **IMPROVED** | S1 all `ACTIVE_HEALTHY`; S2 every run succeeded and under 1 s, at least 10 runs in 10 minutes; S3 zero; S4 5xx within limits; and S5 buffer traffic per `hq-api` request down by **at least 25%** | **report the evidence and HOLD** before the next step. Never automatic. |
+| **UNCHANGED** | healthy as above, and buffer traffic per request within **+/-15%** of baseline | keep it **only if** every health signal is clean and the function is behaviourally equivalent (proved offline). Do not read a lack of visible host improvement as proof the change has no value. Then HOLD. |
+| **WORSE** | any one of: a service that was healthy is not `ACTIVE_HEALTHY`; any heartbeat run failed or took over 1.5 s; fewer than 10 runs in 10 minutes; **any startup timeout**; `hq-api` 5xx above 2% or up by 3 points or more; buffer traffic per request up by more than 15%; **`numbackends` up by more than 50% OR by more than 5 from baseline, whichever is reached first** | **roll back that step immediately** with its prepared path, take ONE verification read, then STOP. No further step. |
+| **AMBIGUOUS** | the `hq-api` request rate differs by more than **40%** (a traffic confound); **or any metric is unavailable** (health unreadable, counters missing or gone backwards, no request rate, a pair not 8 to 20 minutes wide); or buffer traffic per request fell by 15% to 25% (between the UNCHANGED and IMPROVED bands) | **change nothing**; take one additional observation pair; hold if still unclear; roll back only if a WORSE condition appears. |
 
-The thresholds (25%, 15%, 3 points, 50%, 40%) are judgements, set here for Grant to confirm or change before the first write. "WORSE" deliberately uses health and
-heartbeat first: a step that cannot be shown to help is left in place, but one that is followed by a health fall is undone.
+Precedence: WORSE is judged first, so a traffic confound or a missing metric can never hide a health fall. For `numbackends`, "baseline" is the mean of B1 and B2 and "after" is the
+larger of A0 and A1 (the stricter reading). The 15% to 25% gap between UNCHANGED and IMPROVED is not defined by the approved thresholds; I treat it as AMBIGUOUS (one more pair) rather
+than guessing a side, and Grant can reassign it.
+
+**After 1023 specifically** (Grant, 6 October): take the immediate canary, wait the planned observation interval, take the second counter reading, classify. **Do not apply 1027
+automatically.** WORSE: roll 1023 back at once, one verification read, stop. AMBIGUOUS: no further change, one additional observation pair. UNCHANGED: keep only if all health signals stay
+clean. IMPROVED: report and hold before 1027. Every write still needs separate authorisation.
 
 ## 9. Residual risks
 
@@ -271,9 +319,9 @@ heartbeat first: a step that cannot be shown to help is left in place, but one t
    requests to `pulse` requests per tab.
 3. **Production may not be the replica.** `defs` and `precheck` are the guard: a mismatch stops the step. They compare normalised function text, not data or statistics; a different
    production plan for `studio_unseen` would change cost but not the rows returned (equivalence is proved) and not above the old function's cost (the harness question is bounded by the window).
-4. **The `hq-api` deploy carries two changes** (the `thinking` section and the session single-flight, which touches the credential-resolution path). The single-flight has its own unit tests
-   (concurrent callers share one resolution; a refusal is shared only with the waiters; a throttle is not a refusal) and the dry run shows the diff. If the credential path is judged too
-   sensitive for an emergency release, ship a thinking-only gateway (a 2-line diff) and defer the single-flight; say so before wave 2.
+4. **The emergency `hq-api` change is thinking-only (one line)**, per Grant's decision. The session single-flight, which touches credential and session resolution and would cut upstream auth
+   calls roughly eight-fold on a cold page load, is deliberately NOT shipped now; it stays in the candidate with its tests. Consequence: the auth service keeps its current load per page
+   load until the single-flight ships later, once Supabase is stable.
 5. **The production line has no access guard of its own.** `claude/multi-user-p4` predates `src/safety`; this branch carries a copy so the rollout tools, the canary CLI, `hq-function-staged.ts`,
    `hq-page-delta.ts` and `forensics:logs` are guarded. `npm run migrate` and the other `deploy:*` scripts on this branch are NOT guarded: do not use them.
 6. **The page diff against production is not content-checked.** `hq-page-delta` compares file names. The page change against the p4 tip is two files (`app.js`, `bc/account.js`, 78 and 9 lines changed),
@@ -284,6 +332,8 @@ heartbeat first: a step that cannot be shown to help is left in place, but one t
 
 ## 10. Production contact in this phase
 
-**None.** No request was sent to Supabase, Vercel or any production endpoint after the second health reading. Everything above was built, run and rehearsed on local replicas and against
+**None.** No request was sent to Supabase, Vercel or any production endpoint after the second health reading, and none since the approval of 6 October: the two-GO gate cannot be
+satisfied without readings, so `gate.ts status` reads "DOES NOT HOLD" and every baseline command would refuse. The two canaries are the first production contact and are taken only when Grant
+or a clear sign of recovery asks for them. Everything above was built, run and rehearsed on local replicas and against
 the repository; the only network use was reading Vercel's public documentation to verify the page-rollback endpoint. Every production command above refuses to run without an explicit
 `ALLOW_PRODUCTION_CHECKS=1` or `ALLOW_PRODUCTION_WRITES=1` given by a person, and that was confirmed by running each tool once with no flag set (all refused, nothing sent).

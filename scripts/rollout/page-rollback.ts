@@ -56,6 +56,8 @@ if (!go) {
   process.exit(0)
 }
 await import('../../src/safety/require-production-writes.ts')
+const { logWrite } = await import('./log.ts')
+logWrite('rollback-attempt page', false)
 const r = await fetch(
   `https://api.vercel.com/v1/projects/${project.id}/rollback/${id}?description=${encodeURIComponent('stabilisation rollback')}`,
   { method: 'POST', headers: auth },
