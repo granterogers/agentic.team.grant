@@ -293,6 +293,26 @@
       "expect": "tests/agents/one-live-attempt.test.ts"
     },
     {
+      "id": "M26",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/handlers/extract-tasks.ts",
+      "old": "          isUntrusted(s.connector)\n            ? `## ${s.title}",
+      "new": "          false\n            ? `## ${s.title}",
+      "invariant": "task extraction fences outside material in the user turn",
+      "expect": "tests/handlers/extract-tasks.test.ts"
+    },
+    {
+      "id": "M26b",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/handlers/extract-tasks.ts",
+      "old": "const outside = sources.some((s) => isUntrusted(s.connector))",
+      "new": "const outside = false",
+      "invariant": "task extraction tells the model outside material is present",
+      "expect": "tests/handlers/extract-tasks.test.ts"
+    },
+    {
       "id": "M25b",
       "critical": true,
       "severity": "medium",
