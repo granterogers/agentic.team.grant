@@ -1,5 +1,9 @@
 # Deep systems audit — 6 October 2026
 
+> **Second wave:** `docs/audit/SECOND-WAVE-2026-10-06.md` re-verified, fixed (in the repository only; nothing deployed) and re-classified the High and Medium
+> findings below, ran the full mutation campaign, and carries the final table and the recommendation. Read it for the current state; this document is the
+> first-wave record and is kept as written.
+
 **HEAD** `b8ffe44` · branch `claude/deep-systems-audit-3cwbtc` · **read-only run**: no production flag was set (`ALLOW_PRODUCTION_*` unset, the guard honoured), nothing was edited, migrated, deployed or enabled. The only files written are this report.
 
 **P0: none found.** No cross-tenant read or write, auth bypass, unauthorised external contact or secret exposure was traced by seven independent read-only reviewers or by me. The highest findings are D1 (an external assistant's typed "yes" may answer the owner's approval questions) and the test-coverage gaps E1–E3.

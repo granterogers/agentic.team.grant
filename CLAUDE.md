@@ -4753,6 +4753,19 @@ Each of these cost real time. They are here so they cost it once.
   uses (gateway sections, RPCs, handler kinds, environment variables). And a "found a secret" scan built on the log redactor's prose heuristics
   (`authorization`, `long-opaque`) fired on comments saying "bearer token": scan source for credential SHAPES only.
 
+- **Second-wave audit lessons (6 October 2026, `docs/audit/SECOND-WAVE-2026-10-06.md`).** (1) **A surviving mutation proves a missing
+  tripwire, not a vulnerability**: nine of twelve first-run mutations at security call sites survived (the webhook secret check, the approval
+  gate's refusals, the office binding, the worker's containment branch) because the functions were tested and the CALLS that make them matter were
+  matched by source regexes; keep the two claims apart. `npx tsx scripts/audit/mutation-campaign.ts` runs the manifest in a git-backed throwaway
+  worktree, refuses a red baseline, and reports an unlanded anchor as such. (2) **A file-level check hides a handler-level gap**: a gate counted
+  as present because a NEIGHBOURING handler in the same file had one. Judge the block. (3) **A conversation thread keyed on a channel name is shared
+  by every producer of that name**: the dashboard and an external assistant were both `teamhq`, so an assistant's "yes" answered the owner's
+  question (D1, 1023). A turn from no recognised door binds nothing. (4) **A cap checked after a loop is not a cap**; lazy patterns with no closer are
+  quadratic; a second line of defence hides a removed first one, so pin both halves (B-01). (5) **Fix a failure at the state, not at each writer**:
+  a `failed` turn nobody was told about is a state (1024); (6) a **deployment-wide counter used as per-office** let one office park another's work
+  (1025). (7) **An isolated proof that is not in a gate rots silently**: 43 of 96 are red by stale fixtures. (8) **A lint failure can be toolchain
+  drift**: pin the formatter exactly. (9) **One record for what is deployed**: `docs/ops/deployment-state.json`, held by `check:deployment-state`.
+
 ---
 
 ## Visual standard
