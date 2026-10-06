@@ -420,6 +420,7 @@
     "forensics:job-cost": "tsx scripts/forensics/job-lifecycle-cost.ts",
     "forensics:probe": "tsx scripts/forensics/resource-probe.ts",
     "forensics:normal-load": "tsx scripts/forensics/normal-load.ts",
+    "rollout:ledger": "tsx scripts/rollout/migration-ledger.ts",
     "forensics:budget": "tsx scripts/forensics/resource-probe.ts post --quiesce --budget=scripts/forensics/resource-budget.json",
     "check:answerable": "tsx scripts/check-answerable.ts",
     "check:voice-sessions": "tsx scripts/check-voice-sessions.ts",
