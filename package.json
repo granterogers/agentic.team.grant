@@ -197,6 +197,8 @@
     "verify:shapes": "tsx scripts/verify/shapes.ts",
     "setup:python": "tsx scripts/setup/python.ts",
     "deploy:mcp": "tsx scripts/deploy/mcp.ts",
+    "capture:functions": "tsx scripts/forensics/capture-functions.ts",
+    "restore:function": "tsx scripts/deploy/restore-function.ts",
     "mcp:revoke": "tsx scripts/mcp/revoke.ts",
     "verify:mcp": "tsx scripts/verify/mcp.ts",
     "work": "tsx scripts/work.ts",
