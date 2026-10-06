@@ -44,10 +44,21 @@
  * trustworthy because it is the path that runs every day until then.
  */
 
+import {
+  isPrivateHost,
+  MAX_HOPS,
+  type Resolver,
+  readCapped,
+  systemResolver,
+  whyResolvesBadly as whyResolvesPrivately,
+  whyShapeRefused,
+} from '../net/destination.ts'
 import type { BrowserAdapter, Cookie, GatherRequest, GatherResult } from './adapter.ts'
 import { looksSignedOut, textOf, titleOf } from './cloudflare.ts'
-import { type Resolver, systemResolver, whyResolvesPrivately } from './dns.ts'
 import { linksOf } from './links.ts'
+
+// The address policy is shared (src/net/destination.ts); these names are what the rest of the browser code imports.
+export { isPrivateHost, MAX_HOPS, readCapped }
 
 /**
  * When a 200 is not an answer.
@@ -114,15 +125,6 @@ export function looksLikeAShell(text: string, html: string): boolean {
 export const FETCH_TIMEOUT_MS = 20_000
 
 /**
- * How many redirects are followed before the chain is treated as a refusal.
- *
- * Five is generous for a real site and short enough that a loop ends in
- * milliseconds rather than at the timeout, where it would be reported as
- * "the page timed out" and send somebody looking at the network.
- */
-export const MAX_HOPS = 5
-
-/**
  * Why this address may not be fetched, or null when it may be.
  *
  * Extracted from the body of `gather` for one reason, and it is the whole
@@ -145,11 +147,9 @@ export const MAX_HOPS = 5
  * judged by identical code rather than by two readings of the same rule.
  */
 export function whyRefused(target: URL): string | null {
-  if (target.protocol !== 'https:' && target.protocol !== 'http:') {
-    return `${target.protocol} is not a web address`
-  }
-  if (isPrivateHost(target.hostname)) return 'that address is inside a private network'
-  return null
+  // The page reader's named exceptions to the shared policy: plain http is allowed (a page a person cites may be
+  // http), and so is any port. Everything else (userinfo, private ranges) is the shared rule.
+  return whyShapeRefused(target, { allowedPorts: 'any', allowedSchemes: ['https:', 'http:'] })
 }
 
 /**
@@ -179,33 +179,6 @@ export interface FetchedBrowserDeps {
 
 /** A page is read at most this far. The text is cut to 200k characters later; what matters here is not buffering a 50 MB body. */
 export const MAX_PAGE_BYTES = 2_000_000
-
-/** The body as text, read at most `max` bytes: a hostile or broken server cannot make the worker hold a gigabyte. */
-export async function readCapped(response: Response, max: number): Promise<string> {
-  if (response.body === null) return await response.text()
-  const reader = response.body.getReader()
-  const chunks: Uint8Array[] = []
-  let total = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    chunks.push(value)
-    total += value.byteLength
-    if (total >= max) {
-      await reader.cancel().catch(() => undefined)
-      break
-    }
-  }
-  const bytes = new Uint8Array(Math.min(total, max))
-  let at = 0
-  for (const c of chunks) {
-    const room = bytes.length - at
-    if (room <= 0) break
-    bytes.set(c.byteLength > room ? c.subarray(0, room) : c, at)
-    at += Math.min(c.byteLength, room)
-  }
-  return new TextDecoder().decode(bytes)
-}
 
 export class FetchedBrowser implements BrowserAdapter {
   readonly name = 'fetched'
@@ -366,96 +339,4 @@ export class FetchedBrowser implements BrowserAdapter {
       title: titleOf(html),
     })
   }
-}
-
-/**
- * Is this IPv4 address (four numbers) one a public page would never live at?
- * Loopback, "this network", RFC1918, link-local (cloud metadata), carrier-grade NAT, the IETF and benchmarking blocks,
- * multicast and the reserved/broadcast range.
- */
-const privateV4 = (a: number, b: number, c: number): boolean =>
-  a === 0 ||
-  a === 10 ||
-  a === 127 ||
-  (a === 100 && b >= 64 && b <= 127) ||
-  (a === 169 && b === 254) ||
-  (a === 172 && b >= 16 && b <= 31) ||
-  (a === 192 && b === 0 && c === 0) ||
-  (a === 192 && b === 168) ||
-  (a === 198 && (b === 18 || b === 19)) ||
-  a >= 224
-
-/** The eight 16-bit groups of an IPv6 literal, or null when it is not one. */
-const groupsOfV6 = (h: string): number[] | null => {
-  if (!h.includes(':')) return null
-  let text = h.split('%')[0] ?? h
-  // A dotted tail (::ffff:1.2.3.4) is two groups.
-  const tail = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text)
-  if (tail !== null) {
-    const n = [tail[1], tail[2], tail[3], tail[4]].map(Number) as number[]
-    if (n.some((x) => x > 255)) return null
-    text = `${text.slice(0, tail.index)}${(((n[0] ?? 0) << 8) | (n[1] ?? 0)).toString(16)}:${(((n[2] ?? 0) << 8) | (n[3] ?? 0)).toString(16)}`
-  }
-  const halves = text.split('::')
-  if (halves.length > 2) return null
-  const side = (x: string): string[] => (x === '' ? [] : x.split(':'))
-  const head = side(halves[0] ?? '')
-  const rest = halves.length === 2 ? side(halves[1] ?? '') : []
-  const missing = 8 - head.length - rest.length
-  if (halves.length === 1 ? head.length !== 8 : missing < 0) return null
-  const all = [
-    ...head,
-    ...Array.from({ length: halves.length === 2 ? missing : 0 }, () => '0'),
-    ...rest,
-  ]
-  const nums = all.map((g) => (/^[0-9a-f]{1,4}$/.test(g) ? Number.parseInt(g, 16) : Number.NaN))
-  return nums.length === 8 && nums.every((x) => Number.isFinite(x)) ? nums : null
-}
-
-/**
- * Loopback, link-local, private and otherwise non-public addresses, by shape, for IPv4 and IPv6 alike.
- *
- * Deliberately a shape rather than a list of names: the address that matters most is `169.254.169.254`, which no
- * blocklist of hostnames would catch and which answers with cloud credentials. The same address wrapped in IPv6
- * (`::ffff:a9fe:a9fe`, NAT64 `64:ff9b::`, 6to4 `2002:`) is the same address, so it is unwrapped and judged as IPv4.
- * A trailing dot (`localhost.`) names the same host, so it is removed first. A name that resolves to a private
- * address (DNS) cannot be seen from the name; src/browser/dns.ts asks the resolver for that.
- */
-export function isPrivateHost(host: string): boolean {
-  const h = host
-    .toLowerCase()
-    .replace(/^\[|\]$/g, '')
-    .replace(/\.+$/, '')
-  if (h === '') return true
-  const v6 = groupsOfV6(h)
-  if (v6 !== null) {
-    const [g0 = 0, g1 = 0, g2 = 0, g3 = 0, g4 = 0, g5 = 0, g6 = 0, g7 = 0] = v6
-    const embedded = (hi: number, lo: number): boolean => privateV4(hi >> 8, hi & 255, lo >> 8)
-    if (
-      v6.every((x) => x === 0) ||
-      (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0 && g6 === 0 && g7 === 1)
-    )
-      return true
-    if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && (g5 === 0xffff || g5 === 0))
-      return embedded(g6, g7)
-    if (g0 === 0x64 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0)
-      return embedded(g6, g7)
-    if (g0 === 0x2002) return embedded(g1, g2)
-    if ((g0 & 0xffc0) === 0xfe80) return true // link-local
-    if ((g0 & 0xfe00) === 0xfc00) return true // unique local
-    if ((g0 & 0xff00) === 0xff00) return true // multicast
-    return false
-  }
-  if (h === 'localhost' || h.endsWith('.localhost')) return true
-  if (
-    h.endsWith('.internal') ||
-    h.endsWith('.local') ||
-    h.endsWith('.home.arpa') ||
-    h.endsWith('.lan')
-  )
-    return true
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h)
-  if (v4 !== null) return privateV4(Number(v4[1]), Number(v4[2]), Number(v4[3]))
-  // A bare single-label name (`intranet`, `printer`) can only mean something on the machine's own network.
-  return !h.includes('.')
 }

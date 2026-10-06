@@ -36,6 +36,7 @@
 import type { SqlExecutor } from '../db/executor.ts'
 import { putFile } from '../files/store.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { type GuardedFetchDeps, guardedFetch, readCappedBytes } from '../net/destination.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -47,7 +48,12 @@ export interface CollectDeps {
   readonly db: SqlExecutor
   readonly projectRef: string
   readonly serviceKey: string
+  /** Injected by a test so the artifact URL can be driven without a network. */
+  readonly net?: GuardedFetchDeps
 }
+
+/** A generated overview is audio or a document; nothing legitimate is larger, and the worker must not hold more. */
+const MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 
 interface Payload {
   readonly notebook_id?: string
@@ -106,8 +112,15 @@ export function collectHandler(deps: CollectDeps): Handler {
       */
       let bytes = got.bytes
       if (bytes === null && got.url !== null) {
-        const r = await fetch(got.url)
-        if (r.ok) bytes = new Uint8Array(await r.arrayBuffer())
+        /*
+          The URL came back from NotebookLM, so it is somebody else's text: judged by the shared destination policy
+          (https, no private address, every redirect hop re-judged, bounded in size) rather than fetched bare.
+        */
+        const r = await guardedFetch(got.url, {}, { ...deps.net, timeoutMs: 120_000 })
+        if (r.ok && r.response.ok) {
+          const read = await readCappedBytes(r.response, MAX_ARTIFACT_BYTES)
+          if (!read.truncated) bytes = read.bytes
+        }
       }
       if (bytes === null || bytes.byteLength === 0) {
         return said(`I could not get the bytes for that ${got.kind} out of the notebook.`, false)
