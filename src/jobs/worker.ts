@@ -43,7 +43,7 @@ import type { Plan } from '../tools/plan.ts'
 import { plannedWrites, summarise } from '../tools/plan.ts'
 import { containmentRefusal, type Reach } from './containment.ts'
 import { assertHeld, callerArgs, fenceClause, StaleWorkerError, startHeartbeat } from './fence.ts'
-import { lastWord } from './lastword.ts'
+import { lastWord, sweepOwedWords } from './lastword.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -2068,6 +2068,16 @@ export const drain = async (
     await db.execute('select * from app.settle_exhausted_jobs()').catch(() => undefined)
   }
 
+  /*
+    THE ROAD THE INLINE CALL BELOW CANNOT SEE (1024). A job failed by the two sweeps above - an expired lease on its
+    last attempt, no attempts left - never passes through `runJob`, so the call after `runJob` never meets it and its
+    person heard nothing. The question is asked of the state, here, after both sweeps so a death they just caused is
+    told in the same tick. `app.claim_last_word` makes this and the inline call say it once. Never fatal.
+  */
+  if (options.recover !== false) {
+    await sweepOwedWords(db, options.notify).catch(() => undefined)
+  }
+
   // And put back anything a previous worker parked for want of a handler THIS
   // one holds. Beside the stall sweep because it is the same kind of thing: a
   // job that can proceed now and will not without being told. Never fatal —
@@ -2189,14 +2199,18 @@ export const drain = async (
     }
 
     /*
-      THE ONE PLACE A DEAD TURN CAN STILL SPEAK.
+      THE PROMPT PATH FOR A TURN THAT DIED INSIDE `runJob`.
 
-      Every terminal failure in this file - the coherence gate, the output
-      refusal, the handler that threw, the notifying contradiction - arrives
-      here as one result, so the apology is wired once rather than at six
-      gates that would drift. `app.owed_a_word` decides whether anybody is
-      owed anything; a duty, a retry, a child branch and a turn that already
-      answered all come back empty.
+      Every terminal failure that happens in this file - the coherence gate,
+      the output refusal, the handler that threw, the notifying contradiction -
+      arrives here as one result, so the apology is wired once rather than at
+      six gates that would drift. It is NOT every terminal failure: a job
+      failed by SQL (`app.recover_stalled_jobs`, `app.settle_exhausted_jobs`)
+      never returns through `runJob`, and is told by `sweepOwedWords` at the
+      top of the tick instead (1024). Both go through `app.claim_last_word`, so
+      a death seen twice is told once. `app.owed_a_word` decides whether
+      anybody is owed anything; a duty, a retry, a child branch and a turn that
+      already answered all come back empty.
 
       Grant sent a 17-second voice note on 8 September, the transcription path
       threw, and he was told nothing at all. That is what this is for.
