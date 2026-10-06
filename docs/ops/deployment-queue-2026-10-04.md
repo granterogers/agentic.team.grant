@@ -50,7 +50,12 @@ Capture around the deployment now uses: `npm run forensics:metrics` (one raw scr
 | Page (`web/studio`) | changed (in-page confirmation for every destructive control, phone header icons, Slack card, `noticeDialog`) | `npx tsx scripts/deploy/hq-page-delta.ts` (dry run), then `--go`. |
 | `slack-events`, `telegram` webhook | NO change in this window | 0893 is database-side. Do not redeploy them. |
 
-Applied already (production): through `0891` (761 migrations). `0888` chunks, `0889`, `0890`, `0891` Slack installs are live.
+**5 October, public Sample (not part of this queue, shipped separately from live bytes plus only its diff):** migrations 0897 and
+0898 applied; `hq-api` v891, `signin` v126, `voice` v656, `voice-token` v685, `mcp` v661; page `dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3`
+(eight files: `chat.js`, `session.js`, `call.js`, `office.js` (one hunk), `bc/account.js`, `bc/account.css`, `bc/shell.js` (sign-out label and banner), `bc/voicenote.js`, `bc/miniatures.js`).
+None of the held Slack/polish files above went out: `office.js` and `shell.js` carry held work in the working tree, so the staged copies were live bytes plus only the Sample hunks. See `docs/multi-user/PUBLIC-SAMPLE.md`. Before releasing the held page, re-stage against the now-live bytes.
+
+Applied already (production): through `0891` (761 migrations), plus 0897 and 0898 above. `0888` chunks, `0889`, `0890`, `0891` Slack installs are live.
 
 ## Order after recovery, serialised, stop on any degradation
 

@@ -138,6 +138,10 @@ const sessionSpeaker = async (
   const office = resolved.office_id
 
   const ownerKey = String(row.owner_key ?? '').trim()
+  // A sample visitor (0897) is nobody who may speak aloud: a realtime session is a metered OpenAI capability, and a
+  // visitor has not given the office any address, name or reason to be called. Refused here, once, for every function
+  // that resolves a speaker (voice, voice-token, mcp), before anything is read or spent.
+  if (row.kind === 'guest') return null
   let speaker: Speaker
   if (row.kind === 'person') {
     // A person speaks as THEMSELVES. No owner key means no identity to attribute an instruction to.

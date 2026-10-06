@@ -108,6 +108,9 @@ if (assessment.unpinned.length > 0)
   )
 if (!go) {
   console.log('dry run: nothing deployed')
+  console.log(
+    `rollback point if this is deployed: ${liveId} (scripts/rollout/page-rollback.ts ${liveId} --go)`,
+  )
   process.exit(0)
 }
 if (assessment.decision.skip) {
@@ -116,6 +119,11 @@ if (assessment.decision.skip) {
   )
   console.log('pass --force to deploy anyway')
   process.exit(0)
+}
+// A deploy is a production WRITE: it is recorded in the write log the rollout gate reads, before anything is uploaded.
+{
+  const { logWrite } = await import('../rollout/log.ts')
+  logWrite('deploy-attempt page', false)
 }
 
 const create = async () =>

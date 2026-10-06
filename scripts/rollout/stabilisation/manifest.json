@@ -1,0 +1,73 @@
+{
+  "_about": "The ONLY four production steps of the stabilisation release. scripts/rollout/step.ts refuses any step not named here and any file whose sha256 differs from the one pinned here. 'pre' and 'post' are the md5 of each function's pg_get_functiondef after stripping block and line comments and collapsing whitespace, taken on the production-equivalent replica (0891 + 0897-0905): 'pre' before the step, 'post' after it. null means the object must not exist.",
+  "steps": {
+    "1023": {
+      "migration": "migrations/1023_the_health_reading_asks_the_cheap_question_first.sql",
+      "migrationSha256": "3298fd850579f8b1897b0304820d62b0657e6f48abc4bbe75d0ef29b3d0519ea",
+      "rollback": "scripts/rollout/stabilisation/1023.rollback.sql",
+      "rollbackSha256": "1eb7f2e624a7dcc1d72d4619b2018431f54310d57fee269fe5f9928b631e7f51",
+      "objects": [
+        {
+          "sig": "app.office_health(uuid,integer)",
+          "pre": "80e535584c889259ee1bb12d720394ed",
+          "post": "e4049bbd4bd80f7ff7fa471c6f4545fd"
+        },
+        {
+          "sig": "app.last_progress(uuid)",
+          "pre": "08da30802127b8c3b847fea9c552ed9b",
+          "post": "394fb674b4d0485c4958c493623877c3"
+        }
+      ]
+    },
+    "1025": {
+      "migration": "migrations/1025_the_page_load_readers_ask_the_window_before_the_harness.sql",
+      "migrationSha256": "1628eec8f24bb0e031927809078c850e96f9fce3b9675eed03e0da037cd192d6",
+      "rollback": "scripts/rollout/stabilisation/1025.rollback.sql",
+      "rollbackSha256": "3ed3d9459b864c6f07c4b38ec4c7c4330ee53795c715bb7a98f1cc37dfcd27da",
+      "objects": [
+        {
+          "sig": "app.studio_unseen(uuid)",
+          "pre": "152acd600ea5c22f20c4960247db42bf",
+          "post": "1e0c3a1753903a01d980bfd9bbefce73"
+        },
+        {
+          "sig": "app.studio_team_work(uuid,integer)",
+          "pre": "0f1e1794390f41a0c3d387ad47adac2d",
+          "post": "dcab15b192905a7108a37e466709e89e"
+        }
+      ]
+    },
+    "1027": {
+      "migration": "migrations/1027_the_pulse_reads_each_table_once.sql",
+      "migrationSha256": "8dca35908c2c238d4b299969680e18bf2b8c7d58a8afafe1c026a98d9271528a",
+      "rollback": "scripts/rollout/stabilisation/1027.rollback.sql",
+      "rollbackSha256": "c70190fa4053ce9abc16575ee18e424ba4a0e525fc54cf1b480f7353ebe1260d",
+      "objects": [
+        {
+          "sig": "app.hq_pulse(uuid)",
+          "pre": "48a6d7ac56f622cbfd5185740df4966f",
+          "post": "17b92031b3cb85601300c6ec81b14e90"
+        }
+      ]
+    },
+    "1028": {
+      "migration": "migrations/1028_the_thinking_reading_asks_only_whether_the_office_can_think.sql",
+      "migrationSha256": "08dd5dd01fbca185e6f5505a1a5594922aa923e8704332a8160b588547342ea1",
+      "rollback": "scripts/rollout/stabilisation/1028.rollback.sql",
+      "rollbackSha256": "2b5de8adb3aca8851087562e8a8ca0d9c115c8c58051f50a3fea5eeeb293c2e6",
+      "requiresGatewayRolledBackFirst": true,
+      "objects": [
+        {
+          "sig": "app.cannot_think(uuid)",
+          "pre": null,
+          "post": "0e73fbb8faeb9dc5a9f4b918051920c0"
+        },
+        {
+          "sig": "public.cannot_think(uuid)",
+          "pre": null,
+          "post": "46b1d76f6e5372db9ece637fc46012ff"
+        }
+      ]
+    }
+  }
+}

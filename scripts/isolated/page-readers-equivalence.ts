@@ -74,6 +74,12 @@ try {
   const offices = (await rows(
     `select office_id::text id, kind from public.offices order by kind`,
   )) as { id: string; kind: string }[]
+  // hq_studio_lately is migration 1029 and needs 0920; on production's applied line it is not there to compare.
+  const hasLately =
+    (await rows(`select to_regproc('app.event_via_label') is not null as ok`))[0]?.ok === true
+  console.log(
+    `  hq_studio_lately ${hasLately ? 'compared (0920 present)' : 'skipped (0920 absent)'}`,
+  )
   let compared = 0
   let sawAnswers = 0
   let sawAsked = 0
@@ -85,8 +91,12 @@ try {
       ['studio_team_work', id],
       ['studio_team_work', `${id}, 3`],
       ['studio_team_work', `${id}, 30`],
-      ['hq_studio_lately', `${id}, 40`],
-      ['hq_studio_lately', `${id}, 5`],
+      ...(hasLately
+        ? ([
+            ['hq_studio_lately', `${id}, 40`],
+            ['hq_studio_lately', `${id}, 5`],
+          ] as const)
+        : []),
     ] as const) {
       // studio_unseen returns an object keyed by project, which has no generated_at: use plain equality there.
       const cond =
@@ -111,12 +121,14 @@ try {
       )
     )[0]
     sawAsked += Number(t?.n)
-    const l = (
-      await rows(
-        `select coalesce((app.hq_studio_lately(${id}) -> 'today' ->> 'jobs_done')::int, 0) n`,
-      )
-    )[0]
-    sawToday += Number(l?.n)
+    if (hasLately) {
+      const l = (
+        await rows(
+          `select coalesce((app.hq_studio_lately(${id}) -> 'today' ->> 'jobs_done')::int, 0) n`,
+        )
+      )[0]
+      sawToday += Number(l?.n)
+    }
   }
   check(
     failed === 0 && compared > 0,
@@ -125,7 +137,7 @@ try {
 
   // Control 1: not vacuous.
   check(
-    sawAnswers > 0 && sawAsked > 0 && sawToday > 0,
+    sawAnswers > 0 && sawAsked > 0 && (sawToday > 0 || !hasLately),
     `control: the comparison saw ${sawAnswers} unseen answers, ${sawAsked} asks, ${sawToday} jobs done today`,
   )
 

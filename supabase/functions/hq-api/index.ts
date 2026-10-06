@@ -790,6 +790,17 @@ const SECTIONS: Readonly<
     One office, one job; a job that is not this office's answers as one that does not exist.
   */
   turn_status: { fn: 'turn_status', office: true, arg: 'p_job' },
+  /*
+    A SAMPLE VISITOR'S OWN CONVERSATION (0897). The ordinary `conversation` section answers an empty list for a sample
+    office, because every turn in one is a visitor's. A visitor reads only the thread carrying their own id, which the
+    page chose and the database checks the shape of; it is a label on their own turns, not a credential.
+  */
+  sample_conversation: {
+    fn: 'sample_conversation',
+    office: true,
+    arg: 'p_project_id',
+    also: [{ param: 'visitor', arg: 'p_visitor' }],
+  },
 }
 
 /**
@@ -825,6 +836,8 @@ type ActionSpec = {
   required: readonly string[]
   by?: string
   personBy?: string
+  /** Only a sample visitor may do it (0897). */
+  guestOnly?: true
   /** The function takes `p_office` first; the gateway writes the verified one (P3). */
   office?: true
 }
@@ -1426,6 +1439,17 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     common case the awkward one.
   */
   say: { fn: 'say_in_project', office: true, required: ['p_project_id', 'p_text'], by: 'p_by' },
+  /*
+    Asking the SAMPLE office's team a question (0897): the one thing a sample visitor may do besides read. The database
+    checks that the caller is that office's guest, rate-limits them and gives the turn its own chat.
+  */
+  sample_say: {
+    fn: 'sample_say',
+    office: true,
+    required: ['p_project_id', 'p_text', 'p_visitor'],
+    by: 'p_by',
+    guestOnly: true,
+  },
   send_to_agent: {
     fn: 'send_to_agent',
     office: true,
@@ -1736,7 +1760,7 @@ const askUpstream = async (
   key is never a person: possession of a generic credential must not manufacture
   a human's approval identity.
 */
-type PrincipalKind = 'person' | 'harness' | 'service'
+type PrincipalKind = 'person' | 'harness' | 'service' | 'guest'
 
 interface Answer {
   readonly verdict: Verdict
@@ -1860,7 +1884,8 @@ const resolveSession = async (presented: string): Promise<Answer> => {
     restrictive reading. It can read; it cannot be taken for a person. (A database
     that predates 0614 answers no kind at all, and must not make everybody one.)
   */
-  const kind: PrincipalKind = rows[0]?.kind === 'person' ? 'person' : 'harness'
+  const kind: PrincipalKind =
+    rows[0]?.kind === 'person' ? 'person' : rows[0]?.kind === 'guest' ? 'guest' : 'harness'
 
   /*
     THE OFFICE comes from the verified auth user id and from nothing the caller said. No office, a disabled one, or an
@@ -2052,6 +2077,13 @@ const SERVICE_MAY: ReadonlySet<string> = new Set([
   'project_seen',
   'project_look',
 ])
+
+/*
+  WHAT A SAMPLE VISITOR MAY DO (0897): ask the team a question, and nothing else. An allow list, so a new action needs a
+  decision before a visitor can reach it. Reading is not an action and is not here: every section is office-scoped, and
+  the deployment's own pages are the operator's.
+*/
+const GUEST_MAY: ReadonlySet<string> = new Set(['sample_say'])
 
 const allowed = async (presented: string): Promise<Answer> => {
   if (presented === '') return { verdict: 'no', principal: null, kind: null }
@@ -2272,6 +2304,26 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({ error: 'unknown action', actions: Object.keys(ACTIONS) }, 400)
     }
     /*
+      A SAMPLE VISITOR CHANGES NOTHING (0897). A guest is a real session for the public Sample Office; it may read, and
+      the one thing it may do is ask the team a question through `sample_say`. Every other action is refused here, before
+      any function is reached, with a sentence the page can show. And `sample_say` is for guests only: nobody else has
+      any business with the visitor door.
+    */
+    if (kind === 'guest' && !GUEST_MAY.has(actionName)) {
+      return json(
+        {
+          error: 'sample_readonly',
+          message:
+            'This is a sample office, so changes are not saved. Create your own office to make it yours.',
+          action: actionName,
+        },
+        403,
+      )
+    }
+    if (action.guestOnly === true && kind !== 'guest') {
+      return json({ error: 'guest_only', action: actionName }, 403)
+    }
+    /*
       WHO MAY DO WHAT (#385). Three kinds of credential, and only a person may do everything:
 
         service (the office key)  - SERVICE_MAY, and nothing that decides, speaks or connects;
@@ -2288,6 +2340,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
     */
     const mayDo =
       kind === 'person' ||
+      // The one thing a sample visitor may do (0897); everything else was refused above.
+      (kind === 'guest' && GUEST_MAY.has(actionName)) ||
       SERVICE_MAY.has(actionName) ||
       (kind === 'harness' && action.by !== undefined) ||
       // A test member may drop a file into a TEST project (checked below): the upload verification suite has
@@ -3568,7 +3622,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const operator =
       kind === 'service' ||
       (kind === 'person' && principal !== null && principal !== '' && (await isOperator(principal)))
-    ;(data as Record<string, unknown>).viewer = { operator }
+    ;(data as Record<string, unknown>).viewer = { operator, guest: kind === 'guest' }
   }
 
   return json({ section: name, data })
