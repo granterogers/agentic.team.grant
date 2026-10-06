@@ -28,6 +28,9 @@
 > a Monday automation, a date-keeping daily job. Migrations **0899 to 0905** (0900 also fixes a latent `''::uuid` defect that
 > broke hand-off delegation for everybody; #428 was a database cast, not a worker defect). Page `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x`
 > (My Tasks project name, #426 failed-read, Settings notice; rollback chain in PUBLIC-SAMPLE.md). Nothing held was deployed.
+> **Superseded 6 October 2026:** the integrated `main` (`9310116c`) was deployed and accepted: worker v975, hq-api v896, mcp v664, page
+> `dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx` (previous `dpl_34Ug…`), ledger 798, drive-index and calendar-event-sync OFF, Google revoked.
+> Final state, gaps (#436, #437, MCP `tools/list` unverified) and acceptance status: `docs/ops/deployment-readiness-2026-10-05.md` section 13.
 > Account, limits and the capability matrix: `docs/multi-user/PUBLIC-SAMPLE.md`. **Paused:** Supabase recovered after a dashboard restart
 > (6 Oct 12:29Z) and the final walkthroughs passed on the final build: desktop 73/73, phone 73/73, plus contact Save/Remove and
 > Automations refusals. 0902's first scheduled run failed with a platform startup timeout; watch the 7 Oct 03:23Z run. Open: #425 (the team's identity and its

@@ -271,3 +271,39 @@ the tools. `select slug, enabled from public.responsibilities where slug in ('dr
 immediately before deploying and Grant's explicit authorisation, which is not given.** Earlier text of this verdict: GO on the code, the migration history and the plan, subject to the production pre-flight. No reason was found that
 deployment is unsafe, and the reasons it was NO-GO on 5 October (a production ledger two files ahead of Git, uncommitted live Sample code that a deploy from `main` would have overwritten, migration 1000 recording a
 revoked credential as healthy) are each closed in Git. Wait for an explicit instruction; nothing has been deployed.
+
+**Superseded the same day: the deployment happened and was accepted by Grant. See section 13 for the final state.**
+
+## 13. Deployment record, 6 October 2026 (final state, accepted by Grant)
+
+| | |
+|---|---|
+| `main` shipped | `9310116c41748268b43e5d8dc02a6feb195b78f1` (includes PR #435, the deploy-bundle walker and ordering fix) |
+| Migration ledger | **798** applied, every checksum matching its file, none pending |
+| `worker` | v972 -> **v975** |
+| `hq-api` | v893 -> **v896** (four files, closure verified) |
+| `mcp` | v661 -> **v664** |
+| Page | **`dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx`** |
+| Page rollback point | `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x` (then `dpl_E4uGawb9DT9WtyMvTK4h4YqU6SBq`) |
+| `drive-index` duty | OFF |
+| `calendar-event-sync` duty | OFF |
+| Google connection | revoked (one integration connection, matching the dead `invalid_grant` health) |
+| Not redeployed | signin v129, voice v658, voice-token v687, telegram-webhook v698, slack-events v676, google-oauth v646 (their numbers advanced only because setting the worker's secrets re-versions every function; no code changed, verified by re-capture) |
+
+**What happened.** The first `deploy:worker` attempt reset the function secrets and was then refused by the platform: the dependency walker followed only `import ... from` and missed the bare
+`import '../safety/arm.ts'` reached through `src/db/executor.ts`. Nothing was replaced. The walker now uses the TypeScript import scanner, every bundle is checked for closure before anything is written, and
+`deploy:hq-api` (which had omitted `preview.ts`) shares one checked file list. The page delta was the expected 24 new names (12 `bc/` files at the root and under `studio/`); the only live-only entries were Vercel's
+`out/api/notebook*` build output of the `api/*.py` functions the script ships.
+
+**Verified after deployment.** Health green, database writable, cron 31/31 succeeded in 30 minutes, no real failed jobs; worker probes 401/200 and `slack.per_office_delivery` written; hq-api 401/200;
+`sample:public -- verify` 9/9 (Sample containment); signed-in Sample Person tour clean at desktop (36 surfaces) and phone (37); `sample:use` 18/21; Sample baseline restored, 28 other offices unchanged.
+
+**Accepted gaps (not blockers, none repaired in the deployment session).**
+- **#436** Mark done / Reopen: after Mark done the open task record keeps the Mark done button until reload. Regression from the UX v2 page, accepted as a post-deployment defect. Required behaviour is in the issue.
+- **Authenticated MCP `tools/list` is unverified.** `verify:mcp` fails closed on `mcp_clients.office_id`; the eventual proof must use a legitimate office-bound client through the supported provisioning path.
+  Only 401 for no and bogus tokens and the OAuth metadata (200) were checked.
+- **#437** carrier-writers aliased INSERT parsing, stale harness expectations, 19 fixture tasks, five standing rules, two empty-`command_id` rows.
+- **Operational observation:** one transient `53300` (connection slots reserved for superuser) during `sample:reset` at about 19:35 UTC; health was green a minute later. A single event is not a defect and no connection or pool
+  setting was changed.
+
+HQ-VIS-001 and HQ-VIS-003 are in Grant's interactive user acceptance and are NOT accepted until he has used the production interface and said so.
