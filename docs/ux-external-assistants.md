@@ -38,7 +38,7 @@ so reaching `public.mcp_*` without the edge function is no better.
 | `list_tasks` | tasks, optionally by state | cancelled are never listed |
 | `create_task` | adds a task | stamped `added_by = mcp:<client>`, so Activity says "via ChatGPT" |
 | `update_task` | state (todo, doing, blocked, done), title, detail, due date | cannot cancel or delete; a blocked task needs a reason; writes a `task.updated` event carrying the door |
-| `list_events`, `create_event`, `update_event` | calendar | **only listed where the database has the calendar (0897)**; see below |
+| `list_events`, `create_event`, `update_event` | calendar | **only listed where the database has the calendar (0906, written as 0897)**; see below |
 | `inspect_activity` | the Activity feed with `via` and `category` | one project or the whole office |
 | `ask_team` | puts a question to the team (optionally one specialist) | returns a job id; read the answer with `check_job` |
 | `start_research` | asks the research director to investigate (optional https start page) | policy first: see below |
@@ -76,7 +76,7 @@ The Activity feeds (`app.hq_studio_lately`, `app.studio_activity`) now return `v
 `category` is `task`, `document`, `calendar`, `sync`, `research` or `other`, derived from the action type
 (`app.activity_category`).
 
-## The calendar tools (0897 + 0924)
+## The calendar tools (0906, written as 0897, + 0924)
 
 The calendar tools call the real project calendar, never beside it: `app.mcp_event_list` -> `app.hq_project_events`,
 `app.mcp_event_create` -> `app.hq_event_add`, `app.mcp_event_update` -> `app.hq_event_update`. Each checks the client
@@ -96,6 +96,6 @@ first (office, `write` scope, active non-fixture project) and sets the door (`ap
 
 ## Deploying (not done)
 
-1. Apply 0920-0924 (0924 after the calendar 0897) with `npm run migrate` (renumber if a sibling took the numbers).
+1. Apply 0920-0924 (0924 after the calendar, 0906) with `npm run migrate`. `npm run migrate` applies the pending files in filename order, so 0906 precedes 0924 on its own; the Public Sample Office's 0897 to 0905 are already applied and are not part of this.
 2. `npm run deploy:mcp` (it probes tools/list).
 3. Reconnect the connector in ChatGPT / Claude so it re-lists the tools.

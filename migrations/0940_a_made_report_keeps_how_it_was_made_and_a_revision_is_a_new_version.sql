@@ -1,3 +1,5 @@
+-- Numbering note (6 Oct 2026): below, "0900" means the documents migration, now 0907. The Public Sample Office's applied
+-- 0900 (an empty command id is no command id) is a different migration.
 begin;
 
 -- ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 /**
- * What the project-events sync does with each answer Google can give (0897). The database is a recorder: the point is
+ * What the project-events sync does with each answer Google can give (migration 0906, written as 0897). The database is a recorder: the point is
  * WHICH function the pass calls for each outcome, so a refusal is never recorded as a success and a success never
  * leaves a row pending. The same pass is driven against a real replica in scripts/isolated/project-calendar.ts.
  */

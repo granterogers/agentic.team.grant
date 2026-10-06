@@ -11,7 +11,11 @@
  *
  * The dry run recovers the live source the same way and prints the differences by line count; it refuses to continue when
  * the staged folder has a file the live bundle does not (an extra import would be new code nobody reviewed).
+ *
+ * It opens with the production-writes gate like every other deploy script (it had none, and its dry run reads the live
+ * function), and that gate also asks for source provenance: the change being staged must be a pushed commit.
  */
+import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 

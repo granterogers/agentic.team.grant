@@ -1,6 +1,6 @@
 /**
  * Project events to Google Calendar: the exact REST calls, all-day versus timed shaping, idempotence, typed failures,
- * and that no token ever comes back in a string (0897).
+ * and that no token ever comes back in a string (migration 0906, written as 0897).
  *
  * Google is a function in this file. Every interesting case is a failure or a shape, none of which needs a connection.
  */

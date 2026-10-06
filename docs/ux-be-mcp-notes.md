@@ -1,5 +1,7 @@
 # External assistants / MCP calendar - backend notes (branch claude/ux-overnight-be-mcp)
 
+> **Migration numbering (6 Oct 2026).** Written when the project calendar was migration 0897; it is now **0906** (the Public Sample Office applied its own 0897 to 0905 to production first). Read "0897" below as 0906.
+
 Everything here is **unapplied to production**; driven only against the local replica `cand_mcp`.
 
 ## Changes

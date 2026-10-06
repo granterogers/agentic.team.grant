@@ -48,6 +48,6 @@ Safety findings: no database function or TS source issues `DELETE FROM documents
 
 ## Merge notes
 
-- Migration number 0900 (range 0900-0919 assigned). Renumber if a sibling took it; the file has no cross references to its own number except comments and the `0900:` splice message.
+- Migration number: written as 0900 (range 0900-0919 assigned) and RENUMBERED to **0907** on 6 Oct 2026 because the Public Sample Office had applied its own 0900 to production. The file has no cross references to its own number except comments and the splice error message, which now say 0907.
 - `docs/testing/pressable-baseline.json`: 5 new entries (the sibling frontend calls them); remove each in the commit that names it in `web/`. `callers-baseline.json`: 1 entry (`app.document_adopt_version`). `docs/multi-user/ownership-manifest.json`: two tables + one cross edge.
-- Production apply order: `npm run migrate` (0900), then `deploy:hq` (gateway), then `deploy:worker` (drive-read hook). The hook is silent on a database without 0900 (a missing-function error is not reported) and the read itself is unaffected.
+- Production apply order: `npm run migrate` (0907), then `deploy:hq` (gateway), then `deploy:worker` (drive-read hook). The hook is silent on a database without 0907 (a missing-function error is not reported) and the read itself is unaffected.

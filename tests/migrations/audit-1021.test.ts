@@ -34,7 +34,7 @@ describe('the duties that must ship switched off', () => {
 })
 
 describe('no window in which a duty is on', () => {
-  it('0897 inserts calendar-event-sync switched off, so migrating in order never leaves it running before 1021', () => {
+  it('0906 (written as 0897) inserts calendar-event-sync switched off, so migrating in order never leaves it running before 1021', () => {
     const s = readFileSync('migrations/0906_project_calendar_events.sql', 'utf8')
     expect(s).toMatch(
       /insert into public\.responsibilities \(slug, staff_id, description, job_kind, period_minutes, office_id, enabled\)\s+select 'calendar-event-sync'[\s\S]*?'calendar\.sync_events', 15, r\.office_id, false\s+from/,

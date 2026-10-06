@@ -1,5 +1,5 @@
 /**
- * The unified Documents module, driven (migration 0900) - on a marked LOCAL replica, inside one transaction that is
+ * The unified Documents module, driven (migration 0907, written as 0900) - on a marked LOCAL replica, inside one transaction that is
  * rolled back, so a crashed run leaves nothing behind.
  *
  *   npx tsx scripts/isolated/project-documents.ts [replica-db]

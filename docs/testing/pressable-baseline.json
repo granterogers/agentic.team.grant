@@ -13,7 +13,7 @@
     "section:ci_budget": "MISSING READER, same measurement. The monthly ceiling is enforced in the database and nothing has ever been dispatched against it, so the panel would read 0 of 1,500 for ever. It is also the one reading that is genuinely useful the MOMENT Actions return, so it goes back on with `ci_lately` and not before (#17).",
     "section:relations": "NOT NEEDED BY THE PAGE today. The project map draws its own edges; `relations_of` is the API answer to the same question.",
     "action:document_new_version": "Called by the Documents module of the UX overnight branch (claude/ux-overnight, web/studio), which is merged separately from this backend branch: the gateway entry and database function land first so the page has something to call. Remove this entry in the commit that names it in web/ - the check will then fail until you do. Not an agent door: it is a person's explicit press (not on SERVICE_MAY).",
-    "section:project_search_providers": "MISSING CONTROL, awaiting the search filter chips in Team HQ: it tells the page which kinds this database can serve (calendar needs 0897). Remove when the page reads it."
+    "section:project_search_providers": "MISSING CONTROL, awaiting the search filter chips in Team HQ: it tells the page which kinds this database can serve (calendar needs 0906). Remove when the page reads it."
   },
   "unpressed": [
     "action:document_new_version",

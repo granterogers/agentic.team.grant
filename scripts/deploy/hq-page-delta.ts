@@ -118,6 +118,11 @@ const create = async () =>
       target: 'production',
       files: list,
       projectSettings: { framework: null },
+      // Which commit this page was built from (set by the provenance check in require-production-writes.ts), so a
+      // deployment can be traced to source. Absent only when the provenance bypass was used on a tree with no commit.
+      ...(process.env.DEPLOY_SOURCE_SHA === undefined
+        ? {}
+        : { meta: { gitCommitSha: process.env.DEPLOY_SOURCE_SHA, deployedBy: 'deploy:hq-page' } }),
     }),
   })
 let response = await create()

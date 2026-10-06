@@ -98,6 +98,17 @@ then called exactly once), the message text, the second-level writes gate (check
 `migrate` and `check:gateway-wrappers` are refused as real subprocesses with a dead proxy configured, and that the replica path and
 `scripts/isolated/guard.ts` are unaffected.
 
+## Source provenance (6 October 2026, ADR-0067)
+
+Holding the right flags is not the same as shipping something that exists. A deploy or a migration run (`scripts/deploy/*`, `scripts/migrate.ts`,
+`scripts/migrate-one.ts`; not a `--dry` list) is ALSO refused unless its source is attributable: a git checkout, a tree with nothing dirty where it
+ships (untracked files count; `docs/`, `tests/` and `.out/` do not ship), and a HEAD that is on a remote-tracking branch. It is asked once, in
+`src/safety/require-production-writes.ts`, from the command being run, so a new deploy script is covered the day it is written
+(`tests/safety/provenance.test.ts` asserts every file in `scripts/deploy/` is). The history checks (`checksum/missing`, `checksum/modified`, a
+duplicate or lost number) live in the migration runner and have no switch. The single bypass is `ALLOW_UNPROVENANCED_DEPLOY="<reason, 20+
+characters>"`: a sentence, logged to the screen and `.out/provenance-bypass.log`, waiving only the source checks. Do not use it to make a check
+pass. "On a remote" means as of the last `git fetch`; the refusal says to push.
+
 ## Residual - what this does not guard, and why
 
 * **Third-party APIs reached with their own keys** (OpenRouter, Slack, Telegram, Notion, Google, GitHub). They are not Supabase and not

@@ -1,5 +1,7 @@
 # Project calendars - backend notes (branch claude/ux-overnight-be-cal)
 
+> **Migration numbering (6 Oct 2026).** Written when the project calendar was migration 0897. The Public Sample Office applied its own 0897 to 0905 to production first, so the calendar is now **0906** (identical content). Read "0897" below as 0906; the Sample's 0897 is a different migration (`docs/multi-user/PUBLIC-SAMPLE.md`).
+
 Each dashboard project has its own calendar. Events made in a project belong to it from birth and synchronise toward
 Google Calendar when Google is connected (create, edit, delete, both directions). Existing Google events stay Google's
 and can be FILED under a project. Everything below is **unapplied to production**; it was driven only against a local
@@ -164,9 +166,10 @@ NOT verified (needs Google, production, or a database-backed checker this sandbo
 
 ## Merge notes
 
-* Migration number: `0897`. Sibling branches use 0900-0919 (docs) and 0920-0939 (activity). The multi-user-p4 branch may
-  also claim `0897`; if so rename this file to the next free number (it depends on nothing after 0896 and nothing depends
-  on it), then re-run `npm run check:migrations`.
+* Migration number: written as `0897` and now **`0906`**. The multi-user-p4 branch did claim and apply `0897` (the public
+  Sample Office), so this file was renamed to the next free number on 6 Oct 2026, `git mv` with the SQL byte-identical
+  apart from comments (it depends on nothing after 0896 and nothing depends on its number), and `npm run check:migrations`
+  re-run.
 * `docs/testing/pressable-baseline.json`: six entries (`action:event_*`, `section:project_events`) must be REMOVED in the
   merge that wires the calendar UI (the check fails on a baseline entry that has become pressed).
 * `src/google/calendar.ts` gained two optional fields on `CalendarOutcome`; nothing else of existing behaviour changed.

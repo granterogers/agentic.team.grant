@@ -1,5 +1,6 @@
 -- 0960. Two halves of "an external document does not need to be copied to be useful, and an explicit Import makes a
---       durable copy" that 0900 left open. UNAPPLIED to production; proved only on a local replica.
+--       durable copy" that 0907 (written as 0900) left open. UNAPPLIED to production; proved only on a local replica.
+-- Numbering note (6 Oct 2026): below, "0900" means the documents migration, now 0907 (the Sample's applied 0900 is another).
 --
 -- 1. THE IMPORT PRESS NOW STARTS THE FETCH. 0900's hq_document_import recorded a request for a Drive file whose text or
 --    bytes Team HQ did not hold and then waited for something else to read the file (drive.watch happening to see a

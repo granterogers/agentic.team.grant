@@ -20,7 +20,7 @@ const MIGRATIONS_DIR = 'migrations'
 /*
   `migrations/applied.json` is the repository's record of what PRODUCTION has applied, and `check:migrations` refuses any
   edit to an entry in it. Rewriting it "from what the database reports" is right when the database is production and
-  catastrophic when it is not: a run against staging would write staging's state (0897..1020, applied nowhere else) over the
+  catastrophic when it is not: a run against staging would write staging's state (0906..1022, applied nowhere else) over the
   production ledger, and the next production migration check would treat unapplied files as immutable history. In a
   staging shell the on-disk ledger is therefore a separate, git-ignored file and the production one is never touched.
 */
