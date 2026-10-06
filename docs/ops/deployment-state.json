@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "_about": "THE canonical, machine-readable record of what is deployed. Human documents (CLAUDE.md, docs/HANDOFF.md, the deployment-readiness notes) DEFER to this file and must not restate these numbers. It records what existing evidence proves at the time named below; it is never read from production by a check, and it is updated in the same commit as any deploy record. `npm run check:deployment-state` (local, no production contact) holds it against migrations/applied.json and the committed migrations directory.",
+  "recorded": {
+    "at": "2026-10-06",
+    "by": "the 6 October 2026 production deployment record, accepted by Grant",
+    "evidence": "docs/ops/deployment-readiness-2026-10-05.md section 13",
+    "shippedCommit": "9310116c41748268b43e5d8dc02a6feb195b78f1",
+    "isLiveProductionReading": false
+  },
+  "migrations": {
+    "ledger": "migrations/applied.json",
+    "appliedAtRecord": 798,
+    "highestAppliedAtRecord": "1022",
+    "note": "The pending set is DERIVED: every committed migration file whose name is not in the ledger. It is not stored here, so it cannot go stale."
+  },
+  "components": {
+    "worker": { "version": "v975" },
+    "hq-api": { "version": "v896" },
+    "mcp": { "version": "v664" },
+    "page": {
+      "deployment": "dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx",
+      "rollback": ["dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x", "dpl_E4uGawb9DT9WtyMvTK4h4YqU6SBq"]
+    },
+    "notRedeployed": {
+      "signin": "v129",
+      "voice": "v658",
+      "voice-token": "v687",
+      "telegram-webhook": "v698",
+      "slack-events": "v676",
+      "google-oauth": "v646",
+      "note": "version numbers advanced only because setting the worker's secrets re-versions every function; no code changed"
+    }
+  },
+  "duties": { "drive-index": "off", "calendar-event-sync": "off" },
+  "integrations": { "google": "revoked" },
+  "acceptedGaps": [
+    "#436 Mark done leaves the Mark done button until reload",
+    "authenticated MCP tools/list is unverified",
+    "#437 carrier-writers aliased INSERT parsing and stale harness expectations"
+  ],
+  "supersedes": [
+    "CLAUDE.md 'Production has 770 applied ... NOT applied'",
+    "docs/HANDOFF.md entries dated 2026-10-05/06 that say nothing was deployed or 770 were applied"
+  ]
+}

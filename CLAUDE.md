@@ -34,8 +34,10 @@ its one failure an expectation the authoring session had written itself.
 **ORIGINAL ARCHITECTURE AUDIT: CLOSED.** Technical findings were closed at `4053433f`; Grant's seven final policy
 decisions (Vikunja, Slack channels, Notion, Slack rotation, learning, cross-project retrieval, proactive autonomy) were
 implemented in 0640-0646 and verified in production. `docs/policy/FINAL-POLICY-IMPLEMENTATION.md` is canonical and
-ADR-0059 records the decisions; `docs/architecture-run-5/DECISION-389.md` is the superseded options paper. The next
-phase is multi-user architecture research against this clean baseline; it has not begun.
+ADR-0059 records the decisions; `docs/architecture-run-5/DECISION-389.md` is the superseded options paper. The
+multi-user phase that followed (P0 to P4, the public Sample, Team HQ UX v2) is recorded in `docs/HANDOFF.md`; what is
+deployed is in `docs/ops/deployment-state.json`, and the 6 October 2026 deep systems audit and its second wave are in
+`docs/audit/`.
 
 ### The standing rule that replaces the campaign
 
@@ -446,7 +448,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **Production has 770 applied** (the Sample's `0897_a_visitor…` to `0905_…` are the latest; 0892 waits for the platform to recover). The 0897 to 0905 Sample files are applied and immutable; `main`'s own UX migrations (`0906_project_calendar_events`, `0907_documents_…`, 0920 to 1022) are committed and NOT applied to production (the first two were numbered 0897 and 0900 before the Sample took those numbers; see the numbering-collision trap below and `docs/multi-user/PUBLIC-SAMPLE.md`). Do not apply them without a separate decision.
+`npm run migrate` applies plain SQL from `migrations/`. **What is deployed, and how many migrations are applied, is recorded in ONE place: `docs/ops/deployment-state.json`** (machine-readable, held against `migrations/applied.json` and the migrations directory by `npm run check:deployment-state`, and updated in the same commit as any deploy record). This file no longer restates those numbers, because it did (770 applied, 28 unapplied) and was wrong a day later. The pending set is whatever is committed and not in the ledger; applying it is a separate decision. The Sample's `0897` to `0905` files are applied and immutable (`main`'s two files that collided with 0897/0900 are `0906` and `0907`; see the numbering-collision trap below and `docs/multi-user/PUBLIC-SAMPLE.md`).
 
 ## Testing signed in, without Grant's office
 
@@ -4237,8 +4239,10 @@ Each of these cost real time. They are here so they cost it once.
 
 - **A DEFAULT IS AN IDENTITY.** `office_members.owner_key` defaulted to `'grant'`, so a member added by the obvious
   one-line insert spoke as Grant, decided his approvals and - once an operator list keyed on that name existed - WAS the
-  operator. No code had to be wrong for that to be true. 47 functions still carry a `default 'grant'` person; a new reach
-  from the machine key to one fails `check:machine-key` until it is pinned with a reason (0652, multi-user P1).
+  operator. No code had to be wrong for that to be true. When this was written 47 functions carried a `default 'grant'`
+  person and a new reach to one failed `check:machine-key` until pinned with a reason (0652, multi-user P1); the
+  deep systems audit (A-5) found no function's latest definition carrying one and `PINNED` empty, so treat the count as
+  history and re-run `check:machine-key` for the present.
 - **A source-reading test that asserts a NAME stayed green when the gate was removed.** `voice-token` was gated by
   `resolveSpeaker(bearerOf(request)` and the first test looked for that text and for the 401 line; replacing the condition
   with `false` left it green. What discriminated was loading the real handler under a stubbed `Deno` and counting the

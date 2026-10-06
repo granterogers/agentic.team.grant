@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:migrations": "tsx scripts/check-migrations.ts",
+    "check:deployment-state": "tsx scripts/check-deployment-state.ts",
     "check:leaks": "tsx scripts/check-leaks.ts",
     "check:templates": "tsx scripts/check-templates.ts",
     "verify:arrangement": "tsx scripts/verify/arrangement.ts",

@@ -1,3 +1,7 @@
+> **WHAT IS DEPLOYED is recorded in `docs/ops/deployment-state.json`, not in the dated entries below.** Entries from 4 to 6 October
+> describe the state of play on their own day and several say "nothing deployed" or "770 applied"; those were true then and are
+> superseded by the 6 October final deployment (798 applied; see the record). This file does not restate those numbers.
+>
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
 >
 > The Team HQ UX work was already in `main`; the audit found the old UX branch held one documentation commit and nothing else, so this branch is a
