@@ -4739,6 +4739,15 @@ Each of these cost real time. They are here so they cost it once.
 - **Check the old branch for implementation before reconciling it.** The audit expected the UX branch to be heavily diverged and found one
   documentation commit: every implementation commit was already in `main` (merge `9ce450f5`). The right move was a fresh branch from
   `main` and one commit carried across, not a merge of an old tree.
+- **A witness that casts untrusted text crashes on the first row nobody expected, and a crash reads as "no finding".** `check:leaks` cast
+  `pinned_config ->> 'command_id'` to a uuid, and two Sample-duty hand-off jobs carry an empty string, so the check died before a verdict for as long as
+  those rows existed. The cast is guarded by the uuid shape (`scripts/lib/command-id.ts`), an unreadable id is reported as DATA QUALITY under its own
+  heading and never counted as a leak, and the rows were left alone: fix the reader, not the data it was shown.
+- **A deployed edge function's bundle holds TRANSPILED sources, so "matches Git" will read "nowhere" for a correct capture.** `GET /functions/{slug}/body` is an
+  ESZIP2 bundle of the modules with types stripped; byte comparison with the repository's TypeScript can never succeed and says nothing. What a capture proves
+  is that the bytes can be put back (`scripts/forensics/capture-functions.ts`, `scripts/deploy/restore-function.ts`), and what compares with Git is the set of NAMES the code
+  uses (gateway sections, RPCs, handler kinds, environment variables). And a "found a secret" scan built on the log redactor's prose heuristics
+  (`authorization`, `long-opaque`) fired on comments saying "bearer token": scan source for credential SHAPES only.
 
 ---
 

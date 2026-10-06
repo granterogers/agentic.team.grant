@@ -1,7 +1,7 @@
 # Deployment readiness, refreshed 6 October 2026 (reconciliation of Team HQ with the Public Sample Office)
 
-Written and refreshed before any production action. **Nothing was applied, deployed, enabled or read from production during the reconciliation
-that produced this version**, no `ALLOW_PRODUCTION_*` flag was set, and no external service (Google, Drive, Slack, Telegram, Vikunja,
+Written and refreshed before any production action. (Section 8A, added on 6 October, records the later READ-ONLY production pre-flight; still nothing was applied, deployed or changed.) **Nothing was applied, deployed, enabled or read from production during the reconciliation
+that produced the rest of this version**, no `ALLOW_PRODUCTION_*` flag was set, and no external service (Google, Drive, Slack, Telegram, Vikunja,
 ChatGPT, Claude) was contacted. Everything marked "verified" below was verified on a local replica or in a local browser.
 Verdict at the foot. The first version of this document (5 October, main `03177844`) assumed things that are no longer true; the table
 below says which, so nobody works from the old text.
@@ -165,32 +165,96 @@ Verified locally (a replica built from the migrations alone, a real Chromium, no
 Where a proof fails it was run on `main` as well. The 42 of 63 older isolated proofs that fail here (`jobs.office_id` is NOT NULL and their fixtures predate it), the one `office-ownership-sabotage` control,
 and `weather-is-not-a-failure` fail **identically** on `main`; they are not caused by this branch (per-proof result lines compared).
 
-**Not verified, because it needs a production read (refused by the guard, as designed) or a live service:** `check:callers`, `check:consumed`, `check:capabilities`, `check:answerable`, `check:machine-key`,
-`check:carrier-writers`, `check:anon-exposure`, `check:gateway-wrappers` against production (an equivalent was run on the replica), `check:icons`, `gate:safe`, platform health, that production's recorded
-checksums for `0899` to `0905` equal the files in Git, that the nine live-function splices find their anchors in production today, and everything about Google, Drive, Vikunja, Slack, Telegram, ChatGPT and
-Claude. Those rows stay PARTIAL until genuine evidence exists. The signed-in, real-deployment browser walkthroughs were not repeated.
+The paragraph that stood here said the production reads below had not been done. **They were done on 6 October 2026, read-only, from merged `main` `3009ec02` (section 8A).** What is still NOT verified is
+listed at the end of 8A. The signed-in, real-deployment browser walkthroughs were not repeated.
+
+### 8A. Production pre-flight, 6 October 2026 (read-only; `ALLOW_PRODUCTION_CHECKS=1` only; nothing written)
+
+**Verified by reading production:**
+- **Ledger.** 770 applied; every applied name has a file in `main`; every recorded checksum equals the SHA-256 of that file (so `0897` to `0905`, including `0899` to `0905`, match); the runner's own integrity check
+  against the real ledger has no blocking finding; the 13 duplicate-number pairs (`0534` to `0539`, `0543`, `0577`, `0580` to `0584`) have both files applied and none involves an unapplied file; the pending set is exactly the 28
+  files in section 3, with `0906`, `0907` and `1000` among them.
+- **Checks against production that pass:** `check:consumed`, `check:answerable`, `check:machine-key`, `check:carrier-writers`, `check:anon-exposure`, `check:icons`, `check:undo`, `check:believes`, `check:chatter`,
+  `check:pressable`, `check:system-secrets`. Locally on `main`: `lint`, `typecheck`, `check:migrations`, `check:secrets`, `check:templates`, `check:branding`, `check:suite-classes`.
+- **Checks that fail against production TODAY, each because the pending migrations are not applied (expected; re-run them after step 1 of section 10):** `check:gateway-wrappers` (19 functions from `0906`, `0907`, `0921`, `0923`),
+  `check:capabilities` (`web.research`, `0930`), `check:callers` (the baseline entry `app.document_adopt_version`, created by `0907`), `check:ownership` and `check:office-edges` (tables created by `0906`, `0907`,
+  `0920` to `0923`, `0940`, `1000`).
+- **`check:standing`: five standing rules the office "would not store today"**: two written by `p4-second-person` on 3 October ("Keep answers short and put the decision first", "Ask before spending money on anything") and
+  three by `sample-visitor` on 5 October (the Sample Office's own wording). **This is pre-existing production state, recorded here and neither changed nor retracted by this work.** Evidence that it is not a safety
+  problem for the deployment: `app.lessons_for` for the operator's office returns two lessons and none of the five. Of the other live person offices that could be read (23 others are disabled and refuse the read), one is given
+  two lessons that match the five by wording and one is given none; which two they are was not established. Retiring a rule is a production write and a separate decision.
+- **`check:leaks`** crashed on two Sample-duty hand-off jobs whose `command_id` is an empty string (a bare `::uuid` cast). Fixed in the checker (`scripts/lib/command-id.ts`), no row altered. Its findings on the fixed
+  run: **0 new escapes** (38 known, all recorded); 19 fixture tasks written by `verify:p4-second-person` on 3 October (a sweep that needs a production write, not done); 7 personal tasks that end in a run token
+  (listed for a person to look at); and, as **data quality, not a leak**, the 2 unreadable `command_id` values.
+- **Live-function anchors.** All nine splice migrations were checked against the live definitions (section 4 of the pre-flight report): `0896`, `0907`, `1000`, `1020` and `1021` find their anchors, `0981`'s
+  three replaced functions equal production's definitions apart from its own additions, and `0960`, `0991` and `1010` splice functions that `0907` and `0960` create, so they were proved on the replica chain and
+  cannot be checked against production until those apply.
+- **Page.** The live deployment is `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x`. 38 file names (19 distinct files, each served at the root and under `studio/`) differ from `main`, and 12 files exist only in `main`.
+  Every difference was read (live bytes recovered from Vercel) and none is production-only Sample behaviour: see "The 19 shared files" below.
+- **Function bundles** were captured and parsed (below).
+
+**The 19 shared files (live `dpl_34Ug…` against `main`).** `studio/` is a byte copy of the root set in the live deployment (96 of 96 identical), so these are 19 files. The live-only file `config.js` is generated by
+`npm run config:site` and equals its output.
+- *A. Equivalent in `main`:* the Sample's page behaviour (`sample_say`, `sample_readonly`, guest handling, the banner and Leave, `isSample`, welcome and Explore) appears the same number of times in live and `main` in every
+  file, and the files that carry it (`chat.js`, `session.js`, `bc/account.js`, `call.js`, `bc/voicenote.js`) are byte-identical. `data.js` and `bc/miniatures.js` are the committed `1869d7ec` and `0d98186a` versions.
+- *B. Superseded by `main`:* `app.js`, `office.js`, `settings-ui.js`, `undo.js`, `project-settings.js` (native `confirm`, `alert` and `prompt` replaced by the in-page dialog; `why()` removed; the Disconnect sentence changed with
+  ADR-0066; the non-operator Slack sentence replaced by Slack self-service; the one Google card; Vikunja outage rows; Back after closing a module); `bc/shell.js`, `bc/compose.js`, `bc/layout.js`, `bc/wire.js`,
+  `bc/jump.js`, `bc/compose.css`, `bc/docorder.js`, `pdf.js`, `index.html` (the grid-era board replaced by the freeform workspace, the calendar and the unified Documents view, the palette); `settings.js`, `settings-ui.css`,
+  `logos/marks.js` (Slack self-service, the dialog release, Google marks); `data.js` (prototype fallback rows added).
+- *C. Generated or environment-specific:* `config.js`.
+- *D. Unexplained: none.* Every line that exists in a live file and nowhere in `main` belongs to a superseded design above.
+This is a line-level reading plus the lineage of each file in Git (15 of the 19 are exactly an earlier Git version; four, `app.js`, `bc/shell.js`, `office.js` and `settings-ui.js`, are not and were read hunk by hunk). It is
+not a behavioural test of the deployed page, which is what the section 11 smoke tests are for.
+
+**Function bundles.** `GET /functions/{slug}/body` returns an ESZIP2 bundle; its modules are the **transpiled** sources (types stripped), which is why none matches the repository's TypeScript byte for byte. The tools:
+`scripts/forensics/capture-functions.ts` (read-only; `npm run capture:functions -- <dir> <slug>...`) saves the bundle, extracts the sources, records the settings and a SHA-256 of every file, and fails if a credential-shaped value is found;
+`scripts/deploy/restore-function.ts` (`npm run restore:function -- <dir> [--go]`) re-hashes a capture and, with `--go`, redeploys it through the same request every deploy sends (a plan-only run sends nothing). Captured on 6 October into `.out/rollback-2026-10-06/`
+(gitignored): worker v972 (176 files, imports `npm:postgres@3.4.5`, re-resolved on restore), hq-api v893 (2), mcp v661 (2), signin v127 (1), voice v656 (2), voice-token v685 (2). No function secret is in a bundle or was
+read. **A live function holds no gateway section, handler kind, RPC or environment variable that `main` lacks** (checked by name for hq-api, worker, mcp, signin, voice and voice-token).
+A restore produces a NEW version number with the same code. The platform-side rebuild has not been rehearsed, because a rehearsal is a production write.
+
+**Not verified:** `gate:safe` (its production parts write to the Sample and test offices); a restore of any function; the behaviour of deployed `main` code (only the replica and local browser); everything about
+Google, Drive, Vikunja, Slack, Telegram, ChatGPT and Claude; the bundle bytes of signin, voice and voice-token against `main` (compared by identifier sets only); that Vercel's `meta.gitCommitSha` will be accepted.
 
 ## 9. Both rollbacks and the rollback points
 
-Write the rollback points down FIRST, from a fresh read at the time (two documents name different current page deployments: `docs/multi-user/PUBLIC-SAMPLE.md` says `dpl_2VgoidAKu95AcMjLieCocWr6bWxv`,
-`docs/HANDOFF.md` says `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x`; **read the live one**). Note the deployed versions of `worker`, `hq-api`, `signin`, `mcp`, `voice` and `voice-token`, and the latest backup time.
+**The rollback points, read from the platform on 6 October 2026 (read them again immediately before deploying; they are only as good as that reading):**
+- **Live page: `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x`** (created 5 October 17:58 UTC; `docs/HANDOFF.md` was right and `docs/multi-user/PUBLIC-SAMPLE.md` was stale). **Page rollback point: `dpl_E4uGawb9DT9WtyMvTK4h4YqU6SBq`**
+  (production, 17:55 UTC), then `dpl_2VgoidAKu95AcMjLieCocWr6bWxv` (16:36). The Vercel project is not linked to Git and these deployments carry no commit SHA, so there is no source SHA for them; the page deploy
+  of `main` will be the first to carry `meta.gitCommitSha`.
+- **Functions:** worker v972, hq-api v893, mcp v661, signin v127, voice v656, voice-token v685 (also telegram-webhook v696, slack-events v674, google-oauth v644, which this deployment does not touch).
+  **A version number cannot be redeployed.** The rollback is the CAPTURED CONTENT: run `capture-functions.ts` (section 8A) for worker, hq-api and mcp (and, as a record, signin, voice and voice-token, which are not replaced and
+  need no rollback) **before** any function is replaced, into `.out/rollback-<date>/` (gitignored, local to the deploying machine, holds no secret), and check its `MANIFEST.json`. Restoring is
+  `restore-function.ts <dir>`, plan first, then `--go`; it makes a new version number with the same code. A function's own secrets are separate from its bundle and are not touched by a restore.
 
 | Stage | If it fails | Action |
 |---|---|---|
 | Migration (a file fails) | that file rolled back whole; earlier files stay applied; the runner stops | Application code is untouched and compatible with any prefix. **Forward-fix** with a new migration (`1023`+); never edit an applied file. Do not hand-reverse. |
-| Worker | probe fails, or jobs error after it | redeploy the previous worker. The database stays as migrated. Duties are off so nothing timed depends on it. |
-| hq-api | probe fails | redeploy the previous hq-api (the recovered live source is the base; the Sample's `sample_say` and guest policy are in `main`, so a rollback to older Git would drop them: roll back to the previous DEPLOYED version, not to an older commit). |
-| MCP | probe fails or a client misbehaves | redeploy the previous `mcp`; kill switch: `update public.mcp_clients set enabled = false` for the client. |
-| Web | blank or broken page | Vercel: promote the previous deployment (instant, no database involvement). |
+| Worker | probe fails, or jobs error after it | `restore-function.ts .out/rollback-<date>/worker.v972 --go` (re-resolves `npm:postgres@3.4.5`). The database stays as migrated. Duties `calendar-event-sync` and `drive-index` stay off. `deploy:worker` also set the `slack.per_office_delivery` flag; leave it, it only widens. |
+| hq-api | probe fails | `restore-function.ts .out/rollback-<date>/hq-api.v893 --go`. Roll back to the captured DEPLOYED code, not to older Git: the Sample's `sample_say` and guest policy are in `main`, but older commits do not have them. |
+| MCP | probe fails or a client misbehaves | `restore-function.ts .out/rollback-<date>/mcp.v661 --go`; kill switch: `update public.mcp_clients set enabled = false` for the client. |
+| Web | blank or broken page | Vercel: promote `dpl_E4uGawb9DT9WtyMvTK4h4YqU6SBq` (instant, no database involvement). |
 | Whole run | any stage | stop; do not continue past a failed stage. |
 
 Not reversible and not attempted: dropping the new tables or columns, un-applying a migration, restoring `ai_team_app` grants.
 
 ## 10. Production actions that will occur on GO (none has occurred)
 
-1. (read) pre-flight: platform health, the ledger against Git (including `0899` to `0905`), `migrate --dry`. 2. `npm run migrate` (28 files, 0892 to 1022).
-3. `deploy:worker` (+ the Slack flag). 4. `deploy:hq-api`. 5. `deploy:mcp`. 6. `config:site`, `hq-page-delta` dry run, then `--go`. Each from a clean, pushed `main`. No secret changes, no duty changes,
-no Google or Drive contact. Each needs `ALLOW_PRODUCTION_CHECKS=1` and `ALLOW_PRODUCTION_WRITES=1` set by Grant for that command only.
+0. (read) a fresh health reading and cron canary; the ledger against Git; `capture-functions.ts` for the rollback artifacts (section 9). 1. `npm run migrate` (28 files, 0892 to 1022), then the checks that were red only
+because these were pending (section 8A). 2. `deploy:worker` (+ the Slack flag). 3. `deploy:hq-api`. 4. `deploy:mcp`. 5. the page (below). Each from a clean, pushed `main`. No duty changes and no Google or Drive
+contact. **`deploy:worker` is not secret-free:** it re-sets the function's own secrets `HQ_MANAGEMENT_TOKEN`, `HQ_PROJECT_REF` and `WORKER_KICK_SECRET` (the token from the deploying environment, the kick secret from the
+vault, generated once if it is absent) and writes `slack.per_office_delivery`; they are the values the function already holds. Each step needs `ALLOW_PRODUCTION_CHECKS=1` and
+`ALLOW_PRODUCTION_WRITES=1` set by Grant for that command only.
+
+**Page mechanics (the deploy script refuses a file set that differs from the live one):**
+1. `npm run config:site` writes `web/studio/config.js` (gitignored, generated, not a credential: it names the gateway address; on 6 October its output equalled the live file). The live deployment contains it, and
+   `hq-page-delta.ts` treats a live file it does not hold as a loss and refuses, so the deployed root must contain it.
+2. Run `npx tsx scripts/deploy/hq-page-delta.ts` without `--go` (a dry run: it sends nothing, though like every deploy script it needs the production flags and `VERCEL_TOKEN`) from a clean, pushed `main` and read its
+   "names only here / names only live" line. Expected on 6 October: 24 names only here, which are 12 files (`bc/calendar.css`, `bc/calendar.js`, `bc/docs.css`, `bc/docsources.js`, `bc/docthumbs.js`, `bc/docview.js`,
+   `bc/expand.js`, `bc/finder.js`, `bc/stage.js`, `bc/style.js`, `bc/websources.js`, `bc/wscmd.js`) each counted twice, at the root and under `studio/`, and none only live once `config.js` is present.
+3. A file the change is meant to add is named exactly, in the spelling the script prints, so `--allow-new=` carries all 24 names (each file twice). Anything else gained or lost still refuses. `--root=<dir>` points
+   at a staged tree instead of `web/studio`; it is not needed when `main` is shipped whole.
+4. Only then `--go`. It prints the previous deployment as the rollback point (expect `dpl_34Ug…`, the one before it being `dpl_E4uGawb9…`) and stamps `meta.gitCommitSha`.
 
 ## 11. Smoke tests after deployment
 
@@ -203,6 +267,7 @@ the tools. `select slug, enabled from public.responsibilities where slug in ('dr
 
 ## 12. Verdict
 
-**GO on the code, the migration history and the plan, subject to the production pre-flight in section 10, which is the only open gate and needs Grant's authorisation to read.** No reason was found that
+**Updated 6 October 2026, after the read-only production pre-flight (section 8A): the ledger, the live-function anchors, the page differences and the function rollback artifacts are verified; what remains is a fresh health and cron reading
+immediately before deploying and Grant's explicit authorisation, which is not given.** Earlier text of this verdict: GO on the code, the migration history and the plan, subject to the production pre-flight. No reason was found that
 deployment is unsafe, and the reasons it was NO-GO on 5 October (a production ledger two files ahead of Git, uncommitted live Sample code that a deploy from `main` would have overwritten, migration 1000 recording a
 revoked credential as healthy) are each closed in Git. Wait for an explicit instruction; nothing has been deployed.
