@@ -187,21 +187,126 @@ describe('the rules, each with the case that must pass beside the case that must
   })
 })
 
-describe('usage reads are metered too, and their long intervals are refused', () => {
+describe('usage reads are a SEPARATE class: their own count, no window or source rule, not added to the log allowance', () => {
   const usage = (interval: string) =>
     `/v1/projects/p/analytics/endpoints/usage.api-counts?interval=${interval}`
-  it('allows a one-hour interval and refuses 1day, 3day and 7day by default', () => {
-    expect(verdict(usage('1hr')).ok).toBe(true)
-    for (const i of ['1day', '3day', '7day', 'nonsense'])
-      expect(refusedWith(verdict(usage(i)))).toContain('the most this tooling may ask for')
+  const usageRows = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      intent((i + 1) * 70, { kind: 'usage', sqlHash: sqlHash('') }),
+    )
+  it('allows every interval the endpoint offers, because nothing shows they consume the Logs Query meter', () => {
+    for (const i of ['15min', '1hr', '1day', '3day', '7day'])
+      expect(verdict(usage(i)).ok, i).toBe(true)
   })
-  it('refuses the fourth usage read in 24 hours', () => {
-    const rows = [1, 2, 3].map((i) => intent(i * 70, { kind: 'usage', sqlHash: sqlHash('') }))
-    expect(refusedWith(verdict(usage('1hr'), rows))).toContain('usage read')
+  it('allows the single count (no interval) and needs no source filter', () => {
+    expect(verdict('/v1/projects/p/analytics/endpoints/usage.api-requests-count').ok).toBe(true)
   })
-  it('treats the single count (no interval) as a whole day', () => {
-    const p = '/v1/projects/p/analytics/endpoints/usage.api-requests-count'
-    expect(refusedWith(verdict(p))).toContain('the most this tooling may ask for')
+  it('refuses the seventh usage read in 24 hours (our policy), and allows the sixth', () => {
+    expect(verdict(usage('1day'), usageRows(5)).ok).toBe(true)
+    expect(refusedWith(verdict(usage('1day'), usageRows(6)))).toContain('usage read')
+  })
+  it('usage reads do not spend the log allowance, and log queries do not spend the usage allowance', () => {
+    // six usage reads leave the full six log queries available...
+    expect(verdict(path(), usageRows(6)).ok).toBe(true)
+    // ...and six log queries (180 window-minutes) leave the usage reads available
+    const logs = Array.from({ length: DEFAULT_QUERIES }, (_, i) =>
+      intent(70 + i * 70, { windowMin: 30 }),
+    )
+    expect(verdict(usage('1day'), logs).ok).toBe(true)
+    // a usage read's interval is not window-minutes: a 7-day interval does not eat the 180
+    expect(verdict(path({ mins: 60 }), [intent(100, { kind: 'usage', windowMin: 10080 })]).ok).toBe(
+      true,
+    )
+  })
+  it('still needs a stated reason, and a 402 or 429 from the analytics service stops usage reads too', () => {
+    expect(refusedWith(verdict(usage('1day'), [], {} as Env))).toContain('LOG_QUERY_REASON')
+    const a = intent(30, { kind: 'usage' })
+    expect(refusedWith(verdict(usage('1day'), [a, outcome(a, { status: 402 })]))).toContain('402')
+  })
+})
+
+describe('the emergency override: audited, narrow, and not a way round the ceilings', () => {
+  const EMERGENCY =
+    'incident 2026-10-06: need edge, auth and postgres streams together to place the first failing request'
+  const multi = path({ sql: 'select count() from logs' })
+  it('is the only thing that lets an unfiltered query through, and it is recorded as an override', () => {
+    expect(refusedWith(verdict(multi))).toContain('`source`')
+    const v = verdict(multi, [], { ...ok, LOG_QUERY_EMERGENCY_REASON: EMERGENCY })
+    expect(v.ok && v.override).toBe('emergency')
+    expect(v.ok && v.notes.join(' ')).toContain('EMERGENCY OVERRIDE')
+  })
+  it('needs a real reason: a short one overrides nothing', () => {
+    expect(
+      refusedWith(verdict(multi, [], { ...ok, LOG_QUERY_EMERGENCY_REASON: 'it is an emergency' })),
+    ).toContain('`source`')
+  })
+  it('raises the allowances to their ceilings and the window to six hours, and no further', () => {
+    const rows = Array.from({ length: DEFAULT_QUERIES }, (_, i) => intent(70 + i * 70))
+    expect(verdict(multi, rows, { ...ok, LOG_QUERY_EMERGENCY_REASON: EMERGENCY }).ok).toBe(true)
+    expect(
+      verdict(path({ mins: 360 }), [], { ...ok, LOG_QUERY_EMERGENCY_REASON: EMERGENCY }).ok,
+    ).toBe(true)
+    expect(
+      refusedWith(
+        verdict(path({ mins: 361 }), [], { ...ok, LOG_QUERY_EMERGENCY_REASON: EMERGENCY }),
+      ),
+    ).toContain('360')
+    expect(
+      verdict(path({ mins: 1440 }), [], { ...ok, LOG_QUERY_EMERGENCY_REASON: EMERGENCY }).ok,
+    ).toBe(false)
+  })
+  it('does not lift the breaker, the spacing or the cache rule', () => {
+    const emergency = { ...ok, LOG_QUERY_EMERGENCY_REASON: EMERGENCY }
+    const a = intent(30)
+    expect(refusedWith(verdict(path(), [a, outcome(a, { status: 402 })], emergency))).toContain(
+      '402',
+    )
+    expect(refusedWith(verdict(path(), [intent(0.5)], emergency))).toContain('wait')
+  })
+})
+
+describe('bytes scanned: the cap fires only on a number the service reported', () => {
+  it('says bytes are UNKNOWN while no response has reported them, so nobody reads the cap as a bound', () => {
+    const v = verdict()
+    expect(v.ok && v.notes.join(' ')).toContain('cannot fire')
+  })
+  it('stops saying so once a response has reported bytes', () => {
+    const a = intent(100)
+    const v = verdict(path(), [a, outcome(a, { bytesProcessed: 1000 })])
+    expect(v.ok && v.notes.join(' ')).not.toContain('cannot fire')
+  })
+})
+
+describe('the evidence of 4 and 5 October is preserved and pinned (no new query is ever needed to read it)', () => {
+  const lines = (f: string): { kind: string; body: Record<string, unknown> }[] =>
+    readFileSync(f, 'utf8')
+      .split('\n')
+      .filter((l) => l.trim() !== '')
+      .map((l) => JSON.parse(l) as { kind: string; body: Record<string, unknown> })
+  it('holds 106 recorded log queries on 5 October and 4 on 4 October, every one answered 200', () => {
+    const d5 = lines('docs/ops/evidence/2026-10-05/capture-2026-10-05.jsonl').filter(
+      (r) => r.kind === 'logs2',
+    )
+    const d4 = lines('docs/ops/evidence/2026-10-05/capture-2026-10-04.jsonl').filter(
+      (r) => r.kind === 'logs',
+    )
+    expect(d5.length).toBe(106)
+    expect(d4.length).toBe(4)
+    for (const r of [...d5, ...d4]) expect(r.body.status).toBe(200)
+  })
+  it('records calls and timing and never bytes scanned, which is why the 85 GB cannot be attributed from it', () => {
+    const d5 = lines('docs/ops/evidence/2026-10-05/capture-2026-10-05.jsonl').filter(
+      (r) => r.kind === 'logs2',
+    )
+    for (const r of d5) expect(Object.keys(r.body)).not.toContain('total_bytes_processed')
+  })
+  it('no saved usage response carries a bytes field either', () => {
+    const dir = 'docs/ops/evidence/2026-10-05/usage'
+    const files = readdirSync(dir).flatMap((d) =>
+      readdirSync(join(dir, d)).map((f) => join(dir, d, f)),
+    )
+    expect(files.length).toBeGreaterThan(0)
+    for (const f of files) expect(readFileSync(f, 'utf8')).not.toContain('total_bytes_processed')
   })
 })
 

@@ -11,15 +11,16 @@
  *
  * `usage.api-requests-count` is read only with --with-count (a single count, no time axis).
  *
- * METERED. These endpoints read the log service, whose usage is billed by data scanned (6 October 2026: 102 GB against a 100 GB
- * allowance). They go through the log query budget (src/safety/log-query-budget.ts): LOG_QUERY_REASON is required, the default is
- * one hour, and 3day and 7day are refused. Check the saved usage evidence under docs/ops/evidence first.
+ * These are analytics reads, kept SEPARATE from Logs Query: nothing shows that they consume that meter (they return a few dozen
+ * aggregated points). They still go through the budget (src/safety/log-query-budget.ts) so they cannot become the next unwatched
+ * loop: LOG_QUERY_REASON is required, six reads per rolling 24 hours (our policy, not the vendor's), 65 s apart, and a 402 or 429
+ * from the service stops everything. Check the saved usage evidence under docs/ops/evidence before asking again.
  */
 import '../../src/safety/require-production-checks.ts'
 import { mgmt, REF, record, requireToken, saveRaw, sleep } from './common.ts'
 
 requireToken()
-const INTERVALS = (process.argv.find((a) => a.startsWith('--intervals='))?.slice(12) ?? '1hr')
+const INTERVALS = (process.argv.find((a) => a.startsWith('--intervals='))?.slice(12) ?? '1day')
   .split(',')
   .filter((x) => x !== '')
 const run = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16)
@@ -29,8 +30,7 @@ const asks: { name: string; path: string }[] = [
     name: `api-counts-${i}`,
     path: `/v1/projects/${REF}/analytics/endpoints/usage.api-counts?interval=${i}`,
   })),
-  // The single count has no time axis, so the log query budget treats it as a whole day and refuses it unless the window
-  // ceiling has been raised with a stated reason. It is asked for only on request.
+  // The single count has no time axis. It is asked for only on request.
   ...(process.argv.includes('--with-count')
     ? [
         {
@@ -42,7 +42,7 @@ const asks: { name: string; path: string }[] = [
 ]
 let first = true
 for (const a of asks) {
-  // 65 s: the log query budget refuses a second query inside that spacing, and a usage read is metered like a log query.
+  // 65 s: the budget refuses a second analytics query inside that spacing.
   if (!first) await sleep(65_000)
   first = false
   const r = await mgmt(a.path, 60_000)

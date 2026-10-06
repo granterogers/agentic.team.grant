@@ -81,6 +81,7 @@ export const withLogGuard = async <T extends Sent>(
     windowEnd: req.end === null ? null : req.end.toISOString(),
     windowMin: req.windowMin,
     reason: (process.env.LOG_QUERY_REASON ?? '').trim().slice(0, 300),
+    ...(verdict.override === undefined ? {} : { override: verdict.override }),
   }
   append({ ...base, at: now.toISOString(), phase: 'intent' }, ledgerFile)
   const r = await send()

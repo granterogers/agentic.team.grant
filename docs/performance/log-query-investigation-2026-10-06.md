@@ -35,7 +35,7 @@ Traced by reading every script and module that builds a Management API URL (`ana
 |---|---|---|---|---|
 | `scripts/forensics/logs-capture.ts` (`npm run forensics:logs`) | `analytics/endpoints/logs` | yes | **24-hour window**, no source filter required, up to 30+ queries per `--set=all` | **yes**: 106 recorded queries |
 | `scripts/forensics/host-capture.ts --logs` | `analytics/endpoints/logs` | yes | 24-hour window, 8 fixed queries | yes, on 4 Oct 23:02 to 23:06 UTC (4 recorded) |
-| `scripts/forensics/usage-capture.ts` (`npm run forensics:usage`) | `analytics/endpoints/usage.*` | likely yes (reads the same analytics store; the vendor page does not say) | intervals `1day,3day,7day` plus a single count | yes: 4 recorded reads |
+| `scripts/forensics/usage-capture.ts` (`npm run forensics:usage`) | `analytics/endpoints/usage.*` | **UNKNOWN** (nothing shows these consume the Logs Query meter: they return a few dozen aggregated points; treated as a separate class) | intervals `1day,3day,7day` plus a single count | yes: 4 recorded reads |
 | `scripts/incident-snapshot.ts` | `analytics/endpoints/logs` | yes | one 30-minute query on every run, no opt-in | not known to have run |
 | `scripts/forensics/metrics.ts`, `customer-metrics.ts`, `host-capture.ts --control-plane` | `analytics/endpoints/metrics` (Prometheus) | **no** (a different service) | n/a | yes, not a log read |
 | The Supabase MCP server, the Supabase CLI (`supabase logs`), Studio's Log Explorer, Database Health and Reports pages | various | yes | not in this repository | **UNKNOWN**: no MCP configuration for Supabase was found in this checkout, and the other two are invisible from here |
@@ -112,30 +112,60 @@ the guard exists. `host-capture.ts` and `incident-snapshot.ts` send with their o
 reads the source of every file in `scripts/`, `src/` and `supabase/` for the endpoint string and fails if a file reaches it that is
 not on the guarded list or does not call the guard.
 
-| Rule | Value | Why |
+### What is the vendor's, and what is OUR policy
+
+| | Source |
+|---|---|
+| Logs Query is metered as GB of log data scanned, across Studio, the Management API, the CLI and any other interface; over 100 GB (Free) queries are rate limited and retention is shortened; Logs Ingest is a separate meter; Log Drains are Pro/Team/Enterprise only | **Supabase documentation** (read 6 Oct) |
+| A logs window of at most 24 hours; about one query a minute | **Observed** in this repository's own forensic notes; not verified against the current vendor docs |
+| Everything numeric in the table below (60 minutes, 6 queries, 180 window-minutes, 6 usage reads, 65 s, 1 GB, the ceilings) | **OUR conservative policy.** None of it is a Supabase limit. It is chosen so the worst case this tooling can spend in a day is small beside 100 GB whatever the stream's volume, and it is the part to argue about |
+
+### Is a bytes-scanned value available? UNVERIFIED, so the 1 GB cap is not claimed to be enforceable
+
+No saved response in the repository carries `total_bytes_processed`: the 106 + 4 logged log queries record status, time and row
+count only, and the four usage responses saved on 5 October carry only `result` (pinned by a test, `no saved usage response carries a
+bytes field either`). The logs endpoint may or may not report it; this investigation does not know. So:
+
+* the cap is kept because it costs nothing when the field is absent and bounds the spend the day it appears;
+* **while no response has reported bytes, every approval the guard prints says so** (`bytes scanned is UNKNOWN ... the bytes cap cannot
+  fire`), so nobody reads it as a bound;
+* the window-and-count policy is the only bound in force, and the first narrow query (once authorised) settles whether the field exists.
+
+### The rules
+
+| Rule | Value (policy unless stated) | Why |
 |---|---|---|
 | A stated reason | `LOG_QUERY_REASON`, 20+ characters, recorded | Forces "does existing evidence already answer this" to be asked |
-| A narrow source | SQL must filter on `source` | An unfiltered query scans every stream |
-| A short window | **60 minutes**; with `LOG_QUERY_RAISE_REASON` up to a hard ceiling of 360; a whole day cannot be asked for without editing the file | The default was 24 hours |
-| Daily allowance, rolling 24 h | 6 log queries, 180 window-minutes, 3 usage reads; raised ceilings 20, 720 | Intent rows count, so a run that crashes still spent |
-| Reported-bytes cap | 1 GB (ceiling 5 GB) of `total_bytes_processed` the service reports | The only direct measure of what the meter charges |
+| A source | SQL must filter on `source` (one stream or `source in (...)`) | An unfiltered query scans every stream |
+| Emergency override | `LOG_QUERY_EMERGENCY_REASON`, 40+ characters: lifts the source rule and the allowances to their ceilings; does **not** lift the 360 minute window ceiling, the spacing, the cache rule or the breaker; printed on stderr; the ledger row carries `override: 'emergency'` | A legitimate multi-source incident analysis, audited, countable later |
+| A short window | **60 minutes**; with `LOG_QUERY_RAISE_REASON` (or the emergency reason) up to a hard ceiling of 360; a whole day cannot be asked for without editing the file | The default was 24 hours |
+| Daily allowance, rolling 24 h | 6 log queries and 180 window-minutes; raised ceilings 20 and 720 | Intent rows count, so a run that crashes still spent |
+| Bytes cap | 1 GB (ceiling 5 GB), **from reported bytes only** (see above) | The only direct measure of what the meter charges, if it is ever reported |
 | Cache first | A query already answered for a window that covers this one is refused and the saved file is named | Reuse captured evidence |
-| Spacing | 65 seconds across processes | Same as before, now enforced from the ledger |
-| Breaker | 402 stops all log queries for 24 hours; 429 for 15 minutes; nothing is retried | Asking again while refused is the defect |
-| Usage reads | `1hr` default; `1day`, `3day`, `7day` and the single count refused unless raised | The counts have no filter to narrow |
+| Spacing | 65 seconds across processes | Enforced from the ledger |
+| Breaker | 402 stops all analytics queries for 24 hours; 429 for 15 minutes; nothing is retried | Asking again while refused is the defect |
 
-The environment can only **lower** a limit. Raising needs a stated reason and stops at a ceiling. The sabotage control was run: with
-the guard removed from `mgmt`, two wiring tests go red; with it restored, all 29 pass (printed proof that the sabotage landed:
-`grep -c` of the guard expression returned 0 then 1).
+**Usage reads are a separate class.** Nothing shows `usage.*` consumes the Logs Query meter, so they have their own count (6 per 24
+hours, policy), take every interval the endpoint offers, need no source or window rule, and neither spend nor are spent by the log
+allowance (tested both ways). They still need a reason, are spaced, and a 402 or 429 from either kind stops both, because that is the
+analytics service refusing. If a later reading shows they do count, move them under the log rules in one line.
+
+The environment can only **lower** a limit; raising needs a stated reason and stops at a ceiling. Sabotage controls run, each with
+printed proof the sabotage landed: removing the guard from `mgmt` turns two wiring tests red; making the source rule unconditional or
+counting usage reads as log queries each turns the matching tests red; restored, all 40 pass.
+
+### The evidence is preserved
+
+The 110 recorded queries stay in `docs/ops/evidence/2026-10-05/` untouched, and a test pins their number and shape (106 on 5 Oct, 4 on
+4 Oct, all 200, none carrying bytes), so a later edit cannot quietly change what the investigation rests on. No query was issued.
 
 Defaults changed with it: `logs-capture.ts` and `host-capture.ts --logs` default to **one hour** (they were 24);
-`usage-capture.ts` defaults to `1hr` and asks for the single count only with `--with-count` and sleeps 65 s between reads;
+`usage-capture.ts` defaults to `1day`, asks for the single count only with `--with-count` and sleeps 65 s between reads;
 `incident-snapshot.ts` no longer asks the log service unless given `--logs`.
 
 **What the guard cannot do.** The ledger is local to a checkout. It cannot see the Studio UI, another machine, another account or
-a Codex session on another host, and it is not the vendor's meter. The reported-bytes cap only counts queries whose response carries
-`total_bytes_processed`; the rest are written as UNKNOWN rather than zero. It is a guard on this repository's tooling and a record the
-next investigation can read.
+a Codex session on another host, and it is not the vendor's meter. It is a guard on this repository's tooling and a record the next
+investigation can read.
 
 ## 7. Recommendations
 
