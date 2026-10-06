@@ -1,6 +1,21 @@
 import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { classify, type Edge, edgeSummary } from '../../scripts/rollout/classify-lib.ts'
+import {
+  classify,
+  type Edge,
+  edgeSummary,
+  FIVE_XX_ABSOLUTE,
+  FIVE_XX_RISE_POINTS,
+  HEARTBEAT_SLOW_S,
+  IMPROVED_AT,
+  likelyImprovement,
+  MAX_PAIR_MIN,
+  MIN_PAIR_MIN,
+  NUMBACKENDS_ABSOLUTE,
+  NUMBACKENDS_PERCENT,
+  TRAFFIC_CONFOUND,
+  UNCHANGED_BAND,
+} from '../../scripts/rollout/classify-lib.ts'
 import {
   isFirstWrite,
   type Reading,
@@ -247,6 +262,57 @@ describe('the approved health rules', () => {
   it('latency is not an input: nothing in a reading but its health and counters can change a verdict', () => {
     const slowReading = later(60_000, { reasons: ['the database answered in 9 s'] })
     expect(classify(before, slowReading, edge(100), edge(100)).verdict).toBe('IMPROVED')
+  })
+})
+
+describe('the 15% to 25% gap (Grant, 6 October 2026)', () => {
+  const gap = () => classify(before, later(80_000), edge(100), edge(100))
+
+  it('stays AMBIGUOUS and is flagged as the gap only', () => {
+    const r = gap()
+    expect(r.verdict).toBe('AMBIGUOUS')
+    expect(r.gapOnly).toBe(true)
+  })
+
+  it('is reported as a likely improvement only after a SECOND pair also lands in the gap, and never becomes IMPROVED', () => {
+    expect(likelyImprovement([gap()])).toBeNull()
+    expect(likelyImprovement([gap(), gap()])).toBe(
+      'LIKELY IMPROVEMENT, BELOW PREDECLARED IMPROVED THRESHOLD',
+    )
+    expect(gap().verdict).toBe('AMBIGUOUS')
+  })
+
+  it('is not reported if the second pair is outside the gap, or anything else is not clean', () => {
+    const improved = classify(before, later(60_000), edge(100), edge(100))
+    const unchanged = classify(before, later(95_000), edge(100), edge(100))
+    expect(likelyImprovement([gap(), improved])).toBeNull()
+    expect(likelyImprovement([gap(), unchanged])).toBeNull()
+    // a confound makes it ambiguous for another reason, which is not the gap
+    const confounded = classify(before, later(30_000), edge(100), edge(55))
+    expect(confounded.gapOnly).toBeUndefined()
+    expect(likelyImprovement([gap(), confounded])).toBeNull()
+    // a health fall is WORSE, never a likely improvement
+    const sick = [...HEALTHY.slice(0, 3), { name: 'storage', status: 'UNHEALTHY' }]
+    const worse = classify(before, later(80_000, { health: sick, go: false }), edge(100), edge(100))
+    expect(worse.verdict).toBe('WORSE')
+    expect(likelyImprovement([gap(), worse])).toBeNull()
+  })
+
+  it('the predeclared thresholds are pinned: changing one after seeing a result fails here', () => {
+    expect([
+      IMPROVED_AT,
+      UNCHANGED_BAND,
+      TRAFFIC_CONFOUND,
+      NUMBACKENDS_PERCENT,
+      NUMBACKENDS_ABSOLUTE,
+    ]).toEqual([0.25, 0.15, 0.4, 0.5, 5])
+    expect([
+      FIVE_XX_ABSOLUTE,
+      FIVE_XX_RISE_POINTS,
+      HEARTBEAT_SLOW_S,
+      MIN_PAIR_MIN,
+      MAX_PAIR_MIN,
+    ]).toEqual([2, 3, 1.5, 8, 20])
   })
 })
 

@@ -303,9 +303,14 @@ Measure a step with two counter readings (`gate.ts read --counters`) a known tim
 | **WORSE** | any one of: a service that was healthy is not `ACTIVE_HEALTHY`; any heartbeat run failed or took over 1.5 s; fewer than 10 runs in 10 minutes; **any startup timeout**; `hq-api` 5xx above 2% or up by 3 points or more; buffer traffic per request up by more than 15%; **`numbackends` up by more than 50% OR by more than 5 from baseline, whichever is reached first** | **roll back that step immediately** with its prepared path, take ONE verification read, then STOP. No further step. |
 | **AMBIGUOUS** | the `hq-api` request rate differs by more than **40%** (a traffic confound); **or any metric is unavailable** (health unreadable, counters missing or gone backwards, no request rate, a pair not 8 to 20 minutes wide); or buffer traffic per request fell by 15% to 25% (between the UNCHANGED and IMPROVED bands) | **change nothing**; take one additional observation pair; hold if still unclear; roll back only if a WORSE condition appears. |
 
-Precedence: WORSE is judged first, so a traffic confound or a missing metric can never hide a health fall. For `numbackends`, "baseline" is the mean of B1 and B2 and "after" is the
-larger of A0 and A1 (the stricter reading). The 15% to 25% gap between UNCHANGED and IMPROVED is not defined by the approved thresholds; I treat it as AMBIGUOUS (one more pair) rather
-than guessing a side, and Grant can reassign it.
+Precedence: WORSE is judged first, so a traffic confound or a missing metric can never hide a health fall. For `numbackends` (confirmed by Grant, 6 October): baseline is the mean of the two
+pre-change readings, post-change is the worse (highest) of the two post-change readings, and it is WORSE if that is more than 50% above baseline OR more than 5 backends above it, whichever
+threshold is reached first.
+
+**The 15% to 25% gap (confirmed by Grant, 6 October): it stays AMBIGUOUS and is not forced into UNCHANGED or IMPROVED.** If the measured reduction is above 15% and below 25%, take one
+additional observation pair as planned (`classify.ts ... --after2=<A,B> --edge-after2=<file>`, judged against the same baseline and thresholds). If that pair also lands in the gap and every
+health and canary signal is clean, REPORT it as **"LIKELY IMPROVEMENT, BELOW PREDECLARED IMPROVED THRESHOLD"**, but the **formal verdict remains AMBIGUOUS** unless the approved 25% threshold is actually
+crossed. Thresholds are never changed after seeing a result; `tests/rollout/gate-classify.test.ts` pins every one of them, so changing one fails a test.
 
 **After 1023 specifically** (Grant, 6 October): take the immediate canary, wait the planned observation interval, take the second counter reading, classify. **Do not apply 1027
 automatically.** WORSE: roll 1023 back at once, one verification read, stop. AMBIGUOUS: no further change, one additional observation pair. UNCHANGED: keep only if all health signals stay

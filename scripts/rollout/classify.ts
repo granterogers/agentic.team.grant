@@ -10,7 +10,7 @@
  * A missing edge file is "unavailable" and the verdict is AMBIGUOUS, never a pass.
  */
 import { readFileSync } from 'node:fs'
-import { classify, edgeSummary } from './classify-lib.ts'
+import { classify, edgeSummary, likelyImprovement, type Result } from './classify-lib.ts'
 import type { Reading } from './gate-lib.ts'
 import { GATE_LOG, readLines } from './log.ts'
 
@@ -46,9 +46,28 @@ const edge = (n: string) => {
 }
 
 const [b1, b2] = pair('before')
+const base = { a: b1, b: b2 }
+const show = (label: string, result: Result): void => {
+  console.log(`${label} VERDICT: ${result.verdict}`)
+  for (const [k, v] of Object.entries(result.numbers)) console.log(`  ${k}: ${v}`)
+  for (const r of result.reasons) console.log(`  - ${r}`)
+}
 const [a1, a2] = pair('after')
-const result = classify({ a: b1, b: b2 }, { a: a1, b: a2 }, edge('edge-before'), edge('edge-after'))
-console.log(`VERDICT: ${result.verdict}`)
-for (const [k, v] of Object.entries(result.numbers)) console.log(`  ${k}: ${v}`)
-for (const r of result.reasons) console.log(`  - ${r}`)
-process.exit(result.verdict === 'WORSE' ? 1 : 0)
+const first = classify(base, { a: a1, b: a2 }, edge('edge-before'), edge('edge-after'))
+show('after', first)
+let formal = first
+// The additional pair Grant's rule asks for when the first lands between the UNCHANGED and IMPROVED bands (--after2, --edge-after2),
+// judged against the SAME baseline and the SAME predeclared thresholds.
+if (arg('after2') !== undefined) {
+  const [c1, c2] = pair('after2')
+  const second = classify(base, { a: c1, b: c2 }, edge('edge-before'), edge('edge-after2'))
+  show('additional pair', second)
+  formal = second
+  const note = likelyImprovement([first, second])
+  if (note !== null)
+    console.log(
+      `REPORT: ${note} (the formal verdict stays AMBIGUOUS: the approved threshold was not crossed)`,
+    )
+}
+console.log(`FORMAL VERDICT: ${formal.verdict}`)
+process.exit(formal.verdict === 'WORSE' ? 1 : 0)

@@ -22,7 +22,24 @@ import type { Reading } from './gate-lib.ts'
 export type Verdict = 'IMPROVED' | 'UNCHANGED' | 'WORSE' | 'AMBIGUOUS'
 export type Edge = { requestsPerMin: number; fiveXxPercent: number } | null
 export type Window = { a: Reading; b: Reading }
-export type Result = { verdict: Verdict; reasons: string[]; numbers: Record<string, string> }
+export type Result = {
+  verdict: Verdict
+  reasons: string[]
+  numbers: Record<string, string>
+  /** True only when AMBIGUOUS because the fall landed between the UNCHANGED and IMPROVED bands and everything else was clean. */
+  gapOnly?: boolean
+}
+
+/**
+ * Grant's rule for the 15% to 25% gap (6 October 2026): take one more pair as planned. If that pair ALSO lands in the gap with every
+ * health and canary signal clean, REPORT the wording below, but the formal verdict stays AMBIGUOUS: the predeclared threshold was not
+ * crossed, and thresholds are never changed after seeing a result. This returns the wording, never a verdict.
+ */
+export const LIKELY_IMPROVEMENT = 'LIKELY IMPROVEMENT, BELOW PREDECLARED IMPROVED THRESHOLD'
+export const likelyImprovement = (pairs: readonly Result[]): string | null =>
+  pairs.length >= 2 && pairs.slice(-2).every((r) => r.verdict === 'AMBIGUOUS' && r.gapOnly === true)
+    ? LIKELY_IMPROVEMENT
+    : null
 
 export const IMPROVED_AT = 0.25
 export const UNCHANGED_BAND = 0.15
@@ -222,5 +239,6 @@ export const classify = (
       `buffer traffic per request fell ${(-per * 100).toFixed(0)}%, between the UNCHANGED (+/-${UNCHANGED_BAND * 100}%) and IMPROVED (${IMPROVED_AT * 100}%) bands: take one more pair`,
     ],
     numbers,
+    gapOnly: true,
   }
 }
