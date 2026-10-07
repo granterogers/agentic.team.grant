@@ -103,3 +103,5 @@ for (const row of ROWS) {
     console.log('  as resolved:', j(withThread), `<- text: ${JSON.stringify(expanded)}`)
   }
 }
+if (db !== null) await db.end()
+process.exit(0)

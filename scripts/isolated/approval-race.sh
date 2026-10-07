@@ -32,7 +32,9 @@ race() {
   # 0608: the candidate takes who is answering as a third argument; the control
   # ("base") is the schema BEFORE that existed and takes two.
   local who="'Yes'"; [ "$tpl" = base ] || who="'Yes','grant'"
-  $P -d $db -c "update public.jobs set state='cancelled', state_reason='fixture' where job_id='$j'" >/dev/null
+  # The parent is deliberately left QUEUED. This used to cancel it "as a fixture", which stops nothing (a replica has no
+  # worker) and which the current product answers correctly by starting NOTHING from a cancelled parent
+  # (started: 0), so with it the post run counted 0 children and read as the race fixed for the wrong reason.
   ( $P -d $db -c "begin" -c "select app.hq_answer_blocker($oarg'$b'::uuid,$who)" -c "select pg_sleep(4)" -c "commit" >/dev/null 2>&1 ) &
   sleep 1
   local second
