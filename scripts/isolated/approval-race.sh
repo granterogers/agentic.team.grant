@@ -8,14 +8,24 @@ race() {
   local tpl=$1 db="race_$1"
   $P -d postgres -c "drop database if exists $db" -c "create database $db template $tpl" >/dev/null
   [ "$($P -d $db -c "select to_regclass('public.isolated_replica_marker') is not null")" = t ] || { echo "not the replica"; exit 2; }
+  # The fixture is shaped by the schema it finds. Since the office model a job and a blocker carry a NOT NULL
+  # office_id (the blocker's project in the same office) and hq_answer_blocker takes the office first; the control
+  # ("base") is the schema from before the office model and before 0596, and has none of that.
+  local office=f ocols="" ovals="" bcols="" bvals="" oarg=""
+  [ "$($P -d $db -c "select to_regprocedure('app.test_office()') is not null")" = t ] && office=t
+  if [ "$office" = t ]; then
+    ocols="office_id, "; ovals="app.test_office(), "
+    bcols="office_id, project_id, "; bvals="app.test_office(), app.unnamed_project(app.test_office()), "
+    oarg="app.test_office(),"
+  fi
   local ids
   ids=$($P -d $db -c "
-    with j as (insert into public.jobs (correlation_id, kind, state, requested_by, announce, idempotency_key)
-               values (gen_random_uuid(), 'verify.approval_race', 'queued', 'teamhq:verify-apprace-iso', false, 'verify-apprace-iso')
+    with j as (insert into public.jobs (${ocols}correlation_id, kind, state, requested_by, announce, idempotency_key)
+               values (${ovals}gen_random_uuid(), 'verify.approval_race', 'queued', 'teamhq:verify-apprace-iso', false, 'verify-apprace-iso')
                returning job_id)
-    insert into public.blockers (job_id, requested_action, why_needed, consequences_of_delay,
+    insert into public.blockers (${bcols}job_id, requested_action, why_needed, consequences_of_delay,
                                  approval_options, originating_agent, work_can_continue, on_answer)
-    select job_id, 'race', 'a probe', 'none', array['Yes','No'], 'chief-of-staff', true,
+    select ${bvals}job_id, 'race', 'a probe', 'none', array['Yes','No'], 'chief-of-staff', true,
            jsonb_build_object('option','Yes','kind','verify.approval_race_child','payloads', jsonb_build_array('{}'::jsonb))
       from j returning blocker_id || ' ' || job_id")
   local b=${ids% *} j=${ids#* }
@@ -23,10 +33,10 @@ race() {
   # ("base") is the schema BEFORE that existed and takes two.
   local who="'Yes'"; [ "$tpl" = base ] || who="'Yes','grant'"
   $P -d $db -c "update public.jobs set state='cancelled', state_reason='fixture' where job_id='$j'" >/dev/null
-  ( $P -d $db -c "begin" -c "select app.hq_answer_blocker('$b'::uuid,$who)" -c "select pg_sleep(4)" -c "commit" >/dev/null 2>&1 ) &
+  ( $P -d $db -c "begin" -c "select app.hq_answer_blocker($oarg'$b'::uuid,$who)" -c "select pg_sleep(4)" -c "commit" >/dev/null 2>&1 ) &
   sleep 1
   local second
-  second=$($P -d $db -c "select app.hq_answer_blocker('$b'::uuid,$who)::text" 2>&1 | cut -c1-120)
+  second=$($P -d $db -c "select app.hq_answer_blocker($oarg'$b'::uuid,$who)::text" 2>&1 | cut -c1-120)
   wait
   local n
   n=$($P -d $db -c "select count(*) from public.jobs where parent_job_id='$j' and kind='verify.approval_race_child'")

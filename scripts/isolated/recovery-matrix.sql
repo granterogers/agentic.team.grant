@@ -3,11 +3,20 @@
 create table public.m_case (label text, job uuid, want text);
 create or replace function pg_temp.mk(p_label text, p_path text[], p_output boolean, p_attempt int default 1)
 returns uuid language plpgsql as $$
-declare v uuid; s text;
+declare v uuid; s text; has_office boolean := to_regprocedure('app.test_office()') is not null;
 begin
-  insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-  values ('office.instruction', 'teamhq:verify-matrix', app.unnamed_project(app.test_office()), 'verify-matrix-' || p_label, gen_random_uuid())
-  returning job_id into v;
+  -- The fixture is shaped by the schema it finds: since the office model a job carries a NOT NULL office_id and its
+  -- project must sit in that office; the pre-office replica (the 0599-absent control) has neither the column nor the
+  -- argument. Same job, same state path, same expectations - only the two columns differ.
+  if has_office then
+    insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+    values (app.test_office(), 'office.instruction', 'teamhq:verify-matrix', app.unnamed_project(app.test_office()), 'verify-matrix-' || p_label, gen_random_uuid())
+    returning job_id into v;
+  else
+    insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
+    values ('office.instruction', 'teamhq:verify-matrix', app.unnamed_project(), 'verify-matrix-' || p_label, gen_random_uuid())
+    returning job_id into v;
+  end if;
   foreach s in array p_path loop
     if s = 'output_created' and p_output then
       insert into public.outputs (job_id, body, confidence, evidence, deterministic) values (v, 'matrix ' || p_label, 'low', 'inferred', true);
