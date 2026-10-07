@@ -115,11 +115,16 @@ try {
     `${personKinds.length} person kinds / ${systemKinds.length} system kinds`,
   )
 
-  // the shape a seeding step would have to copy, applied by hand only so the dispatcher can be driven across offices
+  // the shape a seeding step would have to copy, applied by hand only so the dispatcher can be driven across offices.
+  // The copied briefing's anchor is moved to local midnight ('00:00') on purpose: a daily duty is due only after its anchor
+  // in ITS OWN zone, and the two person offices sit on opposite sides of the date line (Auckland, London), so with the real
+  // 07:00 anchor one of the two briefings is simply not due for about seven hours of every UTC day and this proof went red
+  // for the wrong reason (11:00 to 18:00 UTC). A midnight anchor makes "due" independent of the time of day the proof runs
+  // and leaves what it asserts (the dispatcher fires each office's own copy, once per period, stamped with that office) intact.
   const seed = async (office: string, onlyKinds: string[]): Promise<void> => {
     await db.execute(
       `insert into public.responsibilities (slug, staff_id, description, job_kind, period_minutes, at_time, timezone, pinned_config, recipient_agent, created_by, office_id, enabled)
-       select r.slug, r.staff_id, r.description, r.job_kind, r.period_minutes, r.at_time, r.timezone, r.pinned_config, r.recipient_agent, 'e3 copy', ${lit(office)}::uuid, true
+       select r.slug, r.staff_id, r.description, r.job_kind, r.period_minutes, case when r.at_time is null then null else time '00:00' end, r.timezone, r.pinned_config, r.recipient_agent, 'e3 copy', ${lit(office)}::uuid, true
          from public.responsibilities r where r.office_id = ${lit(op)}::uuid and r.job_kind = any(${`array[${onlyKinds.map(lit).join(',')}]`}::text[])`,
     )
   }
