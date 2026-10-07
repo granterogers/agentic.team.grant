@@ -94,11 +94,11 @@ import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import type { Correction } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
-import { officeTimezone, OPERATOR_TIMEZONE } from '../agents/office-time.ts'
-import { reminderSentence } from '../agents/reminder-say.ts'
 import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
+import { OPERATOR_TIMEZONE, officeTimezone } from '../agents/office-time.ts'
 import { ownTask } from '../agents/own-task.ts'
 import { projectWorkSpine, readProjectWork } from '../agents/project-work.ts'
+import { reminderSentence } from '../agents/reminder-say.ts'
 import { sentencesOf } from '../agents/sentences.ts'
 import {
   pointsAtAProject,

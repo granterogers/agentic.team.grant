@@ -10,8 +10,8 @@
 
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { personalTaskChange, taskStateChange } from '../../src/agents/mine.ts'
 import { classifyIntent } from '../../src/agents/intent.ts'
+import { personalTaskChange, taskStateChange } from '../../src/agents/mine.ts'
 import { taskRequest } from '../../src/agents/tasks.ts'
 
 describe('taskStateChange reads the sentences that finish or call off a task', () => {
@@ -55,11 +55,14 @@ describe('NEGATIVE: a sentence that CREATES work is not a state change, whatever
 
 describe('the team-task reader DOES claim the state-change sentences, which is why the veto exists', () => {
   // Proof that the veto is load-bearing rather than decorative: without it these sentences are creations.
-  it.each(['Mark the roofer task done.', 'Cancel the venue task.', 'Complete the roofer task.'])('%s', (said) => {
-    const made = taskRequest(said, classifyIntent(said))
-    expect(made).not.toBeNull()
-    expect(made?.title).not.toBeNull()
-  })
+  it.each(['Mark the roofer task done.', 'Cancel the venue task.', 'Complete the roofer task.'])(
+    '%s',
+    (said) => {
+      const made = taskRequest(said, classifyIntent(said))
+      expect(made).not.toBeNull()
+      expect(made?.title).not.toBeNull()
+    },
+  )
 })
 
 describe('rename by name', () => {
@@ -69,7 +72,10 @@ describe('rename by name', () => {
     expect(got?.matched).toContain('a new name')
   })
   it('the bare-referent rename still works', () => {
-    expect(personalTaskChange('rename it to Call John')).toMatchObject({ title: 'Call John', name: null })
+    expect(personalTaskChange('rename it to Call John')).toMatchObject({
+      title: 'Call John',
+      name: null,
+    })
   })
   it('NEGATIVE: renaming something that is not a task is not read', () => {
     expect(personalTaskChange('Rename the file to final.pdf')).toBeNull()
@@ -89,10 +95,17 @@ describe('the handler wires the veto (asserted as the call whose answer is consu
     return b === null ? rest : rest.slice(0, a[0].length + b.index)
   }
   it('settles is read from his own words, before forGrant, asked and namedLater', () => {
-    expect(src).toMatch(/const settles =\s*wantsFile !== null \|\| isBranch \|\| forwarded\s*\?\s*null\s*:\s*(?:\/\/[^\n]*\n\s*)?\(?firstOfHis\(taskStateChange\)/)
+    expect(src).toMatch(
+      /const settles =\s*wantsFile !== null \|\| isBranch \|\| forwarded\s*\?\s*null\s*:\s*(?:\/\/[^\n]*\n\s*)?\(?firstOfHis\(taskStateChange\)/,
+    )
     const iSettles = src.indexOf('const settles =')
     expect(iSettles).toBeGreaterThan(0)
-    for (const later of ['const forGrant =', 'const noted =', 'const asked =', 'const namedLater =']) {
+    for (const later of [
+      'const forGrant =',
+      'const noted =',
+      'const asked =',
+      'const namedLater =',
+    ]) {
       expect(src.indexOf(later), later).toBeGreaterThan(iSettles)
     }
   })
@@ -106,7 +119,7 @@ describe('the handler wires the veto (asserted as the call whose answer is consu
   })
 })
 
-describe('Z1: the operator\'s zone is named in ONE module', () => {
+describe("Z1: the operator's zone is named in ONE module", () => {
   const read = (p: string): string =>
     readFileSync(p, 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')

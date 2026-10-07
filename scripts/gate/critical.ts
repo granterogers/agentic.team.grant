@@ -16,7 +16,7 @@ import type { Proof } from './types.ts'
 export const CRITICAL: readonly Proof[] = [
   // ---- tenant isolation and office identity --------------------------------------------------------------------------
   via('p2', 'office-ownership', 76, 'Person A, Person B, the Sample, the Test office and System cannot read or write one another\'s rows (96 attacks)'),
-  via('p2', 'office-ownership-sabotage', 8, 'the isolation suite is proven able to FAIL: each way the structure is weakened turns it red, then restored it is green', { file: 'office-ownership-sabotage', timeoutS: 420 }),
+  via('p2', 'office-ownership-sabotage', 59,'the isolation suite is proven able to FAIL: each way the structure is weakened turns it red, then restored it is green', { file: 'office-ownership-sabotage', timeoutS: 420 }),
   via('p3', 'p3-app-attack', 1100, 'every application door (gateway, Telegram, Slack, MCP, voice, upload, workers) is tried as the wrong person (1,421 attacks)'),
   p('p1-operator', 21, 'a second person reaches none of the operator-only actions and sections'),
   p('p1-storage-order', 15, 'a storage read or write by an unknown or officeless caller is refused BEFORE any storage call is made'),
@@ -59,7 +59,9 @@ export const CRITICAL: readonly Proof[] = [
   p('terminal-job-owes-a-word', 14, 'a job that ends with no answer owes the person one sentence, once'),
   p('parked-turn-owes-a-word', 20, 'a turn parked for a person says so, and is not silently dropped'),
   p('office-fairness', 18, 'one office cannot starve another of the worker, and an overspender\'s background work is held, never a person\'s conversation'),
-  via('script', 'recovery-matrix', 10, 'every stallable job state is recovered or failed, and a malformed row is contained as a warning', { file: 'recovery-matrix', okRe: '\\|\\s*ok\\s*$', failRe: 'WRONG|CONTROL FAILED', timeoutS: 240 }),
+  // The script prints WRONG rows on purpose for the `pre` control (the schema WITHOUT 0599, where recovery must fail); its
+  // own exit code is what judges that half, so only an explicit CONTROL FAILED line is counted as a failed assertion here.
+  via('script', 'recovery-matrix', 18, 'every stallable job state is recovered or failed, and a malformed row is contained as a warning', { file: 'recovery-matrix', okRe: '\\|\\s*ok\\s*$', failRe: 'CONTROL FAILED', timeoutS: 240 }),
   p('drain-survives-sweep', 1, 'one broken job cannot stop the office: the drain still runs the healthy job beside it', { okRe: '^PASS:', failRe: '^FAIL' }),
   via('script', 'approval-race', 2, 'two overlapping answers to one question perform the action ONCE (with the control that shows two without the fix)', { file: 'approval-race', okRe: '^(PASS|CONTROL red)', failRe: '^(FAIL|CONTROL DID NOT)', timeoutS: 240 }),
 
@@ -69,11 +71,11 @@ export const CRITICAL: readonly Proof[] = [
   p('mcp-cannot-answer', 6, 'an external assistant cannot answer an approval or reach another office through MCP'),
   p('e2e-mcp', 40, 'the MCP server isolates 13 tools per office, has no delete tool, and refuses a revoked client'),
   p('e2e-documents', 48, 'documents of every type are ingested, hostile files are bounded, retrieval is project- and office-scoped'),
-  p('e2e-tasks', 65, 'task mutation: create, mine vs team, complete, delete, search, reminders and retry de-duplication through the real doors'),
-  p('e2e-convergence', 70, 'Telegram text and voice, Slack, Team HQ chat and the call write the same ledger, the same job and the same task writer'),
+  p('e2e-tasks', 70,'task mutation: create, mine vs team, complete, delete, search, reminders and retry de-duplication through the real doors'),
+  p('e2e-convergence', 88,'Telegram text and voice, Slack, Team HQ chat and the call write the same ledger, the same job and the same task writer'),
   p('e2e-duties-budget', 29, 'duties and budgets are per-office; an office\'s background work can be held without parking a person\'s conversation'),
-  p('e2e-failure', 15, 'delivery and failure paths: retries are bounded, a failure is said once, nothing is sent twice'),
+  p('e2e-failure', 41,'delivery and failure paths: retries are bounded, a failure is said once, nothing is sent twice'),
 
   // ---- the migration history itself ----------------------------------------------------------------------------------
-  p('replay-parity', 5, 'the whole migration history replayed into an EMPTY database builds a schema fingerprint-identical to the candidate'),
+  p('replay-parity', 7,'the whole migration history replayed into an EMPTY database builds a schema fingerprint-identical to the candidate'),
 ]

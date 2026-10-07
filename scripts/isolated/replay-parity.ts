@@ -39,7 +39,9 @@ const psql = (db: string, args: string[]): string =>
 const fingerprint = (db: string): string[] =>
   psql(db, ['-f', 'scripts/isolated/schema-fingerprint.sql'])
     .split('\n')
-    .filter((l) => l !== '' && !l.startsWith('mig|'))
+    // `mig|` is the runner's ledger (the replica keeps none); `pg_temp_N` / `pg_toast_temp_N` are the per-session temporary
+    // schemas of whichever backend happened to run the query, which differ between any two readings of ONE database.
+    .filter((l) => l !== '' && !l.startsWith('mig|') && !/^ns\|pg_(toast_)?temp_\d+\|/.test(l))
 const diff = (a: string[], b: string[]): { onlyA: string[]; onlyB: string[] } => {
   const sa = new Set(a)
   const sb = new Set(b)

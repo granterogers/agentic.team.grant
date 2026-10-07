@@ -60,3 +60,10 @@ for f in $(cd "$ROOT/migrations" && ls [0-9][0-9][0-9][0-9]_*.sql | sort); do
   n=${f%%_*}; [ "$n" \> "0599" ] || continue
   $P -d post -v ON_ERROR_STOP=1 -1 -f "$ROOT/migrations/$f" >/dev/null; echo "post: $f"
 done
+# Which migration files `post` holds, recorded in `post` itself. The gate (scripts/gate/run.ts) builds its candidate as `post`
+# plus every migration file NOT in this list, so a rebuilt replica never has a migration applied to it twice. (A `post` built
+# before this table existed is taken to hold every migration up to 1026.)
+$P -d post -c "create table public.isolated_replica_migrations (name text primary key)"
+for f in $(cd "$ROOT/migrations" && ls [0-9][0-9][0-9][0-9]_*.sql | sort); do
+  $P -d post -c "insert into public.isolated_replica_migrations(name) values ('$f')"
+done
