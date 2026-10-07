@@ -30,7 +30,9 @@
 --
 --   5. A reminder is marked reminded only when its delivery SENT (C3), re-said up to three times when the delivery
 --      failed, and a reminder SERIES (a repeat with a reminder time and no due date) moves to its next occurrence in
---      place when it is delivered, without being ticked off. Ticking it off ends it. A repeating TASK (it has a due date)
+--      place when it is delivered, without being ticked off. (Ticking it off ENDED it here; the owner reversed that on 7
+--      October 2026 and 1034 replaces it: completing completes that time only, stopping the series is explicit.)
+--      A repeating TASK (it has a due date)
 --      is unchanged: ticking it off makes the next occurrence. See section 5 below. It reads app.job_delivery_state
 --      from 1029 at run time (a function body is resolved when called, so the order of the two files does not matter,
 --      and a database without 1029 makes app.reminders_settle raise, which the handler answers by marking as before).

@@ -2656,11 +2656,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         alsoAddressed: payload.addressed_also ?? [],
         handedOff: isBranch,
       })
+      /*
+        A turn the office settles in code does not wait on a model to choose WHO answers it.
+
+        The roster's semantic reading (#232) is one model call whenever the subject matcher names nobody, and "Remind me
+        Friday to call Mum" names nobody: it was a model call on every reminder, a wait of up to the provider chain's
+        deadlines during an outage, spent on a turn the personal-task readers settle without one (the journeys assert it:
+        "a reminder needs no model"). It was invisible while it was unattributed and while only Team HQ reached it; every
+        typed-to-the-chief Telegram message reaches it now, so it asks first whether a deterministic reader owns the turn.
+        Coarser than the readers that act (no ellipsis, no grounding check): a miss costs one model call as before, and a
+        false hit costs the literal roster, which is what the turn had before the semantic reader existed.
+      */
+      const routeTz = await officeTimezone(deps.db, job.jobId)
+      const routeNow = deps.now?.() ?? new Date()
+      const settledInCode =
+        !forwarded &&
+        (personalTaskRequest(turn.kept, routeNow, routeTz) !== null ||
+          personalTaskChange(turn.kept, routeNow, routeTz) !== null ||
+          taskStateChange(turn.kept) !== null)
       const who = await speaker(
         deps.db,
         payload.addressed_to ?? null,
         instruction,
-        deps.router,
+        settledInCode ? null : deps.router,
         job.projectId ?? null,
         payload.addressed_also ?? [],
         job.jobId,

@@ -96,7 +96,7 @@ describe('the handler wires the veto (asserted as the call whose answer is consu
   }
   it('settles is read from his own words, before forGrant, asked and namedLater', () => {
     expect(src).toMatch(
-      /const settles =\s*wantsFile !== null \|\| isBranch \|\| forwarded\s*\?\s*null\s*:\s*(?:\/\/[^\n]*\n\s*)?\(?firstOfHis\(taskStateChange\)/,
+      /const settles =\s*wantsFile !== null \|\| isBranch \|\| forwarded(?: \|\| stops !== null)?\s*\?\s*null\s*:\s*(?:\/\/[^\n]*\n\s*)?\(?firstOfHis\(taskStateChange\)/,
     )
     const iSettles = src.indexOf('const settles =')
     expect(iSettles).toBeGreaterThan(0)
@@ -116,6 +116,21 @@ describe('the handler wires the veto (asserted as the call whose answer is consu
     expect(forGrant).toContain('settles !== null')
     const namedLater = sliceBetween(/const namedLater =/, /\n\s*const change =/)
     expect(namedLater).toContain('settles !== null')
+  })
+  it('stopping a recurring reminder is read from his own words before settles, and every creating/changing reader defers to it', () => {
+    // The wired expression, not the name: his words (never a paraphrase), silent for a forwarded turn, read BEFORE settles.
+    expect(src).toMatch(
+      /const stops =\s*wantsFile !== null \|\| isBranch \|\| forwarded\s*\?\s*null\s*:\s*\(firstOfHis\(seriesStopRequest\) \?\? seriesStopRequest\(turn\.kept\)\)/,
+    )
+    expect(src.indexOf('const stops =')).toBeGreaterThan(0)
+    expect(src.indexOf('const settles =')).toBeGreaterThan(src.indexOf('const stops ='))
+    expect(sliceBetween(/const settles =/, /\n\s*const forGrant =/)).toContain('stops !== null')
+    expect(sliceBetween(/const forGrant =/, /\n\s*const noted =/)).toContain('stops !== null')
+    expect(sliceBetween(/const asked =/, /\n\s*const namedLater =/)).toContain('stops !== null')
+    expect(sliceBetween(/const namedLater =/, /\n\s*const change =/)).toContain('stops !== null')
+    expect(sliceBetween(/const change =/, /\n\s*const changed =/)).toContain('stops !== null')
+    // and it is the press that ends the series: the answer is composed from what the database returned
+    expect(src).toMatch(/select app\.reminder_series_stop\(/)
   })
 })
 
