@@ -297,7 +297,11 @@ export const projectIdOf = (slug) => {
     : undefined
 }
 
-/** One session per visit, so the office can group the turns of a conversation. */
+/**
+ * One id per page visit. It is the DEDUPE and containment identity of a turn, not the conversation: the office derives
+ * the conversation (person + office + project) from the verified login, so a reload, a second tab or another device
+ * keeps the thread (H1). Do not store this or send anything else as an identity; the shape is pinned by check:voice-sessions.
+ */
 const SESSION = `s${Math.random().toString(36).slice(2, 12)}`
 
 export function send(slug, text, context, to, also = []) {

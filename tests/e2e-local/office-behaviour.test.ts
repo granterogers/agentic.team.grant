@@ -101,10 +101,10 @@ describe('a false "I contacted somebody" is stopped (claimsToHaveSent)', () => {
     expect(claimsToHaveSent(text)).not.toBeNull()
   })
 
-  // The office has no outbound path while it answers, so every one of these is false by construction. Measured on
-  // 7 October 2026: the detector sees none of them, and the real worker delivers them verbatim
-  // (scripts/isolated/e2e-failure.ts, F3).
-  const MISSED = [
+  // The office has no outbound path while it answers, so every one of these is false by construction. They were
+  // measured on 7 October 2026 as MISSED (the real worker delivered them verbatim, scripts/isolated/e2e-failure.ts F3)
+  // and are caught since the claim detector and the evidence requirement (src/agents/consequence.ts) replaced the list.
+  const FORMERLY_MISSED = [
     "Email sent to Kevin, cc'd your accountant.",
     'Email sent to Kevin.',
     'The report was sent to Kevin and your accountant.',
@@ -115,8 +115,8 @@ describe('a false "I contacted somebody" is stopped (claimsToHaveSent)', () => {
     'Emailed Kevin the report.',
     'The report has been delivered to Kevin.',
   ]
-  for (const text of MISSED) {
-    it.fails(`DEFECT (live): not yet caught - ${text}`, () => {
+  for (const text of FORMERLY_MISSED) {
+    it(`caught (was a live defect) - ${text}`, () => {
       expect(claimsToHaveSent(text)).not.toBeNull()
     })
   }
@@ -201,7 +201,9 @@ describe('model fallback chain', () => {
     ).rejects.toBeInstanceOf(AllCandidatesFailedError)
   })
 
-  it('FINDING (documented): one call tries three models, so the fourth (free tier) is not reached', async () => {
+  // M1 (was a documented FINDING: three models per call). The documented chain is four deep and the free tier is the
+  // last rung, so it has to be reachable inside one call.
+  it('one call walks the whole documented chain, so the fourth (free tier) IS reached', async () => {
     const asked: string[] = []
     const impl = vi.fn(async (_u: string, init: { body: string }) => {
       asked.push(modelOf(init))
@@ -210,13 +212,13 @@ describe('model fallback chain', () => {
     await new ProviderRouter(new FakeDb(CHAIN.map(row)), 'k', impl)
       .complete({ messages: MESSAGES })
       .catch(() => undefined)
-    expect(asked).toEqual(CHAIN.slice(0, 3))
-    expect(asked).not.toContain(CHAIN[3])
+    expect(asked).toEqual(CHAIN)
   })
 
-  // A provider that accepts the connection and never answers: no AbortSignal, so the call never settles and the
-  // chain never advances; the only bound is the platform killing the invocation (lease lapse, then recovery).
-  it.fails('DEFECT (latent): a model that HANGS is failed over from within a bounded time', async () => {
+  // M1 (was an `it.fails` DEFECT): a provider that accepts the connection and never answers is abandoned at the
+  // per-request deadline and the next model answers. Real timers with a tiny deadline; the race against a safety
+  // timer means a regression reads "still waiting" instead of hanging the suite.
+  it('a model that HANGS is failed over from within a bounded time', async () => {
     let n = 0
     const impl = vi.fn(async (_u: string, init: { body: string }) => {
       n += 1
@@ -224,12 +226,12 @@ describe('model fallback chain', () => {
       return good(modelOf(init))
     }) as unknown as typeof fetch
     const settled = await Promise.race([
-      new ProviderRouter(new FakeDb(CHAIN.map(row)), 'k', impl)
+      new ProviderRouter(new FakeDb(CHAIN.map(row)), 'k', impl, 4, { requestTimeoutMs: 40 })
         .complete({ messages: MESSAGES })
-        .then(() => 'answered')
+        .then((r) => `answered by ${r.model}`)
         .catch(() => 'failed'),
-      new Promise<string>((ok) => setTimeout(() => ok('still waiting'), 400)),
+      new Promise<string>((ok) => setTimeout(() => ok('still waiting'), 800)),
     ])
-    expect(settled).not.toBe('still waiting')
+    expect(settled).toBe(`answered by ${CHAIN[1]}`)
   })
 })

@@ -25,10 +25,12 @@
  *
  * ## Which timezone
  *
- * Grant's, from `system_config.grant.timezone` (Europe/Athens), passed in
- * rather than read here — the same reason `localDate` takes one. "Which day is
- * this" is the single decision a UTC server gets wrong at exactly the hours he
- * is most likely to be typing.
+ * The office's, from `public.offices.timezone` via `officeTimezone`
+ * (`office-time.ts`), passed in rather than read here — the same reason
+ * `localDate` takes one. "Which day is this" is the single decision a UTC
+ * server gets wrong at exactly the hours he is most likely to be typing. The
+ * default argument is the operator office's documented zone, for a caller with
+ * none to pass; `addTask` always passes the office's.
  *
  * ## What it refuses, on purpose
  *
@@ -39,6 +41,7 @@
  */
 
 /** Monday-first is not used here; JavaScript's own 0=Sunday is, throughout. */
+import { OPERATOR_TIMEZONE } from './office-time.ts'
 import { DANGLING_AFTER_A_DATE } from './request.ts'
 
 const WEEKDAYS: Readonly<Record<string, number>> = {
@@ -153,50 +156,21 @@ export interface Due {
 }
 
 /**
- * The deadline in a sentence, or null when there is not one this can be sure
- * of.
+ * A calendar date written out in a sentence: an ISO date, "3 October",
+ * "October 3", "3rd of October", with an optional year.
  *
- * `now` and `timeZone` are arguments rather than reads, so the whole thing is
- * a pure function and a test can sit on a Tuesday for ever.
+ * Three answers, kept apart on purpose: `undefined` is "this sentence names no
+ * calendar date, keep looking", `null` is "it names one that does not exist
+ * (31 February)" and is a refusal that stops the search, and a `Due` is the
+ * date. `dueOn` and the personal-task reader (`whenFor`) both read it, so
+ * "remind me on 15 October" and "by 15 October" cannot disagree.
+ *
+ * No year means the next occurrence in `timeZone`: "3 October" said in
+ * November is next October, never five weeks ago.
  */
-export function dueOn(text: string, now: Date, timeZone = 'Europe/Athens'): Due | null {
+export function calendarDateIn(text: string, now: Date, timeZone: string): Due | null | undefined {
   const said = String(text ?? '')
-  if (said.trim() === '') return null
-  if (VAGUE.test(said)) return null
-
   const t = todayIn(now, timeZone)
-
-  // today / tomorrow / the day after tomorrow
-  const plain = /\b(today|tonight|tomorrow|the\s+day\s+after\s+tomorrow)\b/i.exec(said)
-  if (plain !== null) {
-    const word = plain[1]?.toLowerCase() ?? ''
-    const days = word.startsWith('the day after') ? 2 : word === 'tomorrow' ? 1 : 0
-    return { on: addDays(t.y, t.m, t.d, days), from: plain[0] }
-  }
-
-  // in three days / in 2 weeks
-  const relative = /\bin\s+(\d{1,3}|a|one|two|three|four|five|six|seven)\s+(day|week)s?\b/i.exec(
-    said,
-  )
-  if (relative !== null) {
-    const words: Readonly<Record<string, number>> = {
-      a: 1,
-      one: 1,
-      two: 2,
-      three: 3,
-      four: 4,
-      five: 5,
-      six: 6,
-      seven: 7,
-    }
-    const raw = (relative[1] ?? '').toLowerCase()
-    const n = words[raw] ?? Number(raw)
-    if (Number.isFinite(n) && n > 0 && n < 400) {
-      const step = (relative[2] ?? '').toLowerCase().startsWith('week') ? 7 : 1
-      return { on: addDays(t.y, t.m, t.d, n * step), from: relative[0] }
-    }
-  }
-
   // an explicit ISO date, which a connector or a form is likelier to produce
   const explicit = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(said)
   if (explicit !== null) {
@@ -234,6 +208,56 @@ export function dueOn(text: string, now: Date, timeZone = 'Europe/Athens'): Due 
     const on = passed ? realDate(t.y + 1, month, day) : thisYear
     return on === null ? null : { on, from: whole }
   }
+  return undefined
+}
+
+/**
+ * The deadline in a sentence, or null when there is not one this can be sure
+ * of.
+ *
+ * `now` and `timeZone` are arguments rather than reads, so the whole thing is
+ * a pure function and a test can sit on a Tuesday for ever.
+ */
+export function dueOn(text: string, now: Date, timeZone = OPERATOR_TIMEZONE): Due | null {
+  const said = String(text ?? '')
+  if (said.trim() === '') return null
+  if (VAGUE.test(said)) return null
+
+  const t = todayIn(now, timeZone)
+
+  // today / tomorrow / the day after tomorrow
+  const plain = /\b(today|tonight|tomorrow|the\s+day\s+after\s+tomorrow)\b/i.exec(said)
+  if (plain !== null) {
+    const word = plain[1]?.toLowerCase() ?? ''
+    const days = word.startsWith('the day after') ? 2 : word === 'tomorrow' ? 1 : 0
+    return { on: addDays(t.y, t.m, t.d, days), from: plain[0] }
+  }
+
+  // in three days / in 2 weeks
+  const relative = /\bin\s+(\d{1,3}|a|one|two|three|four|five|six|seven)\s+(day|week)s?\b/i.exec(
+    said,
+  )
+  if (relative !== null) {
+    const words: Readonly<Record<string, number>> = {
+      a: 1,
+      one: 1,
+      two: 2,
+      three: 3,
+      four: 4,
+      five: 5,
+      six: 6,
+      seven: 7,
+    }
+    const raw = (relative[1] ?? '').toLowerCase()
+    const n = words[raw] ?? Number(raw)
+    if (Number.isFinite(n) && n > 0 && n < 400) {
+      const step = (relative[2] ?? '').toLowerCase().startsWith('week') ? 7 : 1
+      return { on: addDays(t.y, t.m, t.d, n * step), from: relative[0] }
+    }
+  }
+
+  const calendar = calendarDateIn(said, now, timeZone)
+  if (calendar !== undefined) return calendar
 
   /*
     "end of the week" / "end of the month" — both have an unambiguous answer,

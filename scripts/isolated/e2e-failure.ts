@@ -25,7 +25,8 @@ import { combinedNotifier } from '../../src/channels/notify.ts'
 import { deliveryKey } from '../../src/jobs/delivery-key.ts'
 import { apology } from '../../src/jobs/lastword.ts'
 import { drain, type Handler, type HandlerOutput, type Job, type Reviewer } from '../../src/jobs/worker.ts'
-import { AllCandidatesFailedError } from '../../src/providers/router.ts'
+import type { SqlExecutor, SqlResult } from '../../src/db/executor.ts'
+import { AllCandidatesFailedError, ProviderRouter } from '../../src/providers/router.ts'
 import { isolated } from './guard.ts'
 import { CHAT, realParent, realTelegramKey, registerBot } from './real-telegram.ts'
 
@@ -180,15 +181,21 @@ const sentSince = (n: number) => sent.slice(n)
     ["I've emailed Kevin the report and copied your accountant.", true],
     ['I messaged the team on Slack.', true],
     ['Done - I sent the report to Kevin.', true],
-    ["Email sent to Kevin, cc'd your accountant.", false],
-    ['Email sent to Kevin.', false],
-    ['The report was sent to Kevin and your accountant.', false],
-    ['Kevin has been sent the report.', false],
-    ["I've cc'd your accountant.", false],
-    ["I've shared the report with Kevin.", false],
-    ["I've let Kevin know.", false],
-    ['Emailed Kevin the report.', false],
-    ['The report has been delivered to Kevin.', false],
+    ["Email sent to Kevin, cc'd your accountant.", true],
+    ['Email sent to Kevin.', true],
+    ['The report was sent to Kevin and your accountant.', true],
+    ['Kevin has been sent the report.', true],
+    ["I've cc'd your accountant.", true],
+    ["I've shared the report with Kevin.", true],
+    ["I've let Kevin know.", true],
+    ['Emailed Kevin the report.', true],
+    ['The report has been delivered to Kevin.', true],
+    ['The report has been sent.', true],
+    ["I've shared it with Kevin.", true],
+    ['I uploaded the report to the shared drive.', true],
+    ['I approved the draft and cancelled the Thursday meeting.', true],
+    ['I can email Kevin the report whenever you like.', true],
+    ['I drafted an email to Kevin.', true],
   ]
   for (const [text, expectedCaught] of phrasings) {
     await quiet()
@@ -204,6 +211,74 @@ const sentSince = (n: number) => sent.slice(n)
     } else {
       finding(`a false "I contacted somebody" reached the chat verbatim: ${JSON.stringify(text)}`, `acted unset, no outbound path exists (job ${String((await job(id)).s)})`)
     }
+  }
+
+  // F3b the refusal RECOVERS: the model is told why on the retry and says the true thing, which is what is delivered.
+  {
+    await quiet()
+    const honest = 'I have not emailed Kevin and I cannot send email from here. Here is the text for you to send yourself.'
+    behaviour = async (j, call) => {
+      if (call === 1) return answer('Email sent to Kevin, cc’d your accountant.')
+      const note = String(
+        ((await one(`select coalesce(pinned_config ->> 'coherence_note', '') as n from public.jobs where job_id = ${lit(j.jobId)}::uuid`)).n as string) ?? '',
+      )
+      // the closed loop: the retry can SEE why it was refused
+      return answer(note.includes('email') ? honest : 'the retry was not told why')
+    }
+    const id = await realParent(db)
+    const before = sent.length
+    await tickUntilSettled(id)
+    const seen = sentSince(before)
+    check('F3b a refused false claim is retried with the reason in hand and the true sentence is what reaches him', seen.length === 1 && seen[0]?.text === honest, JSON.stringify(seen.map((s) => s.text.slice(0, 80))))
+    check('F3b the refusal is recorded as an impediment (countable, not silent)', Number((await one(`select count(*)::int as n from public.job_impediments where job_id = ${lit(id)}::uuid and noticed_by = 'the quality gate'`)).n) >= 1)
+  }
+
+  // F3c a model that never stops claiming: he is not left in silence and is never sent the false sentence.
+  {
+    await quiet()
+    behaviour = async () => answer('Email sent to Kevin.')
+    const id = await realParent(db)
+    const before = sent.length
+    await tickUntilSettled(id)
+    const seen = sentSince(before)
+    check('F3c a persistent false claim is never delivered', !seen.some((s) => s.text.includes('Email sent')), JSON.stringify(seen.map((s) => s.text.slice(0, 60))))
+    check('F3c and he is told something, once (never silence)', seen.length === 1, `${seen.length} message(s)`)
+  }
+
+  // F3d controls: true answers that mention the same verbs innocuously are delivered untouched.
+  for (const text of [
+    'I have not emailed Kevin and I cannot send email from here.',
+    'Shall I send it to Kevin?',
+    'I can draft an email to Kevin for you to send.',
+    'The contract says the invoice was emailed to the client on 3 March.',
+    'I will email Kevin once you approve.',
+  ]) {
+    await quiet()
+    behaviour = async () => answer(text)
+    const id = await realParent(db)
+    const before = sent.length
+    await tickUntilSettled(id)
+    check(`F3d control delivered untouched: ${JSON.stringify(text)}`, sentSince(before).some((s) => s.text === text))
+  }
+
+  // F3e the EVIDENCE decides: the same sentence is refused with no task row and delivered when this job made one.
+  for (const [makeRow, expectDelivered] of [[false, false], [true, true]] as const) {
+    await quiet()
+    const claim = 'I scheduled the review task for Friday.'
+    behaviour = async (j) => {
+      if (makeRow) {
+        await db.execute(
+          `select app.task_add(p_office => app.job_office(${lit(j.jobId)}::uuid), p_project => app.unnamed_project(app.job_office(${lit(j.jobId)}::uuid)),
+             p_title => 'Review the venue budget', p_added_by => 'grant', p_job => ${lit(j.jobId)}::uuid)`,
+        )
+      }
+      return answer(claim)
+    }
+    const id = await realParent(db)
+    const before = sent.length
+    await tickUntilSettled(id)
+    const delivered = sentSince(before).some((s) => s.text === claim)
+    check(`F3e "${claim}" ${makeRow ? 'WITH' : 'WITHOUT'} a task row of this job is ${expectDelivered ? 'delivered' : 'refused'}`, delivered === expectDelivered, `delivered=${String(delivered)}`)
   }
 }
 
@@ -312,6 +387,51 @@ const sentSince = (n: number) => sent.slice(n)
   const total = sentSince(before).filter((s) => s.text.startsWith('Here is where')).length + 0
   check('F7 control: re-driven under the same key it is sent exactly once, and a second re-drive is a no-op', first.outcome === 'sent' && second.outcome !== 'failed' && total === 1, `${first.outcome} then ${second.outcome}; ${total} message(s) in all`)
   void key
+}
+
+// ===== F8 (M1) the REAL router, every model HANGS -> the same single apology ====================================
+{
+  await quiet()
+  // The real ProviderRouter over a stub chain whose connections never answer (and ignore their AbortSignal), with a
+  // tiny deadline so the run is fast. The router's own database is a stand-in that only serves the model order; the
+  // job, the worker, the review gate, the delivery and the last word are all the real thing on the replica.
+  const chainRow = (id: string) => ({
+    provider: 'openrouter', model_id: id, pricing_prompt: '0', pricing_completion: '0',
+    base_url: 'https://openrouter.invalid/api/v1', free_only: true, secret_ref: null, standing: 'unproven', why: 'm1',
+  })
+  const chain = ['openai/gpt-oss-120b', 'qwen/qwen3.7-flash', 'mistralai/mistral-small-3.2-24b-instruct', 'some/free-tier:free']
+  const routerDb: SqlExecutor = {
+    kind: 'fake',
+    execute: async (sql: string): Promise<SqlResult> => {
+      if (sql.includes('app.model_order(')) return { rows: chain.map(chainRow) }
+      if (sql.includes('provider_available')) return { rows: [{ ok: true }] }
+      return { rows: [] }
+    },
+  } as unknown as SqlExecutor
+  const asked: string[] = []
+  const hang = (async (_u: string, init: { body: string }) => {
+    asked.push(String((JSON.parse(init.body) as { model: string }).model))
+    return new Promise<Response>(() => undefined)
+  }) as unknown as typeof fetch
+  const router = new ProviderRouter(routerDb, 'k', hang, 4, { requestTimeoutMs: 25 })
+  behaviour = async () => {
+    await router.complete({ messages: [{ role: 'user', content: 'hi' }] })
+    throw new Error('e2e: a hung chain must not answer')
+  }
+  const id = await realParent(db)
+  const before = sent.length
+  const t0 = Date.now()
+  const ticks = await tickUntilSettled(id)
+  const j = await job(id)
+  const outs = await outputsOf(id)
+  const seen = sentSince(before)
+  check('F8 a chain of hung models ends the turn `failed`, in bounded time, not stuck', j.s === 'failed' && Date.now() - t0 < 20000, `state ${String(j.s)} after ${String(ticks)} tick(s), ${String(Date.now() - t0)}ms`)
+  check('F8 every attempt walked all four models, free tier included', asked.length === Number(j.attempt) * 4 && new Set(asked).size === 4, `${asked.length} request(s) over ${String(j.attempt)} attempt(s)`)
+  check('F8 the job row says it was a timeout, in words', /did not answer within/.test(String(j.why)) || /all 4 candidate/.test(String(j.why)), JSON.stringify(String(j.why).slice(0, 140)))
+  check('F8 the person is told exactly once, with the code-composed apology', seen.length === 1 && (seen[0]?.text === apology(false) || seen[0]?.text === apology(true)), `${seen.length} message(s); ${JSON.stringify(seen[0]?.text.slice(0, 90))}`)
+  check('F8 exactly one notice is stored as an output', outs.length === 1, `${outs.length} output(s)`)
+  await tickUntilSettled(id, 2)
+  check('F8 a later tick does not say it again', sentSince(before).length === 1, `${sentSince(before).length} total`)
 }
 
 const failed = results.filter((r) => !r).length

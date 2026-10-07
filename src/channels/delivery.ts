@@ -59,6 +59,8 @@ export class TransportError extends Error {
   constructor(
     readonly code: string,
     readonly kind: TransportFailureKind,
+    /** The provider's own wait (Retry-After / retry_after), seconds. The redrive waits at least this long. */
+    readonly retryAfterSeconds: number | null = null,
   ) {
     super(`transport failed: ${code}`)
     this.name = 'TransportError'
@@ -206,6 +208,16 @@ export class DeliveryService {
         break // 'claimed' or 'reclaimed' — ours to send.
     }
 
+    /*
+      THE FENCE AND THE INTENT RECORD (1029). Written BEFORE the transport is called: this attempt is the only one that
+      may send, and if the worker dies after the provider accepts, the row says a send began, so recovery parks it as
+      ambiguous instead of sending a second copy. A database built before 1029 has no such function; that one error is
+      tolerated so a worker deployed first still delivers (the old behaviour), and nothing else is.
+    */
+    const fence = await this.beginSend(office, claim)
+    if (fence === 'already_sent') return { ...base, outcome: 'already_sent', messageRef: null }
+    if (fence !== 'go') return { ...base, outcome: 'held', messageRef: null }
+
     let result: SendResult
     try {
       result = await this.transport.send({
@@ -314,20 +326,49 @@ export class DeliveryService {
     return row
   }
 
+  private async beginSend(office: string, claim: ClaimRow): Promise<string> {
+    try {
+      const row = await this.one<{ r: string }>(
+        `select app.begin_delivery_send(${office}, ${lit(claim.delivery_id)}::uuid, ${String(claim.attempt)}) as r`,
+      )
+      return row?.r ?? 'go'
+    } catch (error) {
+      if (
+        /function app\.begin_delivery_send.* does not exist/i.test(String((error as Error).message))
+      )
+        return 'go'
+      throw error
+    }
+  }
+
   private async recordFailure(
     claim: ClaimRow,
     error: unknown,
     office: string,
   ): Promise<DeliveryResult> {
-    if (!(error instanceof TransportError)) throw error
+    if (!(error instanceof TransportError)) {
+      // Unknown whether the provider accepted it: park it as indeterminate so it is never left claimed, then let the
+      // caller see the throw as it always has.
+      await this.db
+        .execute(
+          `select app.record_delivery_failure(${office}, ${lit(claim.delivery_id)}::uuid, 'indeterminate:unclassified_error', false) as outcome`,
+        )
+        .catch(() => undefined)
+      throw error
+    }
 
     // `indeterminate` is NOT recorded as retryable. Releasing the lease would
     // invite exactly the second send the transport refused to make. It parks as
     // `failed`, which is terminal and therefore safe, and the only way out is
     // `resolveIndeterminate` — which requires having actually looked.
     const retryable = error.kind === 'retryable'
+    // The provider's wait is passed only when there is one, so an older database (four-argument function) still works.
+    const wait =
+      retryable && error.retryAfterSeconds !== null && error.retryAfterSeconds > 0
+        ? `, ${String(Math.ceil(error.retryAfterSeconds))}`
+        : ''
     await this.db.execute(
-      `select app.record_delivery_failure(${office}, ${lit(claim.delivery_id)}::uuid, ${lit(error.code.slice(0, 200))}, ${retryable ? 'true' : 'false'}) as outcome`,
+      `select app.record_delivery_failure(${office}, ${lit(claim.delivery_id)}::uuid, ${lit(error.code.slice(0, 200))}, ${retryable ? 'true' : 'false'}${wait}) as outcome`,
     )
 
     return {

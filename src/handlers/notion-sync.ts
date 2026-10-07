@@ -54,12 +54,39 @@ import { howComposed } from '../agents/provenance.ts'
 import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
-import { NotionClient } from '../notion/api.ts'
+import { NotionApiError, NotionClient } from '../notion/api.ts'
 import { syncNotion } from '../notion/sync.ts'
 import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count, list } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
+
+/**
+ * What is said when Notion refuses the sync for a reason retrying cannot change. Composed in code, never by a model:
+ * the moment an integration fails is when a model is least trustworthy to word things, and a reworded notice defeats
+ * the once-a-day dedupe. The wording follows Grant's rules for incident notices: what happened to HIM first, what still
+ * works, then what to do, and never "press" something that is not there.
+ */
+export const refusedNotice = (
+  error: NotionApiError,
+): Pick<HandlerOutput, 'body' | 'announce' | 'topic'> =>
+  error.kind === 'auth'
+    ? {
+        body:
+          'Notion has stopped accepting the connection I use to read your notes, so I cannot sync your pages right now.\n\n' +
+          'What this affects: new and changed Notion pages will not show up in Team HQ until it is fixed.\n' +
+          'What still works: everything already saved, including the Notion pages I had already read.\n\n' +
+          'What to do: open Team HQ, go to Settings, then Setting up, and connect Notion again.',
+        announce: true,
+        topic: 'notion.token_refused',
+      }
+    : {
+        body:
+          `Notion turned down my request to read your pages (HTTP ${String(error.status)}), and trying again will not change that, so nothing was synced.\n\n` +
+          'What still works: everything already saved. I will try again at the next sync.',
+        announce: true,
+        topic: 'notion.sync_refused',
+      }
 
 export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null = null): Handler {
   return {
@@ -150,13 +177,30 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
       const client = new NotionClient(token)
       const result = { added: 0, changed: 0, shared: 0, skipped: [] as string[] }
       const filed: string[] = []
-      for (const project of attached) {
-        const one = await syncNotion(db, { jobId: job.jobId }, client, project.id)
-        result.added += one.added
-        result.changed += one.changed
-        result.shared += one.shared
-        result.skipped.push(...one.skipped)
-        if (one.added > 0 || one.changed > 0) filed.push(project.name)
+      try {
+        for (const project of attached) {
+          const one = await syncNotion(db, { jobId: job.jobId }, client, project.id)
+          result.added += one.added
+          result.changed += one.changed
+          result.shared += one.shared
+          result.skipped.push(...one.skipped)
+          if (one.added > 0 || one.changed > 0) filed.push(project.name)
+        }
+      } catch (error) {
+        /*
+          A refusal that no retry can change is REPORTED, not thrown (M2).
+
+          A revoked or removed integration (401) and a request Notion will never accept (a 4xx, as an API-version
+          drift produces) were thrown from here, so each run retried the same doomed call to the job's attempt
+          ceiling, failed, wrote an impediment nobody reads and said nothing to anybody; two hours later the duty fired
+          again, for ever. A duty that cannot work says so, once a day (topic, so `app.say_once` holds the repeats),
+          and completes. Anything TRANSIENT (429, 5xx, a timeout, a malformed reply) still throws, because the next
+          attempt can succeed.
+        */
+        if (error instanceof NotionApiError && error.kind !== 'transient') {
+          return { ...base, ...refusedNotice(error) } satisfies HandlerOutput
+        }
+        throw error
       }
       const project = {
         name: filed.length > 0 ? filed.join(' and ') : attached.map((a) => a.name).join(' and '),

@@ -202,7 +202,9 @@ const fp = 'a'.repeat(64)
     `select app.pause_job(${lit(id)}::uuid, 'awaiting_approval', 'asks a question', 'when he answers', false, null, null, ${lit(fp)})`,
   )
   const waiting = await situation(id)
-  const polled = (await one(`select app.mcp_job_status(app.job_office(${lit(id)}::uuid), ${lit(id)}::uuid) as s`)).s as {
+  const polled = (
+    await one(`select app.mcp_job_status(app.job_office(${lit(id)}::uuid), ${lit(id)}::uuid) as s`)
+  ).s as {
     state: string
     situation: string
   }

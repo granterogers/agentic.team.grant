@@ -94,6 +94,8 @@ import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import type { Correction } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
+import { OPERATOR_TIMEZONE, officeTimezone } from '../agents/office-time.ts'
+import { reminderSentence } from '../agents/reminder-say.ts'
 import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
 import { ownTask } from '../agents/own-task.ts'
 import { projectWorkSpine, readProjectWork } from '../agents/project-work.ts'
@@ -1222,6 +1224,7 @@ async function addTask(
   asked: TaskRequest,
   said_by = '',
   now: Date = new Date(),
+  timeZone: string = OPERATOR_TIMEZONE,
 ): Promise<string> {
   if (asked.title === null) return NEEDS_A_TITLE
 
@@ -1243,7 +1246,7 @@ async function addTask(
     every phrase the resolver declines — this repository filed that as the
     reason the subtraction was removed, and it is still the reason.
   */
-  const when = dueOn(said_by === '' ? asked.title : said_by, now)
+  const when = dueOn(said_by === '' ? asked.title : said_by, now, timeZone)
   /*
     And then out of the NAME, because it is now in the column.
 
@@ -3544,6 +3547,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         main thread read is far below and hoisting it would put a query in
         front of every message to serve this one.
       */
+      /*
+        THE OFFICE'S CLOCK, read once for every date this turn resolves (Z1).
+        Each of the readers below takes the zone as an argument; none of them
+        reads it, so a test can sit them on either side of midnight.
+      */
+      const officeTz = await officeTimezone(deps.db, job.jobId)
+      const nowAt = deps.now?.() ?? new Date()
       const hisLastTurn = wantsAntecedent(turn.kept)
         ? // His last three turns, so "and another for the caterers" after "also one
           // to book the minibus" still reaches the turn that said "task".
@@ -3589,7 +3599,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         overlap on any create sentence in the corpus, so this only ever
         subtracts, which is the cheap direction `mine.ts` argues for.
       */
-      const changesHis = isBranch ? null : firstOfHis(personalTaskChange)
+      const changesHis = isBranch
+        ? null
+        : firstOfHis((text) => personalTaskChange(text, nowAt, officeTz))
 
       /*
         HE CALLED IT OFF (#315, 0555).
@@ -4283,7 +4295,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ? null
         : firstOfHis((text) => {
             // Grounded in his words, for the reason given at the project-task reader.
-            const got = personalTaskRequest(resolveElliptical(text, `${turn.kept} ${hisLastTurn}`))
+            const got = personalTaskRequest(
+              resolveElliptical(text, `${turn.kept} ${hisLastTurn}`),
+              nowAt,
+              officeTz,
+            )
             if (got === null || !groundedIn(got.title, turn.kept)) return null
             /*
               And a change of mind inside the sentence names the task by what
@@ -4553,8 +4569,36 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const subOf =
         isBranch || forwarded ? null : (firstOfHis(subtaskRequest) ?? subtaskRequest(turn.kept))
+      /*
+        ONE SENTENCE, ONE EFFECT (R2). Finishing or calling off a task is read
+        HERE, from his own words, before any reader that could create one from
+        the same sentence. "Mark the roofer task done" was taken by the team-task
+        reader as a request for a task called "the roofer task done" (it has a
+        task noun and an imperative) while the completion ran beside it, so one
+        sentence ticked a task AND filed a junk one and answered "Added it".
+        `changesHis` already vetoed the personal reader for a change; this is the
+        same veto for a state change, and it is read from `firstOfHis` for
+        #322's reason: a guard on a creation grounded in his words may not be
+        grounded in a paraphrase. `taskStateChange` itself declines a sentence
+        that is a request for a NEW task or reminder ("add a task to cancel the
+        venue task"), so the two cannot both claim one sentence.
+
+        It was `noted !== null || ...` before and read after `noted`; now it
+        is read first and `noted` (and `asked`, and `namedLater`) are the ones
+        that defer.
+      */
+      const settles =
+        wantsFile !== null || isBranch || forwarded
+          ? null
+          : // His literal words too: a withdrawal has no surviving intent (R26, R42).
+            (firstOfHis(taskStateChange) ?? taskStateChange(turn.kept))
       const forGrant =
-        wantsFile !== null || isBranch || changesHis !== null || subOf !== null || forwarded
+        wantsFile !== null ||
+        isBranch ||
+        changesHis !== null ||
+        settles !== null ||
+        subOf !== null ||
+        forwarded
           ? null
           : deferred
       const noted =
@@ -4618,11 +4662,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   */
                   p_job => ${lit(job.jobId)}::uuid
                 ) as t`)
-              .then((r) => {
+              .then(async (r) => {
                 const answer = (r.rows[0] as { t?: unknown })?.t
                 const got = (typeof answer === 'string' ? JSON.parse(answer) : answer) as {
                   ok?: boolean
                   repeated?: boolean
+                  id?: string
                 }
                 /*
                   An offer may only promise what the press can perform. If the
@@ -4642,22 +4687,47 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   return `That is already on your list from a moment ago — "${forGrant.title}". I have not added it twice.`
                 }
                 /*
-                  Said as the time it will arrive, in his zone, and "around"
-                  because the reminders duty runs every fifteen minutes: a
-                  promise to the minute would be one it cannot keep.
+                  A REPEAT is stored by a second call, because my_task_add has
+                  no repeat argument and growing it for one caller is how a
+                  writer ends up with eleven. The sentence says whether it
+                  STUCK: a repeat that was refused is reported as a one-off,
+                  never as a recurrence (R3).
                 */
-                if (forGrant.remindAt != null) {
-                  const at = new Intl.DateTimeFormat('en-GB', {
-                    timeZone: 'Europe/Athens',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hourCycle: 'h23',
-                  }).format(new Date(forGrant.remindAt))
-                  return `That is on your list for ${String(forGrant.due)} — "${forGrant.title}". I will remind you around ${at}.`
+                let repeatStored: boolean | null = null
+                if (forGrant.repeat != null) {
+                  repeatStored = await deps.db
+                    .execute(`
+                      select app.my_task_set(
+                        p_office => app.job_office(${lit(job.jobId)}::uuid),
+                        p_task_id => ${lit(String(got.id ?? ''))},
+                        p_repeat_every => ${lit(forGrant.repeat.every)}::interval,
+                        p_repeat_from => 'due') as r`)
+                    .then((s) => {
+                      const raw = (s.rows[0] as { r?: unknown })?.r
+                      const set = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                        ok?: boolean
+                        repeats?: unknown
+                      } | null
+                      return set?.ok === true && set.repeats != null
+                    })
+                    .catch(() => false)
                 }
-                return forGrant.due === null
-                  ? `That is on your list — "${forGrant.title}", no date on it yet.`
-                  : `That is on your list for ${forGrant.due} — "${forGrant.title}".`
+                /*
+                  Said as what is STORED, in the office's zone and naming it:
+                  "around" because the reminders duty runs every fifteen
+                  minutes and a promise to the minute is one it cannot keep.
+                */
+                return reminderSentence({
+                  title: forGrant.title,
+                  due: forGrant.due,
+                  remindAt: forGrant.remindAt ?? null,
+                  defaulted: forGrant.remindDefaulted === true,
+                  immediate: forGrant.remindImmediate === true,
+                  repeatLabel: forGrant.repeat?.label ?? null,
+                  repeatStored,
+                  repeatUnsupported: forGrant.repeatUnsupported ?? null,
+                  timeZone: officeTz,
+                })
               })
               .catch(async (error: unknown) => {
                 await deps.db
@@ -4697,7 +4767,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // sentence, `taskRequest` must not also file one from the same words —
       // and neither must it file one the personal-task path has already taken.
       const asked =
-        pullOut !== null || noted !== null || isBranch || subOf !== null
+        pullOut !== null || noted !== null || isBranch || subOf !== null || settles !== null
           ? null
           : changesHis !== null
             ? null
@@ -4731,7 +4801,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         a conversation behind it. An explicit "call it X" needs no lookup at all.
       */
       const namedLater =
-        asked !== null || isBranch || forwarded || instruction.trim().length > 90
+        asked !== null || isBranch || forwarded || settles !== null || instruction.trim().length > 90
           ? null
           : await deps.db
               .execute(`
@@ -4807,11 +4877,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         words, never the rewrite, for #322's reason. Resolved below against the
         tasks THIS conversation made, and acted on only when exactly one fits.
       */
-      const settles =
-        noted !== null || wantsFile !== null || isBranch || forwarded
-          ? null
-          : // His literal words too: a withdrawal has no surviving intent (R26, R42).
-            (firstOfHis(taskStateChange) ?? taskStateChange(turn.kept))
+      // `settles` is read above, before any reader that could CREATE a task from the same words (R2).
       const change =
         noted !== null || wantsFile !== null || namedLater !== null || isBranch || settles !== null
           ? null
@@ -5177,7 +5243,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const filed =
         asked !== null
-          ? await addTask(deps.db, job, asked, instruction, deps.now?.() ?? new Date())
+          ? await addTask(deps.db, job, asked, instruction, nowAt, officeTz)
           : namedLater === null
             ? null
             : await addTask(
@@ -5192,7 +5258,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   different question.
                 */
                 namedLater,
-                deps.now?.() ?? new Date(),
+                nowAt,
+                officeTz,
               )
 
       /*

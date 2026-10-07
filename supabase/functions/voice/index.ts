@@ -47,6 +47,7 @@
  * question, and this is the answer to it.
  */
 
+import { conversationHead } from '../../../src/auth/conversation-key.ts'
 import { resolveSpeaker, type Speaker } from '../../../src/auth/speaker.ts'
 
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
@@ -290,10 +291,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const said = typeof body.said === 'string' ? body.said.trim() : ''
   const session = typeof body.session === 'string' ? body.session : ''
   if (said === '') return json({ error: 'nothing was said' }, 400)
-  // A session id groups the turns of one conversation. Shaped, not trusted:
-  // it goes into `origin_ref`, which `app.conversation_before` splits on ':'
-  // to decide which turns belong together — so a session id containing a colon
-  // would silently merge two conversations.
+  // A session id names one page VISIT. Shaped, not trusted: it goes into the
+  // dedupe key (containment reads it) and, for a harness, into `origin_ref`,
+  // which `app.conversation_before` splits on ':' - so a session id containing
+  // a colon would silently merge two conversations. The conversation of a real
+  // person is NOT the visit (H1): see `conversationHead`.
   /*
     Who it was addressed to (#26).
 
@@ -366,10 +368,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
     - `project_id` is 0337's column for "the project the caller named", which
       outranks every guess `app.enqueue_inbound` could make.
-    - The conversation becomes that project's thread on this visit:
-      `<session>/<project>`, the first segment of `origin_ref`. A page visit
-      spans every project, so with the session alone a turn in one project
-      read another project's turn as the one before it - in the history the
+    - The conversation becomes that project's thread: `<head>/<project>`, the
+      first segment of `origin_ref`, where the head is the person's durable
+      one (H1) and, for a harness, the visit's session. A head spans every
+      project, so without the project a turn in one project would read
+      another project's turn as the one before it - in the history the
       office is shown, in the answer a "yes please" gives, and in the
       project the conversation remembers.
 
@@ -402,7 +405,18 @@ Deno.serve(async (request: Request): Promise<Response> => {
     is the no-project conversation, and a "yes please" joined to it could
     answer a question asked there.
   */
-  const talk = project === null ? session : `${session}/${project}`
+  /*
+    H1: the conversation is the person's thread in this project, not this page visit. `conversationHead` derives it from
+    the verified office and speaker (never from anything the page sends) and leaves a harness session on its per-visit
+    head. The dedupe key below still carries the visit's own session and a fresh turn id, so two turns are never one.
+  */
+  const talk = await conversationHead({
+    office,
+    actor: speaker.actor,
+    kind: speaker.kind,
+    session,
+    project,
+  })
   const row = (stated: string | null, addressee: string | null): Record<string, unknown> => ({
     // Explicit, from the verified speaker: the compatibility bridge is not asked to guess.
     office_id: office,

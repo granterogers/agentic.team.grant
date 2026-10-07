@@ -29,6 +29,7 @@
  */
 
 import { currentPerson } from '../office/person.ts'
+import { type ConsequenceEvidence, consequenceClaims, unevidencedClaims } from './consequence.ts'
 import { datesIn, isoForMention, MONTH_WORD, wrongWeekday } from './derivable.ts'
 import type { Domain } from './provenance.ts'
 
@@ -224,6 +225,16 @@ export interface OutputMetadata {
    * one would be the gate inventing the constraint it is enforcing.
    */
   readonly standingRules?: readonly string[]
+  /**
+   * The recorded results of this job's tree, from `loadConsequenceEvidence`.
+   *
+   * A claim that something was sent, shared, uploaded, scheduled, deleted,
+   * approved or drafted is accepted only when a row of the right kind exists
+   * here. Absent means the caller could not look: the communication claims
+   * are then treated as unevidenced (no outbound path exists while an answer
+   * is being written) and every other kind is left alone.
+   */
+  readonly consequences?: ConsequenceEvidence
 }
 
 export interface MetadataProblem {
@@ -384,7 +395,18 @@ export const claimsGrantSaid = (body: string): string | null => {
  * makes plans like that real; "I have asked the team" is a claim about the
  * past that nothing performed.
  */
-export const claimsToHaveSent = (body: string): string | null => {
+export const claimsToHaveSent = (body: string): string | null =>
+  legacySendClaim(body) ??
+  consequenceClaims(body).find((c) => c.cls === 'mail' || c.cls === 'outbound')?.quote ??
+  null
+
+/**
+ * The patterns this gate began with, kept as a second line of defence beside
+ * `consequenceClaims`. They are what caught the first real fabrications and
+ * they are tuned against the office's own hand-off language ("Emma has been
+ * asked ..." is real), so they are retained rather than replaced.
+ */
+const legacySendClaim = (body: string): string | null => {
   const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   const claims: RegExp[] = [
@@ -1842,16 +1864,22 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
     }
   }
 
-  const sentClaim = claimsToHaveSent(m.body ?? '')
-  if (sentClaim !== null) {
-    problems.push({
-      field: 'body',
-      problem:
-        `the text says it sent something ("${sentClaim}"), and an agent answering an ` +
-        'instruction has no way to send anything — the notifier runs after this, on ' +
-        'this answer. Nobody was contacted. Say what you WILL do, or hand the work ' +
-        'over, but do not report a message that does not exist.',
-    })
+  /*
+    Claims of consequence need evidence of consequence.
+
+    The detector (the legacy patterns and `consequenceClaims`) decides whether a
+    sentence is a CLAIM; the recorded results in `m.consequences` decide whether
+    it is TRUE. With no evidence supplied the communication claims stay strict,
+    exactly as before, because an answer being written has no outbound path.
+  */
+  const legacy = legacySendClaim(m.body ?? '')
+  for (const c of unevidencedClaims(
+    m.body ?? '',
+    m.consequences,
+    { acted: m.acted, tasksChanged: m.tasksChanged },
+    legacy === null ? [] : [legacy],
+  )) {
+    problems.push({ field: 'body', problem: c.problem })
   }
 
   /*

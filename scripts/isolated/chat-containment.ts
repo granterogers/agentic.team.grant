@@ -73,7 +73,9 @@ check(
 )
 
 const hist = (
-  await one(`select app.conversation_history(app.operator_office(),${lit(project)}::uuid, 100) as v`)
+  await one(
+    `select app.conversation_history(app.operator_office(),${lit(project)}::uuid, 100) as v`,
+  )
 ).v as {
   body: string
   kind: string

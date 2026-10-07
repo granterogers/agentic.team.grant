@@ -192,7 +192,8 @@ export class TelegramTransport implements Transport {
       return { messageRef: String(result.message_id) }
     } catch (error) {
       if (error instanceof TransportError) throw error
-      if (error instanceof TelegramApiError) throw new TransportError(error.code, error.kind)
+      if (error instanceof TelegramApiError)
+        throw new TransportError(error.code, error.kind, error.retryAfter)
       throw error
     }
   }
@@ -267,7 +268,8 @@ export class TelegramTransport implements Transport {
       return { messageRef: String(result.message_id) }
     } catch (error) {
       if (error instanceof TransportError) throw error
-      if (error instanceof TelegramApiError) throw new TransportError(error.code, error.kind)
+      if (error instanceof TelegramApiError)
+        throw new TransportError(error.code, error.kind, error.retryAfter)
       throw error
     }
   }
@@ -335,7 +337,8 @@ export class TelegramTransport implements Transport {
       return { messageRef: String(result.message_id) }
     } catch (error) {
       if (error instanceof TransportError) throw error
-      if (error instanceof TelegramApiError) throw new TransportError(error.code, error.kind)
+      if (error instanceof TelegramApiError)
+        throw new TransportError(error.code, error.kind, error.retryAfter)
       throw error
     }
   }

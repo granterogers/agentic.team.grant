@@ -30,6 +30,7 @@
  * process never runs is not a recovery mechanism.
  */
 
+import { loadConsequenceEvidence } from '../agents/consequence.ts'
 import { type Domain, howComposed } from '../agents/provenance.ts'
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
@@ -42,6 +43,7 @@ import { redactDeep } from '../text/secrets.ts'
 import type { Plan } from '../tools/plan.ts'
 import { plannedWrites, summarise } from '../tools/plan.ts'
 import { containmentRefusal, type Reach } from './containment.ts'
+import { redriveLapsedDeliveries } from './delivery-redrive.ts'
 import { assertHeld, callerArgs, fenceClause, StaleWorkerError, startHeartbeat } from './fence.ts'
 import { lastWord, sweepOwedWords } from './lastword.ts'
 
@@ -1301,7 +1303,11 @@ const runJobHeld = async (
     .then((r) => (r.rows[0] as { had?: boolean } | undefined)?.had)
     .catch(() => undefined)
 
+  // The recorded results of this job's tree: what a claim of consequence is checked against.
+  const consequences = await loadConsequenceEvidence(db, job.jobId)
+
   const problems = metadataProblems({
+    ...(consequences === undefined ? {} : { consequences }),
     confidence: output.confidence,
     evidence: output.evidence,
     sources: output.sources,
@@ -2177,6 +2183,12 @@ export const drain = async (
   await askUnasked(db, options.notify).catch((error: unknown) => {
     console.error(`asking sweep failed: ${String((error as Error).message).slice(0, 200)}`)
   })
+  // And any finished answer whose send failed retryably and whose backoff is over (N1). Never fatal.
+  if (options.recover !== false) {
+    await redriveLapsedDeliveries(db, options.notify).catch((error: unknown) => {
+      console.error(`delivery redrive failed: ${String((error as Error).message).slice(0, 200)}`)
+    })
+  }
   for (let i = 0; i < max; i++) {
     if (options.stopStartingAfter?.() === true) break
     const job = await dequeue(

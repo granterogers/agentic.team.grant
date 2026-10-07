@@ -216,7 +216,8 @@ try {
   const stranger = await act(S_STRANGER, 'contact_photo', photo(realA, contactA))
   // 401, or 403 no_office: a verified login that is nobody's member is told it has no office (self-service accounts, P4).
   const strangerRefused = (o: Out) =>
-    (o.status === 401 || (o.status === 403 && o.body.error === 'no_office')) && o.writes.length === 0
+    (o.status === 401 || (o.status === 403 && o.body.error === 'no_office')) &&
+    o.writes.length === 0
   check(
     'an unauthenticated stranger is refused (401, or 403 no_office) with zero storage writes',
     strangerRefused(stranger),

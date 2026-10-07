@@ -29,6 +29,7 @@ import {
 interface ChildReport {
   case: string
   ms: number
+  cpuMs: number
   maxRssMb: number
   text: string | null
   why?: string
@@ -41,22 +42,38 @@ const SCRUBBED = [
   'SUPABASE_DB_URL',
 ]
 
+/**
+ * Wall-clock allowances, scaled for a busy machine. These cases take 7 to 9 s ALONE (each is a deliberately expensive
+ * document), so a fixed 10 s reader clock and a 15 s wall assertion were within noise of failing whenever another suite
+ * shared the CPUs (thirty children run at once here, and the whole test run adds more). What the tests prove is that a
+ * COUNTER ends each case in bounded WORK, so the bound that matters is CPU time (it does not stretch with contention), the
+ * memory bound is unchanged, and the wall clock is only a generous kill switch: a reader with no counter still hangs past
+ * it and fails, as the unfixed reader did (minutes, or out of memory).
+ */
+const WALL_MS = 120_000
+const CPU_BOUND_MS = 15_000
+
 /** Reads one case in its own process with a hard old-space limit; the result is what the process printed, or a failure. */
 function inChild(name: string): Promise<{ report: ChildReport | null; detail: string }> {
-  const env = { ...process.env }
+  const env = { ...process.env, HOSTILE_WALL_MS: String(WALL_MS) }
   for (const k of SCRUBBED) delete env[k]
   const args = ['--import', 'tsx', '--max-old-space-size=256', 'tests/text/hostile-child.ts', name]
   return new Promise((resolve) => {
     execFile(
       process.execPath,
       args,
-      { env, timeout: 45_000, maxBuffer: 1 << 20, cwd: process.cwd() },
+      { env, timeout: WALL_MS + 30_000, maxBuffer: 1 << 20, cwd: process.cwd() },
       (error, stdout, stderr) => {
         const line = stdout.trim().split('\n').pop() ?? ''
         try {
           resolve({ report: JSON.parse(line) as ChildReport, detail: '' })
         } catch {
-          const how = error === null ? 'bad output' : error.killed ? 'killed after 45s' : 'crashed'
+          const how =
+            error === null
+              ? 'bad output'
+              : error.killed
+                ? `killed after ${String((WALL_MS + 30_000) / 1000)}s`
+                : 'crashed'
           resolve({ report: null, detail: `${name}: no report (${how}) ${stderr.slice(0, 160)}` })
         }
       },
@@ -93,7 +110,8 @@ describe('hostile documents cost a bounded amount (each read in its own process,
       expect(report, detail).not.toBeNull()
       const r = report as ChildReport
       // Bounded in time and in memory. The unfixed reader needed minutes or died; the fixed one needs seconds.
-      expect(r.ms, `${name} took ${String(r.ms)} ms`).toBeLessThan(15_000)
+      expect(r.cpuMs, `${name} used ${String(r.cpuMs)} ms of CPU`).toBeLessThan(CPU_BOUND_MS)
+      expect(r.ms, `${name} took ${String(r.ms)} ms`).toBeLessThan(WALL_MS)
       expect(r.maxRssMb, `${name} peaked at ${String(r.maxRssMb)} MB`).toBeLessThan(450)
       // The wall clock is a backstop for what the counters did not foresee. A case that ends on it was NOT bounded by the
       // thing it aims at: it merely ran out of patience, ten seconds later. Every case must be settled by a counter.
@@ -105,7 +123,7 @@ describe('hostile documents cost a bounded amount (each read in its own process,
         expect(r.why).not.toMatch(/no text in it|scan|damaged|could not be read/)
       }
     }
-    it.concurrent(`${name}: ${c.aims}`, run, 60_000)
+    it.concurrent(`${name}: ${c.aims}`, run, WALL_MS + 60_000)
   }
 })
 

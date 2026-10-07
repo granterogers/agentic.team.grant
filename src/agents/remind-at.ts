@@ -24,51 +24,13 @@
  * morning, 12 is noon, 1-6 is the afternoon. Anything else leaves the time
  * null, which is what happened before.
  *
- * Times are in Grant's zone (`system_config.grant.timezone`), passed in, so
- * the whole thing is a pure function a test can drive.
+ * Times are in the OFFICE's zone (`public.offices.timezone`, read once by
+ * `officeTimezone` in `office-time.ts`), passed in, so the whole thing is a pure
+ * function a test can drive. The default argument is the operator office's
+ * documented zone and is only what a caller that has none to pass gets; every
+ * caller in `src/handlers` passes the office's.
  */
-
-/** The offset of `timeZone` from UTC at the given instant, in minutes. */
-const offsetMinutes = (at: Date, timeZone: string): number => {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).formatToParts(at)
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? '0')
-  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'))
-  return Math.round((asUtc - Math.floor(at.getTime() / 60_000) * 60_000) / 60_000)
-}
-
-/** Local wall-clock (y, m, d, hh, mm) in `timeZone`, as a UTC instant. */
-const wallClock = (
-  y: number,
-  m: number,
-  d: number,
-  hh: number,
-  mm: number,
-  timeZone: string,
-): Date => {
-  const guess = new Date(Date.UTC(y, m, d, hh, mm))
-  const first = offsetMinutes(guess, timeZone)
-  const second = offsetMinutes(new Date(guess.getTime() - first * 60_000), timeZone)
-  return new Date(guess.getTime() - second * 60_000)
-}
-
-const localDay = (at: Date, timeZone: string): { y: number; m: number; d: number } => {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(at)
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? '0')
-  return { y: get('year'), m: get('month') - 1, d: get('day') }
-}
+import { DEFAULT_REMINDER_HOUR, localDay, OPERATOR_TIMEZONE, wallClock } from './office-time.ts'
 
 const PARTS_OF_DAY: Readonly<Record<string, readonly [number, number]>> = {
   morning: [9, 0],
@@ -132,6 +94,58 @@ const NUMBER: Readonly<Record<string, number>> = {
 }
 
 /**
+ * The time of day a sentence names, or null: an explicit clock time ("at 3pm",
+ * "at half past four") or one of the named parts of the day. Not the relative
+ * "in 20 minutes", which is an instant and has no time of day.
+ */
+export function clockOf(said: string): { hh: number; mm: number } | null {
+  const text = spokenToDigits(String(said ?? '')).toLowerCase()
+  const clock =
+    /\bat\s+([01]?\d|2[0-3])(?:[:.]([0-5]\d))?\s*(am|pm|a\.m\.|p\.m\.)?(?!\s*(?:%|percent|quid|pounds?|people|tickets))\b/.exec(
+      text,
+    )
+  if (clock !== null) {
+    let h = Number(clock[1])
+    const mm = clock[2] === undefined ? 0 : Number(clock[2])
+    const meridiem = clock[3]?.replace(/\./g, '')
+    if (meridiem === 'pm' && h < 12) h += 12
+    else if (meridiem === 'am' && h === 12) h = 0
+    // No am/pm and no leading zero: 1-6 is the afternoon, as an office means it.
+    else if (meridiem === undefined && !String(clock[1]).startsWith('0') && h >= 1 && h <= 6)
+      h += 12
+    return { hh: h, mm }
+  }
+  for (const [word, [h, m]] of Object.entries(PARTS_OF_DAY)) {
+    if (new RegExp(`\\b${word}\\b`).test(text)) return { hh: h, mm: m }
+  }
+  return null
+}
+
+/**
+ * The time a reminder is for when somebody asked to be REMINDED on a day and
+ * said no time (R1): nine in the morning, office time, on that day.
+ *
+ * Only for a reminder. A task that merely has a due date has none of this: it
+ * is a date, and giving it a time would make the reminders duty announce
+ * something nobody asked to be told about. When today's nine has already
+ * passed the reminder is for now, so it goes out on the next tick instead of
+ * being filed in the past or silently moved to tomorrow, and `immediate` says
+ * so, because the confirmation must not promise a time that has gone.
+ */
+export function defaultReminderAt(
+  onDay: string,
+  now: Date,
+  timeZone: string,
+  hour: number = DEFAULT_REMINDER_HOUR,
+): { at: string; immediate: boolean } {
+  const [y, m, d] = onDay.split('-').map(Number)
+  const at = wallClock(Number(y), Number(m) - 1, Number(d), hour, 0, timeZone)
+  return at.getTime() <= now.getTime()
+    ? { at: now.toISOString(), immediate: true }
+    : { at: at.toISOString(), immediate: false }
+}
+
+/**
  * When to remind him, as an ISO instant, or null.
  *
  * `onDay` is the ISO date the sentence's date words already resolved to
@@ -142,7 +156,7 @@ export function remindAtFor(
   said: string,
   onDay: string | null,
   now: Date = new Date(),
-  timeZone = 'Europe/Athens',
+  timeZone = OPERATOR_TIMEZONE,
 ): string | null {
   const text = spokenToDigits(String(said ?? '')).toLowerCase()
 
@@ -160,32 +174,9 @@ export function remindAtFor(
     return new Date(now.getTime() + minutes * 60_000).toISOString()
   }
 
-  let hh: number | null = null
-  let mm = 0
-  const clock =
-    /\bat\s+([01]?\d|2[0-3])(?:[:.]([0-5]\d))?\s*(am|pm|a\.m\.|p\.m\.)?(?!\s*(?:%|percent|quid|pounds?|people|tickets))\b/.exec(
-      text,
-    )
-  if (clock !== null) {
-    let h = Number(clock[1])
-    mm = clock[2] === undefined ? 0 : Number(clock[2])
-    const meridiem = clock[3]?.replace(/\./g, '')
-    if (meridiem === 'pm' && h < 12) h += 12
-    else if (meridiem === 'am' && h === 12) h = 0
-    // No am/pm and no leading zero: 1-6 is the afternoon, as an office means it.
-    else if (meridiem === undefined && !String(clock[1]).startsWith('0') && h >= 1 && h <= 6)
-      h += 12
-    hh = h
-  } else {
-    for (const [word, [h, m]] of Object.entries(PARTS_OF_DAY)) {
-      if (new RegExp(`\\b${word}\\b`).test(text)) {
-        hh = h
-        mm = m
-        break
-      }
-    }
-  }
-  if (hh === null) return null
+  const clockTime = clockOf(text)
+  if (clockTime === null) return null
+  const { hh, mm } = clockTime
 
   const today = localDay(now, timeZone)
   let day = today

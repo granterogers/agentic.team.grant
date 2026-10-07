@@ -121,7 +121,9 @@ const brokenAfter = await one(
   `select state::text as s from public.jobs where job_id = '${String(broken.id)}'`,
 )
 console.log({
-  mode: contained ? 'post (0599: the sweep contains the broken row)' : 'pre (control: the sweep raises)',
+  mode: contained
+    ? 'post (0599: the sweep contains the broken row)'
+    : 'pre (control: the sweep raises)',
   sweepRaises,
   drained,
   healthyRanTimes: ran,

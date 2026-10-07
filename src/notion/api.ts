@@ -85,9 +85,15 @@ export interface NotionClientOptions {
   /** Ceiling on any single wait, so a hostile Retry-After cannot park us. */
   readonly maxRetryAfterSeconds?: number
   readonly baseUrl?: string
+  /** Deadline for one request including reading its body. Injectable so tests need not wait. */
+  readonly requestTimeoutMs?: number
 }
 
+/** Longest a single Notion request may take before it is abandoned as `timeout` (transient, retryable). */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 20_000
+
 export class NotionClient {
+  private readonly requestTimeoutMs: number
   private readonly fetchImpl: typeof fetch
   private readonly sleep: (ms: number) => Promise<void>
   private readonly maxRateLimitRetries: number
@@ -104,6 +110,7 @@ export class NotionClient {
     this.maxRateLimitRetries = options.maxRateLimitRetries ?? 3
     this.maxRetryAfterSeconds = options.maxRetryAfterSeconds ?? 30
     this.baseUrl = options.baseUrl ?? BASE
+    this.requestTimeoutMs = Math.max(1, options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS)
   }
 
   /**
@@ -129,18 +136,38 @@ export class NotionClient {
     let waits = 0
 
     for (;;) {
-      const response = await this.fetchImpl(`${this.baseUrl}${endpoint}`, {
-        method,
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          'Notion-Version': NOTION_VERSION,
-          ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        },
-        ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      // Both the request AND the body read sit under one deadline (M2): a Notion that accepts the connection and then
+      // says nothing used to hold the whole duty until the platform killed it, and the heartbeat kept the lease alive
+      // meanwhile. An abandoned request's late answer is never read.
+      const { response, body: parsed } = await this.withDeadline(endpoint, async (signal) => {
+        const res = await this.fetchImpl(`${this.baseUrl}${endpoint}`, {
+          method,
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            'Notion-Version': NOTION_VERSION,
+            ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          },
+          ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+          signal,
+        })
+        let json: unknown
+        try {
+          json = await res.json()
+        } catch {
+          // An HTML 502 from a proxy or CDN is not JSON. It is still a status, and the status says what it was: a
+          // raw SyntaxError here read as an unclassified fault and was neither retried as transient nor named.
+          json = undefined
+        }
+        return { response: res, body: json }
       })
-
-      const body = (await response.json()) as Record<string, unknown>
-      if (response.ok) return body
+      const isObject = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      if (response.ok) {
+        if (isObject) return parsed as Record<string, unknown>
+        // A 200 that is not a JSON object is a malformed response, never an empty result: reading it as `{}` would
+        // make a broken API look like an empty workspace ("0 shared pages. Nothing new.").
+        throw new NotionApiError('malformed_response', 'transient', endpoint, response.status, null)
+      }
+      const body: Record<string, unknown> = isObject ? (parsed as Record<string, unknown>) : {}
 
       const code = String(body.code ?? `http_${String(response.status)}`)
       const kind = classify(response.status, code)
@@ -166,6 +193,31 @@ export class NotionClient {
         response.status,
         Number.isFinite(retryAfter) ? retryAfter : null,
       )
+    }
+  }
+
+  /**
+   * One request under a hard deadline: the AbortSignal tells a real `fetch` to drop the socket, and the race frees
+   * this caller even when the transport ignores it. Whichever settles first wins; the loser is discarded.
+   */
+  private async withDeadline<T>(
+    endpoint: string,
+    run: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new NotionApiError('timeout', 'transient', endpoint, 0, null))
+        controller.abort()
+      }, this.requestTimeoutMs)
+    })
+    const running = run(controller.signal)
+    running.catch(() => undefined)
+    try {
+      return await Promise.race([running, deadline])
+    } finally {
+      clearTimeout(timer)
     }
   }
 

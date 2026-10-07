@@ -451,8 +451,9 @@ describe('failover — a rate-limited free model is normal, not fatal', () => {
     const { impl, bodies } = scripted([rateLimited])
     await expect(
       new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES }),
-    ).rejects.toThrow(/all 3 candidate model\(s\) failed/)
-    expect(bodies()).toHaveLength(3)
+    ).rejects.toThrow(/all 4 candidate model\(s\) failed/)
+    // M1: four, the documented chain depth (it was three, which left the free tier unreachable).
+    expect(bodies()).toHaveLength(4)
   })
 
   it('names every model it tried, because "inference failed" is not actionable', async () => {

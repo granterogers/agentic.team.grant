@@ -18,13 +18,26 @@ const bytesIn = input.bytes.length
 // maxRSS is the kernel's high-water mark for the whole process, so a spike inside one synchronous call is not missed.
 const rssBeforeMb = Math.round(process.resourceUsage().maxRSS / 1024)
 const started = performance.now()
-const result = await fileText(input.bytes, input.mime, input.name)
+const cpuBefore = process.cpuUsage()
+// The reader's own wall clock (10 s by default) is a backstop for what the counters did not foresee. When the machine is
+// busy, wall time stretches while the work does not, so the parent may widen the backstop (HOSTILE_WALL_MS) and judge the
+// case on CPU time instead; the counters, not patience, must still be what ends it.
+const wall = Number(process.env.HOSTILE_WALL_MS ?? '')
+const result = await fileText(
+  input.bytes,
+  input.mime,
+  input.name,
+  Number.isFinite(wall) && wall > 0 ? { ms: wall } : undefined,
+)
 const ms = Math.round(performance.now() - started)
+const cpu = process.cpuUsage(cpuBefore)
+const cpuMs = Math.round((cpu.user + cpu.system) / 1000)
 console.log(
   JSON.stringify({
     case: name,
     bytesIn,
     ms,
+    cpuMs,
     rssBeforeMb,
     maxRssMb: Math.round(process.resourceUsage().maxRSS / 1024),
     text: result.text === null ? null : `${String(result.text.length)} chars`,

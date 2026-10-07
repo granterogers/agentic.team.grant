@@ -302,11 +302,18 @@ const park = (id: string, reason: string, resumable: boolean) =>
       suite-takes-its-own-earlier-work defect CLAUDE.md records. Tell them now, to a notifier nobody reads, and assert
       that nothing is owed before the one job under test begins.
     */
-    await sweepOwedWords(db, async () => ({ note: 'flush: debris from an earlier section' }) as never)
+    await sweepOwedWords(
+      db,
+      async () => ({ note: 'flush: debris from an earlier section' }) as never,
+    )
     const debris = Number(
       (await one(`select count(*)::int as n from app.jobs_owing_a_word(100)`)).n,
     )
-    check('before the drive, no earlier turn is still owed a word (the count is of one job only)', debris === 0, `${debris} owed`)
+    check(
+      'before the drive, no earlier turn is still owed a word (the count is of one job only)',
+      debris === 0,
+      `${debris} owed`,
+    )
     await realParent(db)
     const told: string[] = []
     const handler: Handler = {
