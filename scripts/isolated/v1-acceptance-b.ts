@@ -1498,7 +1498,10 @@ await journey(
           /Recommendation/.test(sent[1] ?? '') &&
           dels.length === 2 &&
           dels.every((d) => d.state === 'sent') &&
-          tg.visible().slice(m).every((c) => c.chat === CHAT),
+          tg
+            .visible()
+            .slice(m)
+            .every((c) => c.chat === CHAT),
         `${String(sent.length)} message(s), ${String(dels.length)} delivery row(s)`,
       )
       check('H4 the obligation reads fulfilled', (await obligation(t.job)) === 'fulfilled')

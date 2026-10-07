@@ -65,7 +65,51 @@ describe('#26 — a selection Grant made himself', () => {
     }
     const who = await speaker(spy, 'chief-of-staff', 'what is open?', null, null, [])
     expect(who.reason).not.toContain('addressed directly')
-    expect(asked.some((s) => s.includes('who_knows_about') || s.includes('public.staff where active'))).toBe(true)
+    expect(
+      asked.some((s) => s.includes('who_knows_about') || s.includes('public.staff where active')),
+    ).toBe(true)
+  })
+
+  it('a turn the office settles in code stays with the chief, and the roster is not consulted at all', async () => {
+    const asked: string[] = []
+    const spy: SqlExecutor = {
+      kind: 'fake',
+      execute: (sql: string): Promise<SqlResult> => {
+        asked.push(sql)
+        return db.execute(sql)
+      },
+    }
+    const who = await speaker(
+      spy,
+      'chief-of-staff',
+      'remind me to call Mum',
+      null,
+      null,
+      [],
+      null,
+      false,
+      true,
+    )
+    expect(who.slug).toBe('chief-of-staff')
+    expect(who.convened).toEqual([])
+    expect(who.reason).toContain('settled in code')
+    expect(asked.some((s) => s.includes('who_knows_about'))).toBe(false)
+  })
+
+  it('...but settled-in-code does not override a specialist whose bot he opened (control)', async () => {
+    const who = await speaker(
+      db,
+      'finance-director',
+      'remind me to call Mum',
+      null,
+      null,
+      [],
+      null,
+      false,
+      true,
+    )
+    expect(who.slug).toBe('finance-director')
+    expect(who.reason).toContain('addressed directly')
   })
 
   it('one answers and the rest are convened, each in their own name', async () => {

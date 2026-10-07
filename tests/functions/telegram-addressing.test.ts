@@ -113,7 +113,10 @@ const routed = (sql: string[]): boolean =>
 
 describe('what the webhook records and what speaker does with it', () => {
   it("the chief's bot stores her own slug (the reply path needs it) and speaker ROUTES it: the roster is consulted", async () => {
-    const stored = await post({ slug: 'chief-of-staff', id: '111' }, 'Ask the team to look at this.')
+    const stored = await post(
+      { slug: 'chief-of-staff', id: '111' },
+      'Ask the team to look at this.',
+    )
     expect(stored.addressed_to).toBe('chief-of-staff')
     const { db, sql } = recordingDb()
     const who = await speaker(db, stored.addressed_to ?? null, stored.instruction ?? '', null)
@@ -122,7 +125,10 @@ describe('what the webhook records and what speaker does with it', () => {
   })
 
   it("a specialist's bot stores that specialist and speaker answers as her WITHOUT consulting the roster (control)", async () => {
-    const stored = await post({ slug: 'research-director', id: '222' }, 'Ask the team to look at this.')
+    const stored = await post(
+      { slug: 'research-director', id: '222' },
+      'Ask the team to look at this.',
+    )
     expect(stored.addressed_to).toBe('research-director')
     const { db, sql } = recordingDb()
     const who = await speaker(db, stored.addressed_to ?? null, stored.instruction ?? '', null)
@@ -145,7 +151,7 @@ describe('what the webhook records and what speaker does with it', () => {
     expect(routed(b.sql)).toBe(false)
   })
 
-  it("a hand-off child addressed to the chief still convenes nobody (the chain ends at one)", async () => {
+  it('a hand-off child addressed to the chief still convenes nobody (the chain ends at one)', async () => {
     const { db, sql } = recordingDb()
     const who = await speaker(db, 'chief-of-staff', 'x', null, null, [], null, true)
     expect(who.slug).toBe('chief-of-staff')

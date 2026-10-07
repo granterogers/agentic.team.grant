@@ -856,7 +856,31 @@ export async function speaker(
    * even if that is the chief. Default false, so every other caller is unchanged.
    */
   handedOff = false,
+  /**
+   * A deterministic reader owns this turn (a reminder, a personal task, a change to one): no specialist is needed to file
+   * it, so the chief keeps it and the roster, with its model reading, is not consulted. Only when nobody was addressed
+   * directly: a specialist whose bot he opened still answers. Default false.
+   */
+  settledInCode = false,
 ): Promise<Speaker> {
+  const direct = addressedDirectly({ addressedTo, alsoAddressed, handedOff })
+  if (settledInCode && !direct) {
+    const { rows: chiefRows } = await db.execute(`
+      select slug, name, title, communication_style, responsibilities
+        from public.staff where slug = 'chief-of-staff' and active
+    `)
+    const c = chiefRows[0] as
+      | Omit<Speaker, 'reason' | 'alsoConvened' | 'convened' | 'handoff'>
+      | undefined
+    if (c !== undefined)
+      return {
+        ...c,
+        reason: 'settled in code — the chief of staff files it herself; no specialist is needed',
+        alsoConvened: [],
+        convened: [],
+        handoff: null,
+      }
+  }
   /*
     DIRECTLY addressed is not the same thing as "addressed_to is set" (see `agents/addressing.ts`).
 
@@ -865,7 +889,7 @@ export async function speaker(
     nobody for anything typed to the chief's bot, so Telegram never delegated. The chief is the router: she falls
     through to the roster below, exactly as a message with no addressee does.
   */
-  const byName = addressedDirectly({ addressedTo, alsoAddressed, handedOff }) ? addressedTo : null
+  const byName = direct ? addressedTo : null
   if (byName !== null) {
     const { rows } = await db.execute(`
       select slug, name, title, communication_style, responsibilities
@@ -1134,7 +1158,8 @@ export async function speaker(
       ? {}
       : await db
           .execute(
-            `select correlation_id::text as c from public.jobs where job_id = ${lit(jobId)}::uuid`,
+            `select correlation_id::text as c from public.jobs
+              where job_id = ${lit(jobId)}::uuid and office_id = app.job_office(${lit(jobId)}::uuid)`,
           )
           .then((r) => {
             const c = (r.rows[0] as { c?: string } | undefined)?.c
@@ -2657,15 +2682,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         handedOff: isBranch,
       })
       /*
-        A turn the office settles in code does not wait on a model to choose WHO answers it.
+        A turn the office settles in code belongs to the chief: no roster, and no model to choose WHO answers it.
 
-        The roster's semantic reading (#232) is one model call whenever the subject matcher names nobody, and "Remind me
-        Friday to call Mum" names nobody: it was a model call on every reminder, a wait of up to the provider chain's
-        deadlines during an outage, spent on a turn the personal-task readers settle without one (the journeys assert it:
-        "a reminder needs no model"). It was invisible while it was unattributed and while only Team HQ reached it; every
-        typed-to-the-chief Telegram message reaches it now, so it asks first whether a deterministic reader owns the turn.
-        Coarser than the readers that act (no ellipsis, no grounding check): a miss costs one model call as before, and a
-        false hit costs the literal roster, which is what the turn had before the semantic reader existed.
+        Routing every typed-to-the-chief message (what Telegram now does) exposed two costs the journeys assert against:
+        "Remind me Friday to call Mum" names nobody to the subject matcher, so the roster's semantic reading (#232) spent a
+        model call on every reminder (and waited up to the provider chain's deadlines during an outage); and "Mark the
+        roofer task done" matched a specialist by the word "roofer" and was voiced by her through a model. Neither turn
+        needs a specialist: the personal-task readers settle them. So when one of them owns the turn and nobody was
+        addressed directly, the chief keeps it. Coarser than the readers that act (no ellipsis, no grounding check): a miss
+        is the roster as before, and a false hit keeps a turn with the chief, who can still answer it.
       */
       const routeTz = await officeTimezone(deps.db, job.jobId)
       const routeNow = deps.now?.() ?? new Date()
@@ -2678,11 +2703,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         deps.db,
         payload.addressed_to ?? null,
         instruction,
-        settledInCode ? null : deps.router,
+        deps.router,
         job.projectId ?? null,
         payload.addressed_also ?? [],
         job.jobId,
         isBranch,
+        settledInCode,
       )
 
       /*

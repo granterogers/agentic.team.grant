@@ -48,7 +48,9 @@ let section = '-'
 const check = (what: string, ok: boolean, detail = ''): boolean => {
   total += 1
   if (!ok) failed += 1
-  console.log(`${ok ? 'PROVEN' : 'FAILED'} ${section}: ${what}${detail === '' ? '' : ` - ${detail}`}`)
+  console.log(
+    `${ok ? 'PROVEN' : 'FAILED'} ${section}: ${what}${detail === '' ? '' : ` - ${detail}`}`,
+  )
   return ok
 }
 const modelDependent = (s: string): void => console.log(`MODEL-DEPENDENT ${section}: ${s}`)
@@ -219,10 +221,9 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     })
     throw error
   }
-  return new Response(
-    JSON.stringify({ ok: true, result: { message_id: 7000 + tgCalls.length } }),
-    { status: 200 },
-  )
+  return new Response(JSON.stringify({ ok: true, result: { message_id: 7000 + tgCalls.length } }), {
+    status: 200,
+  })
 }) as typeof fetch
 const sent = (from: number): TgCall[] => tgCalls.slice(from).filter((c) => c.outcome === 'ok')
 
@@ -280,17 +281,23 @@ const childrenOf = async (parent: string, kind: string): Promise<Row[]> =>
           coalesce(pinned_config ->> 'handed_off_by', '') as by
      from public.jobs where parent_job_id = ${lit(parent)}::uuid and kind = ${lit(kind)} order by created_at`)
 const groupsOf = async (parent: string): Promise<number> =>
-  count(`select count(*)::int as n from public.branch_groups where parent_job_id = ${lit(parent)}::uuid`)
+  count(
+    `select count(*)::int as n from public.branch_groups where parent_job_id = ${lit(parent)}::uuid`,
+  )
 const treeSize = async (root: string): Promise<number> =>
   count(`select count(*)::int as n from public.jobs where correlation_id = ${corr(root)}`)
 const decisionOf = async (job: string): Promise<Row> =>
-  (await rows(
-    `select roster, roster_reason from public.routing_decisions where job_id = ${lit(job)}::uuid order by decided_at desc limit 1`,
-  ))[0] ?? {}
+  (
+    await rows(
+      `select roster, roster_reason from public.routing_decisions where job_id = ${lit(job)}::uuid order by decided_at desc limit 1`,
+    )
+  )[0] ?? {}
 const leadOf = async (job: string): Promise<Row> =>
-  (await rows(
-    `select recipient_agent, state::text as state, attempt from public.jobs where job_id = ${lit(job)}::uuid`,
-  ))[0] ?? {}
+  (
+    await rows(
+      `select recipient_agent, state::text as state, attempt from public.jobs where job_id = ${lit(job)}::uuid`,
+    )
+  )[0] ?? {}
 const deliveriesOf = async (root: string): Promise<Row[]> =>
   rows(`select d.state::text as state, d.channel::text as channel, d.attempt
     from public.deliveries d join public.jobs j on j.job_id = d.job_id
@@ -328,7 +335,8 @@ const say = async (
     opts.bot,
   )
   const job = String(r.body.queued ?? '')
-  if (job === '' || job === 'null') return { status: r.status, job: '', command: '', addressed: null }
+  if (job === '' || job === 'null')
+    return { status: r.status, job: '', command: '', addressed: null }
   const c = (
     await rows(
       `select command_id::text as id, addressed_to from public.inbound_commands where job_id = ${lit(job)}::uuid limit 1`,
@@ -388,7 +396,8 @@ const proj = await mkProject(op, `Riverside Launch ${run}`)
       }),
     }),
   )
-  if (r.status !== 200) throw new Error(`the project document was not uploaded (${String(r.status)})`)
+  if (r.status !== 200)
+    throw new Error(`the project document was not uploaded (${String(r.status)})`)
 }
 await quiet()
 await scopeChat(proj)
@@ -412,7 +421,10 @@ part('T0', 'the configuration under test is the production shape')
 }
 
 // ===================================================================================================================
-part('T1', "the chief's bot: an ordinary instruction is answered by the chief or one specialist, nobody is convened")
+part(
+  'T1',
+  "the chief's bot: an ordinary instruction is answered by the chief or one specialist, nobody is convened",
+)
 {
   await quiet()
   await scopeChat(proj)
@@ -487,8 +499,42 @@ part('T1', "the chief's bot: an ordinary instruction is answered by the chief or
   )
 }
 
+{
+  // Routing every message the chief receives must not put a model, or a specialist, in front of turns the office settles
+  // in code: a reminder, a personal task and a change to one stay with the chief, with no model call at all.
+  await quiet()
+  await scopeChat(proj)
+  const from = tgCalls.length
+  const m = model.mark()
+  const t = await say('Remind me tomorrow at 10am to call Mum.')
+  await settle(t.job)
+  const lead = await leadOf(t.job)
+  const d = await decisionOf(t.job)
+  check(
+    'a reminder typed to the chief bot is kept by the chief: no child, a tree of one, NO model call, and one answer through her bot',
+    lead.recipient_agent === 'chief-of-staff' &&
+      (await treeSize(t.job)) === 1 &&
+      model.since(m).length === 0 &&
+      sent(from).length === 1 &&
+      sent(from)[0]?.token === CHIEF_TOKEN,
+    `${String(model.since(m).length)} model call(s) ${String(d.roster_reason).slice(0, 50)}`,
+  )
+  const m2 = model.mark()
+  const t2 = await say('Add a task to call the roofer.')
+  await settle(t2.job)
+  const t3 = await say('Mark the roofer task done.')
+  await settle(t3.job)
+  check(
+    'adding a task and marking it done stay with the chief too, and cost no model call (a word like "roofer" does not hand them to a specialist)',
+    (await leadOf(t2.job)).recipient_agent === 'chief-of-staff' &&
+      (await leadOf(t3.job)).recipient_agent === 'chief-of-staff' &&
+      model.since(m2).length === 0,
+    `${String(model.since(m2).length)} model call(s)`,
+  )
+}
+
 // ===================================================================================================================
-part('T2',"the chief's bot: 'Ask the team ...' convenes the team, ONE answer, same chat, same bot")
+part('T2', "the chief's bot: 'Ask the team ...' convenes the team, ONE answer, same chat, same bot")
 {
   await quiet()
   await scopeChat(proj)
@@ -547,7 +593,7 @@ part('T2',"the chief's bot: 'Ask the team ...' convenes the team, ONE answer, sa
       (await obligation(t.job)) === 'fulfilled',
   )
   check(
-    "the routed delegation is recorded as a consultation (a specialist convened by the chief, not one Grant picked): the row exists",
+    'the routed delegation is recorded as a consultation (a specialist convened by the chief, not one Grant picked): the row exists',
     (await consultations(t.job)) >= 1,
     String(await consultations(t.job)),
   )
@@ -588,7 +634,10 @@ part('T3', "the chief's bot: a request that names two colleagues convenes both o
 }
 
 // ===================================================================================================================
-part('T4', "a SPECIALIST's bot: directly addressed, nobody else convened, answers in their name, reply through THAT bot")
+part(
+  'T4',
+  "a SPECIALIST's bot: directly addressed, nobody else convened, answers in their name, reply through THAT bot",
+)
 {
   // Enable the research director's bot, exactly as the roster would after a deploy: a token in the vault, enabled.
   const secret = await db.execute(
@@ -647,7 +696,7 @@ part('T4', "a SPECIALIST's bot: directly addressed, nobody else convened, answer
     JSON.stringify(d2.roster),
   )
   check(
-    "(control) and it comes back through her bot once",
+    '(control) and it comes back through her bot once',
     out2.length === 1 && out2[0]?.token === RESEARCH_TOKEN && out2[0]?.chat === CHAT,
   )
 
@@ -674,7 +723,13 @@ part('T5', 'a delegated request still parks on an approval, and only a real answ
 {
   await quiet()
   await scopeChat(proj)
-  const stepOf = (id: string, capability: string, why: string, needs: string[], audience: string) => ({
+  const stepOf = (
+    id: string,
+    capability: string,
+    why: string,
+    needs: string[],
+    audience: string,
+  ) => ({
     id,
     capability,
     why,
@@ -742,7 +797,7 @@ part('T5', 'a delegated request still parks on an approval, and only a real answ
     bound.state === 'resolved' &&
       bound.answered === 'Yes, do it' &&
       model.since(0, 'draft').length === drafts0 + 1,
-    `${JSON.stringify(bound)} drafts ${String(model.since(0, 'draft').length - drafts0)} roles ${modelCalls.slice(-6).map((c) => `${c.role}:${c.persona}`).join(',')}`,
+    `${JSON.stringify(bound)} drafts ${String(model.since(0, 'draft').length - drafts0)}`,
   )
 
   // The button on the dashboard (the gateway's answer_blocker) is the other door; park again and answer by id.
@@ -857,7 +912,10 @@ part('T6', 'retries and duplicates: one command, one job, one team, one answer')
 }
 
 // ===================================================================================================================
-part('T7', "another office cannot be addressed or convened, and does not borrow this chat or this bot's person")
+part(
+  'T7',
+  "another office cannot be addressed or convened, and does not borrow this chat or this bot's person",
+)
 {
   await quiet()
   await scopeChat(proj)
@@ -906,14 +964,17 @@ part('T7', "another office cannot be addressed or convened, and does not borrow 
   await quiet()
   await scopeChat(proj)
   scriptTeam()
-  const bJobs = await count(`select count(*)::int as n from public.jobs where office_id = ${lit(B)}::uuid`)
+  const bJobs = await count(
+    `select count(*)::int as n from public.jobs where office_id = ${lit(B)}::uuid`,
+  )
   const g = await say(`${ASK.replace(/\.$/, '')} next week.`)
   await settle(g.job)
   check(
     "(control) Grant's own delegation still works beside it, convenes two specialists in his office and none in the other person's",
     (await childrenOf(g.job, 'office.instruction')).length === 2 &&
-      (await count(`select count(*)::int as n from public.jobs where office_id = ${lit(B)}::uuid`)) ===
-        bJobs,
+      (await count(
+        `select count(*)::int as n from public.jobs where office_id = ${lit(B)}::uuid`,
+      )) === bJobs,
   )
 }
 

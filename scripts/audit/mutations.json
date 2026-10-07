@@ -337,10 +337,20 @@
       "critical": true,
       "severity": "high",
       "file": "src/handlers/instruction.ts",
-      "old": "const byName = addressedDirectly({ addressedTo, alsoAddressed, handedOff }) ? addressedTo : null",
+      "old": "const byName = direct ? addressedTo : null",
       "new": "const byName = addressedTo === null || addressedTo === '' ? null : addressedTo",
       "invariant": "speaker() reads the stored addressee through the one definition of 'directly addressed', not as 'addressed_to is non-empty'",
       "expect": "tests/functions/telegram-addressing.test.ts"
+    },
+    {
+      "id": "M27c",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/handlers/instruction.ts",
+      "old": "if (settledInCode && !direct) {",
+      "new": "if (false) {",
+      "invariant": "a reminder or personal task typed to the chief stays with the chief and costs no roster or model call",
+      "expect": "tests/handlers/speaker.test.ts"
     }
   ]
 }

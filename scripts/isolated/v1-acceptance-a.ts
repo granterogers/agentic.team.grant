@@ -419,6 +419,11 @@ const stub = {
         console.log(`  [answer #${String(answerCalls)}] ${said.slice(0, 90)}`)
       return { content: said, model: 'va/stub' }
     }
+    // The roster's reading of a clause ("which specialist?"): a model with no view names nobody. It is a different
+    // call from a correction pass and must not be answered by (or counted as) one: a turn typed to the chief's bot is
+    // routed, so it can be asked. It stays in `modelLog` as an "other" call, so it is still counted as a model call.
+    if (role === 'other' && system.startsWith('You route one request'))
+      return { content: 'none', model: 'va/stub' }
     if (role === 'other') return { content: correctionScript(user), model: 'va/stub' }
     if (role === 'rewrite') {
       const latest = /Latest message:\n([\s\S]*)$/.exec(user)?.[1] ?? ''
@@ -1431,10 +1436,16 @@ begin(
   {
     const mL = tgLog.length
     const otherBefore = modelCalls('other')
+    // Counted at the correction pass itself. Role "other" is every model call that is not read, plan, answer or rewrite,
+    // and a turn typed to the chief's bot is ROUTED now, so it includes the roster's reading of the clause: counting
+    // "other" calls measured the wrong thing as soon as the roster could be asked.
+    let correctionPasses = 0
     answerScript = () => `I've drafted the email for you:\n\n${DRAFT_TEXT}\n\nI have not sent it.`
     // a correction pass that behaves exactly as the office instructs it: begin with the truth, then ask what is needed (no draft)
-    correctionScript = () =>
-      'I have not done this yet, and nothing has been changed. What would you like the email to say?'
+    correctionScript = () => {
+      correctionPasses += 1
+      return 'I have not done this yet, and nothing has been changed. What would you like the email to say?'
+    }
     const lead = await sayTelegramAndWork(
       "Draft an email to Kevin about the delivery slot, but don't send it.",
     )
@@ -1444,10 +1455,11 @@ begin(
       (await jobState(String(lead.turn.job)))?.s === 'complete' &&
         ls.length === 1 &&
         /Hi Kevin/.test(ls[0]?.text ?? '') &&
-        modelCalls('other') === otherBefore,
+        correctionPasses === 0,
       JSON.stringify({
         delivered: ls.map((c) => c.text.slice(0, 120)),
-        correctionCalls: modelCalls('other') - otherBefore,
+        correctionCalls: correctionPasses,
+        otherCalls: modelCalls('other') - otherBefore,
       }),
     )
     check(
@@ -1463,8 +1475,9 @@ begin(
     await sayTelegramAndWork('Draft an email to Kevin about the invoice and send it.')
     const both = sentTexts(mN)[0]?.text ?? ''
     check(
-      'CONTROL: "Draft an email ... and send it" still opens "I have not done this yet" (the send half is not done) and claims no send',
-      /I have not done this yet/i.test(both) && sendClaims(both).length === 0,
+      'CONTROL: "Draft an email ... and send it" still opens by saying the work is not done (the send half is not done: "I have not done this yet", or the hand-off\'s "Nothing has changed yet", which the chief says when she routes it) and claims no send',
+      /I have not done this yet|Nothing has changed yet/i.test(both) &&
+        sendClaims(both).length === 0,
       both.slice(0, 120),
     )
     const mS = tgLog.length
