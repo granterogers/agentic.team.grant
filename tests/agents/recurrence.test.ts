@@ -211,11 +211,14 @@ describe('the sentence says whether the repeat stuck', () => {
     repeatUnsupported: null,
     timeZone: ATHENS,
   }
-  it('a SERIES: says it repeats on its own and that ticking it off stops it, and names the first day', () => {
+  it('a SERIES: says it repeats on its own, that ticking one off completes that time only, how to stop it, and names the first day', () => {
+    // Owner decision, 7 October 2026: this used to say "Tick it off to stop these".
     const s = reminderSentence({ ...facts, due: null, series: true })
     expect(s).toContain('That is on your list for 2026-10-12')
     expect(s).toContain('repeats every Monday')
-    expect(s).toContain('Tick it off to stop these')
+    expect(s).toContain('completes that time only')
+    expect(s).toContain('say “stop the Review my finances reminder”')
+    expect(s).not.toContain('Tick it off to stop')
     expect(s).not.toContain('The next one is made when you tick')
   })
   it('stored: says it repeats and how the next one is made', () => {

@@ -1166,7 +1166,7 @@ export interface SeriesStopRequest {
 const SERIES_REPEATING =
   /\b(?:recurring|repeating|repeats?|regular|standing|ongoing|weekly|daily|fortnightly|every|each)\b/i
 const SERIES_STOP_HARD = String.raw`(?:stop|end|turn\s+off|switch\s+off|discontinue)`
-const SERIES_STOP_SOFT = String.raw`(?:cancel|delete|remove|drop|scrap|kill|ditch|bin)`
+const SERIES_STOP_SOFT = '(?:cancel|delete|remove|drop|scrap|kill|ditch|bin)'
 const SERIES_REMINDER_OBJECT = new RegExp(
   String.raw`\b(${SERIES_STOP_HARD}|${SERIES_STOP_SOFT})\s+(?!(?:by|at|in|over|up|out)\b)(?<rest>[^.!?;]{0,100}?\breminders?\b[^.!?;]{0,100})`,
   'i',
@@ -1176,12 +1176,13 @@ const SERIES_NAGGING = new RegExp(
   'i',
 )
 // Words that carry the schedule or the sentence's frame, not the series' name.
-const SERIES_NOISE = new Set([
-  'the', 'my', 'our', 'that', 'this', 'those', 'these', 'all', 'one', 'it', 'last', 'a', 'an', 'to', 'about', 'for', 'of',
-  'on', 'and', 'please', 'reminder', 'reminders', 'recurring', 'repeating', 'repeats', 'repeat', 'regular', 'standing',
-  'ongoing', 'weekly', 'daily', 'fortnightly', 'every', 'each', 'me', 'week', 'day', 'other', 'morning', 'afternoon',
-  'evening', 'from', 'now', 'anymore', 'any', 'more', 'again',
-])
+const SERIES_NOISE: ReadonlySet<string> = new Set(
+  (
+    'the my our that this those these all one it last a an to about for of on and please ' +
+    'reminder reminders recurring repeating repeats repeat regular standing ongoing weekly daily ' +
+    'fortnightly every each me week day other morning afternoon evening from now anymore any more again'
+  ).split(' '),
+)
 
 export function seriesStopRequest(text: string): SeriesStopRequest | null {
   const said = withoutOpeningAffirmation(String(text ?? '').trim())
@@ -1198,7 +1199,11 @@ export function seriesStopRequest(text: string): SeriesStopRequest | null {
   if (object !== null) {
     const verb = String(object[1]).toLowerCase()
     const hard = new RegExp(`^${SERIES_STOP_HARD}$`, 'i').test(verb.replace(/\s+/g, ' '))
-    if (!hard && !SERIES_REPEATING.test(rest) && !/\b(?:mon|tues?|wednes|thurs?|fri|satur|sun)day\b/i.test(rest)) {
+    if (
+      !hard &&
+      !SERIES_REPEATING.test(rest) &&
+      !/\b(?:mon|tues?|wednes|thurs?|fri|satur|sun)day\b/i.test(rest)
+    ) {
       return null
     }
   }
@@ -1230,7 +1235,8 @@ export function pickSeries<T extends SeriesCandidate>(
   name: string | null,
   list: readonly T[],
 ): { readonly one: T | null; readonly many: readonly T[] } {
-  if (name === null) return list.length === 1 ? { one: list[0] ?? null, many: list } : { one: null, many: list }
+  if (name === null)
+    return list.length === 1 ? { one: list[0] ?? null, many: list } : { one: null, many: list }
   const words = name
     .toLowerCase()
     .split(/[^a-z0-9]+/)

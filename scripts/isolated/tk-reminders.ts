@@ -553,11 +553,7 @@ section(
     JSON.stringify(ticked),
   )
   const listed = json(
-    (
-      await one(
-        `select app.my_tasks(${O}, 'all', 200, ${lit(title)}, 'smart', true) as v`,
-      )
-    ).v,
+    (await one(`select app.my_tasks(${O}, 'all', 200, ${lit(title)}, 'smart', true) as v`)).v,
   ) as unknown as { id: string; state: string; repeats: Record<string, unknown> | null }[]
   const doneList = json(
     (await one(`select app.my_tasks(${O}, 'done', 200, ${lit(title)}, 'smart', true) as v`)).v,

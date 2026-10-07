@@ -254,6 +254,11 @@ export const CRITICAL: readonly Proof[] = [
     105,
     'Version 1 journeys G-K, M and N: autonomous work that parks an outward step, delegation fan-in, Team HQ continuity, model failure and delivery failure, untrusted content, cross-office attack',
   ),
+  p(
+    'tg-chief-addressing',
+    30,
+    "Telegram addressing with the production bot shape (the chief's bot the only one enabled, slug chief-of-staff): a message to the chief's bot is routed and can convene the team, one answer back through the same bot to the same chat; a message to a specialist's bot stays directly addressed with nobody else convened; approvals, retries, duplicates and another office",
+  ),
 
   // ---- reminders, state changes and delivery redrive (7 October implementation run) ----------------------------------
   p(
@@ -265,6 +270,11 @@ export const CRITICAL: readonly Proof[] = [
     'tk-reminders',
     68,
     'a reminder fires at the office clock (date-only, recurring, three time zones), through the real handler and the real tasks.remind duty; a harness task is never reminded',
+  ),
+  p(
+    'rm-series',
+    60,
+    'completing a recurring reminder completes that time only (skipped before it fires, recorded after, never a duplicate row or firing); only an explicit stop ends the series; clock changes in three zones, month and year end, a long outage',
   ),
   p(
     'tk-state-changes',

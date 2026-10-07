@@ -321,6 +321,26 @@
       "new": "${'app.enqueue_child'}",
       "invariant": "a plan is started once unless deliberately repeated",
       "expect": "tests/agents/one-live-attempt.test.ts"
+    },
+    {
+      "id": "M27",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/addressing.ts",
+      "old": "  if (to !== CHIEF_OF_STAFF) return true\n  return (input.alsoAddressed ?? []).some((x) => x !== '' && x !== CHIEF_OF_STAFF)",
+      "new": "  return true",
+      "invariant": "a message to the chief's bot is routed by her (the team can be convened); only a specialist's bot is a direct address",
+      "expect": "tests/agents/addressing.test.ts"
+    },
+    {
+      "id": "M27b",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "const byName = addressedDirectly({ addressedTo, alsoAddressed, handedOff }) ? addressedTo : null",
+      "new": "const byName = addressedTo === null || addressedTo === '' ? null : addressedTo",
+      "invariant": "speaker() reads the stored addressee through the one definition of 'directly addressed', not as 'addressed_to is non-empty'",
+      "expect": "tests/functions/telegram-addressing.test.ts"
     }
   ]
 }

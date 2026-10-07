@@ -92,12 +92,17 @@ declare
   v_id uuid;
 begin
   select * into d from public.deliveries x where x.delivery_id = p_delivery;
+  -- Only a job's own ANSWER (key `job:<id>:<channel>`, the key the redrive rebuilds). A failed QUESTION (key `blocker:...`)
+  -- is already an open question on his list, and a second item on a paused job would be asked by the pause sweep as
+  -- though it were the pause's own question.
   if not found or d.state <> 'failed' or d.purpose <> 'result' or d.job_id is null
-     or coalesce(d.error_code, '') like 'superseded:%' then
+     or coalesce(d.error_code, '') like 'superseded:%'
+     or d.dedupe_key not like 'job:' || d.job_id::text || ':%' then
     return null;
   end if;
   select * into j from public.jobs x where x.job_id = d.job_id and x.office_id = d.office_id;
   if not found then return null; end if;
+  if j.state in ('paused', 'waiting_user', 'waiting_external') then return null; end if;
   if coalesce(app.harness_job(j.job_id), false) then return null; end if;
 
   select o.body, o.staff_id into v_body, v_staff
@@ -113,6 +118,7 @@ begin
     into v_channels, v_unsure
     from public.deliveries x
    where x.job_id = j.job_id and x.office_id = d.office_id and x.purpose = 'result' and x.state = 'failed'
+     and x.dedupe_key like 'job:' || x.job_id::text || ':%'
      and coalesce(x.error_code, '') not like 'superseded:%';
 
   v_excerpt := left(regexp_replace(btrim(v_body), '\s+', ' ', 'g'), 500)
@@ -168,6 +174,7 @@ begin
              select 1 from public.deliveries d
               where d.job_id::text = b.on_answer -> 'payloads' -> 0 ->> 'job_id'
                 and d.office_id = b.office_id and d.purpose = 'result'
+                and d.dedupe_key like 'job:' || d.job_id::text || ':%'
                 and (d.state = 'claimed'
                      or (d.state = 'failed' and coalesce(d.error_code, '') not like 'superseded:%')))
     returning 1)
@@ -193,6 +200,7 @@ begin
     select d.delivery_id
       from public.deliveries d
      where d.state = 'failed' and d.purpose = 'result' and d.job_id is not null
+       and d.dedupe_key like 'job:' || d.job_id::text || ':%'
        and coalesce(d.error_code, '') not like 'superseded:%'
        and d.updated_at > app.now_utc() - p_max_age
        and not exists (
@@ -271,6 +279,7 @@ begin
     for r in
       select x.delivery_id from public.deliveries x
        where x.job_id = v_job and x.office_id = p_office and x.purpose = 'result' and x.state = 'failed'
+         and x.dedupe_key like 'job:' || x.job_id::text || ':%'
          and coalesce(x.error_code, '') not like 'superseded:%'
        order by x.updated_at
     loop
@@ -284,6 +293,7 @@ begin
     for r in
       select x.delivery_id from public.deliveries x
        where x.job_id = v_job and x.office_id = p_office and x.purpose = 'result' and x.state = 'failed'
+         and x.dedupe_key like 'job:' || x.job_id::text || ':%'
          and coalesce(x.error_code, '') like 'indeterminate:%'
        order by x.updated_at
     loop

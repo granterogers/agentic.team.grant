@@ -26,6 +26,7 @@ import { pursueHandler } from '../../src/handlers/pursue.ts'
 import { synthesiseHandler } from '../../src/handlers/synthesise.ts'
 import { drain, type Handler, type Reviewer } from '../../src/jobs/worker.ts'
 import { ProviderRouter } from '../../src/providers/router.ts'
+import { startEdge } from './edge-emulator.ts'
 import { isolated } from './guard.ts'
 import { BOT, CHAT, registerBot } from './real-telegram.ts'
 import { startTelegramDoor } from './telegram-door.ts'
@@ -167,6 +168,19 @@ for (const slug of DIRECTORS) {
 const op = String((await one(`select app.operator_office()::text as o`)).o)
 
 const tgDoor = await startTelegramDoor(db, BOT)
+// The gateway, only to put a document into the project the way a person does (so a pursuit has something to read).
+const S_GRANT = `aaa.bbb.${'g'.repeat(70)}`
+const gw = await startEdge({
+  db,
+  edgeFile: 'supabase/functions/hq-api/index.ts',
+  env: {
+    HQ_API_TOKEN: 'isolated-hq-token',
+    SUPABASE_SERVICE_ROLE_KEY: 'isolated-service-key',
+    SUPABASE_ANON_KEY: 'isolated-anon',
+    SIGNIN_ALLOWED_ORIGIN: 'https://page.invalid',
+  },
+  authUsers: { [S_GRANT]: 'grant.e.rogers@gmail.com' },
+})
 
 // The fake Telegram, installed AFTER the edge (it wraps `fetch` and refuses anything but the replica).
 interface TgCall {
@@ -283,8 +297,15 @@ const deliveriesOf = async (root: string): Promise<Row[]> =>
    where j.correlation_id = ${corr(root)} order by d.created_at`)
 const obligation = async (root: string): Promise<string> =>
   String((await one(`select app.obligation_state(${lit(root)}::uuid)::text as v`)).v)
-const consultations = async (root: string): Promise<number> =>
-  count(`select count(*)::int as n from public.consultations c join public.jobs j on j.job_id = c.job_id where j.correlation_id = ${corr(root)}`)
+/**
+ * Consultations where the CHIEF asked somebody, on THIS job: the lead's own turn being a specialist the chief chose. (The
+ * "convened alongside" rows are written by the hand-off path with the lead as requester and are not this site's.)
+ */
+const consultations = async (job: string): Promise<number> =>
+  count(
+    `select count(*)::int as n from public.consultations c join public.staff s on s.staff_id = c.requested_by
+      where c.job_id = ${lit(job)}::uuid and s.slug = 'chief-of-staff'`,
+  )
 
 // ---- the door, as the person uses it -----------------------------------------------------------------------------
 const update = (text: string, extra: Row = {}, chat = CHAT): Row => ({
@@ -349,6 +370,26 @@ const scriptTeam = (): void => {
 }
 
 const proj = await mkProject(op, `Riverside Launch ${run}`)
+{
+  const r = await gw.call(
+    new Request('https://gw.invalid/functions/v1/hq-api', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${S_GRANT}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'document_upload',
+        args: {
+          p_project_id: proj,
+          p_name: 'venue-contract.txt',
+          p_mime: 'text/plain',
+          p_base64: Buffer.from(
+            'Riverside venue contract. The deposit of 2000 pounds is due on 1 November. Insurance certificate still outstanding.',
+          ).toString('base64'),
+        },
+      }),
+    }),
+  )
+  if (r.status !== 200) throw new Error(`the project document was not uploaded (${String(r.status)})`)
+}
 await quiet()
 await scopeChat(proj)
 
@@ -423,8 +464,31 @@ part('T1', "the chief's bot: an ordinary instruction is answered by the chief or
   )
 }
 
+{
+  // A standing instruction typed to the chief's bot singles nobody out, so it is not the chief's own rule. Before the fix
+  // it was read as addressed to her: a staff-scoped lesson, and inside a project-scoped chat (as here) a lesson that
+  // combines a staff and a project target, which `lessons_scope_matches_target` REFUSES, so the job failed (attempt 4,
+  // 23514) and the rule was never stored. (The same sentence typed to a SPECIALIST's bot inside a project fails the
+  // same way today: an adjacent defect this change does not touch.)
+  await quiet()
+  await scopeChat(proj)
+  const t = await say(`From now on use British spelling ${run}a.`)
+  await settle(t.job)
+  const rule = await rows(
+    `select scope::text as scope, staff_slug from public.lessons where from_job = ${lit(t.job)}::uuid and row_kind = 'lesson'`,
+  )
+  check(
+    "a standing instruction typed to the chief's bot is stored (here for the chat's project) and is not scoped to the chief as a person; the job completed",
+    rule.length === 1 &&
+      rule[0]?.scope !== 'staff' &&
+      rule[0]?.staff_slug === null &&
+      (await leadOf(t.job)).state === 'complete',
+    JSON.stringify(rule),
+  )
+}
+
 // ===================================================================================================================
-part('T2', "the chief's bot: 'Ask the team ...' convenes the team, ONE answer, same chat, same bot")
+part('T2',"the chief's bot: 'Ask the team ...' convenes the team, ONE answer, same chat, same bot")
 {
   await quiet()
   await scopeChat(proj)

@@ -1184,7 +1184,9 @@ begin(
       )) === 0 &&
       isLocal(ended.remind_at, ATHENS, 'Mon', 9, 0) &&
       new Date(String(ended.remind_at)).getTime() > Date.now(),
-    ended.remind_at === null || ended.remind_at === undefined ? 'null' : at(ended.remind_at, ATHENS),
+    ended.remind_at === null || ended.remind_at === undefined
+      ? 'null'
+      : at(ended.remind_at, ATHENS),
   )
   // occurrence 3 (a different time from the one just completed) fires and is delivered, once
   await db.execute(

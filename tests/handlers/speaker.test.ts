@@ -45,11 +45,27 @@ const db: SqlExecutor = {
 
 describe('#26 — a selection Grant made himself', () => {
   it('one person, and nobody else — unchanged', async () => {
-    const who = await speaker(db, 'chief-of-staff', 'what is open?', null, null, [])
-    expect(who.slug).toBe('chief-of-staff')
+    // A specialist whose bot he opened. (This case was written with the chief as the person; the chief is the router
+    // and is no longer a "direct" address on her own: see agents/addressing.ts and the next test.)
+    const who = await speaker(db, 'finance-director', 'what is open?', null, null, [])
+    expect(who.slug).toBe('finance-director')
     expect(who.alsoConvened).toEqual([])
-    expect(who.convened).toEqual(['chief-of-staff'])
+    expect(who.convened).toEqual(['finance-director'])
     expect(who.reason).toContain('addressed directly')
+  })
+
+  it('the chief alone is NOT a direct address: she routes, so the roster is consulted', async () => {
+    const asked: string[] = []
+    const spy: SqlExecutor = {
+      kind: 'fake',
+      execute: (sql: string): Promise<SqlResult> => {
+        asked.push(sql)
+        return db.execute(sql)
+      },
+    }
+    const who = await speaker(spy, 'chief-of-staff', 'what is open?', null, null, [])
+    expect(who.reason).not.toContain('addressed directly')
+    expect(asked.some((s) => s.includes('who_knows_about') || s.includes('public.staff where active'))).toBe(true)
   })
 
   it('one answers and the rest are convened, each in their own name', async () => {

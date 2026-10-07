@@ -1214,6 +1214,30 @@ let terminalJob = ''
   )
 }
 
+// ---- 11m. a failed QUESTION is not an answer: it is already a question on his list --------------------------------
+{
+  const j = await make()
+  await runJob(db, j, handlers, review, undefined) // complete, answer stored, nothing delivered
+  await db.execute(
+    `insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, error_code, lease_expires_at)
+     values (app.job_office('${j.jobId}'::uuid), 'telegram', 'blocker:${j.jobId}:reply', '8967954396', '${CHAT}', 'result', '${j.jobId}', 'failed', 'chat_not_found', app.now_utc())`,
+  )
+  await tick()
+  const none = (await itemsOf(j.jobId)).length
+  // control: the very same row shape under the answer's own key raises one
+  const k = await make()
+  await runJob(db, k, handlers, review, undefined)
+  await db.execute(
+    `insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, error_code, lease_expires_at)
+     values (app.job_office('${k.jobId}'::uuid), 'telegram', 'job:${k.jobId}:reply', '8967954396', '${CHAT}', 'result', '${k.jobId}', 'failed', 'chat_not_found', app.now_utc())`,
+  )
+  check(
+    '11m a failed delivery of a question (a blocker key) raises NO item, while the same row under the answer key does (control)',
+    none === 0 && (await itemsOf(k.jobId)).length === 1,
+    `question ${String(none)}, answer ${String((await itemsOf(k.jobId)).length)}`,
+  )
+}
+
 // ---- 11l. exactly-once and the ledger are untouched ----------------------------------------------------------------------
 {
   const dup = Number(

@@ -13,7 +13,13 @@
  * The optional second argument installs ONE sabotage (a deliberately broken copy of a repaired function) and the run is
  * then expected to go RED; it prints proof that the sabotage landed before running anything. See the SABOTAGES table.
  */
-import { localClock, localDay, offsetMinutes, wallClock, weekdayOf } from '../../src/agents/office-time.ts'
+import {
+  localClock,
+  localDay,
+  offsetMinutes,
+  wallClock,
+  weekdayOf,
+} from '../../src/agents/office-time.ts'
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import { remindersHandler } from '../../src/handlers/reminders.ts'
 import type { Job } from '../../src/jobs/worker.ts'
@@ -64,7 +70,9 @@ await db.execute(`create or replace function app.now_utc() returns timestamptz l
 const setNow = async (d: Date | null) => {
   await db.execute(`delete from public.rm_clock`)
   if (d !== null) {
-    await db.execute(`insert into public.rm_clock (t) values (${lit(d.toISOString())}::timestamptz)`)
+    await db.execute(
+      `insert into public.rm_clock (t) values (${lit(d.toISOString())}::timestamptz)`,
+    )
   }
 }
 const MIN = 60_000
@@ -135,7 +143,8 @@ const SABOTAGES: Record<string, () => Promise<string>> = {
   nofired: async () => {
     const sig = 'app.reminder_finish(uuid, boolean)'
     const d = await defOf(sig)
-    const from = 'set last_fired_for = case when p_delivered then t.remind_at else last_fired_for end,'
+    const from =
+      'set last_fired_for = case when p_delivered then t.remind_at else last_fired_for end,'
     if (!d.includes(from)) return 'ANCHOR NOT FOUND'
     await db.execute(d.replace(from, () => 'set'))
     return `definition no longer records fired: ${String(!(await defOf(sig)).includes('last_fired_for = case'))}`
@@ -216,10 +225,11 @@ const deliver = async (jobId: string, state: 'sent' | 'failed' | 'claimed') => {
 const fire = async (title: string, outcome: 'sent' | 'failed' = 'sent') => {
   const j = await enqueue('tick')
   const r = await tick(j)
-  const announced = r.out.announce === true && r.out.body.toLowerCase().includes(title.toLowerCase())
+  const announced =
+    r.out.announce === true && r.out.body.toLowerCase().includes(title.toLowerCase())
   if (announced) await deliver(j.jobId, outcome)
   const settled = await tick()
-  return { announced, job: j.jobId, settledBody: settled.out.body, announce: r.out.announce === true }
+  return { announced, job: j.jobId, settledBody: settled.out.body }
 }
 const get = async (id: string) =>
   (
@@ -266,30 +276,25 @@ const mkSeries = async (title: string, every: string, remindAt: Date): Promise<s
   return String(made.id)
 }
 const tickOff = async (id: string) =>
-  json(
-    (await one(`select app.hq_task_state(${O}, ${lit(id)}, 'done', null, 'grant') as v`)).v,
-  )
+  json((await one(`select app.hq_task_state(${O}, ${lit(id)}, 'done', null, 'grant') as v`)).v)
 const hm = (v: unknown, zone: string) => localClock(new Date(iso(v)), zone)
-const lastMonday9 = (now: Date): Date => {
-  const t = localDay(now, ATHENS)
-  for (let back = 0; back <= 7; back++) {
-    const a = wallClock(t.y, t.m, t.d - back, 9, 0, ATHENS)
-    if (weekdayOf(t.y, t.m, t.d - back) === 1 && a.getTime() <= now.getTime() - 60_000) return a
-  }
-  throw new Error('no Monday found')
-}
-void lastMonday9
 
 // ================================================================================================================
 section('S0: a stop with NOTHING to stop says so and changes nothing (first, on a clean office)')
 {
   await setNow(null)
-  const before = Number((await one(`select count(*)::int as c from public.tasks where office_id = ${O}`)).c)
+  const before = Number(
+    (await one(`select count(*)::int as c from public.tasks where office_id = ${O}`)).c,
+  )
   const r = await say('Stop the recurring reminder.')
-  const after = Number((await one(`select count(*)::int as c from public.tasks where office_id = ${O}`)).c)
+  const after = Number(
+    (await one(`select count(*)::int as c from public.tasks where office_id = ${O}`)).c,
+  )
   check(
     'no recurring reminder exists: the answer says there is none, and nothing was created or changed',
-    /not stopped anything/.test(r.body) && /no recurring reminders/.test(r.body) && before === after,
+    /not stopped anything/.test(r.body) &&
+      /no recurring reminders/.test(r.body) &&
+      before === after,
     r.body.slice(0, 140),
   )
 }
@@ -309,10 +314,11 @@ const s1 = { jobs: [] as string[], title: '', id: '' }
   s1.id = String(t.id)
   s1.title = String(t.title)
   const occ1 = new Date(iso(t.remind_at))
+  const d1 = localDay(occ1, ATHENS)
   check(
     'created as ONE series: a Monday 09:00 in the office zone, in the future',
     hm(t.remind_at, ATHENS) === '09:00' &&
-      weekdayOf(localDay(occ1, ATHENS).y, localDay(occ1, ATHENS).m, localDay(occ1, ATHENS).d) === 1 &&
+      weekdayOf(d1.y, d1.m, d1.d) === 1 &&
       occ1.getTime() > Date.now(),
     iso(t.remind_at),
   )
@@ -321,8 +327,8 @@ const s1 = { jobs: [] as string[], title: '', id: '' }
     /completes that time only/.test(made.body) && /stop the .+ reminder/.test(made.body),
     made.body.slice(0, 200),
   )
-  const occ2 = wallClock(localDay(occ1, ATHENS).y, localDay(occ1, ATHENS).m, localDay(occ1, ATHENS).d + 7, 9, 0, ATHENS)
-  const occ3 = wallClock(localDay(occ1, ATHENS).y, localDay(occ1, ATHENS).m, localDay(occ1, ATHENS).d + 14, 9, 0, ATHENS)
+  const occ2 = wallClock(d1.y, d1.m, d1.d + 7, 9, 0, ATHENS)
+  const occ3 = wallClock(d1.y, d1.m, d1.d + 14, 9, 0, ATHENS)
 
   // occurrence 1 fires: delivered once
   await setNow(new Date(occ1.getTime() + MIN))
@@ -428,11 +434,12 @@ const s1 = { jobs: [] as string[], title: '', id: '' }
     !open.some((r) => r.id === s1.id),
     String(open.length),
   )
-
 }
 
 // ================================================================================================================
-section('S2: completing BEFORE the reminder fires SKIPS that time; in flight completes it; no duplicate row or firing')
+section(
+  'S2: completing BEFORE the reminder fires SKIPS that time; in flight completes it; no duplicate row or firing',
+)
 {
   await setZone(ATHENS)
   // (c) not fired yet, time in the future
@@ -455,16 +462,14 @@ section('S2: completing BEFORE the reminder fires SKIPS that time; in flight com
   )
   await setNow(new Date(occ.getTime() + MIN))
   const skipped = await fire(title)
-  check(
-    '...and the skipped time NEVER fires',
-    !skipped.announced,
-    skipped.settledBody.slice(0, 60),
-  )
+  check('...and the skipped time NEVER fires', !skipped.announced, skipped.settledBody.slice(0, 60))
   await setNow(new Date(next.getTime() + MIN))
   const nextFire = await fire(title)
   check(
     '...while the time after it fires once and is delivered once',
-    nextFire.announced && (await sentCount([nextFire.job])) === 1 && (await rowsTitled(title)) === 1,
+    nextFire.announced &&
+      (await sentCount([nextFire.job])) === 1 &&
+      (await rowsTitled(title)) === 1,
     '',
   )
 
@@ -556,12 +561,19 @@ section('S2: completing BEFORE the reminder fires SKIPS that time; in flight com
       t2.occurrence === 'skipped' &&
       iso(afterTwo.remind_at) === wallClock(2027, 8, 20, 9, 0, ATHENS).toISOString() &&
       (await rowsTitled(titleE)) === 1,
-    JSON.stringify({ t1: t1.occurrence, t2: t2.occurrence, a: iso(afterOne.remind_at), b: iso(afterTwo.remind_at) }),
+    JSON.stringify({
+      t1: t1.occurrence,
+      t2: t2.occurrence,
+      a: iso(afterOne.remind_at),
+      b: iso(afterTwo.remind_at),
+    }),
   )
 }
 
 // ================================================================================================================
-section('S3: the state, not the writer: any writer that sets a series to done is held open; a repeating TASK keeps its meaning')
+section(
+  'S3: the state, not the writer: any writer that sets a series to done is held open; a repeating TASK keeps its meaning',
+)
 {
   await setNow(null)
   await setZone(ATHENS)
@@ -573,7 +585,10 @@ section('S3: the state, not the writer: any writer that sets a series to done is
   const raw = await get(id)
   check(
     'a raw UPDATE to done (no sanctioned writer) does not end a series either: open, repeating, no done_at, one row',
-    raw.state === 'todo' && raw.done_at === null && String(raw.rep).startsWith('7 days') && (await rowsTitled(title)) === 1,
+    raw.state === 'todo' &&
+      raw.done_at === null &&
+      String(raw.rep).startsWith('7 days') &&
+      (await rowsTitled(title)) === 1,
     JSON.stringify(raw),
   )
   // a repeating TASK (a due date) keeps its semantics: ticking it off makes ONE next occurrence
@@ -591,7 +606,10 @@ section('S3: the state, not the writer: any writer that sets a series to done is
   )
   check(
     'a repeating TASK with a due date: ticking it off completes it and makes exactly ONE next occurrence (unchanged by decision)',
-    kids.length === 2 && kids[0]?.state === 'done' && kids[1]?.state === 'todo' && kids[1]?.due !== kids[0]?.due,
+    kids.length === 2 &&
+      kids[0]?.state === 'done' &&
+      kids[1]?.state === 'todo' &&
+      kids[1]?.due !== kids[0]?.due,
     JSON.stringify(kids),
   )
   // a plain one-off reminder is still ended by ticking it off
@@ -615,13 +633,16 @@ section('S3: the state, not the writer: any writer that sets a series to done is
   const reopened = await get(sid)
   check(
     'a series reopened with its time in the past is moved to the future (no stale reminder at once)',
-    new Date(iso(reopened.remind_at)).getTime() > Date.now() && (await rowsTitled(`Reopen ${run}`)) === 1,
+    new Date(iso(reopened.remind_at)).getTime() > Date.now() &&
+      (await rowsTitled(`Reopen ${run}`)) === 1,
     JSON.stringify(reopened),
   )
 }
 
 // ================================================================================================================
-section('S4: the explicit stop: phrasings in his own words, no guess, no stop from a forwarded message, a gateway wrapper')
+section(
+  'S4: the explicit stop: phrasings in his own words, no guess, no stop from a forwarded message, a gateway wrapper',
+)
 {
   await setNow(null)
   await setZone(ATHENS)
@@ -630,14 +651,15 @@ section('S4: the explicit stop: phrasings in his own words, no guess, no stop fr
     fin: await mk(`Review my finances ${run}b`),
     rota: await mk(`Check the rota ${run}`),
     pay: await mk(`Review payroll ${run}`),
-    bins: await mk(`Book the skip hire ${run}`),
+    bins: await mk(`Book the plumber ${run}`),
   }
   const states = async () =>
     Object.fromEntries(
-      await Promise.all(Object.entries(ids).map(async ([k, v]) => [k, String((await get(v)).state)])),
+      await Promise.all(
+        Object.entries(ids).map(async ([k, v]) => [k, String((await get(v)).state)]),
+      ),
     ) as Record<string, string>
-  const allOpen = (s: Record<string, string>, except: string[] = []) =>
-    Object.entries(s).every(([k, v]) => (except.includes(k) ? v === 'cancelled' : v === 'todo'))
+  const allOpen = (s: Record<string, string>) => Object.values(s).every((v) => v === 'todo')
 
   const bare = await say('Stop the recurring reminder.')
   check(
@@ -682,7 +704,7 @@ section('S4: the explicit stop: phrasings in his own words, no guess, no stop fr
   const phrases: [string, keyof typeof ids][] = [
     [`Stop the check the rota ${run} reminder.`, 'rota'],
     [`Cancel the recurring reminder to review payroll ${run}.`, 'pay'],
-    [`Please stop reminding me about the skip hire ${run}.`, 'bins'],
+    [`Please stop reminding me about the plumber ${run}.`, 'bins'],
     [`End the recurring reminder to review my finances ${run}b.`, 'fin'],
   ]
   for (const [said, key] of phrases) {
@@ -700,7 +722,11 @@ section('S4: the explicit stop: phrasings in his own words, no guess, no stop fr
   // a one-off reminder named with "stop" is not a series: nothing is touched
   const oneTitle = `Roofer call ${run}`
   const oo = json(
-    (await one(`select app.my_task_add(${O}, ${lit(oneTitle)}, '', null, now() + interval '2 days') as v`)).v,
+    (
+      await one(
+        `select app.my_task_add(${O}, ${lit(oneTitle)}, '', null, now() + interval '2 days') as v`,
+      )
+    ).v,
   )
   const live = await mk(`Water rota ${run}`)
   const rr = await say(`Stop the roofer call ${run} reminder.`)
@@ -716,7 +742,9 @@ section('S4: the explicit stop: phrasings in his own words, no guess, no stop fr
     (await one(`select public.reminder_series_stop(${O}, ${lit(String(oo.id))}) as v`)).v,
   )
   const wrapOk = json((await one(`select public.reminder_series_stop(${O}, ${lit(live)}) as v`)).v)
-  const wrapAgain = json((await one(`select public.reminder_series_stop(${O}, ${lit(live)}) as v`)).v)
+  const wrapAgain = json(
+    (await one(`select public.reminder_series_stop(${O}, ${lit(live)}) as v`)).v,
+  )
   check(
     'the gateway wrapper: stops a series (with an undo offer), refuses a one-off by name, and refuses a second stop',
     wrapOk.ok === true &&
@@ -731,43 +759,46 @@ section('S4: the explicit stop: phrasings in his own words, no guess, no stop fr
 }
 
 // ================================================================================================================
-section('S5: the clock changes (both directions, three zones) and the calendar edges: the same local time every time')
+section(
+  'S5: the clock changes (both directions, three zones) and the calendar edges: the same local time every time',
+)
 {
-  type Case = { zone: string; label: string; y: number; m: number; d: number; every: string; days: number }
+  // zone, label, year, month (zero-based), day, repeat, days the repeat is
+  type Case = [string, string, number, number, number, string, number]
   const cases: Case[] = [
-    { zone: ATHENS, label: 'Athens spring forward (Sat 28 -> Sun 29 March 2026)', y: 2026, m: 2, d: 28, every: '1 day', days: 1 },
-    { zone: ATHENS, label: 'Athens fall back (Sat 24 -> Sun 25 October 2026)', y: 2026, m: 9, d: 24, every: '1 day', days: 1 },
-    { zone: ATHENS, label: 'Athens weekly across the spring change (Sun 22 -> 29 March 2026)', y: 2026, m: 2, d: 22, every: '7 days', days: 7 },
-    { zone: 'America/New_York', label: 'New York spring forward (Sat 7 -> Sun 8 March 2026)', y: 2026, m: 2, d: 7, every: '1 day', days: 1 },
-    { zone: 'America/New_York', label: 'New York fall back (Sat 31 October -> Sun 1 November 2026)', y: 2026, m: 9, d: 31, every: '1 day', days: 1 },
-    { zone: 'Pacific/Auckland', label: 'Auckland spring forward (Sat 26 -> Sun 27 September 2026)', y: 2026, m: 8, d: 26, every: '1 day', days: 1 },
-    { zone: 'Pacific/Auckland', label: 'Auckland fall back (Sat 3 -> Sun 4 April 2027)', y: 2027, m: 3, d: 3, every: '1 day', days: 1 },
-    { zone: 'Pacific/Auckland', label: 'Auckland weekly across the fall back (Sun 28 March -> 4 April 2027)', y: 2027, m: 2, d: 28, every: '7 days', days: 7 },
-    { zone: ATHENS, label: 'month end (Sat 31 Jan -> Sun 1 Feb 2026)', y: 2026, m: 0, d: 31, every: '1 day', days: 1 },
-    { zone: ATHENS, label: 'year end (Thu 31 Dec 2026 -> Fri 1 Jan 2027)', y: 2026, m: 11, d: 31, every: '1 day', days: 1 },
-    { zone: ATHENS, label: 'February, non-leap (28 -> 1 March 2027)', y: 2027, m: 1, d: 28, every: '1 day', days: 1 },
-    { zone: ATHENS, label: 'February, leap year (28 -> 29 Feb 2028)', y: 2028, m: 1, d: 28, every: '1 day', days: 1 },
-    { zone: ATHENS, label: 'February, leap year (29 Feb -> 1 March 2028)', y: 2028, m: 1, d: 29, every: '1 day', days: 1 },
-    { zone: ATHENS, label: 'weekly across a month end (30 March -> 6 April 2027)', y: 2027, m: 2, d: 30, every: '7 days', days: 7 },
+    [ATHENS, 'Athens spring forward (Sat 28 -> Sun 29 March 2026)', 2026, 2, 28, '1 day', 1],
+    [ATHENS, 'Athens fall back (Sat 24 -> Sun 25 October 2026)', 2026, 9, 24, '1 day', 1],
+    [ATHENS, 'Athens weekly over the spring change (22 -> 29 Mar 2026)', 2026, 2, 22, '7 days', 7],
+    ['America/New_York', 'New York spring forward (7 -> 8 Mar 2026)', 2026, 2, 7, '1 day', 1],
+    ['America/New_York', 'New York fall back (31 Oct -> 1 Nov 2026)', 2026, 9, 31, '1 day', 1],
+    ['Pacific/Auckland', 'Auckland spring forward (26 -> 27 Sep 2026)', 2026, 8, 26, '1 day', 1],
+    ['Pacific/Auckland', 'Auckland fall back (Sat 3 -> Sun 4 April 2027)', 2027, 3, 3, '1 day', 1],
+    ['Pacific/Auckland', 'Auckland weekly over fall back (28 Mar)', 2027, 2, 28, '7 days', 7],
+    [ATHENS, 'month end (Sat 31 Jan -> Sun 1 Feb 2026)', 2026, 0, 31, '1 day', 1],
+    [ATHENS, 'year end (Thu 31 Dec 2026 -> Fri 1 Jan 2027)', 2026, 11, 31, '1 day', 1],
+    [ATHENS, 'February, non-leap (28 Feb -> 1 March 2027)', 2027, 1, 28, '1 day', 1],
+    [ATHENS, 'February, leap year (28 -> 29 Feb 2028)', 2028, 1, 28, '1 day', 1],
+    [ATHENS, 'February, leap year (29 Feb -> 1 March 2028)', 2028, 1, 29, '1 day', 1],
+    [ATHENS, 'weekly across a month end (30 March -> 6 April 2027)', 2027, 2, 30, '7 days', 7],
   ]
   let i = 0
-  for (const c of cases) {
+  for (const [zone, label, y, m, d, every, days] of cases) {
     i += 1
-    await setZone(c.zone)
-    const occ = wallClock(c.y, c.m, c.d, 9, 0, c.zone)
-    const want = wallClock(c.y, c.m, c.d + c.days, 9, 0, c.zone)
-    const crosses = offsetMinutes(occ, c.zone) !== offsetMinutes(want, c.zone)
+    await setZone(zone)
+    const occ = wallClock(y, m, d, 9, 0, zone)
+    const want = wallClock(y, m, d + days, 9, 0, zone)
+    const crosses = offsetMinutes(occ, zone) !== offsetMinutes(want, zone)
     // by DELIVERY
     const title = `Clock ${String(i)} ${run}`
     await setNow(new Date(occ.getTime() + MIN))
-    const id = await mkSeries(title, c.every, occ)
+    const id = await mkSeries(title, every, occ)
     const f = await fire(title)
     const adv = await get(id)
     check(
-      `${c.label}: fires once and moves to ${hm(want, c.zone)} local, ${String(c.days)} day(s) on${crosses ? ' (the UTC offset changed)' : ''}`,
+      `${label}: fires once and moves to ${hm(want, zone)} local, ${String(days)} day(s) on${crosses ? ' (the UTC offset changed)' : ''}`,
       f.announced &&
         iso(adv.remind_at) === want.toISOString() &&
-        hm(adv.remind_at, c.zone) === '09:00' &&
+        hm(adv.remind_at, zone) === '09:00' &&
         (await sentCount([f.job])) === 1 &&
         (await rowsTitled(title)) === 1,
       `${iso(adv.remind_at)} want ${want.toISOString()}`,
@@ -775,14 +806,14 @@ section('S5: the clock changes (both directions, three zones) and the calendar e
     // by SKIP (ticked off before it fired), on the same boundary
     const sTitle = `Clock skip ${String(i)} ${run}`
     await setNow(new Date(occ.getTime() - 3 * 3_600_000))
-    const sid = await mkSeries(sTitle, c.every, occ)
+    const sid = await mkSeries(sTitle, every, occ)
     const t = await tickOff(sid)
     const sk = await get(sid)
     check(
-      `${c.label}: ticked off before it fired it is SKIPPED to the same local time`,
+      `${label}: ticked off before it fired it is SKIPPED to the same local time`,
       t.occurrence === 'skipped' &&
         iso(sk.remind_at) === want.toISOString() &&
-        hm(sk.remind_at, c.zone) === '09:00' &&
+        hm(sk.remind_at, zone) === '09:00' &&
         (await rowsTitled(sTitle)) === 1,
       `${iso(sk.remind_at)} want ${want.toISOString()}`,
     )
@@ -812,7 +843,11 @@ section('S6: a long outage fires ONCE, not a backlog, and the next time is the n
     JSON.stringify(a),
   )
   const quiet = await fire(title)
-  check('...and the next tick does not say it again', !quiet.announced, quiet.settledBody.slice(0, 60))
+  check(
+    '...and the next tick does not say it again',
+    !quiet.announced,
+    quiet.settledBody.slice(0, 60),
+  )
 }
 
 await setNow(null)
