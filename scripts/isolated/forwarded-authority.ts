@@ -8,7 +8,8 @@
  * controls that prove the change bought no precision loss.
  */
 import { isolated } from './guard.ts'
-import { CHAT, realTelegramKey, registerBot } from './real-telegram.ts'
+import { realTurn } from './fixtures-approvals.ts'
+import { registerBot } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'fwd624')
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
@@ -18,21 +19,13 @@ const check = (what: string, ok: boolean, detail: string) => {
   results.push({ ok })
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what} - ${detail}`)
 }
-const DOOR = "set local application_name = 'PostgREST 14.5';"
 await registerBot(db)
-const project = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
+const project = String(
+  (await one(`select app.unnamed_project(app.operator_office())::text as p`)).p,
+)
 
-const turn = async (context: Record<string, unknown>) => {
-  const key = realTelegramKey()
-  const msg = key.split(':').pop() ?? '1'
-  const cmd = await one(`${DOOR}
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, context)
-    values ('telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(CHAT)}, 'file this for me', ${lit(key)}, 'grant', ${lit(JSON.stringify(context))}::jsonb)
-    returning command_id::text as id`)
-  const enq = await one(`${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
-  const v = typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v
-  return String((v as { job_id: string }).job_id)
-}
+const turn = async (context: Record<string, unknown>) =>
+  (await realTurn(db, { channel: 'telegram', text: 'file this for me', context })).job
 const child = async (parent: string) =>
   String(
     (
@@ -86,8 +79,8 @@ check('no job is unprompted (unchanged)', v.verdict === 'ask', v.verdict)
 // a legacy job: no stored origin, so it reads as it always did
 const legacy = String(
   (
-    await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-    values ('verify.ask', 'teamhq:verify-fwd', app.unnamed_project(app.test_office()), 'fwd-' || gen_random_uuid(), gen_random_uuid()) returning job_id::text as id`)
+    await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+    values (app.operator_office(), 'verify.ask', 'teamhq:verify-fwd', app.unnamed_project(app.operator_office()), 'fwd-' || gen_random_uuid(), gen_random_uuid()) returning job_id::text as id`)
   ).id,
 )
 await db
@@ -100,15 +93,11 @@ check(
   JSON.stringify(v),
 )
 // a standing authorization still upgrades a forwarded job, as any explicit yes does
-await db
-  .execute(
-    `insert into public.standing_authorizations (tool, project_id, reason, granted_by) values ('notebook.write', null, 'forwarded proof', 'grant')`,
-  )
-  .catch(async () => {
-    await db.execute(
-      `insert into public.standing_authorizations (tool, reason) values ('notebook.write', 'forwarded proof')`,
-    )
-  })
+// Through the product's writer, with no swallowed error: a standing yes that was never written would make the
+// check below fail for the wrong reason rather than vacuously pass.
+await db.execute(
+  `select app.grant_standing(app.operator_office(), 'notebook.write', ${lit(project)}::uuid, 'forwarded proof', 'grant', null)`,
+)
 v = await verdict(fwdKid)
 check(
   'an explicit standing authorization is untouched by a forwarded turn',

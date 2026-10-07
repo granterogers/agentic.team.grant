@@ -19,6 +19,7 @@
  * REFUSED at the worker gate.
  */
 import { containmentRefusal } from '../../src/jobs/containment.ts'
+import { scopeOf } from './fixtures-jobs.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'syn379')
@@ -38,8 +39,8 @@ const CHAT = '1386648496'
 
 const turn = async (channel: string, key: string, ref: string): Promise<string | null> => {
   const cmd = await one(`${DOOR}
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(ref)}, ${lit(CHAT)}, ${lit(`Synthetic ${run}`)}, ${lit(key)}, 'grant')
+    insert into public.inbound_commands (${scopeOf('real').cols}, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (${scopeOf('real').vals}, ${lit(channel)}, ${lit(ref)}, ${lit(CHAT)}, ${lit(`Synthetic ${run}`)}, ${lit(key)}, 'grant')
     returning command_id::text as id`)
   const enq = jsonOf(
     (await one(`${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)).v,
@@ -49,8 +50,8 @@ const turn = async (channel: string, key: string, ref: string): Promise<string |
 const rootJob = async (requestedBy: string, kind: string): Promise<string> =>
   String(
     (
-      await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-        values (gen_random_uuid(), ${lit(`syn:${run}:${n()}`)}, ${lit(kind)}, ${lit(requestedBy)})
+      await one(`insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+        values (app.operator_office(), gen_random_uuid(), ${lit(`syn:${run}:${n()}`)}, ${lit(kind)}, ${lit(requestedBy)})
         returning job_id::text as v`)
     ).v,
   )

@@ -8,6 +8,7 @@
  * Telegram turn from his chat, each with an answer. The reader the Chat is
  * drawn from must show the second pair and not the first.
  */
+import { scopeOfProject } from './fixtures-jobs.ts'
 import { isolated } from './guard.ts'
 import { realTelegramKey, registerBot } from './real-telegram.ts'
 
@@ -23,7 +24,8 @@ const check = (what: string, ok: boolean, detail: string) => {
 }
 
 const made =
-  await one(`select app.hq_create_project(app.test_office(), ${lit(`Chat proof ${run}`)}, 'upload',
+  // a REAL project is the operator's; it is where Grant's chat lives, and where a harness turn must not be shown
+  await one(`select app.hq_create_project(app.operator_office(), ${lit(`Chat proof ${run}`)}, 'upload',
   ${lit(`chat-${run}`)}, ${lit(`Chat proof ${run}`)}, true) as v`)
 const project = String((made.v as { project_id?: string }).project_id ?? '')
 const p = await one(
@@ -38,8 +40,8 @@ check(
 const turn = async (channel: string, key: string, ref: string, words: string): Promise<string> => {
   const cmd = await one(`
     set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, project_id)
-    values (${lit(channel)}, ${lit(ref)}, 'grant', ${lit(words)}, ${lit(key)}, 'grant', ${lit(project)}::uuid)
+    insert into public.inbound_commands (${scopeOfProject(project).cols}, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (${scopeOfProject(project).vals}, ${lit(channel)}, ${lit(ref)}, 'grant', ${lit(words)}, ${lit(key)}, 'grant')
     returning command_id::text as id`)
   const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
   const job = String(
@@ -71,7 +73,7 @@ check(
 )
 
 const hist = (
-  await one(`select app.conversation_history(app.test_office(), ${lit(project)}::uuid, 100) as v`)
+  await one(`select app.conversation_history(app.operator_office(),${lit(project)}::uuid, 100) as v`)
 ).v as {
   body: string
   kind: string

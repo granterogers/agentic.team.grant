@@ -22,6 +22,7 @@
  */
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import type { Job } from '../../src/jobs/worker.ts'
+import { realTurn } from './fixtures-approvals.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'entitle')
@@ -49,16 +50,15 @@ const router = {
 const handler = instructionHandler({ db, router })
 
 let seq = 0
-const turn = async (chat: string, said: string, channel = 'teamhq'): Promise<Job> => {
+const chats = new Map<string, string>()
+const turn = async (chat: string, said: string): Promise<Job> => {
   seq += 1
-  const cmd = await one(`
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(`${chat}:${String(seq)}`)}, 'grant', ${lit(said)},
-            ${lit(`${channel}:entitle:${run}.${String(seq)}`)}, 'grant')
-    returning command_id::text as id`)
-  const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
-  const v = (typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v) as { job_id?: string }
-  if (v.job_id === undefined) throw new Error(`enqueue refused: ${JSON.stringify(enq.v)}`)
+  // A turn as the Telegram adapter writes it (recognised key, PostgREST door), one numeric chat per conversation:
+  // the old fixture's made-up keys are no door (1023), and the dashboard's single conversation would thread every
+  // case into the last. Telegram is also where he mostly works.
+  if (!chats.has(chat)) chats.set(chat, String(800_000_000 + chats.size))
+  const real = await realTurn(db, { channel: 'telegram', text: said, chat: chats.get(chat) })
+  const v = { job_id: real.job }
   const j = await one(`select job_id::text as id, kind, correlation_id::text as c,
       project_id::text as p, idempotency_key as k from public.jobs where job_id = ${lit(v.job_id)}::uuid`)
   return {
@@ -177,8 +177,8 @@ for (const c of CASES) {
   const first = await turn(chat, c.earlier)
   const running = String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id, state)
-        select 'office.pursue', requested_by, project_id, 'entitle-' || gen_random_uuid(), correlation_id, job_id, 'queued'
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id, state)
+        select office_id, 'office.pursue', requested_by, project_id, 'entitle-' || gen_random_uuid(), correlation_id, job_id, 'queued'
           from public.jobs where job_id = ${lit(first.jobId)}::uuid returning job_id::text as id`)
     ).id,
   )
@@ -209,8 +209,8 @@ for (const c of CASES) {
   const first2 = await turn(chat2, c.earlier)
   const running2 = String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id, state)
-        select 'office.pursue', requested_by, project_id, 'entitle-' || gen_random_uuid(), correlation_id, job_id, 'queued'
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id, state)
+        select office_id, 'office.pursue', requested_by, project_id, 'entitle-' || gen_random_uuid(), correlation_id, job_id, 'queued'
           from public.jobs where job_id = ${lit(first2.jobId)}::uuid returning job_id::text as id`)
     ).id,
   )

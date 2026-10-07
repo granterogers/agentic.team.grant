@@ -53,7 +53,25 @@ check(
 
 // ---- channels -----------------------------------------------------------------------------------------------
 /** Named exceptions, each with its reason: a list allowed to differ from the vocabulary, and how. */
-const EXCEPTIONS: Record<string, { extra: string[]; why: string; swap?: [string, string] }> = {
+const EXCEPTIONS: Record<
+  string,
+  { extra: string[]; why: string; swap?: [string, string]; only?: string[] }
+> = {
+  // PROVENANCE, not delivery (0920): which door an event came through. External assistants (ChatGPT, Claude, an MCP
+  // client) are doors and are not delivery surfaces, so they are named here and deliberately NOT in the delivery
+  // tables above. A write cannot be refused for it: app.ambient_via() maps any word outside this vocabulary to NULL.
+  events_origin_channel_known: {
+    extra: ['chatgpt', 'claude', 'mcp'],
+    why: 'the door an event came through; external assistants are doors but not delivery surfaces (0920)',
+  },
+  // A chat identity can be LINKED to an office only for a surface that has a chat identity to prove: Telegram (0885)
+  // and Slack (0891). Voice is a call and teamhq is the login itself, so neither has a link to make. app.link_begin
+  // refuses any other word before the table is reached.
+  channel_link_challenges_channel_check: {
+    extra: [],
+    only: ['telegram', 'slack'],
+    why: 'only a surface with a chat identity can be linked to an office (0885, 0891)',
+  },
   feedback_channel_known: { extra: ['email'], why: 'a thumbs-up can arrive from a mail reply' },
   subject_identities_channel_known: {
     extra: [],
@@ -88,7 +106,7 @@ const disagreements = (lists: Awaited<ReturnType<typeof channelLists>>) =>
       ex?.swap === undefined
         ? [...CHANNELS]
         : CHANNELS.map((c) => (c === ex.swap?.[0] ? ex.swap[1] : c))
-    const want = new Set<string>([...base, ...(ex?.extra ?? [])])
+    const want = new Set<string>(ex?.only ?? [...base, ...(ex?.extra ?? [])])
     const got = new Set(l.words)
     return want.size !== got.size || [...want].some((w) => !got.has(w))
   })

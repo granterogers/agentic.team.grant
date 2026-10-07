@@ -50,7 +50,7 @@ const project = String(
   json(
     (
       await one(
-        `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`taken-${run}`)}, ${lit(name)}, true) as v`,
+        `select app.hq_create_project(app.operator_office(),${lit(name)}, 'upload', ${lit(`taken-${run}`)}, ${lit(name)}, true) as v`,
       )
     ).v,
   ).project_id,
@@ -66,8 +66,8 @@ const isFixture = (
 ).is_fixture
 const jobId = String(
   (
-    await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-      values ('office.channels', 'duty:isolated-b6c', ${lit(project)}::uuid, 'b6c-' || gen_random_uuid(), gen_random_uuid())
+    await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+      values (app.operator_office(), 'office.channels','duty:isolated-b6c', ${lit(project)}::uuid, 'b6c-' || gen_random_uuid(), gen_random_uuid())
       returning job_id::text as id`)
   ).id,
 )

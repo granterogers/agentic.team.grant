@@ -77,7 +77,7 @@ const setup = async (label: string) => {
     json(
       (
         await one(
-          `select app.hq_create_project(app.test_office(), ${lit(`Drive ${label} ${run}`)}, 'upload', ${lit(slug)}, ${lit(`Drive ${label} ${run}`)}, true) as v`,
+          `select app.hq_create_project(app.operator_office(),${lit(`Drive ${label} ${run}`)}, 'upload', ${lit(slug)}, ${lit(`Drive ${label} ${run}`)}, true) as v`,
         )
       ).v,
     ).project_id,
@@ -92,8 +92,8 @@ const setup = async (label: string) => {
      where connector = 'drive' and external_ref = ${lit(folder)}`)
   const jobId = String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values ('drive.watch', 'duty:isolated-b6', ${lit(project)}::uuid, 'b6-' || gen_random_uuid(), gen_random_uuid())
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+        values (app.operator_office(), 'drive.watch','duty:isolated-b6', ${lit(project)}::uuid, 'b6-' || gen_random_uuid(), gen_random_uuid())
         returning job_id::text as id`)
     ).id,
   )

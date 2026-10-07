@@ -20,6 +20,7 @@
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import { raiseBlocker } from '../../src/inference/record.ts'
 import type { Job } from '../../src/jobs/worker.ts'
+import { scopeOf } from './fixtures-jobs.ts'
 import { isolated } from './guard.ts'
 import { chatFor, markShown } from './shown.ts'
 
@@ -42,8 +43,8 @@ let seq = 0
 const turn = async (channel: string, chat: string, said: string): Promise<Job> => {
   seq += 1
   const cmd = await one(`
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(`${chat}:${String(seq)}`)}, 'grant', ${lit(said)},
+    insert into public.inbound_commands (${scopeOf('real').cols}, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (${scopeOf('real').vals}, ${lit(channel)},${lit(`${chat}:${String(seq)}`)}, 'grant', ${lit(said)},
             ${lit(`${channel}:ack_seq_proof:${run}.${String(seq)}`)}, 'grant')
     returning command_id::text as id`)
   const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
@@ -66,8 +67,8 @@ const ask = async (channel: string, chat: string, what: string): Promise<string>
   const asking = await turn(channel, chat, `Draft the note about ${what} and send it.`)
   const child = String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id)
-        select 'office.pursue', requested_by, project_id, 'seq374-' || gen_random_uuid(), correlation_id, job_id
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id)
+        select office_id, 'office.pursue', requested_by, project_id, 'seq374-' || gen_random_uuid(), correlation_id, job_id
           from public.jobs where job_id = ${lit(asking.jobId)}::uuid
         returning job_id::text as id`)
     ).id,
