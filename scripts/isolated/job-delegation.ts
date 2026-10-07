@@ -34,11 +34,14 @@ const child = async (parent: string, kind = 'office.instruction', payload = '{}'
   )
 const fp = 'c'.repeat(64)
 const blocker = async (job: string) => {
-  const proj = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
+  // the blocker's project must sit in the JOB's office (blockers_project_id_same_office), not the test office
+  const proj = String(
+    (await one(`select app.unnamed_project(app.job_office(${lit(job)}::uuid))::text as p`)).p,
+  )
   return String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-        values (${lit(proj)}::uuid, ${lit(job)}::uuid, ${lit(`Delegation proof ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'isolated', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false)
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+        values (app.job_office(${lit(job)}::uuid), ${lit(proj)}::uuid, ${lit(job)}::uuid, ${lit(`Delegation proof ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'isolated', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false)
         returning blocker_id::text as id`)
     ).id,
   )
@@ -54,8 +57,8 @@ const answer = async (b: string, by = 'grant') =>
 {
   const staff = String((await one(`select staff_id::text as s from public.staff limit 1`)).s)
   const slug = `zz-sys-${run}`
-  await db.execute(`insert into public.responsibilities (slug, staff_id, description, job_kind, period_minutes)
-    values (${lit(slug)}, ${lit(staff)}::uuid, 'a duty that says it is grant, for the impersonation proof', 'office.notice', 10)`)
+  await db.execute(`insert into public.responsibilities (office_id, slug, staff_id, description, job_kind, period_minutes)
+    values (app.operator_office(), ${lit(slug)},${lit(staff)}::uuid, 'a duty that says it is grant, for the impersonation proof', 'office.notice', 10)`)
   const fired = await one(
     `select fired_job_id::text as j from app.dispatch_due_responsibilities() where duty_slug = ${lit(slug)}`,
   )
@@ -70,8 +73,8 @@ const answer = async (b: string, by = 'grant') =>
   // a job that merely CLAIMS to be Grant's
   const fake = String(
     (
-      await one(`insert into public.jobs (kind, requested_by, idempotency_key, correlation_id)
-        values ('office.instruction', 'telegram:grant', ${lit(`claims-grant-${run}`)}, gen_random_uuid()) returning job_id::text as j`)
+      await one(`insert into public.jobs (office_id, kind, requested_by, idempotency_key, correlation_id)
+        values (app.operator_office(), 'office.instruction', 'telegram:grant', ${lit(`claims-grant-${run}`)}, gen_random_uuid()) returning job_id::text as j`)
     ).j,
   )
   const f = await one(

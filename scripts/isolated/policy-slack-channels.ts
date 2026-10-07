@@ -14,8 +14,8 @@ import { json, lit, policyWorld } from './policy-lib.ts'
 const w = await policyWorld('psc')
 const { db, one, rows, check } = w
 
-await db.execute(`insert into public.slack_workspaces (team_id, team_name, bot_user_id)
-  values ('T-ISOLATED', 'isolated', 'U0ISOLATED') on conflict do nothing`)
+await db.execute(`insert into public.slack_workspaces (office_id, team_id, team_name, bot_user_id)
+  values (app.operator_office(), 'T-ISOLATED', 'isolated', 'U0ISOLATED') on conflict do nothing`)
 const created: string[] = []
 let n = 0
 const stub: typeof fetch = async (input) => {
@@ -60,7 +60,7 @@ const mk = async (label: string, by: 'person' | 'sql'): Promise<string> => {
     if (r.status !== 200) throw new Error(`create failed ${JSON.stringify(r.body)}`)
   } else {
     await one(
-      `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`r-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
+      `select app.hq_create_project(app.operator_office(), ${lit(name)}, 'upload', ${lit(`r-${label}-${w.run}`)}, ${lit(name)}, true) as r`,
     )
   }
   return String(
@@ -71,8 +71,8 @@ const sweepJob = async (project: string) =>
   w.jobOf(
     String(
       (
-        await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-          values ('office.provision_channels', 'hq', ${lit(project)}::uuid, 'prov-' || gen_random_uuid(), gen_random_uuid())
+        await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+          values ((select p.office_id from public.projects p where p.project_id = ${lit(project)}::uuid), 'office.provision_channels', 'hq', ${lit(project)}::uuid, 'prov-' || gen_random_uuid(), gen_random_uuid())
           returning job_id::text as id`)
       ).id,
     ),
@@ -361,14 +361,14 @@ check(
 const broad = json(
   (
     await one(
-      `select app.grant_standing(app.test_office(), 'slack.channel', null, 'anywhere', 'grant') as r`,
+      `select app.grant_standing(app.operator_office(), 'slack.channel', null, 'anywhere', 'grant') as r`,
     )
   ).r,
 )
 const broadProject = json(
   (
     await one(
-      `select app.grant_standing(app.test_office(), 'slack.channel', ${lit(U)}::uuid, 'anywhere', 'grant') as r`,
+      `select app.grant_standing(app.operator_office(), 'slack.channel', ${lit(U)}::uuid, 'anywhere', 'grant') as r`,
     )
   ).r,
 )

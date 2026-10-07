@@ -3,7 +3,10 @@
  * row-level security?
  *
  *   psql -h /tmp/pgs -p 55432 -U postgres -c "drop database if exists fk_spike"
- *   psql -h /tmp/pgs -p 55432 -U postgres -c "create database fk_spike template post"
+ *   # the template must be the schema BEFORE 0654 (this proof creates its own `offices` table). `post` now holds every
+ *   # migration, offices included, and the proof dies on "relation offices already exists": clone `pre` + 0599..0653,
+ *   # which is what p2-backfill-plants.ts builds as p2_plant_template.
+ *   psql -h /tmp/pgs -p 55432 -U postgres -c "create database fk_spike template p2_plant_template"
  *   npx tsx scripts/isolated/ownership-composite-fk.ts fk_spike
  *
  * It applies the structure docs/multi-user/ARCHITECTURE.md proposes to the REAL tables of the
@@ -41,7 +44,7 @@ import { isolated } from './guard.ts'
 const target = process.argv[2] ?? 'fk_spike'
 if (!/^fk_spike/.test(target)) {
   console.error(
-    `REFUSED: ${target} is not a throwaway clone. Run: create database fk_spike template post`,
+    `REFUSED: ${target} is not a throwaway clone. Run: create database fk_spike template p2_plant_template (the schema before 0654; see the header)`,
   )
   process.exit(2)
 }

@@ -55,12 +55,12 @@ const mk = async (n: string) =>
 const o = await testOrigins(db, 'isolated:history')
 const good = await mk(`Fixture conversation ${run}`)
 await o.declare('teamhq', good)
-await db.execute(`insert into public.jobs (correlation_id, project_id, kind, requested_by, idempotency_key)
-  values (gen_random_uuid(), ${lit(good)}::uuid, 'verification.conversation', 'grant', ${lit(`h:${run}:1`)})`)
+await db.execute(`insert into public.jobs (office_id, correlation_id, project_id, kind, requested_by, idempotency_key)
+  values ((select office_id from public.projects where project_id = ${lit(good)}::uuid), gen_random_uuid(), ${lit(good)}::uuid, 'verification.conversation', 'grant', ${lit(`h:${run}:1`)})`)
 check('declared BEFORE work: the declaration is accepted', true, 'declared, then the job')
 const bad = await mk(`Fixture conversation ${run} late`)
-await db.execute(`insert into public.jobs (correlation_id, project_id, kind, requested_by, idempotency_key)
-  values (gen_random_uuid(), ${lit(bad)}::uuid, 'verification.conversation', 'grant', ${lit(`h:${run}:2`)})`)
+await db.execute(`insert into public.jobs (office_id, correlation_id, project_id, kind, requested_by, idempotency_key)
+  values ((select office_id from public.projects where project_id = ${lit(bad)}::uuid), gen_random_uuid(), ${lit(bad)}::uuid, 'verification.conversation', 'grant', ${lit(`h:${run}:2`)})`)
 let refused = ''
 try {
   await o.declare('teamhq', bad)

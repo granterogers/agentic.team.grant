@@ -31,13 +31,15 @@ const project = async (name: string): Promise<string> =>
   String(
     (
       await one(
-        `select app.hq_create_project(app.test_office(), ${lit(name)}, 'notion', ${lit(`prov-${name}`)}, ${lit(name)}, true) ->> 'project_id' as id`,
+        `select app.hq_create_project(app.operator_office(), ${lit(name)}, 'notion', ${lit(`prov-${name}`)}, ${lit(name)}, true) ->> 'project_id' as id`,
       )
     ).id,
   )
 const A = await project(`Provenance A ${run}`)
 const B = await project(`Provenance B ${run}`)
-const UNNAMED = String((await one(`select app.unnamed_project(app.test_office())::text as id`)).id)
+const UNNAMED = String(
+  (await one(`select app.unnamed_project(app.operator_office())::text as id`)).id,
+)
 
 const door = await startDoor(db)
 /* A page visit: one session, as chat.js mints it. */
@@ -242,14 +244,14 @@ const name = (id: unknown) =>
   const inA = String(
     (
       await one(
-        `select public.conversation_history(app.test_office(), ${lit(A)}::uuid, 50, null)::text as t`,
+        `select public.conversation_history(app.operator_office(), ${lit(A)}::uuid, 50, null)::text as t`,
       )
     ).t,
   )
   const inB = String(
     (
       await one(
-        `select public.conversation_history(app.test_office(), ${lit(B)}::uuid, 50, null)::text as t`,
+        `select public.conversation_history(app.operator_office(), ${lit(B)}::uuid, 50, null)::text as t`,
       )
     ).t,
   )
@@ -307,8 +309,8 @@ const name = (id: unknown) =>
     })
     const child = String(
       (
-        await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id)
-          select 'office.pursue', requested_by, project_id, 'prov374-' || gen_random_uuid(), correlation_id, job_id
+        await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id)
+          select office_id, 'office.pursue', requested_by, project_id, 'prov374-' || gen_random_uuid(), correlation_id, job_id
             from public.jobs where job_id = ${lit(String(t.job))}::uuid returning job_id::text as id`)
       ).id,
     )

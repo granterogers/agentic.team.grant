@@ -67,10 +67,10 @@ const openQuestions = async () =>
   )
 
 await db.execute(
-  `insert into public.slack_workspaces (team_id, team_name, bot_user_id) values ('TISOLATED1', 'isolated', 'U0ISOLATED') on conflict do nothing`,
+  `insert into public.slack_workspaces (office_id, team_id, team_name, bot_user_id) values (app.operator_office(), 'TISOLATED1', 'isolated', 'U0ISOLATED') on conflict do nothing`,
 )
 await db.execute(
-  `insert into public.slack_app_credentials (slack_app_id, team_id, app_name) values ('A0PROOF9X', 'TISOLATED1', 'proof') on conflict do nothing`,
+  `insert into public.slack_app_credentials (office_id, slack_app_id, team_id, app_name) values (app.operator_office(), 'A0PROOF9X', 'TISOLATED1', 'proof') on conflict do nothing`,
 )
 await one(
   `select app.store_secret('slack.config_refresh_token', 'the-pre-rotation-refresh-token', 'proof') as r`,

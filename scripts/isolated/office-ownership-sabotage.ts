@@ -173,12 +173,20 @@ const sabotages: Sabotage[] = [
   },
   {
     name: 'let a writer that names no office default to the test office again',
+    // The default must be the REAL test office. Offices get random ids (0654), so a hardcoded placeholder uuid
+    // matches no office: the insert then fails the foreign key (23503) and the control "went red" for the wrong
+    // reason, never having let a writer land in the test office. Resolve the id and name it in the default.
     break:
-      "alter table public.jobs alter column office_id set default '00000000-0000-0000-0000-000000000000'::uuid",
+      "do $d$ begin execute format('alter table public.jobs alter column office_id set default %L::uuid', (select office_id from public.offices where kind = 'test')); end $d$",
     prove:
       "select count(*)::int as n from pg_attrdef d join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum where d.adrelid = 'public.jobs'::regclass and a.attname = 'office_id'",
     restore: 'alter table public.jobs alter column office_id drop default',
-    suiteRed: ['a harness-named writer with no office is refused'],
+    // A default on the column lets EVERY unscoped writer in, so the real-looking one (added after this sabotage was
+    // written) is refused no longer either: two checks name the same cause, and both must go red.
+    suiteRed: [
+      'a harness-named writer with no office is refused',
+      'with Person A and B active the same unscoped real-looking writer is refused',
+    ],
     gates: [],
   },
 ]

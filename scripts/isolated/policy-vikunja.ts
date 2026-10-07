@@ -160,7 +160,9 @@ check(
 )
 
 // ---- 2. delete asks ---------------------------------------------------------------------------------------------
-await one(`select app.my_task_delete(${lit(t1)}, 'proof') as r`)
+await one(
+  `select app.my_task_delete(p_office => app.operator_office(), p_task_id => ${lit(t1)}, p_reason => 'proof') as r`,
+)
 const askedAt = await tick()
 const open = await rows(
   `select blocker_id::text as id, requested_action, approval_options, decline_option, action_fingerprint, on_answer
@@ -278,7 +280,9 @@ check(
 // ---- 5. a refused delete does not happen, and is not asked about again ---------------------------------------
 const t2 = await addTask(`Renew the lease ${w.run}`)
 await tick()
-await one(`select app.my_task_delete(${lit(t2)}, 'proof') as r`)
+await one(
+  `select app.my_task_delete(p_office => app.operator_office(), p_task_id => ${lit(t2)}, p_reason => 'proof') as r`,
+)
 await tick()
 const q2 = String(
   (
@@ -312,7 +316,9 @@ check(
 // ---- 6. nothing the job carries is an approval ------------------------------------------------------------------
 const t3 = await addTask(`Cancel the subscription ${w.run}`)
 await tick()
-await one(`select app.my_task_delete(${lit(t3)}, 'proof') as r`)
+await one(
+  `select app.my_task_delete(p_office => app.operator_office(), p_task_id => ${lit(t3)}, p_reason => 'proof') as r`,
+)
 const forged = await w.dutyJob('tasks.sync')
 await one(
   `update public.jobs set pinned_config = pinned_config || '{"approved_by":"grant","approval":"yes","approved":true}'::jsonb where job_id = ${lit(forged.jobId)}::uuid returning 1 as x`,

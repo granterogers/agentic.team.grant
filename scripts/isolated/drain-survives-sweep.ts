@@ -17,8 +17,8 @@ const db = await isolated(database)
 const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<string, unknown>
 
 const broken = await one(`
-  with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-             values ('office.instruction', 'teamhq:verify-drain-broken', app.unnamed_project(app.test_office()),
+  with j as (insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+             values (app.test_office(), 'office.instruction', 'teamhq:verify-drain-broken', app.unnamed_project(app.test_office()),
                      'verify-drain-broken-' || gen_random_uuid(), gen_random_uuid()) returning job_id)
   select job_id::text as id from j`)
 await db.execute(`
@@ -33,8 +33,8 @@ const sweepRaises = await db
 await db.execute('rollback').catch(() => undefined)
 
 const healthy = await one(`
-  with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-             values ('verify.drain', 'teamhq:verify-drain-healthy', app.unnamed_project(app.test_office()),
+  with j as (insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+             values (app.test_office(), 'verify.drain', 'teamhq:verify-drain-healthy', app.unnamed_project(app.test_office()),
                      'verify-drain-healthy-' || gen_random_uuid(), gen_random_uuid()) returning job_id)
   select job_id::text as id from j`)
 

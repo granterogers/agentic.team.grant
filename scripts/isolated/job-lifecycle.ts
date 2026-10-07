@@ -35,8 +35,8 @@ const out = (body: string): HandlerOutput => ({
 const newJob = async (extra = ''): Promise<string> =>
   String(
     (
-      await one(`insert into public.jobs (kind, requested_by, idempotency_key, correlation_id, announce ${extra === '' ? '' : ', max_attempts'})
-        values (${lit(KIND)}, ${lit(scope)}, ${lit(`life-${run}-${crypto.randomUUID()}`)}, gen_random_uuid(), false ${extra === '' ? '' : `, ${extra}`})
+      await one(`insert into public.jobs (office_id, kind, requested_by, idempotency_key, correlation_id, announce ${extra === '' ? '' : ', max_attempts'})
+        values (app.test_office(), ${lit(KIND)}, ${lit(scope)}, ${lit(`life-${run}-${crypto.randomUUID()}`)}, gen_random_uuid(), false ${extra === '' ? '' : `, ${extra}`})
         returning job_id::text as id`)
     ).id,
   )
@@ -180,11 +180,13 @@ const situation = async (id: string) =>
 
 // ---- D2 and D5: an answer is not an attempt, and is never lost to a race ------------------------------------------
 const blockerFor = async (id: string, state = 'open') => {
-  const proj = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
+  const proj = String(
+    (await one(`select app.unnamed_project(app.job_office(${lit(id)}::uuid))::text as p`)).p,
+  )
   return String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, state ${state === 'open' ? '' : ', resolved_at, answered_by, answered_option'})
-        values (${lit(proj)}::uuid, ${lit(id)}::uuid, ${lit(`Run 4 proof ${run}`)}, 'isolated', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false, ${lit(state)}::public.blocker_state ${state === 'open' ? '' : ", app.now_utc(), 'verify-operator', 'Yes'"})
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, state ${state === 'open' ? '' : ', resolved_at, answered_by, answered_option'})
+        values (app.job_office(${lit(id)}::uuid), ${lit(proj)}::uuid, ${lit(id)}::uuid, ${lit(`Run 4 proof ${run}`)}, 'isolated', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false, ${lit(state)}::public.blocker_state ${state === 'open' ? '' : ", app.now_utc(), 'verify-operator', 'Yes'"})
         returning blocker_id::text as id`)
     ).id,
   )
@@ -200,7 +202,7 @@ const fp = 'a'.repeat(64)
     `select app.pause_job(${lit(id)}::uuid, 'awaiting_approval', 'asks a question', 'when he answers', false, null, null, ${lit(fp)})`,
   )
   const waiting = await situation(id)
-  const polled = (await one(`select app.mcp_job_status(${lit(id)}::uuid) as s`)).s as {
+  const polled = (await one(`select app.mcp_job_status(app.job_office(${lit(id)}::uuid), ${lit(id)}::uuid) as s`)).s as {
     state: string
     situation: string
   }

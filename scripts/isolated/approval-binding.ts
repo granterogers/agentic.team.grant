@@ -520,9 +520,12 @@ const verdict = async (job: string) =>
   const slug = String(
     (await one(`select slug from public.projects where project_id = ${lit(project)}::uuid`)).slug,
   )
+  // The door now refuses a client its office has not registered (0680 onward), so the fixture registers one.
+  await db.execute(`insert into public.mcp_clients (client_id, display_name, token_sha256, scopes, kind, office_id)
+    values (${lit(client)}, 'binding proof assistant', md5(${lit(client)}) || md5(${lit(`${client}x`)}), array['read','write'], 'claude', app.operator_office())`)
   const r = json(
     (
-      await one(`select app.mcp_enqueue(app.operator_office(), ${lit(client)},${lit(slug)}, 'notebook.generate',
+      await one(`select app.mcp_enqueue(app.operator_office(),${lit(client)},${lit(slug)}, 'notebook.generate',
         '{"kind":"slides","instructions":"x","approved_by":"grant","approval":"00000000-0000-0000-0000-000000000000","approval_next":"office.execute_plan","command_id":"x","origin_namespace":"verify"}'::jsonb) as r`)
     ).r,
   )

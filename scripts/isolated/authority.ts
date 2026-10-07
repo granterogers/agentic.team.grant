@@ -30,21 +30,21 @@ const project = async (label: string, dial = 'suggest'): Promise<string> => {
   const id = String(
     json(
       (
-        await one(`select app.hq_create_project(app.test_office(), ${lit(`Authority ${label} ${run}`)}, 'upload', ${lit(`authority-${label}-${run}`)},
+        await one(`select app.hq_create_project(app.operator_office(), ${lit(`Authority ${label} ${run}`)}, 'upload', ${lit(`authority-${label}-${run}`)},
           ${lit(`Authority ${label} ${run}`)}, true) as v`)
       ).v,
     ).project_id,
   )
   await db.execute(
-    `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(id)}::uuid, ${lit(dial)}, 'grant', 'authority proof')`,
+    `insert into public.autonomy_settings (office_id, project_id, level, set_by, reason) values (app.operator_office(), ${lit(id)}::uuid, ${lit(dial)}, 'grant', 'authority proof')`,
   )
   return id
 }
 const job = async (p: string, by: string, kind = 'office.instruction'): Promise<string> =>
   String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values (${lit(kind)}, ${lit(by)}, ${lit(p)}::uuid, 'au-' || gen_random_uuid(), gen_random_uuid())
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+        values (app.operator_office(), ${lit(kind)}, ${lit(by)}, ${lit(p)}::uuid, 'au-' || gen_random_uuid(), gen_random_uuid())
         returning job_id::text as id`)
     ).id,
   )
@@ -53,9 +53,9 @@ const OPTS = ['Yes, do it', 'No, leave it']
 const ask = async (p: string, j: string, fp: string, tool = 'notebook.write') =>
   String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
           approval_options, originating_agent, work_can_continue, action_fingerprint, decline_option)
-        values (${lit(p)}::uuid, ${lit(j)}::uuid, ${lit(`Do the thing for ${tool}`)}, 'authority proof',
+        values (app.operator_office(), ${lit(p)}::uuid, ${lit(j)}::uuid, ${lit(`Do the thing for ${tool}`)}, 'authority proof',
           'Nothing happens until somebody answers this question.', array[${OPTS.map(lit).join(',')}],
           'chief-of-staff', true, ${lit(fp)}, 'No, leave it') returning blocker_id::text as id`)
     ).id,
@@ -64,7 +64,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   json(
     (
       await one(
-        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.test_office()), ${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`,
+        `select app.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b)}::uuid), app.operator_office()), ${lit(b)}::uuid, ${lit(a)}, ${lit(by)})::text as r`,
       )
     ).r,
   )
@@ -76,7 +76,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     await db.execute(`select slug from public.staff order by slug limit 2`)
   ).rows.map((r) => String((r as { slug: string }).slug))
   await db.execute(
-    `insert into public.staff_tools (staff_slug, tool) values (${lit(String(holder))}, 'task.create') on conflict do nothing`,
+    `insert into public.staff_tools (office_id, staff_slug, tool) values (app.operator_office(),${lit(String(holder))}, 'task.create') on conflict do nothing`,
   )
   await db.execute(
     `delete from public.staff_tools where staff_slug = ${lit(String(bare))} and tool = 'task.create'`,
@@ -110,7 +110,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const p = await project('outside', 'act')
   const person = await job(p, 'telegram:grant-out')
   await db.execute(
-    `select app.grant_standing(app.test_office(), 'slack.post', ${lit(p)}::uuid, 'authority proof', 'grant', null)`,
+    `select app.grant_standing(app.operator_office(), 'slack.post', ${lit(p)}::uuid, 'authority proof', 'grant', null)`,
   )
   const inside = await mayAct(db as never, { projectId: p, tool: 'slack.post', audience: 'office' })
   const out = await mayAct(db as never, {
@@ -312,7 +312,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `blockers ${String(blockersBefore)}->${String(blockersAfter)}, impediments ${String(impediments)}`,
   )
   await db.execute(
-    `select app.grant_standing(app.test_office(), 'notebook.write', ${lit(p)}::uuid, 'he changed his mind', 'grant', null)`,
+    `select app.grant_standing(app.operator_office(), 'notebook.write', ${lit(p)}::uuid, 'he changed his mind', 'grant', null)`,
   )
   const third = await ask2()
   check(
@@ -329,9 +329,9 @@ const answer = async (b: string, a: string, by = 'grant') =>
     const j = await job(p, `telegram:grant-tick-${label}`)
     const b = String(
       (
-        await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+        await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay,
             approval_options, originating_agent, work_can_continue, standing_tool, standing_option, decline_option)
-          values (${lit(p)}::uuid, ${lit(j)}::uuid, ${lit(`Keep it in step ${label}`)}, 'authority proof',
+          values (app.operator_office(), ${lit(p)}::uuid, ${lit(j)}::uuid, ${lit(`Keep it in step ${label}`)}, 'authority proof',
             'Nothing happens until somebody answers this question.',
             array['Yes, keep doing it without asking me', 'No, leave it'], 'chief-of-staff', false,
             'notebook.write', 'Yes, keep doing it without asking me', 'No, leave it') returning blocker_id::text as id`)
@@ -359,7 +359,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `${String(stillOpen.bs)}/${String(stillOpen.ts)}`,
   )
   const stranger = await makeAsk('stranger')
-  await db.execute(`select app.hq_task_state(${lit(stranger.t)}, 'done', null, 'somebody-unknown')`)
+  await db.execute(`select app.hq_task_state(app.operator_office(), ${lit(stranger.t)},'done', null, 'somebody-unknown')`)
   const s2 = await one(
     `select b.state::text as bs, t.state::text as ts from public.blockers b, public.tasks t where b.blocker_id = ${lit(stranger.b)}::uuid and t.task_id = ${lit(stranger.t)}::uuid`,
   )
@@ -369,7 +369,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `${String(s2.bs)}/${String(s2.ts)}`,
   )
   const known = await makeAsk('grant')
-  await db.execute(`select app.hq_task_state(${lit(known.t)}, 'done', null, 'grant')`)
+  await db.execute(`select app.hq_task_state(app.operator_office(), ${lit(known.t)},'done', null, 'grant')`)
   const k = await one(
     `select b.state::text as bs, b.answered_by as by, b.answered_option as opt, (select count(*)::int from public.standing_authorizations where tool = 'notebook.write' and project_id = ${lit(p)}::uuid and revoked_at is null) as standing from public.blockers b where b.blocker_id = ${lit(known.b)}::uuid`,
   )
@@ -412,7 +412,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     await db.execute(`select slug from public.staff order by slug limit 2`)
   ).rows.map((r) => String((r as { slug: string }).slug))
   await db.execute(
-    `insert into public.staff_tools (staff_slug, tool) values (${lit(String(holder))}, 'task.create') on conflict do nothing`,
+    `insert into public.staff_tools (office_id, staff_slug, tool) values (app.operator_office(),${lit(String(holder))}, 'task.create') on conflict do nothing`,
   )
   await db.execute(
     `delete from public.staff_tools where staff_slug = ${lit(String(bare))} and tool = 'task.create'`,
@@ -495,7 +495,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   for (const who of [a, b]) {
     await db.execute(
-      `insert into public.staff_tools (staff_slug, tool) values (${lit(String(who))}, 'task.create') on conflict do nothing`,
+      `insert into public.staff_tools (office_id, staff_slug, tool) values (app.operator_office(),${lit(String(who))}, 'task.create') on conflict do nothing`,
     )
   }
   const j = await job(p, 'telegram:grant-binds', 'office.pursue')
@@ -555,8 +555,8 @@ const answer = async (b: string, a: string, by = 'grant') =>
   })
   const b = String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-      values (${lit(p)}::uuid, ${lit(j)}::uuid, 'Backfill proof', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (app.operator_office(), ${lit(p)}::uuid, ${lit(j)}::uuid, 'Backfill proof', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
     ).id,
   )
   const sql = readFileSync(
@@ -693,7 +693,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     internal.verdict,
   )
   await db.execute(
-    `select app.grant_standing(app.test_office(), 'notebook.write', ${lit(p)}::uuid, 'review proof', 'grant', null)`,
+    `select app.grant_standing(app.operator_office(), 'notebook.write', ${lit(p)}::uuid, 'review proof', 'grant', null)`,
   )
   const withStanding = await mayAct(db as never, {
     projectId: p,
@@ -769,7 +769,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const late = json(
     (
       await one(
-        `select app.answer_generation_approval(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b3)}::uuid), app.test_office()), ${lit(b3)}::uuid, false, 'grant')::text as r`,
+        `select app.answer_generation_approval(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b3)}::uuid), app.operator_office()), ${lit(b3)}::uuid, false, 'grant')::text as r`,
       )
     ).r,
   )
@@ -798,8 +798,8 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const j4 = await job(p, 'telegram:grant-rv2d')
   const b4 = String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-      values (${lit(p)}::uuid, ${lit(j4)}::uuid, 'Blocked tick proof', 'review proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (app.operator_office(), ${lit(p)}::uuid, ${lit(j4)}::uuid, 'Blocked tick proof', 'review proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
     ).id,
   )
   const t4 = String(
@@ -809,9 +809,9 @@ const answer = async (b: string, a: string, by = 'grant') =>
       )
     ).id,
   )
-  await db.execute(`select app.hq_task_state(${lit(t4)}, 'blocked', 'waiting on the venue')`)
+  await db.execute(`select app.hq_task_state(app.operator_office(), ${lit(t4)}, 'blocked', 'waiting on the venue', null)`)
   const refused = json(
-    (await one(`select app.hq_task_state(${lit(t4)}, 'done', null, null)::text as r`)).r,
+    (await one(`select app.hq_task_state(app.operator_office(), ${lit(t4)}, 'done', null, null)::text as r`)).r,
   )
   const back = await one(
     `select state::text as s, blocked_on as w from public.tasks where task_id = ${lit(t4)}::uuid`,
@@ -831,8 +831,8 @@ const answer = async (b: string, a: string, by = 'grant') =>
     'public.hq_approve_tool(uuid, uuid, jsonb, text)',
     'public.hq_decline_tool(uuid, uuid, text, text)',
     'public.hq_grant_standing(uuid, text, text, uuid, timestamptz, text)',
-    'public.hq_revoke_standing(uuid, text, text)',
-    'public.hq_withdraw_refusal(uuid, text)',
+    'public.hq_revoke_standing(uuid, uuid, text, text)',
+    'public.hq_withdraw_refusal(uuid, uuid, text)',
     'public.hq_task_state(uuid, text, text, text, text)',
     'public.sender_admitted(text, text, text)',
   ]) {
@@ -869,7 +869,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     await db.execute(`select slug from public.staff order by slug limit 2`)
   ).rows.map((r) => String((r as { slug: string }).slug))
   await db.execute(
-    `insert into public.staff_tools (staff_slug, tool) values (${lit(String(holder))}, 'notebook.write') on conflict do nothing`,
+    `insert into public.staff_tools (office_id, staff_slug, tool) values (app.operator_office(),${lit(String(holder))}, 'notebook.write') on conflict do nothing`,
   )
   await db.execute(
     `delete from public.staff_tools where staff_slug = ${lit(String(bare))} and tool = 'notebook.write'`,
@@ -901,7 +901,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     String(ungranted.decision.reason),
   )
   await db.execute(
-    `select app.grant_standing(app.test_office(), 'notebook.write', ${lit(p)}::uuid, 'third review', 'grant', null)`,
+    `select app.grant_standing(app.operator_office(), 'notebook.write', ${lit(p)}::uuid, 'third review', 'grant', null)`,
   )
   const standingToo = await duty(String(bare))
   check(
@@ -935,8 +935,8 @@ const answer = async (b: string, a: string, by = 'grant') =>
   })
   const bf = String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-      values (${lit(pf)}::uuid, ${lit(jf)}::uuid, 'Legacy proof', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (app.operator_office(), ${lit(pf)}::uuid, ${lit(jf)}::uuid, 'Legacy proof', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
     ).id,
   )
   const sql = readFileSync(
@@ -1033,6 +1033,9 @@ const answer = async (b: string, a: string, by = 'grant') =>
         'document.create',
         'draft.create',
         'preference.update',
+        // Decided 7 October 2026 (migration 1001): keeps a report's look as the project's style. It writes one
+        // row inside the office, reaches nobody, and asks before replacing an existing style, so it is internal.
+        'style.save',
         'task.create',
         'task.extract',
         'web.read',
@@ -1044,8 +1047,8 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const j6 = await job(p, 'telegram:grant-third-tick')
   const b6 = String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-      values (${lit(p)}::uuid, ${lit(j6)}::uuid, 'Quiet tick proof', 'third review', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (app.operator_office(), ${lit(p)}::uuid, ${lit(j6)}::uuid, 'Quiet tick proof', 'third review', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
     ).id,
   )
   const t6 = String(
@@ -1074,7 +1077,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `${String(imp)} impediments`,
   )
   const ok = json(
-    (await one(`select app.hq_task_state(${lit(t6)}, 'done', null, 'grant')::text as r`)).r,
+    (await one(`select app.hq_task_state(app.operator_office(), ${lit(t6)},'done', null, 'grant')::text as r`)).r,
   )
   check(
     'a tick that answers the question offers no undo (it could not take the answer back)',
@@ -1090,8 +1093,8 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const j = await job(p, 'telegram:grant-review')
   const b = String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-      values (${lit(p)}::uuid, ${lit(j)}::uuid, 'Review tick', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+      values (app.operator_office(), ${lit(p)}::uuid, ${lit(j)}::uuid, 'Review tick', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
     ).id,
   )
   const t = String(
@@ -1103,7 +1106,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const undosBefore = Number((await one(`select count(*)::int as n from public.undo_offers`)).n)
   const reply = json(
-    (await one(`select app.hq_task_state(${lit(t)}, 'done', null, null)::text as r`)).r,
+    (await one(`select app.hq_task_state(app.operator_office(), ${lit(t)}, 'done', null, null)::text as r`)).r,
   )
   const undosAfter = Number((await one(`select count(*)::int as n from public.undo_offers`)).n)
   const stored = String(
@@ -1120,7 +1123,7 @@ const answer = async (b: string, a: string, by = 'grant') =>
   const fp = await fingerprint({ button: run })
   const b2 = await ask(p, j2, fp)
   await db.execute(
-    `select app.answer_generation_approval(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b2)}::uuid), app.test_office()), ${lit(b2)}::uuid, false, 'grant')`,
+    `select app.answer_generation_approval(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = ${lit(b2)}::uuid), app.operator_office()), ${lit(b2)}::uuid, false, 'grant')`,
   )
   const viaButton = await mayAct(db as never, {
     projectId: p,
@@ -1143,8 +1146,8 @@ const answer = async (b: string, a: string, by = 'grant') =>
     .catch(() => undefined)
   const b3 = String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, state, resolved_at, resolution)
-      values (${lit(p)}::uuid, ${lit(j3)}::uuid, 'Live proof', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', true, 'resolved', now(), 'Yes, do it — answered by grant') returning blocker_id::text as id`)
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, state, resolved_at, resolution)
+      values (app.operator_office(), ${lit(p)}::uuid, ${lit(j3)}::uuid, 'Live proof', 'authority proof', 'Nothing happens until somebody answers this question.', array['Yes, do it','No, leave it'], 'chief-of-staff', true, 'resolved', now(), 'Yes, do it — answered by grant') returning blocker_id::text as id`)
     ).id,
   )
   const sql = readFileSync(

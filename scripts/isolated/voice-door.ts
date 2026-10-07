@@ -66,10 +66,23 @@ export async function startDoor(db: PgExecutor): Promise<Handler> {
       const token = String(
         (init?.headers as Record<string, string> | undefined)?.Authorization ?? '',
       ).replace(/^Bearer\s+/i, '')
-      return new Response(JSON.stringify(token === DOOR_SESSION ? { email: DOOR_MEMBER } : {}), {
-        status: token === DOOR_SESSION ? 200 : 401,
-        headers: { 'content-type': 'application/json' },
-      })
+      // The identity service also answers the auth user's id (P3: the office is resolved from the id, not the address).
+      const found =
+        token === DOOR_SESSION
+          ? await db
+              .execute(
+                `select id::text as id from auth.users where lower(email) = ${lit(DOOR_MEMBER.toLowerCase())} limit 1`,
+              )
+              .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+          : { rows: [] as Record<string, unknown>[] }
+      const authId = (found.rows[0] as { id?: string } | undefined)?.id
+      return new Response(
+        JSON.stringify(token === DOOR_SESSION ? { id: authId, email: DOOR_MEMBER } : {}),
+        {
+          status: token === DOOR_SESSION ? 200 : 401,
+          headers: { 'content-type': 'application/json' },
+        },
+      )
     }
     const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
     const reply = (status: number, value: unknown) =>
