@@ -125,8 +125,8 @@ const jobRow = async (
     }
   }
   const r =
-    await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, pinned_config, parent_job_id)
-      values (${lit(kind)}, ${lit(by)}, ${lit(p)}::uuid, 'ab-' || gen_random_uuid(), gen_random_uuid(),
+    await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id, pinned_config, parent_job_id)
+      values (app.test_office(), ${lit(kind)},${lit(by)}, ${lit(p)}::uuid, 'ab-' || gen_random_uuid(), gen_random_uuid(),
               ${lit(JSON.stringify(config))}::jsonb, ${parent === null ? 'null' : `${lit(parent)}::uuid`})
       returning job_id::text as id, correlation_id::text as cid, idempotency_key as k`)
   return {
@@ -331,7 +331,7 @@ const verdict = async (job: string) =>
   const a = await approvedGeneration({ kind: 'slides', instructions: `observe ${run}` })
   const p2 = await projectWithNotebook('observe')
   await db.execute(
-    `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(p2)}::uuid, 'observe', 'grant', 'proof')`,
+    `insert into public.autonomy_settings (office_id, project_id, level, set_by, reason) values (app.test_office(), ${lit(p2)}::uuid, 'observe', 'grant', 'proof')`,
   )
   // The same approval, on a project the dial has since set to observe.
   await db.execute(
@@ -480,7 +480,7 @@ const verdict = async (job: string) =>
   )
   const p3 = await projectWithNotebook('observe2')
   await db.execute(
-    `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(p3)}::uuid, 'observe', 'grant', 'proof')`,
+    `insert into public.autonomy_settings (office_id, project_id, level, set_by, reason) values (app.test_office(), ${lit(p3)}::uuid, 'observe', 'grant', 'proof')`,
   )
   const watched = await jobRow(p3, 'notebook.add_source', {
     url: `${url}-watched`,
