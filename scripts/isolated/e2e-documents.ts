@@ -79,7 +79,7 @@ try {
     )
   const pA = await project(A.office, A.key, `E3 Alpha ${run}`)
   const pB = await project(B.office, B.key, `E3 Beta ${run}`)
-  const pA2 = await project(A.office, A.key, `E3 Alpha Two ${run}`)
+  await project(A.office, A.key, `E3 Alpha Two ${run}`) // a second project of A's: only its existence matters
   check('two person offices and three real projects exist', A.office !== B.office, '')
 
   const SA = `aaa.bbb.${'a'.repeat(70)}`
@@ -129,9 +129,7 @@ try {
     })
     return {
       status: r.status,
-      id: String(
-        ((r.body.result as Row | undefined)?.document_id as string | undefined) ?? '',
-      ),
+      id: String(((r.body.result as Row | undefined)?.document_id as string | undefined) ?? ''),
       searchable: (r.body.result as Row | undefined)?.searchable,
       why: (r.body.result as Row | undefined)?.why,
       error: r.body.error,
@@ -141,13 +139,27 @@ try {
   // ---- 1. files of every kind through the real gateway --------------------------------------------------------
   const long = `${'The ordinary opening paragraph says very little about anything. '.repeat(900)} ${W.tail} is stated only at the very end of this long file.`
   const files: { label: string; name: string; mime: string; bytes: Uint8Array; word?: string }[] = [
-    { label: 'txt', name: 'notes.txt', mime: 'text/plain', bytes: enc(`Plain note about ${W.txt}.`), word: W.txt },
-    { label: 'md', name: 'plan.md', mime: 'text/markdown', bytes: enc(`# Plan\n\nThe ${W.md} milestone.`), word: W.md },
+    {
+      label: 'txt',
+      name: 'notes.txt',
+      mime: 'text/plain',
+      bytes: enc(`Plain note about ${W.txt}.`),
+      word: W.txt,
+    },
+    {
+      label: 'md',
+      name: 'plan.md',
+      mime: 'text/markdown',
+      bytes: enc(`# Plan\n\nThe ${W.md} milestone.`),
+      word: W.md,
+    },
     {
       label: 'html',
       name: 'page.html',
       mime: 'text/html',
-      bytes: enc(`<html><script>var x="${W.secret}"</script><body><p>Visible ${W.html} text</p></body></html>`),
+      bytes: enc(
+        `<html><script>var x="${W.secret}"</script><body><p>Visible ${W.html} text</p></body></html>`,
+      ),
       word: W.html,
     },
     {
@@ -157,7 +169,9 @@ try {
       bytes: zip([
         {
           name: 'word/document.xml',
-          data: `<w:document><w:body><w:p><w:r><w:t>Word ${W.docx} paragraph</w:t></w:r></w:p></w:body></w:document>`,
+          data: Buffer.from(
+            `<w:document><w:body><w:p><w:r><w:t>Word ${W.docx} paragraph</w:t></w:r></w:p></w:body></w:document>`,
+          ),
         },
       ]),
       word: W.docx,
@@ -166,7 +180,13 @@ try {
       label: 'pdf',
       name: 'brief.pdf',
       mime: 'application/pdf',
-      bytes: onePage('', Buffer.from(`BT /F1 12 Tf 72 700 Td (The quarterly financial review shows that revenue grew steadily across every region this year, and the ${W.pdf} milestone is on track.) Tj ET`, 'latin1')),
+      bytes: onePage(
+        '',
+        Buffer.from(
+          `BT /F1 12 Tf 72 700 Td (The quarterly financial review shows that revenue grew steadily across every region this year, and the ${W.pdf} milestone is on track.) Tj ET`,
+          'latin1',
+        ),
+      ),
       word: W.pdf,
     },
     { label: 'long', name: 'long.txt', mime: 'text/plain', bytes: enc(long), word: W.tail },
@@ -195,14 +215,24 @@ try {
   const imgRow = await one(
     `select content is null as no_text, origin, state from public.documents where document_id = ${lit(img.id)}::uuid`,
   )
-  check('the image row holds NULL content (not an empty string) and is origin yours', imgRow.no_text === true && imgRow.origin === 'yours', JSON.stringify(imgRow))
+  check(
+    'the image row holds NULL content (not an empty string) and is origin yours',
+    imgRow.no_text === true && imgRow.origin === 'yours',
+    JSON.stringify(imgRow),
+  )
   const empty = await upload(SA, pA, 'empty.txt', 'text/plain', enc('   \n  '))
   check(
     'a whitespace-only text file is filed and says there was no text, rather than indexing an empty string',
     empty.status === 200 && empty.searchable === false,
     `status ${String(empty.status)} why=${String(empty.why)}`,
   )
-  const garbage = await upload(SA, pA, 'garbage.pdf', 'application/pdf', enc('%PDF-1.4 this is not a pdf at all'))
+  const garbage = await upload(
+    SA,
+    pA,
+    'garbage.pdf',
+    'application/pdf',
+    enc('%PDF-1.4 this is not a pdf at all'),
+  )
   check(
     'a malformed PDF is stored and answers not-searchable without throwing',
     garbage.status === 200 && garbage.searchable === false,
@@ -221,15 +251,26 @@ try {
     check(
       `hostile ${name}: the gateway answers (filed or refused), in bounded time`,
       (r.status === 200 || r.status === 400) && ms < 20000,
-      `status ${String(r.status)} searchable=${String(r.searchable)} ${String(ms)}ms ${String(r.why ?? r.error ?? '')}`.slice(0, 160),
+      `status ${String(r.status)} searchable=${String(r.searchable)} ${String(ms)}ms ${String(r.why ?? r.error ?? '')}`.slice(
+        0,
+        160,
+      ),
     )
     if (r.status === 200 && r.searchable === false) {
-      const row = await one(`select content is null as no_text from public.documents where document_id = ${lit(r.id)}::uuid`)
+      const row = await one(
+        `select content is null as no_text from public.documents where document_id = ${lit(r.id)}::uuid`,
+      )
       check(`hostile ${name}: when declined the row holds no invented text`, row.no_text === true)
     }
   }
   // the same word dropped by B, into B's project
-  const bDoc = await upload(SB, pB, 'bnotes.txt', 'text/plain', enc(`B's own note about ${W.bstat} and shared word ${W.txt}.`))
+  const bDoc = await upload(
+    SB,
+    pB,
+    'bnotes.txt',
+    'text/plain',
+    enc(`B's own note about ${W.bstat} and shared word ${W.txt}.`),
+  )
   check("B's own file is filed and searchable", bDoc.searchable === true, String(bDoc.why ?? ''))
 
   // ---- 2. text, chunks, tsvector ---------------------------------------------------------------------------------
@@ -239,32 +280,60 @@ try {
   )
   check(
     'docx text was extracted from the XML (the tag is gone, the words are there), fingerprinted and has a tsvector',
-    String(tx.content).includes(W.docx) && !String(tx.content).includes('<w:') && tx.fp === true && tx.fetched === true && tx.has_search === true,
+    String(tx.content).includes(W.docx) &&
+      !String(tx.content).includes('<w:') &&
+      tx.fp === true &&
+      tx.fetched === true &&
+      tx.has_search === true,
     String(tx.content).slice(0, 60),
   )
-  const htmlRow = await one(`select content from public.documents where document_id = ${lit(idOf.html ?? '')}::uuid`)
-  check('html: <script> content is not indexed, visible text is', !String(htmlRow.content).includes(W.secret) && String(htmlRow.content).includes(W.html), String(htmlRow.content).slice(0, 60))
+  const htmlRow = await one(
+    `select content from public.documents where document_id = ${lit(idOf.html ?? '')}::uuid`,
+  )
+  check(
+    'html: <script> content is not indexed, visible text is',
+    !String(htmlRow.content).includes(W.secret) && String(htmlRow.content).includes(W.html),
+    String(htmlRow.content).slice(0, 60),
+  )
   const chunks = await one(
     `select count(*)::int as n, count(*) filter (where state = 'active')::int as active from public.document_chunks where document_id = ${lit(idOf.long ?? '')}::uuid`,
   )
-  check('a long file is cut into several active passages', Number(chunks.n) > 1 && Number(chunks.active) === Number(chunks.n), JSON.stringify(chunks))
-  const shortChunks = await one(`select count(*)::int as n from public.document_chunks where document_id = ${lit(idOf.txt ?? '')}::uuid`)
-  check('a short file has a passage too (or none): count is recorded', Number(shortChunks.n) >= 0, `chunks=${String(shortChunks.n)}`)
+  check(
+    'a long file is cut into several active passages',
+    Number(chunks.n) > 1 && Number(chunks.active) === Number(chunks.n),
+    JSON.stringify(chunks),
+  )
+  const shortChunks = await one(
+    `select count(*)::int as n from public.document_chunks where document_id = ${lit(idOf.txt ?? '')}::uuid`,
+  )
+  check(
+    'a short file has a passage too (or none): count is recorded',
+    Number(shortChunks.n) >= 0,
+    `chunks=${String(shortChunks.n)}`,
+  )
 
   // ---- 3. retrieval: positive controls from the owner ---------------------------------------------------------------
   const sd = async (office: string, query: string, project: string | null): Promise<Row[]> =>
-    q(`select * from app.search_documents(${lit(office)}::uuid, ${lit(query)}, ${project === null ? 'null' : `${lit(project)}::uuid`}, 20, 'any')`)
+    q(
+      `select * from app.search_documents(${lit(office)}::uuid, ${lit(query)}, ${project === null ? 'null' : `${lit(project)}::uuid`}, 20, 'any')`,
+    )
   for (const f of files) {
     if (f.word === undefined) continue
     const hits = await sd(A.office, f.word, pA)
-    check(`owner finds the ${f.label} by a word only it contains`, hits.length === 1 && String(hits[0]?.document_id) === idOf[f.label], `${String(hits.length)} hit(s)`)
+    check(
+      `owner finds the ${f.label} by a word only it contains`,
+      hits.length === 1 && String(hits[0]?.document_id) === idOf[f.label],
+      `${String(hits.length)} hit(s)`,
+    )
   }
   const viaRetrieve = await retrieve(db, { officeId: A.office }, `where is ${W.tail} stated`, pA, 5)
   const lastPassage = viaRetrieve.find((h) => h.documentId === idOf.long)
   check(
     'the real retrieve(): a fact at the END of a long file is found and the excerpt shown carries it',
     lastPassage !== undefined && lastPassage.excerpt.includes(W.tail),
-    lastPassage === undefined ? 'not found' : `excerpt ${String(lastPassage.excerpt.length)} chars, passage ${JSON.stringify(lastPassage.passage ?? null)}`,
+    lastPassage === undefined
+      ? 'not found'
+      : `excerpt ${String(lastPassage.excerpt.length)} chars, passage ${JSON.stringify(lastPassage.passage ?? null)}`,
   )
   check(
     'the image, the empty file and the malformed PDF are NOT retrievable by their file name or content (they hold no text)',
@@ -278,87 +347,212 @@ try {
     ['search_documents(B, A canary, NULL project)', await sd(B.office, W.docx, null)],
     ['search_documents(B, A tail canary, NULL)', await sd(B.office, W.tail, null)],
   ]
-  for (const [what, rows] of lookups) check(`B asking: ${what} finds nothing`, rows.length === 0, `${String(rows.length)} hit(s)`)
+  for (const [what, rows] of lookups)
+    check(`B asking: ${what} finds nothing`, rows.length === 0, `${String(rows.length)} hit(s)`)
   const shared = await sd(B.office, W.txt, null)
   check(
-    'a word both offices happen to hold returns only B\'s own document (A\'s copy of the same word is invisible)',
+    "a word both offices happen to hold returns only B's own document (A's copy of the same word is invisible)",
     shared.length === 1 && String(shared[0]?.document_id) === bDoc.id,
     `${String(shared.length)} hit(s)`,
   )
-  const bChunks = await q(`select * from app.best_chunks(${lit(B.office)}::uuid, array[${lit(idOf.long ?? '')}::uuid], ${lit(W.tail)}, 2)`)
-  check('best_chunks(B, A\'s document) returns nothing', bChunks.length === 0, `${String(bChunks.length)} row(s)`)
-  const aChunks = await q(`select * from app.best_chunks(${lit(A.office)}::uuid, array[${lit(idOf.long ?? '')}::uuid], ${lit(W.tail)}, 2)`)
-  check('control: best_chunks(A, A\'s document) returns passages', aChunks.length > 0, `${String(aChunks.length)} row(s)`)
-  const bSibling = await retrieve(db, { officeId: B.office }, `${W.docx} ${W.tail} ${W.pdf}`, pA, 5)
-  check('the real retrieve() asked from B about A\'s project returns nothing', bSibling.length === 0, `${String(bSibling.length)} hit(s)`)
-  const pk = await one(`select app.project_knowledge(${lit(B.office)}::uuid, ${lit(pA)}::uuid) as v`)
-  const pkA = await one(`select app.project_knowledge(${lit(A.office)}::uuid, ${lit(pA)}::uuid) as v`)
+  const bChunks = await q(
+    `select * from app.best_chunks(${lit(B.office)}::uuid, array[${lit(idOf.long ?? '')}::uuid], ${lit(W.tail)}, 2)`,
+  )
   check(
-    'project_knowledge(B, A\'s project) discloses no document count or title; (A, A) is a real answer (control)',
+    "best_chunks(B, A's document) returns nothing",
+    bChunks.length === 0,
+    `${String(bChunks.length)} row(s)`,
+  )
+  const aChunks = await q(
+    `select * from app.best_chunks(${lit(A.office)}::uuid, array[${lit(idOf.long ?? '')}::uuid], ${lit(W.tail)}, 2)`,
+  )
+  check(
+    "control: best_chunks(A, A's document) returns passages",
+    aChunks.length > 0,
+    `${String(aChunks.length)} row(s)`,
+  )
+  const bSibling = await retrieve(db, { officeId: B.office }, `${W.docx} ${W.tail} ${W.pdf}`, pA, 5)
+  check(
+    "the real retrieve() asked from B about A's project returns nothing",
+    bSibling.length === 0,
+    `${String(bSibling.length)} hit(s)`,
+  )
+  const pk = await one(
+    `select app.project_knowledge(${lit(B.office)}::uuid, ${lit(pA)}::uuid) as v`,
+  )
+  const pkA = await one(
+    `select app.project_knowledge(${lit(A.office)}::uuid, ${lit(pA)}::uuid) as v`,
+  )
+  check(
+    "project_knowledge(B, A's project) discloses no document count or title; (A, A) is a real answer (control)",
     !JSON.stringify(pk.v ?? null).includes('notes.txt') && JSON.stringify(pkA.v ?? null).length > 4,
     `B:${JSON.stringify(pk.v ?? null).slice(0, 100)} A:${JSON.stringify(pkA.v ?? null).slice(0, 80)}`,
   )
-  const bf = await one(`select app.project_work_brief(${lit(B.office)}::uuid, ${lit(pA)}::uuid) as v`)
-  check('project_work_brief(B, A\'s project) answers like a project that does not exist (null)', bf.v === null, JSON.stringify(bf.v))
-  const probe = await q(`select * from app.psearch_documents(${lit(B.office)}::uuid, ${lit(pA)}::uuid, websearch_to_tsquery('english', ${lit(W.docx)}), 10)`)
+  const bf = await one(
+    `select app.project_work_brief(${lit(B.office)}::uuid, ${lit(pA)}::uuid) as v`,
+  )
+  check(
+    "project_work_brief(B, A's project) answers like a project that does not exist (null)",
+    bf.v === null,
+    JSON.stringify(bf.v),
+  )
+  const probe = await q(
+    `select * from app.psearch_documents(${lit(B.office)}::uuid, ${lit(pA)}::uuid, websearch_to_tsquery('english', ${lit(W.docx)}), 10)`,
+  )
   check('psearch_documents(B, A project) finds nothing', probe.length === 0)
-  const probeA = await q(`select * from app.psearch_documents(${lit(A.office)}::uuid, ${lit(pA)}::uuid, websearch_to_tsquery('english', ${lit(W.docx)}), 10)`)
-  check('control: psearch_documents(A, A project) finds the docx', probeA.length === 1, `${String(probeA.length)}`)
+  const probeA = await q(
+    `select * from app.psearch_documents(${lit(A.office)}::uuid, ${lit(pA)}::uuid, websearch_to_tsquery('english', ${lit(W.docx)}), 10)`,
+  )
+  check(
+    'control: psearch_documents(A, A project) finds the docx',
+    probeA.length === 1,
+    `${String(probeA.length)}`,
+  )
 
   // through the gateway, as B
   const g1 = await read(SB, `section=search&q=${W.docx}`)
-  check('gateway: B searching for A\'s word through section=search finds none of it', g1.status === 200 && !g1.text.includes(idOf.docx ?? 'x'), `http ${String(g1.status)}`)
+  check(
+    "gateway: B searching for A's word through section=search finds none of it",
+    g1.status === 200 && !g1.text.includes(idOf.docx ?? 'x'),
+    `http ${String(g1.status)}`,
+  )
   const g1a = await read(SA, `section=search&q=${W.docx}`)
-  check('gateway control: A searching section=search finds the docx', g1a.status === 200 && g1a.text.includes(idOf.docx ?? 'x'), `http ${String(g1a.status)}`)
+  check(
+    'gateway control: A searching section=search finds the docx',
+    g1a.status === 200 && g1a.text.includes(idOf.docx ?? 'x'),
+    `http ${String(g1a.status)}`,
+  )
   const g2 = await read(SB, `section=project_search&q=${W.pdf}&project=${pA}`)
-  check('gateway: B project_search into A\'s project finds none of it', !g2.text.includes(idOf.pdf ?? 'x'), `http ${String(g2.status)}`)
+  check(
+    "gateway: B project_search into A's project finds none of it",
+    !g2.text.includes(idOf.pdf ?? 'x'),
+    `http ${String(g2.status)}`,
+  )
   const g2a = await read(SA, `section=project_search&q=${W.pdf}&project=${pA}`)
-  check('gateway control: A project_search finds the PDF', g2a.text.includes(idOf.pdf ?? 'x'), `http ${String(g2a.status)}`)
+  check(
+    'gateway control: A project_search finds the PDF',
+    g2a.text.includes(idOf.pdf ?? 'x'),
+    `http ${String(g2a.status)}`,
+  )
   const g3 = await read(SB, `section=document&id=${idOf.docx}`)
-  check('gateway: B opening A\'s document id gets no text', !g3.text.includes(W.docx), `http ${String(g3.status)}: ${g3.text.slice(0, 80)}`)
+  check(
+    "gateway: B opening A's document id gets no text",
+    !g3.text.includes(W.docx),
+    `http ${String(g3.status)}: ${g3.text.slice(0, 80)}`,
+  )
   const g3a = await read(SA, `section=document&id=${idOf.docx}`)
-  check('gateway control: A opening the same id gets the text', g3a.text.includes(W.docx), `http ${String(g3a.status)}`)
+  check(
+    'gateway control: A opening the same id gets the text',
+    g3a.text.includes(W.docx),
+    `http ${String(g3a.status)}`,
+  )
   const g4 = await read(SB, `section=project_documents&slug=e3-alpha-${run}`)
-  check('gateway: B listing A\'s project documents by slug gets no titles', !g4.text.includes('report.docx'), `http ${String(g4.status)}: ${g4.text.slice(0, 80)}`)
+  check(
+    "gateway: B listing A's project documents by slug gets no titles",
+    !g4.text.includes('report.docx'),
+    `http ${String(g4.status)}: ${g4.text.slice(0, 80)}`,
+  )
   const g4a = await read(SA, `section=project_documents&slug=e3-alpha-${run}`)
-  check('gateway control: A listing its own project shows report.docx', g4a.text.includes('report.docx'), `http ${String(g4a.status)}`)
+  check(
+    'gateway control: A listing its own project shows report.docx',
+    g4a.text.includes('report.docx'),
+    `http ${String(g4a.status)}`,
+  )
   // cross-office WRITE: B uploads into A's project
   const cross = await upload(SB, pA, 'planted.txt', 'text/plain', enc(`planted ${W.secret}`))
-  check('B cannot upload into A\'s project (refused, nothing filed)', cross.status !== 200, `http ${String(cross.status)}: ${String(cross.error ?? '')}`)
-  const planted = await one(`select count(*)::int as n from public.documents where title = 'planted.txt'`)
+  check(
+    "B cannot upload into A's project (refused, nothing filed)",
+    cross.status !== 200,
+    `http ${String(cross.status)}: ${String(cross.error ?? '')}`,
+  )
+  const planted = await one(
+    `select count(*)::int as n from public.documents where title = 'planted.txt'`,
+  )
   check('no row exists for the refused upload', Number(planted.n) === 0)
-  const reindexForeign = json((await one(`select app.index_file_text(${lit(B.office)}::uuid, ${lit(idOf.docx ?? '')}::uuid, 'OVERWRITTEN') as r`)).r)
-  check('index_file_text(B, A\'s document) is refused like a missing document and does not overwrite', reindexForeign.indexed === false && (await sd(A.office, W.docx, pA)).length === 1, JSON.stringify(reindexForeign))
+  const reindexForeign = json(
+    (
+      await one(
+        `select app.index_file_text(${lit(B.office)}::uuid, ${lit(idOf.docx ?? '')}::uuid, 'OVERWRITTEN') as r`,
+      )
+    ).r,
+  )
+  check(
+    "index_file_text(B, A's document) is refused like a missing document and does not overwrite",
+    reindexForeign.indexed === false && (await sd(A.office, W.docx, pA)).length === 1,
+    JSON.stringify(reindexForeign),
+  )
 
   // ---- 5. what is in play: archived, disconnected, mirrors, fixtures ------------------------------------------------------
-  await db.execute(`update public.documents set state = 'archived' where document_id = ${lit(idOf.md ?? '')}::uuid`)
-  check('an archived document leaves search (and its row still exists)', (await sd(A.office, W.md, pA)).length === 0 && Number((await one(`select count(*)::int n from public.documents where document_id = ${lit(idOf.md ?? '')}::uuid`)).n) === 1)
-  await db.execute(`update public.documents set state = 'approved' where document_id = ${lit(idOf.md ?? '')}::uuid`)
+  await db.execute(
+    `update public.documents set state = 'archived' where document_id = ${lit(idOf.md ?? '')}::uuid`,
+  )
+  check(
+    'an archived document leaves search (and its row still exists)',
+    (await sd(A.office, W.md, pA)).length === 0 &&
+      Number(
+        (
+          await one(
+            `select count(*)::int n from public.documents where document_id = ${lit(idOf.md ?? '')}::uuid`,
+          )
+        ).n,
+      ) === 1,
+  )
+  await db.execute(
+    `update public.documents set state = 'approved' where document_id = ${lit(idOf.md ?? '')}::uuid`,
+  )
   check('control: restoring it brings it back', (await sd(A.office, W.md, pA)).length === 1)
 
   // a mirror: the office wrote a copy into a connector; it must not appear twice
   const mirrorWord = word('mirror')
   const orig = await upload(SA, pA, 'orig.txt', 'text/plain', enc(`original ${mirrorWord}`))
-  const sha = (await one(`select encode(extensions.digest(convert_to('original ${mirrorWord}', 'UTF8'),'sha256'),'hex') h`)).h
-  await db.execute(
-    `insert into public.documents (office_id, project_id, connector, origin, title, content, content_fingerprint, fetched_at, mirrors_document_id, state, external_ref, external_parent_ref)
+  const sha = (
+    await one(
+      `select encode(extensions.digest(convert_to('original ${mirrorWord}', 'UTF8'),'sha256'),'hex') h`,
+    )
+  ).h
+  await db
+    .execute(
+      `insert into public.documents (office_id, project_id, connector, origin, title, content, content_fingerprint, fetched_at, mirrors_document_id, state, external_ref, external_parent_ref)
      values (${lit(A.office)}::uuid, ${lit(pA)}::uuid, 'notion', 'made', 'orig mirror', ${lit(`original ${mirrorWord}`)}, ${lit(String(sha))}, now(), ${lit(orig.id)}::uuid, 'approved', ${lit(`m-${run}`)}, ${lit(`mp-${run}`)})`,
-  ).catch((e) => console.log('   (mirror insert note: ' + String(e).slice(0, 160) + ')'))
+    )
+    .catch((e) => console.log(`   (mirror insert note: ${String(e).slice(0, 160)})`))
   const mirrors = await sd(A.office, mirrorWord, pA)
-  check('a mirrored copy steps aside: one hit, the original', mirrors.length === 1 && String(mirrors[0]?.document_id) === orig.id, `${String(mirrors.length)} hit(s) ${JSON.stringify(mirrors.map((m) => m.connector))}`)
+  check(
+    'a mirrored copy steps aside: one hit, the original',
+    mirrors.length === 1 && String(mirrors[0]?.document_id) === orig.id,
+    `${String(mirrors.length)} hit(s) ${JSON.stringify(mirrors.map((m) => m.connector))}`,
+  )
 
   // a fixture (harness) project: not in the project-wide typed search a person sees
   const fixName = `fixture-e3-${run}`
-  const fixProject = String(json((await one(`select app.hq_create_project(${lit(A.office)}::uuid, ${lit(fixName)}, 'upload', ${lit(`fx-${run}`)}, ${lit(fixName)}, true, ${lit(A.key)}) as v`)).v).project_id)
+  const fixProject = String(
+    json(
+      (
+        await one(
+          `select app.hq_create_project(${lit(A.office)}::uuid, ${lit(fixName)}, 'upload', ${lit(`fx-${run}`)}, ${lit(fixName)}, true, ${lit(A.key)}) as v`,
+        )
+      ).v,
+    ).project_id,
+  )
   const fixWord = word('fixture')
-  await db.execute(
-    `insert into public.documents (office_id, project_id, connector, origin, title, content, content_fingerprint, fetched_at, state, storage_path, mime_type, byte_size)
+  await db
+    .execute(
+      `insert into public.documents (office_id, project_id, connector, origin, title, content, content_fingerprint, fetched_at, state, storage_path, mime_type, byte_size)
      values (${lit(A.office)}::uuid, ${lit(fixProject)}::uuid, null, 'yours', 'fixture doc', ${lit(fixWord)}, ${lit(String(sha))}, now(), 'approved', ${lit(`${fixProject}/x.txt`)}, 'text/plain', 5)`,
-  ).catch((e) => console.log('   (fixture insert note: ' + String(e).slice(0, 160) + ')'))
-  const fxPs = await q(`select * from app.psearch_documents(${lit(A.office)}::uuid, null, websearch_to_tsquery('english', ${lit(fixWord)}), 10)`)
-  check('psearch (the person-facing typed search) excludes a FIXTURE project\'s document', fxPs.length === 0, `${String(fxPs.length)}`)
+    )
+    .catch((e) => console.log(`   (fixture insert note: ${String(e).slice(0, 160)})`))
+  const fxPs = await q(
+    `select * from app.psearch_documents(${lit(A.office)}::uuid, null, websearch_to_tsquery('english', ${lit(fixWord)}), 10)`,
+  )
+  check(
+    "psearch (the person-facing typed search) excludes a FIXTURE project's document",
+    fxPs.length === 0,
+    `${String(fxPs.length)}`,
+  )
   const fxSd = await sd(A.office, fixWord, null)
-  console.log(`INFO app.search_documents with NULL project returns the fixture project's document: ${String(fxSd.length)} hit(s) (retrieve() scopes to a project, so an answering turn is not given it unless that project is the turn's)`)
+  console.log(
+    `INFO app.search_documents with NULL project returns the fixture project's document: ${String(fxSd.length)} hit(s) (retrieve() scopes to a project, so an answering turn is not given it unless that project is the turn's)`,
+  )
 
   // ---- 6. census / exhaustiveness: the work brief declares itself complete only when everything was listed ------------------
   for (let i = 0; i < 5; i += 1) {
@@ -366,7 +560,10 @@ try {
       `select app.task_add(p_office => ${lit(A.office)}::uuid, p_project => ${lit(pA)}::uuid, p_title => ${lit(`E3 task ${String(i)} ${run}`)}, p_detail => '', p_due_on => ${i % 2 === 0 ? 'current_date - 3' : 'null'}, p_added_by => ${lit(A.key)})`,
     )
   }
-  const wb = json((await one(`select app.project_work_brief(${lit(A.office)}::uuid, ${lit(pA)}::uuid, 3) as v`)).v)
+  const wb = json(
+    (await one(`select app.project_work_brief(${lit(A.office)}::uuid, ${lit(pA)}::uuid, 3) as v`))
+      .v,
+  )
   const counts = json(wb.counts ?? {})
   console.log(`INFO work brief keys: ${Object.keys(wb).join(',')} counts=${JSON.stringify(counts)}`)
   const shownN = Array.isArray(wb.tasks) ? (wb.tasks as unknown[]).length : Number(wb.shown ?? -1)
@@ -375,9 +572,16 @@ try {
     Number(counts.total ?? wb.total) === 5 && shownN === 3,
     `shown ${String(shownN)} total ${String(counts.total ?? wb.total)}`,
   )
-  const coverage = await one(`select app.project_knowledge(${lit(A.office)}::uuid, ${lit(pA)}::uuid) as v`)
+  const coverage = await one(
+    `select app.project_knowledge(${lit(A.office)}::uuid, ${lit(pA)}::uuid) as v`,
+  )
   console.log(`INFO project_knowledge(A, Alpha) = ${JSON.stringify(coverage.v).slice(0, 300)}`)
-  check('project_knowledge counts a dropped file as upload material (no connector) and names nothing as unindexed', !JSON.stringify(coverage.v ?? '').toLowerCase().includes('nothing indexed'))
+  check(
+    'project_knowledge counts a dropped file as upload material (no connector) and names nothing as unindexed',
+    !JSON.stringify(coverage.v ?? '')
+      .toLowerCase()
+      .includes('nothing indexed'),
+  )
 
   console.log(`\n${String(total - failed)}/${String(total)} passed`)
   exit = failed === 0 ? 0 : 1

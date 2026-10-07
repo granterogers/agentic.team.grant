@@ -55,7 +55,7 @@ const CPU_BOUND_MS = 15_000
 
 /** Reads one case in its own process with a hard old-space limit; the result is what the process printed, or a failure. */
 function inChild(name: string): Promise<{ report: ChildReport | null; detail: string }> {
-  const env = { ...process.env, HOSTILE_WALL_MS: String(WALL_MS) }
+  const env: NodeJS.ProcessEnv = { ...process.env, HOSTILE_WALL_MS: String(WALL_MS) }
   for (const k of SCRUBBED) delete env[k]
   const args = ['--import', 'tsx', '--max-old-space-size=256', 'tests/text/hostile-child.ts', name]
   return new Promise((resolve) => {

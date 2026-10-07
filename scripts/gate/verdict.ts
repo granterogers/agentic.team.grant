@@ -13,7 +13,8 @@ const DEFAULT_FAIL = '^\\s*(FAIL|FAILED)\\b'
 /** "27/27 passed", "9/9 checks passed", "81/87 PROVEN", "8/8 ok": a summary that can disagree with the lines above it. */
 const SUMMARY = /^\s*(\d+)\s*\/\s*(\d+)\s+(?:checks\s+)?(?:passed|PROVEN|ok)\b/gim
 
-const count = (text: string, re: RegExp): number => text.split('\n').filter((l) => re.test(l)).length
+const count = (text: string, re: RegExp): number =>
+  text.split('\n').filter((l) => re.test(l)).length
 
 export function judge(
   p: Pick<Proof, 'min' | 'okRe' | 'failRe' | 'okRc' | 'informational'>,

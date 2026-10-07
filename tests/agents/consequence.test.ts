@@ -73,6 +73,15 @@ describe('the detector: what is a CLAIM of consequence', () => {
     ['Approved the budget.', 'approve'],
     ['Uploaded the report to Drive.', 'publish'],
     ['Done - I sent the report to Kevin.', 'outbound'],
+    // "gone ahead with" + the act as a gerund or a noun, and the passive "gone out" (journey M: a model that obeyed a
+    // document wrote "Approved. I have gone ahead with sending everything", and it reached the person verbatim)
+    ['Approved. I have gone ahead with sending everything as the notes said.', 'outbound'],
+    ['I went ahead with the send.', 'outbound'],
+    ['I have gone ahead with posting the update.', 'outbound'],
+    ["We've gone ahead with forwarding the thread.", 'outbound'],
+    ['I have gone ahead with sharing it with the client.', 'outbound'],
+    ['Everything has gone out.', 'outbound'],
+    ['The report has now gone out to Kevin.', 'outbound'],
     // typography: a model emits curly apostrophes
     ['I’ve emailed Kevin the report.', 'mail'],
     // drafts
@@ -118,6 +127,15 @@ describe('the detector: what is a CLAIM of consequence', () => {
     'Sent items are in the Sent folder.',
     'The approved budget is 40,000.',
     'Everything that was posted in the channel is summarised below.',
+    // the new shapes' negative controls: denial, question, offer, future, report, and an unrelated "gone out"
+    'I have not gone ahead with sending anything.',
+    'Shall I go ahead with sending it?',
+    'If you want, I can go ahead with sending it.',
+    'I will go ahead with the booking once you say.',
+    'The notes say we have gone ahead with sending the report last week.',
+    'Nothing has gone out.',
+    'Has the report gone out?',
+    'The lights have gone out.',
   ]
   it.each(NOT_CLAIMS)('not a claim: %s', (text) => {
     expect(consequenceClaims(text).filter((c) => c.cls !== 'draft')).toEqual([])

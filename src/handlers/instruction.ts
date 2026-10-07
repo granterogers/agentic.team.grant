@@ -91,6 +91,7 @@ import {
 import { capabilityLies } from '../agents/capability-claims.ts'
 import { clauses, split } from '../agents/clauses.ts'
 import { heldToWhatIsQueued } from '../agents/commitment.ts'
+import { bodyHoldsDraft } from '../agents/consequence.ts'
 import type { Correction } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
@@ -130,7 +131,7 @@ import {
   withoutNegated,
 } from '../agents/negation.ts'
 import type { CanonicalOutcome } from '../agents/outcome.ts'
-import { contractFor, sayWhatHappened } from '../agents/outcome.ts'
+import { answersByWriting, contractFor, sayWhatHappened } from '../agents/outcome.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import { performable } from '../agents/perform.ts'
 import {
@@ -6928,7 +6929,24 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         needed a detector - because a composed sentence cannot be phrased
         around.
       */
-      const outcomeLine = sayWhatHappened(outcome)
+      /*
+        A DRAFT THAT IS THE ANSWER IS THE WORK DONE (Version 1 acceptance, journey E).
+
+        "Draft an email to Kevin ... but don't send it" creates no row: the draft is the text of the answer. So `landed`
+        was 0 against `wanted` 1, and two things followed from a rows-only count. The office opened the draft itself with
+        "I have not done this yet, and nothing has been changed". And `mayClaimCompletion` was false, so a model's most
+        natural lead, "I've drafted the email for you:", was refused as a claim of completion and rewritten into "what I
+        would need" - the draft thrown away. `consequence.ts` already knows a draft quoted in the answer is the only place a
+        draft can exist (`bodyHoldsDraft`), so the same fact is read here: when the request was a request to write (and
+        not also to send), and the answer really holds a draft, that clause has landed. Nothing else is loosened: a
+        promise of future work is still refused (`mayCommitToFuture` is untouched), and a claim of a send, post or share
+        is still judged by `consequence.ts` against its rows.
+      */
+      const draftIsTheAnswer = requests.some(answersByWriting) && bodyHoldsDraft(said, '')
+      const outcomeNow: CanonicalOutcome = draftIsTheAnswer
+        ? { ...outcome, landed: outcome.landed + 1 }
+        : outcome
+      const outcomeLine = sayWhatHappened(outcomeNow)
       /*
         Joined with a SPACE, not a blank line.
 
@@ -6966,7 +6984,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         promise something else, so the loop ends at a sentence composed from
         canonical state rather than at another attempt.
       */
-      const may = contractFor(outcome)
+      const may = contractFor(outcomeNow)
       const held =
         may.mayCommitToFuture && may.mayClaimCompletion
           ? { answer: draft, outcome: 'clean' as const }

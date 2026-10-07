@@ -3,7 +3,7 @@
 # question perform the answer ONCE. Run against a copy of `base` (without 0596,
 # the control: must show 2) and a copy of `post` (with it: must show 1).
 set -uo pipefail
-P="psql -h /tmp/pgs -p 55432 -U postgres -qAtX"
+P="psql -h ${ISOLATED_PG_SOCKET:-/tmp/pgs} -p ${ISOLATED_PG_PORT:-55432} -U postgres -qAtX"
 race() {
   # The gate gives each run its own names (GATE_DB_PREFIX) and the candidate to use as `post` (ISOLATED_POST); by hand the
   # old names and `post` itself are used, and `post` is only ever a template.
@@ -49,8 +49,10 @@ race() {
   $P -d postgres -c "drop database $db" >/dev/null
   echo "$n"
 }
-c=$(race base | tee /dev/stderr | tail -1)
-t=$(race post | tee /dev/stderr | tail -1)
+# Each run's lines are shown, and its last line (the child count) is what is compared. `tee /dev/stderr` is not used: when
+# the caller's stderr is a socket (the gate runner's pipes are) opening /dev/stderr fails with ENXIO.
+out_c=$(race base); echo "$out_c" >&2; c=$(echo "$out_c" | tail -1)
+out_t=$(race post); echo "$out_t" >&2; t=$(echo "$out_t" | tail -1)
 [ "$c" = 2 ] && echo "CONTROL red as it must be: without 0596 two answers performed it twice" || echo "CONTROL DID NOT REPRODUCE (children=$c)"
 [ "$t" = 1 ] && echo "PASS: with 0596 two overlapping answers performed it once" || { echo "FAIL: with 0596 children=$t"; exit 1; }
 [ "$c" = 2 ] || exit 1

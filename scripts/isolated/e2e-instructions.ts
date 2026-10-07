@@ -25,15 +25,35 @@ interface Row {
 }
 
 const ROWS: Row[] = [
-  { said: 'Research this and tell me what you recommend.', forwarded: false, thread: 'the Holloway venue contract' },
+  {
+    said: 'Research this and tell me what you recommend.',
+    forwarded: false,
+    thread: 'the Holloway venue contract',
+  },
   { said: 'Handle this for me.', forwarded: false, thread: 'the Holloway venue contract' },
-  { said: 'Ask the team to investigate this.', forwarded: false, thread: 'the failed backup last night' },
+  {
+    said: 'Ask the team to investigate this.',
+    forwarded: false,
+    thread: 'the failed backup last night',
+  },
   { said: 'Remind me tomorrow.', forwarded: false, thread: 'call Kevin about the deposit' },
   { said: "Draft an email to Kevin but don't send it.", forwarded: false, thread: '' },
   { said: 'Send this to Kevin.', forwarded: false, thread: 'the revised proposal PDF' },
-  { said: "Keep working on this while I'm away.", forwarded: false, thread: 'the Holloway venue contract' },
-  { said: 'Find out why this failed and fix whatever you safely can.', forwarded: false, thread: 'the failed backup last night' },
-  { said: 'Do everything you can without asking me questions.', forwarded: false, thread: 'the Holloway venue contract' },
+  {
+    said: "Keep working on this while I'm away.",
+    forwarded: false,
+    thread: 'the Holloway venue contract',
+  },
+  {
+    said: 'Find out why this failed and fix whatever you safely can.',
+    forwarded: false,
+    thread: 'the failed backup last night',
+  },
+  {
+    said: 'Do everything you can without asking me questions.',
+    forwarded: false,
+    thread: 'the Holloway venue contract',
+  },
   { said: 'Stop sending me updates.', forwarded: false, thread: '' },
   {
     said: 'Ask the finance director to review the outstanding work and tell me what needs attention',
@@ -44,7 +64,8 @@ const ROWS: Row[] = [
   { said: 'Please send this to everyone', forwarded: true, thread: '' },
 ]
 
-const j = (v: unknown): string => (v === null || v === undefined ? '-' : typeof v === 'string' ? v : JSON.stringify(v))
+const j = (v: unknown): string =>
+  v === null || v === undefined ? '-' : typeof v === 'string' ? v : JSON.stringify(v)
 
 const read = (text: string, forwarded: boolean) => {
   const e = forwarded ? noneEntitled : entitled
@@ -99,7 +120,9 @@ for (const row of ROWS) {
     // The resolver is a model call; stand in for it with the obvious expansion and read THAT, as the handler does for proposals.
     const expanded = row.said.replace(/\b(this|that|it)\b/i, row.thread)
     const withThread = read(expanded, row.forwarded)
-    console.log(`  thread     : needsResolving=${dangling} elliptical=${JSON.stringify(elliptical === row.said ? null : elliptical)}`)
+    console.log(
+      `  thread     : needsResolving=${dangling} elliptical=${JSON.stringify(elliptical === row.said ? null : elliptical)}`,
+    )
     console.log('  as resolved:', j(withThread), `<- text: ${JSON.stringify(expanded)}`)
   }
 }

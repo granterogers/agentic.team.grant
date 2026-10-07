@@ -22,7 +22,11 @@ export function fileOf(p: Proof): string {
 }
 
 export function proofsOf(tier: Tier | 'all'): readonly Proof[] {
-  return tier === 'critical' ? CRITICAL : tier === 'extended' ? EXTENDED : [...CRITICAL, ...EXTENDED]
+  return tier === 'critical'
+    ? CRITICAL
+    : tier === 'extended'
+      ? EXTENDED
+      : [...CRITICAL, ...EXTENDED]
 }
 
 /** Every file under scripts/isolated (one directory deep), as paths relative to it. */
@@ -39,7 +43,10 @@ export function isolatedFiles(root = ISOLATED_DIR): string[] {
 
 const strip = (f: string): string => f.replace(/\.[^./]+$/, '')
 
-/** What covers a file: the proof or helper whose stem it is. Returns where it is registered, or null when nothing does. */
+/**
+ * What covers a file: the proof or helper whose stem it is. Returns where it is registered, or null when nothing does.
+ * A .ts proof and the .sh or .sql that sets it up share a stem and are one entry.
+ */
 export function coverOf(file: string): string | null {
   const keys = new Set([file, strip(file)])
   const dir = file.includes('/') ? `${file.slice(0, file.indexOf('/'))}/*` : null
@@ -51,7 +58,6 @@ export function coverOf(file: string): string | null {
     for (const p of list) {
       const stem = p.file ?? p.name
       if (keys.has(stem) || keys.has(`${stem}.ts`) || keys.has(`${stem}.sh`)) return tier
-      // a .ts proof and the .sh/.sql that sets it up share a stem and are one entry
     }
   for (const h of HELPERS) if (keys.has(h.stem) || (dir !== null && h.stem === dir)) return 'helper'
   return null
@@ -75,14 +81,20 @@ export function registryProblems(isolatedRoot = ISOLATED_DIR): Problem[] {
       const where = seen.get(p.name)
       if (where !== undefined) bad(`${p.name} is registered twice (${where} and ${tier})`)
       seen.set(p.name, tier)
-      if (p.why.trim().length < 20) bad(`${p.name}: say in a sentence what it guards (the 'why' is empty)`)
+      if (p.why.trim().length < 20)
+        bad(`${p.name}: say in a sentence what it guards (the 'why' is empty)`)
       if (tier === 'quarantine') {
-        if ((p as { replacedBy?: string }).replacedBy === undefined || (p as { replacedBy: string }).replacedBy.trim() === '')
-          bad(`${p.name}: a quarantined proof says what replaced it, even if the answer is "nothing"`)
+        const replacedBy = (p as { replacedBy?: string }).replacedBy
+        if (replacedBy === undefined || replacedBy.trim() === '')
+          bad(
+            `${p.name}: a quarantined proof says what replaced it, even if the answer is "nothing"`,
+          )
         continue
       }
       if (p.min < 0 || (p.min === 0 && p.informational !== true))
-        bad(`${p.name}: a proof needs an assertion floor of at least 1 (or must be marked informational)`)
+        bad(
+          `${p.name}: a proof needs an assertion floor of at least 1 (or must be marked informational)`,
+        )
       const f = join(isolatedRoot, fileOf(p))
       if (!existsSync(f)) bad(`${p.name}: ${f} does not exist`)
     }
@@ -95,9 +107,12 @@ export function registryProblems(isolatedRoot = ISOLATED_DIR): Problem[] {
   }
   for (const h of HELPERS) {
     if (h.stem.endsWith('/*')) {
-      if (!existsSync(join(isolatedRoot, h.stem.slice(0, -2)))) bad(`helper ${h.stem}: no such directory`)
+      if (!existsSync(join(isolatedRoot, h.stem.slice(0, -2))))
+        bad(`helper ${h.stem}: no such directory`)
     } else if (
-      !['', '.ts', '.sh', '.sql', '.md'].some((e) => existsSync(join(isolatedRoot, `${h.stem}${e}`)))
+      !['', '.ts', '.sh', '.sql', '.md'].some((e) =>
+        existsSync(join(isolatedRoot, `${h.stem}${e}`)),
+      )
     )
       bad(`helper ${h.stem}: no such file`)
   }

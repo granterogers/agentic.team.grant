@@ -170,6 +170,17 @@ const SHAPES: readonly Shape[] = [
     ),
     impersonal: false,
   },
+  {
+    // The act named as a gerund or a noun after "gone ahead with": "I have gone ahead with sending everything",
+    // "I went ahead with the send". PREFIX already took "gone ahead and sent"; this is the same claim in the other
+    // grammar, and it reached a person verbatim when a model obeyed a document (Version 1 acceptance, journey M).
+    cls: 'outbound',
+    re: new RegExp(
+      `${PREFIX}(?:gone|went)\\s+ahead\\s+with\\s+(?:the\\s+|your\\s+|that\\s+|this\\s+)?(?:sending|send|e-?mailing|messaging|posting|forwarding|sharing|delivering|delivery|notifying)\\b[^.!?]{0,60}`,
+      'i',
+    ),
+    impersonal: false,
+  },
   { cls: 'publish', re: new RegExp(`${PREFIX}uploaded\\b[^.!?]{0,60}`, 'i'), impersonal: false },
   {
     cls: 'schedule',
@@ -215,6 +226,13 @@ const SHAPES: readonly Shape[] = [
       String.raw`\b(?:(?:has|have|had)\s+(?:now\s+|already\s+|just\s+|successfully\s+)?been|was|were|got)\s+(?:now\s+|already\s+|just\s+|successfully\s+)?(?:shared|delivered)\b${RECIPIENT}[^.!?]{0,60}`,
       'i',
     ),
+    impersonal: true,
+  },
+  {
+    // "Everything has gone out.": the passive of a send with no verb of sending in it. The subject has to be a thing a
+    // person sends (everything, it, the report ...): "the lights have gone out" is not a claim of anything.
+    cls: 'outbound',
+    re: /\b(?:everything|it\s+all|all\s+of\s+it|they|them|it|the\s+(?:[\w'-]+\s+){0,2}?(?:e-?mails?|messages?|notes?|reports?|invoices?|invites?|invitations?|updates?|summary|summaries|drafts?|memos?|proposals?|quotes?|agendas?|documents?|files?|replies|notifications?))\s+(?:has|have|had)\s+(?:now\s+|already\s+|just\s+)?gone\s+out\b[^.!?]{0,60}/i,
     impersonal: true,
   },
   {

@@ -61,15 +61,23 @@ try {
   psql('postgres', ['-c', `create database ${EMPTY}`])
   psql(EMPTY, ['-c', `alter database ${EMPTY} set search_path to "$user", public, extensions`])
   psql(EMPTY, ['-v', 'ON_ERROR_STOP=1', '-f', 'scripts/isolated/platform.sql'])
-  psql(EMPTY, ['-c', 'create table public.isolated_replica_marker (built_at timestamptz default now())'])
+  psql(EMPTY, [
+    '-c',
+    'create table public.isolated_replica_marker (built_at timestamptz default now())',
+  ])
 
   const files = readdirSync('migrations').filter((f) => /^\d{4}_.*\.sql$/.test(f))
-  const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/isolated/fresh-replay.ts', EMPTY], {
-    encoding: 'utf8',
-    maxBuffer: 64 << 20,
-  })
+  const run = spawnSync(
+    process.execPath,
+    ['--import', 'tsx', 'scripts/isolated/fresh-replay.ts', EMPTY],
+    { encoding: 'utf8', maxBuffer: 64 << 20 },
+  )
   const out = `${run.stdout}${run.stderr}`
-  check(run.status === 0, 'the replay into an empty database completed', `exit ${String(run.status)}`)
+  check(
+    run.status === 0,
+    'the replay into an empty database completed',
+    `exit ${String(run.status)}`,
+  )
   const applied = Number(/applied (\d+) migration\(s\)/.exec(out)?.[1] ?? -1)
   check(
     applied === files.length,
@@ -85,7 +93,11 @@ try {
 
   const a = fingerprint(target)
   const b = fingerprint(EMPTY)
-  check(a.length > 1000 && b.length > 1000, 'both fingerprints are substantial (a measure that matches nothing proves nothing)', `${String(a.length)} / ${String(b.length)} lines`)
+  check(
+    a.length > 1000 && b.length > 1000,
+    'both fingerprints are substantial (a measure that matches nothing proves nothing)',
+    `${String(a.length)} / ${String(b.length)} lines`,
+  )
   const d = diff(a, b)
   check(
     d.onlyA.length === 0 && d.onlyB.length === 0,
@@ -97,7 +109,10 @@ try {
 
   // CONTROL: the comparison can fail.
   psql(EMPTY, ['-c', 'create table public.zz_replay_parity_probe (x int)'])
-  const landed = psql(EMPTY, ['-tAc', "select to_regclass('public.zz_replay_parity_probe') is not null"]).trim()
+  const landed = psql(EMPTY, [
+    '-tAc',
+    "select to_regclass('public.zz_replay_parity_probe') is not null",
+  ]).trim()
   const dd = diff(fingerprint(target), fingerprint(EMPTY))
   check(
     landed === 't' && dd.onlyB.some((l) => l.includes('zz_replay_parity_probe')),

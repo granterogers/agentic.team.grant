@@ -20,7 +20,7 @@
 */
 import { mayAct } from '../../src/agents/approval.ts'
 import { isolated } from './guard.ts'
-import { realParent, realTelegramKey, registerBot, CHAT } from './real-telegram.ts'
+import { CHAT, realParent, realTelegramKey, registerBot } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'e2_boundary')
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
@@ -34,7 +34,9 @@ const DOOR = "set local application_name = 'PostgREST 14.5';"
 
 await registerBot(db)
 const office = String((await one(`select app.operator_office()::text as o`)).o)
-const project = String((await one(`select app.unnamed_project(app.operator_office())::text as p`)).p)
+const project = String(
+  (await one(`select app.unnamed_project(app.operator_office())::text as p`)).p,
+)
 
 const forwardedTurn = async (): Promise<string> => {
   const key = realTelegramKey()
@@ -66,9 +68,7 @@ const fwdRoot = await forwardedTurn()
 const forwarded = await childOf(fwdRoot)
 
 const tools = (
-  await db.execute(
-    `select tool, level, enabled from public.tool_permissions order by level, tool`,
-  )
+  await db.execute(`select tool, level, enabled from public.tool_permissions order by level, tool`)
 ).rows as { tool: string; level: number; enabled: boolean }[]
 const DIALS = ['observe', 'suggest', 'act_with_review', 'act'] as const
 const JOBS: [string, string | null][] = [
@@ -99,7 +99,13 @@ interface Cell {
 const cells: Cell[] = []
 for (const dial of DIALS) {
   await setDial(dial)
-  const seen = String((await one(`select app.autonomy_for_in(${lit(office)}::uuid, ${lit(project)}::uuid)::text as a`)).a)
+  const seen = String(
+    (
+      await one(
+        `select app.autonomy_for_in(${lit(office)}::uuid, ${lit(project)}::uuid)::text as a`,
+      )
+    ).a,
+  )
   if (seen !== dial) throw new Error(`the dial did not take: wanted ${dial}, policy reads ${seen}`)
   for (const t of tools) {
     for (const [jobName, jobId] of JOBS) {
@@ -126,25 +132,65 @@ for (const dial of DIALS) {
     }
   }
 }
-console.log(`\n${cells.length} policy cells driven (${tools.length} tools x ${DIALS.length} dials x ${JOBS.length} jobs x ${AUDIENCES.length} audiences)\n`)
+console.log(
+  `\n${cells.length} policy cells driven (${tools.length} tools x ${DIALS.length} dials x ${JOBS.length} jobs x ${AUDIENCES.length} audiences)\n`,
+)
 
 const offenders = (pred: (c: Cell) => boolean) => cells.filter(pred)
-const names = (xs: Cell[]) => xs.slice(0, 3).map((c) => `${c.tool}@${c.dial}/${c.job}/${c.audience}`).join(', ')
+const names = (xs: Cell[]) =>
+  xs
+    .slice(0, 3)
+    .map((c) => `${c.tool}@${c.dial}/${c.job}/${c.audience}`)
+    .join(', ')
 
 let bad = offenders((c) => !c.enabled && c.verdict === 'proceed')
-check('P1 a disabled tool never proceeds (any dial, any job, any audience)', bad.length === 0, bad.length === 0 ? `${cells.filter((c) => !c.enabled).length} cells` : names(bad))
-bad = offenders((c) => c.level >= 3 && c.verdict === 'proceed')
-check('P2 a level-3 tool never proceeds on the dial alone', bad.length === 0, bad.length === 0 ? `${cells.filter((c) => c.level >= 3).length} cells` : names(bad))
-bad = offenders((c) => c.audience === 'outside' && c.level >= 1 && c.verdict === 'proceed')
-check('P3 an outside audience never proceeds at level >= 1', bad.length === 0, bad.length === 0 ? `${cells.filter((c) => c.audience === 'outside' && c.level >= 1).length} cells` : names(bad))
-bad = offenders((c) => c.dial === 'observe' && c.level >= 1 && c.verdict !== 'refuse')
-check('P4 observe refuses every write', bad.length === 0, bad.length === 0 ? `${cells.filter((c) => c.dial === 'observe' && c.level >= 1).length} cells` : names(bad))
-bad = offenders((c) => c.job === 'forwarded' && c.asked)
-check('P5 forwarded words are never "he asked"', bad.length === 0, bad.length === 0 ? `${cells.filter((c) => c.job === 'forwarded').length} cells` : names(bad))
-const typedOk = cells.filter(
-  (c) => c.job === 'typed' && c.audience === 'unstated' && c.enabled && c.level >= 1 && c.level <= 2 && (c.dial === 'suggest' || c.dial === 'act_with_review'),
+check(
+  'P1 a disabled tool never proceeds (any dial, any job, any audience)',
+  bad.length === 0,
+  bad.length === 0 ? `${cells.filter((c) => !c.enabled).length} cells` : names(bad),
 )
-check('C1 control: a typed level-1/2 job proceeds at suggest/act_with_review', typedOk.length > 0 && typedOk.every((c) => c.verdict === 'proceed' && c.asked), `${typedOk.length} cells`)
+bad = offenders((c) => c.level >= 3 && c.verdict === 'proceed')
+check(
+  'P2 a level-3 tool never proceeds on the dial alone',
+  bad.length === 0,
+  bad.length === 0 ? `${cells.filter((c) => c.level >= 3).length} cells` : names(bad),
+)
+bad = offenders((c) => c.audience === 'outside' && c.level >= 1 && c.verdict === 'proceed')
+check(
+  'P3 an outside audience never proceeds at level >= 1',
+  bad.length === 0,
+  bad.length === 0
+    ? `${cells.filter((c) => c.audience === 'outside' && c.level >= 1).length} cells`
+    : names(bad),
+)
+bad = offenders((c) => c.dial === 'observe' && c.level >= 1 && c.verdict !== 'refuse')
+check(
+  'P4 observe refuses every write',
+  bad.length === 0,
+  bad.length === 0
+    ? `${cells.filter((c) => c.dial === 'observe' && c.level >= 1).length} cells`
+    : names(bad),
+)
+bad = offenders((c) => c.job === 'forwarded' && c.asked)
+check(
+  'P5 forwarded words are never "he asked"',
+  bad.length === 0,
+  bad.length === 0 ? `${cells.filter((c) => c.job === 'forwarded').length} cells` : names(bad),
+)
+const typedOk = cells.filter(
+  (c) =>
+    c.job === 'typed' &&
+    c.audience === 'unstated' &&
+    c.enabled &&
+    c.level >= 1 &&
+    c.level <= 2 &&
+    (c.dial === 'suggest' || c.dial === 'act_with_review'),
+)
+check(
+  'C1 control: a typed level-1/2 job proceeds at suggest/act_with_review',
+  typedOk.length > 0 && typedOk.every((c) => c.verdict === 'proceed' && c.asked),
+  `${typedOk.length} cells`,
+)
 // Tools whose answer is not the dial's alone: authorised one destination at a time (scoped), or carrying a standing yes
 // Grant gave (the replica holds one for calendar.write). They are real behaviour, not the plain dial the controls read.
 const special = new Set<string>([
@@ -154,23 +200,75 @@ const special = new Set<string>([
   ).rows.map((r) => String((r as { tool: string }).tool)),
 ])
 console.log(`(excluded from the plain-dial controls: ${[...special].join(', ')})`)
-const actOk = cells.filter((c) => c.job === 'unprompted' && c.audience === 'unstated' && c.enabled && c.level === 2 && c.dial === 'act' && !special.has(c.tool))
-check('C2 control: at act an unprompted level-2 tool proceeds', actOk.length > 0 && actOk.every((c) => c.verdict === 'proceed'), `${actOk.length} cells`)
-const fwdAsk = cells.filter(
-  (c) => c.job === 'forwarded' && c.audience === 'unstated' && c.enabled && c.level === 2 && c.dial === 'suggest' && !special.has(c.tool),
+const actOk = cells.filter(
+  (c) =>
+    c.job === 'unprompted' &&
+    c.audience === 'unstated' &&
+    c.enabled &&
+    c.level === 2 &&
+    c.dial === 'act' &&
+    !special.has(c.tool),
 )
-check('C3 control: a FORWARDED level-2 request at suggest asks, where a typed one proceeds', fwdAsk.length > 0 && fwdAsk.every((c) => c.verdict === 'ask'), `${fwdAsk.length} cells`)
-const fwdScoped = cells.filter((c) => c.job === 'forwarded' && c.audience === 'unstated' && c.dial === 'act' && ['notion.write', 'task.board.write'].includes(c.tool))
-check('C4 a forwarded request cannot use a destination-scoped write even at act', fwdScoped.length > 0 && fwdScoped.every((c) => c.verdict === 'ask'), `${fwdScoped.length} cells`)
+check(
+  'C2 control: at act an unprompted level-2 tool proceeds',
+  actOk.length > 0 && actOk.every((c) => c.verdict === 'proceed'),
+  `${actOk.length} cells`,
+)
+const fwdAsk = cells.filter(
+  (c) =>
+    c.job === 'forwarded' &&
+    c.audience === 'unstated' &&
+    c.enabled &&
+    c.level === 2 &&
+    c.dial === 'suggest' &&
+    !special.has(c.tool),
+)
+check(
+  'C3 control: a FORWARDED level-2 request at suggest asks, where a typed one proceeds',
+  fwdAsk.length > 0 && fwdAsk.every((c) => c.verdict === 'ask'),
+  `${fwdAsk.length} cells`,
+)
+const fwdScoped = cells.filter(
+  (c) =>
+    c.job === 'forwarded' &&
+    c.audience === 'unstated' &&
+    c.dial === 'act' &&
+    ['notion.write', 'task.board.write'].includes(c.tool),
+)
+check(
+  'C4 a forwarded request cannot use a destination-scoped write even at act',
+  fwdScoped.length > 0 && fwdScoped.every((c) => c.verdict === 'ask'),
+  `${fwdScoped.length} cells`,
+)
 
 // What can reach a person or an outside system, one line each, at the two ends of the dial.
-const SHOW = ['gmail.send', 'gmail.draft', 'slack.post', 'calendar.write', 'notion.write', 'task.board.write', 'github.write', 'slack.channel', 'spend.money', 'task.create', 'draft.create']
-console.log('\ntool              lvl on   suggest(unp/typed/fwd)   act(unp/typed/fwd)    act+outside(typed)')
+const SHOW = [
+  'gmail.send',
+  'gmail.draft',
+  'slack.post',
+  'calendar.write',
+  'notion.write',
+  'task.board.write',
+  'github.write',
+  'slack.channel',
+  'spend.money',
+  'task.create',
+  'draft.create',
+]
+console.log(
+  '\ntool              lvl on   suggest(unp/typed/fwd)   act(unp/typed/fwd)    act+outside(typed)',
+)
 for (const tool of SHOW) {
   const row = (dial: string, aud = 'unstated') =>
-    JOBS.map(([j]) => cells.find((c) => c.tool === tool && c.dial === dial && c.job === j && c.audience === aud)?.verdict ?? '?').join('/')
+    JOBS.map(
+      ([j]) =>
+        cells.find((c) => c.tool === tool && c.dial === dial && c.job === j && c.audience === aud)
+          ?.verdict ?? '?',
+    ).join('/')
   const meta = cells.find((c) => c.tool === tool)
-  console.log(`${tool.padEnd(17)} ${String(meta?.level)}   ${meta?.enabled ? 'y' : 'n'}    ${row('suggest').padEnd(22)}  ${row('act').padEnd(20)}  ${cells.find((c) => c.tool === tool && c.dial === 'act' && c.job === 'typed' && c.audience === 'outside')?.verdict}`)
+  console.log(
+    `${tool.padEnd(17)} ${String(meta?.level)}   ${meta?.enabled ? 'y' : 'n'}    ${row('suggest').padEnd(22)}  ${row('act').padEnd(20)}  ${cells.find((c) => c.tool === tool && c.dial === 'act' && c.job === 'typed' && c.audience === 'outside')?.verdict}`,
+  )
 }
 const gm = cells.find((c) => c.tool === 'gmail.send' && c.dial === 'act' && c.job === 'typed')
 console.log(`\ngmail.send at act, typed job: ${gm?.verdict} - ${gm?.because}`)

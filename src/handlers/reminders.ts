@@ -141,6 +141,21 @@ export function remindersHandler(db: SqlExecutor): Handler {
         */
         announce: due.length > 0,
         body,
+        /*
+          WHAT THIS ANNOUNCEMENT IS ABOUT: these occurrences, not these words (found by the Version 1 acceptance suite).
+
+          `app.say_once` keeps a duty from saying one thing every hour by fingerprinting the BODY for twenty hours, and
+          `tasks.remind` is a duty. A body is only the title, so "take the pills" at 4pm and "take the pills" at 8pm are the
+          same fingerprint: the second reminder was muted as "already said", the settle step read a muted job as a lost
+          delivery and re-opened it, the next tick was muted too, and after the third send the reminder was marked
+          finished having reached nobody. A reminder is already said at most once per occurrence (a task in flight or
+          reminded is not due), so the fingerprint is the occurrence: each task and the time it was set for. A retry of the
+          SAME occurrence after a definite failure keeps the same topic and is let through by
+          `app.reopen_duty_voice`, exactly as before.
+        */
+        ...(due.length > 0
+          ? { topic: `reminders:${due.map((d) => `${d.id}@${d.remind_at}`).join(',')}` }
+          : {}),
       } satisfies HandlerOutput
     },
   }

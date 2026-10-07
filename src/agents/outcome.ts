@@ -409,6 +409,28 @@ export const sayWhatHappened = (c: CanonicalOutcome): string | null => {
 }
 
 /**
+ * Was this clause a request to WRITE something, where the writing is the whole job?
+ *
+ * Found by the Version 1 acceptance suite (journey E): "Draft an email to Kevin ... but don't send it" lands no row (a
+ * draft is the answer's own text, not a task or a document), so the outcome read as "wanted 1, landed 0" and the office
+ * (a) opened the draft with "I have not done this yet, and nothing has been changed", and (b) refused a model's natural
+ * "I've drafted the email for you:" as a claim of completion, rewriting the draft away into "what I would need". The draft
+ * IS the work. This is the one place that says which requests are like that, so the handler and the tests read the same
+ * answer.
+ *
+ * Deliberately narrow: an imperative to draft, write, compose or prepare, at the start of the clause (optionally behind
+ * "please", "can you", "I need you to"), and NOT when it also asks for the thing to be sent, posted, shared or filed
+ * ("draft it and send it" has a half the office cannot do, and the "I have not done this" sentence is true of it). "Send
+ * the draft to Kevin" has no such opening and is untouched.
+ */
+const OPENS_WITH_WRITING =
+  /^\s*(?:(?:please|kindly)[\s,]+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?|i\s+need\s+you\s+to\s+|i(?:'|’)d\s+like\s+you\s+to\s+|i\s+want\s+you\s+to\s+)?(?:draft|write|compose|prepare)\b/i
+const ALSO_SENDS_IT =
+  /\b(?:and|then|also|&)\s+(?:then\s+|also\s+)?(?:send|e-?mail|post|publish|share|forward|text|submit|file|upload|deliver)\b/i
+export const answersByWriting = (request: string): boolean =>
+  OPENS_WITH_WRITING.test(request) && !ALSO_SENDS_IT.test(request)
+
+/**
  * The classes in which a turn owes Grant a sentence it cannot get from the
  * model.
  *

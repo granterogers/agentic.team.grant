@@ -6,6 +6,10 @@
  * No production contact: the cluster is a unix socket, and the child environments have every production credential
  * removed (see cleanEnv).
  */
+// The gate runs only against a local unix socket and removes every production credential from what it starts, so it can
+// reach nothing remote. It still arms the production fetch guard (CLAUDE.md: a script that names the production credentials
+// carries a gate module, and tests/safety/production-gate-coverage.test.ts holds every such script to it).
+import '../../src/safety/arm.ts'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -42,7 +46,22 @@ export class GateRefusal extends Error {}
 export function sql(db: string, statement: string): string {
   return execFileSync(
     'psql',
-    ['-h', SOCK, '-p', PORT, '-U', 'postgres', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-d', db, '-c', statement],
+    [
+      '-h',
+      SOCK,
+      '-p',
+      PORT,
+      '-U',
+      'postgres',
+      '-X',
+      '-qAt',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-d',
+      db,
+      '-c',
+      statement,
+    ],
     { encoding: 'utf8', env: cleanEnv(), maxBuffer: 64 << 20 },
   ).trim()
 }
@@ -51,7 +70,23 @@ export function sql(db: string, statement: string): string {
 export function applyFile(db: string, file: string): { ok: boolean; out: string } {
   const r = spawnSync(
     'psql',
-    ['-h', SOCK, '-p', PORT, '-U', 'postgres', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-1', '-d', db, '-f', file],
+    [
+      '-h',
+      SOCK,
+      '-p',
+      PORT,
+      '-U',
+      'postgres',
+      '-X',
+      '-q',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-1',
+      '-d',
+      db,
+      '-f',
+      file,
+    ],
     { encoding: 'utf8', env: cleanEnv(), maxBuffer: 64 << 20 },
   )
   return { ok: r.status === 0, out: `${r.stdout}${r.stderr}` }
@@ -112,6 +147,18 @@ export function ensureReplica(opts: { build: boolean }): void {
       )
       for (let i = 0; i < 20 && !reachable(); i++) spawnSync('sleep', ['1'])
     }
+    if (!reachable() && !existsSync(DATA) && opts.build && process.getuid?.() === 0) {
+      // No cluster at all: replica.sh makes one (initdb), starts it and builds base, pre and post.
+      console.log(
+        `there is no replica cluster at ${DATA}; building one with scripts/isolated/replica.sh (a few minutes)`,
+      )
+      const r = spawnSync('bash', ['scripts/isolated/replica.sh'], {
+        stdio: 'inherit',
+        env: cleanEnv(),
+      })
+      if (r.status !== 0)
+        throw new GateRefusal('scripts/isolated/replica.sh failed; read its output above')
+    }
     if (!reachable())
       throw new GateRefusal(
         `No replica cluster answers on ${SOCK} port ${PORT}.\n${how}\nIf it is built but stopped:  sudo su postgres -c "${PGBIN}/pg_ctl -D ${DATA} -o \\"-p ${PORT} -k ${SOCK} -c listen_addresses=''\\" start"`,
@@ -119,9 +166,15 @@ export function ensureReplica(opts: { build: boolean }): void {
   }
   if (!dbExists('post') || !marked('post')) {
     if (opts.build && process.getuid?.() === 0) {
-      console.log('the replica database `post` is missing or unmarked; building it with scripts/isolated/replica.sh')
-      const r = spawnSync('bash', ['scripts/isolated/replica.sh'], { stdio: 'inherit', env: cleanEnv() })
-      if (r.status !== 0) throw new GateRefusal('scripts/isolated/replica.sh failed; read its output above')
+      console.log(
+        'the replica database `post` is missing or unmarked; building it with scripts/isolated/replica.sh',
+      )
+      const r = spawnSync('bash', ['scripts/isolated/replica.sh'], {
+        stdio: 'inherit',
+        env: cleanEnv(),
+      })
+      if (r.status !== 0)
+        throw new GateRefusal('scripts/isolated/replica.sh failed; read its output above')
     }
     if (!dbExists('post') || !marked('post'))
       throw new GateRefusal(
@@ -139,14 +192,21 @@ export const migrationFiles = (): string[] =>
 /** Which migration files `post` already holds: its own list when it keeps one, else everything up to LEGACY_POST_THROUGH. */
 export function pendingForCandidate(): { pending: string[]; basis: string } {
   const all = migrationFiles()
-  const hasList = sql('post', `select to_regclass('public.isolated_replica_migrations') is not null`) === 't'
-  if (hasList) {
-    const have = new Set(sql('post', 'select name from public.isolated_replica_migrations').split('\n'))
-    return { pending: all.filter((f) => !have.has(f)), basis: 'post records the migrations it holds' }
+  // replica.sh records the list as the comment on the marker table: "migrations: 0001_a.sql 0002_b.sql ..."
+  const recorded = sql(
+    'post',
+    `select coalesce(obj_description('public.isolated_replica_marker'::regclass, 'pg_class'), '')`,
+  )
+  if (recorded.startsWith('migrations: ')) {
+    const have = new Set(recorded.slice('migrations: '.length).split(/\s+/).filter(Boolean))
+    return {
+      pending: all.filter((f) => !have.has(f)),
+      basis: 'post records the migrations it holds',
+    }
   }
   return {
     pending: all.filter((f) => Number(f.slice(0, 4)) > LEGACY_POST_THROUGH),
-    basis: `post predates the recorded list, so every migration above ${String(LEGACY_POST_THROUGH)} is taken to be pending`,
+    basis: `post carries no recorded list (an older build), so every migration above ${String(LEGACY_POST_THROUGH)} is taken to be pending`,
   }
 }
 
@@ -187,7 +247,9 @@ export interface Candidate {
 export function ensureCandidate(opts: { rebuild: boolean; given?: string | undefined }): Candidate {
   if (opts.given !== undefined) {
     if (['post', 'pre', 'base', 'postgres', 'template0', 'template1'].includes(opts.given))
-      throw new GateRefusal(`--candidate ${opts.given} is a replica generation; the gate never uses one as its candidate. Name a clone.`)
+      throw new GateRefusal(
+        `--candidate ${opts.given} is a replica generation; the gate never uses one as its candidate. Name a clone.`,
+      )
     if (!dbExists(opts.given) || !marked(opts.given))
       throw new GateRefusal(`--candidate ${opts.given} does not exist or lacks the replica marker`)
     return { name: opts.given, note: 'given with --candidate' }
@@ -200,8 +262,15 @@ export function ensureCandidate(opts: { rebuild: boolean; given?: string | undef
   ).slice(0, 16)
   const stamp = `gate:${signature}`
   if (!opts.rebuild && dbExists(name) && marked(name)) {
-    const have = sql('postgres', `select coalesce(shobj_description(oid, 'pg_database'), '') from pg_database where datname = '${name}'`)
-    if (have === stamp) return { name, note: `reused (post + ${String(pending.length)} newer migration(s); ${basis})` }
+    const have = sql(
+      'postgres',
+      `select coalesce(shobj_description(oid, 'pg_database'), '') from pg_database where datname = '${name}'`,
+    )
+    if (have === stamp)
+      return {
+        name,
+        note: `reused (post + ${String(pending.length)} newer migration(s); ${basis})`,
+      }
   }
   dropDb(name)
   sql('postgres', `create database "${name}" template post`)
@@ -209,13 +278,21 @@ export function ensureCandidate(opts: { rebuild: boolean; given?: string | undef
     const r = applyFile(name, `migrations/${f}`)
     if (!r.ok) {
       dropDb(name)
+      const head = r.out
+        .split('\n')
+        .filter((l) => l.trim() !== '')
+        .slice(0, 6)
+        .join('\n')
       throw new GateRefusal(
-        `The candidate schema could not be built: migration ${f} failed on a copy of \`post\`.\n${r.out.split('\n').filter((l) => l.trim() !== '').slice(0, 6).join('\n')}\nThat migration (or one it needs before it) is not yet sound, so no proof can say anything about the branch.`,
+        `The candidate schema could not be built: migration ${f} failed on a copy of \`post\`.\n${head}\nThat migration (or one it needs before it) is not yet sound, so no proof can say anything about the branch.`,
       )
     }
   }
   sql('postgres', `comment on database "${name}" is '${stamp}'`)
-  return { name, note: `built: post + ${String(pending.length)} newer migration(s) (${pending.map((f) => f.slice(0, 4)).join(', ') || 'none'}); ${basis}` }
+  return {
+    name,
+    note: `built: post + ${String(pending.length)} newer migration(s) (${pending.map((f) => f.slice(0, 4)).join(', ') || 'none'}); ${basis}`,
+  }
 }
 
 /** A short unique token for this run's database names. */
@@ -227,7 +304,9 @@ export function ensurePlantTemplate(): string {
   if (dbExists(name) && marked(name)) return name
   dropDb(name)
   sql('postgres', `create database "${name}" template pre`)
-  for (const f of migrationFiles().filter((x) => x.slice(0, 4) > '0598' && x.slice(0, 4) < '0654')) {
+  for (const f of migrationFiles().filter(
+    (x) => x.slice(0, 4) > '0598' && x.slice(0, 4) < '0654',
+  )) {
     const r = applyFile(name, `migrations/${f}`)
     if (!r.ok) {
       dropDb(name)
@@ -239,7 +318,12 @@ export function ensurePlantTemplate(): string {
 
 /** Drops every database this run created (by its run token), in every naming family the proofs demand. */
 export function sweepRun(run: string): number {
-  const like = [`${PREFIX}${run}_%`, `p2_attack_${PREFIX}${run}_%`, `p3_attack_${PREFIX}${run}_%`, `fk_spike_${PREFIX}${run}_%`]
+  const like = [
+    `${PREFIX}${run}_%`,
+    `p2_attack_${PREFIX}${run}_%`,
+    `p3_attack_${PREFIX}${run}_%`,
+    `fk_spike_${PREFIX}${run}_%`,
+  ]
   const names = sql(
     'postgres',
     `select datname from pg_database where ${like.map((l) => `datname like '${l}'`).join(' or ')}`,
