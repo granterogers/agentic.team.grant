@@ -533,6 +533,19 @@ describe('the skip decision is wired into both deploy scripts, in front of the d
     },
   )
 
+  it('deploy:hq-page keeps the fingerprint in the same meta that carries the commit', () => {
+    // The provenance gate sets DEPLOY_SOURCE_SHA on every real deploy, and the later spread replaces `meta`. If it did not carry the
+    // fingerprint too, no deployment would ever record one and the skip could never fire (a silent loss of the whole saving).
+    const at = delta.indexOf('gitCommitSha: process.env.DEPLOY_SOURCE_SHA')
+    expect(at).toBeGreaterThan(0)
+    expect(delta.slice(at, at + 260)).toMatch(
+      /\.\.\.\(deploymentMeta\(assessment\)\.meta \?\? \{\}\)/,
+    )
+    // control: the same slice from a copy without the spread does not match
+    const without = delta.replace('...(deploymentMeta(assessment).meta ?? {}),', '')
+    expect(without.slice(at, at + 260)).not.toMatch(/deploymentMeta\(assessment\)\.meta/)
+  })
+
   it('deploy:hq-page returns before the request when the decision is to skip (and not on a dry run first)', () => {
     const skipAt = delta.indexOf('if (assessment.decision.skip) {')
     expect(skipAt).toBeGreaterThan(0)

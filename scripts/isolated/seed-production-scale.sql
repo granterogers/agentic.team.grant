@@ -49,6 +49,11 @@ insert into public.projects (slug, name, status, office_id)
 select 'seed-project-' || g, 'Seed project ' || g, 'active', (select grant_office from seed_ctx)
 from generate_series(1, 4) g;
 
+-- The person office's projects are older than the 40 days of work seeded below, as production's are. Without this a freshly built
+-- replica has projects created TODAY, so every "since the project was created or seven days ago" window (studio_unseen) starts after
+-- all the seeded work and the reader looks cheap for a reason production does not share (found revalidating on current main).
+update public.projects set created_at = now() - interval '60 days' where office_id = (select grant_office from seed_ctx);
+
 create temp table seed_kinds (kind text, requested_by text, weight int, with_model boolean);
 insert into seed_kinds values
   ('drive.watch',            'duty:drive-watch',       350, false),

@@ -178,7 +178,8 @@ describe('which commands are asked', () => {
 
   it('stamps the commit on the page it ships (the deployed page is attributable to a SHA)', () => {
     const page = readFileSync('scripts/deploy/hq-page-delta.ts', 'utf8')
-    expect(page).toMatch(/meta: \{ gitCommitSha: process\.env\.DEPLOY_SOURCE_SHA/)
+    // whitespace-tolerant: the same `meta` also carries the page fingerprint, so the formatter lays the object out over lines
+    expect(page).toMatch(/meta: \{\s*gitCommitSha: process\.env\.DEPLOY_SOURCE_SHA/)
   })
 })
 

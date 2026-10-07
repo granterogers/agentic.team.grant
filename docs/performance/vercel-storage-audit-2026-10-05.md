@@ -159,7 +159,7 @@ can block deploys.** The live production deployment is never deleted.
 
 Saved beside this document: **`vercel-cleanup-inventory-2026-10-05.csv`** (241 rows: id, created, age, target, state, bundles,
 function bytes, aliases, Vercel's own retention protection, document references, KEEP/DELETE and the reason). Generated at
-2026-10-05T16:24Z by `scripts/deploy/vercel-storage-inventory.ts`, which only issues GET requests and refuses to produce a list
+2026-10-05T16:24Z by `scripts/vercel/vercel-storage-inventory.ts`, which only issues GET requests and refuses to produce a list
 that breaks the rule (`assertSafe`, with controls that make it fail).
 
 **Rule.** Keep the live deployment, the 15 newest ready production deployments, and every ready production deployment in a
@@ -187,7 +187,7 @@ production candidates are 6.428 GiB.
   history of superseded releases; the rule deletes them, and any can be kept by adding `--keep=<id>` when regenerating.
 
 **To regenerate before approval** (the window and the newest-15 move with the clock):
-`ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/deploy/vercel-storage-inventory.ts --out=<file.csv> [--keep=<id,id>] [--now=<ISO time>]`.
+`ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/vercel/vercel-storage-inventory.ts --out=<file.csv> [--keep=<id,id>] [--now=<ISO time>]`.
 
 ## 5. Prevention of unchanged and unnecessary redeployments (proposal, proven, not wired)
 

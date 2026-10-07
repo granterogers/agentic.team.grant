@@ -1,8 +1,8 @@
 /**
  * READ-ONLY inventory of a Vercel project's deployments and the deletion candidates under the retention rule.
  *
- *   ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/deploy/vercel-storage-inventory.ts
- *   ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/deploy/vercel-storage-inventory.ts --out=.out/vercel-inventory.csv
+ *   ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/vercel/vercel-storage-inventory.ts
+ *   ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/vercel/vercel-storage-inventory.ts --out=.out/vercel-inventory.csv
  *   ... --keep=dpl_abc,dpl_def   (ids a reviewer wants kept regardless)  --now=2026-10-05T15:00:00Z  (reproduce a past list)
  *
  * It only issues GET requests, through the one `get` function below. It never deletes, promotes, aliases or deploys, and it
@@ -26,7 +26,7 @@ import {
   type Rule,
   toCsv,
   totals,
-} from './lib/vercel-retention.ts'
+} from '../deploy/lib/vercel-retention.ts'
 
 const token = process.env.VERCEL_TOKEN ?? ''
 if (token === '') {

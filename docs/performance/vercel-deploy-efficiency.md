@@ -14,7 +14,7 @@ This follows the Vercel storage audit. It is separate from, and does not complet
 | 1 | `excludeFiles` on both Python functions | `vercel.json`, `scripts/deploy/lib/function-exclude.ts` | In the repository; **NOT DEPLOYED** |
 | 2 | A bundle-size budget test | `tests/deploy/function-bundle-budget.test.ts` | Runs in `npm test` |
 | 3 | A deployment fingerprint and a fail-open skip | `scripts/deploy/lib/page-fingerprint.ts`, `page-deploy-guard.ts`, `page-files.ts` | Wired into `deploy:hq` and `deploy:hq-page`; **NOT DEPLOYED** (no deploy was run) |
-| 4 | A preservation-first retention planner (proposals only) | `scripts/deploy/lib/vercel-retention.ts`, `scripts/deploy/vercel-storage-inventory.ts` | Read-only tooling; **has not been run** |
+| 4 | A preservation-first retention planner (proposals only) | `scripts/deploy/lib/vercel-retention.ts`, `scripts/vercel/vercel-storage-inventory.ts` | Read-only tooling; **has not been run** |
 
 ### 1.1 `excludeFiles`
 
@@ -187,7 +187,7 @@ Every step that touches production needs a person to set the production flags fo
 6. **Prove the skip.** Run `hq-page-delta.ts --go` again with no change. Expect `SKIP`, `nothing to deploy`, exit 0, and no new
    deployment in the project list. Then change one studio byte and confirm it deploys. If the first run did not record the
    fingerprint, the log says so and nothing is lost.
-7. **Retention (separate approval).** With the read flag, `npx tsx scripts/deploy/vercel-storage-inventory.ts --out=<file>.csv`
+7. **Retention (separate approval).** With the read flag, `npx tsx scripts/vercel/vercel-storage-inventory.ts --out=<file>.csv`
    (GET only). Review the CSV; add `--keep=<id>` for anything else to preserve; regenerate (the window and the newest 15 move with
    the clock). Nothing in this change deletes: removal is a separate, explicitly approved act, with a tool that must be written
    and reviewed on its own. Deleted deployments are recoverable for 30 days per Vercel (UNVERIFIED whether they still count

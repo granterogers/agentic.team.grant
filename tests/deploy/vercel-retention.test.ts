@@ -313,7 +313,9 @@ describe('assertSafe can fail (controls)', () => {
 
 describe('the planner is pure: it cannot delete anything', () => {
   const lib = readFileSync('scripts/deploy/lib/vercel-retention.ts', 'utf8')
-  const cli = readFileSync('scripts/deploy/vercel-storage-inventory.ts', 'utf8')
+  // The CLI is read-only and lives outside scripts/deploy on purpose: every file in that folder is held to the production-writes
+  // gate and its source-provenance rule (tests/safety/provenance.test.ts), which is for scripts that WRITE.
+  const cli = readFileSync('scripts/vercel/vercel-storage-inventory.ts', 'utf8')
   const stripComments = (s: string) =>
     s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
@@ -339,7 +341,7 @@ describe('the planner is pure: it cannot delete anything', () => {
     expect(imports.sort()).toEqual(
       [
         '../../src/safety/require-production-checks.ts',
-        './lib/vercel-retention.ts',
+        '../deploy/lib/vercel-retention.ts',
         'node:child_process',
         'node:fs',
       ].sort(),
