@@ -96,8 +96,10 @@ const PERSONS: Record<string, { email: string; owner: string; user: string; offi
   [TOKEN_D]: { email: 'd@x.test', owner: 'grant', user: 'u-d', office: OFFICE_B },
 }
 
+let lastResponses: Record<string, unknown>[] = []
+
 const driveVoice = async (
-  turns: { token: string; session: string; project: string | null }[],
+  turns: { token: string; session: string; project: string | null; message?: string }[],
 ): Promise<Posted[]> => {
   const g = globalThis as unknown as { Deno?: unknown }
   const envVars: Record<string, string> = {
@@ -115,6 +117,8 @@ const driveVoice = async (
     },
   }
   const posted: Posted[] = []
+  const filed = new Map<string, { id: string; office: string }>()
+  lastResponses = []
   const realFetch = globalThis.fetch
   const ok = (v: unknown, status = 200) =>
     new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json' } })
@@ -139,11 +143,27 @@ const driveVoice = async (
       return ok(p === undefined ? { ok: false } : { ok: true, office_id: p.office })
     }
     if (path.endsWith('/rest/v1/inbound_commands')) {
-      posted.push(JSON.parse(String(init?.body)) as Posted)
-      return ok([{ command_id: `c${posted.length}` }], 201)
+      if ((init?.method ?? 'GET') === 'GET') {
+        // the replay lookup: office-scoped, like the real filter
+        const q = new URL(url).searchParams
+        const key = (q.get('dedupe_key') ?? '').replace(/^eq\./, '')
+        const officeId = (q.get('office_id') ?? '').replace(/^eq\./, '')
+        const hit = filed.get(key)
+        return ok(hit !== undefined && hit.office === officeId ? [{ command_id: hit.id }] : [])
+      }
+      const row = JSON.parse(String(init?.body)) as Posted
+      // a unique index on dedupe_key with Prefer: resolution=ignore-duplicates: the duplicate answers 201 and no row
+      if (filed.has(row.dedupe_key)) return ok([], 201)
+      posted.push(row)
+      const id = `c${posted.length}`
+      filed.set(row.dedupe_key, { id, office: row.office_id })
+      return ok([{ command_id: id }], 201)
     }
     if (path.endsWith('/rpc/voice_answer')) return ok({})
-    if (path.endsWith('/rpc/enqueue_inbound')) return ok({ job_id: `j${posted.length}` })
+    if (path.endsWith('/rpc/enqueue_inbound')) {
+      const id = JSON.parse(String(init?.body)).p_command_id as string
+      return ok({ job_id: `j-${id}` })
+    }
     return ok({})
   }) as typeof fetch
   try {
@@ -160,10 +180,12 @@ const driveVoice = async (
             said: 'Yes, do that.',
             session: t.session,
             ...(t.project === null ? {} : { project: t.project }),
+            ...(t.message === undefined ? {} : { message: t.message }),
           }),
         }),
       )
       expect(r.status).toBe(200)
+      lastResponses.push((await r.json()) as Record<string, unknown>)
     }
   } finally {
     globalThis.fetch = realFetch

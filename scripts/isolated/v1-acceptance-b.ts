@@ -85,6 +85,13 @@ const check = (what: string, ok: boolean, detail = ''): boolean => {
   return ok
 }
 const note = (s: string): void => console.log(`       ${s}`)
+// A promise nobody was waiting on that rejects is a defect in the thing under test, not a reason to lose the run.
+process.on('unhandledRejection', (reason) => {
+  check(
+    `no promise was left rejecting with nobody to hear it (${String((reason as Error)?.message ?? reason).slice(0, 120)})`,
+    false,
+  )
+})
 /** What a deterministic fake cannot settle: the line is the claim a real model could still break. */
 const modelDependent = (s: string): void => {
   J.model.push(s)

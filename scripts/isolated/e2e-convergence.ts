@@ -136,12 +136,18 @@ const postVoice = async (
   session: string,
   project: string | null,
   bearer = S_GRANT,
+  message?: string,
 ) => {
   const r = await voiceEdge.call(
     new Request('https://gw.invalid/functions/v1/voice/turn', {
       method: 'POST',
       headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ said, session, ...(project === null ? {} : { project }) }),
+      body: JSON.stringify({
+        said,
+        session,
+        ...(project === null ? {} : { project }),
+        ...(message === undefined ? {} : { message }),
+      }),
     }),
   )
   return { status: r.status, body: (await r.json().catch(() => ({}))) as Record<string, unknown> }
@@ -913,6 +919,87 @@ console.log('\n== H1: durable Team HQ conversation (person + office + project) =
     'H1 dedupe: five simultaneous turns on one visit and one head are five commands',
     nBurst === 5 && results.every((r) => r.status === 200),
     `${String(nBurst)} rows`,
+  )
+
+  // A replayed message is ONE command (journey L), scoped to the person, office and project that sent it.
+  const countSaying = async (said: string) =>
+    Number(
+      (
+        await one(
+          `select count(*)::int as c from public.inbound_commands where instruction = ${lit(said)}`,
+        )
+      ).c,
+    )
+  const sameId = `m${run}shared`
+  const sharedSession = `s${run.slice(-4)}rp`
+  const rp = `replayed ${tag('h1r')}`
+  const r1 = await postVoice(rp, sharedSession, pMine, S_GRANT, sameId)
+  const r2 = await postVoice(rp, sharedSession, pMine, S_GRANT, sameId)
+  check(
+    'H1 replay: the same message id POSTed twice is ONE command and ONE job, with the same acknowledgement',
+    (await countSaying(rp)) === 1 &&
+      r1.status === 200 &&
+      r2.status === 200 &&
+      r1.body.did === 'delegated' &&
+      r2.body.did === 'delegated' &&
+      r1.body.command_id === r2.body.command_id &&
+      r1.body.job_id === r2.body.job_id,
+    `${String(await countSaying(rp))} command(s) ${JSON.stringify([r1.body.command_id, r2.body.command_id])}`,
+  )
+  const rd = `different ids ${tag('h1d')}`
+  await postVoice(rd, sharedSession, pMine, S_GRANT, `m${run}firstmsg`)
+  await postVoice(rd, sharedSession, pMine, S_GRANT, `m${run}secondmsg`)
+  check(
+    'H1 replay: the same words under two DIFFERENT message ids are two commands',
+    (await countSaying(rd)) === 2,
+    String(await countSaying(rd)),
+  )
+  const ro = `other person ${tag('h1o')}`
+  await postVoice(ro, sharedSession, pMine, S_GRANT, sameId)
+  await postVoice(ro, sharedSession, pTheirs, S_OTHER, sameId)
+  check(
+    "H1 replay: ANOTHER PERSON in ANOTHER OFFICE sending the SAME id and visit id is not deduped against mine (two commands, one each)",
+    (await countSaying(ro)) === 2,
+    String(await countSaying(ro)),
+  )
+  const rj = `other project ${tag('h1j')}`
+  await postVoice(rj, sharedSession, pMine, S_GRANT, sameId)
+  await postVoice(rj, sharedSession, pMineTwo, S_GRANT, sameId)
+  check(
+    'H1 replay: the same id into ANOTHER PROJECT is another message',
+    (await countSaying(rj)) === 2,
+    String(await countSaying(rj)),
+  )
+  const rm = `malformed ${tag('h1m')}`
+  for (const bad of ['short', 'has space in it', 'x'.repeat(65), 'semi;colon;colon;', '../../../etc']) {
+    await postVoice(rm, sharedSession, pMine, S_GRANT, bad)
+  }
+  check(
+    'H1 replay: a malformed or absent message id is ignored (each POST is its own turn, as before)',
+    (await countSaying(rm)) === 5,
+    String(await countSaying(rm)),
+  )
+  // the hq `say` writer: same id, same person and project is one command; another PERSON in the SAME office is not deduped
+  const sayText = `said once ${tag('h1s')}`
+  const sayRow = async (office: string, project: string, by: string, id: string | null) =>
+    json(
+      (
+        await one(
+          `select app.say_in_project(${lit(office)}::uuid, ${lit(project)}::uuid, ${lit(sayText)}, null, '{}'::text[], ${lit(by)}${id === null ? '' : `, ${lit(id)}`}) as v`,
+        )
+      ).v,
+    )
+  const s1 = await sayRow(op, pMine, 'grant', sameId)
+  const s2 = await sayRow(op, pMine, 'grant', sameId)
+  const s3 = await sayRow(op, pMine, 'grant-colleague', sameId)
+  check(
+    'H1 replay (say): the same id replayed is one command; the same id from another person in the same office is another',
+    s1.ok === true &&
+      s1.command === s2.command &&
+      s1.job === s2.job &&
+      s2.replayed === true &&
+      s3.command !== s1.command,
+    JSON.stringify([s1.replayed, s2.replayed, s3.replayed]),
   )
 
   for (const id of [qx, qy, q1]) {

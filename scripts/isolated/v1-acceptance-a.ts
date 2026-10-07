@@ -1936,12 +1936,22 @@ const slackPost = async (raw: string, retry = false) => {
   )
   return { status: r.status, body: (await r.json().catch(() => ({}))) as Record<string, unknown> }
 }
-const postVoice = async (said: string, session: string, project: string | null) => {
+const postVoice = async (
+  said: string,
+  session: string,
+  project: string | null,
+  message?: string,
+) => {
   const r = await voiceEdge.call(
     new Request('https://gw.invalid/functions/v1/voice/turn', {
       method: 'POST',
       headers: { Authorization: `Bearer ${S_GRANT}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ said, session, ...(project === null ? {} : { project }) }),
+      body: JSON.stringify({
+        said,
+        session,
+        ...(project === null ? {} : { project }),
+        ...(message === undefined ? {} : { message }),
+      }),
     }),
   )
   return { status: r.status, body: (await r.json().catch(() => ({}))) as Record<string, unknown> }
@@ -2067,8 +2077,10 @@ begin(
 
   // ---- Team HQ: a turn replayed (the page re-sends after a timeout)
   const hqText = 'Add a task to order the banner.'
-  const hq1 = await postVoice(hqText, `va${run.slice(-6)}hq`, slackProject)
-  const hq2 = await postVoice(hqText, `va${run.slice(-6)}hq`, slackProject)
+  // The page names each message once at send time and reuses the name for a replay of that message (chat.js).
+  const hqMessage = `m${run}hqreplay`
+  const hq1 = await postVoice(hqText, `va${run.slice(-6)}hq`, slackProject, hqMessage)
+  const hq2 = await postVoice(hqText, `va${run.slice(-6)}hq`, slackProject, hqMessage)
   await settle()
   const hqCommands = await commandsSaying(hqText)
   const hqJobs = await jobsOfCommandsSaying(hqText)
@@ -2089,10 +2101,25 @@ begin(
   check(
     'HQ replay: ONE logical command and ONE job (an idempotent door)',
     hqCommands === 1 && hqJobs === 1,
-    `${String(hqCommands)} command(s), ${String(hqJobs)} job(s): the door writes a fresh turn id on every POST, so a replay is two turns; only the action is deduplicated`,
+    `${String(hqCommands)} command(s), ${String(hqJobs)} job(s)`,
+  )
+  check(
+    'HQ replay: the second POST answers with the SAME acknowledgement (same job), not an error',
+    hq1.body.did === 'delegated' &&
+      hq2.body.did === 'delegated' &&
+      hq1.body.command_id === hq2.body.command_id &&
+      hq1.body.job_id === hq2.body.job_id,
+    JSON.stringify([hq1.body, hq2.body]).slice(0, 220),
+  )
+  // NEIGHBOUR: the same words as a NEW message (a new name) are a second command - he did say it twice.
+  await postVoice(hqText, `va${run.slice(-6)}hq`, slackProject, `m${run}hqagain`)
+  check(
+    'HQ NEIGHBOUR: the same words sent again as a NEW message (a different message id) are a second command',
+    (await commandsSaying(hqText)) === 2,
+    `${String(await commandsSaying(hqText))} command(s)`,
   )
   const sayText = 'Add a task to print the flyers.'
-  const sayArgs = { p_project_id: slackProject, p_text: sayText }
+  const sayArgs = { p_project_id: slackProject, p_text: sayText, p_message_id: `m${run}sayreplay` }
   await hqAct('say', sayArgs)
   await hqAct('say', sayArgs)
   await settle()

@@ -28,8 +28,8 @@ scheme that no longer exists). This is the structural repair. It changes no prod
    `sudo bash scripts/isolated/replica.sh` (about 90 seconds). Measured: a brand-new cluster, built and gated by the runner alone,
    4 proofs in 95 s.
 3. **The candidate.** `post` is only ever a TEMPLATE; the gate never connects to it to write. It makes `<prefix>_cand` = a clone of
-   `post` plus every migration file in `migrations/` that `post` does not already hold (`post` records what it holds in
-   `public.isolated_replica_migrations` since `replica.sh` was changed; an older `post` is taken to hold everything up to 1026).
+   `post` plus every migration file in `migrations/` that `post` does not already hold (`replica.sh` records what it holds as the
+   comment on `public.isolated_replica_marker`; an older `post` with no such comment is taken to hold everything up to 1026).
    The candidate is rebuilt only when `post` or those files change. A migration that cannot be applied to a copy stops the gate
    and is named: nothing can be said about a branch whose schema does not build.
 4. **One clone per proof.** Each proof runs on its own fresh clone of the candidate (`xargs -P4` style pool, `GATE_JOBS` to change
@@ -121,6 +121,17 @@ the baseline. The "not by" notes are gaps in WHICH proof catches a break, not in
 
 `scripts/gate/sabotage.ts` takes `--only a,b`, `--list`, `--reuse-baseline` and `--no-restore`, so a long list can be split across
 calls that each fit a shell's ten-minute ceiling.
+
+## Measured (7 October 2026, 4 cores, 16 GB)
+
+* Critical tier, 55 proofs, from a replica the runner built itself on a brand-new cluster: 53 green, 2 red, 3,071 assertions
+  passed, **149 s gate + about 30 s to build the replica**. On the existing replica: about 70 s.
+* Both tiers together, 126 proofs: 124 green, 2 red, 4,692 assertions passed, 141 s (after a candidate rebuild with three newer
+  migrations). Per-proof counts are printed live and in `.out/gate/latest.json`.
+* The first from-scratch run found two defects in this tooling and both were fixed: `replica.sh` had recorded what it holds in a new
+  table in `public`, which `check:ownership` and `check:office-edges` correctly refused as an unclassified product table (the list
+  is now the comment on the marker table), and `approval-race.sh` hard-coded the default socket and a `tee /dev/stderr` that fails
+  when stderr is a socket. A gate that has only run on the author's cluster has not been run.
 
 ## Known state at the time of writing
 

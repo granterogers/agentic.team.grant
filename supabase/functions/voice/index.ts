@@ -47,7 +47,7 @@
  * question, and this is the answer to it.
  */
 
-import { conversationHead } from '../../../src/auth/conversation-key.ts'
+import { conversationHead, messageTurn } from '../../../src/auth/conversation-key.ts'
 import { resolveSpeaker, type Speaker } from '../../../src/auth/speaker.ts'
 
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
@@ -287,6 +287,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     session?: unknown
     to?: unknown
     project?: unknown
+    message?: unknown
   }
   const said = typeof body.said === 'string' ? body.said.trim() : ''
   const session = typeof body.session === 'string' ? body.session : ''
@@ -397,7 +398,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
     (found by a concurrency check on #373). Containment (0598) reads only the
     session before the dot, so the turn's shape is free.
   */
-  const turn = `${Date.now().toString(36)}${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
+  /*
+    A message the page NAMED at send time keeps one turn id however many times it is posted (a retry after a timeout
+    is the same message, so one command and one job). The id is hashed with the verified office, speaker and project,
+    so it cannot dedupe against anybody else's, and an absent or malformed id falls back to a fresh turn per POST,
+    which is what older pages get. Two different messages carry different ids and are two turns.
+  */
+  const named = await messageTurn({ office, actor: speaker.actor, project, message: body.message })
+  const turn =
+    named ?? `${Date.now().toString(36)}${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
   /*
     The CONVERSATION is the thread the page showed, and it stays that thread
     even when the office cannot file the turn under its project. A stale tab
@@ -497,7 +506,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json({ error: 'could not record what you said' }, 503)
   }
   const rows = (await attempt.json().catch(() => [])) as { command_id?: string }[]
-  const commandId = rows[0]?.command_id
+  let commandId = rows[0]?.command_id
+  if (commandId === undefined && named !== null) {
+    /*
+      A replay of a message the page named: `ignore-duplicates` returned no row because the first POST already filed
+      it. Answer with that command (this office's only: the key carries the office) so the page gets the same
+      acknowledgement shape, not an error. Everything below is idempotent for a command already turned into work.
+    */
+    const found = await fetch(
+      `${DB_URL}/rest/v1/inbound_commands?select=command_id&dedupe_key=eq.${encodeURIComponent(`voice:turn:${session}.${turn}`)}&office_id=eq.${encodeURIComponent(office)}`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+    ).catch(() => null)
+    const prior = (await found?.json().catch(() => [])) as { command_id?: string }[] | undefined
+    commandId = prior?.[0]?.command_id
+  }
   if (commandId === undefined) return json({ error: 'could not record what you said' }, 503)
 
   // 2. Ask the canonical layer whether this is answerable. The decision is

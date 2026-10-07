@@ -50,6 +50,37 @@ export const durableHead = async (office: string, actor: string): Promise<string
   return `hq${hex(bytes).slice(0, 32)}`
 }
 
+/** A page-minted message id: bounded and plain, so it can be neither a long payload nor anything that needs escaping. */
+export const MESSAGE_ID = /^[A-Za-z0-9_-]{8,64}$/
+
+/**
+ * The per-turn part of the dedupe key and `origin_ref`, for a message the page NAMED at send time. The same message
+ * replayed (a retry after a timeout) names itself again and so maps to the same turn; a different message has a
+ * different id and so a different turn. The hash carries office, speaker and project, so the same id from another
+ * person, another office or into another project is another turn and can never dedupe against this one.
+ *
+ * Returns null when the id is absent or malformed: the caller then mints a fresh turn id (old pages keep working).
+ * 24 lower-case hex characters, which is inside the `[a-z0-9]+` the dashboard door's key shape allows.
+ */
+export const messageTurn = async (input: {
+  readonly office: string
+  readonly actor: string
+  readonly project: string | null
+  readonly message: unknown
+}): Promise<string | null> => {
+  if (typeof input.message !== 'string' || !MESSAGE_ID.test(input.message)) return null
+  if (input.office === '' || input.actor === '') return null
+  const bytes = new Uint8Array(
+    await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(
+        `hq-message\n${input.office.toLowerCase()}\n${input.actor}\n${input.project ?? ''}\n${input.message}`,
+      ),
+    ),
+  )
+  return hex(bytes).slice(0, 24)
+}
+
 /**
  * The first segment of `origin_ref` (everything before the turn id): the conversation head, with `/<project>` when the
  * page names a project. Never contains a colon.
