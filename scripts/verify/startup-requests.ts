@@ -74,7 +74,15 @@ const server = createServer(async (rq, rs) => {
   rs.end(await readFile(f))
 })
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()))
-const origin = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}/`
+const localOrigin = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}/`
+// STARTUP_BASE_URL runs the same scenarios against a DEPLOYED page (a Vercel preview): the page's own files come from there, the
+// gateway is still the fake below, and every request toward Supabase is blocked and counted, so it cannot reach an office.
+const remote = (process.env.STARTUP_BASE_URL ?? '').trim()
+const origin = remote === '' ? localOrigin : `${remote.replace(/\/+$/, '')}/`
+// The fake gateway must match the page's scheme: an https page may not call an http address (mixed content is blocked).
+const GATEWAY = remote.startsWith('https:') ? 'https://office.test' : 'http://office.test'
+const reachedSupabase: string[] = []
+console.log(`page under test: ${remote === '' ? 'the local studio files' : origin}`)
 
 const browser = await chromium.launch()
 const problems: string[] = []
@@ -120,10 +128,15 @@ async function open(
       : { viewport: { width: 1440, height: 900 } },
   )
   const page = await ctx.newPage()
+  // Nothing here may reach a real office: a page that ignored the window.HQ_API seam would call its generated config's address.
+  await page.route(/supabase\.co/, (route) => {
+    reachedSupabase.push(route.request().url().split('?')[0] ?? '')
+    return route.abort()
+  })
   await page.clock.install()
   const log: string[] = []
   let exists = office
-  await page.route('http://office.test/**', async (route) => {
+  await page.route(`${GATEWAY}/**`, async (route) => {
     const req = route.request()
     const cors = {
       'access-control-allow-origin': '*',
@@ -173,7 +186,7 @@ async function open(
   // has one (the office key is Grant's legacy path, and it cannot create an office). Far from expiry on the page's own
   // clock, so the harness's fake clock never makes it refresh.
   await page.addInitScript(`
-    window.HQ_API = 'http://office.test/hq-api'
+    window.HQ_API = '${GATEWAY}/hq-api'
     try {
       localStorage.setItem('hq.session', JSON.stringify({
         access_token: 'local-test-session',
@@ -353,6 +366,12 @@ try {
   await browser.close()
   server.close()
 }
+check(
+  reachedSupabase.length === 0,
+  `no request left the page for Supabase (${String(reachedSupabase.length)} blocked${
+    reachedSupabase.length === 0 ? '' : `: ${[...new Set(reachedSupabase)].join(', ')}`
+  })`,
+)
 
 console.log(
   problems.length === 0
