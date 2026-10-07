@@ -50,6 +50,19 @@ now makes them 60 days old. The budget still refuses an unseeded replica (`post`
 Budget: PASS on the candidate with 1024; a copy without 1031 fails `unseen` (155k > 6,000). Scenarios on main vs the candidate: one visible tab
 per minute 3.17M to 0.21M (-93.3%); a page load 4.05M to 1.20M (-70.4%; -60.0% without 1024); idle 2.0k to 298 a minute (-85.2%).
 
+## Freeze pass (7 October 2026, same day, 1024 included)
+
+Selected set, applied in order on a replica rebuilt from scratch on main's chain: **1023, 1024, 1025, 1027, 1028, 1029, 1030, 1031**, plus the
+non-migration changes. Whole scenarios, settled baseline against the candidate (MEASURED ON A LOCAL REPLICA): one visible tab per minute 2.53M to
+0.213M buffers (-91.6%); a page load 3.81M to 1.18M (-69.2%); three tabs per minute 7.58M to 0.64M (-91.6%); idle worker pass 2.4k to 304 (-87.5%).
+All six equivalence proofs pass (44 of 44 dequeue cases), and each sabotage goes red and is restored.
+
+Two replica artifacts were found and fixed in the SEED, neither a candidate regression (the unmodified baseline shows both): a never-run daily
+duty (07:00 briefing) fired by the first pass after the clock passed its anchor, and planner statistics that were stale on a copy that had been
+written to (`provision_missing_channels` 558 buffers on one copy, 106 on its twin, 120 after `analyze`). The budget protocol is now stated in
+`resource-budget.json`: judge a replica that has already run one probe pass (a never-probed replica reads `worker.dispatch_due` at 36 statements
+against a ceiling of 8, on the baseline as much as the candidate).
+
 ## Hold (not revived)
 
 1026 (saving not reproduced), `model_order` caching, `shared_buffers`, compute or plan changes, deleting anything on Vercel, index changes,

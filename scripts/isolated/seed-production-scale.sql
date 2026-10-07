@@ -177,9 +177,18 @@ select 'bloat rounds: ' || :bloat as note;
 select 'update public.jobs set updated_at = updated_at + interval ''1 second'' where pinned_config ->> ''router'' = ''seed''' from generate_series(1, :bloat) \gexec
 commit;
 
+-- Production's duties have all run recently. A fresh replica's have not, so the first pass after seeding fires every due duty (and a
+-- daily one with a clock time, such as the 07:00 briefing, once the clock is past it): a one-off 7,700 statements and 57k buffers that
+-- a measured idle pass must not include. Found by the freeze pass, when the budget read 58k for an unmodified database.
+update public.responsibilities set last_run_at = now() where last_run_at is null;
+
 vacuum (analyze) public.jobs;
 vacuum (analyze) public.job_state_transitions, public.outputs, public.inference_usage, public.routing_decisions,
                  public.deliveries, public.inbound_commands, public.projects;
+
+-- Planner statistics for every table a measured path reads. Without this a copy of the seeded database that is then written to can
+-- flip a plan (provision_missing_channels read 558 buffers on one copy and 106 on its twin, with identical rows).
+analyze;
 
 select 'jobs' rel, (select count(*) from public.jobs) n, pg_size_pretty(pg_relation_size('public.jobs')) heap,
        pg_size_pretty(pg_indexes_size('public.jobs')) indexes, pg_size_pretty(pg_total_relation_size('public.jobs')) total
