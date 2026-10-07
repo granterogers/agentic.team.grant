@@ -9,7 +9,13 @@
  * `scripts/isolated/e2e-convergence.ts` (the reload section).
  */
 import { describe, expect, it, vi } from 'vitest'
-import { conversationHead, durableHead, PAGE_SESSION } from '../../src/auth/conversation-key.ts'
+import {
+  conversationHead,
+  durableHead,
+  MESSAGE_ID,
+  messageTurn,
+  PAGE_SESSION,
+} from '../../src/auth/conversation-key.ts'
 
 const OFFICE_A = '11111111-1111-4111-8111-111111111111'
 const OFFICE_B = '22222222-2222-4222-8222-222222222222'
@@ -256,5 +262,90 @@ describe('the real /voice/turn door writes the durable conversation into origin_
     expect(headOf(harness as Posted)).toBe(`verify-h1run/${PROJ_1}`)
     expect(headOf(harness as Posted)).not.toBe(headOf(real as Posted))
     expect((harness as Posted).dedupe_key.startsWith('voice:turn:verify-h1run.')).toBe(true)
+  })
+})
+
+describe('a replayed message is ONE command (message id)', () => {
+  const turn = (o: Partial<Parameters<typeof messageTurn>[0]> = {}) =>
+    messageTurn({ office: OFFICE_A, actor: 'grant', project: PROJ_1, message: 'mabcdef1234', ...o })
+
+  it('is the same turn for the same message and a different turn for anything else', async () => {
+    const base = await turn()
+    expect(base).toMatch(/^[a-f0-9]{24}$/)
+    expect(await turn()).toBe(base)
+    expect(await turn({ message: 'mabcdef1235' })).not.toBe(base)
+    expect(await turn({ actor: 'sam' })).not.toBe(base)
+    expect(await turn({ office: OFFICE_B })).not.toBe(base)
+    expect(await turn({ project: PROJ_2 })).not.toBe(base)
+    expect(await turn({ project: null })).not.toBe(base)
+  })
+
+  it('ignores an absent or malformed id (old pages keep working)', async () => {
+    for (const message of [
+      undefined,
+      null,
+      42,
+      '',
+      'short',
+      'has space here',
+      'x'.repeat(65),
+      'a;b;c;d;e;f;',
+      '../../../x',
+    ]) {
+      if (typeof message === 'string') expect(MESSAGE_ID.test(message)).toBe(false)
+      expect(await turn({ message })).toBeNull()
+    }
+  })
+
+  it('the real door: the same id twice is one stored command and the SAME acknowledgement', async () => {
+    const posted = await driveVoice([
+      { token: TOKEN_A, session: 's1abc2def3', project: PROJ_1, message: 'mreplay00001' },
+      { token: TOKEN_A, session: 's1abc2def3', project: PROJ_1, message: 'mreplay00001' },
+    ])
+    expect(posted.length).toBe(1)
+    const [a, b] = lastResponses
+    expect(a?.did).toBe('delegated')
+    expect(b?.did).toBe('delegated')
+    expect(b?.command_id).toBe(a?.command_id)
+    expect(b?.job_id).toBe(a?.job_id)
+    // the key keeps the dashboard shape the harness rule and adapter_key_ok recognise
+    expect((posted[0] as Posted).dedupe_key).toMatch(/^voice:turn:s[a-z0-9]{1,10}\.[a-z0-9]+$/)
+  })
+
+  it('different ids are two commands; no id is a fresh turn per POST', async () => {
+    expect(
+      (
+        await driveVoice([
+          { token: TOKEN_A, session: 's1abc2def3', project: PROJ_1, message: 'mfirstmsg01' },
+          { token: TOKEN_A, session: 's1abc2def3', project: PROJ_1, message: 'msecondmsg2' },
+        ])
+      ).length,
+    ).toBe(2)
+    expect(
+      (
+        await driveVoice([
+          { token: TOKEN_A, session: 's1abc2def3', project: PROJ_1 },
+          { token: TOKEN_A, session: 's1abc2def3', project: PROJ_1 },
+        ])
+      ).length,
+    ).toBe(2)
+    expect(
+      (
+        await driveVoice([
+          { token: TOKEN_A, session: 's1abc2def3', project: PROJ_1, message: 'x'.repeat(65) },
+          { token: TOKEN_A, session: 's1abc2def3', project: PROJ_1, message: 'x'.repeat(65) },
+        ])
+      ).length,
+    ).toBe(2)
+  })
+
+  it('another person or office sending the SAME id and visit id is not deduped against yours', async () => {
+    const posted = await driveVoice([
+      { token: TOKEN_A, session: 's1abc2def3', project: PROJ_1, message: 'mshared0001' },
+      { token: TOKEN_C, session: 's1abc2def3', project: PROJ_1, message: 'mshared0001' },
+      { token: TOKEN_B, session: 's1abc2def3', project: PROJ_1, message: 'mshared0001' },
+    ])
+    expect(posted.length).toBe(3)
+    expect(new Set(posted.map((p) => p.dedupe_key)).size).toBe(3)
   })
 })

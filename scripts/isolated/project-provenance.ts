@@ -9,6 +9,7 @@
  * from the rows, never from a reply's wording. Invariants are numbered as in
  * `docs/design/373-project-provenance.md`.
  */
+import { durableHead } from '../../src/auth/conversation-key.ts'
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import { raiseBlocker } from '../../src/inference/record.ts'
 import type { Job } from '../../src/jobs/worker.ts'
@@ -61,6 +62,13 @@ const sent = async (body: Record<string, unknown>) => {
       left join public.jobs j on j.job_id = ${jobId === '' ? 'null' : `${lit(jobId)}::uuid`}
      where c.command_id = ${lit(String(r.body.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid`)
   return { status: r.status, reply: r.body, ...row } as Record<string, unknown> & { status: number }
+}
+/** The durable conversation head the door derived for the person who sent this command (office + actor). */
+const durableOf = async (command: string): Promise<string> => {
+  const c = await one(
+    `select office_id::text as o, actor from public.inbound_commands where command_id = ${lit(command)}::uuid`,
+  )
+  return await durableHead(String(c.o), String(c.actor))
 }
 const name = (id: unknown) =>
   id === A ? 'A' : id === B ? 'B' : id === UNNAMED ? 'Unnamed' : String(id)
@@ -187,9 +195,16 @@ const name = (id: unknown) =>
   const ghostTalk =
     await one(`select split_part(origin_ref, ':', 1) as t from public.inbound_commands
     where command_id = ${lit(String(ghost.command))}::uuid`)
+  // The conversation head is the person's durable one (H1), not the visit's session: the property is that the ghost
+  // project's thread is the head plus its own project, and the no-project conversation is the bare head, which a
+  // turn on an unknown project must never join.
+  const head = await durableOf(String(ghost.command))
   check(
-    "6. and it stays in its own thread, never the visit's no-project conversation",
-    ghostTalk.t === `${s}/00000000-0000-4000-8000-000000000373` && loose.talk === s,
+    '6. and it stays in its own thread, never the no-project conversation',
+    ghostTalk.t === `${head}/00000000-0000-4000-8000-000000000373` &&
+      loose.talk === head &&
+      ghostTalk.t !== loose.talk &&
+      !String(ghostTalk.t).startsWith(s),
     `${String(ghostTalk.t)} vs ${String(loose.talk)}`,
   )
   check(
@@ -271,13 +286,26 @@ const name = (id: unknown) =>
       sent({ said: `Please draft concurrent note ${String(i)} ${run}`, session: s, project: p }),
     ),
   )
+  // One durable head for the person (H1), then the project: six concurrent turns on ONE head must still each be
+  // stated, resolved and threaded as their own project, and never as the other's.
+  const head = await durableOf(String(burst[0]?.command))
   const wrong = burst.filter(
-    (r, i) => r.project !== (i % 2 === 0 ? A : B) || r.talk !== `${s}/${i % 2 === 0 ? A : B}`,
+    (r, i) =>
+      r.stated !== (i % 2 === 0 ? A : B) ||
+      r.project !== (i % 2 === 0 ? A : B) ||
+      r.talk !== `${head}/${i % 2 === 0 ? A : B}`,
   )
   check(
     '3b. six concurrent turns alternating A and B each resolve and converse where stated',
     burst.length === 6 && wrong.length === 0,
     burst.map((r) => name(r.project)).join(' '),
+  )
+  check(
+    '3b. (control) six DISTINCT commands, one per turn, in two project threads on one head',
+    new Set(burst.map((r) => r.command)).size === 6 &&
+      new Set(burst.map((r) => r.talk)).size === 2 &&
+      burst.every((r) => String(r.talk).startsWith(`${head}/`)),
+    burst.map((r) => name(String(r.talk).split('/')[1])).join(' '),
   )
 }
 
