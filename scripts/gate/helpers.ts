@@ -32,4 +32,5 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
   { stem: 'dump-memory-probe', role: 'one table dumped in a fresh process, called by backup-restore-typed' },
   { stem: 'run-all', role: 'the old runner, now a shim that calls the gate runner' },
   { stem: 'README', role: 'documentation' },
+  { stem: 'quarantine/README', role: 'why each quarantined proof is quarantined, and what replaced it' },
 ]

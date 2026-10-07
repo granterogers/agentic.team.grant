@@ -670,24 +670,37 @@ export function personalTaskRequest(
     has read it, so its words leave the title the way "on Friday" does; the
     reader that resolves it is the one that says which words they were.
   */
-  const written = rec === null ? calendarDateIn(asked, now, timeZone) : undefined
+  /*
+    A repeat the office cannot keep is neither a date nor part of the work: the
+    weekday inside "every first Monday" must not become a due date, and its
+    words must not mangle the title ("Every first to run the report"). So it is
+    read out of the text the dates come from, and put back on the END of the
+    title in brackets, where he can read what he asked for and the reply says
+    it was not recorded.
+  */
+  const unsaid = (text: string): string =>
+    unsupported === null ? text : text.replace(unsupported, ' ').replace(/\s{2,}/g, ' ')
+  const dateSaid = unsaid(said)
+  const askedSans = unsaid(asked)
+  const written = rec === null ? calendarDateIn(askedSans, now, timeZone) : undefined
   const escaped = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const titled =
     rec !== null
       ? withoutTheRepeat(asked, rec)
       : written
-        ? asked.replace(
+        ? askedSans.replace(
             new RegExp(`(?:\\b(?:on|by|before|until|for)\\s+)?${escaped(written.from)}`, 'i'),
             ' ',
           )
-        : asked
-  const title = stripFraming(titled.replace(/^(?:also|and|then|plus)[,\s]+/i, ''))
+        : askedSans
+  const base = stripFraming(titled.replace(/^(?:also|and|then|plus)[,\s]+/i, ''))
+  const title = unsupported === null || base.length < 3 ? base : `${base} (${unsupported})`
   /*
     A title of nothing is not a task. "Remind me" on its own is a sentence with
     no work in it, and filing an empty row would be the placeholder this
     repository keeps refusing to ship — CLAUDE.md's card with nothing in it.
   */
-  if (title.length < 3) return null
+  if (base.length < 3) return null
 
   /*
     The time, when he said one (ledger R24), and the day it lands on when he
@@ -709,8 +722,8 @@ export function personalTaskRequest(
       repeatUnsupported: null,
     }
   }
-  const day = whenFor(said, now, timeZone)
-  let remindAt = remindAtFor(said, day, now, timeZone)
+  const day = whenFor(dateSaid, now, timeZone)
+  let remindAt = remindAtFor(dateSaid, day, now, timeZone)
   /*
     R1. "Remind me on Friday to ring the venue" gave a due date and no remind_at,
     so the duty that sends reminders had nothing to read and the reminder he

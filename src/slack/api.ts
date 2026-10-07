@@ -24,6 +24,8 @@
  * The token never appears in an error message, a log line or a thrown value.
  */
 
+import { failedBeforeSending } from '../channels/network-failure.ts'
+
 export interface SlackApiResponse {
   readonly ok: boolean
   readonly error?: string
@@ -231,6 +233,9 @@ export class SlackClient {
           waits += 1
           await this.sleep(250 * waits)
           continue
+        }
+        if (!idempotent && failedBeforeSending(error)) {
+          throw new SlackApiError(`network_before_send:${detail}`, 'retryable', method)
         }
         throw new SlackApiError(
           idempotent ? `network_error:${detail}` : `indeterminate:${detail}`,

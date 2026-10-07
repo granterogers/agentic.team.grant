@@ -577,6 +577,135 @@ for (const [label, err] of [
   )
 }
 
+// ---- 10. network failures through the REAL Telegram client and transport, with a scripted fetch -----------------
+{
+  const fetchCalls: string[] = []
+  let acceptedMessages = 0
+  const plan: (() => Response | never)[] = []
+  const okResponse = () => {
+    acceptedMessages += 1
+    return new Response(JSON.stringify({ ok: true, result: { message_id: acceptedMessages } }))
+  }
+  const fetchImpl = (async (url: string) => {
+    fetchCalls.push(String(url))
+    const step = plan.shift()
+    return step === undefined ? okResponse() : step()
+  }) as unknown as typeof fetch
+  const failWith = (code: string) => () => {
+    throw Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error(code), { code }),
+    })
+  }
+  // The provider accepted it, then the connection died before the answer arrived.
+  const acceptThenReset = () => {
+    acceptedMessages += 1
+    throw Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('ECONNRESET'), { code: 'ECONNRESET' }),
+    })
+  }
+  const { TelegramClient } = await import('../../src/telegram/api.ts')
+  const { TelegramTransport } = await import('../../src/telegram/transport.ts')
+  const realService = new DeliveryService(
+    db,
+    new TelegramTransport(
+      new TelegramClient('1:FAKE', { fetchImpl, sleep: async () => undefined }),
+    ),
+  )
+  const realNotify = combinedNotifier(
+    [
+      {
+        name: 'real-transport',
+        surface: 'telegram',
+        notify: async (job: Job, output: HandlerOutput) => {
+          const r = await realService.deliver({
+            dedupeKey: deliveryKey(job, output, 'reply'),
+            accountRef: '8967954396',
+            targetRef: CHAT,
+            purpose: 'result',
+            correlationId: job.correlationId,
+            jobId: job.jobId,
+            body: { text: output.body },
+          })
+          return { delivered: r.outcome === 'sent', note: `real: ${r.outcome}` }
+        },
+      },
+    ],
+    db,
+  )
+  const realTick = () => drain(db, 'dl', handlers, review, 25, { notify: realNotify })
+
+  // 10a. Connect-phase failures: definitely not sent, retried once per backoff step, then delivered exactly once.
+  plan.push(failWith('ECONNREFUSED'), failWith('ENOTFOUND'))
+  const j = await make()
+  await runJob(db, j, handlers, review, realNotify)
+  const a1 = (await rowsOf(j.jobId))[0]
+  check(
+    '10a a connect-phase failure leaves the answer owed (retryable, no intent), not parked',
+    a1?.state === 'claimed' &&
+      String(a1.error_code).startsWith('network_before_send:') &&
+      !a1.intent &&
+      fetchCalls.length === 1,
+    `${a1?.state} ${a1?.error_code} fetches ${String(fetchCalls.length)}`,
+  )
+  await realTick()
+  check(
+    '10b not retried while the backoff runs',
+    fetchCalls.length === 1,
+    `fetches ${String(fetchCalls.length)}`,
+  )
+  await lapse(j.jobId)
+  await realTick()
+  const a2 = (await rowsOf(j.jobId))[0]
+  check(
+    '10c one retry per backoff step: second failure, still owed, longer wait, exactly 2 fetches',
+    a2?.state === 'claimed' && fetchCalls.length === 2 && a2.lease_in > 40,
+    `${a2?.state} attempt ${String(a2?.attempt)} wait ${String(a2?.lease_in)}s fetches ${String(fetchCalls.length)}`,
+  )
+  await lapse(j.jobId)
+  await realTick()
+  await realTick()
+  const a3 = (await rowsOf(j.jobId))[0]
+  check(
+    '10d then delivered exactly once: sent, 3 fetches, 1 accepted message, never duplicated',
+    a3?.state === 'sent' && fetchCalls.length === 3 && acceptedMessages === 1,
+    `${a3?.state} fetches ${String(fetchCalls.length)} accepted ${String(acceptedMessages)}`,
+  )
+
+  // 10e. The provider accepted it and the response was lost: stays indeterminate, never resent.
+  fetchCalls.length = 0
+  acceptedMessages = 0
+  plan.push(acceptThenReset)
+  const k = await make()
+  await runJob(db, k, handlers, review, realNotify)
+  await lapse(k.jobId)
+  await realTick()
+  await realTick()
+  const e1 = (await rowsOf(k.jobId))[0]
+  check(
+    '10e a connection reset after the request was sent is parked indeterminate and NEVER resent (no duplicate)',
+    e1?.state === 'failed' &&
+      String(e1.error_code).startsWith('indeterminate:') &&
+      fetchCalls.length === 1 &&
+      acceptedMessages === 1 &&
+      (await undelivered(k.jobId)).length === 1,
+    `${e1?.state} ${e1?.error_code} fetches ${String(fetchCalls.length)} accepted ${String(acceptedMessages)}`,
+  )
+
+  // 10f. A read timeout (no code, or ETIMEDOUT) is not provable either.
+  fetchCalls.length = 0
+  plan.push(failWith('ETIMEDOUT'))
+  const m = await make()
+  await runJob(db, m, handlers, review, realNotify)
+  await lapse(m.jobId)
+  await realTick()
+  const f1 = (await rowsOf(m.jobId))[0]
+  check(
+    '10f a timeout that may have followed the write is parked indeterminate, one fetch',
+    f1?.state === 'failed' && fetchCalls.length === 1,
+    `${f1?.state} ${f1?.error_code} fetches ${String(fetchCalls.length)}`,
+  )
+}
+
 const failed = results.filter((r) => !r.ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
 await db.end()

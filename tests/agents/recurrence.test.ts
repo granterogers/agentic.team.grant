@@ -135,7 +135,20 @@ describe('personalTaskRequest: the first occurrence is on the office wall clock'
     const got = personalTaskRequest('Remind me every month to pay rent.', WED, ATHENS)
     expect(got?.repeat ?? null).toBeNull()
     expect(got?.repeatUnsupported).toBe('every month')
-    expect(got?.title.toLowerCase()).toContain('every month')
+    expect(got?.title).toBe('Pay rent (every month)')
+  })
+
+  it('the weekday inside an unsupported repeat is NOT a due date, and the title is not mangled', () => {
+    const got = personalTaskRequest('Remind me every first Monday to run the report.', WED, ATHENS)
+    expect(got?.repeatUnsupported).toBe('every first Monday')
+    expect(got?.title).toBe('Run the report (every first Monday)')
+    expect(got?.due ?? null).toBeNull()
+    expect(got?.remindAt ?? null).toBeNull()
+    // ...but a day he named OUTSIDE the unsupported phrase still counts.
+    const dated = personalTaskRequest('Remind me on Friday to pay rent every month.', WED, ATHENS)
+    expect(dated?.due).toBe('2026-10-09')
+    expect(dated?.repeatUnsupported).toBe('every month')
+    expect(dated?.title).toBe('Pay rent (every month)')
   })
 
   it('a message without any repeat reads exactly as before', () => {

@@ -94,7 +94,9 @@ const studioArr = (await one(`select app.studio_tasks(${lit(p1)}::uuid) as v`)).
 void studio
 check('the project view (studio_tasks) shows BOTH, marked mine/not mine', studioArr.some((t) => t.title === `Team A ${run}` && t.mine === false) && studioArr.some((t) => t.title === `Mine A ${run}` && t.mine === true), `${studioArr.length} rows`)
 const tz = String((await one(`select app.grant_timezone() as z`)).z)
-observed('timezone split', `studio_tasks buckets "due soon" in app.grant_timezone()=${tz}; my_tasks buckets today/overdue in UTC (read from the function bodies)`)
+// 1027 (Z1): one clock. studio_tasks, my_tasks, my_tasks_counts and reminders_due all bucket in app.office_timezone(office);
+// scripts/isolated/tk-reminders.ts proves that on two zones a day apart. grant_timezone() is now only the legacy setting.
+observed('timezone', `office zone ${String((await one(`select app.office_timezone(${O}) as z`)).z)} (legacy app.grant_timezone()=${tz})`)
 const delTeam = json((await one(`select app.my_task_delete(${O}, ${lit(String(teamA.id))}) as v`)).v)
 check("the personal delete door refuses the team's task", delTeam.ok === false, JSON.stringify(delTeam))
 const setTeam = json((await one(`select app.my_task_set(${O}, ${lit(String(teamA.id))}, null, null, null, null, null, ${lit(`Renamed by my_task_set ${run}`)}) as v`)).v)

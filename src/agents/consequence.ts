@@ -460,6 +460,7 @@ export async function loadConsequenceEvidence(
 ): Promise<ConsequenceEvidence | undefined> {
   if (!/^[0-9a-f-]{36}$/i.test(jobId)) return undefined
   try {
+    // raw-sql[2]: keyed by the claimed job; it reads the rows recorded under that job's own tree, and the roster and one switch.
     const r = await db.execute(`
       with recursive up as (
         select job_id, parent_job_id from public.jobs where job_id = '${jobId}'::uuid
