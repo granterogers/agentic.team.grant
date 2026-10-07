@@ -14,18 +14,25 @@ import { describe, expect, it } from 'vitest'
 const app = readFileSync(new URL('../../web/studio/app.js', import.meta.url), 'utf8')
 
 describe('lazy Settings reads stay honest', () => {
-  it('forgets a failed settings read, so opening Settings again asks again', () => {
+  it('forgets a failed settings read only when a person opens Settings, never on a redraw', () => {
     const fn = app.slice(
-      app.indexOf('function needSettings()'),
+      app.indexOf('function needSettings('),
       app.indexOf('async function needLately()'),
     )
+    // the retry is conditional on the caller saying a person is opening the sheet ...
     expect(fn).toContain(
-      "if (settingsAsked !== null && config.settingsSource.state === 'failed') settingsAsked = null",
+      "if (retry && settingsAsked !== null && config.settingsSource.state === 'failed') settingsAsked = null",
     )
-    // and it is decided BEFORE the memoised promise is returned
+    // ... decided BEFORE the memoised promise is returned
     expect(fn.indexOf("state === 'failed'")).toBeLessThan(
       fn.indexOf('if (settingsAsked !== null || !canWrite())'),
     )
+    // The read's completion redraws the sheet, so an unconditional retry is a request loop (329 reads of each of six sections
+    // in the startup harness while the office could not answer). Only the open path may pass true: the sheet is hidden exactly
+    // when it is being opened, and Sources (a redraw of the page) passes nothing.
+    expect(app).toContain('void needSettings(v.hidden)')
+    expect(app).toContain('  void needSettings()\n  const list = p.sources')
+    expect(app).not.toMatch(/needSettings\(true\)/)
   })
 
   it('does not draw the invented Cost card for a signed-in person until usage has answered', () => {

@@ -7026,8 +7026,9 @@ function importSheet(p) {
 
 function settingsSheet() {
   const v = $('#settings')
-  // Opening Settings is what asks the office for it (see needSettings); the draw below says so until it answers.
-  void needSettings()
+  // Opening Settings is what asks the office for it (see needSettings); the draw below says so until it answers. The sheet is
+  // hidden exactly when a person is opening it; a redraw while it is showing must not retry a failed read.
+  void needSettings(v.hidden)
   // An old id (governance, setup) resolves to the tab that now holds what it held.
   state.setting = config.tabId(state.setting)
   const tabs = config.TABS
@@ -15052,10 +15053,11 @@ async function needTasks() {
   Once asked, `refresh` keeps them current as it always did (see below), so a person who has opened Settings sees the same
   freshness as before. A person who never does costs the office none of the ten reads.
 */
-function needSettings() {
-  // A read that failed is asked again the next time something needs it: the pane says to close it and open it again, and a
-  // memoised settled promise would make that a promise nothing keeps.
-  if (settingsAsked !== null && config.settingsSource.state === 'failed') settingsAsked = null
+function needSettings(retry = false) {
+  // A read that failed is asked again when a PERSON opens Settings (the pane says to close it and open it again), and only
+  // then. It must never be asked again by a redraw: the read's own completion redraws, so a retry on every call is a loop that
+  // sends the six reads again and again for as long as the office cannot answer, which is when it can least afford them.
+  if (retry && settingsAsked !== null && config.settingsSource.state === 'failed') settingsAsked = null
   if (settingsAsked !== null || !canWrite()) return settingsAsked
   settingsAsked = Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
     render()

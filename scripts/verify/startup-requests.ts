@@ -259,6 +259,20 @@ try {
     })`,
   )
 
+  // The fake gateway answers every Settings section with an empty payload, which the page cannot use, so the reads above FAILED.
+  // A failed read is asked again only when a person closes Settings and opens it again (the pane says to), and never by a redraw:
+  // the read's own completion redraws, so a retry on every call would send the six reads again and again while the office
+  // cannot answer them (329 of each in a first draft of the retry). Waiting a while with the sheet open must send nothing.
+  // (The reopen path is pinned by tests/web/lazy-settings-honesty.test.ts over the wired expressions; this harness has no
+  // project, so it draws no rail to press, and driving the command bar for it was not worth what it adds.)
+  const quiet = s.log.length
+  await visibleMinute(s.page)
+  const retriedAlone = s.log.slice(quiet).filter((x) => x !== 'pulse' && x !== 'thinking')
+  check(
+    retriedAlone.length === 0,
+    `a failed Settings read does not retry by itself over a visible minute (saw ${show(retriedAlone) || 'nothing'})`,
+  )
+
   // ---- 2. signed in, no office ----------------------------------------------------------------------------------------
   console.log('2. signed in, no office yet')
   const b = await open(false)
