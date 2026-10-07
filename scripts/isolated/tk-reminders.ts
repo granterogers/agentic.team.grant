@@ -8,7 +8,7 @@
  * sentences is MODEL-DEPENDENT and not claimed. The operator office's `timezone` is changed on the CLONE to put the same
  * sentence at the same instant in three zones; the database is dropped by the caller.
  */
-import { localDay, wallClock } from '../../src/agents/office-time.ts'
+import { localDay, wallClock, weekdayOf } from '../../src/agents/office-time.ts'
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import { remindersHandler } from '../../src/handlers/reminders.ts'
 import type { Job } from '../../src/jobs/worker.ts'
@@ -62,10 +62,8 @@ const handler = instructionHandler({
   now: () => at,
 })
 let n = 0
-const say = async (
-  said: string,
-  chat = 'r',
-): Promise<{ body: string; job: Job; jobId: string }> => {
+/** A turn's command and job, NOT run. Also how a duty job is made: only its job row is needed. */
+const enqueue = async (said: string, chat = 'r'): Promise<Job> => {
   n += 1
   const c = await one(`set local application_name = 'PostgREST 14.5';
     insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, context)
@@ -85,8 +83,74 @@ const say = async (
     attempt: 1,
     officeId: String(j.o),
   } as Job
+  return job
+}
+const say = async (
+  said: string,
+  chat = 'r',
+): Promise<{ body: string; job: Job; jobId: string }> => {
+  const job = await enqueue(said, chat)
   const out = await handler.handle(job, db)
-  return { body: String((out as { body?: string }).body ?? ''), job, jobId }
+  return { body: String((out as { body?: string }).body ?? ''), job, jobId: job.jobId }
+}
+/** One run of the tasks.remind duty, as a job of its own. */
+const tick = async (job?: Job) => {
+  const j = job ?? (await enqueue('tick'))
+  const out = await remindersHandler(db).handle({ ...j, kind: 'tasks.remind' }, db)
+  return { out, job: j }
+}
+/** What the delivery layer would have recorded for the message a job owed (1029's table, written as it writes it). */
+const deliver = async (jobId: string, state: 'sent' | 'failed' | 'claimed') => {
+  await db.execute(
+    `insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, attempt, lease_expires_at, message_ref, sent_at, error_code)
+     values (${O}, 'telegram', ${lit(`tkr${run}:${jobId}:${state}:${String(Math.random())}`)}, '8967954396', '1386648496', 'result', ${lit(jobId)}::uuid, ${lit(state)}::slack_delivery_state, 1, now() + interval '2 minutes',
+       ${state === 'sent' ? "'m-1'" : 'null'}, ${state === 'sent' ? 'now()' : 'null'}, ${state === 'failed' ? "'chat_not_found'" : 'null'})`,
+  )
+}
+/** The row, as the duty sees it. */
+const stateOf = async (id: string) =>
+  (
+    await rows(
+      `select title, state, remind_at, reminded_at, remind_job_id::text as job, remind_sends as sends, due_on::text as due, repeat_every::text as rep from public.tasks where task_id = ${lit(id)}::uuid`,
+    )
+  )[0] as Record<string, unknown>
+const rowsTitled = async (title: string) =>
+  Number(
+    (
+      await one(
+        `select count(*)::int as c from public.tasks where office_id = ${O} and title = ${lit(title)}`,
+      )
+    ).c,
+  )
+/** Time passes: the reminder's time arrives (or has long gone). */
+const setRemindAt = async (id: string, when: Date) => {
+  await db.execute(
+    `update public.tasks set remind_at = ${lit(when.toISOString())}::timestamptz, reminded_at = null, remind_job_id = null, remind_sends = 0 where task_id = ${lit(id)}::uuid`,
+  )
+}
+const ATHENS = 'Europe/Athens'
+/** The most recent Monday 09:00 in Athens that has already passed (a series' reminder time that is due). */
+const lastMonday9 = (now: Date): Date => {
+  const t = localDay(now, ATHENS)
+  for (let back = 0; back <= 7; back++) {
+    const at = wallClock(t.y, t.m, t.d - back, 9, 0, ATHENS)
+    if (weekdayOf(t.y, t.m, t.d - back) === 1 && at.getTime() <= now.getTime() - 60_000) return at
+  }
+  throw new Error('no Monday found')
+}
+/** The same wall-clock time `days` later in Athens. */
+const plusDays = (at: Date, days: number): Date => {
+  const t = localDay(at, ATHENS)
+  const hm = new Intl.DateTimeFormat('en-GB', {
+    timeZone: ATHENS,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+    .format(at)
+    .split(':')
+    .map(Number)
+  return wallClock(t.y, t.m, t.d + days, Number(hm[0]), Number(hm[1]), ATHENS)
 }
 const taskOf = async (jobId: string) =>
   (
@@ -186,20 +250,27 @@ section('R1: the duty actually fires a date-only reminder, once')
     !duty.body.toLowerCase().includes(`due only control ${run}`),
     '',
   )
+  const sIn = await stateOf(String(t?.id))
   check(
-    '...and marks it reminded',
-    (
-      await one(
-        `select reminded_at is not null as r from public.tasks where task_id = ${lit(String(t?.id))}::uuid`,
-      )
-    ).r === true,
-    '',
+    '...and marks it IN FLIGHT by the job that said it, not reminded yet (C3: said is not delivered)',
+    sIn.job === job.jobId && sIn.reminded_at === null && Number(sIn.sends) === 1,
+    JSON.stringify(sIn),
   )
-  const again = await remindersHandler(db).handle({ ...job, kind: 'tasks.remind' }, db)
+  const again = await tick()
   check(
-    'the next tick does not say it again',
-    !again.body.toLowerCase().includes(`renew the licence ${run}`),
-    again.body.slice(0, 80),
+    'the next tick does not say it again while its delivery is unknown',
+    !again.out.body.toLowerCase().includes(`renew the licence ${run}`),
+    again.out.body.slice(0, 80),
+  )
+  await deliver(job.jobId, 'sent')
+  const afterSent = await tick()
+  const sDone = await stateOf(String(t?.id))
+  check(
+    'once the delivery is recorded SENT, the next tick marks it reminded, and it is never said again',
+    sDone.reminded_at !== null &&
+      sDone.job === null &&
+      !afterSent.out.body.toLowerCase().includes(`renew the licence ${run}`),
+    JSON.stringify(sDone),
   )
 }
 
@@ -314,7 +385,7 @@ section(
 }
 
 // ================================================================================================================
-section('R3: the recurrence is kept, stored, and survives completion with the RIGHT remind_at')
+section('R3: the recurrence is read, and stored as a reminder SERIES (no due date)')
 {
   await setZone('Europe/Athens')
   at = new Date()
@@ -329,124 +400,365 @@ section('R3: the recurrence is kept, stored, and survives completion with the RI
     const { body, jobId } = await say(said)
     const t = await taskOf(jobId)
     check(
-      `"${said}" stores repeat_every ${every}, repeat_from due, a due date and a remind_at, and a clean title`,
+      `"${said}" stores a reminder SERIES: repeat_every ${every}, a remind_at, NO due date, and a clean title`,
       t?.rep !== null &&
         String(t?.rep).replace('00:00:00', '').trim() === every &&
-        t?.repeat_from === 'due' &&
-        t.due !== null &&
+        t?.repeat_from === 'done' &&
+        t.due === null &&
         t.remind_at !== null &&
         String(t.title).toLowerCase() === title &&
         !/every|weekly/i.test(String(t.title)),
       JSON.stringify(t),
     )
     check(
-      '...and the reply says it repeats and how the next one comes',
-      /repeats every/.test(body) && /tick/.test(body),
+      '...and the reply says it repeats and that ticking it off stops these',
+      /repeats every/.test(body) && /Tick it off to stop these/.test(body),
       body.slice(0, 200),
-    )
-    // Completing the first occurrence makes the next, exactly one period later on the office wall clock.
-    const done = json(
-      (
-        await one(
-          `select app.hq_task_state(${O}, ${lit(String(t?.id))}, 'done', null, 'grant') as v`,
-        )
-      ).v,
-    )
-    const next = (
-      await rows(
-        `select task_id::text as id, due_on::text as due, remind_at, repeat_every::text as rep, repeat_from, state from public.tasks where office_id = ${O} and title = ${lit(String(t?.title))} and state = 'todo'`,
-      )
-    )[0]
-    const periodDays = every === '1 day' ? 1 : every === '14 days' ? 14 : 7
-    const d0 = String(t?.due).split('-').map(Number)
-    const r0 = new Date(iso(t?.remind_at))
-    const local = new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Europe/Athens',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    })
-      .format(r0)
-      .split(':')
-      .map(Number)
-    const expected = wallClock(
-      Number(d0[0]),
-      Number(d0[1]) - 1,
-      Number(d0[2]) + periodDays,
-      Number(local[0]),
-      Number(local[1]),
-      'Europe/Athens',
-    )
-    check(
-      '...completing it makes the next occurrence at remind_at + period on the wall clock',
-      done.state === 'done' &&
-        next !== undefined &&
-        next.remind_at !== null &&
-        iso(next.remind_at) === expected.toISOString(),
-      `next ${JSON.stringify(next)} expected ${expected.toISOString()}`,
-    )
-    check(
-      '...which keeps the repeat, and the finished one stops repeating',
-      next?.rep !== null &&
-        (
-          await one(
-            `select repeat_every is null as r from public.tasks where task_id = ${lit(String(t?.id))}::uuid`,
-          )
-        ).r === true,
-      '',
     )
   }
 }
 
 section(
-  'R3: first occurrence -> the duty fires it -> complete -> next occurrence -> the duty fires that too',
+  'R3: a series fires, is delivered, moves on IN PLACE without a tick, fires again; ticking it off ends it',
 )
 {
   at = new Date()
-  const { jobId, job } = await say(`Remind me every day at 9am to stretch ${run}.`)
-  const first = await taskOf(jobId)
-  // 1. time passes; the first occurrence fires
-  await db.execute(
-    `update public.tasks set remind_at = now() - interval '2 minutes' where task_id = ${lit(String(first?.id))}::uuid`,
-  )
-  const d1 = await remindersHandler(db).handle({ ...job, kind: 'tasks.remind' }, db)
+  await setZone(ATHENS)
+  const said = `Remind me every Monday at 9am to review my finances ${run}.`
+  const first = await say(said)
+  const s0 = await taskOf(first.jobId)
+  const id = String(s0?.id)
+  const title = String(s0?.title)
   check(
-    'the duty fires the first occurrence',
-    d1.announce === true && d1.body.toLowerCase().includes(`stretch ${run}`),
-    d1.body.replace(/\n/g, ' | ').slice(0, 140),
+    '"every Monday at 9am" is stored as ONE series row: a reminder time, a repeat, no due date invented',
+    s0?.due === null &&
+      String(s0?.rep).startsWith('7 days') &&
+      s0?.remind_at !== null &&
+      new Date(iso(s0?.remind_at)).getTime() > Date.now() &&
+      weekdayOf(
+        localDay(new Date(iso(s0?.remind_at)), ATHENS).y,
+        localDay(new Date(iso(s0?.remind_at)), ATHENS).m,
+        localDay(new Date(iso(s0?.remind_at)), ATHENS).d,
+      ) === 1,
+    JSON.stringify(s0),
   )
-  // 2. he ticks it off; the next occurrence exists and carries a remind_at
-  await one(`select app.hq_task_state(${O}, ${lit(String(first?.id))}, 'done', null, 'grant') as v`)
-  const second = (
+  check(
+    '...and the reply says ticking it off stops them',
+    /Tick it off to stop these/.test(first.body),
+    first.body.slice(0, 220),
+  )
+  // Monday 09:00 arrives (the most recent one, so the next is exactly a week on).
+  const anchor = lastMonday9(new Date())
+  const nextMonday = plusDays(anchor, 7)
+  await setRemindAt(id, anchor)
+
+  // FIRING 1: announced, in flight, NOT advanced and NOT marked: delivery has not happened.
+  const j1 = await enqueue('tick')
+  const f1 = await tick(j1)
+  const a1 = await stateOf(id)
+  check(
+    'firing 1: the duty announces it once',
+    f1.out.announce === true && f1.out.body.toLowerCase().includes(title.toLowerCase()),
+    f1.out.body.replace(/\n/g, ' | ').slice(0, 120),
+  )
+  check(
+    '...and it is only IN FLIGHT: remind_at has not moved, reminded_at is not set (mark-before-delivery is the defect)',
+    a1.job === j1.jobId &&
+      Number(a1.sends) === 1 &&
+      a1.reminded_at === null &&
+      iso(a1.remind_at) === anchor.toISOString(),
+    JSON.stringify(a1),
+  )
+  await deliver(j1.jobId, 'claimed')
+  const wait = await tick()
+  const aWait = await stateOf(id)
+  check(
+    '...while its delivery is still pending nothing is said again and nothing moves',
+    wait.out.announce === false &&
+      aWait.job === j1.jobId &&
+      iso(aWait.remind_at) === anchor.toISOString(),
+    JSON.stringify(aWait),
+  )
+  await db.execute(
+    `update public.deliveries set state = 'sent', message_ref = 'm-1', sent_at = now() where job_id = ${lit(j1.jobId)}::uuid`,
+  )
+  // SETTLE: the delivery is recorded sent; the series moves to next Monday 09:00 office time IN PLACE, without a tick.
+  const settle1 = await tick()
+  const a2 = await stateOf(id)
+  check(
+    'delivered: remind_at is advanced IN PLACE to next Monday 09:00 office time, with nobody ticking it off',
+    iso(a2.remind_at) === nextMonday.toISOString() &&
+      a2.reminded_at === null &&
+      a2.job === null &&
+      Number(a2.sends) === 0 &&
+      a2.state === 'todo' &&
+      a2.due === null,
+    `${JSON.stringify(a2)} want ${nextMonday.toISOString()}`,
+  )
+  check(
+    '...exactly ONE row throughout, and that tick did not say it again',
+    (await rowsTitled(title)) === 1 && settle1.out.announce === false,
+    String(await rowsTitled(title)),
+  )
+
+  // FIRING 2: a week later (Monday 09:00 again).
+  await setRemindAt(id, anchor)
+  const j2 = await enqueue('tick')
+  const f2 = await tick(j2)
+  check(
+    'firing 2: the duty announces it again',
+    f2.out.announce === true && f2.out.body.toLowerCase().includes(title.toLowerCase()),
+    f2.out.body.replace(/\n/g, ' | ').slice(0, 120),
+  )
+  await deliver(j2.jobId, 'sent')
+  await tick()
+  const a3 = await stateOf(id)
+  check(
+    '...delivered: advanced in place again; still ONE row, still open',
+    iso(a3.remind_at) === nextMonday.toISOString() &&
+      a3.state === 'todo' &&
+      (await rowsTitled(title)) === 1,
+    JSON.stringify(a3),
+  )
+
+  // TICK OFF ends the series.
+  await one(`select app.hq_task_state(${O}, ${lit(id)}, 'done', null, 'grant') as v`)
+  const ended = await stateOf(id)
+  const after = await tick()
+  check(
+    'ticking it off ENDS the series: no next occurrence row, no repeat left, and no third firing',
+    ended.state === 'done' &&
+      ended.rep === null &&
+      (await rowsTitled(title)) === 1 &&
+      !after.out.body.toLowerCase().includes(title.toLowerCase()),
+    JSON.stringify(ended),
+  )
+}
+
+section(
+  'R3: a delivery that FAILED is retried, a delivered reminder is not re-sent, the retry is bounded',
+)
+{
+  at = new Date()
+  await setZone(ATHENS)
+  const mkSeries = async (label: string) => {
+    const { jobId } = await say(`Remind me every day at 9am to ${label} ${run}.`)
+    const t = await taskOf(jobId)
+    const yesterday = plusDays(new Date(), -1)
+    const anchor = wallClock(
+      localDay(yesterday, ATHENS).y,
+      localDay(yesterday, ATHENS).m,
+      localDay(yesterday, ATHENS).d,
+      9,
+      0,
+      ATHENS,
+    )
+    await setRemindAt(String(t?.id), anchor)
+    return { id: String(t?.id), title: String(t?.title), anchor }
+  }
+  // a series whose first message is refused, then goes through
+  const s = await mkSeries('stretch')
+  const jA = await enqueue('tick')
+  const tA = await tick(jA)
+  await deliver(jA.jobId, 'failed')
+  const jB = await enqueue('tick')
+  const tB = await tick(jB)
+  const sB = await stateOf(s.id)
+  check(
+    'a reminder whose delivery FAILED is said again on the next tick (it is not lost)',
+    tA.out.announce === true &&
+      tB.out.announce === true &&
+      tB.out.body.toLowerCase().includes(s.title.toLowerCase()) &&
+      sB.job === jB.jobId &&
+      Number(sB.sends) === 2,
+    JSON.stringify(sB),
+  )
+  await deliver(jB.jobId, 'sent')
+  const tC = await tick()
+  const sC = await stateOf(s.id)
+  check(
+    '...and once that one is delivered the series moves on, once, and is not said a third time',
+    tC.out.announce === false &&
+      sC.job === null &&
+      new Date(iso(sC.remind_at)).getTime() > Date.now() &&
+      (await rowsTitled(s.title)) === 1,
+    JSON.stringify(sC),
+  )
+
+  // bounded: three refused sends, then the office stops (and the delivery rows stay failed, which is what surfaces)
+  const one3 = await say(`Remind me tomorrow to renew the passport ${run}.`)
+  const o = await taskOf(one3.jobId)
+  await db.execute(
+    `update public.tasks set remind_at = now() - interval '1 minute' where task_id = ${lit(String(o?.id))}::uuid`,
+  )
+  let announced = 0
+  for (let i = 0; i < 3; i++) {
+    const j = await enqueue('tick')
+    const r = await tick(j)
+    if (r.out.announce === true && r.out.body.toLowerCase().includes(`renew the passport ${run}`)) {
+      announced += 1
+    }
+    await deliver(j.jobId, 'failed')
+  }
+  const fourth = await tick()
+  const oS = await stateOf(String(o?.id))
+  check(
+    'the retry is BOUNDED: three sends, all refused, and the fourth tick gives up instead of re-firing for ever',
+    announced === 3 &&
+      fourth.out.announce === false &&
+      !fourth.out.body.toLowerCase().includes('renew the passport') &&
+      oS.reminded_at !== null &&
+      oS.job === null,
+    JSON.stringify({ announced, oS }),
+  )
+  const failedRows = Number(
+    (
+      await one(
+        `select count(*)::int as c from public.deliveries where office_id = ${O} and state = 'failed' and job_id in (select job_id from public.jobs where office_id = ${O}) and error_code = 'chat_not_found'`,
+      )
+    ).c,
+  )
+  check(
+    '...and the refused deliveries stay failed (that is what app.undelivered lists)',
+    failedRows >= 3,
+    String(failedRows),
+  )
+
+  // a SERIES that is refused three times is not killed: that occurrence is given up and the series moves on
+  const sx = await mkSeries('check the post')
+  for (let i = 0; i < 3; i++) {
+    const j = await enqueue('tick')
+    await tick(j)
+    await deliver(j.jobId, 'failed')
+  }
+  await tick()
+  const sxS = await stateOf(sx.id)
+  check(
+    'a series refused three times gives up THAT occurrence and keeps running: next time is in the future, one row',
+    new Date(iso(sxS.remind_at)).getTime() > Date.now() &&
+      sxS.reminded_at === null &&
+      sxS.state === 'todo' &&
+      (await rowsTitled(sx.title)) === 1,
+    JSON.stringify(sxS),
+  )
+
+  // a job that ENDED having claimed no delivery at all (nothing could go anywhere) is a loss, not a pending message
+  const sl = await mkSeries('water the plants')
+  const jl = await enqueue('tick')
+  await tick(jl)
+  await db.execute(`set session_replication_role = replica`)
+  await db.execute(
+    `update public.jobs set state = 'complete', finished_at = now() where job_id = ${lit(jl.jobId)}::uuid`,
+  )
+  await db.execute(`set session_replication_role = default`)
+  const jl2 = await enqueue('tick')
+  const rl = await tick(jl2)
+  const slS = await stateOf(sl.id)
+  check(
+    'a job that ended with NO delivery row at all is treated as lost: the reminder is said again',
+    rl.out.announce === true &&
+      rl.out.body.toLowerCase().includes(sl.title.toLowerCase()) &&
+      slS.job === jl2.jobId,
+    JSON.stringify(slS),
+  )
+}
+
+section('R3: a long outage fires ONCE and moves past now (no backlog)')
+{
+  at = new Date()
+  await setZone(ATHENS)
+  const { jobId } = await say(`Remind me every day at 9am to feed the cat ${run}.`)
+  const t = await taskOf(jobId)
+  const id = String(t?.id)
+  const today = localDay(new Date(), ATHENS)
+  await setRemindAt(id, wallClock(today.y, today.m, today.d - 30, 9, 0, ATHENS))
+  const j = await enqueue('tick')
+  const f = await tick(j)
+  const lines = (f.out.body.match(new RegExp(`feed the cat ${run}`, 'gi')) ?? []).length
+  check(
+    'thirty missed days are ONE reminder, not thirty',
+    f.out.announce === true && lines === 1,
+    f.out.body.replace(/\n/g, ' | ').slice(0, 140),
+  )
+  await deliver(j.jobId, 'sent')
+  await tick()
+  const s = await stateOf(id)
+  const clock = new Intl.DateTimeFormat('en-GB', {
+    timeZone: ATHENS,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(iso(s.remind_at)))
+  const ahead = new Date(iso(s.remind_at)).getTime() - Date.now()
+  check(
+    '...and the next one is the next 09:00 after now (not 30 days of catching up), still one row',
+    ahead > 0 &&
+      ahead <= 25 * 3_600_000 &&
+      clock === '09:00' &&
+      (await rowsTitled(String(t?.title))) === 1,
+    `${JSON.stringify(s)} clock ${clock}`,
+  )
+  const quiet = await tick()
+  check(
+    '...and the next tick says nothing',
+    quiet.out.announce === false,
+    quiet.out.body.slice(0, 60),
+  )
+}
+
+section(
+  'R3: a repeating TASK (it has a due date) is unchanged: ticking it off makes the next one, delivery does not advance it',
+)
+{
+  at = new Date()
+  await setZone(ATHENS)
+  const nowD = localDay(new Date(), ATHENS)
+  const dueDay = `${String(nowD.y)}-${String(nowD.m + 1).padStart(2, '0')}-${String(nowD.d).padStart(2, '0')}`
+  const made = json(
+    (
+      await one(
+        `select app.my_task_add(${O}, ${lit(`Due series ${run}`)}, '', ${lit(dueDay)}::date, now() - interval '1 minute') as v`,
+      )
+    ).v,
+  )
+  await one(
+    `select app.my_task_set(${O}, ${lit(String(made.id))}, p_repeat_every => interval '7 days', p_repeat_from => 'due') as v`,
+  )
+  const j = await enqueue('tick')
+  const f = await tick(j)
+  await deliver(j.jobId, 'sent')
+  await tick()
+  const s = await stateOf(String(made.id))
+  check(
+    'delivery of its reminder marks it reminded and does NOT advance it or make another row',
+    f.out.announce === true &&
+      s.reminded_at !== null &&
+      s.due === dueDay &&
+      s.state === 'todo' &&
+      (await rowsTitled(`Due series ${run}`)) === 1,
+    JSON.stringify(s),
+  )
+  await one(`select app.hq_task_state(${O}, ${lit(String(made.id))}, 'done', null, 'grant') as v`)
+  const next = (
     await rows(
-      `select task_id::text as id, remind_at, reminded_at, due_on::text as due from public.tasks where office_id = ${O} and title ilike ${lit(`stretch ${run}`)} and state = 'todo'`,
+      `select due_on::text as due, remind_at, repeat_every::text as rep from public.tasks where office_id = ${O} and title = ${lit(`Due series ${run}`)} and state = 'todo'`,
     )
   )[0]
   check(
-    'the next occurrence exists, unreminded, with a remind_at later than now',
-    second !== undefined &&
-      second.remind_at !== null &&
-      second.reminded_at === null &&
-      new Date(iso(second.remind_at)).getTime() > Date.now(),
-    JSON.stringify(second),
+    'ticking it off makes exactly ONE next occurrence, a week on, with a reminder, still repeating',
+    (await rowsTitled(`Due series ${run}`)) === 2 &&
+      next !== undefined &&
+      next.remind_at !== null &&
+      String(next.rep).startsWith('7 days'),
+    JSON.stringify(next),
   )
-  // 3. time passes again; the second occurrence fires
-  await db.execute(
-    `update public.tasks set remind_at = now() - interval '1 minute' where task_id = ${lit(String(second?.id))}::uuid`,
-  )
-  const d2 = await remindersHandler(db).handle({ ...job, kind: 'tasks.remind' }, db)
+  // a typed repeating COMMITMENT is that kind: a due date, ticked off to advance
+  const commit = await say(`I need to review the books every Monday ${run}.`)
+  const ct = await taskOf(commit.jobId)
   check(
-    'the duty fires the SECOND occurrence: the recurrence survived',
-    d2.announce === true && d2.body.toLowerCase().includes(`stretch ${run}`),
-    d2.body.replace(/\n/g, ' | ').slice(0, 140),
-  )
-  const third = await one(
-    `select count(*)::int as c from public.tasks where office_id = ${O} and title ilike ${lit(`stretch ${run}`)}`,
-  )
-  check(
-    '...exactly two occurrences exist so far (no runaway)',
-    Number(third.c) === 2,
-    String(third.c),
+    'typed: "I need to ... every Monday" is a repeating TASK (due date, repeat from due), not a reminder series',
+    ct?.due !== null && ct?.repeat_from === 'due' && String(ct?.rep).startsWith('7 days'),
+    JSON.stringify(ct),
   )
 }
 
@@ -614,7 +926,7 @@ section(
     '2030-03-06T07:00:00.000Z',
   )
 
-  // a reminder with NO due date, from when it was done: the same local time of day, a period after today
+  // A reminder SERIES (no due date) ticked off ENDS: the trigger makes no next occurrence for it (the delivery moves it).
   await setZone('Europe/Athens')
   const rem = json(
     (
@@ -626,40 +938,118 @@ section(
   await one(
     `select app.my_task_set(${O}, ${lit(String(rem.id))}, p_repeat_every => interval '1 day', p_repeat_from => 'done') as v`,
   )
-  const rBefore = await one(
-    `select remind_at from public.tasks where task_id = ${lit(String(rem.id))}::uuid`,
-  )
   await one(`select app.hq_task_state(${O}, ${lit(String(rem.id))}, 'done', null, 'grant') as v`)
-  const rNext = (
-    await rows(
-      `select remind_at, due_on::text as due from public.tasks where office_id = ${O} and title = ${lit(`Reminder only ${run}`)} and state = 'todo'`,
-    )
-  )[0]
-  const nowD = new Date()
-  const tomorrow = localDay(new Date(nowD.getTime() + 86_400_000), 'Europe/Athens')
-  const tod = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/Athens',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  })
-    .format(new Date(iso(rBefore.remind_at)))
-    .split(':')
-    .map(Number)
-  const wantRem = wallClock(
-    tomorrow.y,
-    tomorrow.m,
-    tomorrow.d,
-    Number(tod[0]),
-    Number(tod[1]),
-    'Europe/Athens',
-  )
+  const rEnded = await stateOf(String(rem.id))
   check(
-    'a reminder with no due date repeating from done keeps its time of day, the local day after today (was: remind_at LOST)',
-    rNext !== undefined &&
-      rNext.remind_at !== null &&
-      iso(rNext.remind_at) === wantRem.toISOString(),
-    `${JSON.stringify(rNext)} want ${wantRem.toISOString()}`,
+    'a series ticked off makes NO next occurrence (one row, no repeat left): the trigger and the delivery cannot both advance it',
+    (await rowsTitled(`Reminder only ${run}`)) === 1 &&
+      rEnded.rep === null &&
+      rEnded.state === 'done',
+    JSON.stringify(rEnded),
+  )
+
+  // The in-place advance itself, on the wall clock: every case is a series delivered at its reminder time.
+  const inPlace = async (
+    label: string,
+    zone: string,
+    remindIso: string,
+    every: string,
+    wantRemind: string,
+  ) => {
+    await setZone(zone)
+    const made = json(
+      (
+        await one(
+          `select app.my_task_add(${O}, ${lit(`${label} ${run}`)}, '', null, ${lit(remindIso)}::timestamptz) as v`,
+        )
+      ).v,
+    )
+    await one(
+      `select app.my_task_set(${O}, ${lit(String(made.id))}, p_repeat_every => ${lit(every)}::interval, p_repeat_from => 'done') as v`,
+    )
+    // delivered: the delivery layer said sent, which is what reminders_sent is told
+    await one(`select app.reminders_sent(${O}, array[${lit(String(made.id))}]::uuid[]) as v`)
+    const s = await stateOf(String(made.id))
+    check(
+      `series in place: ${label} (${zone}) -> ${wantRemind}, one row, still open, no due date`,
+      s.remind_at !== null &&
+        iso(s.remind_at) === wantRemind &&
+        s.state === 'todo' &&
+        s.due === null &&
+        s.reminded_at === null &&
+        (await rowsTitled(`${label} ${run}`)) === 1,
+      JSON.stringify(s),
+    )
+  }
+  await inPlace(
+    'Series Athens spring',
+    'Europe/Athens',
+    '2030-03-25T07:00:00Z',
+    '7 days',
+    '2030-04-01T06:00:00.000Z',
+  )
+  await inPlace(
+    'Series Athens fall',
+    'Europe/Athens',
+    '2030-10-21T06:00:00Z',
+    '7 days',
+    '2030-10-28T07:00:00.000Z',
+  )
+  await inPlace(
+    'Series Athens daily fall',
+    'Europe/Athens',
+    '2030-10-26T06:00:00Z',
+    '1 day',
+    '2030-10-27T07:00:00.000Z',
+  )
+  await inPlace(
+    'Series NY spring',
+    'America/New_York',
+    '2030-03-04T14:00:00Z',
+    '7 days',
+    '2030-03-11T13:00:00.000Z',
+  )
+  await inPlace(
+    'Series NY fall',
+    'America/New_York',
+    '2030-10-28T13:00:00Z',
+    '7 days',
+    '2030-11-04T14:00:00.000Z',
+  )
+  await inPlace(
+    'Series Auckland spring',
+    'Pacific/Auckland',
+    '2030-09-22T21:00:00Z',
+    '7 days',
+    '2030-09-29T20:00:00.000Z',
+  )
+  await inPlace(
+    'Series Auckland fall',
+    'Pacific/Auckland',
+    '2030-03-31T20:00:00Z',
+    '7 days',
+    '2030-04-07T21:00:00.000Z',
+  )
+  await inPlace(
+    'Series month end',
+    'Europe/Athens',
+    '2030-01-28T07:00:00Z',
+    '7 days',
+    '2030-02-04T07:00:00.000Z',
+  )
+  await inPlace(
+    'Series year end',
+    'Europe/Athens',
+    '2030-12-30T07:00:00Z',
+    '7 days',
+    '2031-01-06T07:00:00.000Z',
+  )
+  await inPlace(
+    'Series fortnight Feb',
+    'Europe/Athens',
+    '2030-02-20T07:00:00Z',
+    '14 days',
+    '2030-03-06T07:00:00.000Z',
   )
 
   // a schedule that has fallen behind catches up rather than producing a backlog

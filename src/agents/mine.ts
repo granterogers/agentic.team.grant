@@ -718,9 +718,15 @@ export function personalTaskRequest(
   if (rec !== null) {
     const first = firstOccurrence(rec, clockOf(said), now, timeZone)
     const said_a_time = clockOf(said) !== null
+    /*
+      Two shapes, by what he asked for. "Remind me every Monday to X" is a REMINDER SERIES: a reminder time and a repeat
+      and NO due date, one row that moves to its next occurrence when it is delivered and that ticking off ENDS.
+      A repeating COMMITMENT ("I need to review the books every Monday") is a repeating TASK: it has a due date and
+      ticking it off makes the next occurrence. A due date invented for the series would turn it into the second kind.
+    */
     return {
       title: cased,
-      due: localIsoDay(first, timeZone),
+      due: remind ? null : localIsoDay(first, timeZone),
       because: remind ? 'reminder' : 'commitment',
       // A repeating COMMITMENT with no time said is a dated, repeating to-do, not a reminder.
       remindAt: remind || said_a_time ? first.toISOString() : null,

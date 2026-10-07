@@ -28,9 +28,14 @@
 --      loops. Done-from-done starts the clock on the office's local day.
 --   4. my_task_set refuses a task that is not on the person's own list, by name, and says why.
 --
--- Not done here, deliberately: advancing a repeating reminder when it FIRES rather than when it is completed (a repeating
--- task is still a task: the next occurrence is made when this one is ticked off, which is the product's existing meaning of
--- "repeat"), month-based repeats, and any change to app.reminders_sent (another remediation owns its delivery marking).
+--   5. A reminder is marked reminded only when its delivery SENT (C3), re-said up to three times when the delivery
+--      failed, and a reminder SERIES (a repeat with a reminder time and no due date) moves to its next occurrence in
+--      place when it is delivered, without being ticked off. Ticking it off ends it. A repeating TASK (it has a due date)
+--      is unchanged: ticking it off makes the next occurrence. See section 5 below. It reads app.job_delivery_state
+--      from 1029 at run time (a function body is resolved when called, so the order of the two files does not matter,
+--      and a database without 1029 makes app.reminders_settle raise, which the handler answers by marking as before).
+--
+-- Not done here, deliberately: month-based repeats.
 
 begin;
 
@@ -302,8 +307,13 @@ begin
      and not app.harness_task(t.is_fixture, t.job_id)
      and t.remind_at is not null
      and t.reminded_at is null
+     -- announced by a duty run whose delivery has not ended yet (1027): not announced a second time
+     and t.remind_job_id is null
      and t.remind_at <= app.now_utc()
-     and t.remind_at >= app.now_utc() - p_grace
+     -- A reminder SERIES is exempt from the floor (1027): after an outage longer than the grace it would otherwise
+     -- never fire and never move on, and a series that has stopped for good is worse than one stale message.
+     and (t.remind_at >= app.now_utc() - p_grace
+          or (t.repeat_every is not null and t.due_on is null))
   );
 end;
 $function$;
@@ -329,6 +339,18 @@ begin
   -- A zero or negative interval would loop for ever below, and means nothing as a repeat.
   if new.repeat_every <= interval '0' then return new; end if;
 
+  /*
+    A REMINDER SERIES (a repeat with a reminder time and no due date) is advanced IN PLACE by
+    app.reminder_finish when the reminder is delivered, and ticking it off ENDS it. If this trigger also made a next
+    occurrence the same occurrence would advance twice (once in place, once as a new row). Only a task with a due date
+    is a repeating TASK, and only that kind makes its next occurrence here.
+  */
+  if new.due_on is null and new.remind_at is not null then
+    update public.tasks set repeat_every = null, repeat_from = null
+     where task_id = new.task_id and office_id = new.office_id;
+    return new;
+  end if;
+
   v_tz := app.office_timezone(new.office_id);
   v_today := (app.now_utc() at time zone v_tz)::date;
 
@@ -348,19 +370,11 @@ begin
 
   if new.remind_at is null then
     v_remind := null;
-  elsif new.due_on is not null then
-    -- The reminder keeps its distance from the due date, measured on the office's wall clock so a 09:00 reminder
-    -- is still 09:00 after the clocks change. (`date - date` is an integer of days.)
-    v_remind := ((new.remind_at at time zone v_tz) + ((v_due - new.due_on) * interval '1 day')) at time zone v_tz;
-  elsif new.repeat_from = 'done' then
-    -- A reminder with no due date, repeated from when it was done: the same time of day, a period after today.
-    v_remind := ((v_today + new.repeat_every)::date + (new.remind_at at time zone v_tz)::time) at time zone v_tz;
   else
-    -- A reminder with no due date has nothing but itself to repeat from (1027: it used to be lost here).
-    v_remind := ((new.remind_at at time zone v_tz) + new.repeat_every) at time zone v_tz;
-    while v_remind < app.now_utc() loop
-      v_remind := ((v_remind at time zone v_tz) + new.repeat_every) at time zone v_tz;
-    end loop;
+    -- Here the task has a due date (a reminder with none was handled above). The reminder keeps its distance from
+    -- the due date, measured on the office's wall clock so a 09:00 reminder is still 09:00 after the clocks change.
+    -- (`date - date` is an integer of days.)
+    v_remind := ((new.remind_at at time zone v_tz) + ((v_due - new.due_on) * interval '1 day')) at time zone v_tz;
   end if;
 
   insert into public.tasks
@@ -476,6 +490,10 @@ begin
                                    where btrim(x) <> '' order by 1))
              end,
     reminded_at = case when 'remind_at' = any (v_clear) or p_remind_at is not null then null else reminded_at end,
+    -- A reminder set again is a new reminder: one that was in flight is forgotten, or the delivery of the OLD one
+    -- would end the NEW time when it settled (1027, section 5).
+    remind_job_id = case when 'remind_at' = any (v_clear) or p_remind_at is not null then null else remind_job_id end,
+    remind_sends = case when 'remind_at' = any (v_clear) or p_remind_at is not null then 0 else remind_sends end,
     remind_at = case when 'remind_at' = any (v_clear) then null
                      else coalesce(p_remind_at, remind_at) end,
     repeat_every = case when 'repeat' = any (v_clear) then null
@@ -500,5 +518,178 @@ begin
             from public.tasks t where t.task_id = v_id and t.office_id = p_office);
 end;
 $function$;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- 5. a reminder is marked reminded when it was DELIVERED, and a reminder SERIES keeps firing without being ticked off
+-- ---------------------------------------------------------------------------------------------------------------------
+--
+-- Before: the tasks.remind handler set reminded_at in the same tick that composed the message (C3), so a reminder whose
+-- delivery was refused by a gate, rate-limited or lost was marked as sent and never said again. And a repeating
+-- reminder moved on only when somebody ticked it off, so "remind me every Monday to review my finances" fired once and
+-- then stopped unless he ticked it.
+--
+-- Now, in two steps across two ticks, because delivery finishes after the job that announced:
+--   announce  app.reminders_announced records WHICH duty job said it (remind_job_id) and counts the send.
+--   settle    app.reminders_settle (the next tick, before it reads what is due) asks app.job_delivery_state (1029):
+--               sent     -> app.reminder_finish: a one-off is marked reminded; a SERIES moves remind_at forward IN PLACE
+--               failed   -> clear remind_job_id so it is due again and is said again, up to 3 sends; after the third the
+--                           office stops (a one-off is marked reminded, a series moves on) and the delivery layer's own
+--                           terminal `failed` row is what surfaces it (app.undelivered)
+--               pending  -> wait; none -> pending while the job is live, failed once the job has ended
+--
+-- A REMINDER SERIES is a repeating task with remind_at and NO due_on. One row throughout: remind_at moves to the next
+-- occurrence strictly after now on the office wall clock (DST-correct), reminded_at is cleared and the task stays open.
+-- A long outage fires ONCE and moves past now (the loop is bounded), never a backlog. Ticking it off or deleting it ENDS
+-- the series (the trigger above does not make a next occurrence for it). A task with a due date is a repeating TASK and
+-- keeps its meaning: ticking it off makes the next occurrence.
+
+alter table public.tasks add column if not exists remind_job_id uuid;
+alter table public.tasks add column if not exists remind_sends integer not null default 0;
+comment on column public.tasks.remind_job_id is
+  'The tasks.remind duty job whose message announced this reminder while its delivery has not ended (1027). Null when nothing is in flight. app.reminders_settle reads app.job_delivery_state of it on a later tick.';
+comment on column public.tasks.remind_sends is
+  'How many times the current occurrence of this reminder has been announced (1027). Bounds the re-send of a reminder whose delivery failed; reset when the occurrence ends.';
+
+-- The one place that ENDS an occurrence of a reminder: delivered, or given up on.
+create function app.reminder_finish(p_task uuid)
+returns void
+language plpgsql
+security definer
+set search_path to 'public', 'pg_catalog'
+as $function$
+declare
+  t public.tasks%rowtype;
+  v_tz text;
+  v_next timestamp;
+  v_now timestamptz := app.now_utc();
+  v_n integer := 0;
+begin
+  select * into t from public.tasks where task_id = p_task for update;
+  if not found then return; end if;
+  if t.state in ('done', 'cancelled') then
+    -- Ended by the person: a series stops here, nothing is advanced.
+    update public.tasks set remind_job_id = null where task_id = p_task;
+    return;
+  end if;
+  if t.repeat_every is not null and t.due_on is null and t.remind_at is not null
+     and t.repeat_every > interval '0' then
+    v_tz := app.office_timezone(t.office_id);
+    v_next := t.remind_at at time zone v_tz;
+    loop
+      v_next := v_next + t.repeat_every;            -- local wall clock: 09:00 stays 09:00 across a change of clocks
+      v_n := v_n + 1;
+      exit when (v_next at time zone v_tz) > v_now or v_n >= 1000;
+    end loop;
+    if (v_next at time zone v_tz) <= v_now then
+      v_next := (v_now at time zone v_tz) + t.repeat_every;   -- the bound was hit: never leave it in the past
+    end if;
+    update public.tasks
+       set remind_at = v_next at time zone v_tz, reminded_at = null, remind_job_id = null, remind_sends = 0
+     where task_id = p_task;
+  else
+    update public.tasks set reminded_at = v_now, remind_job_id = null where task_id = p_task;
+  end if;
+end;
+$function$;
+revoke all on function app.reminder_finish(uuid) from public, anon, authenticated, service_role;
+
+-- Said by a duty job: the reminders it named are in flight. Marked LAST, after the body is composed.
+create function app.reminders_announced(p_office uuid, p_ids uuid[], p_job uuid)
+returns integer
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare v_n integer;
+begin
+  perform app.require_office(p_office);
+  with marked as (
+    update public.tasks
+       set remind_job_id = p_job, remind_sends = remind_sends + 1
+     where task_id = any(coalesce(p_ids, array[]::uuid[]))
+       and office_id = p_office
+       and reminded_at is null
+       and remind_job_id is null
+    returning task_id
+  )
+  select count(*)::int into v_n from marked;
+  return v_n;
+end;
+$function$;
+revoke all on function app.reminders_announced(uuid, uuid[], uuid) from public, anon, authenticated, service_role;
+
+-- Delivered: end the occurrence (a one-off is marked, a series moves on). Same contract as before for a caller:
+-- the number of THIS office's reminders ended, a foreign or missing id counts for nothing.
+create or replace function app.reminders_sent(p_office uuid, p_ids uuid[])
+returns integer
+language plpgsql
+security definer
+set search_path to 'public', 'pg_catalog'
+as $function$
+declare v_id uuid; v_n integer := 0;
+begin
+  perform app.require_office(p_office);
+  for v_id in
+    select task_id from public.tasks
+     where task_id = any(coalesce(p_ids, array[]::uuid[]))
+       and office_id = p_office
+       and reminded_at is null
+  loop
+    perform app.reminder_finish(v_id);
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end;
+$function$;
+
+-- Run at the start of a tasks.remind tick: end what has been delivered, re-open what was lost, wait for the rest.
+create function app.reminders_settle(p_office uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'pg_catalog'
+as $function$
+declare
+  r record;
+  v_state text;
+  v_max constant integer := 3;
+  v_delivered integer := 0;
+  v_reopened integer := 0;
+  v_gave_up integer := 0;
+  v_waiting integer := 0;
+begin
+  perform app.require_office(p_office);
+  for r in
+    select t.task_id, t.remind_sends, t.remind_job_id, j.state as job_state
+      from public.tasks t
+      left join public.jobs j on j.job_id = t.remind_job_id and j.office_id = t.office_id
+     where t.office_id = p_office and t.remind_job_id is not null
+     order by t.remind_at
+     limit 500
+  loop
+    v_state := app.job_delivery_state(p_office, r.remind_job_id);
+    -- Nothing was ever claimed: still to come while the job is live, a loss once it has ended.
+    if v_state = 'none' and coalesce(r.job_state, 'failed') in ('complete', 'failed', 'cancelled') then
+      v_state := 'failed';
+    end if;
+    if v_state = 'sent' then
+      perform app.reminder_finish(r.task_id);
+      v_delivered := v_delivered + 1;
+    elsif v_state = 'failed' and r.remind_sends < v_max then
+      update public.tasks set remind_job_id = null where task_id = r.task_id;
+      v_reopened := v_reopened + 1;
+    elsif v_state = 'failed' then
+      -- Bounded: the third failed send ends the occurrence. The delivery rows stay failed and are listed by
+      -- app.undelivered, which is how it surfaces.
+      perform app.reminder_finish(r.task_id);
+      v_gave_up := v_gave_up + 1;
+    else
+      v_waiting := v_waiting + 1;
+    end if;
+  end loop;
+  return jsonb_build_object('delivered', v_delivered, 'reopened', v_reopened, 'gave_up', v_gave_up, 'waiting', v_waiting);
+end;
+$function$;
+revoke all on function app.reminders_settle(uuid) from public, anon, authenticated, service_role;
 
 commit;

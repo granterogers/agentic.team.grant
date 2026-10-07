@@ -78,6 +78,23 @@ export function remindersHandler(db: SqlExecutor): Handler {
         its own, so nobody's reminder is sent from, or marked by, somebody else's tick.
       */
       const office = `app.job_office('${job.jobId.replace(/'/g, "''")}'::uuid)`
+      /*
+        FIRST, WHAT EARLIER TICKS SAID (C3, migration 1027). A reminder is marked reminded when its message was DELIVERED,
+        and delivery finishes after the job that announced it, so the answer is read here, on a later tick: delivered
+        ends the occurrence (a series moves on in place), a lost or refused message is due again (up to three sends),
+        and one still in flight is left alone. A database without the function (or without 1029's
+        app.job_delivery_state) cannot tell, and then the older rule applies: marked once said, so a reminder is never
+        said twice.
+      */
+      const tracksDelivery = await db
+        .execute(`select app.reminders_settle(${office}) as s`)
+        .then(() => true)
+        .catch((error: unknown) => {
+          // Only "that function is not there" means this database cannot track delivery. Any other failure is a failure
+          // of the tick (the job retries), never a reason to quietly go back to marking before delivery.
+          if (/does not exist|42883/i.test(String((error as Error)?.message ?? error))) return false
+          throw error
+        })
       const raw = (await db.execute(`select app.reminders_due(${office}) as r`)).rows[0] as
         | { r?: unknown }
         | undefined
@@ -99,7 +116,14 @@ export function remindersHandler(db: SqlExecutor): Handler {
       */
       if (due.length > 0) {
         const ids = due.map((d) => `'${d.id.replace(/'/g, "''")}'::uuid`).join(',')
-        await db.execute(`select app.reminders_sent(${office}, array[${ids}])`)
+        if (tracksDelivery) {
+          // In flight, not sent: the settle on a later tick decides, from what the delivery layer recorded.
+          await db.execute(
+            `select app.reminders_announced(${office}, array[${ids}], '${job.jobId.replace(/'/g, "''")}'::uuid)`,
+          )
+        } else {
+          await db.execute(`select app.reminders_sent(${office}, array[${ids}])`)
+        }
       }
 
       return {

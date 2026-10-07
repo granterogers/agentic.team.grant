@@ -247,7 +247,13 @@ async function main(): Promise<number> {
   const cand = ensureCandidate({ rebuild: false, given: undefined })
   console.log(`candidate ${cand.name}: ${cand.note}`)
   console.log('\n== BASELINE: the unsabotaged candidate')
-  const base = gate(cand.name, 'baseline')
+  // --reuse-baseline and --no-restore let a long list be split across calls that each fit a shell's ten-minute ceiling; the
+  // last call (without --no-restore) shows the clean candidate is as it was. The baseline file is the one the previous call wrote.
+  const baselineFile = `.out/gate/sabotage-${PREFIX}-baseline.json`
+  const base =
+    args.includes('--reuse-baseline') && existsSync(baselineFile)
+      ? (JSON.parse(readFileSync(baselineFile, 'utf8')) as Report)
+      : gate(cand.name, 'baseline')
   const baseRed = new Set(base.red.map((r) => r.name))
   console.log(`baseline: ${String(base.green)} green, ${String(base.red.length)} red${baseRed.size > 0 ? ` (${[...baseRed].join(', ')}: red BEFORE any sabotage, so not counted against a sabotage)` : ''}; ${base.wallSeconds.toFixed(0)}s`)
 
@@ -261,9 +267,13 @@ async function main(): Promise<number> {
       const proof = s.apply(sab)
       for (const l of proof) console.log(`   landed: ${l}`)
       const rep = gate(sab, s.id)
-      const newly = rep.red.map((r) => r.name).filter((n) => !baseRed.has(n))
+      const allNew = rep.red.map((r) => r.name).filter((n) => !baseRed.has(n))
+      // replay-parity goes red for ANY edit made to the candidate, because the candidate then differs from the migration
+      // history. That is a true and useful signal about drift, and a vacuous one about a CONTROL: counting it would make every
+      // sabotage "caught". It counts only for a sabotage that is about drift.
+      const newly = allNew.filter((n) => n !== 'replay-parity' || s.expect.includes('replay-parity'))
       const asIntended = s.expect.some((e) => newly.includes(e))
-      console.log(`   gate: ${String(rep.green)} green, ${String(rep.red.length)} red; newly red: ${newly.length === 0 ? 'NONE' : newly.join(', ')}`)
+      console.log(`   gate: ${String(rep.green)} green, ${String(rep.red.length)} red; newly red: ${allNew.length === 0 ? 'NONE' : allNew.join(', ')}${allNew.length !== newly.length ? ' (replay-parity ignored for this verdict: it reports any drift)' : ''}`)
       console.log(`   ${newly.length > 0 ? 'CAUGHT' : 'NOT CAUGHT'}${newly.length > 0 && !asIntended ? ` (but not by any proof this sabotage was expected to trip: ${s.expect.join(', ')})` : ''}`)
       outcomes.push({ id: s.id, caught: newly.length > 0, asIntended, newlyRed: newly })
     } catch (e) {
@@ -275,11 +285,14 @@ async function main(): Promise<number> {
     }
   }
 
-  console.log('\n== RESTORE: the clean candidate again')
-  const after = gate(cand.name, 'restore')
-  const afterRed = new Set(after.red.map((r) => r.name))
-  const same = afterRed.size === baseRed.size && [...afterRed].every((n) => baseRed.has(n))
-  console.log(`restored gate: ${String(after.green)} green, ${String(after.red.length)} red${afterRed.size > 0 ? ` (${[...afterRed].join(', ')})` : ''}; red set ${same ? 'IDENTICAL to the baseline' : 'DIFFERS FROM THE BASELINE'}`)
+  let same = true
+  if (!args.includes('--no-restore')) {
+    console.log('\n== RESTORE: the clean candidate again')
+    const after = gate(cand.name, 'restore')
+    const afterRed = new Set(after.red.map((r) => r.name))
+    same = afterRed.size === baseRed.size && [...afterRed].every((n) => baseRed.has(n))
+    console.log(`restored gate: ${String(after.green)} green, ${String(after.red.length)} red${afterRed.size > 0 ? ` (${[...afterRed].join(', ')})` : ''}; red set ${same ? 'IDENTICAL to the baseline' : 'DIFFERS FROM THE BASELINE'}`)
+  }
 
   console.log('\n---- sabotage summary')
   for (const o of outcomes)

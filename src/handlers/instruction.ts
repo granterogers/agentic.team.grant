@@ -4701,7 +4701,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                         p_office => app.job_office(${lit(job.jobId)}::uuid),
                         p_task_id => ${lit(String(got.id ?? ''))},
                         p_repeat_every => ${lit(forGrant.repeat.every)}::interval,
-                        p_repeat_from => 'due') as r`)
+                        /*
+                          A series has no due date, and a repeat "from due" needs one (a table constraint), so its
+                          value is 'done'; the series moves on when it is delivered and the value is never read.
+                        */
+                        p_repeat_from => ${forGrant.due === null ? "'done'" : "'due'"}) as r`)
                     .then((s) => {
                       const raw = (s.rows[0] as { r?: unknown })?.r
                       const set = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
@@ -4724,6 +4728,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   defaulted: forGrant.remindDefaulted === true,
                   immediate: forGrant.remindImmediate === true,
                   repeatLabel: forGrant.repeat?.label ?? null,
+                  series: forGrant.repeat != null && forGrant.due === null,
                   repeatStored,
                   repeatUnsupported: forGrant.repeatUnsupported ?? null,
                   timeZone: officeTz,

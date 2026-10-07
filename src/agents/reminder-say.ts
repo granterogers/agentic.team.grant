@@ -13,7 +13,7 @@
  * them stops matching.
  */
 
-import { localClock } from './office-time.ts'
+import { localClock, localIsoDay } from './office-time.ts'
 
 export interface ReminderFacts {
   readonly title: string
@@ -29,6 +29,11 @@ export interface ReminderFacts {
   readonly repeatLabel: string | null
   /** True when the repeat is stored, false when storing it failed, null when none was asked for. */
   readonly repeatStored: boolean | null
+  /**
+   * A reminder SERIES (a repeat with a reminder time and no due date): it moves to its next time when it is delivered,
+   * and ticking it off ends it. Optional so every older caller reads as before (a repeating task).
+   */
+  readonly series?: boolean
   /** The words of a repeat that cannot be kept, when he asked for one. */
   readonly repeatUnsupported: string | null
   /** The office's zone, named in the sentence so a time is never ambiguous. */
@@ -37,9 +42,14 @@ export interface ReminderFacts {
 
 export function reminderSentence(f: ReminderFacts): string {
   const parts: string[] = []
-  const on = f.due === null ? '' : ` for ${f.due}`
+  // A series has no due date; its first reminder's day is what the sentence names.
+  const day =
+    f.due === null && f.series === true && f.remindAt !== null
+      ? localIsoDay(new Date(f.remindAt), f.timeZone)
+      : f.due
+  const on = day === null ? '' : ` for ${day}`
   const head =
-    f.due === null
+    day === null
       ? `That is on your list — "${f.title}", no date on it yet.`
       : `That is on your list${on} — "${f.title}".`
   parts.push(head)
@@ -56,7 +66,9 @@ export function reminderSentence(f: ReminderFacts): string {
     }
   }
   if (f.repeatLabel !== null) {
-    if (f.repeatStored === true) {
+    if (f.repeatStored === true && f.series === true) {
+      parts.push(`It repeats ${f.repeatLabel}. Tick it off to stop these.`)
+    } else if (f.repeatStored === true) {
       parts.push(
         `It repeats ${f.repeatLabel}. The next one is made when you tick this one off, ` +
           'so tick each one when it is done.',

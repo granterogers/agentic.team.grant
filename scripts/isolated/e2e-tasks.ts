@@ -176,10 +176,12 @@ const remRep = await mine(`${lit(`Daily-reminder ${run}`)}, '', null, now() - in
 await one(`select app.my_task_set(${O}, ${lit(String(remRep.id))}, null, null, interval '1 day', 'done') as v`)
 await one(`select app.hq_task_state(${O}, ${lit(String(remRep.id))}, 'done', null, 'grant') as v`)
 const nextRem = (await rows(`select remind_at, due_on::text as due from public.tasks where title = ${lit(`Daily-reminder ${run}`)} and state = 'todo'`))[0]
+// Decided (R3, 1027): a repeating task with ONLY a reminder time is a reminder SERIES. The delivery of its reminder moves it to
+// the next time in place (scripts/isolated/tk-reminders.ts), and ticking it off ENDS it: the trigger makes no next row for it.
 check(
-  'a repeating task that has ONLY a reminder time (no due date) keeps a reminder on its next occurrence',
-  nextRem !== undefined && nextRem.remind_at !== null,
-  `next occurrence: ${JSON.stringify(nextRem)} (trigger tasks_repeat_on_done derives remind_at only from due_on - remind_at)`,
+  'a reminder SERIES (a reminder time and a repeat, no due date) ticked off ENDS: no next occurrence row',
+  nextRem === undefined,
+  `next occurrence: ${JSON.stringify(nextRem)}`,
 )
 const remRepDue = await mine(`${lit(`Daily-reminder-due ${run}`)}, '', ${lit(day(0))}::date, now() - interval '1 minute'`)
 await one(`select app.my_task_set(${O}, ${lit(String(remRepDue.id))}, null, null, interval '1 day', 'due') as v`)
@@ -220,7 +222,9 @@ check(
 const outJob = await jobObj(fj)
 const handled = await remindersHandler(db).handle({ ...outJob, kind: 'tasks.remind' }, db)
 check('tasks.remind announces when something is due, naming it', handled.announce === true && handled.body.includes(`Remind due ${run}`), handled.body.replace(/\n/g, ' | ').slice(0, 160))
-check('...and marks what it said, last', Number((await one(`select count(*)::int as c from public.tasks where title = ${lit(`Remind due ${run}`)} and reminded_at is not null`)).c) === 1, '')
+// Decided (C3, 1027): said is not delivered. It is marked IN FLIGHT by the job that said it; a later tick, once the delivery layer
+// says sent, marks it reminded (scripts/isolated/tk-reminders.ts drives that).
+check('...and marks what it said as in flight, last (not reminded until delivered)', Number((await one(`select count(*)::int as c from public.tasks where title = ${lit(`Remind due ${run}`)} and reminded_at is null and remind_job_id = ${lit(outJob.jobId)}::uuid`)).c) === 1, '')
 const handled2 = await remindersHandler(db).handle({ ...outJob, kind: 'tasks.remind' }, db)
 check('the next tick says nothing and does not announce (no repeat, no 96-a-day noise)', handled2.announce === false && !handled2.body.includes(`Remind due ${run}`), handled2.body.slice(0, 80))
 const resetRem = await one(`select app.my_task_set(${O}, ${lit(String(rDue.id))}, null, now() - interval '1 minute') as v`)

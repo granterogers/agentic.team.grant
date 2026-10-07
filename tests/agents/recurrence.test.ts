@@ -9,12 +9,20 @@
 
 import { describe, expect, it } from 'vitest'
 import { personalTaskRequest } from '../../src/agents/mine.ts'
+import { localIsoDay } from '../../src/agents/office-time.ts'
 import { recurrenceOf } from '../../src/agents/recurrence.ts'
 import { reminderSentence } from '../../src/agents/reminder-say.ts'
 
 const ATHENS = 'Europe/Athens'
 // Wednesday 7 October 2026, 11:00 in Athens (EEST).
 const WED = new Date('2026-10-07T08:00:00.000Z')
+
+/**
+ * The office-local day of a REMINDER SERIES' first reminder. A series has no due date (it is a reminder, and a due date
+ * would make it a repeating task that is advanced by ticking it off), so its day is the day of its reminder time.
+ */
+const dayOf = (got: { remindAt?: string | null; due: string | null } | null): string | null =>
+  got?.remindAt == null ? null : localIsoDay(new Date(got.remindAt), ATHENS)
 
 describe('recurrenceOf reads the repeats that are a whole number of days', () => {
   it.each([
@@ -73,7 +81,8 @@ describe('personalTaskRequest: the first occurrence is on the office wall clock'
   it('"every Monday" with no time: next Monday at nine, a clean title, a due date to repeat from', () => {
     const got = personalTaskRequest('Remind me every Monday to review my finances.', WED, ATHENS)
     expect(got?.title).toBe('Review my finances')
-    expect(got?.due).toBe('2026-10-12')
+    expect(got?.due).toBeNull() // a reminder SERIES: no due date, one row advanced in place
+    expect(dayOf(got)).toBe('2026-10-12')
     expect(got?.remindAt).toBe('2026-10-12T06:00:00.000Z')
     expect(got?.remindDefaulted).toBe(true)
     expect(got?.repeat).toMatchObject({ every: '7 days', label: 'every Monday' })
@@ -87,12 +96,13 @@ describe('personalTaskRequest: the first occurrence is on the office wall clock'
       new Date('2026-10-07T04:00:00.000Z'),
       ATHENS,
     )
-    expect(early?.due).toBe('2026-10-07')
+    expect(early?.due).toBeNull()
+    expect(dayOf(early)).toBe('2026-10-07')
     expect(early?.remindAt).toBe('2026-10-07T06:00:00.000Z')
     expect(early?.remindDefaulted).toBe(false)
     expect(early?.title).toBe('Stretch')
     const late = personalTaskRequest('Remind me every day at 9am to stretch.', WED, ATHENS)
-    expect(late?.due).toBe('2026-10-08')
+    expect(dayOf(late)).toBe('2026-10-08')
     expect(late?.remindAt).toBe('2026-10-08T06:00:00.000Z')
   })
 
@@ -102,7 +112,7 @@ describe('personalTaskRequest: the first occurrence is on the office wall clock'
       WED,
       ATHENS,
     )
-    expect(got?.due).toBe('2026-10-09')
+    expect(dayOf(got)).toBe('2026-10-09')
     expect(got?.remindAt).toBe('2026-10-09T13:00:00.000Z')
     expect(got?.title).toBe('Send the report')
     expect(got?.repeat?.every).toBe('7 days')
@@ -110,20 +120,22 @@ describe('personalTaskRequest: the first occurrence is on the office wall clock'
 
   it('"every Wednesday" said on Wednesday after the time is next week; before it, today', () => {
     expect(
-      personalTaskRequest('Remind me every Wednesday to file the log.', WED, ATHENS)?.due,
+      dayOf(personalTaskRequest('Remind me every Wednesday to file the log.', WED, ATHENS)),
     ).toBe('2026-10-14')
     expect(
-      personalTaskRequest(
-        'Remind me every Wednesday to file the log.',
-        new Date('2026-10-07T04:00:00.000Z'),
-        ATHENS,
-      )?.due,
+      dayOf(
+        personalTaskRequest(
+          'Remind me every Wednesday to file the log.',
+          new Date('2026-10-07T04:00:00.000Z'),
+          ATHENS,
+        ),
+      ),
     ).toBe('2026-10-07')
   })
 
   it('"weekly" with no day starts one week from today; "every other Tuesday" starts on the next Tuesday', () => {
     const weekly = personalTaskRequest('Remind me weekly to review this.', WED, ATHENS)
-    expect(weekly?.due).toBe('2026-10-14')
+    expect(dayOf(weekly)).toBe('2026-10-14')
     expect(weekly?.remindAt).toBe('2026-10-14T06:00:00.000Z')
     expect(weekly?.title).toBe('Review this')
     const other = personalTaskRequest(
@@ -131,7 +143,7 @@ describe('personalTaskRequest: the first occurrence is on the office wall clock'
       WED,
       ATHENS,
     )
-    expect(other?.due).toBe('2026-10-13')
+    expect(dayOf(other)).toBe('2026-10-13')
     expect(other?.repeat?.every).toBe('14 days')
   })
 
@@ -142,7 +154,7 @@ describe('personalTaskRequest: the first occurrence is on the office wall clock'
       new Date('2026-10-20T08:00:00.000Z'),
       ATHENS,
     )
-    expect(got?.due).toBe('2026-10-25')
+    expect(dayOf(got)).toBe('2026-10-25')
     expect(got?.remindAt).toBe('2026-10-25T07:00:00.000Z') // 09:00 EET
   })
 
@@ -199,6 +211,13 @@ describe('the sentence says whether the repeat stuck', () => {
     repeatUnsupported: null,
     timeZone: ATHENS,
   }
+  it('a SERIES: says it repeats on its own and that ticking it off stops it, and names the first day', () => {
+    const s = reminderSentence({ ...facts, due: null, series: true })
+    expect(s).toContain('That is on your list for 2026-10-12')
+    expect(s).toContain('repeats every Monday')
+    expect(s).toContain('Tick it off to stop these')
+    expect(s).not.toContain('The next one is made when you tick')
+  })
   it('stored: says it repeats and how the next one is made', () => {
     const s = reminderSentence(facts)
     expect(s).toContain('repeats every Monday')

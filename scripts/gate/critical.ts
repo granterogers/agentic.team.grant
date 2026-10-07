@@ -76,6 +76,11 @@ export const CRITICAL: readonly Proof[] = [
   p('e2e-duties-budget', 29, 'duties and budgets are per-office; an office\'s background work can be held without parking a person\'s conversation'),
   p('e2e-failure', 41,'delivery and failure paths: retries are bounded, a failure is said once, nothing is sent twice'),
 
+  // ---- work in flight from the 7 October implementation run: registered by name, floors to be raised when each is final ----
+  p('tk-reminders', 5, 'a reminder fires at the office clock (date-only, recurring, three time zones), through the real handler and the real tasks.remind duty; a harness task is never reminded'),
+  p('tk-state-changes', 5, 'one sentence has one effect: a state change changes exactly one task and adds none, a creation adds exactly one, a non-match changes nothing'),
+  p('dl-delivery-redrive', 5, 'a finished answer is redriven until it is sent or visibly given up, and is never left claimed'),
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p('replay-parity', 7,'the whole migration history replayed into an EMPTY database builds a schema fingerprint-identical to the candidate'),
 ]
