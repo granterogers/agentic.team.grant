@@ -16,6 +16,7 @@ import { pickRoster } from '../../src/agents/router.ts'
 import { resolveElliptical, taskRequest } from '../../src/agents/tasks.ts'
 import { needsResolving } from '../../src/agents/thread.ts'
 import { asHumanWords } from '../../src/agents/turn.ts'
+import { isolated } from './guard.ts'
 
 interface Row {
   said: string
@@ -76,10 +77,22 @@ const read = (text: string, forwarded: boolean) => {
   }
 }
 
+// Optional second argument: a marked local replica. The roster is then the REAL one - `speaker()` reading
+// `app.who_knows_about` over `staff.expertise`, role words through `namedColleague` - instead of the offline fallback.
+const dbName = process.argv[2]
+const db = dbName === undefined ? null : await isolated(dbName)
+const speaker = db === null ? null : (await import('../../src/handlers/instruction.ts')).speaker
+
 for (const row of ROWS) {
   console.log(`\n=== ${JSON.stringify(row.said)}${row.forwarded ? '  [FORWARDED]' : ''}`)
   const alone = read(row.said, row.forwarded)
   console.log('  no thread  :', j(alone))
+  if (db !== null && speaker !== null) {
+    const who = await speaker(db, null, row.said, null, null, [], null)
+    console.log(
+      `  real roster: speaks=${who.slug} convened=${who.convened.join(',') || '(nobody)'} handoff=${j(who.handoff)} - ${who.reason.slice(0, 110)}`,
+    )
+  }
   if (row.thread !== '') {
     const elliptical = resolveElliptical(row.said, row.thread)
     const dangling = needsResolving(row.said)

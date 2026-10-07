@@ -21,7 +21,8 @@ import { raiseBlocker } from '../../src/inference/record.ts'
 import type { Job } from '../../src/jobs/worker.ts'
 import { scopeOf } from './fixtures-jobs.ts'
 import { isolated } from './guard.ts'
-import { chatFor, markShown } from './shown.ts'
+import { markShown } from './fixtures-approvals.ts' // the office-carrying copy: shown.ts predates deliveries.office_id
+import { chatFor } from './shown.ts'
 
 const db = await isolated(process.argv[2] ?? 'ack374')
 const run = Date.now().toString(36)
