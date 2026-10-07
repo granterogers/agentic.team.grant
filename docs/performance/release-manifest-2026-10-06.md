@@ -1,5 +1,9 @@
 # Release manifest: `claude/efficiency-deep-optimization` (6 October 2026)
 
+> **SUPERSEDED on 7 October 2026.** Its migration counts and ledger assumed production held 770 migrations. A read-only preflight showed
+> 798, exactly `origin/main`'s set (the 28 UX-line migrations were applied on 6 October). Use
+> `current-main-revalidation-2026-10-07.md` for what still holds; only 1023 to 1031 are unapplied.
+
 **Nothing in this document touched production.** No query, log query, migration, deploy or config change was made to produce it. Every
 production fact below is either from a file in this repository or is labelled UNVERIFIED. Labels: MEASURED (a number from a local replica run),
 DERIVED (arithmetic or reading of code from measured things), INFERRED (a reasonable belief with no direct test), UNKNOWN.
