@@ -425,6 +425,7 @@ npm run verify:wired                                            # if UI changed
 npm run verify:hq && npm run verify:ui && npm run verify:talk  # if UI changed (verify:talk is Team HQ, simulated audio; see below)
 npm run shots                                                   # capture web/studio
 npm run gate:safe -- --part=static && npm run gate:safe -- --part=production && npm run gate:safe -- --part=identity   # the gate that is safe to run (#414)
+npm run verify:critical                                         # the replica proofs that guard tenant isolation, approvals, jobs, delivery, tasks, provenance (docs/testing/CRITICAL-GATE.md). Local, no production, about 90 s
 ```
 
 **`npm run gate:safe` is the gate to run.** No model calls, serialised, foreground, one health reading first, and Grant plus
@@ -4765,6 +4766,23 @@ Each of these cost real time. They are here so they cost it once.
   a `failed` turn nobody was told about is a state (1024); (6) a **deployment-wide counter used as per-office** let one office park another's work
   (1025). (7) **An isolated proof that is not in a gate rots silently**: 43 of 96 are red by stale fixtures. (8) **A lint failure can be toolchain
   drift**: pin the formatter exactly. (9) **One record for what is deployed**: `docs/ops/deployment-state.json`, held by `check:deployment-state`.
+
+- **Version 1 reliability run lessons (7 October 2026, `docs/audit/V1-RELIABILITY-ACCEPTANCE-2026-10-07.md`).** (1) **The proofs that matter most
+  were red only because nothing ran them**: `npm run verify:critical` (55+ proofs, each justified in one line in `scripts/gate/critical.ts`, each on its
+  own fresh clone, a proof that asserts nothing or falls below its floor is red) is now the gate; a new replica proof is ONE `p(...)` line, and the
+  registry check refuses an unregistered file in `scripts/isolated/`. The gate was shown to catch 15 deliberate sabotages (`npm run verify:gate-sabotage`);
+  the one it first missed had no proof asserting it. (2) **A reminder is not a task with a date**: only an explicit "remind me" gets a default time
+  (09:00 in the OFFICE's zone, `offices.timezone`, never a hard-coded city); a reminder-only repeat is one row that advances in place when its delivery is
+  recorded sent, a repeating task makes the next one when ticked. (3) **A state change must veto creation**: "Mark X done" matched `taskRequest` as a create.
+  (4) **Claims of consequence require evidence of consequence**: `src/agents/consequence.ts` decides whether a sentence IS a claim and recorded rows decide
+  whether it is TRUE, per verb class; no phrasing list can be complete. (5) **A finished answer needs an ending**: a retryable failure is redriven with
+  bounded backoff, a failure after the request may have left the process parks as indeterminate rather than risk a duplicate (`docs/delivery/DELIVERY-STATE-MACHINE.md`).
+  (6) **A conversation key is derived by the server from the verified person, never named by the page** (`src/auth/conversation-key.ts`), and an
+  idempotency id from the page is scoped to that person so it can never dedupe against anybody else's. (7) **Every model request has a deadline and the
+  chain has a budget** (`src/providers/router.ts`). (8) **A journey suite found what unit tests could not**: one office's job could be delivered to
+  ANOTHER office's Telegram chat (1033). Drive whole journeys through the real doors, worker and delivery with a stub model and a fake transport
+  (`scripts/isolated/v1-acceptance-a.ts`, `-b.ts`), and state beside each what the stub model stands in for. (9) **An agent's "pre-existing red" is a claim**:
+  four proofs were reported as failing identically before and after; run by the lead on fresh clones every one was green.
 
 ---
 
