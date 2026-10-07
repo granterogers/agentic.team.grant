@@ -108,7 +108,7 @@ export interface PagerMessage {
    * Set for an operational notice (#413): a heading above short paragraphs, and none of an answer's furniture.
    * See `HandlerOutput.notice`.
    */
-  readonly notice?: { readonly heading: string }
+  readonly notice?: { readonly heading?: string }
 }
 
 /**
@@ -403,7 +403,9 @@ export function pagerText(message: PagerMessage): string {
       line (a notice claims nothing to be confident about), no unreviewed warning (nothing was drafted) and no body
       trimming that could cut the one sentence saying what to do: a notice is composed in code, to fit.
     */
-    parts.push(`<b>${escapeHtml(message.notice.heading)}</b>`)
+    if ((message.notice.heading ?? '') !== '') {
+      parts.push(`<b>${escapeHtml(message.notice.heading ?? '')}</b>`)
+    }
     parts.push(
       message.body
         .trim()

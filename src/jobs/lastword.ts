@@ -228,6 +228,8 @@ export async function lastWord(
   const output: HandlerOutput = {
     announce: true,
     body,
+    // A notice by kind: what the person is owed here is a sentence, not an answer to be labelled "not reviewed".
+    notice: {},
     confidence: 'high',
     contradictions: null,
     evidence: 'inferred',

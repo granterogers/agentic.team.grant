@@ -58,7 +58,12 @@ describe('a branch that starts work consults the decision already made', () => {
 
   it('and the narration it belongs to is the same decision', async () => {
     const text = await source()
-    expect(text).toMatch(/const alreadyOn =\s*alreadyRunning === null/)
+    // The model-recognised repeat, and the one `alreadyOn` the branches above consult: it IS that decision, widened
+    // only by the structural case (a live child of an earlier turn), never replaced by something else.
+    expect(text).toMatch(/const alreadyOnFromState =\s*alreadyRunning === null/)
+    expect(text).toMatch(
+      /const alreadyOn =\s*alreadyOnFromState !== null\s*\?\s*alreadyOnFromState/,
+    )
   })
 })
 

@@ -205,7 +205,11 @@ export interface HandlerOutput {
    * says "tap the button" with no button is the defect this field exists to prevent.
    */
   readonly notice?: {
-    readonly heading: string
+    /**
+     * A heading above the paragraphs. Absent when the sentence stands alone: the last word a failed turn owes the person
+     * (`src/jobs/lastword.ts`) is a notice by KIND, not by furniture, and needs no heading to say it did not get through.
+     */
+    readonly heading?: string
     readonly link?: { readonly label: string; readonly url: string }
   }
   /**

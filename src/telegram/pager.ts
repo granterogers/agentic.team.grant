@@ -215,7 +215,12 @@ export class TelegramPager {
       projectUrl,
       ...(input.output.notice === undefined
         ? {}
-        : { notice: { heading: input.output.notice.heading } }),
+        : {
+            notice:
+              input.output.notice.heading === undefined
+                ? {}
+                : { heading: input.output.notice.heading },
+          }),
     }
 
     const result = await this.delivery.deliver({

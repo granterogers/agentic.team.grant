@@ -802,10 +802,14 @@ await journey(
       note(
         'the independent step after the parked one ran before the answer (the product now continues past a question)',
       )
-    if (texts2.some((t) => innerRef.test(t)))
-      finding(
-        `the message that asks for approval prints an internal step reference to the person ("${texts2.join(' ').match(innerRef)?.[0] ?? ''}"), which CLAUDE.md's #242 rule calls a defect (src/handlers/pursue.ts, \`stopped before "\${run.at}"\`)`,
-      )
+    check(
+      "G2 the approval message says in plain words what will happen (the step's own description) and prints no step id or tool code, while the id stays in the job's own state",
+      !texts2.some((t) => innerRef.test(t)) &&
+        !texts2.some((t) => /\bdraft\.create\b/.test(t)) &&
+        texts2.some((t) => t.includes('Prepare the note to the venue')) &&
+        byName('s4:draft.create')?.finished === false,
+      texts2.join(' | ').slice(0, 160),
+    )
     if (!texts2.some((t) => /email the note|no way to/i.test(t)))
       finding(
         'the refused outward steps (an email, a post to outsiders) and the model\'s own "unreachable" list are not said to the person at the PAUSE, only in the final summary: until he answers he is not told the office cannot email the note',
@@ -1275,6 +1279,13 @@ await journey(
           (await outputsOfTree(r)).filter((o) => o.kind === 'office.synthesise').length === 1,
         `${String(k.length)} children, ${String((await groupsOf(r)).length)} group(s), ${String(s.length)} synthesis job(s)`,
       )
+      const leadOut = (await outputsOfTree(r)).find((o) => o.job === r)
+      check(
+        "H2 (control for the repeat fix) a worker RETRY finds its own earlier children and still owns them: the lead's reply says it handed the work on, and does not say somebody else is already on it",
+        /handed this on/.test(String(leadOut?.body)) &&
+          !/already on that/i.test(String(leadOut?.body)),
+        String(leadOut?.body).slice(0, 100),
+      )
       check(
         'H2 each specialist was asked once (one model call each) although the lead ran twice',
         model.since(m2, 'answer').filter((c) => c.persona === 'Daniel').length === 1 &&
@@ -1307,10 +1318,21 @@ await journey(
       const refused = await count(
         `select count(*)::int as n from public.job_impediments where job_id = ${lit(r2)}::uuid and needed = 'draw several answers together'`,
       )
-      if (/handed this on/.test(String(out2?.body)) || refused > 0)
-        finding(
-          `a repeated request whose children already exist (enqueue_child_once hands back the FIRST turn's children) makes the second turn say it handed work on ("${String(out2?.body).slice(0, 70)}...") and records a refused fan-in ("job is not a child of this one", ${String(refused)} impediment): no second team and no second synthesis start (the first turn's synthesis answers the thread), but the second reply promises something it did not start. instruction.ts pushes the existing child into branchesStarted and app.fan_in_over refuses it.`,
-        )
+      check(
+        'H3a the repeat does not CLAIM a hand-off it did not make: no "handed this on", no "I have not done this yet", and it says somebody is already on it',
+        !/handed this on|have not done this yet/i.test(String(out2?.body)) &&
+          /already on that/i.test(String(out2?.body)),
+        String(out2?.body).slice(0, 120),
+      )
+      check(
+        'H3a the repeat records no refused fan-in (the existing children belong to the first turn, so this turn registers no group)',
+        refused === 0 && (await groupsOf(r2)).length === 0,
+        `${String(refused)} impediment(s), ${String((await groupsOf(r2)).length)} group(s) on the second turn`,
+      )
+      check(
+        'H3a the first turn is untouched by the repeat: its own two children, its one group, its one synthesis',
+        k1.length === 2 && (await groupsOf(r1)).length === 1,
+      )
       modelDependent(
         'whether a real model recognises a repeat as the same work (src/agents/already.ts asks a model); when it does not, the structural guard above is all that stands between a repeat and a second team',
       )
@@ -1378,6 +1400,29 @@ await journey(
           /came back/i.test(String(out3?.body)),
         String(out3?.body).slice(0, 120),
       )
+      // Negative control for the repeat fix: when NOTHING of the earlier work is running any more, the same sentence is
+      // new work (the live-key index permits it by design) and the office really hands it on: new children, a group of
+      // its own, the hand-off said, no refused fan-in. The fix must not have bought "no false claim" with "no work".
+      {
+        await quiet()
+        scriptTeam()
+        model.script('already', 'NONE')
+        const fourth = await voiceTurn(ask, `s${run.slice(-4)}h3f`, proj)
+        const r4 = String(fourth.body.job_id ?? '')
+        await settle(r4)
+        const k4 = await childrenOf(r4, 'office.instruction')
+        const out4 = (await outputsOfTree(r4)).find((o) => o.job === r4)
+        check(
+          'H3d (control) the same sentence once nothing of the earlier work is running is new work: two new children, its own fan-in group, the hand-off said, no refused fan-in',
+          k4.length === 2 &&
+            (await groupsOf(r4)).length === 1 &&
+            /handed this on/i.test(String(out4?.body)) &&
+            (await count(
+              `select count(*)::int as n from public.job_impediments where job_id = ${lit(r4)}::uuid and needed = 'draw several answers together'`,
+            )) === 0,
+          `${String(k4.length)} children :: ${String(out4?.body).slice(0, 80)}`,
+        )
+      }
       check(
         "H3 across all of the repeats the person still has exactly one fan-in group per turn that delegated, and every group has its own branches (no group points at another turn's jobs)",
         (await count(
@@ -1930,8 +1975,10 @@ await journey(
       )
       clock.stop()
       useRouter(null)
-      finding(
-        'the apology the person receives after an exhausted model chain is followed by the provenance caption "not reviewed yet — I would not rely on this as it stands", which is about an answer and is attached to a notice that contains none',
+      check(
+        'J2 the apology is the whole message: no "not reviewed yet" caption follows it (the caption is about a drafted answer; the apology is a notice composed in code)',
+        texts[0]?.trim() === apology(false) && !/not reviewed|rely on this/i.test(texts[0] ?? ''),
+        JSON.stringify(texts[0]?.slice(-80)),
       )
       modelDependent(
         'how often a real provider chain is in each failure mode, and whether a real model eventually answers on a later attempt (the scripted chain fails every time here)',

@@ -37,6 +37,7 @@ import {
   planFor,
   planningCatalogue,
 } from '../agents/goal.ts'
+import { stoppedPartWay, stoppedToAsk } from '../agents/pause-words.ts'
 import type { Observation } from '../agents/perform.ts'
 import { byStepId, compile, performable } from '../agents/perform.ts'
 import { howComposed } from '../agents/provenance.ts'
@@ -317,9 +318,10 @@ export function pursueHandler(deps: PursueDeps): Handler {
           ...base,
           path: await spent(),
           announce: asking,
+          // In plain words: the step's own description, never its id or tool code (pause-words.ts).
           body: asking
-            ? `${sofar}I have stopped before "${run.at}" because I need you to say. ${run.pause.detail} ${run.pause.resumeWhen}`
-            : `${sofar}I stopped part way through, at "${run.at}": ${run.pause.detail} ${run.pause.resumeWhen}`,
+            ? `${sofar}${stoppedToAsk(run.pause)}`
+            : `${sofar}${stoppedPartWay(run.pause)}`,
         }
       }
 
@@ -350,7 +352,7 @@ export function pursueHandler(deps: PursueDeps): Handler {
         complete is worse than one that admits it understood nothing.
       */
       const lines: string[] = []
-      if (run.kind === 'stopped') lines.push(`You asked me to stop, so I did, at "${run.at}".`)
+      if (run.kind === 'stopped') lines.push('You asked me to stop, so I did.')
       for (const s of did) lines.push(s.o.saw)
       for (const s of couldNot) {
         lines.push(`I could not ${s.o.capability}: ${s.o.impediment ?? 'nothing came back'}.`)

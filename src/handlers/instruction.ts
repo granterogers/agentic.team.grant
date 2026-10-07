@@ -80,7 +80,7 @@ import {
   type RequestedKind,
 } from '../agents/actions.ts'
 import type { AnotherGo } from '../agents/again.ts'
-import { alreadyPursuing } from '../agents/already.ts'
+import { alreadyPursuing, alreadyWithSentence } from '../agents/already.ts'
 import {
   capabilityBrief,
   capabilityNow,
@@ -2805,7 +2805,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         Both end by naming the way to get another go, because refusing to
         duplicate is only safe if asking for a duplicate is easy.
       */
-      const alreadyOn =
+      const alreadyOnFromState =
         alreadyRunning === null
           ? null
           : (alreadyRunning.answer ?? '').trim() !== ''
@@ -2906,6 +2906,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               })
 
       const branchesStarted: { agent: string; jobId: string }[] = []
+      // Specialists a repeated request found already on the work, in a job this turn does not own.
+      const alreadyWithOthers: { agent: string; jobId: string }[] = []
       /*
         A QUESTION ABOUT THE WORK IS NOT WORK (#316).
 
@@ -2942,7 +2944,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const aboutTheWork =
         asksWhoIsOnIt(resolved.from ?? instruction) !== null || asksWhoIsOnIt(instruction) !== null
-      for (const other of aboutTheWork || alreadyOn !== null ? [] : who.alsoConvened) {
+      for (const other of aboutTheWork || alreadyOnFromState !== null ? [] : who.alsoConvened) {
         /*
           ONCE PER SPECIALIST PER OBLIGATION (#316, 0556).
 
@@ -2970,10 +2972,51 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 'handed_off_by', ${lit(who.slug)}
               ),
               false${callerArgs(job)}
-            ) ->> 'job_id' as id
+            ) as r
           `)
-          .catch((error: unknown) => ({ rows: [{ id: null, e: (error as Error).message }] }))
-        const row = spawned.rows[0] as { id?: string | null; e?: string } | undefined
+          .then((r) => {
+            const raw = (r.rows[0] as { r?: unknown } | undefined)?.r
+            const got = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+              job_id?: string | null
+              created?: boolean
+            } | null
+            return {
+              rows: [{ id: got?.job_id ?? null, created: got?.created !== false } as const],
+            }
+          })
+          .catch((error: unknown) => ({
+            rows: [{ id: null, created: false, e: (error as Error).message }],
+          }))
+        const row = spawned.rows[0] as
+          | { id?: string | null; created?: boolean; e?: string }
+          | undefined
+        /*
+          A REPEAT'S "CHILD" IS SOMEBODY ELSE'S WORK, AND A HAND-OFF IS NOT
+          CLAIMED FOR IT (Version 1 acceptance, journey H).
+
+          `enqueue_child_once` hands back the FIRST turn's live child when this
+          turn repeats the request. That job is not a child of THIS one, so
+          registering it as a branch made the fan-in refuse it (a refusal
+          recorded as if it were an event) and counted it as "convened" for
+          the sentence the person reads. Only a child this job owns -- one it
+          just made, or one its own earlier attempt made (a worker retry,
+          where the same parent finds its own child again) -- is a hand-off.
+          The rest is existing work, named as such below.
+        */
+        if (typeof row?.id === 'string' && row.created === false) {
+          const owner = await deps.db
+            .execute(
+              `select parent_job_id::text as p from public.jobs
+                where job_id = ${lit(row.id)}::uuid
+                  and office_id = app.job_office(${lit(job.jobId)}::uuid)`,
+            )
+            .then((r) => String((r.rows[0] as { p?: string } | undefined)?.p ?? ''))
+            .catch(() => job.jobId)
+          if (owner !== job.jobId) {
+            alreadyWithOthers.push({ agent: other, jobId: row.id })
+            continue
+          }
+        }
         if (row?.id === null || row?.id === undefined) {
           await deps.db
             .execute(`
@@ -3009,6 +3052,32 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           .catch(() => undefined)
         branchesStarted.push({ agent: other, jobId: row.id })
       }
+
+      /*
+        THE SAME TRUTH FROM THE STRUCTURAL DOOR.
+
+        `alreadyOnFromState` is the judgement made above (a model recognised the
+        repeat). When it did not, `enqueue_child_once` still refused a second
+        team, and what the person reads must say THAT -- somebody is on it --
+        rather than claim a hand-off or open "I have not done this". It applies
+        only when nothing was started or owned by this turn: a turn that made
+        some new work and found some already running keeps its normal reply.
+      */
+      const alreadyOn =
+        alreadyOnFromState !== null
+          ? alreadyOnFromState
+          : branchesStarted.length === 0 && alreadyWithOthers.length > 0
+            ? alreadyWithSentence(
+                await deps.db
+                  .execute(
+                    `select coalesce(nullif(name, ''), title, slug) as n from public.staff
+                      where slug in (${alreadyWithOthers.map((o) => lit(o.agent)).join(', ')})
+                      order by slug`,
+                  )
+                  .then((r) => r.rows.map((x) => String((x as { n?: string }).n ?? '')))
+                  .catch(() => []),
+              )
+            : null
 
       /*
         And something that WAITS for them and answers (#262).
