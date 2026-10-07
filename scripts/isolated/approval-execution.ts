@@ -139,7 +139,9 @@ const blocker = async (jobId: string) =>
   )
 const answer = (jobId: string, a: string, fn = 'app') =>
   blocker(jobId).then((b) =>
-    db.execute(`select ${fn}.hq_answer_blocker('${b}'::uuid, '${a}', 'grant')`),
+    db.execute(
+      `select ${fn}.hq_answer_blocker(coalesce((select zz_o.office_id from public.blockers zz_o where zz_o.blocker_id = '${b}'::uuid), app.test_office()), '${b}'::uuid, '${a}', 'grant')`,
+    ),
   )
 const state = async (jobId: string) =>
   String((await one(`select state::text as s from public.jobs where job_id = '${jobId}'`)).s)

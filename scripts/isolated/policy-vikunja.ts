@@ -64,7 +64,7 @@ const addTask = async (title: string): Promise<string> => {
   const r = json(
     (
       await one(
-        `select app.my_task_add(p_office => app.test_office(), p_title => ${lit(title)}) as r`,
+        `select app.my_task_add(p_office => app.operator_office(), p_title => ${lit(title)}) as r`,
       )
     ).r,
   )
@@ -150,7 +150,7 @@ check(
   `${String(remote.count('create', 'Pay the printer'))} create(s)`,
 )
 await one(
-  `select app.my_task_set(p_office => app.test_office(), p_task_id => ${lit(t1)}, p_title => ${lit(`Pay the printer, urgently ${w.run}`)}) as r`,
+  `select app.my_task_set(p_office => app.operator_office(), p_task_id => ${lit(t1)}, p_title => ${lit(`Pay the printer, urgently ${w.run}`)}) as r`,
 )
 await tick()
 check(

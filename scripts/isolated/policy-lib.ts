@@ -121,7 +121,7 @@ export async function policyWorld(defaultDb: string): Promise<World> {
         String(
           (
             await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
-              values (app.operator_office(), ${lit(kind)}, 'duty:' || coalesce((select slug from public.responsibilities where job_kind = ${lit(kind)} limit 1), (select slug from public.responsibilities order by slug limit 1)), ${project === null ? 'null' : `${lit(project)}::uuid`},
+              values (${project === null ? 'app.operator_office()' : `(select p.office_id from public.projects p where p.project_id = ${lit(project)}::uuid)`}, ${lit(kind)}, 'duty:' || coalesce((select slug from public.responsibilities where job_kind = ${lit(kind)} limit 1), (select slug from public.responsibilities order by slug limit 1)), ${project === null ? 'null' : `${lit(project)}::uuid`},
                       'pol-' || gen_random_uuid(), gen_random_uuid())
               returning job_id::text as id`)
           ).id,
