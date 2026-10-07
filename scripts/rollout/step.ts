@@ -25,6 +25,7 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../../src/db/executor.ts'
+import { writeLedgerRow } from './ledger-write.ts'
 import { judgeShape, statementsOf } from './shape.ts'
 
 type Obj = { sig: string; pre: string | null; post: string | null }
@@ -107,7 +108,7 @@ let db: SqlExecutor
 let ref = ''
 let token = ''
 // Production writes are logged (scripts/rollout/log.ts) so the two-GO condition can tell that something changed. A replica is not.
-let logWrite: (what: string, ok: boolean) => void = () => undefined
+let logWrite: (what: string, ok: boolean, detail?: string) => void = () => undefined
 if (replica !== undefined) {
   const { isolated } = await import('../isolated/guard.ts')
   db = await isolated(replica)
@@ -290,21 +291,15 @@ try {
       console.log(`DRY RUN: would ${action} exactly one row. Add --go to do it.`)
       process.exit(0)
     }
-    logWrite(`${action}-attempt ${stepId}`, false)
-    await db.execute(
-      action === 'record'
-        ? `insert into app.schema_migrations (name, checksum, duration_ms) values ('${name}', '${S.migrationSha256}', 0)
-             on conflict (name) do update set checksum = excluded.checksum`
-        : `delete from app.schema_migrations where name = '${name}' and checksum = '${S.migrationSha256}'`,
-    )
-    const after = (
-      (
-        await db.execute(
-          `select count(*)::int as n from app.schema_migrations where name = '${name}'`,
-        )
-      ).rows[0] as { n: number }
-    ).n
-    const ok = action === 'record' ? after === 1 : after === 0
+    // The attempt AND its completed entry are logged inside writeLedgerRow (scripts/rollout/ledger-write.ts).
+    const { ok, after } = await writeLedgerRow({
+      db,
+      action,
+      stepId,
+      name,
+      sha256: S.migrationSha256,
+      logWrite,
+    })
     console.log(
       `${action} ${stepId}: ledger row now ${after === 1 ? 'present' : 'absent'}: ${ok ? 'OK' : 'UNEXPECTED'}`,
     )

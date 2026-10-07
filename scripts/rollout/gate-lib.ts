@@ -23,7 +23,7 @@ export type Reading = {
   /** The statistics read (`--counters`), when taken. */
   counters?: Record<string, unknown> | null
 }
-export type WriteEvent = { at: string; what: string; ok: boolean }
+export type WriteEvent = { at: string; what: string; ok: boolean; detail?: string }
 
 /** "About ten minutes": not back to back (a pair is meant to span an interval) and not so far apart that it says little. */
 export const MIN_GAP_MIN = 8

@@ -30,8 +30,13 @@ export const appendLine = (file: string, value: unknown): void => {
 }
 
 /** Record a production write (after it was made, successful or not). */
-export const logWrite = (what: string, ok: boolean): void =>
-  appendLine(WRITE_LOG, { at: new Date().toISOString(), what, ok } satisfies WriteEvent)
+export const logWrite = (what: string, ok: boolean, detail?: string): void =>
+  appendLine(WRITE_LOG, {
+    at: new Date().toISOString(),
+    what,
+    ok,
+    ...(detail === undefined ? {} : { detail }),
+  } satisfies WriteEvent)
 
 /**
  * Refuse unless the two-GO condition holds. Used before the baseline reads, and before the first production write; once a write
