@@ -4784,6 +4784,23 @@ Each of these cost real time. They are here so they cost it once.
   (`scripts/isolated/v1-acceptance-a.ts`, `-b.ts`), and state beside each what the stub model stands in for. (9) **An agent's "pre-existing red" is a claim**:
   four proofs were reported as failing identically before and after; run by the lead on fresh clones every one was green.
 
+- **Decisions and evidence of 7 October 2026 (`docs/audit/V1-DECISIONS-AND-EVIDENCE-2026-10-07.md`).** (1) **A comment about how the data is shaped was
+  false for months, and it hid the fact that Telegram never delegated.** 0082 said the chief's bot is registered *with a null `staff_slug`*; a
+  read-only production read of `public.telegram_bots` showed the ONLY enabled bot is the pager and carries `chief-of-staff` (the seven director bots are all
+  disabled). The webhook stores the bot's slug as `addressed_to`, and `speaker()` treated any non-empty `addressed_to` as "addressed directly, convene
+  nobody", so every instruction typed to the chief bot was answered alone. Two concepts shared one column: **which bot receives the reply** (reply routing,
+  unchanged, still the stored `addressed_to`) and **whether a specialist was addressed directly** (`src/agents/addressing.ts`, the one definition: the chief
+  routes, a specialist is addressed). (2) **Completing a recurring reminder completes THAT time only** (Grant's decision): the series stays open, an
+  occurrence completed before it fires is skipped, and stopping it is a separate explicit act (`app.reminder_series_stop`, "stop the Monday finance
+  reminder", a "Stop repeating" button); the decision lives at the `tasks.state` trigger because ten writers set that column. (3) **A failed or uncertain
+  delivery of a finished answer puts ONE question on his Needs me list** (a blocker, `on_answer.kind = 'delivery.decide'`): send it again, it arrived,
+  or dismiss. An uncertain one is never auto-resent, and nothing is sent on a second channel because policy does not clearly permit it. (4) **Backup
+  retention policy is RECORDED, not executed**: the newest 7 days that each have a verified backup, plus the newest verified backup from each of the previous 8 ISO weeks
+  (`docs/ops/backup-retention-policy.md`, `src/backup/retention.ts`, a pure planner); deletion needs the attended flag AND both production-write flags AND
+  Grant's separate approval of the exact list. (5) **A proof that passes in the morning and fails after 11:00 UTC is a clock-dependent proof**:
+  `e2e-duties-budget` seeded a 07:00 briefing into offices on both sides of the date line, so one of the two was correctly not due for seven hours of
+  every UTC day. Anchor a fixture to local midnight, or pin the clock.
+
 ---
 
 ## Visual standard

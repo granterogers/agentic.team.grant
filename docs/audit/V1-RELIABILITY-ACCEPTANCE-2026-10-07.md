@@ -1,5 +1,10 @@
 # Version 1 reliability and acceptance, 7 October 2026
 
+> **Superseded in part the same day** by `docs/audit/V1-DECISIONS-AND-EVIDENCE-2026-10-07.md`: the Telegram delegation question and the Notion
+> failures are no longer PARKED (two authorised read-only production reads settled them), ticking a recurring reminder no longer ends the series
+> (Grant's decision), an uncertain or failed delivery now puts a question on his Needs me list, and the backup retention policy is recorded. This
+> document is kept as written.
+
 Scope: make the current Version 1 candidate reliable in the user journeys that matter to Grant, then prove it with behavioural
 acceptance tests. **Nothing was deployed. No migration was applied to production. After the single Tier 1 read-only pass earlier
 today there was no production contact.** Migrations 1023 to 1026 and every fix below are in the repository only. Evidence
