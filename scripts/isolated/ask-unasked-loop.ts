@@ -283,7 +283,20 @@ const later = (b: string, by: string) =>
   )
 }
 
-// 6. A worker that died mid-send leaves a claim; its lease lapses and the sweep finishes it.
+// 6. A send that died mid-flight is AMBIGUOUS (the provider may have accepted it), so it is never blindly resent
+// (migration 1029). The property kept from the old expectation: it is not lost silently - it ends visibly parked and
+// listed for the person, and a second copy is never sent. Two shapes of "died": a throw nobody classified, and a worker
+// killed after it began the send (the row is left claimed with the intent recorded).
+const stateOf = async (b: string) =>
+  (await one(
+    `select state::text as state, error_code, send_started_at is not null as intent
+       from public.deliveries where dedupe_key like 'blocker:' || '${b}' || ':%'`,
+  )) as { state: string; error_code: string | null; intent: boolean }
+const listed = async (jobId: string) => {
+  const v = (await one(`select app.undelivered(null, 200) as u`)).u
+  const list = (typeof v === 'string' ? JSON.parse(v) : v) as { job: string }[]
+  return list.filter((x) => x.job === jobId).length
+}
 {
   const j = await make('telegram:grant')
   failNext = 'plain'
@@ -291,11 +304,40 @@ const later = (b: string, by: string) =>
   await age(j.jobId)
   const b = await blockerOf(j.jobId)
   await lapse(b)
-  await ticks(2, notify, j.jobId)
+  await ticks(3, notify, j.jobId)
+  const s = await stateOf(b)
   check(
-    'a send that died after its claim is finished by the sweep, once',
-    sent.filter((x) => keyed(b)(x.key)).length === 1,
-    `${String(calls.filter(keyed(b)).length)} calls, ${String(sent.filter((x) => keyed(b)(x.key)).length)} sent`,
+    'a send that threw unclassified is parked as indeterminate, never resent, and listed',
+    calls.filter(keyed(b)).length === 1 &&
+      sent.filter((x) => keyed(b)(x.key)).length === 0 &&
+      s.state === 'failed' &&
+      String(s.error_code).startsWith('indeterminate:') &&
+      (await listed(j.jobId)) === 1,
+    `${String(calls.filter(keyed(b)).length)} calls, ${s.state} ${s.error_code}, listed ${String(await listed(j.jobId))}`,
+  )
+}
+{
+  const j = await make('telegram:grant')
+  await runJob(db, j, [handler], review, undefined) // paused with its question, nothing asked yet
+  await age(j.jobId)
+  const b = await blockerOf(j.jobId)
+  // The worker claimed, began the send, and was killed: claimed, intent recorded, lease lapsed, no outcome.
+  await db.execute(
+    `insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, correlation_id, blocker_id, send_started_at, lease_expires_at)
+     select j.office_id, 'telegram', 'blocker:${b}:reply', '8967954396', '1386648496', 'blocker', j.job_id, j.correlation_id, '${b}'::uuid, app.now_utc() - interval '5 minutes', app.now_utc() - interval '1 second'
+       from public.jobs j where j.job_id = '${j.jobId}'`,
+  )
+  const before = calls.filter(keyed(b)).length
+  await ticks(3, notify, j.jobId)
+  const s = await stateOf(b)
+  check(
+    'a worker killed mid-send leaves a claim that is parked as unconfirmed, not resent, and listed',
+    calls.filter(keyed(b)).length === before &&
+      sent.filter((x) => keyed(b)(x.key)).length === 0 &&
+      s.state === 'failed' &&
+      s.error_code === 'indeterminate:lease_lapsed_mid_send' &&
+      (await listed(j.jobId)) === 1,
+    `${String(calls.filter(keyed(b)).length - before)} new calls, ${s.state} ${s.error_code}, listed ${String(await listed(j.jobId))}`,
   )
 }
 

@@ -471,22 +471,32 @@ export async function loadConsequenceEvidence(
         select job_id from root
         union all
         select j.job_id from public.jobs j join tree t on j.parent_job_id = t.job_id)
+      , o as (select app.job_office('${jobId}'::uuid) as office_id)
       select
         (select count(*) from public.events e where e.related_job_id in (select job_id from tree)
+            and e.office_id = (select office_id from o)
             and e.tool_used = 'gmail.send')::int as mailed,
         (select count(*) from public.deliveries d where d.job_id in (select job_id from tree)
+            and d.office_id = (select office_id from o)
             and d.state = 'sent')::int as delivered,
         (select count(*) from public.documents d where d.produced_by_job in (select job_id from tree)
+            and d.office_id = (select office_id from o)
             and d.mirrors_document_id is not null)::int as published,
-        ((select count(*) from public.tasks t where t.job_id in (select job_id from tree))
+        ((select count(*) from public.tasks t where t.job_id in (select job_id from tree)
+            and t.office_id = (select office_id from o))
          + (select count(*) from public.events e where e.related_job_id in (select job_id from tree)
+              and e.office_id = (select office_id from o)
               and e.action_type ~* 'calendar'))::int as scheduled,
-        ((select count(*) from public.undoable_actions u where u.job_id in (select job_id from tree))
+        ((select count(*) from public.undoable_actions u where u.job_id in (select job_id from tree)
+            and u.office_id = (select office_id from o))
          + (select count(*) from public.events e where e.related_job_id in (select job_id from tree)
+              and e.office_id = (select office_id from o)
               and e.action_type ~* '(delete|cancel|remove)'))::int as removed,
         (select count(*) from public.events e where e.related_job_id in (select job_id from tree)
+            and e.office_id = (select office_id from o)
             and e.action_type ~* 'approv')::int as approved,
-        (select count(*) from public.documents d where d.produced_by_job in (select job_id from tree))::int as drafted,
+        (select count(*) from public.documents d where d.produced_by_job in (select job_id from tree)
+            and d.office_id = (select office_id from o))::int as drafted,
         greatest((select count(*) from tree) - 1, 0)::int as handoffs,
         coalesce((select array_agg(s.name) from public.staff s where s.active), '{}'::text[]) as colleagues,
         coalesce((select bool_or(tp.enabled) from public.tool_permissions tp where tp.tool = 'gmail.send'), false) as can_email`)

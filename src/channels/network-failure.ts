@@ -61,4 +61,4 @@ const check = (value: unknown, depth: number): boolean => {
 }
 
 /** True only when the failure provably happened before the request was transmitted. */
-export const failedBeforeSending = (error: unknown): boolean => (check(error, 0), true)
+export const failedBeforeSending = (error: unknown): boolean => check(error, 0)

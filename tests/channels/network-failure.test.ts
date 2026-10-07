@@ -61,7 +61,9 @@ describe('failedBeforeSending', () => {
   it('a multi-address connect failure counts only when EVERY address failed before connecting', () => {
     const agg = (...codes: string[]) =>
       Object.assign(new TypeError('fetch failed'), {
-        cause: Object.assign(new AggregateError(codes.map((c) => Object.assign(new Error(c), { code: c })))),
+        cause: Object.assign(
+          new AggregateError(codes.map((c) => Object.assign(new Error(c), { code: c }))),
+        ),
       })
     expect(failedBeforeSending(agg('ECONNREFUSED', 'ENETUNREACH'))).toBe(true)
     expect(failedBeforeSending(agg('ECONNREFUSED', 'ECONNRESET'))).toBe(false)
@@ -102,21 +104,27 @@ const slackSend = (fetchImpl: typeof fetch) =>
     .catch((e: unknown) => e as TransportError)
 
 describe('the transports classify a failed WRITE', () => {
-  it.each(NOT_SENT)('Telegram: %s before sending is retryable, and the write is attempted once', async (code) => {
-    const { fetchImpl, calls } = throwing(fetchFailed(code))
-    const error = (await tgSend(fetchImpl)) as TransportError
-    expect(error).toBeInstanceOf(TransportError)
-    expect(error.kind).toBe('retryable')
-    expect(error.code.startsWith('network_before_send:')).toBe(true)
-    expect(calls).toHaveLength(1) // the client does not loop a write by itself
-  })
-  it.each(MAYBE_SENT)('Telegram: %s may have been transmitted, so it is indeterminate', async (code) => {
-    const { fetchImpl, calls } = throwing(fetchFailed(code))
-    const error = (await tgSend(fetchImpl)) as TransportError
-    expect(error.kind).toBe('indeterminate')
-    expect(error.code.startsWith('indeterminate:')).toBe(true)
-    expect(calls).toHaveLength(1)
-  })
+  it.each(NOT_SENT)(
+    'Telegram: %s before sending is retryable, and the write is attempted once',
+    async (code) => {
+      const { fetchImpl, calls } = throwing(fetchFailed(code))
+      const error = (await tgSend(fetchImpl)) as TransportError
+      expect(error).toBeInstanceOf(TransportError)
+      expect(error.kind).toBe('retryable')
+      expect(error.code.startsWith('network_before_send:')).toBe(true)
+      expect(calls).toHaveLength(1) // the client does not loop a write by itself
+    },
+  )
+  it.each(MAYBE_SENT)(
+    'Telegram: %s may have been transmitted, so it is indeterminate',
+    async (code) => {
+      const { fetchImpl, calls } = throwing(fetchFailed(code))
+      const error = (await tgSend(fetchImpl)) as TransportError
+      expect(error.kind).toBe('indeterminate')
+      expect(error.code.startsWith('indeterminate:')).toBe(true)
+      expect(calls).toHaveLength(1)
+    },
+  )
   it.each(NOT_SENT)('Slack: %s before sending is retryable', async (code) => {
     const { fetchImpl, calls } = throwing(fetchFailed(code))
     const error = (await slackSend(fetchImpl)) as TransportError
@@ -124,10 +132,13 @@ describe('the transports classify a failed WRITE', () => {
     expect(error.code.startsWith('network_before_send:')).toBe(true)
     expect(calls).toHaveLength(1)
   })
-  it.each(MAYBE_SENT)('Slack: %s may have been transmitted, so it is indeterminate', async (code) => {
-    const { fetchImpl } = throwing(fetchFailed(code))
-    expect(((await slackSend(fetchImpl)) as TransportError).kind).toBe('indeterminate')
-  })
+  it.each(MAYBE_SENT)(
+    'Slack: %s may have been transmitted, so it is indeterminate',
+    async (code) => {
+      const { fetchImpl } = throwing(fetchFailed(code))
+      expect(((await slackSend(fetchImpl)) as TransportError).kind).toBe('indeterminate')
+    },
+  )
   it('a Telegram upload (callForm) classifies the same way', async () => {
     const mk = (code: string) =>
       new TelegramClient('1:FAKE', { fetchImpl: throwing(fetchFailed(code)).fetchImpl }).callForm(
