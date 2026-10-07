@@ -611,14 +611,22 @@ describe('every Vercel deployment a script in scripts/deploy creates is wired or
 
   it('finds the creators (the check is not vacuous)', () => {
     expect(creators).toEqual(
-      ['hq-page-delta.ts', 'hq.ts', 'site.ts', 'ux-review-preview.ts', 'vercel.ts'].sort(),
+      [
+        'hq-page-delta.ts',
+        'hq-page-preview.ts',
+        'hq.ts',
+        'site.ts',
+        'ux-review-preview.ts',
+        'vercel.ts',
+      ].sort(),
     )
   })
 
   it.each(creators)('%s imports the guard, or is named with a reason', (file) => {
     const src = read(`${dir}/${file}`)
     const wired = /page-deploy-guard\.ts/.test(src)
-    if (file === 'hq.ts' || file === 'hq-page-delta.ts') expect(wired).toBe(true)
+    if (file === 'hq.ts' || file === 'hq-page-delta.ts' || file === 'hq-page-preview.ts')
+      expect(wired).toBe(true)
     else {
       expect(wired).toBe(false)
       expect(
