@@ -121,7 +121,12 @@ const weekdayFrom = (said: string): number | null => {
   return hit === null ? null : (WEEKDAY_INDEX[String(hit[1]).toLowerCase()] ?? null)
 }
 
-const build = (days: number, weekday: number | null, phrase: string, label: string): Recurrence => ({
+const build = (
+  days: number,
+  weekday: number | null,
+  phrase: string,
+  label: string,
+): Recurrence => ({
   every: `${String(days)} ${days === 1 ? 'day' : 'days'}`,
   days,
   weekday,

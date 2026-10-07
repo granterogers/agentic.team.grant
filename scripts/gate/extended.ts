@@ -85,16 +85,19 @@ export const EXTENDED: readonly Proof[] = [
   // ---- characterisations and drivers that print findings, not assertions ---------------------------------------------
   p('e2e-instructions', 0, 'how thirteen natural-language instructions are classified and routed (a printed characterisation, no assertions)', { informational: true }),
 
+  // ---- a real browser (slow; needs Chromium and the proxy CA, see CLAUDE.md `npm run trust:proxy-ca`) -----------------
+  p('combined-browser', 10, 'Team HQ in a real browser as a person and as a Sample visitor: draws, no overflow at the phone width, a guest\'s writes refused', { args: ['--only=390'], timeoutS: 420 }),
+
   // ---- migration-specific and structural proofs ----------------------------------------------------------------------
   via('plants', 'p2-backfill-plants', 10, 'the ownership backfill ABORTS on data it cannot prove (six plants and a control)', { timeoutS: 300 }),
   via('fk', 'ownership-composite-fk', 8, 'the composite ownership keys hold under a role that bypasses row security (needs the schema BEFORE 0654)', { timeoutS: 300 }),
   via('sql', 'ux-activity-via', 1, 'migration 0920: Activity says which door', { file: 'ux-be/01-activity-via', okRe: 'PASS 01' }),
   via('sql', 'ux-project-search', 1, 'project search finds only the office\'s own', { file: 'ux-be/02-project-search', okRe: 'PASS|all checks passed' }),
   via('sql', 'ux-mcp-tools', 1, 'MCP tools per office', { file: 'ux-be/03-mcp-tools', okRe: 'PASS 03' }),
-  via('sql', 'ux-style-profiles', 1, 'style profiles', { file: 'ux-be/04-style-profiles', okRe: 'PASS 04' }),
-  via('sql', 'ux-mcp-calendar', 1, 'MCP calendar tools', { file: 'ux-be/05-mcp-calendar', okRe: 'PASS 05' }),
-  via('sql', 'ux-web-sources', 1, 'web sources', { file: 'ux-be/05-web-sources', okRe: 'all checks passed' }),
+  via('sql', 'ux-style-profiles', 1, 'style profiles are one per person and never another office\'s', { file: 'ux-be/04-style-profiles', okRe: 'PASS 04' }),
+  via('sql', 'ux-mcp-calendar', 1, 'the MCP calendar tools read and write only the caller\'s office', { file: 'ux-be/05-mcp-calendar', okRe: 'PASS 05' }),
+  via('sql', 'ux-web-sources', 1, 'web sources a project reads are the project\'s own and bounded', { file: 'ux-be/05-web-sources', okRe: 'all checks passed' }),
   via('sql', 'ux-audit-1021', 1, 'migration 1021 audit proof (ends in a deliberate PROOF_OK exception)', { file: 'ux-be/07-audit-1021', okRe: 'PROOF_OK', okRc: 3 }),
   p('ux-artifacts', 1, 'the report pipeline end to end with a fake model (rolled back)', { file: 'ux-be/05-artifacts', okRe: 'ALL PASSED' }),
-  p('ux-style-adopt', 1, 'adopting a style', { file: 'ux-be/06-style-adopt', okRe: 'ALL PASSED' }),
+  p('ux-style-adopt', 1, 'adopting a style changes the report\'s colours and records what was adopted', { file: 'ux-be/06-style-adopt', okRe: 'ALL PASSED' }),
 ]

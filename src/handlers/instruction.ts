@@ -94,7 +94,7 @@ import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import type { Correction } from '../agents/correction.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
-import { OPERATOR_TIMEZONE, officeTimezone } from '../agents/office-time.ts'
+import { officeTimezone, OPERATOR_TIMEZONE } from '../agents/office-time.ts'
 import { reminderSentence } from '../agents/reminder-say.ts'
 import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
 import { ownTask } from '../agents/own-task.ts'
@@ -4801,7 +4801,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         a conversation behind it. An explicit "call it X" needs no lookup at all.
       */
       const namedLater =
-        asked !== null || isBranch || forwarded || settles !== null || instruction.trim().length > 90
+        asked !== null ||
+        isBranch ||
+        forwarded ||
+        settles !== null ||
+        instruction.trim().length > 90
           ? null
           : await deps.db
               .execute(`

@@ -492,7 +492,12 @@
     "verify:basecamp-addsource": "tsx scripts/verify/basecamp-addsource.ts",
     "verify:final-audit-live": "tsx scripts/verify/final-audit-live.ts",
     "verify:policy-live": "tsx scripts/verify/policy-live.ts",
-    "verify:isolated": "bash scripts/isolated/run-all.sh",
+    "verify:critical": "tsx scripts/gate/run.ts --tier critical",
+    "verify:extended": "tsx scripts/gate/run.ts --tier extended",
+    "verify:proofs": "tsx scripts/gate/run.ts --tier all",
+    "verify:isolated": "tsx scripts/gate/run.ts --tier all",
+    "check:proofs": "tsx scripts/gate/run.ts --check",
+    "verify:gate-sabotage": "tsx scripts/gate/sabotage.ts",
     "verify:run5-live": "tsx scripts/verify/run5-live.ts"
   },
   "devDependencies": {

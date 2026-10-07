@@ -48,6 +48,7 @@ interface Options {
   keep: boolean
   rebuild: boolean
   noBuild: boolean
+  allowUnregistered: boolean
   candidate: string | undefined
   check: boolean
   list: boolean
@@ -62,6 +63,7 @@ function parse(argv: string[]): Options {
     keep: false,
     rebuild: false,
     noBuild: false,
+    allowUnregistered: false,
     candidate: undefined,
     check: false,
     list: false,
@@ -80,6 +82,7 @@ function parse(argv: string[]): Options {
     else if (a === '--keep') o.keep = true
     else if (a === '--rebuild') o.rebuild = true
     else if (a === '--no-build') o.noBuild = true
+    else if (a === '--allow-unregistered') o.allowUnregistered = true
     else if (a === '--candidate') o.candidate = next()
     else if (a === '--check') o.check = true
     else if (a === '--list') o.list = true
@@ -215,7 +218,13 @@ const pad = (s: string, n: number): string => (s.length >= n ? s : s + ' '.repea
 
 async function main(): Promise<number> {
   const o = parse(process.argv.slice(2))
-  const problems = registryProblems()
+  let problems = registryProblems()
+  if (o.allowUnregistered) {
+    // For a developer whose new proof is not registered YET: it is named, loudly, and still not run by any tier.
+    const orphans = problems.filter((x) => x.what.includes('neither a registered proof'))
+    for (const x of orphans) console.warn(`WARNING (not run by any tier): ${x.what}`)
+    problems = problems.filter((x) => !orphans.includes(x))
+  }
   if (problems.length > 0) {
     console.error('REGISTRY PROBLEMS (the gate will not run on a registry that is not sound):')
     for (const p of problems) console.error(`  - ${p.what}`)

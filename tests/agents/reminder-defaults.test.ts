@@ -9,8 +9,8 @@
 
 import { describe, expect, it } from 'vitest'
 import { calendarDateIn } from '../../src/agents/due.ts'
-import { whenFor, personalTaskRequest, personalTaskChange } from '../../src/agents/mine.ts'
-import { officeTimezone, OPERATOR_TIMEZONE } from '../../src/agents/office-time.ts'
+import { personalTaskChange, personalTaskRequest, whenFor } from '../../src/agents/mine.ts'
+import { OPERATOR_TIMEZONE, officeTimezone } from '../../src/agents/office-time.ts'
 import { defaultReminderAt } from '../../src/agents/remind-at.ts'
 import { reminderSentence } from '../../src/agents/reminder-say.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
@@ -27,10 +27,25 @@ const ask = (said: string, now: Date, zone: string) => personalTaskRequest(said,
 describe('R1: asked to be reminded on a day, no time said -> nine, office time', () => {
   it.each([
     ['Remind me Friday to call Mum.', 'Call Mum.', '2026-10-09', '2026-10-09T06:00:00.000Z'],
-    ['Remind me tomorrow to pay the bill.', 'Pay the bill.', '2026-10-08', '2026-10-08T06:00:00.000Z'],
+    [
+      'Remind me tomorrow to pay the bill.',
+      'Pay the bill.',
+      '2026-10-08',
+      '2026-10-08T06:00:00.000Z',
+    ],
     ['Remind me on 15 October to renew X.', 'Renew X.', '2026-10-15', '2026-10-15T06:00:00.000Z'],
-    ['Nudge me next week to chase the invoice.', 'Chase the invoice.', '2026-10-14', '2026-10-14T06:00:00.000Z'],
-    ['Remind me in 3 days to water the plants.', 'Water the plants.', '2026-10-10', '2026-10-10T06:00:00.000Z'],
+    [
+      'Nudge me next week to chase the invoice.',
+      'Chase the invoice.',
+      '2026-10-14',
+      '2026-10-14T06:00:00.000Z',
+    ],
+    [
+      'Remind me in 3 days to water the plants.',
+      'Water the plants.',
+      '2026-10-10',
+      '2026-10-10T06:00:00.000Z',
+    ],
   ])('%s', (said, title, due, remindAt) => {
     const got = ask(said, WED_11_ATHENS, ATHENS)
     expect(got).not.toBeNull()
@@ -117,9 +132,8 @@ describe('Z1: "today" and "tomorrow" are the office\'s calendar day', () => {
   })
 
   it('personalTaskChange moves a task on the office day too', () => {
-    const NIGHT_ATHENS = new Date('2026-10-07T22:30:00.000Z')
-    expect(personalTaskChange('make that tomorrow', NIGHT_ATHENS, ATHENS)?.due).toBe('2026-10-09')
-    expect(personalTaskChange('make that tomorrow', NIGHT_ATHENS, NEW_YORK)?.due).toBe('2026-10-08')
+    expect(personalTaskChange('make that tomorrow', NIGHT, ATHENS)?.due).toBe('2026-10-09')
+    expect(personalTaskChange('make that tomorrow', NIGHT, NEW_YORK)?.due).toBe('2026-10-08')
   })
 })
 
@@ -141,7 +155,11 @@ describe('the default time across a change of clocks', () => {
   })
 
   it('a written date on the day of the change reads end to end', () => {
-    const got = ask('Remind me on 25 October to put the clocks back.', new Date('2026-10-20T08:00:00Z'), ATHENS)
+    const got = ask(
+      'Remind me on 25 October to put the clocks back.',
+      new Date('2026-10-20T08:00:00Z'),
+      ATHENS,
+    )
     expect(got?.due).toBe('2026-10-25')
     expect(got?.remindAt).toBe('2026-10-25T07:00:00.000Z')
   })
@@ -163,11 +181,17 @@ describe('the sentence says what is stored, in the zone it used', () => {
     expect(ny).toContain('09:00 (America/New_York)')
     expect(ny).toContain('did not say a time')
     expect(ny).not.toContain('Athens')
-    const athens = reminderSentence({ ...base, remindAt: '2026-10-09T06:00:00.000Z', timeZone: ATHENS })
+    const athens = reminderSentence({
+      ...base,
+      remindAt: '2026-10-09T06:00:00.000Z',
+      timeZone: ATHENS,
+    })
     expect(athens).toContain('09:00 (Europe/Athens)')
   })
   it('a time he said is not described as a default', () => {
-    expect(reminderSentence({ ...base, defaulted: false, timeZone: NEW_YORK })).not.toContain('did not say')
+    expect(reminderSentence({ ...base, defaulted: false, timeZone: NEW_YORK })).not.toContain(
+      'did not say',
+    )
   })
   it('an immediate reminder does not promise nine o clock', () => {
     const s = reminderSentence({ ...base, immediate: true, timeZone: ATHENS })
@@ -202,17 +226,19 @@ describe('Z1: ONE zone source', () => {
       },
     } as never
   }
-  it('asks the database for the zone of the JOB\'s office', async () => {
+  it("asks the database for the zone of the JOB's office", async () => {
     const db = fake([{ tz: NEW_YORK }])
     expect(await officeTimezone(db, 'job-1')).toBe(NEW_YORK)
     expect(db.seen[0]).toContain('app.office_timezone(app.job_office(')
     expect(db.seen[0]).toContain('job-1')
   })
-  it('an office the database reads as UTC is UTC, never the operator\'s zone', async () => {
+  it("an office the database reads as UTC is UTC, never the operator's zone", async () => {
     expect(await officeTimezone(fake([{ tz: 'UTC' }]), 'j')).toBe('UTC')
   })
   it('an UNREADABLE zone (no function yet, no row, not a zone) is the documented operator default', async () => {
-    expect(await officeTimezone(fake(new Error('function app.office_timezone does not exist')), 'j')).toBe(OPERATOR_TIMEZONE)
+    expect(
+      await officeTimezone(fake(new Error('function app.office_timezone does not exist')), 'j'),
+    ).toBe(OPERATOR_TIMEZONE)
     expect(await officeTimezone(fake([]), 'j')).toBe(OPERATOR_TIMEZONE)
     expect(await officeTimezone(fake([{ tz: 'Not/AZone' }]), 'j')).toBe(OPERATOR_TIMEZONE)
   })

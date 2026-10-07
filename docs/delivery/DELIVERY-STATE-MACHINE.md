@@ -25,7 +25,8 @@ refusal; `indeterminate:*` may have landed; `abandoned:*` was never sent and the
 | First delivery succeeds | `sent` | no | n/a |
 | 429 (Telegram `retry_after`, Slack `Retry-After`) | retryable, wait at least the provider's | yes, when the wait is over, bounded by `delivery.max_attempts` (5) | after the last attempt: `delivery.gave_up` event and the undelivered list |
 | 5xx the provider reported | retryable, exponential 30, 60, 120, 240 s, ceiling 900 s | same | same |
-| Network error or timeout on a write | `failed indeterminate:*` | NOT automatically (it may have landed). Slack can `reconcile`; Telegram cannot. A person or a reconcile makes it owed again | undelivered list ("did not say whether it arrived") |
+| Network failure BEFORE any request bytes left (DNS `ENOTFOUND`/`EAI_AGAIN`, `ECONNREFUSED`, `ENETUNREACH`/`EHOSTUNREACH`, undici connect timeout, TLS handshake or certificate failure, invalid URL; classified in `src/channels/network-failure.ts` from the error's `code` through its `cause` chain, every address of an `AggregateError` must qualify) | retryable `network_before_send:*` | yes, one attempt per backoff step, bounded by `max_attempts` | after the last attempt, as for 5xx |
+| Failure AFTER the request may have been sent (read timeout, `ECONNRESET`, `EPIPE`, response lost) or any code not on that list | `failed indeterminate:*` | NOT automatically (it may have landed). Slack can `reconcile`; Telegram cannot. A person or a reconcile makes it owed again | undelivered list ("did not say whether it arrived") |
 | 400 chat not found, 403 bot blocked, unknown | `failed` at once | never | undelivered list, `delivery.failed` event |
 | Two workers, one key | one claim wins, the other is `held`; a second sender of the same attempt is `fenced` | n/a | n/a |
 | Worker dies before the provider call | row `claimed`, no intent | yes, by the redrive (attempt + 1) | n/a |
@@ -39,9 +40,13 @@ refusal; `indeterminate:*` may have landed; `abandoned:*` was never sent and the
   the message is **not** resent, and the row says visibly that it is unconfirmed. The cost is that if the provider had in
   fact NOT accepted it, the answer waits for a person (`retry_delivery`) or, on Slack, for a reconcile.
 * A retry after a failure the provider REPORTED (429, 5xx with a body) is safe: the provider said it did not accept.
-* Slack's 5xx on a write and every network or timeout error on a write are classified indeterminate by the client
-  (`src/slack/api.ts`, `src/telegram/api.ts`), so they park rather than retry. That is a deliberate choice of
-  at-most-once over at-least-once for ambiguous errors.
+* Slack's 5xx on a write and every network error that is not provably pre-send are classified indeterminate by the
+  client (`src/slack/api.ts`, `src/telegram/api.ts`), so they park rather than retry. That is a deliberate choice of
+  at-most-once over at-least-once for ambiguous errors. An unknown error code is treated as ambiguous.
+* Who learns of a terminal failure: it is on `app.undelivered` (read by the studio) and in the events ledger. The
+  `owed_a_word` mechanism covers FAILED turns only and skips a job that has any delivery row, so a completed answer
+  whose delivery failed is not told on a chat channel. A one-line notice on a different channel (for example Slack when
+  Telegram failed) would be cheap but is a new outward message and is NOT implemented.
 * Several channels for one job are independent rows; the notifier's one-message-per-surface rule plus the sweep's
   `superseded` rule keep two rows from putting two messages in one chat, but two different chats legitimately get one each.
 * Time is the database clock. A lapsed lease is detected on the next worker tick (about a minute), so a retry is never

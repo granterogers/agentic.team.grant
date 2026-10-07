@@ -49,9 +49,15 @@
 import { calendarDateIn } from './due.ts'
 import { withoutOpeningAffirmation } from './intent.ts'
 import { mentionsWithoutAsking } from './not-a-request.ts'
-import { localDay, localIsoDay, OPERATOR_TIMEZONE, weekdayOf, wallClock } from './office-time.ts'
-import { clockOf, defaultReminderAt, REMIND_TIME_WORDS, remindAtFor, spokenToDigits } from './remind-at.ts'
+import { localDay, localIsoDay, OPERATOR_TIMEZONE, wallClock, weekdayOf } from './office-time.ts'
 import { type Recurrence, recurrenceOf, withoutTheRepeat } from './recurrence.ts'
+import {
+  clockOf,
+  defaultReminderAt,
+  REMIND_TIME_WORDS,
+  remindAtFor,
+  spokenToDigits,
+} from './remind-at.ts'
 import { DANGLING_AFTER_A_DATE, PROJECT_ADJUNCT } from './request.ts'
 /*
   The office reminding him. The verb is "remind" and the object is HIM, which
@@ -664,7 +670,8 @@ export function personalTaskRequest(
   */
   const repeating = recurrenceOf(asked)
   const rec = repeating !== null && 'every' in repeating ? repeating : null
-  const unsupported = repeating !== null && 'unsupported' in repeating ? repeating.unsupported : null
+  const unsupported =
+    repeating !== null && 'unsupported' in repeating ? repeating.unsupported : null
   /*
     A date written out ("on 15 October") is in the due column once `whenFor`
     has read it, so its words leave the title the way "on Friday" does; the
@@ -776,7 +783,8 @@ const firstOccurrence = (
     return wallClock(today.y, today.m, today.d + rec.days, hh, mm, timeZone)
   }
   for (let ahead = 0; ahead <= 14; ahead++) {
-    if (rec.weekday !== null && weekdayOf(today.y, today.m, today.d + ahead) !== rec.weekday) continue
+    if (rec.weekday !== null && weekdayOf(today.y, today.m, today.d + ahead) !== rec.weekday)
+      continue
     const at = wallClock(today.y, today.m, today.d + ahead, hh, mm, timeZone)
     if (at.getTime() > now.getTime()) return at
   }
