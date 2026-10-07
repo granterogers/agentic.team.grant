@@ -35,6 +35,14 @@ const auth = { Authorization: `Bearer ${token}` }
 // The upload set is defined once, in lib/page-files.ts, and the fingerprint below is computed over exactly these bytes.
 // Run `npm run config:site` first: the generated web/studio/config.js is part of what is uploaded and so of the fingerprint.
 const files = await collectPageFiles('.')
+// The generated config.js tells the page which office to ask. It is gitignored, so a fresh checkout does not have it, and a page
+// deployed without it points at no office (backend.js answers an empty address). Refuse before anything is compared or sent.
+if (!files.has('config.js') || !files.has('studio/config.js')) {
+  console.error(
+    'web/studio/config.js is missing: run `npm run config:site` first. Nothing was compared or deployed.',
+  )
+  process.exit(2)
+}
 const list = toUploadList(files)
 /** The non-file fields of the deployment request. The request and the fingerprint both read these, so they cannot differ. */
 const DEPLOYMENT = {

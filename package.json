@@ -253,6 +253,7 @@
     "coverage": "tsx scripts/coverage.ts",
     "verify:duties": "tsx scripts/verify/duties.ts",
     "verify:notebook": "tsx scripts/verify/notebook.ts",
+    "verify:notebook-bundle": "tsx scripts/verify/notebook-bundle.ts",
     "verify:google-live": "tsx scripts/verify/google-live.ts",
     "q": "tsx scripts/q.ts",
     "verify:drains": "tsx scripts/verify/drains.ts",
