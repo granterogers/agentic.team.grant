@@ -397,17 +397,21 @@ await one(
   `select app.my_task_set(${O}, ${lit(String(remRep.id))}, null, null, interval '1 day', 'done') as v`,
 )
 await one(`select app.hq_task_state(${O}, ${lit(String(remRep.id))}, 'done', null, 'grant') as v`)
-const nextRem = (
-  await rows(
-    `select remind_at, due_on::text as due from public.tasks where title = ${lit(`Daily-reminder ${run}`)} and state = 'todo'`,
-  )
-)[0]
-// Decided (R3, 1027): a repeating task with ONLY a reminder time is a reminder SERIES. The delivery of its reminder moves it to
-// the next time in place (scripts/isolated/tk-reminders.ts), and ticking it off ENDS it: the trigger makes no next row for it.
+const remSeries = await rows(
+  `select state, remind_at, due_on::text as due, repeat_every::text as rep, last_completed_for from public.tasks where title = ${lit(`Daily-reminder ${run}`)}`,
+)
+// Decided (R3, 1027) and REVERSED by the owner on 7 October 2026 (1034): a repeating task with ONLY a reminder time is a reminder
+// SERIES, the delivery of its reminder moves it to the next time in place (scripts/isolated/tk-reminders.ts), and ticking it off
+// completes THAT TIME ONLY: the occurrence that had not fired is skipped, the row stays open and repeating, and no second row
+// is made (the old expectation here was "ticked off ENDS: no next occurrence row"; it is flipped, not weakened: still no row).
 check(
-  'a reminder SERIES (a reminder time and a repeat, no due date) ticked off ENDS: no next occurrence row',
-  nextRem === undefined,
-  `next occurrence: ${JSON.stringify(nextRem)}`,
+  'a reminder SERIES (a reminder time and a repeat, no due date) ticked off completes that time only: ONE row, still open and repeating, the unfired time skipped',
+  remSeries.length === 1 &&
+    remSeries[0]?.state === 'todo' &&
+    String(remSeries[0]?.rep).startsWith('1 day') &&
+    remSeries[0]?.last_completed_for !== null &&
+    new Date(String(remSeries[0]?.remind_at)).getTime() > Date.now(),
+  `rows: ${JSON.stringify(remSeries)}`,
 )
 const remRepDue = await mine(
   `${lit(`Daily-reminder-due ${run}`)}, '', ${lit(day(0))}::date, now() - interval '1 minute'`,

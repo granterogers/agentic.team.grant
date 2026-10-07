@@ -322,7 +322,7 @@ interface TgCall {
   text: string
   outcome: string
 }
-type TgStep = 'ok' | 'rate_limited' | 'refused' | 'lost_response'
+type TgStep = 'ok' | 'rate_limited' | 'refused' | 'lost_response' | 'chat_not_found'
 const tg = {
   calls: [] as TgCall[],
   script: [] as TgStep[],
@@ -363,6 +363,13 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     const error = new TypeError('fetch failed') as TypeError & { cause?: unknown }
     error.cause = Object.assign(new Error('read ETIMEDOUT'), { code: 'UND_ERR_SOCKET' })
     throw error
+  }
+  if (step === 'chat_not_found') {
+    // A definite refusal: the provider answered and said the chat is gone. Nothing was posted.
+    return new Response(
+      JSON.stringify({ ok: false, error_code: 400, description: 'Bad Request: chat not found' }),
+      { status: 400 },
+    )
   }
   if (step === 'rate_limited') {
     return new Response(
@@ -742,7 +749,19 @@ await journey(
     const parked = await rows(
       `select state::text as state, coalesce(state_reason, '') as why from public.jobs where job_id = ${lit(pid)}::uuid`,
     )
-    const texts2 = sinceMark(m2)
+    /*
+      A request typed to the chief's bot is ROUTED by her (the same roster the dashboard uses), so this sentence also
+      convenes specialists and ONE synthesis of theirs reaches the chat. That message is the team's, not the pursuit's:
+      the checks below are about the pursuit's own messages, so the synthesis (found from its output row, not by its
+      wording) is set aside here and asserted on its own just under them.
+    */
+    const synthBodies = (await outputsOfTree(g2.job))
+      .filter((o) => o.kind === 'office.synthesise')
+      .map((o) => String(o.body).slice(0, 40))
+    const synthJobs2 = new Set(
+      tree2.filter((t) => t.kind === 'office.synthesise').map((t) => String(t.id)),
+    )
+    const texts2 = sinceMark(m2).filter((t) => !synthBodies.some((b) => b !== '' && t.includes(b)))
     check(
       'G2 the proposed plan was cut to what the office can stand behind: the email step and the post-to-outsiders step are not in what the person was told',
       texts2[0]?.includes('5 steps') === true &&
@@ -777,7 +796,13 @@ await journey(
         String(open2[0]?.fp).length === 64,
       String(open2[0]?.requested_action),
     )
-    const dels2 = await deliveriesOfTree(g2.job)
+    const dels2All = await deliveriesOfTree(g2.job)
+    const dels2 = dels2All.filter((d) => !synthJobs2.has(String(d.job)))
+    check(
+      'G2 (the team) the specialists the chief convened for the same sentence reached the chat with ONE synthesis and no other message of theirs',
+      dels2All.length - dels2.length === 1 && synthBodies.length === 1,
+      `${String(dels2All.length - dels2.length)} synthesis delivery row(s)`,
+    )
     check(
       'G2 the person was told ONCE what is done and what awaits: one message holds the receipts and the question, and that delivery is bound to the question',
       texts2.length === 2 &&
@@ -1441,68 +1466,48 @@ await journey(
         'answer:Claire',
         'I looked at this myself: the contract needs a cap on the cancellation fee before it is signed.',
       )
+      // The production shape, untouched: the chief's bot is the ONLY enabled bot, its staff_slug is the non-empty
+      // 'chief-of-staff', and the door stores that as addressed_to (the reply path joins the bot on it).
       const slug = String(
         (await one(`select staff_slug from public.telegram_bots where bot_id = ${lit(BOT)}`))
           .staff_slug,
       )
+      const m = tg.visible().length
       const t = await sayTg(askTg)
       await settle(t.job)
-      const dec = await one(
-        `select roster, roster_reason from public.routing_decisions where job_id = ${lit(t.job)}::uuid order by decided_at desc limit 1`,
+      const stored = await one(
+        `select addressed_to from public.inbound_commands where command_id = ${lit(t.command)}::uuid`,
+      )
+      const sent = sinceMark(m)
+      const kids = await childrenOf(t.job, 'office.instruction')
+      const dels = await deliveriesOfTree(t.job)
+      check(
+        "H4 typed to the chief's own bot (production shape: staff_slug chief-of-staff, addressed_to stored as chief-of-staff for the reply path) the chief ROUTES it and the team is convened: two specialists, one fan-in, one synthesis",
+        slug === 'chief-of-staff' &&
+          stored.addressed_to === 'chief-of-staff' &&
+          kids.length === 2 &&
+          (await groupsOf(t.job)).length === 1 &&
+          (await childrenOf(t.job, 'office.synthesise')).length === 1,
+        kids.map((k) => String(k.addressed)).join(','),
       )
       check(
-        "H4 typed to the chief's own bot (registered with staff_slug chief-of-staff) the door records the message as addressed to her, and the router convenes NOBODY: no child, no fan-in",
-        slug === 'chief-of-staff' &&
-          (await childrenOf(t.job, 'office.instruction')).length === 0 &&
-          (await groupsOf(t.job)).length === 0 &&
-          JSON.stringify(dec.roster) === JSON.stringify(['chief-of-staff']) &&
-          /addressed directly/.test(String(dec.roster_reason)),
-        String(dec.roster_reason).slice(0, 80),
+        "H4 the chat receives the lead's reply and then ONE synthesised recommendation, each exactly once, through the chief's bot to the same chat; the specialists send nothing",
+        sent.length === 2 &&
+          new Set(sent).size === 2 &&
+          /handed this on in 3 pieces/.test(sent[0] ?? '') &&
+          /Recommendation/.test(sent[1] ?? '') &&
+          dels.length === 2 &&
+          dels.every((d) => d.state === 'sent') &&
+          tg.visible().slice(m).every((c) => c.chat === CHAT),
+        `${String(sent.length)} message(s), ${String(dels.length)} delivery row(s)`,
       )
-      finding(
-        'delegation never happens from Telegram while the chief\'s bot carries staff_slug chief-of-staff: the webhook records addressed_to = chief-of-staff, speaker() takes its "addressed directly" branch and convenes nobody, so "Ask the team to investigate X" typed to Claire is answered by Claire alone. instruction.ts\'s header says a message to the chief\'s bot has NO addressed_to and the router decides; migration 0082 says the pager bot had a null staff_slug when written, CLAUDE.md says no bot row has ever had one. Which holds in production cannot be read here (PARKED); measured real traffic of 5138 turns convening nobody, none two, fits the first reading.',
-      )
+      check('H4 the obligation reads fulfilled', (await obligation(t.job)) === 'fulfilled')
       unproven(
-        "which staff_slug production's chief bot carries, and so whether Telegram ever delegates there (PARKED: production is not read in this suite)",
+        "that production's bot table is the shape seeded here (a read-only production read reported the chief's bot enabled with the non-empty slug chief-of-staff and the seven director bots disabled); this suite never reads production",
       )
-      // What the sentence would do if the door did NOT address Claire (instruction.ts's header describes that shape; the
-      // stored command and job are rewritten to carry no addressee before the worker takes them): the router decides,
-      // and the whole chain runs, answers returning through the real reply channel.
-      await quiet()
-      await scopeChat(proj)
-      scriptTeam()
-      {
-        const m = tg.visible().length
-        const t2 = await sayTg(`${ASK_H.replace(/\.$/, '')} by the weekend.`)
-        await db.execute(
-          `update public.inbound_commands set addressed_to = null where job_id = ${lit(t2.job)}::uuid`,
-        )
-        await db.execute(
-          `update public.jobs set pinned_config = pinned_config - 'addressed_to' where job_id = ${lit(t2.job)}::uuid`,
-        )
-        await settle(t2.job)
-        const sent = sinceMark(m)
-        const kids = await childrenOf(t2.job, 'office.instruction')
-        const dels = await deliveriesOfTree(t2.job)
-        check(
-          "H4b with the chief's bot unaddressed the same sentence delegates over Telegram: two specialists, one fan-in, one synthesis",
-          kids.length === 2 &&
-            (await groupsOf(t2.job)).length === 1 &&
-            (await childrenOf(t2.job, 'office.synthesise')).length === 1,
-          kids.map((k) => String(k.addressed)).join(','),
-        )
-        check(
-          "H4b the chat receives the lead's reply and then ONE synthesised recommendation, each exactly once; the specialists send nothing",
-          sent.length === 2 &&
-            new Set(sent).size === 2 &&
-            /handed this on in 3 pieces/.test(sent[0] ?? '') &&
-            /Recommendation/.test(sent[1] ?? '') &&
-            dels.length === 2 &&
-            dels.every((d) => d.state === 'sent'),
-          `${String(sent.length)} message(s), ${String(dels.length)} delivery row(s)`,
-        )
-        check('H4b the obligation reads fulfilled', (await obligation(t2.job)) === 'fulfilled')
-      }
+      modelDependent(
+        "which specialists a real model's reading would add for a Telegram request (the roster is the deterministic subject matcher, as on the dashboard), and what each says; the full Telegram addressing matrix (specialist bots, approvals, retries, other offices) is scripts/isolated/tg-chief-addressing.ts",
+      )
     }
   },
 )
@@ -1869,7 +1874,8 @@ await journey(
       clock.start(true)
       const m = tg.visible().length
       const mk = model.mark()
-      const t = await sayTg('What is the status of the venue contract?')
+      // A sentence the chief keeps (the roster names nobody for it): this journey is about the provider chain, not routing.
+      const t = await sayTg('Has the insurance certificate come in yet?')
       const t0 = realDateNow()
       await bounded(settle(t.job), 8_000)
       const realMs = realDateNow() - t0
@@ -1940,16 +1946,22 @@ await journey(
           realMs < 20_000,
         `${String(lead?.state)} after ${String(lead?.attempt)} attempt(s), ${String(realMs)} real ms, ${String(clock.skew)} ms of fake clock`,
       )
-      // The answering calls only: a turn also makes ordinary calls (reading the sentence, planning) that the stub answers.
-      const answering = usage.filter((_, i) => fetched[i]?.role === 'answer')
+      /*
+        The answering calls are every one that is not an ordinary call (reading the sentence, planning, the roster's
+        semantic reading) that the stub answers ok. Usage rows are not compared with calls BY POSITION: a turn the chief
+        routes makes a roster reading on every attempt, a hung call writes its row later than the next call, and a
+        positional pairing then reads an ordinary call's ok as an answering call's. The property is order-free: the four
+        failure kinds each appear, and the ok rows are exactly the ordinary calls, so no answering call was recorded ok.
+      */
+      const ordinaryCalls = fetched.filter((c) => c.role !== 'answer').length
       check(
         'J2 every real call left exactly one usage row, and the four failure kinds of the answering calls are each recorded as themselves (none recorded as ok)',
         usage.length === fetched.length &&
           ['transport_error', 'rate_limited', 'provider_error', 'malformed_response'].every((k) =>
-            answering.some((u) => u.outcome === k),
+            usage.some((u) => u.outcome === k),
           ) &&
-          !answering.some((u) => u.outcome === 'ok'),
-        answering.map((u) => u.outcome).join(','),
+          usage.filter((u) => u.outcome === 'ok').length === ordinaryCalls,
+        usage.map((u) => u.outcome).join(','),
       )
       check(
         'J2 the person got exactly ONE message, and it is the code-composed apology (not a model sentence, no provider, status or model name, no raw error)',
@@ -2027,6 +2039,13 @@ const undeliveredFor = async (job: string): Promise<Row[]> => {
   const list = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Row[]
   return (Array.isArray(list) ? list : []).filter((x) => String(x.job) === job)
 }
+// The question put on his list for one job's undelivered answer (1032), read from the canonical row.
+const attentionOf = async (job: string): Promise<Row[]> =>
+  rows(`select blocker_id::text as id, state::text as state, requested_action, why_needed, approval_options,
+         work_can_continue, answered_option
+    from public.blockers
+   where on_answer ->> 'kind' = 'delivery.decide' and on_answer -> 'payloads' -> 0 ->> 'job_id' = ${lit(job)}
+   order by created_at`)
 const lapse = async (root: string): Promise<void> => {
   await db.execute(
     `update public.deliveries set lease_expires_at = app.now_utc() - interval '1 second'
@@ -2080,7 +2099,8 @@ await journey(
     // ---- K1a: Telegram says 429 once; the client waits as told and the same call succeeds ---------------------------------
     {
       const a = await ask(
-        'Any news on the venue hire insurance?',
+        // A sentence the chief keeps (the roster names nobody for it): this case is about the Telegram send, not routing.
+        'Where have we got to with the catering quote?',
         'The insurance for the venue hire is confirmed.',
         ['rate_limited'],
       )
@@ -2207,6 +2227,64 @@ await journey(
           (await outputsOfTree(a.job)).length === 1,
         JSON.stringify(listed[0]).slice(0, 200),
       )
+      // 1032: the person is not left to find it. ONE question is on his list, in plain words, with the answer in it.
+      const dj = String(d1?.job)
+      const items = await attentionOf(dj)
+      const it = items[0]
+      const words = `${String(it?.requested_action)} ${String(it?.why_needed)}`
+      check(
+        'K3 the uncertain answer put ONE question on his Needs me list: "may not have reached you on Telegram", quoting the answer, holding nothing up, offering Send it again / It arrived / Dismiss, with no id or code in the words',
+        items.length === 1 &&
+          it?.state === 'open' &&
+          /may not have reached you on Telegram/.test(words) &&
+          words.includes('Signage for the venue hire') &&
+          it.work_can_continue === true &&
+          JSON.stringify(it.approval_options) ===
+            JSON.stringify(['Send it again', 'It arrived, close this', 'Dismiss']) &&
+          !/[0-9a-f]{8}-[0-9a-f]{4}-|indeterminate|chat_not_found|#\d/.test(words),
+        words.slice(0, 160),
+      )
+      const plane = await section(S_GRANT, 'section=studio')
+      const thread = await section(S_GRANT, `section=conversation&id=${proj}`)
+      check(
+        'K3 and he can SEE it where he works: the project page lists the question, and the thread still holds the answer, marked as possibly not delivered',
+        plane.status === 200 &&
+          plane.text.includes('may not have reached you on Telegram') &&
+          thread.status === 200 &&
+          thread.text.includes('Signage for the venue hire') &&
+          thread.text.includes('"delivery":"unconfirmed"'),
+        `plane ${String(plane.status)} lists it ${String(plane.text.includes('may not have reached you on Telegram'))}, thread ${String(thread.status)} has answer ${String(thread.text.includes('Signage for the venue hire'))} unconfirmed ${String(thread.text.includes('"delivery":"unconfirmed"'))}: ${thread.text.slice(0, 120)}`,
+      )
+      const callsBefore = tg.calls.length
+      const stranger = await act(S_B, 'answer_blocker', {
+        p_blocker_id: String(it?.id),
+        p_answer: 'Send it again',
+      })
+      await tick()
+      check(
+        "K3 another person's office cannot answer it: the question stays open, the delivery stays parked, nothing is sent",
+        (await attentionOf(dj))[0]?.state === 'open' &&
+          (await deliveriesOfTree(a.job))[0]?.state === 'failed' &&
+          tg.calls.length === callsBefore,
+        `${String(stranger.status)} ${JSON.stringify(stranger.body).slice(0, 100)}`,
+      )
+      // He says it arrived (he saw it on his phone): closed without sending.
+      const arrived = await act(S_GRANT, 'answer_blocker', {
+        p_blocker_id: String(it?.id),
+        p_answer: 'It arrived, close this',
+      })
+      await tick()
+      await tick()
+      check(
+        'K3 "It arrived, close this" settles the ambiguity WITHOUT a send: the row closed as delivered, no request after the press, the question resolved with his answer',
+        arrived.status === 200 &&
+          tg.calls.length === callsBefore &&
+          (await deliveriesOfTree(a.job))[0]?.state === 'sent' &&
+          (await attentionOf(dj))[0]?.state === 'resolved' &&
+          (await attentionOf(dj))[0]?.answered_option === 'It arrived, close this' &&
+          (await undeliveredFor(a.job)).length === 0,
+        JSON.stringify(arrived.body).slice(0, 100),
+      )
     }
 
     // ---- K3b: the person's own door out of an ambiguous send ------------------------------------------------------------
@@ -2234,12 +2312,92 @@ await journey(
           (await deliveriesOfTree(a.job))[0]?.state === 'sent',
         `${String(after)} request(s) after the retry; ${JSON.stringify(retry.body).slice(0, 80)}`,
       )
+      const its = await attentionOf(String(parked?.job))
+      check(
+        'K3b and the question he had been asked closes ITSELF when the answer is delivered another way (one item, resolved, not answered by anybody)',
+        its.length === 1 && its[0]?.state === 'resolved' && its[0]?.answered_option === null,
+        JSON.stringify(its[0]).slice(0, 120),
+      )
+    }
+
+    // ---- K4: a definite refusal (the chat is gone): one question, and sending again is HIS press, exactly once -----------
+    {
+      const a = await ask(
+        // phrased like K3's question, so the scripted model answers it outright and starts no hand-offs
+        'Is the venue hire fire safety sorted?',
+        'The fire safety certificate for the venue hire is valid until March.',
+        ['chat_not_found'],
+      )
+      await lapse(a.job)
+      await tick()
+      await tick()
+      await settle(a.job, 2)
+      const d1 = (await deliveriesOfTree(a.job))[0]
+      const dj = String(d1?.job)
+      const items = await attentionOf(dj)
+      const it = items[0]
+      check(
+        'K4 a refused send is terminal at once and never retried (one request, nothing in the chat), and raises ONE question that says it did not reach him and offers only Send it again / Dismiss',
+        d1?.state === 'failed' &&
+          tg.calls.slice(a.mark).length === 1 &&
+          a.texts().length === 0 &&
+          items.length === 1 &&
+          /did not reach you on Telegram/.test(String(it?.requested_action)) &&
+          JSON.stringify(it?.approval_options) === JSON.stringify(['Send it again', 'Dismiss']),
+        `${String(d1?.state)} requests ${String(tg.calls.slice(a.mark).length)} visible ${String(a.texts().length)} items ${String(items.length)} ${String(it?.requested_action)} ${JSON.stringify(it?.approval_options)}`,
+      )
+      const press = await act(S_GRANT, 'answer_blocker', {
+        p_blocker_id: String(it?.id),
+        p_answer: 'Send it again',
+      })
+      await tick()
+      await tick()
+      await settle(a.job, 2)
+      check(
+        'K4 his Send it again sends it exactly once more: one new request, the message in the chat is the answer, the same row is sent, the question is resolved, and later ticks add nothing',
+        press.status === 200 &&
+          tg.calls.slice(a.mark).length === 2 &&
+          a.texts().length === 1 &&
+          a.texts()[0]?.includes('fire safety certificate') === true &&
+          (await deliveriesOfTree(a.job))[0]?.state === 'sent' &&
+          (await attentionOf(dj))[0]?.state === 'resolved' &&
+          (await attentionOf(dj)).length === 1,
+        `${JSON.stringify(press.body).slice(0, 100)} requests ${String(tg.calls.slice(a.mark).length)} visible ${JSON.stringify(a.texts())} row ${String((await deliveriesOfTree(a.job))[0]?.state)} items ${JSON.stringify(await attentionOf(dj))}`,
+      )
+    }
+
+    // ---- K5: dismissed: nothing is sent and nothing nags -------------------------------------------------------------------
+    {
+      const a = await ask(
+        'Is the venue hire waste collection booked?',
+        'Waste collection for the venue hire is booked for Friday morning.',
+        ['chat_not_found'],
+      )
+      const dj = String((await deliveriesOfTree(a.job))[0]?.job)
+      const it = (await attentionOf(dj))[0]
+      const mark = tg.calls.length
+      const press = await act(S_GRANT, 'answer_blocker', {
+        p_blocker_id: String(it?.id),
+        p_answer: 'Dismiss',
+      })
+      await lapse(a.job)
+      await tick()
+      await tick()
+      check(
+        'K5 Dismiss sends nothing, leaves the delivery honestly failed, and no later tick raises it again',
+        press.status === 200 &&
+          tg.calls.length === mark &&
+          (await deliveriesOfTree(a.job))[0]?.state === 'failed' &&
+          (await attentionOf(dj)).length === 1 &&
+          (await attentionOf(dj))[0]?.state === 'resolved',
+        JSON.stringify(press.body).slice(0, 100),
+      )
     }
     modelDependent(
       'nothing in this journey depends on a model: the answer text is scripted and the delivery layer never reads it',
     )
-    finding(
-      'a delivery parked as indeterminate (the Telegram response was lost) is visible only on the dashboard list and in the events ledger; the person is not told on a chat channel (docs/delivery/DELIVERY-STATE-MACHINE.md states this as not implemented), so a lost-response answer that did not in fact arrive waits until he looks',
+    note(
+      'Not done, by decision: nothing is sent on a second channel when an answer fails (policy does not say a failure notice may be sent there). The question is on his Needs me list and the thread shows the answer.',
     )
   },
 )

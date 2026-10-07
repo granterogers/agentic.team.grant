@@ -103,7 +103,7 @@ run is about 246 objects, so 26 to 40 runs is 6,000 to 10,000. That does not dis
 
 ### What giving backups back buys
 
-The policy `keep the newest 7 plus the newest of each of the last 8 ISO weeks` (`src/backup/retention.ts`), applied once on 8 October and then nightly:
+The policy `keep the newest 7 daily verified plus the newest verified of each of the previous 8 ISO weeks` (`src/backup/retention.ts`; the table below was modelled before the wording was made exact and counts the current week as one of the 8, so it is within one archive of the exact policy), applied once on 8 October and then nightly:
 
 | Scenario | Total on 8 Oct before | after | 70% | 80% | 85% | 90% | 95% | 100% |
 |---|---|---|---|---|---|---|---|---|
@@ -155,7 +155,7 @@ is never permitted`.)
 | `projects` (8.0 MB) | **user content**; 8 MB for a few dozen rows is bloat from the backfills (`0655` to `0660` rewrote 63,803 rows) | `supabase-forensics-2026-10-04.md` | rewrite with the other bloated tables | deleting projects (ADR-0014 order) |
 | `cron.job_run_details` (cron schema 6.5 MB) | **operations**: the database's only per-minute record of the host, used as the witness in the October forensics ("a log pipeline that loses lines under pressure produced a false finding, and the table next to it contradicted it") | `CLAUDE.md`, 4 Oct forensics entry | a prune to 30 days is standard and frees a few MB, but removes the only history of the incident pattern. **Keep until the October investigation closes**; then prune | pruning during an open incident |
 | `net._http_response` | platform, pruned by it after a few hours | `0544` | none | n/a |
-| Storage `backups` bucket | **recovery**, and the largest consumer on the central assumptions | this document | **`npm run backup:prune`**: dry run by default; keeps the newest 7 plus one a week for 8 weeks; refuses unless the newest backup has just been verified byte for byte; never touches a file it did not create; at most 30 runs a pass; manifest removed last | automatic deletion on a schedule (Grant's rule); deleting the only copy |
+| Storage `backups` bucket | **recovery**, and the largest consumer on the central assumptions | this document | **`npm run backup:prune`**: dry run by default; keeps the newest 7 daily VERIFIED backups plus the newest verified one of each of the previous 8 ISO weeks (owner's policy of 7 October, see `backup-retention-policy.md`; NOT executed); verifies every finished backup byte for byte first; unverified or unfinished runs are reported and never deleted; never touches a file it did not create; at most 30 runs a pass; manifest removed last; deletes only with `--attended` plus the production-write approval | automatic deletion on a schedule (Grant's rule); deleting the only copy |
 | Storage `build` bucket | **diary pictures**, expire with their rows | ADR-0034, 0413 | already pruned daily by `build-shot-retention` | n/a |
 
 ### The three explicit pruning precedents, checked against what actually runs
@@ -172,7 +172,7 @@ REPLICA-PROVEN in `scripts/isolated/capacity-warning.ts` chapter 7. **None of th
 ## What to do, in order (a recommendation; nothing here has been done)
 
 1. **Read `app.free_tier_headroom()` once** (Grant authorises the production read). It names the larger problem in one number.
-2. If storage is above 60%: `npm run backup:prune` (dry run), read the list, then `-- --go`. This is the cheap move and it is reversible in the only sense that matters (the
+2. If storage is above 60%: `npm run backup:prune` (dry run), read the list, then `-- --attended` (only with the owner's separate approval of that deletion). This is the cheap move and it is reversible in the only sense that matters (the
    newest verified copy and a weekly tail remain).
 3. Deploy the worker carrying `capacity-watch` and apply migration 1026 together (a migration is not a deploy). Until then the hourly chore is the warning, and only the chore works once 1026 is applied.
 4. Schedule a maintenance window for rewriting `jobs` and `projects` once `pgstattuple` has said how much it frees.

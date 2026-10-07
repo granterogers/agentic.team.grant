@@ -273,8 +273,8 @@ export const CRITICAL: readonly Proof[] = [
   ),
   p(
     'dl-delivery-redrive',
-    25,
-    'a finished answer is redriven until it is sent or visibly given up, and is never left claimed',
+    54,
+    'a finished answer is redriven until it is sent or visibly given up, never left claimed, and a failed or uncertain one puts ONE question on the person list (never auto-resent, resolvable by his answer, none for harness traffic)',
   ),
 
   // ---- the migration history itself ----------------------------------------------------------------------------------

@@ -17,8 +17,11 @@
  * than any classifier could extract from the text, and overriding it would make
  * the choice of bot decorative.
  *
- * When the message went to the Chief of Staff bot there is no `addressed_to`,
- * and then the router does decide: that is what a chief of staff is for.
+ * When the message went to the Chief of Staff bot the router does decide: that
+ * is what a chief of staff is for. The chief's bot IS registered with the slug
+ * `chief-of-staff`, so the door stores that as `addressed_to` (the reply path
+ * needs it to find the bot), and `agents/addressing.ts` is what says the chief
+ * is not a selection: only a specialist other than her is "addressed directly".
  *
  * ## Spoken instructions
  *
@@ -79,6 +82,7 @@ import {
   notebookRequest,
   type RequestedKind,
 } from '../agents/actions.ts'
+import { addressedDirectly } from '../agents/addressing.ts'
 import type { AnotherGo } from '../agents/again.ts'
 import { alreadyPursuing, alreadyWithSentence } from '../agents/already.ts'
 import {
@@ -99,7 +103,12 @@ import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
 import { OPERATOR_TIMEZONE, officeTimezone } from '../agents/office-time.ts'
 import { ownTask } from '../agents/own-task.ts'
 import { projectWorkSpine, readProjectWork } from '../agents/project-work.ts'
-import { reminderSentence } from '../agents/reminder-say.ts'
+import {
+  reminderSentence,
+  seriesDoneSentence,
+  seriesNotStoppedSentence,
+  seriesStoppedSentence,
+} from '../agents/reminder-say.ts'
 import { sentencesOf } from '../agents/sentences.ts'
 import {
   pointsAtAProject,
@@ -120,6 +129,8 @@ import {
   personalTaskChange,
   personalTaskRequest,
   pickByName,
+  pickSeries,
+  seriesStopRequest,
   subtaskRequest,
   taskStateChange,
 } from '../agents/mine.ts'
@@ -840,8 +851,21 @@ export async function speaker(
    * literal path gets.
    */
   jobId: string | null = null,
+  /**
+   * This is a hand-off child (it carries `handed_off_by`): whoever it is addressed to answers and nobody is convened,
+   * even if that is the chief. Default false, so every other caller is unchanged.
+   */
+  handedOff = false,
 ): Promise<Speaker> {
-  const byName = addressedTo === null || addressedTo === '' ? null : addressedTo
+  /*
+    DIRECTLY addressed is not the same thing as "addressed_to is set" (see `agents/addressing.ts`).
+
+    The chief's own bot is registered with the slug `chief-of-staff`, so the webhook stores her slug on every Telegram
+    instruction, which the reply path needs (it joins the bot on it). Reading that as "he picked a specialist" convened
+    nobody for anything typed to the chief's bot, so Telegram never delegated. The chief is the router: she falls
+    through to the roster below, exactly as a message with no addressee does.
+  */
+  const byName = addressedDirectly({ addressedTo, alsoAddressed, handedOff }) ? addressedTo : null
   if (byName !== null) {
     const { rows } = await db.execute(`
       select slug, name, title, communication_style, responsibilities
@@ -1097,13 +1121,33 @@ export async function speaker(
           .filter((a) => !found.some((f) => f.i === a.i))
           .slice(0, NAMED_BY_MODEL_AT_MOST)
 
+  /*
+    The reading of the subject is a model call and belongs to the job it was made for.
+
+    It was made with an empty trace, so the router recorded it against a correlation id minted for the occasion: spend
+    that no job, no budget and no `howComposed` could ever see. Rare while only a dashboard turn reached it; every
+    typed-to-the-chief Telegram message whose subject the matcher cannot name reaches it now. The trace is the claimed
+    job's own (`jobId` is null only for a caller that has none, which gets the old behaviour).
+  */
+  const tracedTo =
+    jobId === null || literal === undefined || router === null || unanswered.length === 0
+      ? {}
+      : await db
+          .execute(
+            `select correlation_id::text as c from public.jobs where job_id = ${lit(jobId)}::uuid`,
+          )
+          .then((r) => {
+            const c = (r.rows[0] as { c?: string } | undefined)?.c
+            return c === undefined ? { jobId } : { jobId, correlationId: c }
+          })
+          .catch(() => ({ jobId }))
   const semantic =
     literal === undefined || router === null || unanswered.length === 0
       ? []
       : (
           await Promise.all(
             unanswered.map((a) =>
-              nameSubjects(db, router, a.t, {}, asks.length === 1 ? 2 : 1).catch(() => []),
+              nameSubjects(db, router, a.t, tracedTo, asks.length === 1 ? 2 : 1).catch(() => []),
             ),
           )
         ).flat()
@@ -2602,6 +2646,16 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         .catch((error: unknown) => !/42883|does not exist/i.test(String((error as Error).message)))
       const entitled = forwarded ? noneEntitled : allEntitled
 
+      /*
+        Directly addressed to a specialist (or a selection), or routed by the chief? ONE answer, asked here and used by
+        `speaker` and by the two readers below that also ask "was this addressed to a person". The stored `addressed_to`
+        is not that answer: the chief's bot stores her own slug so replies find the bot.
+      */
+      const addressedToSomeone = addressedDirectly({
+        addressedTo: payload.addressed_to,
+        alsoAddressed: payload.addressed_also ?? [],
+        handedOff: isBranch,
+      })
       const who = await speaker(
         deps.db,
         payload.addressed_to ?? null,
@@ -2610,6 +2664,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         job.projectId ?? null,
         payload.addressed_also ?? [],
         job.jobId,
+        isBranch,
       )
 
       /*
@@ -3186,7 +3241,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         something herself is not a consultation, and counting it would make the
         rate look healthy while nothing was delegated at all.
       */
-      if (who.slug !== 'chief-of-staff' && (payload.addressed_to ?? '') === '') {
+      if (who.slug !== 'chief-of-staff' && !addressedToSomeone) {
         /*
           Through `app.record_consultation`, which takes SLUGS.
 
@@ -4156,7 +4211,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               learnedBy,
               // Addressed to one person, or to the office. Getting this backwards
               // means a rule for Ruby quietly governing Daniel.
-              (payload.addressed_to ?? '') === '' ? null : who.slug,
+              addressedToSomeone ? who.slug : null,
               job.jobId,
               /*
                 And the PROJECT, when the message carried one (#310).
@@ -4657,8 +4712,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         is read first and `noted` (and `asked`, and `namedLater`) are the ones
         that defer.
       */
-      const settles =
+      /*
+        STOPPING A RECURRING REMINDER is its own act, read before finishing or cancelling a task (owner decision,
+        7 October 2026). Ticking a series off completes that time only, so ending the series has to be said: "stop the
+        Monday finance reminder". Read from HIS words and never the paraphrase, and silent for a forwarded message (the
+        door closes for a forwarded turn, so a forwarded "stop the Monday reminder" never ends a series).
+      */
+      const stops =
         wantsFile !== null || isBranch || forwarded
+          ? null
+          : (firstOfHis(seriesStopRequest) ?? seriesStopRequest(turn.kept))
+      const settles =
+        wantsFile !== null || isBranch || forwarded || stops !== null
           ? null
           : // His literal words too: a withdrawal has no surviving intent (R26, R42).
             (firstOfHis(taskStateChange) ?? taskStateChange(turn.kept))
@@ -4667,6 +4732,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         isBranch ||
         changesHis !== null ||
         settles !== null ||
+        stops !== null ||
         subOf !== null ||
         forwarded
           ? null
@@ -4842,7 +4908,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // sentence, `taskRequest` must not also file one from the same words —
       // and neither must it file one the personal-task path has already taken.
       const asked =
-        pullOut !== null || noted !== null || isBranch || subOf !== null || settles !== null
+        pullOut !== null ||
+        noted !== null ||
+        isBranch ||
+        subOf !== null ||
+        settles !== null ||
+        stops !== null
           ? null
           : changesHis !== null
             ? null
@@ -4880,6 +4951,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         isBranch ||
         forwarded ||
         settles !== null ||
+        stops !== null ||
         instruction.trim().length > 90
           ? null
           : await deps.db
@@ -4958,7 +5030,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       // `settles` is read above, before any reader that could CREATE a task from the same words (R2).
       const change =
-        noted !== null || wantsFile !== null || namedLater !== null || isBranch || settles !== null
+        noted !== null ||
+        wantsFile !== null ||
+        namedLater !== null ||
+        isBranch ||
+        settles !== null ||
+        stops !== null
           ? null
           : changesHis
       const changed =
@@ -5073,9 +5150,85 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         task, or several, is asked about with the candidates named, never
         guessed.
       */
+      /*
+        The press for stops: the recurring reminders on HIS list, one picked by what he named, and never a guess. A name
+        that fits no series, or two, changes nothing and says which. The row is ended through app.reminder_series_stop
+        (a cancel with the product's own undo offer) and the sentence says only what it returned.
+      */
+      const stoppedSeries: { text: string; did: boolean } | null =
+        stops === null
+          ? null
+          : await deps.db
+              .execute(
+                `select app.reminder_series(app.job_office(${lit(job.jobId)}::uuid), app.harness_job(${lit(job.jobId)}::uuid)) as t`,
+              )
+              .then(async (r) => {
+                const raw = (r.rows[0] as { t?: unknown })?.t
+                const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+                const list = (Array.isArray(parsed) ? parsed : []) as {
+                  id: string
+                  title: string
+                  weekday?: string | null
+                }[]
+                if (list.length === 0) {
+                  return {
+                    did: false,
+                    text: seriesNotStoppedSentence({
+                      reason: 'nothing_recurring',
+                      name: stops.name,
+                      titles: [],
+                    }),
+                  }
+                }
+                const picked = pickSeries(stops.name, list)
+                if (picked.one === null) {
+                  const several = picked.many.length > 1 || stops.name === null
+                  return {
+                    did: false,
+                    text: seriesNotStoppedSentence({
+                      reason: several ? 'many' : 'none',
+                      name: stops.name,
+                      titles: (picked.many.length > 1 ? picked.many : list).map((s) => s.title),
+                    }),
+                  }
+                }
+                const target = picked.one
+                const done = await deps.db.execute(
+                  `select app.reminder_series_stop(app.job_office(${lit(job.jobId)}::uuid), ${lit(target.id)},
+                     app.command_principal(app.job_office(${lit(job.jobId)}::uuid), ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)) as r`,
+                )
+                const out = (done.rows[0] as { r?: unknown })?.r
+                const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
+                  ok?: boolean
+                  error?: string
+                  undo?: string | null
+                } | null
+                return got?.ok === true
+                  ? {
+                      did: true,
+                      text: seriesStoppedSentence({
+                        title: target.title,
+                        undoOffered: got.undo != null,
+                      }),
+                    }
+                  : {
+                      did: false,
+                      text: `I could not stop "${target.title}"${got?.error === undefined ? '' : `: ${got.error}`}.`,
+                    }
+              })
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'stop a recurring reminder', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
       const settledTask: { text: string; did: boolean } | null =
         settles === null
-          ? null
+          ? stoppedSeries
           : await referentCandidates(deps.db, String(payload.command_id ?? ''), job.jobId)
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
@@ -5123,7 +5276,32 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 const got = (typeof out === 'string' ? JSON.parse(out) : out) as {
                   state?: string
                   error?: string
+                  series?: boolean
+                  occurrence?: 'recorded' | 'skipped'
+                  next_at?: string | null
+                  skipped_at?: string | null
                 } | null
+                /*
+                  A RECURRING REMINDER ticked off completes that time only (1034): the row is still open, which is the
+                  answer, and the sentence says which time it was and that the series goes on.
+                */
+                if (
+                  settles.state === 'done' &&
+                  got?.series === true &&
+                  got.error === undefined &&
+                  (got.occurrence === 'recorded' || got.occurrence === 'skipped')
+                ) {
+                  return {
+                    did: true,
+                    text: seriesDoneSentence({
+                      title: target.title,
+                      occurrence: got.occurrence,
+                      nextAt: got.next_at ?? null,
+                      skippedAt: got.skipped_at ?? null,
+                      timeZone: officeTz,
+                    }),
+                  }
+                }
                 if (got?.state !== settles.state) {
                   return {
                     did: false,

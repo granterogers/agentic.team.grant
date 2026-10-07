@@ -28,7 +28,8 @@ const check = (what: string, ok: boolean, detail: string) => {
   console.log(`${ok ? 'PROVEN  ' : 'FAILED  '} ${what} - ${detail}`)
 }
 const section = (s: string) => console.log(`\n== ${s} ==`)
-const iso = (v: unknown) => new Date(String(v)).toISOString()
+const iso = (v: unknown) =>
+  v === null || v === undefined ? 'null' : new Date(String(v)).toISOString()
 
 const op = String((await one(`select app.operator_office()::text as o`)).o)
 const O = `${lit(op)}::uuid`
@@ -111,7 +112,7 @@ const deliver = async (jobId: string, state: 'sent' | 'failed' | 'claimed') => {
 const stateOf = async (id: string) =>
   (
     await rows(
-      `select title, state, remind_at, reminded_at, remind_job_id::text as job, remind_sends as sends, due_on::text as due, repeat_every::text as rep from public.tasks where task_id = ${lit(id)}::uuid`,
+      `select title, state, remind_at, reminded_at, remind_job_id::text as job, remind_sends as sends, due_on::text as due, repeat_every::text as rep, last_fired_for, last_completed_for, last_completed_at from public.tasks where task_id = ${lit(id)}::uuid`,
     )
   )[0] as Record<string, unknown>
 const rowsTitled = async (title: string) =>
@@ -411,15 +412,19 @@ section('R3: the recurrence is read, and stored as a reminder SERIES (no due dat
       JSON.stringify(t),
     )
     check(
-      '...and the reply says it repeats and that ticking it off stops these',
-      /repeats every/.test(body) && /Tick it off to stop these/.test(body),
+      // FLIPPED 7 Oct 2026 (owner decision): ticking one off no longer stops the series; stopping is a separate sentence.
+      '...and the reply says it repeats, that ticking one off completes that time only, and how to stop the series',
+      /repeats every/.test(body) &&
+        /completes that time only/.test(body) &&
+        /say .stop the .+ reminder/.test(body) &&
+        !/Tick it off to stop/.test(body),
       body.slice(0, 200),
     )
   }
 }
 
 section(
-  'R3: a series fires, is delivered, moves on IN PLACE without a tick, fires again; ticking it off ends it',
+  'R3: a series fires, is delivered, moves on IN PLACE without a tick, fires again; ticking it off completes that time only; "stop" ends it',
 )
 {
   at = new Date()
@@ -443,14 +448,17 @@ section(
     JSON.stringify(s0),
   )
   check(
-    '...and the reply says ticking it off stops them',
-    /Tick it off to stop these/.test(first.body),
+    '...and the reply says ticking one off completes that time only (FLIPPED: it no longer ends the series)',
+    /completes that time only/.test(first.body) && !/Tick it off to stop/.test(first.body),
     first.body.slice(0, 220),
   )
   // Monday 09:00 arrives (the most recent one, so the next is exactly a week on).
   const anchor = lastMonday9(new Date())
   const nextMonday = plusDays(anchor, 7)
-  await setRemindAt(id, anchor)
+  // Occurrence 1 is the Monday before `anchor` and occurrence 2 is `anchor` itself: both are in the past (time has passed)
+  // and DIFFERENT, because a completed occurrence is never fired again and the test must not re-fire the same one.
+  const occ1 = plusDays(anchor, -7)
+  await setRemindAt(id, occ1)
 
   // FIRING 1: announced, in flight, NOT advanced and NOT marked: delivery has not happened.
   const j1 = await enqueue('tick')
@@ -466,7 +474,7 @@ section(
     a1.job === j1.jobId &&
       Number(a1.sends) === 1 &&
       a1.reminded_at === null &&
-      iso(a1.remind_at) === anchor.toISOString(),
+      iso(a1.remind_at) === occ1.toISOString(),
     JSON.stringify(a1),
   )
   await deliver(j1.jobId, 'claimed')
@@ -476,7 +484,7 @@ section(
     '...while its delivery is still pending nothing is said again and nothing moves',
     wait.out.announce === false &&
       aWait.job === j1.jobId &&
-      iso(aWait.remind_at) === anchor.toISOString(),
+      iso(aWait.remind_at) === occ1.toISOString(),
     JSON.stringify(aWait),
   )
   await db.execute(
@@ -521,17 +529,81 @@ section(
     JSON.stringify(a3),
   )
 
-  // TICK OFF ends the series.
-  await one(`select app.hq_task_state(${O}, ${lit(id)}, 'done', null, 'grant') as v`)
-  const ended = await stateOf(id)
-  const after = await tick()
+  // TICKING OFF completes THAT TIME only (FLIPPED 7 Oct 2026, owner decision: it used to END the series).
+  const ticked = json(
+    (await one(`select app.hq_task_state(${O}, ${lit(id)}, 'done', null, 'grant') as v`)).v,
+  )
+  const c2 = await stateOf(id)
   check(
-    'ticking it off ENDS the series: no next occurrence row, no repeat left, and no third firing',
-    ended.state === 'done' &&
-      ended.rep === null &&
-      (await rowsTitled(title)) === 1 &&
-      !after.out.body.toLowerCase().includes(title.toLowerCase()),
-    JSON.stringify(ended),
+    'ticking off the delivered occurrence records it and the series STAYS: open, repeat kept, same next time, ONE row, no duplicate',
+    c2.state === 'todo' &&
+      String(c2.rep).startsWith('7 days') &&
+      iso(c2.remind_at) === nextMonday.toISOString() &&
+      iso(c2.last_completed_for) === anchor.toISOString() &&
+      c2.last_completed_at !== null &&
+      (await rowsTitled(title)) === 1,
+    JSON.stringify(c2),
+  )
+  check(
+    '...and the door says what it did (series, recorded), offers no undo for it and does not call it an error',
+    ticked.series === true &&
+      ticked.occurrence === 'recorded' &&
+      ticked.error === undefined &&
+      ticked.undo === null,
+    JSON.stringify(ticked),
+  )
+  const listed = json(
+    (
+      await one(
+        `select app.my_tasks(${O}, 'all', 200, ${lit(title)}, 'smart', true) as v`,
+      )
+    ).v,
+  ) as unknown as { id: string; state: string; repeats: Record<string, unknown> | null }[]
+  const doneList = json(
+    (await one(`select app.my_tasks(${O}, 'done', 200, ${lit(title)}, 'smart', true) as v`)).v,
+  ) as unknown as { id: string }[]
+  const mine = listed.find((r) => r.id === id)
+  check(
+    '...the list still shows it OPEN as a recurring reminder, says when he last completed one, and the Done bucket does not hold it',
+    mine?.state === 'todo' &&
+      mine.repeats?.series === true &&
+      mine.repeats.last_done_at !== null &&
+      !doneList.some((r) => r.id === id),
+    JSON.stringify(mine),
+  )
+  // The next occurrence still fires after the completion: a third reminder, delivered once.
+  await setRemindAt(id, plusDays(anchor, -14))
+  const j3 = await enqueue('tick')
+  const f3 = await tick(j3)
+  await deliver(j3.jobId, 'sent')
+  await tick()
+  const a4 = await stateOf(id)
+  check(
+    'after the completion the next occurrence still FIRES (once) and the series moves on again, still one row',
+    f3.out.announce === true &&
+      f3.out.body.toLowerCase().includes(title.toLowerCase()) &&
+      a4.state === 'todo' &&
+      iso(a4.remind_at) === nextMonday.toISOString() &&
+      (await rowsTitled(title)) === 1,
+    JSON.stringify(a4),
+  )
+  // STOPPING is a separate, explicit act, through the real handler and in his words.
+  const stopped = await say(`Stop the ${title.toLowerCase()} reminder.`)
+  const z = await stateOf(id)
+  check(
+    '"stop the ... reminder" ENDS the series: cancelled, says so, and offers the undo',
+    z.state === 'cancelled' && /^Stopped/.test(stopped.body) && /undo/.test(stopped.body),
+    `${JSON.stringify(z)} ${stopped.body.slice(0, 160)}`,
+  )
+  await setRemindAt(id, plusDays(anchor, -21))
+  const after = await tick()
+  const z2 = await stateOf(id)
+  check(
+    '...and it never fires again: no third firing even with its time due, still one row, still cancelled',
+    z2.state === 'cancelled' &&
+      !after.out.body.toLowerCase().includes(title.toLowerCase()) &&
+      (await rowsTitled(title)) === 1,
+    JSON.stringify(z2),
   )
 }
 
@@ -940,11 +1012,15 @@ section(
   )
   await one(`select app.hq_task_state(${O}, ${lit(String(rem.id))}, 'done', null, 'grant') as v`)
   const rEnded = await stateOf(String(rem.id))
+  // FLIPPED 7 Oct 2026: it used to end ("no repeat left", state done). Now the time that had not fired is SKIPPED, the
+  // series stays open and repeating, and the trigger and the delivery still cannot both advance it: ONE row.
   check(
-    'a series ticked off makes NO next occurrence (one row, no repeat left): the trigger and the delivery cannot both advance it',
+    'a series ticked off BEFORE it fired skips that time and stays open and repeating: one row, no duplicate occurrence row, next time in the future',
     (await rowsTitled(`Reminder only ${run}`)) === 1 &&
-      rEnded.rep === null &&
-      rEnded.state === 'done',
+      String(rEnded.rep).startsWith('1 day') &&
+      rEnded.state === 'todo' &&
+      rEnded.last_completed_for !== null &&
+      new Date(iso(rEnded.remind_at)).getTime() > Date.now(),
     JSON.stringify(rEnded),
   )
 

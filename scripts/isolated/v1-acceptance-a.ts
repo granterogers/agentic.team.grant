@@ -1051,7 +1051,7 @@ end()
 // ===============================================================================================================
 begin(
   'C',
-  'RECURRING: "Remind me every Monday at 9am to review my finances." (two occurrences, then tick off)',
+  'RECURRING: "Remind me every Monday at 9am to review my finances." (two occurrences, tick off completes that time only, then stop)',
 )
 {
   const calls0 = modelCalls()
@@ -1149,39 +1149,71 @@ begin(
     `${String(sentPair)} sent rows`,
   )
 
-  // ticking off ends it
+  // ticking off completes THAT TIME only. FLIPPED 7 October 2026 by the owner's decision: it used to END the series (state
+  // done, "no next occurrence row"); now the row stays open and repeating and only a separate "stop" ends it.
   const markT = tgLog.length
   const off = await sayTelegramAndWork('Tick off the review my finances task.')
   const ended = await taskById(id)
   const offAnswer = sentTexts(markT)[0]
   check(
-    '"tick off" completes THAT row (state done, completed by the person)',
-    ended.state === 'done' && ended.done_at !== null,
-    JSON.stringify({ state: ended.state }),
+    '"tick off" completes THAT TIME only: the row stays open (todo, not done) and repeating, and the occurrence is recorded',
+    ended.state === 'todo' &&
+      ended.done_at === null &&
+      ended.rep === '7 days' &&
+      (await num(
+        `select count(*)::int as c from public.tasks where task_id = ${lit(id)}::uuid and last_completed_for is not null and last_completed_at is not null`,
+      )) === 1,
+    JSON.stringify({ state: ended.state, rep: ended.rep }),
   )
   check(
-    '...and the reply says so truthfully',
+    '...and the reply says so truthfully: done for this time, still repeating, and how to stop it',
     offAnswer !== undefined &&
       /review my finances/i.test(offAnswer.text) &&
-      /done|ticked/i.test(offAnswer.text),
-    offAnswer?.text.slice(0, 120) ?? 'none',
+      /done for this time/i.test(offAnswer.text) &&
+      /still repeating/i.test(offAnswer.text) &&
+      /stop the .+ reminder/i.test(offAnswer.text),
+    offAnswer?.text.slice(0, 160) ?? 'none',
   )
   check(
-    '...and ends the series: no next occurrence row is created',
+    '...and no occurrence row is created (still one row) and the next time is still a Monday 09:00 in the future',
     (await num(
       `select count(*)::int as c from public.tasks where office_id = ${O} and title = 'Review my finances'`,
     )) === 1 &&
       (await num(
         `select count(*)::int as c from public.tasks where job_id = ${lit(String(off.turn.job))}::uuid`,
-      )) === 0,
-    '',
+      )) === 0 &&
+      isLocal(ended.remind_at, ATHENS, 'Mon', 9, 0) &&
+      new Date(String(ended.remind_at)).getTime() > Date.now(),
+    ended.remind_at === null || ended.remind_at === undefined ? 'null' : at(ended.remind_at, ATHENS),
+  )
+  // occurrence 3 (a different time from the one just completed) fires and is delivered, once
+  await db.execute(
+    `update public.duty_said set said_at = said_at - interval '8 days', last_seen_at = last_seen_at - interval '8 days'`,
+  )
+  await rewindSeries(2)
+  const f3 = await dutyTick()
+  check(
+    'after the completion the next occurrence still fires: announced once, naming it',
+    f3.sent.length === 1 && /Review my finances/.test(f3.sent[0]?.text ?? ''),
+    f3.sent[0]?.text.slice(0, 80) ?? 'none',
+  )
+  await dutyTick()
+  // the explicit stop
+  const stopT = tgLog.length
+  await sayTelegramAndWork('Stop the review my finances reminder.')
+  const stopAnswer = sentTexts(stopT)[0]
+  const stopped = await taskById(id)
+  check(
+    '"stop the review my finances reminder" ENDS the series (cancelled) and the reply says so',
+    stopped.state === 'cancelled' && /stopped/i.test(stopAnswer?.text ?? ''),
+    `${String(stopped.state)} | ${stopAnswer?.text.slice(0, 100) ?? 'none'}`,
   )
   await db.execute(
     `update public.tasks set remind_at = app.now_utc() - interval '1 minute' where task_id = ${lit(id)}::uuid`,
   )
   const dead = await dutyTick()
   check(
-    'after it ends it is never announced again, even with its time long past',
+    'after it is stopped it is never announced again, even with its time long past',
     dead.sent.every((c) => !/Review my finances/.test(c.text)),
     `${String(dead.sent.length)} message(s)`,
   )

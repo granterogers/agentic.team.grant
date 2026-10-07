@@ -42,7 +42,7 @@ import {
   putObject,
   tablesToBackUp,
 } from '../backup/portable.ts'
-import { DEFAULT_POLICY, planRetention } from '../backup/retention.ts'
+import { DEFAULT_POLICY } from '../backup/retention.ts'
 import { listRuns } from '../backup/runs.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
@@ -228,17 +228,18 @@ export function backupHandler(deps: BackupDeps): Handler {
       let retentionNote = ''
       try {
         const runs = await listRuns(projectRef, serviceKey)
-        const plan = planRetention(
-          runs.map((r) => ({ ...r, verified: r.name === prefix })),
-          new Date(),
-        )
         const total = runs.reduce((a, r) => a + r.bytes, 0)
-        if (plan.remove.length > 0) {
+        /*
+          Only the run just written is known to be verified here, so no plan is made: a run nobody has read back is
+          unknown, and unknown is never deleted. The note gives the size and the count the owner's policy would be
+          applied to; which runs would go is decided by `npm run backup:prune`, which verifies each one first.
+        */
+        if (runs.length > DEFAULT_POLICY.keepDays + DEFAULT_POLICY.keepWeeks) {
           retentionNote =
             `\n\nThe backups hold ${String(Math.round(total / 1_000_000))}MB of the 1GB storage allowance across ` +
-            `${count(runs.length, 'run', 'runs')}. Keeping the newest ${String(DEFAULT_POLICY.keepLast)} and one a week ` +
-            `would free ${String(Math.round(plan.freedBytes / 1_000_000))}MB by removing ` +
-            `${count(plan.remove.length, 'run', 'runs')}. Nothing is deleted until you run \`npm run backup:prune\`.`
+            `${count(runs.length, 'run', 'runs')}. The retention policy (the newest ${String(DEFAULT_POLICY.keepDays)} daily ` +
+            `verified plus one verified a week for the previous ${String(DEFAULT_POLICY.keepWeeks)} weeks) is a dry run until ` +
+            'you run `npm run backup:prune`, which verifies each run first. Nothing is deleted without --attended.'
         }
       } catch {
         retentionNote = ''

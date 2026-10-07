@@ -43,10 +43,13 @@ refusal; `indeterminate:*` may have landed; `abandoned:*` was never sent and the
 * Slack's 5xx on a write and every network error that is not provably pre-send are classified indeterminate by the
   client (`src/slack/api.ts`, `src/telegram/api.ts`), so they park rather than retry. That is a deliberate choice of
   at-most-once over at-least-once for ambiguous errors. An unknown error code is treated as ambiguous.
-* Who learns of a terminal failure: it is on `app.undelivered` (read by the studio) and in the events ledger. The
-  `owed_a_word` mechanism covers FAILED turns only and skips a job that has any delivery row, so a completed answer
-  whose delivery failed is not told on a chat channel. A one-line notice on a different channel (for example Slack when
-  Telegram failed) would be cheap but is a new outward message and is NOT implemented.
+* Who learns of a terminal failure (migration 1032, the person's list): a failed or uncertain delivery of a finished
+  answer puts ONE question on the person's own Needs me list, so it can no longer disappear. See "The person's list"
+  below. The `owed_a_word` mechanism still covers FAILED turns only. NOTHING is sent on a second channel: whether a
+  failure notice may be sent to the owner on another channel is not settled by policy (`telegram.only_chief_speaks`,
+  the pager and `claim_delivery` containment say nothing about it), so it is not done; Team HQ plus the item is the
+  whole surface. If policy later permits it, it belongs in the same trigger and must be a code-composed line on a channel
+  other than the one that failed, never worded like the answer.
 * Several channels for one job are independent rows; the notifier's one-message-per-surface rule plus the sweep's
   `superseded` rule keep two rows from putting two messages in one chat, but two different chats legitimately get one each.
 * Time is the database clock. A lapsed lease is detected on the next worker tick (about a minute), so a retry is never
@@ -66,4 +69,28 @@ refusal; `indeterminate:*` may have landed; `abandoned:*` was never sent and the
 * C3: `app.job_delivery_state(office, job)` returns `sent | pending | failed | none`. A reminder should set `reminded_at`
   only when it returns `sent` (and clear it, or not set it, on `failed`); `reminders.ts` belongs to the reminders change.
 
-Proofs: `tests/channels/delivery-redrive.test.ts`, `scripts/isolated/dl-delivery-redrive.ts` (replica).
+## The person's list (migration 1032)
+
+A `failed` result delivery (a definite refusal, `gave_up`, `abandoned:*`, or an `indeterminate:*` parking, however it
+got there: the failure recorder, the sweep, the reclaim of a lapsed mid-send, or a person's retry failing again) raises
+one durable question for the person. Retryable failures that are still `claimed` raise nothing, and one that later
+succeeds never had an item.
+
+| | |
+|---|---|
+| **What it is** | A row in `public.blockers` with `on_answer.kind = 'delivery.decide'`, `work_can_continue = true`. It appears on Needs me (`app.needs_me_in`), on the project's waiting list (`app.studio_waiting`) with its answers as buttons, and the undelivered list carries its id and an excerpt of the answer. |
+| **Why a blocker** | Needs me is the surface the person already reads, it is per office and harness-filtered, and it carries options. It is NOT a to-do: `blockers_make_a_task` files a to-do only for a blocker that stops work, and ticking such a to-do answers the blocker with its first option, which here could resend an uncertain message. It satisfies `check:answerable` by the START road (`on_answer`), performed in SQL by `app.answer_delivery_attention`. |
+| **Words** | "Claire's answer may not have reached you on Telegram" (uncertain) or "...did not reach you on Telegram" (refused), the reason in plain words (`app.delivery_words`), and the first 500 characters of the answer. No id, code or number. The full answer is in the thread, which marks it `unconfirmed` (may have arrived) or `failed`. |
+| **Answers** | Uncertain: **Send it again** (`app.retry_delivery`, the existing safe door: it clears the intent record and the redrive sends it once through the same notifier and fence), **It arrived, close this** (`app.resolve_indeterminate_delivery` with a person-confirmed marker: closed as delivered, NOTHING sent), **Dismiss** (nothing sent, the delivery stays `failed`). Refused or abandoned: Send it again and Dismiss only. An uncertain delivery is never resent without his Send it again. |
+| **Once** | A unique partial index on the open item keyed by the job. The trigger on `public.deliveries`, the sweep's backstop and a retry that fails again all insert with `on conflict do nothing`, so two workers, a race and a retry produce one item. A dismissed or answered failure is not raised again by the backstop; a NEW failure (a later `updated_at`) raises a new item. |
+| **Closes itself** | When the job has no failed (non-superseded) and no still-owed result delivery left, the same trigger (on `sent` or `suppressed`) and the sweep resolve it ("It reached you"). So the thread's Try again and a reconcile both close it. |
+| **Containment** | A job `app.harness_job` calls harness raises nothing; the item carries the delivery's own office; `hq_answer_blocker`, `needs_me_in` and `studio_waiting` are office-scoped, so another office never sees or answers it (and the retry and resolve doors are office-scoped a second time). |
+| **Backstop** | `app.settle_lapsed_deliveries` (each worker tick) settles delivered items and raises the item a recent failure (inside the two-day redrive window) is missing, e.g. one that failed before this existed or whose trigger errored (the error is written to the events ledger as `delivery.attention_failed`, never fatal). |
+
+Known limits, honest: the item is raised on the person's own list, not pushed to a chat; a person who never opens Team
+HQ is still not told on Telegram or Slack. `app.undelivered` is not scoped to an office and no gateway section serves it
+(the readers a person actually has are the thread and Needs me); it should be given an office argument before anything
+serves it.
+
+Proofs: `tests/channels/delivery-redrive.test.ts`, `scripts/isolated/dl-delivery-redrive.ts` (replica; 56 checks, the
+1032 ones are 11a to 11l), `scripts/isolated/v1-acceptance-b.ts` journey K (K3 to K5 through the real gateway).

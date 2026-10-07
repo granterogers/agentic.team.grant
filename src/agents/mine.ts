@@ -1145,6 +1145,105 @@ export function pickByName<T extends { readonly title: string }>(
 }
 
 /**
+ * "Stop the Monday finance reminder", "cancel the recurring reminder to review my finances", "end that recurring
+ * reminder", "stop reminding me about the finances every Monday": a RECURRING REMINDER ended on purpose.
+ *
+ * Owner decision, 7 October 2026: ticking a recurring reminder completes THAT TIME only, so the series needs its own
+ * explicit way to stop, said in his own words. It is read from his words (never a paraphrase) and the handler resolves WHICH
+ * series; this reading only says that a series is being ended and what distinguishes it.
+ *
+ * Which verbs, and why they differ. `stop`, `end` and `turn off` have no other reading beside the noun "reminder" here
+ * (`taskStateChange` never read them), so they claim the sentence. `cancel`, `delete`, `remove`, `drop` and `scrap` already
+ * cancel a task by name through `taskStateChange`, and a one-off reminder is still cancelled there: they claim a sentence
+ * only when it SAYS the reminder repeats ("recurring", "repeating", "standing", "every Monday"), so this does not take
+ * "cancel the roofer reminder" away from the reader that handles it.
+ */
+export interface SeriesStopRequest {
+  /** What distinguishes the series ("monday finance", "review my finances"), or null for a bare referent. */
+  readonly name: string | null
+}
+
+const SERIES_REPEATING =
+  /\b(?:recurring|repeating|repeats?|regular|standing|ongoing|weekly|daily|fortnightly|every|each)\b/i
+const SERIES_STOP_HARD = String.raw`(?:stop|end|turn\s+off|switch\s+off|discontinue)`
+const SERIES_STOP_SOFT = String.raw`(?:cancel|delete|remove|drop|scrap|kill|ditch|bin)`
+const SERIES_REMINDER_OBJECT = new RegExp(
+  String.raw`\b(${SERIES_STOP_HARD}|${SERIES_STOP_SOFT})\s+(?!(?:by|at|in|over|up|out)\b)(?<rest>[^.!?;]{0,100}?\breminders?\b[^.!?;]{0,100})`,
+  'i',
+)
+const SERIES_NAGGING = new RegExp(
+  String.raw`\b${SERIES_STOP_HARD}\s+(?:reminding|nagging|pinging|prompting|messaging|texting|bugging)\s+me\s+(?<rest>(?:every|each|about|to|of|that|on)\b[^.!?;]{2,120})`,
+  'i',
+)
+// Words that carry the schedule or the sentence's frame, not the series' name.
+const SERIES_NOISE = new Set([
+  'the', 'my', 'our', 'that', 'this', 'those', 'these', 'all', 'one', 'it', 'last', 'a', 'an', 'to', 'about', 'for', 'of',
+  'on', 'and', 'please', 'reminder', 'reminders', 'recurring', 'repeating', 'repeats', 'repeat', 'regular', 'standing',
+  'ongoing', 'weekly', 'daily', 'fortnightly', 'every', 'each', 'me', 'week', 'day', 'other', 'morning', 'afternoon',
+  'evening', 'from', 'now', 'anymore', 'any', 'more', 'again',
+])
+
+export function seriesStopRequest(text: string): SeriesStopRequest | null {
+  const said = withoutOpeningAffirmation(String(text ?? '').trim())
+  if (said === '') return null
+  if (said.endsWith('?') && !/^(?:can|could|would|will)\s+you\b/i.test(said)) return null
+  if (/\b(?:don'?t|do\s+not|never|not\s+yet|no\s+need\s+to|not)\b/i.test(said)) return null
+  // A request for a NEW reminder or task ("remind me every Monday to stop the printers") is not this.
+  if (personalTaskRequest(said) !== null || CREATES_A_TASK.test(said)) return null
+  const nagging = SERIES_NAGGING.exec(said)
+  const object = nagging === null ? SERIES_REMINDER_OBJECT.exec(said) : null
+  const hit = nagging ?? object
+  if (hit === null) return null
+  const rest = String(hit.groups?.rest ?? '')
+  if (object !== null) {
+    const verb = String(object[1]).toLowerCase()
+    const hard = new RegExp(`^${SERIES_STOP_HARD}$`, 'i').test(verb.replace(/\s+/g, ' '))
+    if (!hard && !SERIES_REPEATING.test(rest) && !/\b(?:mon|tues?|wednes|thurs?|fri|satur|sun)day\b/i.test(rest)) {
+      return null
+    }
+  }
+  // Taken back in the same breath: "stop the Monday reminder, actually no".
+  const after = said.slice((hit.index ?? 0) + hit[0].length)
+  if (
+    /(?:^|[,;:—-])\s*(?:actually|no|wait|hang\s+on|on\s+second\s+thoughts?|scratch\s+that|forget\s+(?:it|that))\b/i.test(
+      `${rest} ${after}`,
+    )
+  ) {
+    return null
+  }
+  const words = rest
+    .toLowerCase()
+    .replace(/[^a-z0-9'’ -]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w !== '' && !SERIES_NOISE.has(w))
+  return { name: words.length === 0 ? null : words.join(' ') }
+}
+
+/** One of the series on his list that a name picks: exactly one, or none, or several (never a guess). */
+export interface SeriesCandidate {
+  readonly id: string
+  readonly title: string
+  readonly every?: string
+  readonly weekday?: string | null
+}
+export function pickSeries<T extends SeriesCandidate>(
+  name: string | null,
+  list: readonly T[],
+): { readonly one: T | null; readonly many: readonly T[] } {
+  if (name === null) return list.length === 1 ? { one: list[0] ?? null, many: list } : { one: null, many: list }
+  const words = name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2)
+  if (words.length === 0) return { one: list.length === 1 ? (list[0] ?? null) : null, many: list }
+  const fits = list.filter((c) => {
+    const hay = `${c.title} ${c.weekday ?? ''}`.toLowerCase()
+    return words.every((w) => hay.includes(w))
+  })
+  return { one: fits.length === 1 ? (fits[0] ?? null) : null, many: fits }
+}
+
+/**
  * "Add checking the figures as a subtask under it" (ledger R6).
  *
  * The conversation had no subtask reading, so that sentence filed a flat

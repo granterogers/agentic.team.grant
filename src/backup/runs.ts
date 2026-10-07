@@ -12,10 +12,12 @@
  *     a restore refuses and the next pass sweeps) and never a manifest vouching for objects that are gone.
  *
  * Nothing calls `applyRetention` with `go: true` except `scripts/backup/prune.ts`, behind the production-writes gate and a
- * person's explicit `--go`. The nightly handler only reports.
+ * person's explicit `--attended`. A deletion refuses (throws) without BOTH the attended flag and the repository's own
+ * production-write approval. The nightly handler only reports.
  */
 
-import { BUCKET, listUnder } from './portable.ts'
+import { productionWritesAllowed } from '../safety/production-gate.ts'
+import { BUCKET, checksum, downloadArchive, listUnder, readFolder } from './portable.ts'
 import { isOurs, type Plan, type RunInfo } from './retention.ts'
 
 interface Listed {
@@ -71,12 +73,71 @@ export async function listRuns(ref: string, serviceKey: string): Promise<RunInfo
   return runs.filter((r) => !r.name.endsWith('.sha256'))
 }
 
+/**
+ * Mark which runs are VERIFIED, by reading them back: every object's checksum must match the one stored beside it
+ * (the same read `backup:rehearse` does). `listRuns` never sets `verified`, because listing proves nothing about
+ * whether the bytes can be read. An unfinished run, a failed read or a throw is NOT verified. Attended and slow (it
+ * downloads each run), so the caller decides which runs to ask about.
+ */
+export async function verifyRuns(
+  ref: string,
+  serviceKey: string,
+  runs: readonly RunInfo[],
+  onEach: (run: RunInfo, verified: boolean) => void = () => undefined,
+): Promise<RunInfo[]> {
+  const out: RunInfo[] = []
+  for (const r of runs) {
+    let verified = false
+    if (isOurs(r.name) && r.complete) {
+      try {
+        if (r.name.startsWith('run-')) {
+          const inside = await listUnder(ref, serviceKey, r.name)
+          const tables = inside
+            .map((o) => o.name)
+            .filter((n) => n.endsWith('.json.gz') && !n.endsWith('/manifest.json.gz'))
+          const read = await readFolder(ref, serviceKey, { prefix: r.name, tables })
+          verified = read.corrupt.length === 0 && Object.keys(read.data).length > 0
+        } else {
+          const bytes = await downloadArchive(ref, serviceKey, r.name)
+          const stated = new TextDecoder()
+            .decode(await downloadArchive(ref, serviceKey, `${r.name}.sha256`))
+            .trim()
+            .split(/\s+/)[0]
+          verified = stated !== undefined && stated !== '' && stated === (await checksum(bytes))
+        }
+      } catch {
+        verified = false
+      }
+    }
+    onEach(r, verified)
+    out.push({ ...r, verified })
+  }
+  return out
+}
+
 export interface Applied {
   readonly dryRun: boolean
   readonly deleted: readonly string[]
   readonly objectsDeleted: number
   readonly refused: string | null
 }
+
+export interface ApplyOptions {
+  /** A deletion was asked for. Without it the call is a dry run. */
+  readonly go: boolean
+  /** A person is at the keyboard and said so (`--attended`). A deletion needs this as well as `go`. */
+  readonly attended?: boolean
+  /**
+   * The repository's own production-write approval (`ALLOW_PRODUCTION_CHECKS=1` and `ALLOW_PRODUCTION_WRITES=1`).
+   * Defaults to reading the environment. Only a replica proof against the storage emulator passes anything else;
+   * `scripts/backup/prune.ts` never does. Production destructive execution additionally needs the owner's separate
+   * approval, which no code here can grant.
+   */
+  readonly writesAllowed?: () => boolean
+}
+
+/** Refused deletion: thrown, never silently turned into a dry run, so a script that asked for a deletion hears no. */
+export class RetentionRefused extends Error {}
 
 const remove = async (ref: string, serviceKey: string, path: string): Promise<boolean> => {
   const r = await fetch(`https://${ref}.supabase.co/storage/v1/object/${BUCKET}/${path}`, {
@@ -90,7 +151,7 @@ export async function applyRetention(
   ref: string,
   serviceKey: string,
   plan: Plan,
-  options: { readonly go: boolean },
+  options: ApplyOptions,
 ): Promise<Applied> {
   if (plan.refused !== null)
     return { dryRun: !options.go, deleted: [], objectsDeleted: 0, refused: plan.refused }
@@ -99,7 +160,23 @@ export async function applyRetention(
   if (foreign !== undefined) {
     throw new Error(`refusing to delete ${foreign}: this system did not create it`)
   }
+  // a plan that names anything this policy never deletes (unverified, unfinished) is a corrupted plan
+  const reported = new Set(plan.unknown.map((d) => d.name))
+  const unjudged = names.find((n) => reported.has(n))
+  if (unjudged !== undefined) {
+    throw new Error(`refusing to delete ${unjudged}: it is unverified or unfinished`)
+  }
   if (!options.go) return { dryRun: true, deleted: names, objectsDeleted: 0, refused: null }
+  if (options.attended !== true) {
+    throw new RetentionRefused(
+      'refusing to delete: a deletion needs the attended flag (--attended) as well as go',
+    )
+  }
+  if (!(options.writesAllowed ?? productionWritesAllowed)()) {
+    throw new RetentionRefused(
+      "refusing to delete: production writes are not allowed (ALLOW_PRODUCTION_CHECKS=1 and ALLOW_PRODUCTION_WRITES=1 are the owner's switch)",
+    )
+  }
 
   let objects = 0
   for (const name of names) {

@@ -29,8 +29,8 @@ import {
   recoveryChecklist,
   restoreArchive,
 } from '../../src/backup/restore.ts'
-import { planRetention } from '../../src/backup/retention.ts'
-import { applyRetention, listRuns } from '../../src/backup/runs.ts'
+import { DEFAULT_POLICY, planRetention } from '../../src/backup/retention.ts'
+import { applyRetention, listRuns, verifyRuns } from '../../src/backup/runs.ts'
 import { gunzipText, MemoryArchive, StorageFolderSource } from '../../src/backup/sources.ts'
 import { PgExecutor } from '../../src/db/pg-executor.ts'
 import { backupHandler } from '../../src/handlers/backup.ts'
@@ -853,17 +853,45 @@ const tamper = async (qualified: string, change: (t: string) => string): Promise
   emulator.seed('aiteamhq-20260916T123456Z.json.gz.sha256', bytes(70), '2026-09-16T12:34:56Z')
   emulator.seed('grants-hand-made-export.json.gz', bytes(9000), '2026-01-01T00:00:00Z')
   const now = new Date('2026-10-06T12:00:00Z')
-  const runs = (await listRuns(REF, KEY)).map((r) =>
-    r.name === realFolder ? { ...r, verified: true } : r,
-  )
-  const plan = planRetention(runs, now)
-  const names = new Set(plan.remove.map((d) => d.name))
+  const listed = await listRuns(REF, KEY)
+  // Real verification, driven through the real reader: only the backup the handler wrote has checksums that match its
+  // bytes. The seeded folders carry a made-up checksum file, so reading them back must NOT verify them.
+  const checked = await verifyRuns(REF, KEY, listed)
+  const verifiedNow = checked.filter((r) => r.verified).map((r) => r.name)
   check(
-    'the plan over the real bucket layout removes old complete runs, old unfinished runs and the legacy file',
-    plan.remove.length > 20 &&
-      [...names].some((n) => n === 'aiteamhq-20260916T123456Z.json.gz') &&
-      plan.remove.some((d) => d.reason.startsWith('an unfinished run')),
-    `${String(plan.remove.length)} of ${String(runs.length)} removable, ${String(plan.keep.length)} kept`,
+    'verifyRuns reads each run back: the real backup verifies, runs with a wrong checksum and unfinished runs do not',
+    verifiedNow.length === 1 &&
+      verifiedNow[0] === realFolder &&
+      checked.filter((r) => !r.complete).every((r) => !r.verified),
+    `${String(verifiedNow.length)} of ${String(checked.length)} verified`,
+  )
+  const unverifiedPlan = planRetention(checked, now)
+  check(
+    'UNVERIFIED backups are never selected for deletion: with one verified run the plan removes nothing and reports the rest',
+    unverifiedPlan.remove.length === 0 &&
+      unverifiedPlan.unknown.length >= 40 &&
+      unverifiedPlan.keep.map((d) => d.name).join() === realFolder,
+    `${String(unverifiedPlan.unknown.length)} unknown, ${String(unverifiedPlan.remove.length)} removable`,
+  )
+  // A completed verification pass, modelled: every finished ours-run is marked verified (what the attended command
+  // does after reading each one back), so the plan can be driven over the whole layout.
+  const allVerified = (rs: typeof listed): typeof listed =>
+    rs.map((r) =>
+      r.complete && r.name !== 'grants-hand-made-export.json.gz' ? { ...r, verified: true } : r,
+    )
+  const runs = allVerified(listed)
+  const PASS_LIMIT = { ...DEFAULT_POLICY, maxDeletes: 10 }
+  const plan = planRetention(runs, now, PASS_LIMIT)
+  const names = new Set(plan.remove.map((d) => d.name))
+  const full = planRetention(runs, now)
+  check(
+    'the plan over the real bucket layout removes old complete runs and the legacy file, and only reports old unfinished runs',
+    full.remove.length > 15 &&
+      full.remove.some((d) => d.name === 'aiteamhq-20260916T123456Z.json.gz') &&
+      full.unknown.filter((d) => d.rule === 'incomplete').length === 5 &&
+      full.remove.every((d) => runs.find((r) => r.name === d.name)?.complete === true) &&
+      plan.remove.length === PASS_LIMIT.maxDeletes,
+    `${String(full.remove.length)} of ${String(runs.length)} removable, ${String(full.keep.length)} kept, ${String(full.unknown.length)} unknown; a pass takes ${String(plan.remove.length)}`,
   )
   check(
     'it never lists the newest backup (the real one) nor the foreign file',
@@ -886,7 +914,10 @@ const tamper = async (qualified: string, change: (t: string) => string): Promise
     runs.map((r) => ({ ...r, verified: false })),
     now,
   )
-  const refusedRun = await applyRetention(REF, KEY, refusedPlan, { go: true })
+  // `writesAllowed` is the replica proof's own switch: every URL here is the storage emulator and nothing else is
+  // reachable. The production command never passes it.
+  const APPROVED = { go: true, attended: true, writesAllowed: () => true } as const
+  const refusedRun = await applyRetention(REF, KEY, refusedPlan, APPROVED)
   check(
     'CONTROL: with no verified backup the plan is refused and even go:true deletes nothing',
     refusedPlan.refused !== null &&
@@ -898,10 +929,15 @@ const tamper = async (qualified: string, change: (t: string) => string): Promise
     ...plan,
     remove: [
       ...plan.remove,
-      { name: 'grants-hand-made-export.json.gz', bytes: 9000, reason: 'a corrupted plan' },
+      {
+        name: 'grants-hand-made-export.json.gz',
+        bytes: 9000,
+        rule: 'outside-policy' as const,
+        reason: 'a corrupted plan',
+      },
     ],
   }
-  const refusedForeign = await applyRetention(REF, KEY, sneaky, { go: true }).then(
+  const refusedForeign = await applyRetention(REF, KEY, sneaky, APPROVED).then(
     () => 'deleted',
     (e: Error) => e.message,
   )
@@ -912,7 +948,27 @@ const tamper = async (qualified: string, change: (t: string) => string): Promise
       emulator.objects.has('grants-hand-made-export.json.gz'),
     refusedForeign.slice(0, 90),
   )
-  const done = await applyRetention(REF, KEY, plan, { go: true })
+  // CONTROLS: a deletion asked for without the attended flag, and one attended but without the production-write
+  // approval (the proof's environment sets neither ALLOW_PRODUCTION_* variable), both refuse and delete nothing.
+  const noAttended = await applyRetention(REF, KEY, plan, {
+    go: true,
+    writesAllowed: () => true,
+  }).then(
+    () => 'deleted',
+    (e: Error) => e.message,
+  )
+  const noApproval = await applyRetention(REF, KEY, plan, { go: true, attended: true }).then(
+    () => 'deleted',
+    (e: Error) => e.message,
+  )
+  check(
+    'CONTROL: a deletion needs the attended flag AND the production-write approval; either missing refuses and nothing is deleted',
+    noAttended.includes('attended flag') &&
+      noApproval.includes('production writes are not allowed') &&
+      emulator.deleted.length === 0,
+    `${noAttended.slice(0, 50)} | ${noApproval.slice(0, 50)}`,
+  )
+  const done = await applyRetention(REF, KEY, plan, APPROVED)
   const stillThere = (k: string): boolean => emulator.objects.has(k)
   const manifestLast = plan.remove
     .filter((d) => d.name.startsWith('run-'))
@@ -949,21 +1005,30 @@ const tamper = async (qualified: string, change: (t: string) => string): Promise
       ),
     `${String(plan.keep.length)} kept`,
   )
-  // bounded per pass (30), so the 31st run is left for the next one; the passes converge and then do nothing
+  // bounded per pass (10 here), so the runs past the limit are left for the next pass; the passes converge and then do nothing
   let passes = 1
   let last = plan
-  while (last.remove.length > 0 && passes < 5) {
-    last = planRetention(
-      (await listRuns(REF, KEY)).map((r) => (r.name === realFolder ? { ...r, verified: true } : r)),
-      now,
-    )
-    if (last.remove.length > 0) await applyRetention(REF, KEY, last, { go: true })
+  let widest = plan.remove.length
+  while (last.remove.length > 0 && passes < 8) {
+    last = planRetention(allVerified(await listRuns(REF, KEY)), now, PASS_LIMIT)
+    widest = Math.max(widest, last.remove.length)
+    if (last.remove.length > 0) await applyRetention(REF, KEY, last, APPROVED)
     passes += 1
   }
   check(
-    'the passes converge: the run past the per-pass limit goes on the next, then there is nothing left to remove',
-    last.remove.length === 0 && passes === 3,
-    `${String(passes)} passes, ${String(last.remove.length)} removable at the end`,
+    'the passes converge: the runs past the per-pass limit go on later passes, no pass exceeds it, then there is nothing left to remove',
+    last.remove.length === 0 && passes >= 3 && widest <= PASS_LIMIT.maxDeletes,
+    `${String(passes)} passes, widest ${String(widest)}, ${String(last.remove.length)} removable at the end`,
+  )
+  const settled = allVerified(await listRuns(REF, KEY))
+  const settledPlan = planRetention(settled, now, PASS_LIMIT)
+  check(
+    'what is left is within the owner policy: at most 7 daily + 8 weekly verified runs, the newest backup among them, and the unfinished runs and foreign file untouched',
+    settledPlan.remove.length === 0 &&
+      settledPlan.keep.length <= 15 &&
+      settledPlan.keep.some((d) => d.name === realFolder) &&
+      emulator.objects.has('grants-hand-made-export.json.gz'),
+    `${String(settledPlan.keep.length)} kept, ${String(settledPlan.unknown.length)} unknown`,
   )
 }
 

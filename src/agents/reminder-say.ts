@@ -31,7 +31,8 @@ export interface ReminderFacts {
   readonly repeatStored: boolean | null
   /**
    * A reminder SERIES (a repeat with a reminder time and no due date): it moves to its next time when it is delivered,
-   * and ticking it off ends it. Optional so every older caller reads as before (a repeating task).
+   * ticking it off completes that time only, and ending the series is a separate explicit act (1034). Optional so every
+   * older caller reads as before (a repeating task).
    */
   readonly series?: boolean
   /** The words of a repeat that cannot be kept, when he asked for one. */
@@ -67,7 +68,10 @@ export function reminderSentence(f: ReminderFacts): string {
   }
   if (f.repeatLabel !== null) {
     if (f.repeatStored === true && f.series === true) {
-      parts.push(`It repeats ${f.repeatLabel}. Tick it off to stop these.`)
+      parts.push(
+        `It repeats ${f.repeatLabel}. Ticking one off completes that time only and the next still comes; ` +
+          `to end the series, say “stop the ${f.title} reminder”.`,
+      )
     } else if (f.repeatStored === true) {
       parts.push(
         `It repeats ${f.repeatLabel}. The next one is made when you tick this one off, ` +
@@ -87,4 +91,66 @@ export function reminderSentence(f: ReminderFacts): string {
     )
   }
   return parts.join(' ')
+}
+
+/** "Monday 2026-10-12 at 09:00 (Europe/Athens)": the day named, the zone named, so a time is never ambiguous. */
+const when = (iso: string, timeZone: string): string => {
+  const at = new Date(iso)
+  const weekday = new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'long' }).format(at)
+  return `${weekday} ${localIsoDay(at, timeZone)} at ${localClock(at, timeZone)} (${timeZone})`
+}
+
+/**
+ * What the office says after he completes a recurring reminder (migration 1034). It is composed from what the database
+ * returned, so it claims only what happened: the time was recorded as done, or it had not come yet and was skipped; and in
+ * both cases the series is still on.
+ */
+export function seriesDoneSentence(f: {
+  readonly title: string
+  readonly occurrence: 'recorded' | 'skipped'
+  readonly nextAt: string | null
+  readonly skippedAt: string | null
+  readonly timeZone: string
+}): string {
+  const next = f.nextAt === null ? '' : ` The next one is ${when(f.nextAt, f.timeZone)}.`
+  const head =
+    f.occurrence === 'skipped'
+      ? `Done for this time — “${f.title}” had not come round yet${f.skippedAt === null ? '' : ` (${when(f.skippedAt, f.timeZone)})`}, so I have skipped it and it will not remind you for that one.`
+      : `Done for this time — I have marked this one of “${f.title}” as done.`
+  return `${head}${next} The reminder is still repeating; to end it for good, say “stop the ${f.title} reminder”.`
+}
+
+/** What the office says after a recurring reminder is stopped. */
+export function seriesStoppedSentence(f: {
+  readonly title: string
+  readonly undoOffered: boolean
+}): string {
+  return (
+    `Stopped — “${f.title}” will not remind you again.` +
+    (f.undoOffered ? ' If that was a mistake you can undo it from the dashboard.' : '')
+  )
+}
+
+/** What the office says when it did not stop anything, and why. Never a guess. */
+export function seriesNotStoppedSentence(f: {
+  readonly reason: 'none' | 'many' | 'nothing_recurring'
+  readonly name: string | null
+  readonly titles: readonly string[]
+}): string {
+  if (f.reason === 'nothing_recurring') {
+    return 'I have not stopped anything — you have no recurring reminders on your list.'
+  }
+  if (f.reason === 'many') {
+    const names = f.titles
+      .slice(0, 5)
+      .map((t) => `“${t}”`)
+      .join(', ')
+    return `I have not stopped anything yet. Which recurring reminder do you mean — ${names}?`
+  }
+  const named = f.name === null ? '' : ` matching “${f.name}”`
+  const have = f.titles
+    .slice(0, 5)
+    .map((t) => `“${t}”`)
+    .join(', ')
+  return `I have not stopped anything — I could not find one recurring reminder${named}. Your recurring reminders: ${have}.`
 }
