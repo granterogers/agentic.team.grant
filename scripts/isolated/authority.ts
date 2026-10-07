@@ -359,7 +359,9 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `${String(stillOpen.bs)}/${String(stillOpen.ts)}`,
   )
   const stranger = await makeAsk('stranger')
-  await db.execute(`select app.hq_task_state(app.operator_office(), ${lit(stranger.t)},'done', null, 'somebody-unknown')`)
+  await db.execute(
+    `select app.hq_task_state(app.operator_office(), ${lit(stranger.t)},'done', null, 'somebody-unknown')`,
+  )
   const s2 = await one(
     `select b.state::text as bs, t.state::text as ts from public.blockers b, public.tasks t where b.blocker_id = ${lit(stranger.b)}::uuid and t.task_id = ${lit(stranger.t)}::uuid`,
   )
@@ -369,7 +371,9 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `${String(s2.bs)}/${String(s2.ts)}`,
   )
   const known = await makeAsk('grant')
-  await db.execute(`select app.hq_task_state(app.operator_office(), ${lit(known.t)},'done', null, 'grant')`)
+  await db.execute(
+    `select app.hq_task_state(app.operator_office(), ${lit(known.t)},'done', null, 'grant')`,
+  )
   const k = await one(
     `select b.state::text as bs, b.answered_by as by, b.answered_option as opt, (select count(*)::int from public.standing_authorizations where tool = 'notebook.write' and project_id = ${lit(p)}::uuid and revoked_at is null) as standing from public.blockers b where b.blocker_id = ${lit(known.b)}::uuid`,
   )
@@ -809,9 +813,15 @@ const answer = async (b: string, a: string, by = 'grant') =>
       )
     ).id,
   )
-  await db.execute(`select app.hq_task_state(app.operator_office(), ${lit(t4)}, 'blocked', 'waiting on the venue', null)`)
+  await db.execute(
+    `select app.hq_task_state(app.operator_office(), ${lit(t4)}, 'blocked', 'waiting on the venue', null)`,
+  )
   const refused = json(
-    (await one(`select app.hq_task_state(app.operator_office(), ${lit(t4)}, 'done', null, null)::text as r`)).r,
+    (
+      await one(
+        `select app.hq_task_state(app.operator_office(), ${lit(t4)}, 'done', null, null)::text as r`,
+      )
+    ).r,
   )
   const back = await one(
     `select state::text as s, blocked_on as w from public.tasks where task_id = ${lit(t4)}::uuid`,
@@ -1077,7 +1087,11 @@ const answer = async (b: string, a: string, by = 'grant') =>
     `${String(imp)} impediments`,
   )
   const ok = json(
-    (await one(`select app.hq_task_state(app.operator_office(), ${lit(t6)},'done', null, 'grant')::text as r`)).r,
+    (
+      await one(
+        `select app.hq_task_state(app.operator_office(), ${lit(t6)},'done', null, 'grant')::text as r`,
+      )
+    ).r,
   )
   check(
     'a tick that answers the question offers no undo (it could not take the answer back)',
@@ -1106,7 +1120,11 @@ const answer = async (b: string, a: string, by = 'grant') =>
   )
   const undosBefore = Number((await one(`select count(*)::int as n from public.undo_offers`)).n)
   const reply = json(
-    (await one(`select app.hq_task_state(app.operator_office(), ${lit(t)}, 'done', null, null)::text as r`)).r,
+    (
+      await one(
+        `select app.hq_task_state(app.operator_office(), ${lit(t)}, 'done', null, null)::text as r`,
+      )
+    ).r,
   )
   const undosAfter = Number((await one(`select count(*)::int as n from public.undo_offers`)).n)
   const stored = String(

@@ -335,6 +335,41 @@ check('a message forwarded to the Telegram bot creates NO task (through the real
 const fwdRow = await one(`select context::text as c from public.inbound_commands where instruction = ${lit(fwdText)}`)
 check('...because the door recorded it as forwarded', String(fwdRow.c).includes('forwarded'), String(fwdRow.c))
 
+// a state change by conversation must not ALSO create a task (the cheapest natural phrasing)
+section('8b conversational completion: one sentence, one effect')
+{
+  const seed = `Add a task to ring the roofer about the gutters ${run}`
+  await tgSend(seed)
+  await drain(seed)
+  const before = Number((await one(`select count(*)::int as c from public.tasks`)).c)
+  const finish = `Mark the roofer task done ${run}x`
+  await tgSend(finish)
+  const jj = await drain(finish)
+  const after = Number((await one(`select count(*)::int as c from public.tasks`)).c)
+  const made = await rows(`select title, assigned_to_human as mine, added_by from public.tasks where job_id = ${lit(String(jj))}::uuid`)
+  const target = (await rows(`select state from public.tasks where title ilike ${lit(`%ring the roofer about the gutters ${run}%`)}`))[0]
+  check('"Mark the roofer task done" completes the roofer task', target?.state === 'done', String(target?.state))
+  check(
+    '...and creates NO new task out of the same words (junk title "the roofer task done")',
+    after === before,
+    `tasks ${String(before)} -> ${String(after)}; new rows: ${JSON.stringify(made)}`,
+  )
+  const cancelS = `Cancel the venue task ${run}y`
+  const seed2 = `Add a task to book the venue ${run}`
+  await tgSend(seed2)
+  await drain(seed2)
+  const b2 = Number((await one(`select count(*)::int as c from public.tasks`)).c)
+  await tgSend(cancelS)
+  const j3 = await drain(cancelS)
+  const a2 = Number((await one(`select count(*)::int as c from public.tasks`)).c)
+  check('"Cancel the venue task" creates no new task either', a2 === b2, `tasks ${String(b2)} -> ${String(a2)}; ${JSON.stringify(await rows(`select title, added_by from public.tasks where job_id = ${lit(String(j3))}::uuid`))}`)
+  const every = `Remind me to ring the venue every Monday ${run}`
+  await tgSend(every)
+  const j4 = await drain(every)
+  const rec = (await rows(`select title, due_on::text as due, repeat_every::text as rep from public.tasks where job_id = ${lit(String(j4))}::uuid`))[0]
+  check('"Remind me to X every Monday" is recorded as a RECURRING task, with a clean title', rec?.rep !== null && rec?.rep !== undefined && !String(rec?.title).toLowerCase().includes('every'), JSON.stringify(rec))
+}
+
 // ================================================================================================================
 section('9 Vikunja compatibility assumptions (what the local task model must satisfy)')
 const tcols = (await rows(`select column_name from information_schema.columns where table_schema = 'public' and table_name = 'tasks'`)).map((r) => String(r.column_name))

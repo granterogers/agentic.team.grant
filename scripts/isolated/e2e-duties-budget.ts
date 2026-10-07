@@ -182,6 +182,37 @@ try {
   const stillHeldElsewhere = Number((await one(`select count(*)::int n from public.jobs where office_id in (${lit(op)}::uuid, ${lit(sys)}::uuid) and state_reason like '%daily limit%' and created_at > now() - interval '5 minutes'`)).n)
   check('no job of the operator or system office was held by any of the above', stillHeldElsewhere === 0)
 
+  // ---- 4. a duty says a repeating thing once (a revoked credential is told once a day, not every hour) -------------------------------
+  await seed(B.office, ['google.read_mail'])
+  const mailJob = async (office: string): Promise<string> => queued(office, null, 'google.read_mail', 'duty:mail-refresh')
+  const say = async (office: string, job: string, body: string, topic: string | null = null): Promise<boolean> =>
+    (await one(`select app.say_once(${lit(office)}::uuid, ${lit(job)}::uuid, ${lit(body)}${topic === null ? '' : `, ${lit(topic)}`}) as s`)).s === true
+  const revoked = 'Google refused the stored connection: it has been revoked. Reconnect it in Settings.'
+  const j1 = await mailJob(B.office)
+  const j2 = await mailJob(B.office)
+  const j3 = await mailJob(B.office)
+  check('the first announcement of a revoked credential is spoken', (await say(B.office, j1, revoked)) === true)
+  check('the same news an hour later (same body) is NOT spoken again', (await say(B.office, j2, revoked)) === false)
+  check('news that CHANGED (a different body) is spoken at once', (await say(B.office, j3, 'Google is connected again.')) === true)
+  const repeats = await one(`select repeats from public.duty_said where job_kind = 'google.read_mail' and project_id = app.unnamed_project(${lit(B.office)}::uuid)`)
+  console.log(`INFO duty_said repeats after the second identical report: ${JSON.stringify(repeats)}`)
+  const jc = await mailJob(C.office)
+  check('a person who holds no such duty is never muted (an unlisted job is always spoken: fail open)', (await say(C.office, jc, revoked)) === true && (await say(C.office, await mailJob(C.office), revoked)) === true)
+  await db.execute(`update public.duty_said set said_at = now() - interval '21 hours' where job_kind = 'google.read_mail'`)
+  check('after 20 hours the unchanged news is spoken again (told daily, not never)', (await say(B.office, await mailJob(B.office), 'Google is connected again.')) === true)
+  const foreignJob = await mailJob(B.office)
+  check('a job of another office asked from the wrong office is "a job that does not exist": spoken, and it changes nothing', (await say(C.office, foreignJob, revoked)) === true)
+
+  // ---- 5. a failing duty is recorded per office and surfaces for that office only ------------------------------------------------
+  for (let i = 0; i < 3; i += 1) {
+    await db.execute(`select app.failure_seen(${lit(B.office)}::uuid, 'google.read_mail', ${lit('invalid_grant: refresh refused')}, 'invalid_grant', ${lit(j1)}::uuid)`)
+  }
+  const rfB = await q(`select * from app.recurring_failures(${lit(B.office)}::uuid, 3, 14)`)
+  const rfC = await q(`select * from app.recurring_failures(${lit(C.office)}::uuid, 3, 14)`)
+  console.log(`INFO recurring_failures: B ${String(rfB.length)} row(s), C ${String(rfC.length)} row(s); first B row keys: ${Object.keys(rfB[0] ?? {}).join(',')}`)
+  check('a failure that repeats three times is reported for the office it happened in (control)', rfB.length === 1, `${String(rfB.length)} row(s)`)
+  check('and is not reported for another office', rfC.length === 0)
+
   // the SYSTEM office: its jobs' spend is its own
   check('the system office has its own (zero) spend and is not part of any person office ceiling', (await spentToday(sys)) === 0)
 

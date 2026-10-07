@@ -32,14 +32,12 @@ const handler = instructionHandler({
   router: { complete: async () => ({ content: '{}', model: 'isolated/stand-in' }) } as never,
 })
 
-let seq = 0
 const chats = new Map<string, string>()
 const say = async (
   chat: string,
   said: string,
   forwarded: boolean,
 ): Promise<Job & { commandId: string }> => {
-  seq += 1
   // A turn as the Telegram adapter writes it (recognised key, PostgREST door), one numeric chat per conversation:
   // the dashboard's single conversation would thread every case into the last one. The flag is the same one both
   // doors set (`context.forwarded`).

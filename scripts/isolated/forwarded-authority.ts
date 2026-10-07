@@ -7,8 +7,8 @@
  * was FORWARDED text is not, and asks. His own words, a duty, a legacy job and a standing authorization are the
  * controls that prove the change bought no precision loss.
  */
-import { isolated } from './guard.ts'
 import { realTurn } from './fixtures-approvals.ts'
+import { isolated } from './guard.ts'
 import { registerBot } from './real-telegram.ts'
 
 const db = await isolated(process.argv[2] ?? 'fwd624')

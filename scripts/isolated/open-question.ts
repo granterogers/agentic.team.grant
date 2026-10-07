@@ -19,8 +19,8 @@
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import { raiseBlocker } from '../../src/inference/record.ts'
 import type { Job } from '../../src/jobs/worker.ts'
-import { isolated } from './guard.ts'
 import { markShown, realTurn } from './fixtures-approvals.ts'
+import { isolated } from './guard.ts'
 import { chatFor } from './shown.ts'
 
 const db = await isolated(process.argv[2] ?? 'openq')

@@ -34,9 +34,8 @@ export async function realTurn(
     readonly channel: 'telegram' | 'teamhq'
     readonly text: string
     /** The conversation: a numeric Telegram chat id. Ignored for the dashboard, whose conversation is its channel. */
-    readonly chat?: string
-    readonly context?: Record<string, unknown>
-    readonly synthetic?: boolean
+    readonly chat?: string | undefined
+    readonly context?: Record<string, unknown> | undefined
   },
 ): Promise<RealTurn> {
   const context = lit(JSON.stringify(o.context ?? {}))

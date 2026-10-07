@@ -7,14 +7,11 @@
 
   Usage: npx tsx scripts/isolated/e2e-instructions.ts
 */
-import { artifactRequest, researchRequest } from '../../src/agents/actions.ts'
-import { wantsAnotherGo } from '../../src/agents/again.ts'
-import { callsItOff } from '../../src/agents/calloff.ts'
+import { artifactRequest } from '../../src/agents/actions.ts'
 import { entitled, noneEntitled } from '../../src/agents/entitled.ts'
 import { asksForTasks, asksForWriting } from '../../src/agents/goal.ts'
 import { classifyIntent, needsClarification } from '../../src/agents/intent.ts'
 import { personalTaskRequest } from '../../src/agents/mine.ts'
-import { readPlan } from '../../src/agents/plan.ts'
 import { pickRoster } from '../../src/agents/router.ts'
 import { resolveElliptical, taskRequest } from '../../src/agents/tasks.ts'
 import { needsResolving } from '../../src/agents/thread.ts'
