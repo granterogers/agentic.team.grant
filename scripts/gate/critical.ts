@@ -244,6 +244,16 @@ export const CRITICAL: readonly Proof[] = [
     41,
     'delivery and failure paths: retries are bounded, a failure is said once, nothing is sent twice',
   ),
+  p(
+    'v1-acceptance-a',
+    100,
+    'Version 1 journeys A-F and L through the real doors, worker and delivery: reminders (dated, date-only, recurring), task completion, a draft that is not sent, the human-contact boundary, duplicate input',
+  ),
+  p(
+    'v1-acceptance-b',
+    105,
+    'Version 1 journeys G-K, M and N: autonomous work that parks an outward step, delegation fan-in, Team HQ continuity, model failure and delivery failure, untrusted content, cross-office attack',
+  ),
 
   // ---- reminders, state changes and delivery redrive (7 October implementation run) ----------------------------------
   p(
