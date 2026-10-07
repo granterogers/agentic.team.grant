@@ -9,6 +9,8 @@
 import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { closureProblems } from './lib/bundle.ts'
+import { HQ_API_ENTRY, HQ_API_FILES } from './lib/hq-api-files.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
 if (supabaseToken === '') {
@@ -18,29 +20,24 @@ if (supabaseToken === '') {
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const db = new ManagementApiExecutor(ref, supabaseToken)
 
+// Resolve and validate the upload BEFORE anything is sent: the upload is a hand-kept flat list, so what proves it is
+// complete is the closure check, and an incomplete one must stop here rather than reach the platform.
+const sources = new Map<string, string>()
+for (const f of HQ_API_FILES) sources.set(f.name, await readFile(f.from, 'utf8'))
+const problems = closureProblems(sources)
+if (problems.length > 0) {
+  console.error(`not deployed, nothing was changed in production:\n  - ${problems.join('\n  - ')}`)
+  process.exit(1)
+}
+console.log(`hq-api: ${String(sources.size)} file(s), closure verified`)
 const form = new FormData()
 form.append(
   'metadata',
-  JSON.stringify({ name: 'hq-api', entrypoint_path: 'index.ts', verify_jwt: false }),
+  JSON.stringify({ name: 'hq-api', entrypoint_path: HQ_API_ENTRY, verify_jwt: false }),
 )
-form.append(
-  'file',
-  new File([await readFile('supabase/functions/hq-api/index.ts', 'utf8')], 'index.ts', {
-    type: 'application/typescript',
-  }),
-)
-form.append(
-  'file',
-  new File([await readFile('src/text/file-text.ts', 'utf8')], 'file-text.ts', {
-    type: 'application/typescript',
-  }),
-)
-form.append(
-  'file',
-  new File([await readFile('src/slack/oauth.ts', 'utf8')], 'oauth.ts', {
-    type: 'application/typescript',
-  }),
-)
+for (const [name, source] of sources) {
+  form.append('file', new File([source], name, { type: 'application/typescript' }))
+}
 const deployed = await fetch(
   `https://api.supabase.com/v1/projects/${ref}/functions/deploy?slug=hq-api`,
   { method: 'POST', headers: { Authorization: `Bearer ${supabaseToken}` }, body: form },

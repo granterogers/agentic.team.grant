@@ -408,6 +408,9 @@ Rules, and they bind **sub-agents exactly as they bind you**:
    (`require-production-checks` for reads, `require-production-writes` for writes). `tests/safety` fails if one does not,
    and fails if a gate import is removed.
 5. Unset `SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_REF SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_URL` when running anything local.
+6. A deploy or a migration run also needs an attributable source: a clean tree where it ships and a pushed commit (`src/safety/provenance.ts`,
+   ADR-0067). Commit and push first. `ALLOW_UNPROVENANCED_DEPLOY="<reason>"` exists for a live outage and is logged; never use it to make a
+   check pass.
 
 ---
 
@@ -4712,6 +4715,39 @@ Each of these cost real time. They are here so they cost it once.
 - **A tolerated error list must be bounded by WHAT may be skipped as well as by the message.** `src/migrations/fresh.ts` skips a
   statement only if it is a `do` self-check or a seed `insert`; a failing `create` or `alter` is never skippable, whatever the list
   says. Prove replay parity with a catalogue fingerprint (`scripts/isolated/schema-fingerprint.sql`), not by "it applied".
+- **A migration's history is only as good as the source a deploy came from, and the runner could not see the source.** The Sample's `0897`
+  and `0898` were applied from a tree nobody committed: the ledger held two names and checksums and the repository held nothing, so
+  `migrate` was blocked until the files were recovered (`0898` from the statement history, byte for byte; `0897` only from the session that
+  wrote it, because a reconstruction fails `checksum/modified` and must). The runner refused the history faults; nothing refused the
+  source. `src/safety/provenance.ts` is that half (ADR-0067): a deploy or migrate run needs a git checkout, a tree clean where it ships
+  and a commit that is on a remote. Its one bypass is a logged sentence of 20 characters or more, never a flag.
+- **A backfill that asserts "healthy" about something it did not check records a defect as a fact.** Migration 1000 marked every office
+  holding a Google secret an `active` connection; a secret in the vault proves a token was STORED. One live token had been revoked on 15
+  September, and the one-active rule would then have refused the reconnect. The state now comes only from durable evidence already in the
+  database, fails closed to `unverified`, and a trigger moves it with the credential's recorded health. Ask of every `state = 'ok'` a
+  migration writes: what did it observe, and when?
+- **A suite whose premise is a failure mode of the environment inverts when the product starts handling that failure honestly.**
+  `verify:phone-header` stored a made-up token and relied on an unreachable office leaving the prototype's invented project on screen,
+  which the Sample's #426 (a failed first read draws nothing invented) correctly removed: two of its checks went red on `main`, and the one
+  that had been red before the Sample was asserting words on a control the product had made an icon. Run a suspect suite on the tree BEFORE
+  the change as well as after, to separate what the change broke from what was already red (here, 1 failure before and 3 after, and neither
+  count was the product).
+- **An overflow check compared with the page's own width cannot fail on a phone.** A phone widens its layout viewport to fit what overflows,
+  so `scrollWidth <= innerWidth` is true of a page 700px wide on a 390px device, and `overflow-x` on the body hides it from `scrollWidth`
+  altogether. `scripts/isolated/combined-browser.ts` measures against the DEVICE's width and asks the elements their right edge, and was
+  shown red by the sabotage that the first version missed.
+- **Check the old branch for implementation before reconciling it.** The audit expected the UX branch to be heavily diverged and found one
+  documentation commit: every implementation commit was already in `main` (merge `9ce450f5`). The right move was a fresh branch from
+  `main` and one commit carried across, not a merge of an old tree.
+- **A witness that casts untrusted text crashes on the first row nobody expected, and a crash reads as "no finding".** `check:leaks` cast
+  `pinned_config ->> 'command_id'` to a uuid, and two Sample-duty hand-off jobs carry an empty string, so the check died before a verdict for as long as
+  those rows existed. The cast is guarded by the uuid shape (`scripts/lib/command-id.ts`), an unreadable id is reported as DATA QUALITY under its own
+  heading and never counted as a leak, and the rows were left alone: fix the reader, not the data it was shown.
+- **A deployed edge function's bundle holds TRANSPILED sources, so "matches Git" will read "nowhere" for a correct capture.** `GET /functions/{slug}/body` is an
+  ESZIP2 bundle of the modules with types stripped; byte comparison with the repository's TypeScript can never succeed and says nothing. What a capture proves
+  is that the bytes can be put back (`scripts/forensics/capture-functions.ts`, `scripts/deploy/restore-function.ts`), and what compares with Git is the set of NAMES the code
+  uses (gateway sections, RPCs, handler kinds, environment variables). And a "found a secret" scan built on the log redactor's prose heuristics
+  (`authorization`, `long-opaque`) fired on comments saying "bearer token": scan source for credential SHAPES only.
 
 ---
 

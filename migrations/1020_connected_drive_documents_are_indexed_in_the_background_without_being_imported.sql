@@ -1,6 +1,8 @@
 -- 1020. A connected Google Drive document is read and indexed in the BACKGROUND, without being imported (HQ-DOC-026),
 -- and a deployment can start with its timed duties held (the staging posture). UNAPPLIED to production.
--- Depends on 0896, 0900, 0960, 0990, 1000 and 1010.
+-- Depends on 0896, 0907 (written as 0900), 0960, 0990, 1000 and 1010.
+-- Numbering note (6 Oct 2026): below, "0897" means the project calendar, now migration 0906, and "0900" the documents
+-- migration, now 0907. The Public Sample Office's applied 0897 and 0900 are different migrations.
 --
 -- Grant, 5 October 2026: agents may read and index connected Drive documents on their own. BACKGROUND INDEX IS NOT IMPORT.
 --   background index  reads the source read-only and keeps only DERIVED material: extracted text in documents.content

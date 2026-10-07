@@ -1,5 +1,5 @@
 /**
- * Project calendars (0897) - every function driven with real rows, on a LOCAL replica only.
+ * Project calendars (migration 0906, written as 0897) - every function driven with real rows, on a LOCAL replica only.
  *
  *   npx tsx scripts/isolated/project-calendar.ts <replica-db>      (default: cand_cal)
  *

@@ -1,4 +1,6 @@
 -- 0925: a tombstoned event is not a search result.
+-- Numbering note (6 Oct 2026): below, "0897" means the project calendar, now migration 0906. The Public Sample Office's
+-- applied 0897 is a different migration.
 --
 -- 0921's calendar provider was written before 0897 existed and read whatever columns the table had. 0897's table
 -- tombstones a deleted event (deleted_at) until the deletion has reached Google, so searching found events the person had

@@ -1,5 +1,7 @@
 # UX overnight backend (branch claude/ux-overnight-be-act): notes and contracts
 
+> **Migration numbering (6 Oct 2026).** Written when the project calendar was migration 0897; it is now **0906** (the Public Sample Office applied its own 0897 to 0905 to production first). Read "0897" below as 0906.
+
 Four items, migrations **0920-0923**, all UNAPPLIED to production. Proofs run only against the local replica copy.
 
 | Migration | Item | Proof (local, rolls back) |

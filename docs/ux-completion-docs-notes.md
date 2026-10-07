@@ -1,5 +1,7 @@
 # External documents, Import and cached previews - completion notes (HQ-DOC-025 .. 031)
 
+> **Migration numbering (6 Oct 2026).** Written when the documents migration was 0900; it is now **0907** (the Public Sample Office applied its own 0900 to production first). Read "0900" below as 0907.
+
 Branch `claude/ux-overnight-docs` (from `claude/team-hq-ux-overnight`). Migration **0960 is UNAPPLIED to production**; it was proved only on the local replica `cand_docs2` (clean base `pbase` + this branch's unapplied migrations 0897-0950 + 0960). Nothing was deployed and nothing touched production. The ledger is deliberately not edited; this file says what is now true per row.
 
 ## What was built

@@ -524,7 +524,7 @@
     },
     "document_version_notes": {
       "class": "OFFICE_CARRIER",
-      "why": "Provenance of a document version (0900); written only by app.document_version_link, which copies the head document's own office, and tied to its documents by same-office composite keys so a note cannot belong to a different office than the version it describes.",
+      "why": "Provenance of a document version (0907, written as 0900); written only by app.document_version_link, which copies the head document's own office, and tied to its documents by same-office composite keys so a note cannot belong to a different office than the version it describes.",
       "caller_selects": true,
       "cross": [
         {
@@ -546,7 +546,7 @@
     },
     "document_import_requests": {
       "class": "OFFICE_CARRIER",
-      "why": "A person's explicit request to import an external document that Team HQ does not hold yet (0900); written only by app.hq_document_import under the verified office, and tied to its documents by same-office composite keys.",
+      "why": "A person's explicit request to import an external document that Team HQ does not hold yet (0907, written as 0900); written only by app.hq_document_import under the verified office, and tied to its documents by same-office composite keys.",
       "caller_selects": true,
       "cross": [
         {

@@ -55,7 +55,7 @@ const migration = readFileSync(
   'utf8',
 )
 const start = migration.indexOf(
-  'insert into public.integration_connections (office_id, provider, account_ref, state, scopes, secret_name)\nselect',
+  'insert into public.integration_connections (office_id, provider, account_ref, state, scopes, secret_name, revoked_at)\nselect',
 )
 const end = migration.indexOf('on conflict do nothing;', start)
 check('the backfill statement was found in the migration', start > 0 && end > start)
@@ -92,6 +92,15 @@ try {
        on conflict (key) do update set value = excluded.value`,
   )
   await secret(`google.refresh_token.${OTHER}`, `rt-other-${run}`)
+  // A credential is backfilled ACTIVE only when the database proves it works: a fresh ok reading of the Google health row.
+  // (The states a credential gets WITHOUT that proof are driven in google-connection-backfill.ts.)
+  for (const office of [HOME, OTHER]) {
+    await q(
+      `insert into public.connection_health (office_id, service, credential, state, detail, owner, action)
+       values (${lit(office)}::uuid, 'google_calendar', 'oauth_client', 'ok', 'connected', 'proof', '')
+       on conflict (office_id, service, credential) do update set state = 'ok', detail = 'connected', checked_at = app.now_utc()`,
+    )
+  }
 
   // BACKFILL on rows
   await q(BACKFILL)

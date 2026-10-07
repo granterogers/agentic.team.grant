@@ -1,5 +1,7 @@
 # UX completion (svc): what is now true
 
+> **Migration numbering (6 Oct 2026).** Written when the project calendar was migration 0897; it is now **0906** (the Public Sample Office applied its own 0897 to 0905 to production first). Read "0897" below as 0906.
+
 Branch `claude/ux-overnight-svc`, cut from `claude/team-hq-ux-overnight`. Three independent items. Everything was built and
 proved on the local replica (`cand_svc2`, `pbase` plus the branch's unapplied migrations plus 0980 and 0981) with the
 Supabase variables unset. **Nothing was applied to, deployed to or run against production.** The ledger

@@ -1,5 +1,5 @@
 -- 0991. Text that a preview derived is not the file, so an Import of such a document still fetches the source.
--- UNAPPLIED to production. Depends on 0900, 0960 and 0990.
+-- UNAPPLIED to production. Depends on 0907 (written as 0900), 0960 and 0990.
 --
 -- Before this, hq_document_import and document_import_fulfil asked "does the document have content or a stored file?". Once
 -- 0990 lets a preview write extracted text into documents.content, a PDF that had only been PREVIEWED would answer yes and

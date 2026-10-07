@@ -1,3 +1,15 @@
+> ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
+>
+> The Team HQ UX work was already in `main`; the audit found the old UX branch held one documentation commit and nothing else, so this branch is a
+> fresh one carrying that and the corrections. **Migration 1000 is fixed before it was ever applied**: a Google credential is `active` only when the
+> database proves it works (fresh `ok` health), `revoked` when Google said `invalid_grant`, `dead` when refused otherwise, `unverified` when nothing
+> proves it (ADR-0067); a trigger keeps it in step with the credential's recorded health. **A deploy or migration run now refuses a dirty tree or an
+> unpushed commit** (`src/safety/provenance.ts`; one bypass, a logged sentence, not used). Every stale reference to Team HQ's `0897`/`0900` is
+> corrected to `0906`/`0907` (nothing executable depended on the old numbers). `scripts/isolated/combined-browser.ts` is the first browser run of the
+> merged product: a person and a Sample visitor through the real gateway code, 9 viewports, reduced motion, 415 checks. `verify:phone-header` had been
+> red on `main` for two reasons that were the suite's, not the product's, and was corrected. `HQ-VIS-001` and `-003` remain post-deployment user
+> acceptance. State of play, what was and was not verified, and the order to deploy: `docs/ops/deployment-readiness-2026-10-05.md`.
+>
 > ## 2026-10-06 - PUBLIC SAMPLE OFFICE INTEGRATED WITH CURRENT MAIN (branch `claude/multi-user-p4`)
 >
 > Multi-User V1 itself was already in `main` (`28569e68`). This merge brings the four Sample commits (`0d98186a`, `1869d7ec`,
@@ -16,6 +28,9 @@
 > a Monday automation, a date-keeping daily job. Migrations **0899 to 0905** (0900 also fixes a latent `''::uuid` defect that
 > broke hand-off delegation for everybody; #428 was a database cast, not a worker defect). Page `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x`
 > (My Tasks project name, #426 failed-read, Settings notice; rollback chain in PUBLIC-SAMPLE.md). Nothing held was deployed.
+> **Superseded 6 October 2026:** the integrated `main` (`9310116c`) was deployed and accepted: worker v975, hq-api v896, mcp v664, page
+> `dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx` (previous `dpl_34Ug…`), ledger 798, drive-index and calendar-event-sync OFF, Google revoked.
+> Final state, gaps (#436, #437, MCP `tools/list` unverified) and acceptance status: `docs/ops/deployment-readiness-2026-10-05.md` section 13.
 > Account, limits and the capability matrix: `docs/multi-user/PUBLIC-SAMPLE.md`. **Paused:** Supabase recovered after a dashboard restart
 > (6 Oct 12:29Z) and the final walkthroughs passed on the final build: desktop 73/73, phone 73/73, plus contact Save/Remove and
 > Automations refusals. 0902's first scheduled run failed with a platform startup timeout; watch the 7 Oct 03:23Z run. Open: #425 (the team's identity and its

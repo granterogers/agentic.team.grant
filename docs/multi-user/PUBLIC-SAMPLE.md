@@ -188,7 +188,9 @@ npm run sample:public-transition     # visitor -> real person -> sign out -> vis
 | `signin` | v126 | the `sample` action is new and additive; v124 before this work |
 | `voice`, `voice-token`, `mcp` | v656, v685, v661 | the guest refusal rides in `src/auth/speaker.ts` |
 | Migrations 0899 to 0904 (showcase layer, empty command id, completed work only, dates, hidden turns) | applied | additive reader changes; each has an isolated proof |
-| Page | `dpl_2VgoidAKu95AcMjLieCocWr6bWxv` (My Tasks project name, #426 chat fallback, Settings notice) | previous `dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3`; original `dpl_8QwvvES1oRridjeokGzu2MMGdEYm` (before this work); then `dpl_DrHpy8xh…`, `dpl_3E7t94dY…`, `dpl_2z4wvtNQ…` |
+| Page | **Superseded later on 6 October 2026: the live deployment is now `dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx` (main `9310116c`); see `docs/ops/deployment-readiness-2026-10-05.md` section 13.** Until then `dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x` was the live production deployment (read from the Vercel API on 6 October 2026). `dpl_2VgoidAKu95AcMjLieCocWr6bWxv` (My Tasks project name, #426 chat fallback, Settings notice) was current at 16:36 UTC on 5 October and was superseded by `dpl_E4uGawb9DT9WtyMvTK4h4YqU6SBq` (17:55) and then `dpl_34Ug…` (17:58) | the one before the live page is `dpl_E4uGawb9DT9WtyMvTK4h4YqU6SBq`, then `dpl_2VgoidAKu95AcMjLieCocWr6bWxv`, `dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3`; original `dpl_8QwvvES1oRridjeokGzu2MMGdEYm` (before this work); then `dpl_DrHpy8xh…`, `dpl_3E7t94dY…`, `dpl_2z4wvtNQ…` |
+
+Function versions read from the platform on 6 October 2026 (the rows above were written earlier and are older for two of them): `hq-api` **v893** (was v891), `signin` **v127** (was v126), `worker` v972, `mcp` v661, `voice` v656, `voice-token` v685, `telegram-webhook` v696, `slack-events` v674, `google-oauth` v644.
 
 **Nothing held was deployed.** Function and page deploys were built from the *live bytes* plus only this change, never from the
 working tree (which carries the held Slack self-service and polish work). The page deploy tool uploaded 7, 1, 1 and 1 files; the

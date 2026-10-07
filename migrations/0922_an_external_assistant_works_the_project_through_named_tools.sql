@@ -1,3 +1,5 @@
+-- Numbering note (6 Oct 2026): below, "0897" means the project calendar, now migration 0906, and "0900" the documents
+-- migration, now 0907. The Public Sample Office's applied 0897 and 0900 are different migrations.
 begin;
 
 -- ---------------------------------------------------------------------------

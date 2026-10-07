@@ -6,8 +6,13 @@
  * header (the text Sign out button is the thing that once squeezed the name to 0px), and the unreachable office leaves it in
  * place, which is how this repository's other local suites get a writer. The prototype project "Legacy Coaching Course" is the
  * subject. Asserted at 320, 360, 390 and 430px: the name is at least 40px wide, the header does not overflow the screen, and
- * every control in it is 44px to touch; and at 1440px the desktop header still says "Sign out" in words.
+ * every control in it is 44px to touch; and at 1440px the desktop header offers Sign out as a quiet icon with that name.
  * A control: with the phone rules removed the same measurement must come out red (checked by hand, recorded in HANDOFF).
+ *
+ * CORRECTED 6 October 2026 (reconciling the Sample Office): two of its checks described a world that has since changed on
+ * purpose and were red on main. The 70px floor needs a real project, and the page (rightly, #426) no longer invents one for a
+ * signed-in person whose office did not answer, so that floor moved to scripts/isolated/combined-browser.ts, which draws a
+ * real office through the real gateway. The desktop check asserted words on a control the product made an icon earlier.
  */
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -45,7 +50,7 @@ const MEASURE = `(() => {
   var top = document.querySelector('.bctop');
   var controls = Array.prototype.slice.call(top.querySelectorAll('button')).filter(function (b) { return b.offsetParent !== null; }).map(function (b) { var r = b.getBoundingClientRect(); return { label: (b.getAttribute('aria-label') || b.textContent || '').slice(0, 24), h: Math.round(r.height), w: Math.round(r.width) }; });
   return { name: box('.bcjumpname'), top: top.getBoundingClientRect().width, scroll: document.documentElement.scrollWidth, vw: window.innerWidth,
-           signoutText: (document.querySelector('.bcsignout .bcsotext') || {}).textContent || '', signoutTextShown: !!document.querySelector('.bcsignout .bcsotext') && getComputedStyle(document.querySelector('.bcsignout .bcsotext')).display !== 'none', controls: controls };
+           signoutLabel: (document.querySelector('.bcsignout') || document.body).getAttribute('aria-label') || '', signoutText: (document.querySelector('.bcsignout .bcsotext') || {}).textContent || '', signoutTextShown: !!document.querySelector('.bcsignout .bcsotext') && getComputedStyle(document.querySelector('.bcsignout .bcsotext')).display !== 'none', controls: controls };
 })()`
 try {
   for (const [width, touch] of [
@@ -75,6 +80,7 @@ try {
       scroll: number
       vw: number
       signoutTextShown: boolean
+      signoutLabel: string
       controls: { label: string; h: number; w: number }[]
     }
     if (width < 600) {
@@ -83,13 +89,10 @@ try {
         (m.name?.w ?? 0) >= 40,
         String(m.name?.w),
       )
-      if (width <= 360) {
-        check(
-          `${String(width)}px: the mark gives its room to the name (at least 70px)`,
-          (m.name?.w ?? 0) >= 70,
-          String(m.name?.w),
-        )
-      }
+      // The 70px floor at 320 and 360 is NOT measured here any more. This suite has no office behind it, and since #426 the page
+      // draws no invented project for a signed-in person whose first read failed, so the name measured here is a placeholder, not
+      // the project's. The floor is asserted against a real project, answered by the real gateway, in
+      // scripts/isolated/combined-browser.ts (320, 360, 390 and 430, a person and a sample visitor).
       check(
         `${String(width)}px: the header does not widen the page`,
         m.scroll <= m.vw,
@@ -134,9 +137,13 @@ try {
         `${String(home.scroll)} of ${String(home.vw)}; ${home.controls.map((c) => `${c.label}:${String(c.h)}`).join(' ')}`,
       )
     } else {
+      // A desktop with a fine pointer draws the quiet icon (docs.css, "Sign out: the icon alone"), named for a screen reader
+      // and by its tooltip; the words are the phone's alternative to the icon's 44px target, not a desktop requirement. This
+      // used to assert the words, which the product stopped drawing before the Sample was merged (red on b82c2779 too).
       check(
-        `${String(width)}px: the desktop header still says Sign out in words`,
-        m.signoutTextShown,
+        `${String(width)}px: the desktop header offers Sign out, as an icon named Sign out`,
+        m.signoutLabel === 'Sign out' && !m.signoutTextShown,
+        `label ${m.signoutLabel}, words shown ${String(m.signoutTextShown)}`,
       )
     }
     await ctx.close()

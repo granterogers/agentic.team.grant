@@ -1,5 +1,7 @@
 # External documents are read, searched and previewed on demand, without Import - notes (HQ-DOC-025 .. 031)
 
+> **Migration numbering (6 Oct 2026).** Written when the documents migration was 0900; it is now **0907** (the Public Sample Office applied its own 0900 to production first). Read "0900" below as 0907.
+
 Branch `claude/ux-closure-preview` (from `claude/team-hq-ux-overnight`). Migrations **0990 and 0991 are UNAPPLIED to production**; they were proved only on the local replica `cand_prev2` (clean base `pbase` + this branch's unapplied migrations 0897-0981 + 0990 + 0991). Nothing was deployed, nothing touched production, and **no live Google call was made**: every Drive response in every test is a fake. The ledger is not edited. This file says what is now true per row and exactly what still needs a live Google account.
 
 Intent (Grant): an external document does not need to be imported to be useful. A connected external document can be read, searched, indexed and previewed on demand while its source is connected. **Import** is a different act: it makes a durable Team HQ copy that survives the source disappearing. Read/preview/index are never Import.

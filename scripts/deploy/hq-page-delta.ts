@@ -135,7 +135,16 @@ const create = async () =>
       target: DEPLOYMENT.target,
       files: list,
       projectSettings: DEPLOYMENT.projectSettings,
-      ...deploymentMeta(assessment),
+      // The page fingerprint (what makes an unchanged redeploy skippable) and, from the provenance check in
+      // require-production-writes.ts, the commit this page was built from. Neither is an input to the fingerprint.
+      ...((): { meta?: Record<string, string> } => {
+        const meta: Record<string, string> = { ...(deploymentMeta(assessment).meta ?? {}) }
+        if (process.env.DEPLOY_SOURCE_SHA !== undefined) {
+          meta.gitCommitSha = process.env.DEPLOY_SOURCE_SHA
+          meta.deployedBy = 'deploy:hq-page'
+        }
+        return Object.keys(meta).length === 0 ? {} : { meta }
+      })(),
     }),
   })
 let response = await create()

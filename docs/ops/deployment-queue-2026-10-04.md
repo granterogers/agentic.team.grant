@@ -55,7 +55,7 @@ Capture around the deployment now uses: `npm run forensics:metrics` (one raw scr
 (eight files: `chat.js`, `session.js`, `call.js`, `office.js` (one hunk), `bc/account.js`, `bc/account.css`, `bc/shell.js` (sign-out label and banner), `bc/voicenote.js`, `bc/miniatures.js`).
 None of the held Slack/polish files above went out: `office.js` and `shell.js` carry held work in the working tree, so the staged copies were live bytes plus only the Sample hunks. See `docs/multi-user/PUBLIC-SAMPLE.md`. Before releasing the held page, re-stage against the now-live bytes.
 
-Applied already (production): through `0891` (761 migrations), plus 0897 and 0898 above. `0888` chunks, `0889`, `0890`, `0891` Slack installs are live.
+Applied already (production), as written on 5 October: through `0891` (761 migrations), plus 0897 and 0898 above. **Superseded 6 October: production has 770 applied, the Sample's `0897` to `0905` (exact source now in Git).** `0888` chunks, `0889`, `0890`, `0891` Slack installs are live.
 
 ## Order after recovery, serialised, stop on any degradation
 

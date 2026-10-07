@@ -434,7 +434,7 @@ export const buildPass = async (
     // The other direction: dated tasks into the diary (#94, ADR-0020). Off
     // until `calendar.sync_tasks` is turned on.
     calendarTasksHandler(db),
-    // Project calendars both ways: a project's own events to Google, and Google's edits back (0897).
+    // Project calendars both ways: a project's own events to Google, and Google's edits back (0906, written as 0897).
     calendarEventsHandler(db),
     jobTracesHandler(db),
     /*
