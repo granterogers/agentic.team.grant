@@ -54,7 +54,9 @@ const executor = (cfg: Cfg = {}) => {
       if (/app\.container_refs/.test(sql)) return { rows: [] }
       if (/select content_fingerprint from public\.documents/.test(sql)) {
         const id = [...(cfg.known ?? [])].find((k) => sql.includes(`'${k}'`))
-        return { rows: id === undefined ? [] : [{ content_fingerprint: cfg.fingerprint ?? 'stale' }] }
+        return {
+          rows: id === undefined ? [] : [{ content_fingerprint: cfg.fingerprint ?? 'stale' }],
+        }
       }
       if (/insert into public\.documents/.test(sql)) return { rows: [{ document_id: 'd' }] }
       if (/inference_usage/.test(sql)) return { rows: [{ n: spentModel ? 1 : 0 }] }
@@ -97,7 +99,9 @@ const paragraph = (text: string) => ({
 })
 const blocks = (text: string) => () => json(200, { results: [paragraph(text)], has_more: false })
 
-const run = async (cfg: Cfg = {}): Promise<{ out: HandlerOutput; ctx: ReturnType<typeof executor> }> => {
+const run = async (
+  cfg: Cfg = {},
+): Promise<{ out: HandlerOutput; ctx: ReturnType<typeof executor> }> => {
   const ctx = executor(cfg)
   const out = await notionSyncHandler(ctx.db, null).handle(job, ctx.db)
   return { out, ctx }
@@ -121,9 +125,10 @@ afterEach(() => {
 })
 
 describe('a healthy sync', () => {
-  it('reads shared pages at the pinned API version and files them in the job\'s office', async () => {
+  it("reads shared pages at the pinned API version and files them in the job's office", async () => {
     const n = notion({
-      '/search': () => json(200, { results: [page('pg1', 'Notes'), page('pg2', 'Ideas')], has_more: false }),
+      '/search': () =>
+        json(200, { results: [page('pg1', 'Notes'), page('pg2', 'Ideas')], has_more: false }),
       '/blocks/pg1/children': blocks('first page text'),
       '/blocks/pg2/children': blocks('second page text'),
     })
@@ -186,7 +191,8 @@ describe('a healthy sync', () => {
 
   it('one unreadable page is left out and named; the others still sync', async () => {
     notion({
-      '/search': () => json(200, { results: [page('ok', 'Readable'), page('bad', 'Private')], has_more: false }),
+      '/search': () =>
+        json(200, { results: [page('ok', 'Readable'), page('bad', 'Private')], has_more: false }),
       '/blocks/ok/children': blocks('fine'),
       '/blocks/bad/children': () => json(403, { code: 'restricted_resource' }),
     })
@@ -238,7 +244,9 @@ describe('switched off, unconfigured', () => {
 
 describe('a refusal no retry can change is REPORTED once, not thrown every two hours for ever', () => {
   it('401 (revoked token or removed integration): completes with a notice, one request, no document, no retry loop', async () => {
-    const n = notion({ '/search': () => json(401, { code: 'unauthorized', message: 'API token is invalid.' }) })
+    const n = notion({
+      '/search': () => json(401, { code: 'unauthorized', message: 'API token is invalid.' }),
+    })
     const { out, ctx } = await run()
     expect(out.announce).toBe(true)
     expect(out.topic).toBe('notion.token_refused')
@@ -258,7 +266,9 @@ describe('a refusal no retry can change is REPORTED once, not thrown every two h
   })
 
   it('a 400 from /search (API drift) is reported with its status under its own topic', async () => {
-    notion({ '/search': () => json(400, { code: 'validation_error', message: 'body.filter is not valid' }) })
+    notion({
+      '/search': () => json(400, { code: 'validation_error', message: 'body.filter is not valid' }),
+    })
     const { out } = await run()
     expect(out.topic).toBe('notion.sync_refused')
     expect(out.body).toMatch(/HTTP 400/)
@@ -279,7 +289,10 @@ describe('a refusal no retry can change is REPORTED once, not thrown every two h
 describe('a failure a retry CAN fix still throws, so the job retries', () => {
   it.each([
     ['500', () => json(500, { code: 'internal_server_error' })],
-    ['an HTML 502 from a proxy (not JSON)', () => new Response('<html>502 Bad Gateway</html>', { status: 502 })],
+    [
+      'an HTML 502 from a proxy (not JSON)',
+      () => new Response('<html>502 Bad Gateway</html>', { status: 502 }),
+    ],
     ['a 200 that is not a JSON object', () => new Response('"ok"', { status: 200 })],
     ['a 200 with an HTML body', () => new Response('<html>maintenance</html>', { status: 200 })],
   ])('%s', async (_name, answer) => {

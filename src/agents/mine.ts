@@ -665,7 +665,22 @@ export function personalTaskRequest(
   const repeating = recurrenceOf(asked)
   const rec = repeating !== null && 'every' in repeating ? repeating : null
   const unsupported = repeating !== null && 'unsupported' in repeating ? repeating.unsupported : null
-  const titled = rec === null ? asked : withoutTheRepeat(asked, rec)
+  /*
+    A date written out ("on 15 October") is in the due column once `whenFor`
+    has read it, so its words leave the title the way "on Friday" does; the
+    reader that resolves it is the one that says which words they were.
+  */
+  const written = rec === null ? calendarDateIn(asked, now, timeZone) : undefined
+  const escaped = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const titled =
+    rec !== null
+      ? withoutTheRepeat(asked, rec)
+      : written
+        ? asked.replace(
+            new RegExp(`(?:\\b(?:on|by|before|until|for)\\s+)?${escaped(written.from)}`, 'i'),
+            ' ',
+          )
+        : asked
   const title = stripFraming(titled.replace(/^(?:also|and|then|plus)[,\s]+/i, ''))
   /*
     A title of nothing is not a task. "Remind me" on its own is a sentence with

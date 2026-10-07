@@ -5,8 +5,11 @@
 set -uo pipefail
 P="psql -h /tmp/pgs -p 55432 -U postgres -qAtX"
 race() {
-  local tpl=$1 db="race_$1"
-  $P -d postgres -c "drop database if exists $db" -c "create database $db template $tpl" >/dev/null
+  # The gate gives each run its own names (GATE_DB_PREFIX) and the candidate to use as `post` (ISOLATED_POST); by hand the
+  # old names and `post` itself are used, and `post` is only ever a template.
+  local tpl=$1 db="${GATE_DB_PREFIX:-race}_$1" from=$1
+  [ "$tpl" = post ] && from=${ISOLATED_POST:-post}
+  $P -d postgres -c "drop database if exists $db" -c "create database $db template $from" >/dev/null
   [ "$($P -d $db -c "select to_regclass('public.isolated_replica_marker') is not null")" = t ] || { echo "not the replica"; exit 2; }
   # The fixture is shaped by the schema it finds. Since the office model a job and a blocker carry a NOT NULL
   # office_id (the blocker's project in the same office) and hq_answer_blocker takes the office first; the control

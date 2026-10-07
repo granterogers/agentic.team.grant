@@ -124,47 +124,76 @@ describe('the detector: what is a CLAIM of consequence', () => {
   })
 
   it('a claim inside a block quote or a code fence is somebody else’s sentence', () => {
-    expect(clsOf('The email you forwarded says:\n> I emailed Kevin the report.\nThat is all it says.')).toEqual([])
+    expect(
+      clsOf('The email you forwarded says:\n> I emailed Kevin the report.\nThat is all it says.'),
+    ).toEqual([])
     expect(clsOf('The log line is:\n```\nI emailed Kevin\n```')).toEqual([])
   })
 })
 
 describe('the evidence decides whether a detected claim is TRUE', () => {
-  const NEEDS: [ClaimClass, string, Partial<ConsequenceEvidence>, Partial<ConsequenceEvidence>][] = [
-    ['mail', 'I emailed Kevin the report.', { delivered: 3, handoffs: 2 }, { mailed: 1 }],
-    ['outbound', 'I posted a Slack message to the team.', { mailed: 1, published: 1 }, { delivered: 1 }],
-    ['publish', 'I uploaded the report to Drive.', { delivered: 2, drafted: 1 }, { published: 1 }],
-    ['schedule', 'I scheduled the review task for Friday.', { delivered: 2, removed: 1 }, { scheduled: 1 }],
-    ['remove', 'I deleted the old milestone.', { scheduled: 2, delivered: 1 }, { removed: 1 }],
-    ['approve', 'I approved the draft.', { removed: 2, scheduled: 1 }, { approved: 1 }],
-  ]
-  it.each(NEEDS)('%s: %s is refused without ITS evidence and accepted with it', (cls, text, wrong, right) => {
-    // the other kinds of evidence do not stand in for this one
-    const refused = unevidencedClaims(text, evidence(wrong))
-    expect(refused.map((p) => p.cls)).toContain(cls)
-    expect(unevidencedClaims(text, evidence(right))).toEqual([])
-    // with no evidence object: communication kinds are strict, the rest are not accused
-    const unknown = unevidencedClaims(text)
-    expect(unknown.length > 0).toBe(cls === 'mail' || cls === 'outbound')
-  })
+  const NEEDS: [ClaimClass, string, Partial<ConsequenceEvidence>, Partial<ConsequenceEvidence>][] =
+    [
+      ['mail', 'I emailed Kevin the report.', { delivered: 3, handoffs: 2 }, { mailed: 1 }],
+      [
+        'outbound',
+        'I posted a Slack message to the team.',
+        { mailed: 1, published: 1 },
+        { delivered: 1 },
+      ],
+      [
+        'publish',
+        'I uploaded the report to Drive.',
+        { delivered: 2, drafted: 1 },
+        { published: 1 },
+      ],
+      [
+        'schedule',
+        'I scheduled the review task for Friday.',
+        { delivered: 2, removed: 1 },
+        { scheduled: 1 },
+      ],
+      ['remove', 'I deleted the old milestone.', { scheduled: 2, delivered: 1 }, { removed: 1 }],
+      ['approve', 'I approved the draft.', { removed: 2, scheduled: 1 }, { approved: 1 }],
+    ]
+  it.each(NEEDS)(
+    '%s: %s is refused without ITS evidence and accepted with it',
+    (cls, text, wrong, right) => {
+      // the other kinds of evidence do not stand in for this one
+      const refused = unevidencedClaims(text, evidence(wrong))
+      expect(refused.map((p) => p.cls)).toContain(cls)
+      expect(unevidencedClaims(text, evidence(right))).toEqual([])
+      // with no evidence object: communication kinds are strict, the rest are not accused
+      const unknown = unevidencedClaims(text)
+      expect(unknown.length > 0).toBe(cls === 'mail' || cls === 'outbound')
+    },
+  )
 
   it('an email claim is NEVER accepted by a delivery: deliveries have no email channel', () => {
-    expect(unevidencedClaims('Email sent to Kevin.', evidence({ delivered: 5 })).map((p) => p.cls)).toEqual(['mail'])
+    expect(
+      unevidencedClaims('Email sent to Kevin.', evidence({ delivered: 5 })).map((p) => p.cls),
+    ).toEqual(['mail'])
   })
 
   it('a hand-off to a named colleague is evidence for "I sent it over to Marcus", and only for a colleague', () => {
     const handoff = evidence({ handoffs: 1 })
     expect(unevidencedClaims('I sent it over to Marcus.', handoff)).toEqual([])
-    expect(unevidencedClaims('I sent it over to Kevin.', handoff).map((p) => p.cls)).toEqual(['outbound'])
-    expect(unevidencedClaims('I sent it over to Marcus.', evidence({})).map((p) => p.cls)).toEqual(['outbound'])
+    expect(unevidencedClaims('I sent it over to Kevin.', handoff).map((p) => p.cls)).toEqual([
+      'outbound',
+    ])
+    expect(unevidencedClaims('I sent it over to Marcus.', evidence({})).map((p) => p.cls)).toEqual([
+      'outbound',
+    ])
   })
 
   it('a task row or a task change is accepted for scheduled and cancelled respectively', () => {
-    expect(unevidencedClaims('I scheduled the review task for Friday.', NONE, { acted: 1 })).toEqual([])
+    expect(
+      unevidencedClaims('I scheduled the review task for Friday.', NONE, { acted: 1 }),
+    ).toEqual([])
     expect(unevidencedClaims('I cancelled the venue task.', NONE, { tasksChanged: 1 })).toEqual([])
-    expect(unevidencedClaims('I cancelled the venue task.', NONE, { tasksChanged: 0 }).map((p) => p.cls)).toEqual([
-      'remove',
-    ])
+    expect(
+      unevidencedClaims('I cancelled the venue task.', NONE, { tasksChanged: 0 }).map((p) => p.cls),
+    ).toEqual(['remove'])
   })
 
   it('the correction says what is true and what to do, never an issue number', () => {
@@ -181,7 +210,9 @@ describe('the evidence decides whether a detected claim is TRUE', () => {
       expect(p.length, text).toBeGreaterThan(0)
       for (const x of p) expect(x.problem).not.toMatch(/#\d|§/)
     }
-    expect(unevidencedClaims('Email sent to Kevin.', NONE)[0]?.problem).toMatch(/cannot be sent|no way to send email/)
+    expect(unevidencedClaims('Email sent to Kevin.', NONE)[0]?.problem).toMatch(
+      /cannot be sent|no way to send email/,
+    )
   })
 })
 
@@ -189,20 +220,27 @@ describe('drafts: what evidence does a draft leave?', () => {
   const draftText =
     'Subject: Venue deposit\n\nHi Kevin,\nCould you confirm the deposit has landed before Friday?\nThanks, Grant'
   it('"I drafted an email to Kevin." with nothing behind it is refused', () => {
-    expect(unevidencedClaims('I drafted an email to Kevin.', NONE).map((p) => p.cls)).toEqual(['draft'])
+    expect(unevidencedClaims('I drafted an email to Kevin.', NONE).map((p) => p.cls)).toEqual([
+      'draft',
+    ])
   })
   it('allowed when the answer contains the draft', () => {
-    expect(unevidencedClaims(`I drafted an email to Kevin for your review.\n\n${draftText}`, NONE)).toEqual([])
-    expect(unevidencedClaims(`A draft email to Kevin is ready for your review.\n\n${draftText}`, NONE)).toEqual([])
+    expect(
+      unevidencedClaims(`I drafted an email to Kevin for your review.\n\n${draftText}`, NONE),
+    ).toEqual([])
+    expect(
+      unevidencedClaims(`A draft email to Kevin is ready for your review.\n\n${draftText}`, NONE),
+    ).toEqual([])
   })
   it('allowed when a document was made in this job’s tree', () => {
     expect(unevidencedClaims('I drafted an email to Kevin.', evidence({ drafted: 1 }))).toEqual([])
   })
   it('"ready" with a one-line gloss and no text is still refused', () => {
     expect(
-      unevidencedClaims('A draft email to Kevin is ready for your review.\nIt covers the deposit.', NONE).map(
-        (p) => p.cls,
-      ),
+      unevidencedClaims(
+        'A draft email to Kevin is ready for your review.\nIt covers the deposit.',
+        NONE,
+      ).map((p) => p.cls),
     ).toEqual(['draft'])
   })
   it('a draft that says it was NOT sent is a draft claim and nothing else', () => {
@@ -216,8 +254,12 @@ describe('capability language about email is itself a claim, and it is false', (
     const p = unevidencedClaims('I can email Kevin.', NONE)
     expect(p.map((x) => x.cls)).toEqual(['capability'])
     expect(p[0]?.problem).toMatch(/no email capability/)
-    expect(unevidencedClaims("I'm able to send emails for you.", NONE).map((x) => x.cls)).toEqual(['capability'])
-    expect(unevidencedClaims('I can send it to Kevin by email.', NONE).map((x) => x.cls)).toEqual(['capability'])
+    expect(unevidencedClaims("I'm able to send emails for you.", NONE).map((x) => x.cls)).toEqual([
+      'capability',
+    ])
+    expect(unevidencedClaims('I can send it to Kevin by email.', NONE).map((x) => x.cls)).toEqual([
+      'capability',
+    ])
   })
   it('is allowed when the capability really exists, and when the office speaks of drafts', () => {
     expect(unevidencedClaims('I can email Kevin.', evidence({ canEmail: true }))).toEqual([])
@@ -244,7 +286,7 @@ describe('false-positive corpus: TRUE answers that mention these verbs innocuous
     ['Sent items are in the Sent folder.', {}],
     ['The newsletter went out last Tuesday according to the thread.', {}],
     ['I have not sent anything to Kevin.', {}],
-    ["You asked me to email Kevin. I have not done that and I cannot send email from here.", {}],
+    ['You asked me to email Kevin. I have not done that and I cannot send email from here.', {}],
     ['The report is ready for you to send to Kevin.', {}],
     ['Once you approve it, you can send it to Kevin yourself.', {}],
     ['The shared drive holds three budget files.', {}],
@@ -276,7 +318,10 @@ describe('false-positive corpus: TRUE answers that mention these verbs innocuous
     ['The message from Kevin says he sent the figures.', {}],
     ['I shared the key findings above.', {}],
     ['The plan was deleted in the August cleanup.', {}],
-    ['Here is the draft email to Kevin:\n\nSubject: Deposit\n\nHi Kevin,\nCould you confirm the deposit before Friday?\nThanks', {}],
+    [
+      'Here is the draft email to Kevin:\n\nSubject: Deposit\n\nHi Kevin,\nCould you confirm the deposit before Friday?\nThanks',
+      {},
+    ],
     [
       'I drafted an email to Kevin for your review.\n\nSubject: Deposit\n\nHi Kevin,\nCould you confirm the deposit before Friday?\nThanks',
       {},
@@ -309,9 +354,9 @@ describe('false-positive corpus: TRUE answers that mention these verbs innocuous
     expect(COLLEAGUES.length).toBe(8)
   })
   it('the legacy detector is not stricter than the corpus allows either', () => {
-    const hit = CORPUS.filter(([t, ev]) => Object.keys(ev).length === 0 && claimsToHaveSent(t) !== null).map(
-      ([t]) => t,
-    )
+    const hit = CORPUS.filter(
+      ([t, ev]) => Object.keys(ev).length === 0 && claimsToHaveSent(t) !== null,
+    ).map(([t]) => t)
     expect(hit).toEqual([])
   })
 
@@ -319,7 +364,9 @@ describe('false-positive corpus: TRUE answers that mention these verbs innocuous
   // with no date, no named agent and no source attribution reads exactly like a claim. The refusal recovers through
   // the retry (the model is told to attribute it), and a missed fabrication is the cheaper error.
   it('KNOWN: an unattributed, undated simple-past recount of a send is treated as a claim', () => {
-    expect(clsOf('The invoice was sent to the client, so the status is paid.')).toEqual(['outbound'])
+    expect(clsOf('The invoice was sent to the client, so the status is paid.')).toEqual([
+      'outbound',
+    ])
   })
 })
 
@@ -342,17 +389,29 @@ describe('through metadataProblems, the gate the worker runs', () => {
   })
   it('accepts the same words when the tree recorded a delivery (a Slack post that really went)', () => {
     expect(
-      metadataProblems({ ...base, body: 'I posted the summary to the team.', consequences: evidence({ delivered: 1 }) }),
+      metadataProblems({
+        ...base,
+        body: 'I posted the summary to the team.',
+        consequences: evidence({ delivered: 1 }),
+      }),
     ).toEqual([])
   })
   it('still refuses an email claim when a delivery exists, and an unevidenced approval', () => {
     expect(
-      metadataProblems({ ...base, body: 'Email sent to Kevin.', consequences: evidence({ delivered: 1 }) }).length,
+      metadataProblems({
+        ...base,
+        body: 'Email sent to Kevin.',
+        consequences: evidence({ delivered: 1 }),
+      }).length,
     ).toBe(1)
-    expect(metadataProblems({ ...base, body: 'I approved the draft.', consequences: NONE }).length).toBe(1)
+    expect(
+      metadataProblems({ ...base, body: 'I approved the draft.', consequences: NONE }).length,
+    ).toBe(1)
   })
   it('offering email is refused only when the evidence says there is no capability', () => {
-    expect(metadataProblems({ ...base, body: 'I can email Kevin.', consequences: NONE }).length).toBe(1)
+    expect(
+      metadataProblems({ ...base, body: 'I can email Kevin.', consequences: NONE }).length,
+    ).toBe(1)
     expect(metadataProblems({ ...base, body: 'I can email Kevin.' })).toEqual([])
   })
 })
@@ -369,10 +428,32 @@ describe('loadConsequenceEvidence', () => {
   const id = '11111111-1111-1111-1111-111111111111'
   it('reads counts, names and the email switch', async () => {
     const ev = await loadConsequenceEvidence(
-      rowDb({ mailed: 0, delivered: 2, published: 1, scheduled: 3, removed: 0, approved: 0, drafted: 1, handoffs: 1, colleagues: ['Emma'], can_email: false }),
+      rowDb({
+        mailed: 0,
+        delivered: 2,
+        published: 1,
+        scheduled: 3,
+        removed: 0,
+        approved: 0,
+        drafted: 1,
+        handoffs: 1,
+        colleagues: ['Emma'],
+        can_email: false,
+      }),
       id,
     )
-    expect(ev).toEqual({ mailed: 0, delivered: 2, published: 1, scheduled: 3, removed: 0, approved: 0, drafted: 1, handoffs: 1, colleagues: ['Emma'], canEmail: false })
+    expect(ev).toEqual({
+      mailed: 0,
+      delivered: 2,
+      published: 1,
+      scheduled: 3,
+      removed: 0,
+      approved: 0,
+      drafted: 1,
+      handoffs: 1,
+      colleagues: ['Emma'],
+      canEmail: false,
+    })
   })
   it('cannot look means unknown, never zero: the caller falls back to strict-for-comms only', async () => {
     expect(await loadConsequenceEvidence(rowDb(undefined, true), id)).toBeUndefined()

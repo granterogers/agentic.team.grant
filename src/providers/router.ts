@@ -524,24 +524,20 @@ export class ProviderRouter {
       // resolve a key. `app.model_speed` reads the result and it is the basis
       // for any future "which model answers Grant" decision (0150).
       startedAt = Date.now()
-      const read = await this.callWithDeadline(
-        model,
-        timeoutMs,
-        async (signal) => {
-          const response = await this.fetchImpl(`${provider.base_url}/chat/completions`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${bearer}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body),
-            signal,
-          })
-          // The body is read inside the deadline too: a provider that sends headers and then stalls is hung.
-          const parsed: unknown = await response.json()
-          return { status: response.status, parsed }
-        },
-      )
+      const read = await this.callWithDeadline(model, timeoutMs, async (signal) => {
+        const response = await this.fetchImpl(`${provider.base_url}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${bearer}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal,
+        })
+        // The body is read inside the deadline too: a provider that sends headers and then stalls is hung.
+        const parsed: unknown = await response.json()
+        return { status: response.status, parsed }
+      })
       if (typeof read.parsed !== 'object' || read.parsed === null || Array.isArray(read.parsed)) {
         throw new SyntaxError('provider response was not a JSON object')
       }
@@ -549,7 +545,10 @@ export class ProviderRouter {
       // An HTTP failure that carried no `error` object is still a failure: without this a bare 500 body
       // reads as an empty completion and RECORDS A SUCCESS against the breaker.
       if (read.status >= 400 && payload.error === undefined) {
-        payload = { ...payload, error: { code: read.status, message: `HTTP ${String(read.status)}` } }
+        payload = {
+          ...payload,
+          error: { code: read.status, message: `HTTP ${String(read.status)}` },
+        }
       }
     } catch (error) {
       await this.recordFailure(provider.provider, (error as Error).message)

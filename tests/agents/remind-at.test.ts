@@ -52,7 +52,10 @@ describe('the time he said becomes remind_at', () => {
   it.each([
     'remind me to chase the printers',
     'remind me to book 3 tables for 40 people',
-    'remind me on Friday to ring the venue',
+    // A due date is not a reminder request: "remind me on Friday" now gets the
+    // office's default time (R1, tests/agents/reminder-defaults.test.ts), but a
+    // commitment with a day and no "remind" has none.
+    'I need to ring the venue on Friday',
     'remind me to ask what the margin at 35 percent would be',
   ])('NEGATIVE CONTROL: no time said, no time set: %s', (said) => {
     expect(personalTaskRequest(said, now)?.remindAt ?? null).toBeNull()

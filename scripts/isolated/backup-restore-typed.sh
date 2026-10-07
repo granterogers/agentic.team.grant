@@ -12,12 +12,19 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd); cd "$ROOT"
 SOCK=${ISOLATED_PG_SOCKET:-/tmp/pgs}; PORT=${ISOLATED_PG_PORT:-55432}
 P="psql -h $SOCK -p $PORT -U postgres -q"
-$P -c "drop database if exists brt_src"; $P -c "drop database if exists brt_dst"; $P -c "drop database if exists brt_base"
-$P -c "create database brt_base template post"
-for m in $(ls migrations/*.sql | awk -F/ '{print $2}' | awk -v f="${MIG_FLOOR:-1026}" '$0 >= f'); do
-  $P -d brt_base -v ON_ERROR_STOP=1 -1 -f "migrations/$m" >/dev/null
-done
-$P -d brt_base -v ON_ERROR_STOP=1 -1 -f scripts/isolated/restore-probe-schema.sql
-$P -c "create database brt_src template brt_base"; $P -c "create database brt_dst template brt_base"
+# The gate gives each run its own database names (GATE_DB_PREFIX) and the candidate to start from (ISOLATED_POST), which
+# already carries every newer migration, so none is re-applied. By hand the old names, `post` and MIG_FLOOR are used.
+PREFIX=${GATE_DB_PREFIX:-brt}
+BASE=${PREFIX}_base; SRC=${PREFIX}_src; DST=${PREFIX}_dst
+drop() { $P -c "drop database if exists $SRC" >/dev/null 2>&1; $P -c "drop database if exists $DST" >/dev/null 2>&1; $P -c "drop database if exists $BASE" >/dev/null 2>&1; }
+drop; trap drop EXIT
+$P -c "create database $BASE template ${ISOLATED_POST:-post}"
+if [ -z "${ISOLATED_POST:-}" ]; then
+  for m in $(ls migrations/*.sql | awk -F/ '{print $2}' | awk -v f="${MIG_FLOOR:-1026}" '$0 >= f'); do
+    $P -d "$BASE" -v ON_ERROR_STOP=1 -1 -f "migrations/$m" >/dev/null
+  done
+fi
+$P -d "$BASE" -v ON_ERROR_STOP=1 -1 -f scripts/isolated/restore-probe-schema.sql
+$P -c "create database $SRC template $BASE"; $P -c "create database $DST template $BASE"
 env -u SUPABASE_ACCESS_TOKEN -u SUPABASE_PROJECT_REF -u SUPABASE_SERVICE_ROLE_KEY -u SUPABASE_DB_URL \
-  npx tsx scripts/isolated/backup-restore-typed.ts brt_src brt_dst
+  npx tsx scripts/isolated/backup-restore-typed.ts "$SRC" "$DST"

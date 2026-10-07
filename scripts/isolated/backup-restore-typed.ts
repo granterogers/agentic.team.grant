@@ -725,9 +725,13 @@ const tamper = async (qualified: string, change: (t: string) => string): Promise
   // must be able to damage nothing that anyone else uses (the template refusals are unit-tested on the pure judge).
   const admin = new PgExecutor(`postgresql://postgres@/postgres?host=${sock}&port=${port}`)
   await admin.connect()
-  await admin.execute('drop database if exists brt_unmarked')
-  await admin.execute('create database brt_unmarked template brt_base')
-  const unmarked = new PgExecutor(`postgresql://postgres@/brt_unmarked?host=${sock}&port=${port}`)
+  // Named from the source database's own prefix, so two runs (the gate gives each its own) never share a name.
+  const prefix = SRC.replace(/_src$/, '')
+  const BASE = `${prefix}_base`
+  const UNMARKED = `${prefix}_unmarked`
+  await admin.execute(`drop database if exists ${UNMARKED}`)
+  await admin.execute(`create database ${UNMARKED} template ${BASE}`)
+  const unmarked = new PgExecutor(`postgresql://postgres@/${UNMARKED}?host=${sock}&port=${port}`)
   await unmarked.connect()
   await unmarked.execute('drop table public.isolated_replica_marker')
   const refusedUnmarked = await restoreArchive(unmarked, folderSource, {
@@ -739,7 +743,7 @@ const tamper = async (qualified: string, change: (t: string) => string): Promise
   const untouched =
     Number((await one(unmarked, `select count(*)::int as n from public.staff`)).n) > 0
   await unmarked.end()
-  await admin.execute('drop database brt_unmarked')
+  await admin.execute(`drop database ${UNMARKED}`)
   await admin.end()
   check(
     'CONTROL: a database with no replica marker is refused, and nothing in it was touched',

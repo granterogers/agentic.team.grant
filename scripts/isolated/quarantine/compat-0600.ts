@@ -1,11 +1,14 @@
 /**
+ * QUARANTINED (see ./README.md): never run by a gate. Its precondition (the 0600 schema, app.job_origin absent) is false on
+ * every candidate, so it can only fail.
+ *
  * RC2 deployment compatibility (#381): the RC2 worker's gate against the
  * schema production has BEFORE 0601 (app.job_origin absent).
  *
- *   npx tsx scripts/isolated/compat-0600.ts <replica-db built from post>
+ *   npx tsx scripts/isolated/quarantine/compat-0600.ts <a replica database with 0601 not applied>
  */
-import { containmentRefusal } from '../../src/jobs/containment.ts'
-import { isolated } from './guard.ts'
+import { containmentRefusal } from '../../../src/jobs/containment.ts'
+import { isolated } from '../guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'compat0600')
 const run = Date.now().toString(36)

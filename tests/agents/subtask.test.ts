@@ -33,10 +33,10 @@ describe('the handler writes it under its parent and vetoes the flat readers', (
     .replace(/^[ \t]*\/\/.*$/gm, '')
   it('vetoes the personal and project task readers', () => {
     expect(src).toMatch(
-      /const forGrant =\s*wantsFile !== null \|\| isBranch \|\| changesHis !== null \|\| subOf !== null/,
+      /const forGrant =\s*wantsFile !== null \|\|\s*isBranch \|\|\s*changesHis !== null \|\|\s*settles !== null \|\|\s*subOf !== null/,
     )
     expect(src).toMatch(
-      /const asked =\s*pullOut !== null \|\| noted !== null \|\| isBranch \|\| subOf !== null/,
+      /const asked =\s*pullOut !== null \|\| noted !== null \|\| isBranch \|\| subOf !== null \|\| settles !== null/,
     )
   })
   it('writes through my_task_add with the resolved parent', () => {

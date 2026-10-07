@@ -98,12 +98,23 @@ const COUNT: Readonly<Record<string, number>> = {
 */
 const EVERY = new RegExp(
   String.raw`\b(?:every|each)\s+(?:(other|alternate|first|second|third|fourth|fifth|last)\s+|(\d{1,3}|${Object.keys(COUNT).join('|')})\s+)?` +
-    String.raw`(weekdays?|weekends?|days?|weeks?|fortnights?|months?|years?|hours?|minutes?|mornings?|afternoons?|evenings?|${WEEKDAY_WORDS})\b`,
+    String.raw`(weekdays?|weekends?|days?|weeks?|fortnights?|months?|years?|hours?|minutes?|mornings?|afternoons?|evenings?|(?:${WEEKDAY_WORDS})s?)\b`,
   'i',
 )
-const ADVERB = /\b(daily|weekly|fortnightly|biweekly|bi-weekly|monthly|yearly|annually|hourly)\b/i
+const ADVERB = /\b(daily|weekly|fortnightly|biweekly|bi-weekly|monthly|yearly|annually|hourly)\b/gi
 
-const NAMED_DAY = new RegExp(String.raw`\b(?:on\s+)?(${WEEKDAY_WORDS})\b`, 'i')
+/*
+  "Weekly" is a repeat as an ADVERB ("remind me weekly to...", "review this
+  weekly.") and a description as an ADJECTIVE ("send the weekly update"). The
+  adjective is followed by a noun and the adverb is not, so the adverb is the
+  one at the end of a clause, in front of a preposition or conjunction, or
+  straight after "remind me". A noun-modifier read as a repeat would turn a
+  one-off into a standing reminder, which is worse than missing a repeat.
+*/
+const ADVERB_AFTER = /^\s*(?:$|[,.!?;:]|(?:to|on|at|and|so|for|before|after|starting)\b)/i
+const ADVERB_BEFORE = /\b(?:remind|nudge|ping|prompt)\s+me\s+$/i
+
+const NAMED_DAY = new RegExp(String.raw`\b(?:on\s+)?(${WEEKDAY_WORDS})s?\b`, 'i')
 
 const weekdayFrom = (said: string): number | null => {
   const hit = NAMED_DAY.exec(said)
@@ -165,8 +176,12 @@ export function recurrenceOf(text: string): Recurrence | UnsupportedRecurrence |
     // month, year, weekday, weekend, hour, minute
     return { unsupported: phrase }
   }
-  const adverb = ADVERB.exec(said)
-  if (adverb !== null) {
+  const adverb = [...said.matchAll(ADVERB)].find(
+    (m) =>
+      ADVERB_AFTER.test(said.slice((m.index ?? 0) + m[0].length)) ||
+      ADVERB_BEFORE.test(said.slice(0, m.index ?? 0)),
+  )
+  if (adverb !== undefined) {
     const phrase = adverb[0]
     const word = phrase.toLowerCase()
     if (word === 'daily') return build(1, null, phrase, 'every day')

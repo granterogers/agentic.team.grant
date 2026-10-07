@@ -98,12 +98,20 @@ export interface ConsequenceClaim {
   readonly sentence: string
 }
 
+// Typography is straightened before matching (a model emits curly apostrophes). The characters are named by code
+// point rather than typed, so no invisible character sits inside a pattern.
+const chars = (...codes: number[]): string => String.fromCharCode(...codes)
+const SINGLE_QUOTES = new RegExp(`[${chars(0x2018, 0x2019, 0x201b)}]`, 'g')
+const DOUBLE_QUOTES = new RegExp(`[${chars(0x201c, 0x201d)}]`, 'g')
+const DASHES = new RegExp(`[${chars(0x2010)}-${chars(0x2015, 0x2212)}]`, 'g')
+const SPACES = new RegExp(`[${chars(0xa0, 0x2007, 0x202f)}]`, 'g')
+const BULLETS = new RegExp(`^[\\s\\-*${chars(0x2022)}]+|^\\d+[.)]\\s+`)
 const plain = (text: string): string =>
   text
-    .replace(/[‘’‛]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[‐-―−]/g, '-')
-    .replace(/[   ]/g, ' ')
+    .replace(SINGLE_QUOTES, "'")
+    .replace(DOUBLE_QUOTES, '"')
+    .replace(DASHES, '-')
+    .replace(SPACES, ' ')
 
 /**
  * Sentences, with the things that are not the office's own assertion removed:
@@ -116,7 +124,7 @@ export const sentencesOf = (raw: string): string[] => {
     .replace(/"[^"\n]{2,}"/g, ' ')
   return text
     .split(/(?<=[.!?])\s+|\n+|;\s+|\s+-\s+(?=[A-Z])/)
-    .map((s) => s.replace(/^[\s\-*•]+|^\d+[.)]\s+/, '').trim())
+    .map((s) => s.replace(BULLETS, '').trim())
     .filter((s) => s !== '')
 }
 
@@ -400,7 +408,7 @@ const WHAT: Record<ClaimClass, string> = {
  */
 export function unevidencedClaims(
   body: string,
-  ev: ConsequenceEvidence | undefined,
+  ev?: ConsequenceEvidence | undefined,
   counts: ActedCounts = {},
   /** Extra comm claims found by a caller's own detector (the legacy patterns). */
   extra: readonly string[] = [],

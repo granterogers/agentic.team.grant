@@ -30,7 +30,12 @@ class Db implements SqlExecutor {
   usage(): string[] {
     return this.statements
       .filter((s) => s.includes('insert into public.inference_usage'))
-      .map((s) => /'(ok|empty_completion|provider_error|rate_limited|transport_error|malformed_response|refused_paid|unavailable)',/.exec(s)?.[1] ?? '?')
+      .map(
+        (s) =>
+          /'(ok|empty_completion|provider_error|rate_limited|transport_error|malformed_response|refused_paid|unavailable)',/.exec(
+            s,
+          )?.[1] ?? '?',
+      )
   }
   usageSql(): string[] {
     return this.statements.filter((s) => s.includes('insert into public.inference_usage'))
@@ -98,8 +103,11 @@ const router = (db: Db, impl: typeof fetch, options = {}): ProviderRouter =>
 
 /** Start a call and report whether it has settled, so a hang can be asserted without being awaited. */
 const start = (r: ProviderRouter) => {
-  const state: { done: boolean; ok?: Awaited<ReturnType<ProviderRouter['complete']>>; err?: Error } =
-    { done: false }
+  const state: {
+    done: boolean
+    ok?: Awaited<ReturnType<ProviderRouter['complete']>>
+    err?: Error
+  } = { done: false }
   const raw = r.complete({ messages: MESSAGES }).then(
     (v) => {
       state.done = true
@@ -111,6 +119,7 @@ const start = (r: ProviderRouter) => {
     },
   )
   // Awaiting `p` asserts the call settled; it never waits for a call that cannot (see `done`).
+  // biome-ignore lint/suspicious/noThenProperty: a deliberately lazy thenable, so `await p` is a settle assertion that cannot hang
   const p: PromiseLike<void> = { then: (a, b) => done(raw).then(a, b) }
   return { state, p }
 }
@@ -131,7 +140,8 @@ const done = async (p: Promise<unknown>): Promise<void> => {
     },
   )
   for (let i = 0; i < 50; i += 1) await Promise.resolve()
-  if (!settled) throw new Error('HUNG: the call had not settled after the fake clock passed every deadline')
+  if (!settled)
+    throw new Error('HUNG: the call had not settled after the fake clock passed every deadline')
 }
 
 beforeEach(() => {
@@ -144,7 +154,9 @@ afterEach(() => {
 describe('the arithmetic is the documented one', () => {
   it('a chain of pure timeouts fits under the 150s edge wall clock and the 300s lease', () => {
     expect(DEFAULT_MAX_ATTEMPTS).toBe(4)
-    expect(DEFAULT_REQUEST_TIMEOUT_MS * DEFAULT_MAX_ATTEMPTS).toBeLessThanOrEqual(DEFAULT_CHAIN_BUDGET_MS)
+    expect(DEFAULT_REQUEST_TIMEOUT_MS * DEFAULT_MAX_ATTEMPTS).toBeLessThanOrEqual(
+      DEFAULT_CHAIN_BUDGET_MS,
+    )
     expect(DEFAULT_CHAIN_BUDGET_MS).toBeLessThan(150_000)
   })
 })
@@ -162,7 +174,10 @@ describe('the provider outcomes, one at a time', () => {
 
   it('429 (body error) moves on and is recorded rate_limited', async () => {
     const db = new Db(CHAIN.map(row))
-    const { impl } = scripted([async () => json({ error: { code: 429, message: 'slow down' } }), answers])
+    const { impl } = scripted([
+      async () => json({ error: { code: 429, message: 'slow down' } }),
+      answers,
+    ])
     const result = await router(db, impl).complete({ messages: MESSAGES })
     expect(result.model).toBe(CHAIN[1])
     expect(db.usage()).toEqual(['rate_limited', 'ok'])
@@ -333,7 +348,12 @@ describe('the whole chain', () => {
     expect(Date.now() - t0).toBeLessThanOrEqual(T * 4 + 10)
     expect(state.err).toBeInstanceOf(AllCandidatesFailedError)
     expect((state.err as AllCandidatesFailedError).candidates).toEqual(CHAIN)
-    expect(db.usage()).toEqual(['transport_error', 'transport_error', 'transport_error', 'transport_error'])
+    expect(db.usage()).toEqual([
+      'transport_error',
+      'transport_error',
+      'transport_error',
+      'transport_error',
+    ])
   })
 
   it('every kind of failure at once: still four attempts, one error, rows for each real call', async () => {
@@ -348,7 +368,12 @@ describe('the whole chain', () => {
     await vi.advanceTimersByTimeAsync(T + 10)
     await p
     expect(state.err).toBeInstanceOf(AllCandidatesFailedError)
-    expect(db.usage()).toEqual(['rate_limited', 'provider_error', 'malformed_response', 'transport_error'])
+    expect(db.usage()).toEqual([
+      'rate_limited',
+      'provider_error',
+      'malformed_response',
+      'transport_error',
+    ])
   })
 
   it('the chain budget caps the whole call even if the per-request deadline would allow more', async () => {
