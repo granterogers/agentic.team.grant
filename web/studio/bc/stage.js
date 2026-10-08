@@ -478,6 +478,9 @@ export const wireStage = (root, ctx) => {
     panning = { id: e.pointerId, sx: e.clientX, sy: e.clientY, from: view }
     board.setPointerCapture?.(e.pointerId)
     board.classList.add('bcpanes--panning')
+    /* No text selection while the canvas is dragged: moving the pointer over the top bar used to highlight it. */
+    document.documentElement.classList.add('bc-dragging')
+    globalThis.getSelection?.()?.removeAllRanges()
   }
   board.addEventListener('pointerdown', (e) => {
     if (stacked()) return
@@ -520,6 +523,7 @@ export const wireStage = (root, ctx) => {
     if (panning !== null && e.pointerId === panning.id) {
       panning = null
       board.classList.remove('bcpanes--panning')
+      document.documentElement.classList.remove('bc-dragging')
       commitView()
     }
   }

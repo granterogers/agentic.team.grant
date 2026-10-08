@@ -195,6 +195,38 @@ try {
     `${vp1.x - vp0.x},${vp1.y - vp0.y}`,
   )
 
+  /* A pan that sweeps the pointer over the page header must not select its text. */
+  {
+    const here = await page.evaluate(() => {
+      const b = (document.querySelector('[data-bc-board]') as any).getBoundingClientRect()
+      for (let y = b.bottom - 20; y > b.top + 20; y -= 25)
+        for (let x = b.right - 160; x > b.left + 20; x -= 25) {
+          const e = document.elementFromPoint(x, y)
+          if (e?.classList.contains('bcstage') || e?.classList.contains('bcpanes')) return { x, y }
+        }
+      return null
+    })
+    if (here !== null) {
+      await page.mouse.move(here.x, here.y)
+      await page.mouse.down()
+      await page.mouse.move(here.x - 300, 20, { steps: 10 })
+      const during = await page.evaluate(() => ({
+        selected: String(window.getSelection()?.toString() ?? ''),
+        locked: document.documentElement.classList.contains('bc-dragging'),
+      }))
+      await page.mouse.up()
+      const after = await page.evaluate(() => ({
+        selected: String(window.getSelection()?.toString() ?? ''),
+        locked: document.documentElement.classList.contains('bc-dragging'),
+      }))
+      check(
+        'panning across the page header selects no text',
+        during.selected === '' && after.selected === '' && during.locked && !after.locked,
+        JSON.stringify({ during, after }),
+      )
+    }
+  }
+
   /* ------------------------------------------------------------ move and resize at a non-1 zoom */
   await page.click('[data-bc-viewreset]')
   await page.waitForTimeout(350)
