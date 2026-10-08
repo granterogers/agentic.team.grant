@@ -39,6 +39,7 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import { raiseBlocker } from '../inference/record.ts'
+import { degradeForFallback, FALLBACK_BECAUSE } from './fallback-policy.ts'
 
 /** Single-quote escaping for SQL literals. Nothing here is ever a secret. */
 const lit = (value: string): string => `'${value.replace(/'/g, "''")}'`
@@ -209,12 +210,34 @@ export const mayAct = async (
       ? (parsed.verdict as Verdict)
       : 'ask'
 
+  /*
+    A BACKUP MODEL DOES NOT GET TO ACT ON ITS OWN (#444).
+
+    If any model call in this conversation was answered by a fallback (the router records that on the job's own trace), a
+    `proceed` for a step that changes anything becomes `ask`, unless he already said yes to exactly this action. Applied to
+    the policy's answer rather than inside it, so it needs no migration and holds against every version of the database that
+    answers. Reads still proceed and a refusal stays a refusal. Only asked when the answer is a `proceed` that could change
+    something, and unreadable counts as served-by-a-fallback: a downgrade that fails open is no downgrade.
+  */
+  const judged = where.job ?? where.jobAskedFor ?? null
+  const parsedLevel = typeof parsed.action_level === 'number' ? parsed.action_level : null
+  const mayChange =
+    verdict === 'proceed' && parsed.approved !== true && (parsedLevel === null || parsedLevel >= 1)
+  const degraded =
+    mayChange && judged !== null
+      ? degradeForFallback(
+          { verdict, actionLevel: parsedLevel, approved: parsed.approved === true },
+          await fallbackServedTurn(db, judged),
+        )
+      : { verdict, degraded: false }
+
   const s = parsed.standing
   return {
-    verdict,
+    verdict: degraded.verdict,
     tool: typeof parsed.tool === 'string' ? parsed.tool : where.tool,
-    because:
-      typeof parsed.because === 'string' && parsed.because.trim() !== ''
+    because: degraded.degraded
+      ? FALLBACK_BECAUSE
+      : typeof parsed.because === 'string' && parsed.because.trim() !== ''
         ? parsed.because
         : 'The policy did not say why, so it asks.',
     actionLevel: typeof parsed.action_level === 'number' ? parsed.action_level : null,
@@ -223,7 +246,11 @@ export const mayAct = async (
     approved: parsed.approved === true,
     declined: parsed.declined === true,
     remembered: parsed.remembered === true,
-    reason: typeof parsed.reason === 'string' ? parsed.reason : null,
+    reason: degraded.degraded
+      ? 'fallback_model'
+      : typeof parsed.reason === 'string'
+        ? parsed.reason
+        : null,
     standing:
       s === null || s === undefined || typeof s.id !== 'string'
         ? null
@@ -234,6 +261,26 @@ export const mayAct = async (
             since: typeof s.since === 'string' ? s.since : '',
             until: typeof s.until === 'string' ? s.until : null,
           },
+  }
+}
+
+/**
+ * Was any model call in this job's conversation answered by a fallback? Read from the router's own trace entry (`decision` with
+ * `fallback: true`), over the whole correlation because the plan was made by the parent and the step runs in a child. Unreadable
+ * is true: see the caller.
+ */
+const fallbackServedTurn = async (db: SqlExecutor, job: string): Promise<boolean> => {
+  try {
+    const { rows } = await db.execute(
+      `select exists (
+         select 1 from public.job_traces t join public.jobs j on j.job_id = t.job_id
+          where j.office_id = app.job_office(${lit(job)}::uuid)
+            and j.correlation_id = (select correlation_id from public.jobs where job_id = ${lit(job)}::uuid)
+            and t.kind = 'decision' and t.detail ->> 'fallback' = 'true') as f`,
+    )
+    return (rows[0] as { f?: boolean } | undefined)?.f === true
+  } catch {
+    return true
   }
 }
 

@@ -513,6 +513,56 @@
       "expect": "tests/db/link-failure.test.ts"
     },
     {
+      "id": "M43",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "if ((completion.servedBy?.rank ?? 0) > 0 && keptRequest !== null) {",
+      "new": "if ((completion.servedBy?.rank ?? 0) > 99 && keptRequest !== null) {",
+      "invariant": "a backup model's answer is checked against the evidence before it is delivered",
+      "expect": "tests/handlers/fallback-wiring.test.ts"
+    },
+    {
+      "id": "M44",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/approval.ts",
+      "old": "await fallbackServedTurn(db, judged)",
+      "new": "false",
+      "invariant": "a turn a backup model helped work out asks before it changes anything",
+      "expect": "tests/agents/fallback-authority.test.ts"
+    },
+    {
+      "id": "M45",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/providers/router.ts",
+      "old": "const planned = ordered.filter((m) => !skip.has(m)).slice(0, this.maxAttempts)",
+      "new": "const planned = ordered.slice(0, this.maxAttempts)",
+      "invariant": "a second opinion is a different model: the one that was found inadequate is never asked again",
+      "expect": "tests/handlers/fallback-wiring.test.ts"
+    },
+    {
+      "id": "M46",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/fallback-policy.ts",
+      "old": "if (INFERENCE.test(s) && contentRatio(s, established) < 0.6) {",
+      "new": "if (INFERENCE.test(s) && contentRatio(s, established) < -1) {",
+      "invariant": "an inference a backup model draws must rest on words the turn held",
+      "expect": "tests/agents/fallback-policy.test.ts"
+    },
+    {
+      "id": "M47",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/fallback-policy.ts",
+      "old": "if (held && readOnly && BLOCKER_FRAMING.test(answer)) reasons.push('offers_unasked_action')",
+      "new": "",
+      "invariant": "a blocker raised against a plain question is not an answer to it",
+      "expect": "tests/agents/fallback-policy.test.ts"
+    },
+    {
       "id": "M29",
       "critical": false,
       "severity": "high",

@@ -207,6 +207,11 @@ export const CRITICAL: readonly Proof[] = [
     11,
     "the worker records a handler failure through a short database blip (retrying with the handler reason, not left running), never retries a refused statement, never spends an attempt twice on a persistent outage, recovers once under concurrent sweeps, and never touches another office's live job",
   ),
+  p(
+    'fallback-turns',
+    16,
+    "a backup model's answer is admitted on evidence (off-target, unsupported-inference and routing-narration answers are refused and replaced by a second opinion from a different model, then by an honest limitation built from the evidence), a good backup answer is delivered unchanged, a first-choice answer is never second-guessed, and a turn a backup model helped work out asks before it changes anything",
+  ),
   // ---- provenance, retrieval scope and the drivers that exercise whole journeys --------------------------------------
   p(
     'project-provenance',

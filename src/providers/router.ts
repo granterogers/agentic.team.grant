@@ -144,6 +144,13 @@ export interface CompletionRequest {
   readonly messages: readonly { role: string; content: string }[]
   /** Optional explicit model. Omit to take the highest-priority usable one. */
   readonly model?: string
+  /**
+   * Models NOT to try for this call: ones that already answered this request and were found inadequate (#444). The chain
+   * continues with the rest, so a second opinion is a different model and never the same one again.
+   */
+  readonly skipModels?: readonly string[]
+  /** A tighter ceiling for THIS call's whole chain (never looser than the router's own): a second opinion must not double the wall-clock cost. */
+  readonly chainBudgetMs?: number
   readonly maxTokens?: number
   /**
    * Sampling temperature, when the caller needs the SAME answer twice.
@@ -189,6 +196,12 @@ export interface CompletionResult {
   readonly content: string
   readonly promptTokens: number
   readonly completionTokens: number
+  /**
+   * Where this answer sat in the allow-list's measured order, and what was tried first (#444). `rank` 0 is the first choice
+   * today; anything above it is a fallback, which is a fact about this call and says nothing about the model's brand. Absent
+   * for a caller-named model, which is a decision somebody made.
+   */
+  readonly servedBy?: { readonly rank: number; readonly tried: readonly string[] }
   /**
    * What the provider reported for this response, in US dollars.
    *
@@ -336,9 +349,15 @@ export class ProviderRouter {
     jobId: string | undefined,
     model: string,
     why: string,
+    rank = 0,
   ): Promise<void> {
-    if (jobId === undefined || jobId === '' || why === '') return
-    const detail = JSON.stringify({ chose: model, because: why }).replace(/'/g, "''")
+    // A fallback is always recorded (the authority half reads it); a first choice only when there is a reason to give.
+    if (jobId === undefined || jobId === '' || (why === '' && rank === 0)) return
+    const detail = JSON.stringify({
+      chose: model,
+      because: why,
+      ...(rank > 0 ? { fallback: true, rank } : {}),
+    }).replace(/'/g, "''")
     await this.db
       .execute(
         `select app.job_trace_add(app.job_office('${jobId.replace(/'/g, "''")}'::uuid), '${jobId.replace(/'/g, "''")}'::uuid, 'decision',
@@ -415,14 +434,20 @@ export class ProviderRouter {
       )
     }
 
-    const planned = models.slice(0, this.maxAttempts).map((m) => m.model_id)
+    const skip = new Set(request.skipModels ?? [])
+    const ordered = models.map((m) => m.model_id)
+    const planned = ordered.filter((m) => !skip.has(m)).slice(0, this.maxAttempts)
     const startedChain = Date.now()
+    const budgetMs = Math.max(
+      1,
+      Math.min(this.chainBudgetMs, request.chainBudgetMs ?? this.chainBudgetMs),
+    )
     const tried: string[] = []
     let lastError: Error = new NoUsableModelError()
 
     for (const [index, model] of planned.entries()) {
       // The chain has a ceiling of its own, so a run of timeouts cannot outlast the wall clock above it.
-      const remaining = this.chainBudgetMs - (Date.now() - startedChain)
+      const remaining = budgetMs - (Date.now() - startedChain)
       if (index > 0 && remaining < MIN_ATTEMPT_MS) break
       tried.push(model)
       try {
@@ -436,8 +461,9 @@ export class ProviderRouter {
         // Traced after it worked, not before it was tried: the interesting
         // fact is which model ANSWERED, and a model that threw and was failed
         // over from is already recorded in `inference_usage` with its outcome.
-        await this.explainChoice(request.jobId, model, why.get(model) ?? '')
-        return result
+        const rank = ordered.indexOf(model)
+        await this.explainChoice(request.jobId, model, why.get(model) ?? '', rank)
+        return { ...result, servedBy: { rank, tried: [...skip, ...tried.slice(0, -1)] } }
       } catch (error) {
         // Non-negotiable: these end the call rather than advancing it.
         // `PaidCallPreventedError` covers both "this model is not on the

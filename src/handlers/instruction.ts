@@ -121,6 +121,7 @@ import {
 const entitled = allEntitled
 
 import { asksAboutHisOwnList, extractionRequest } from '../agents/extract.ts'
+import { admitFallbackAnswer, limitationAnswer } from '../agents/fallback-policy.ts'
 import { answerOutranks, decideEarlyGate, type EarlyGate } from '../agents/gates.ts'
 import { type Capability, planFor, planningCatalogue } from '../agents/goal.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
@@ -215,7 +216,7 @@ import {
 import { NotebookActions } from '../notebook/actions.ts'
 import { currentPerson } from '../office/person.ts'
 import { EnvelopeCeilingError, envelopeDecision } from '../providers/envelope.ts'
-import type { ProviderRouter } from '../providers/router.ts'
+import type { CompletionRequest, ProviderRouter } from '../providers/router.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import { escapeHtml } from '../telegram/message.ts'
 import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
@@ -277,6 +278,10 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
  * Returns the line to put in the confirmation, or null to leave the turn
  * exactly as it is today.
  */
+/** Words that make a sentence a request to change something, whatever its grammar (a polite question is still a request). */
+const WRITING_WORDS =
+  /\b(?:remind|add|create|schedule|send|e-?mail|book|set up|make|draft|write|file|log|note|put|mark|cancel|delete|update|change|move|rename|forward|post)\b/i
+
 export const planAndPursue = async (
   db: SqlExecutor,
   router: ProviderRouter,
@@ -6653,9 +6658,17 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               return false
             })
 
+      // The request is kept so a refused backup answer can be asked of a different model with exactly the same prompt (#444).
+      let completionRequest: CompletionRequest | null = null
+      const answerRouter = {
+        complete: (request: CompletionRequest) => {
+          completionRequest = request
+          return deps.router.complete(request)
+        },
+      }
       const completion = !answering
         ? null
-        : await deps.router.complete({
+        : await answerRouter.complete({
             ...(envelope ? { answerEnvelope: true } : {}),
             messages: [
               {
@@ -7218,7 +7231,77 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       if (scrubbedToNothing(completion.content) && job.attempt < 4) {
         throw new Error('the model returned only scaffolding, nothing to say')
       }
-      const said = scrub(completion.content)
+      /*
+        A BACKUP MODEL'S ANSWER IS ADMITTED ON EVIDENCE (#444, src/agents/fallback-policy.ts).
+
+        Only when the model that answered was not the first choice today. The checks can refuse an answer and never write one:
+        it must use the facts it was handed, not offer a change nobody asked for in place of the answer, rest an inference on
+        words the turn held, state only figures it was given or can derive, and not narrate the office's routing. A refused
+        answer is asked once more of a DIFFERENT model inside a tighter budget; if that one is refused too, or none is left, the
+        person gets what could not be established and what the turn did hold, composed in code, never a fluent guess.
+      */
+      let answeredBy = completion
+      let said = scrub(completion.content)
+      // Assigned inside `answerRouter`, which the compiler cannot see through.
+      const keptRequest = completionRequest as unknown as CompletionRequest | null
+      if ((completion.servedBy?.rank ?? 0) > 0 && keptRequest !== null) {
+        // The passages themselves, not the block that wraps them: its fence and headings are words the answer could share by accident.
+        // The office's own listings (waiting, project spine, task brief) are wrappers full of common words, so they are left out of
+        // what an inference must rest on; a figure in them is not asked about here (counts are small and money is not listed there).
+        const heldTexts = [
+          ...hits.map((h) => h.excerpt),
+          // Only real correspondence: with none cached the block is a note ABOUT not having looked, whose words are not evidence.
+          ...(mail.length > 0 ? [mailContext] : []),
+        ].filter((t) => t !== '')
+        const hisAsk = turn.kept.trim() === '' ? instruction : turn.kept
+        // Read-only: a question or a request for findings, with no writing verb in his words, and nothing this turn actually
+        // wrote or started. The cost of a wrong "no" is a check that does not run, never a good answer refused.
+        const readOnly =
+          (outcome.wanted === 0 ||
+            requests.every(answersByFindings) ||
+            (classifyIntent(hisAsk).intent === 'question' && !WRITING_WORDS.test(hisAsk))) &&
+          outcome.landed === 0 &&
+          outcome.pendingActions === 0
+        const admit = (text: string) =>
+          admitFallbackAnswer({
+            asked: hisAsk,
+            answer: text,
+            retrieved: heldTexts,
+            established: [hisAsk, ...heldTexts].join('\n'),
+            readOnly,
+          })
+        let verdict = admit(said)
+        const trail: string[] = verdict.ok
+          ? []
+          : [`${completion.model}: ${verdict.reasons.join(',')}`]
+        if (!verdict.ok) {
+          const second = await deps.router
+            .complete({
+              ...keptRequest,
+              skipModels: [completion.model, ...(completion.servedBy?.tried ?? [])],
+              chainBudgetMs: 40_000,
+            })
+            .catch(() => null)
+          if (second !== null) {
+            const text = scrub(second.content)
+            const again = admit(text)
+            if (again.ok) {
+              answeredBy = second
+              said = text
+              verdict = again
+            } else trail.push(`${second.model}: ${again.reasons.join(',')}`)
+          }
+        }
+        if (!verdict.ok) {
+          said = limitationAnswer({ retrieved: heldTexts })
+          await deps.db
+            .execute(
+              `select app.job_trace_add(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'degradation',
+                 ${lit(JSON.stringify({ fallback_answer_refused: trail }))}::jsonb, null, null, null, null)`,
+            )
+            .catch(() => undefined)
+        }
+      }
 
       /*
         And the same question about a CAPABILITY rather than a connector (#320).
@@ -7590,7 +7673,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         sources: [...sourceRefs(hits), ...mailRefs(mail)],
         contradictions: null,
         path: 'inference',
-        model: completion.model,
+        model: answeredBy.model,
         /*
           What this answer was entitled to know, tagged by where it came from
           (#231).
