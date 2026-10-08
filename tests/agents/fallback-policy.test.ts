@@ -40,6 +40,18 @@ describe('what the real fallback models said, refused', () => {
       expect(a.ok, said).toBe(false)
     }
   })
+  it('answers that carry the figures and then ask for details to log a task nobody asked for', () => {
+    for (const said of [
+      'To log the deposit as 2500 pounds due on 15 November, I will need the following information:\n\n1. The project or client.\n2. Any notes.\n\nOnce I have this information, I can create a task and schedule it accordingly. Please provide the necessary details so I can proceed.',
+      'Confirmed. It matches the addendum exactly.\n\nThe addendum updates both the sum and the deadline. I need to know the new sum and the new deadline to track it. Please provide these details.',
+    ]) {
+      const a = admit(said, 'What is the deposit for the venue and when is it due?', [
+        'Riverside venue addendum, signed later. The deposit is now 2500 pounds and is due on 15 November.',
+        CONTRACT,
+      ])
+      expect(a.ok, said).toBe(false)
+    }
+  })
   it('a forfeiture claim and an offer to flag, with none of the figures asked for', () => {
     const a = admit(
       "I won't add it to the boards or schedule anything yet. The contract lists a full forfeiture clause so premature confirmation would be pointless until the insurance certificate clears.\n\nTell me when you want it flagged on the Riverside dashboard.",
@@ -58,6 +70,28 @@ describe('what the real fallback models said, refused', () => {
       "I'm skipping the team review.\n\nThe deposit is two thousand pounds and due 1 November, per the contract [1]. I'm not convening anyone because simple fact-checking isn't a meeting.",
     )
     expect(reasons(a)).toContain('process_narration')
+  })
+  it('the same tic in the other words a backup model used', () => {
+    const a = admit(
+      "I won't pull anyone in for this. The deposit is 2000 pounds, due 1 November [1].\n\nIt's a straight factual retrieve from the contract, so there's nothing else to route.",
+    )
+    expect(reasons(a)).toContain('process_narration')
+  })
+  it('the admin commentary a backup model volunteered, in the words it used', () => {
+    for (const said of [
+      'The deposit is 2000 pounds, due 1 November [1].\n\nNo further action needed. You have the date locked in the file, so I am not creating a duplicate record.',
+      'No cancellation cap. The fee is 100 percent of the booking.\n\nI\u2019m not going to post a channel ping for a straightforward contract clause.',
+      'The office is not going to do anything about the two thousand pounds due on 1 November.',
+      'The deposit is 2500 pounds, due 15 November. We\u2019re not calling a meeting or posting a channel ping for a straightforward clause.',
+    ])
+      expect(reasons(admit(said)), said).toContain('process_narration')
+  })
+  it('but ordinary uses of those words are left alone', () => {
+    expect(
+      admit(
+        'The deposit is 2000 pounds, due 1 November. The supplier route into the venue is the east gate.',
+      ).ok,
+    ).toBe(true)
   })
   it('a denial of a document the turn held, on the very question it answers', () => {
     const a = admit('I have no venue contract on file, so I cannot say what the deposit is.')

@@ -94,10 +94,10 @@ const ACTION_OFFER =
 
 /** An answer that opens by refusing or conditioning something he did not ask for: a blocker where there was a question. */
 const BLOCKER_FRAMING =
-  /\bi (?:can['\u2019]?t|cannot|won['\u2019]?t|will not) (?:schedule|add|log|create|flag|set up|track)\b|\bto proceed,? i (?:need|would need)\b|\bi (?:would )?need (?:the following|you to|to know)\b|\bonce you (?:provide|confirm|have)\b|\btell me which project\b/i
+  /\bi (?:can['\u2019]?t|cannot|won['\u2019]?t|will not) (?:schedule|add|log|create|flag|set up|track)\b|\bto proceed,? i (?:need|would need)\b|\bi (?:would |will |['\u2019]ll )?need (?:the following|you to|to know)\b|\bonce (?:you|i) (?:provide|confirm|have)\b|\bplease provide (?:the|these|those|more)\b|\bso i can proceed\b|\b(?:log|create|schedule)(?:ged)? (?:a|the) (?:payment |deposit )?task\b|\btell me which project\b/i
 
 const NARRATION =
-  /\bi['’]?m (?:not )?(?:skipping|routing|convening|bringing in)\b|\bnot (?:convening|routing|bringing in) (?:anyone|anybody|this)\b|\bskipping the (?:team|review)\b|\bsimple (?:fact-?check|factual retriev)/i
+  /\bi['\u2019]?m (?:not )?(?:skipping|routing|convening|bringing in)\b|\bnot (?:convening|routing|bringing in) (?:anyone|anybody|this)\b|\bskipping the (?:team|review)\b|\bsimple (?:fact-?check|factual retriev)|\bi (?:won['\u2019]?t|will not) pull (?:anyone|anybody|the team) in\b|\bnothing (?:else )?to route\b|\bstraight (?:factual )?retriev|\b(?:i['\u2019]?m|we['\u2019]?re|i am|we are) not (?:going to )?(?:call(?:ing)?|post(?:ing)?|ping(?:ing)?|convening|raising|creating|logging|queu(?:e|ing))\b[^.!?\n]{0,70}\b(?:meeting|channel|ping|task|record|dashboard|reminder|anyone)\b|\bwe (?:won['\u2019]?t|will not) log (?:another|a) task\b|\bno further action (?:is )?needed\b|\bthe office is not going to do anything\b/i
 
 const INFERENCE =
   /\b(?:i infer|inferring|infer that|this (?:suggests|implies)|which (?:suggests|implies)|probably|presumably|it (?:seems|appears) (?:that|to be)|so (?:the|it) (?:is|must be))\b/i

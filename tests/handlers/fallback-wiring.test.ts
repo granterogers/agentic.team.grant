@@ -25,8 +25,8 @@ describe('the answer', () => {
     expect(handler).toMatch(/said = limitationAnswer\(\{ retrieved: heldTexts \}\)/)
     expect(handler).toMatch(/fallback_answer_refused/)
   })
-  it('records the model that actually wrote the delivered answer', () => {
-    expect(handler).toMatch(/model: answeredBy\.model,/)
+  it('records the model that actually wrote the delivered answer, and none for the text composed in code', () => {
+    expect(handler).toMatch(/model: wroteInCode \? null : answeredBy\.model,/)
   })
 })
 

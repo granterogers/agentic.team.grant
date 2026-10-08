@@ -280,7 +280,7 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
  */
 /** Words that make a sentence a request to change something, whatever its grammar (a polite question is still a request). */
 const WRITING_WORDS =
-  /\b(?:remind|add|create|schedule|send|e-?mail|book|set up|make|draft|write|file|log|note|put|mark|cancel|delete|update|change|move|rename|forward|post)\b/i
+  /\b(?:remind|add|creat|schedul|send|sent|e-?mail|book|set up|make|draft|writ|file|log|note|put|mark|cancel|delet|updat|chang|mov|renam|forward|post|confirm)\w*/i
 
 export const planAndPursue = async (
   db: SqlExecutor,
@@ -7241,6 +7241,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         person gets what could not be established and what the turn did hold, composed in code, never a fluent guess.
       */
       let answeredBy = completion
+      // True when the text is the limitation composed in code: no model wrote it, and the record must not say one did.
+      let wroteInCode = false
       let said = scrub(completion.content)
       // Assigned inside `answerRouter`, which the compiler cannot see through.
       const keptRequest = completionRequest as unknown as CompletionRequest | null
@@ -7257,8 +7259,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         // Read-only: a question or a request for findings, with no writing verb in his words, and nothing this turn actually
         // wrote or started. The cost of a wrong "no" is a check that does not run, never a good answer refused.
         const readOnly =
-          (outcome.wanted === 0 ||
-            requests.every(answersByFindings) ||
+          // NOT `outcome.wanted === 0`: a request the office cannot perform wants nothing, and is still a request.
+          ((requests.length > 0 && requests.every(answersByFindings)) ||
             (classifyIntent(hisAsk).intent === 'question' && !WRITING_WORDS.test(hisAsk))) &&
           outcome.landed === 0 &&
           outcome.pendingActions === 0
@@ -7294,6 +7296,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         }
         if (!verdict.ok) {
           said = limitationAnswer({ retrieved: heldTexts })
+          wroteInCode = true
           await deps.db
             .execute(
               `select app.job_trace_add(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'degradation',
@@ -7673,7 +7676,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         sources: [...sourceRefs(hits), ...mailRefs(mail)],
         contradictions: null,
         path: 'inference',
-        model: answeredBy.model,
+        model: wroteInCode ? null : answeredBy.model,
         /*
           What this answer was entitled to know, tagged by where it came from
           (#231).
