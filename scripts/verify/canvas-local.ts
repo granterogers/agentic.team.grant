@@ -1,4 +1,4 @@
-/// <reference lib="dom" />
+// biome-ignore-all lint/suspicious/noExplicitAny: browser objects inside page.evaluate, which the project's TypeScript has no DOM library for
 /**
  * The infinite canvas and the project menu, in a real browser (8 October 2026).
  *   npx tsx scripts/verify/canvas-local.ts
@@ -13,6 +13,10 @@
 import '../../src/safety/arm.ts'
 import { chromium, type Page } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
+
+/* The page functions below run in the browser, where these exist; the project's TypeScript has no DOM library. */
+declare const document: any
+declare const window: any
 
 const PORT = 4652
 const server = await serveStudio(PORT)
@@ -37,7 +41,7 @@ const rect = (p: Page, sel: string) =>
   }, sel)
 const view = (p: Page) =>
   p.evaluate(() => {
-    const t = document.querySelector('.bcstage') as HTMLElement
+    const t = document.querySelector('.bcstage') as any
     const m = /translate\(([-\d.e]+)px, ([-\d.e]+)px\) scale\(([-\d.e]+)\)/.exec(t.style.transform)
     if (m === null) throw new Error('no transform')
     return { x: Number(m[1]), y: Number(m[2]), zoom: Number(m[3]) }
@@ -137,7 +141,7 @@ try {
     for (const el of document.querySelectorAll('.bcmodbody')) {
       if (el.scrollHeight > el.clientHeight + 4) {
         const r = el.getBoundingClientRect()
-        return { x: r.x + r.width / 2, y: r.y + r.height / 2, top: (el as HTMLElement).scrollTop }
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2, top: (el as any).scrollTop }
       }
     }
     return null
@@ -150,11 +154,8 @@ try {
     await page.waitForTimeout(150)
     const after = await page.evaluate(
       ([x, y]) =>
-        (
-          document
-            .elementFromPoint(x as number, y as number)
-            ?.closest('.bcmodbody') as HTMLElement | null
-        )?.scrollTop ?? -1,
+        (document.elementFromPoint(x as number, y as number)?.closest('.bcmodbody') as any | null)
+          ?.scrollTop ?? -1,
       [scroller.x, scroller.y],
     )
     check(
@@ -167,7 +168,7 @@ try {
   /* ------------------------------------------------------------ pan */
   const vp0 = await view(page)
   const bare = await page.evaluate(() => {
-    const b = (document.querySelector('[data-bc-board]') as Element).getBoundingClientRect()
+    const b = (document.querySelector('[data-bc-board]') as any).getBoundingClientRect()
     for (let y = b.bottom - 20; y > b.top + 20; y -= 25) {
       for (let x = b.right - 160; x > b.left + 20; x -= 25) {
         const e = document.elementFromPoint(x, y)
