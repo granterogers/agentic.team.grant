@@ -2782,6 +2782,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         when she is the one named, and only from the text a model reads: every reader that decides to DO something reads his own
         words (`turn.kept`), so this can improve an answer and cannot start work. See own-task.ts.
       */
+      /*
+        The text the roster was chosen from. The decision is RECORDED against the same text: classified from the stripped
+        sentence it can read as unconfident while the roster (chosen from the whole one) holds three people, and
+        `routing_decisions_unconfident_stays_small` rightly refuses that row, which failed the turn (found when "Ask the
+        team to ..." began to be stripped for each specialist).
+      */
+      const routedText = instruction
       instruction = ownTask(instruction, who)
 
       /*
@@ -7046,7 +7053,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ...(job.projectId === null ? {} : { projectId: job.projectId }),
         jobId: job.jobId,
       })
-      const decided = route(instruction, scan)
+      const decided = route(routedText, scan)
       /*
         The depth this job is actually at (#233).
 

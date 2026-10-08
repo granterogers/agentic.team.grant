@@ -126,6 +126,17 @@ describe('a frame that names a kind of person is addressed to whoever was chosen
   })
 })
 
+describe('the routing decision is recorded against the text the roster was chosen from', () => {
+  it('WIRED: the roster is chosen from the whole sentence, so the row is classified from it, not from the stripped one', () => {
+    const source = readFileSync('src/handlers/instruction.ts', 'utf8')
+    expect(source).toMatch(
+      /const routedText = instruction\s*\n\s*instruction = ownTask\(instruction, who\)/,
+    )
+    expect(source).toMatch(/const decided = route\(routedText, scan\)/)
+    expect(source).not.toMatch(/const decided = route\(instruction, scan\)/)
+  })
+})
+
 describe('a frame that addresses the team collectively is addressed to each member who answers (real-model run)', () => {
   const quality: Speaking = {
     slug: 'quality-director',

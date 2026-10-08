@@ -423,6 +423,16 @@
       "expect": "tests/agents/own-task.test.ts"
     },
     {
+      "id": "M34",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "const decided = route(routedText, scan)",
+      "new": "const decided = route(instruction, scan)",
+      "invariant": "the routing decision is classified from the text the roster was chosen from (a stripped delegation frame must not make a team roster read unconfident and fail the turn)",
+      "expect": "tests/agents/own-task.test.ts"
+    },
+    {
       "id": "M29",
       "critical": false,
       "severity": "high",
