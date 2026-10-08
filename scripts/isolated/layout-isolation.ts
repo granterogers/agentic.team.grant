@@ -29,16 +29,30 @@ const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Reco
 const doc = (note: string) =>
   JSON.stringify([
     { id: 'tasks', x: 10, y: 10, w: 400, h: 300, z: 1, tint: null },
-    { id: '__workspace', v: 2, hasMods: true, zoom: 1.5, pan: { x: 40, y: 60 }, postits: [{ id: 'n_1', text: note }] },
+    {
+      id: '__workspace',
+      v: 2,
+      hasMods: true,
+      zoom: 1.5,
+      pan: { x: 40, y: 60 },
+      postits: [{ id: 'n_1', text: note }],
+    },
   ])
 
 await q('begin')
 try {
   const mkOffice = async (name: string): Promise<string> => {
     const auth = String((await q('select gen_random_uuid()::text a'))[0]?.a)
-    await q(`insert into auth.users (id, email) values (${lit(auth)}, ${lit(`${name}.${run}@example.invalid`)})`)
-    await q(`insert into public.offices (auth_user_id, kind, name) values (${lit(auth)}, 'person', ${lit(`${name} ${run}`)})`)
-    return String((await q(`select office_id::text o from public.offices where auth_user_id = ${lit(auth)}`))[0]?.o)
+    await q(
+      `insert into auth.users (id, email) values (${lit(auth)}, ${lit(`${name}.${run}@example.invalid`)})`,
+    )
+    await q(
+      `insert into public.offices (auth_user_id, kind, name) values (${lit(auth)}, 'person', ${lit(`${name} ${run}`)})`,
+    )
+    return String(
+      (await q(`select office_id::text o from public.offices where auth_user_id = ${lit(auth)}`))[0]
+        ?.o,
+    )
   }
   const project = async (office: string, slug: string): Promise<void> => {
     await q(
@@ -54,9 +68,21 @@ try {
   await project(A, SA2)
   await project(B, SB)
   const set = async (office: string, slug: string, panels: string, surface = 'basecamp') =>
-    json((await q(`select app.hq_dashboard_layout_set(${lit(office)}::uuid, ${lit(slug)}, ${lit(panels)}::jsonb, ${lit(surface)}) r`))[0]?.r)
+    json(
+      (
+        await q(
+          `select app.hq_dashboard_layout_set(${lit(office)}::uuid, ${lit(slug)}, ${lit(panels)}::jsonb, ${lit(surface)}) r`,
+        )
+      )[0]?.r,
+    )
   const reset = async (office: string, slug: string, surface = 'basecamp') =>
-    json((await q(`select app.hq_dashboard_layout_reset(${lit(office)}::uuid, ${lit(slug)}, ${lit(surface)}) r`))[0]?.r)
+    json(
+      (
+        await q(
+          `select app.hq_dashboard_layout_reset(${lit(office)}::uuid, ${lit(slug)}, ${lit(surface)}) r`,
+        )
+      )[0]?.r,
+    )
   const stored = async (slug: string, surface = 'basecamp') =>
     (
       await q(
@@ -69,44 +95,102 @@ try {
   check('Bob saves his arrangement', (await set(B, SB, doc('bob note'))).ok === true)
   const a1 = await stored(SA)
   const b1 = await stored(SB)
-  check('each is stored under its own person', a1?.owner !== undefined && b1?.owner !== undefined && a1.owner !== b1.owner, `${String(a1?.owner)} / ${String(b1?.owner)}`)
-  check('Alice reads back only her own note', String(a1?.p).includes('alice note') && !String(a1?.p).includes('bob note'))
+  check(
+    'each is stored under its own person',
+    a1?.owner !== undefined && b1?.owner !== undefined && a1.owner !== b1.owner,
+    `${String(a1?.owner)} / ${String(b1?.owner)}`,
+  )
+  check(
+    'Alice reads back only her own note',
+    String(a1?.p).includes('alice note') && !String(a1?.p).includes('bob note'),
+  )
 
   // 2. nobody reaches across by naming the other's project
   const cross = await set(B, SA, doc('BOB OVERWRITES ALICE'))
-  check('Bob cannot save over Alice by naming her project', typeof cross.error === 'string' && String(cross.error).includes('no project called'), JSON.stringify(cross))
+  check(
+    'Bob cannot save over Alice by naming her project',
+    typeof cross.error === 'string' && String(cross.error).includes('no project called'),
+    JSON.stringify(cross),
+  )
   const a2 = await stored(SA)
-  check("Alice's arrangement is unchanged after that attempt", a2?.p === a1?.p && !String(a2?.p).includes('BOB'))
+  check(
+    "Alice's arrangement is unchanged after that attempt",
+    a2?.p === a1?.p && !String(a2?.p).includes('BOB'),
+  )
   const crossReset = await reset(B, SA)
-  check('Bob cannot reset Alice by naming her project', typeof crossReset.error === 'string' || crossReset.ok !== true || (await stored(SA)) !== undefined, JSON.stringify(crossReset))
+  check(
+    'Bob cannot reset Alice by naming her project',
+    typeof crossReset.error === 'string' && String(crossReset.error).includes('no project called'),
+    JSON.stringify(crossReset),
+  )
   check("and Alice's row is still there", (await stored(SA)) !== undefined)
 
   // 3. two surfaces are two rows
-  check('Alice saves a studio arrangement of the same project', (await set(A, SA, doc('studio copy'), 'studio')).ok === true)
-  check('the Team HQ copy is untouched by it', String((await stored(SA, 'basecamp'))?.p).includes('alice note'))
-  check('the studio copy is its own row', String((await stored(SA, 'studio'))?.p).includes('studio copy'))
+  check(
+    'Alice saves a studio arrangement of the same project',
+    (await set(A, SA, doc('studio copy'), 'studio')).ok === true,
+  )
+  check(
+    'the Team HQ copy is untouched by it',
+    String((await stored(SA, 'basecamp'))?.p).includes('alice note'),
+  )
+  check(
+    'the studio copy is its own row',
+    String((await stored(SA, 'studio'))?.p).includes('studio copy'),
+  )
 
   // 4. per project
-  check('Alice arranges a second project differently', (await set(A, SA2, doc('second project'))).ok === true)
-  check('the first project keeps its own arrangement', String((await stored(SA))?.p).includes('alice note') && !String((await stored(SA))?.p).includes('second project'))
+  check(
+    'Alice arranges a second project differently',
+    (await set(A, SA2, doc('second project'))).ok === true,
+  )
+  check(
+    'the first project keeps its own arrangement',
+    String((await stored(SA))?.p).includes('alice note') &&
+      !String((await stored(SA))?.p).includes('second project'),
+  )
 
   // 5. empty is a reset
   const emptied = await set(A, SA2, '[]')
-  check('saving an empty arrangement is a reset, not a stored value', emptied.reset === true && (await stored(SA2)) === undefined, JSON.stringify(emptied))
+  check(
+    'saving an empty arrangement is a reset, not a stored value',
+    emptied.reset === true && (await stored(SA2)) === undefined,
+    JSON.stringify(emptied),
+  )
 
   // 6. sabotage: the same writer without the office check lets Bob in
-  const def = String((await q(`select pg_get_functiondef('app.hq_dashboard_layout_set(uuid,text,jsonb,text)'::regprocedure) d`))[0]?.d)
+  const def = String(
+    (
+      await q(
+        `select pg_get_functiondef('app.hq_dashboard_layout_set(uuid,text,jsonb,text)'::regprocedure) d`,
+      )
+    )[0]?.d,
+  )
   const needle = 'where slug = p_slug and office_id = p_office'
-  const hurt = def.replace('app.hq_dashboard_layout_set(', 'app.hq_dashboard_layout_set_sabotaged(').replace(needle, 'where slug = p_slug')
-  check('the sabotage applied', hurt !== def && hurt.includes('set_sabotaged') && !hurt.includes(needle))
+  const hurt = def
+    .replace('app.hq_dashboard_layout_set(', 'app.hq_dashboard_layout_set_sabotaged(')
+    .replace(needle, 'where slug = p_slug')
+  check(
+    'the sabotage applied',
+    hurt !== def && hurt.includes('set_sabotaged') && !hurt.includes(needle),
+  )
   await q(hurt)
-  const bad = json((await q(`select app.hq_dashboard_layout_set_sabotaged(${lit(B)}::uuid, ${lit(SA)}, ${lit(doc('BOB OVERWRITES ALICE'))}::jsonb, 'basecamp') r`))[0]?.r)
-  const alt = await stored(SA)
-  check('with the office check removed, Bob overwrites Alice (so check 2 can fail)', String(alt?.p).includes('BOB') || bad.error === undefined, JSON.stringify(bad))
+  const overwritten = json(
+    (
+      await q(
+        `select app.hq_dashboard_layout_set_sabotaged(${lit(B)}::uuid, ${lit(SA)}, ${lit(doc('BOB OVERWRITES ALICE'))}::jsonb, 'basecamp') r`,
+      )
+    )[0]?.r,
+  )
+  check(
+    'with the office check removed, the writer accepts Bob over Alice (so check 2 can fail)',
+    overwritten.error === undefined && overwritten.ok === true,
+    JSON.stringify(overwritten),
+  )
 } finally {
   await q('rollback')
 }
 await db.end()
-const bad = results.filter((r) => !r).length
-console.log(`\n${String(results.length - bad)}/${String(results.length)} passed`)
-process.exit(bad === 0 ? 0 : 1)
+const failed = results.filter((r) => !r).length
+console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
+process.exit(failed === 0 ? 0 : 1)
