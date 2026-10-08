@@ -265,3 +265,41 @@ describe('join', () => {
     expect(D.join('', 'b')).toBe('b')
   })
 })
+
+describe('a recogniser that never starts (its service is unreachable)', () => {
+  class MuteRec extends FakeRec {
+    start() {
+      this.started = true // the engine accepted the call and then said nothing at all
+    }
+  }
+  const makeMute = () =>
+    D.createDictation({
+      Recognition: MuteRec,
+      setTimer: (fn: () => void) => {
+        timers.push(fn)
+        return timers.length
+      },
+      clearTimer: () => {
+        timers = []
+      },
+    })
+
+  it('gives up after the start timeout, says so and lets go of the microphone', () => {
+    const d = makeMute()
+    expect(d.start(box())).toBe(true)
+    expect(d.state()).toBe('starting')
+    expect(timers.length).toBe(1)
+    timers.shift()?.()
+    expect(d.state()).toBe('error')
+    expect(d.reason()).toMatch(/did not start/i)
+    expect(d.active()).toBe(false)
+    expect((FakeRec.all.at(-1) as FakeRec).aborted).toBe(true)
+  })
+
+  it('does not fire once it has started', () => {
+    const d = make()
+    d.start(box())
+    expect(d.state()).toBe('listening')
+    expect(timers.length).toBe(0)
+  })
+})

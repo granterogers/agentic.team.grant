@@ -21,7 +21,8 @@
      The alternative is uploading audio to a transcription service, which is
      better and costs money, and this project is ~£0/month. The cost of the
      free choice is honest and stated in the UI: Chrome's implementation sends
-     audio to Google's servers to transcribe it. Safari's runs on the device.
+     audio to Google's servers to transcribe it. Safari's is Apple's speech service; whether it stays on the device
+     depends on the language and system settings the page cannot see, so the notice does not promise it.
      Neither is our server, so a person deserves to be told before they press
      it, which is why the button carries that sentence in its title and the
      panel says it in words.
@@ -76,7 +77,14 @@ export const why = () => {
 
 // What the button's title says before you press it. Named, not implied (#196).
 export const disclosure = () =>
-  'Dictate a message. Your browser transcribes the audio — in Chrome that means Google hears it. Nothing is sent until you press Send.'
+  'Dictate a message. Your browser transcribes the audio — in Chrome that means Google hears it, in Safari Apple’s speech service does. Nothing is sent to the team until you press Send.'
+
+/*
+  The same fact where a phone can see it. A title attribute is never shown on a touch screen, so the dock also says it in
+  the status line while the microphone is open.
+*/
+export const listeningNotice = () =>
+  'Listening… your browser transcribes the audio (Google in Chrome, Apple in Safari).'
 
 /*
   The logic lives in dictation.js, a state machine with the recogniser injected so it can be tested without a

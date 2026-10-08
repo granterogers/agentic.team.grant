@@ -35,6 +35,7 @@ export const STATES = ['idle', 'starting', 'listening', 'stopping', 'error']
 
 const MAX_SILENT_RESTARTS = 4
 const RESTART_DELAY_MS = 250
+const START_TIMEOUT_MS = 8000
 
 const REASONS = {
   'not-allowed': 'The microphone was refused. Allow it for this site in the browser, then try again.',
@@ -42,6 +43,7 @@ const REASONS = {
   'audio-capture': 'No microphone was found. Connect one and try again.',
   network: 'Dictation needs the network and could not reach it. What was heard is kept.',
   'language-not-supported': 'This browser cannot transcribe that language.',
+  silent: 'Dictation did not start. The browser did not answer. Check the connection and try again.',
 }
 const FATAL = new Set(['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported'])
 
@@ -161,10 +163,42 @@ export const createDictation = ({
     return r
   }
 
+  /*
+    A recogniser that never reports it has started (the speech service is unreachable, or the browser quietly ignores
+    start()) would leave the button in "starting" for ever. Found by driving the real engine in a browser with no route to
+    its service: no start, no error, no end. After a few seconds say so and let go of the microphone.
+  */
+  let watchdog = null
+  const unwatch = () => {
+    if (watchdog !== null) {
+      clearTimer(watchdog)
+      watchdog = null
+    }
+  }
+
   const begin = () => {
     try {
-      spawn().start()
+      const r = spawn()
+      const started = r.onstart
+      r.onstart = (e) => {
+        unwatch()
+        started(e)
+      }
+      unwatch()
+      watchdog = setTimer(() => {
+        watchdog = null
+        if (rec !== r || state !== 'starting') return
+        rec = null
+        try {
+          r.abort()
+        } catch {
+          /* already gone */
+        }
+        finish(REASONS.silent)
+      }, START_TIMEOUT_MS)
+      r.start()
     } catch {
+      unwatch()
       /* start() throws if a session is somehow already running; never claim the microphone is open when it is not. */
       rec = null
       wanted = false

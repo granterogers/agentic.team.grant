@@ -73,7 +73,7 @@ export const wire = (dock) => {
         }
       },
       onstate: (state) => {
-        if (state === 'listening') speak('Listening…')
+        if (state === 'listening') speak(dictate.listeningNotice())
         paint()
       },
       onstop: (reason) => {
