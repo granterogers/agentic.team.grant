@@ -4221,3 +4221,30 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
 @media (pointer: coarse) {
   [data-experience='basecamp'] .bcpostitundobtn { min-height: 44px; min-width: 44px; }
 }
+
+/* ======================================================================== *
+ * THE INFINITE CANVAS (8 October 2026)
+ *
+ * The board is a viewport. The stage inside it is a world that is panned and
+ * zoomed with one transform, and the dotted grid is painted on the board from
+ * the same three variables (--bc-gx, --bc-gy, --bc-gz), so dots and modules
+ * cannot drift apart. At the end of the sheet on purpose: it overrides the
+ * freeform block above it.
+ * ======================================================================== */
+[data-experience='basecamp'] .bcpanes {
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  --bc-dot: color-mix(in srgb, var(--bc-text-muted) 38%, transparent);
+  --bc-gstep: calc(24px * var(--bc-gz, 1));
+  background-image: radial-gradient(circle at center, var(--bc-dot) 0 calc(0.9px + 0.25px * var(--bc-gz, 1)), transparent calc(1.6px + 0.25px * var(--bc-gz, 1)));
+  background-size: var(--bc-gstep) var(--bc-gstep);
+  background-position: var(--bc-gx, 0) var(--bc-gy, 0);
+}
+[data-experience='basecamp'] .bcpanes--panning { cursor: grabbing; }
+[data-experience='basecamp'] .bcpanes--grab * { cursor: grab; }
+[data-experience='basecamp'] .bcmod.bcmod--placed,
+[data-experience='basecamp'] .bcpostit { cursor: auto; touch-action: pan-x pan-y; }
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpanes { overflow: visible; touch-action: auto; cursor: auto; background-image: none; }
+}

@@ -54,12 +54,20 @@
 */
 
 /** Every module the home can hold. */
+const clampZoom = (z) => Math.min(ZOOM.max, Math.max(ZOOM.min, z))
+const cleanPan = (p) => ({
+  x: Number.isFinite(p?.x) ? Math.max(-REACH, Math.min(REACH, p.x)) : 0,
+  y: Number.isFinite(p?.y) ? Math.max(-REACH, Math.min(REACH, p.y)) : 0,
+})
 export const ALL = ['tasks', 'board', 'documents', 'schedule', 'contacts', 'activity']
 
 export const MIN = { w: 240, h: 150 }
 export const POSTIT_MIN = { w: 130, h: 120 }
 export const POSTIT_DEFAULT = { w: 210, h: 190 }
-export const ZOOM = { min: 0.5, max: 1.5, step: 0.1 }
+export const ZOOM = { min: 0.2, max: 2.5, step: 0.1 }
+/** Furthest a module may sit from the origin, in logical pixels: far past anything reachable, so nothing is ever "at the edge". */
+export const REACH = 100000
+export const MAX_SIZE = 6000
 export const GAP = 12
 
 /** The curated tints. `null` is "none". The values are hues, mixed in by CSS. */
@@ -154,11 +162,52 @@ const minOf = (id) => (isPostit(id) ? POSTIT_MIN : MIN)
  */
 export const clampRect = (m, st) => {
   const min = minOf(m.id)
-  const w = Math.max(min.w, Math.min(Math.max(min.w, st.w), Math.round(m.w ?? min.w)))
-  const h = Math.max(min.h, Math.min(Math.max(min.h, st.h), Math.round(m.h ?? min.h)))
-  const x = Math.max(0, Math.min(Math.max(0, st.w - w), Math.round(m.x ?? 0)))
-  const y = Math.max(0, Math.min(Math.max(0, st.h - h), Math.round(m.y ?? 0)))
+  const num = (v, d) => (Number.isFinite(v) ? Math.round(v) : d)
+  if (st !== undefined) {
+    /* Given a stage, keep the rectangle inside it: how defaults, presets and tidying are laid out. */
+    const w = Math.max(min.w, Math.min(Math.max(min.w, st.w), num(m.w, min.w)))
+    const h = Math.max(min.h, Math.min(Math.max(min.h, st.h), num(m.h, min.h)))
+    return {
+      ...m,
+      x: Math.max(0, Math.min(Math.max(0, st.w - w), num(m.x, 0))),
+      y: Math.max(0, Math.min(Math.max(0, st.h - h), num(m.y, 0))),
+      w,
+      h,
+    }
+  }
+  /* With none, the canvas is infinite: only sizes and absurd distances are bounded. */
+  const w = Math.max(min.w, Math.min(MAX_SIZE, num(m.w, min.w)))
+  const h = Math.max(min.h, Math.min(MAX_SIZE, num(m.h, min.h)))
+  const x = Math.max(-REACH, Math.min(REACH, num(m.x, 0)))
+  const y = Math.max(-REACH, Math.min(REACH, num(m.y, 0)))
   return { ...m, x, y, w, h }
+}
+
+/* ---------------------------------------------------------- the view ---
+  The canvas is infinite: a view is { zoom, x, y }, where (x, y) is where the
+  world origin sits on screen, in screen pixels, relative to the board's own
+  top-left. A world point wx maps to screen wx * zoom + x. All of the
+  arithmetic lives here, as pure functions, so it can be tested without a
+  browser and so a pan, a zoom and a drag can never disagree about it.
+*/
+export const toWorld = (v, sx, sy) => ({ x: (sx - v.x) / v.zoom, y: (sy - v.y) / v.zoom })
+export const toScreen = (v, wx, wy) => ({ x: wx * v.zoom + v.x, y: wy * v.zoom + v.y })
+/** Zoom by a factor keeping the world point under (sx, sy) exactly where it is. */
+export const zoomAt = (v, factor, sx, sy) => {
+  const zoom = clampZoom(v.zoom * factor)
+  const k = zoom / v.zoom
+  return { zoom, x: sx - (sx - v.x) * k, y: sy - (sy - v.y) * k }
+}
+export const panBy = (v, dx, dy) => ({ ...v, x: v.x + dx, y: v.y + dy })
+/** The view that brings every rectangle into a box of w by h with a margin, never magnifying past 1. */
+export const fitView = (rects, w, h, pad = 40) => {
+  if (rects.length === 0) return { zoom: 1, x: 0, y: 0 }
+  const x0 = Math.min(...rects.map((r) => r.x))
+  const y0 = Math.min(...rects.map((r) => r.y))
+  const x1 = Math.max(...rects.map((r) => r.x + r.w))
+  const y1 = Math.max(...rects.map((r) => r.y + r.h))
+  const zoom = clampZoom(Math.min(1, (w - pad * 2) / (x1 - x0), (h - pad * 2) / (y1 - y0)))
+  return { zoom, x: (w - (x1 - x0) * zoom) / 2 - x0 * zoom, y: (h - (y1 - y0) * zoom) / 2 - y0 * zoom }
 }
 
 const crossing = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
@@ -372,8 +421,7 @@ export const tidy = (mods, st) => {
 const KEY = (slug) => `bc.stage.${slug}`
 const slugOf = (s) => (typeof s === 'string' ? s : (s?.slug ?? ''))
 
-const emptyDoc = () => ({ mods: null, zoom: 1, layouts: {}, postits: [], gone: {}, seeded: false })
-const clampZoom = (z) => Math.min(ZOOM.max, Math.max(ZOOM.min, z))
+const emptyDoc = () => ({ mods: null, zoom: 1, pan: { x: 0, y: 0 }, layouts: {}, postits: [], gone: {}, seeded: false })
 
 let stage = { w: 1200, h: 620 }
 let measured = false
@@ -421,6 +469,7 @@ export const normalise = (raw) => {
       .map(cleanMod)
   }
   if (Number.isFinite(raw.zoom)) d.zoom = clampZoom(raw.zoom)
+  d.pan = cleanPan(raw.pan)
   if (raw.layouts !== null && typeof raw.layouts === 'object') {
     for (const [name, l] of Object.entries(raw.layouts)) {
       if (l === null || typeof l !== 'object' || !Array.isArray(l.mods)) continue
@@ -476,6 +525,7 @@ export const toPanels = (d) => [
     v: 2,
     hasMods: d.mods !== null,
     zoom: d.zoom,
+    pan: d.pan,
     layouts: d.layouts,
     postits: d.postits,
     gone: d.gone,
@@ -491,6 +541,7 @@ export const fromPanels = (panels) => {
   return normalise({
     mods: meta.hasMods === true ? panels.filter((m) => m && m.id !== '__workspace') : null,
     zoom: meta.zoom,
+    pan: meta.pan,
     layouts: meta.layouts,
     postits: meta.postits,
     gone: meta.gone,
@@ -502,6 +553,8 @@ export const fromPanels = (panels) => {
 const isBlank = (d) =>
   d.mods === null &&
   d.zoom === 1 &&
+  d.pan.x === 0 &&
+  d.pan.y === 0 &&
   d.postits.length === 0 &&
   Object.keys(d.gone).length === 0 &&
   Object.keys(d.layouts).length === 0 &&
@@ -640,7 +693,7 @@ export const forgetAll = () => {
 export const layout = (slug) => {
   const d = doc(slug)
   const base = d.mods === null ? fromFractions(THIRDS, stage) : d.mods
-  return base.map((m) => clampRect(m, stage))
+  return base.map((m) => clampRect(m))
 }
 
 const materialised = (slug) => {
@@ -658,7 +711,7 @@ const topZ = (d) =>
 export const place = (slug, id, rect) => {
   const d = materialised(slug)
   const z = topZ(d) + 1
-  d.mods = d.mods.map((m) => (m.id === id ? clampRect({ ...m, ...rect, id, z }, stage) : m))
+  d.mods = d.mods.map((m) => (m.id === id ? clampRect({ ...m, ...rect, id, z }) : m))
   commit(slug, d)
   return layout(slug)
 }
@@ -719,7 +772,7 @@ export const autoArrange = (slug) => {
  * arrangement.
  */
 export const reset = (slug) => {
-  commit(slug, { ...doc(slug), mods: null, zoom: 1 })
+  commit(slug, { ...doc(slug), mods: null, zoom: 1, pan: { x: 0, y: 0 } })
 }
 
 /**
@@ -729,7 +782,7 @@ export const reset = (slug) => {
  */
 export const customised = (slug) => {
   const d = doc(slug)
-  if (d.zoom !== 1) return true
+  if (d.zoom !== 1 || d.pan.x !== 0 || d.pan.y !== 0) return true
   if (d.mods === null) return false
   const was = fromFractions(THIRDS, stage)
   if (d.mods.length !== was.length) return true
@@ -749,6 +802,13 @@ export const customised = (slug) => {
 /* ------------------------------------------------------------------- zoom --- */
 
 export const zoomOf = (slug) => doc(slug).zoom
+export const viewOf = (slug) => ({ zoom: doc(slug).zoom, ...doc(slug).pan })
+/** Store the view (zoom and where the origin sits). */
+export const setView = (slug, v) => {
+  const zoom = Math.round(clampZoom(v.zoom) * 1000) / 1000
+  commit(slug, { ...doc(slug), zoom, pan: cleanPan(v) })
+  return viewOf(slug)
+}
 
 export const setZoom = (slug, z) => {
   const zoom = Math.round(clampZoom(z) * 100) / 100
@@ -848,10 +908,10 @@ export const postits = (slug) => {
       // Nowhere clear: no starter. The Note button in the toolbar still adds one, wherever its owner puts it.
       return []
     }
-    const starter = clampRect({ id: 'n_starter', ...spot, z: 7, text: '' }, stage)
+    const starter = clampRect({ id: 'n_starter', ...spot, z: 7, text: '' })
     return [{ ...starter, starter: true }]
   }
-  return d.postits.map((n) => clampRect(n, stage))
+  return d.postits.map((n) => clampRect(n))
 }
 
 export const addPostit = (slug) => {

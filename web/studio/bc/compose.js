@@ -560,6 +560,9 @@ const dock = (p) => {
     <button type="button" class="bcdockbtn" data-bc-viewreset title="Reset the view. Notes and everything in the modules are kept"${grid.customised(p.slug) ? '' : ' data-quiet="1"'}>
       ${ic('<path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/>')}<span>Reset view</span>
     </button>
+    <button type="button" class="bcdockbtn" data-bc-fit title="Bring everything into view">
+      ${ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}<span>Fit</span>
+    </button>
     <span class="bczoom" role="group" aria-label="Zoom">
       <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="out" aria-label="Zoom out">&minus;</button>
       <button type="button" class="bcdockbtn bczoomval" data-bc-zoom="reset" aria-label="Reset zoom to 100%" title="Reset zoom">${String(Math.round(z * 100))}%</button>
@@ -746,9 +749,9 @@ export const compositionC = (p) => {
     wire.js re-measures and repaints the rectangles in place before the browser
     has painted anything. Once it has measured, the real size is reused.
   */
-  const z = grid.zoomOf(p.slug)
+  const view = grid.viewOf(p.slug)
   if (!grid.stageMeasured() && typeof innerWidth === 'number') {
-    grid.setStage((innerWidth - 170) / z, (innerHeight - 330) / z)
+    grid.setStage(innerWidth - 170, innerHeight - 330)
   }
   const st = grid.stageSize()
   const place = grid.layout(p.slug)
@@ -756,8 +759,8 @@ export const compositionC = (p) => {
   return `<div class="bchome bccomp bccomp--c">
     ${head(p, `<div class="bcworkbar">${offChips(p)}${dock(p)}</div>`)}
     <div class="bcworkspace">
-    <div class="bcpanes" data-bc-board="${esc(p.slug)}" style="height:${String(Math.round(st.h * z))}px">
-      <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;transform:scale(${String(z)})">
+    <div class="bcpanes" data-bc-board="${esc(p.slug)}" style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)}">
+      <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;transform:translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})">
         ${place
           .map((r) => {
             const m = by.get(r.id)

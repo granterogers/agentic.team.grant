@@ -32,7 +32,6 @@ import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, toke
   presentations can be diffed against one another.
 */
 import * as bc from './bc/shell.js'
-import * as bcJump from './bc/jump.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
 import * as bcExpand from './bc/expand.js'
@@ -5510,8 +5509,8 @@ const HELP_TOPICS = [
   {
     title: 'Find your way around',
     steps: [
-      'The home screen lists your projects. Press one to open it. Inside you will find its tasks, documents, contacts, sources and team.',
-      'Press Jump to… at the top (or Shift J) to find any project, task or document by name.',
+      'The menu at the top left lists your projects. Press one to open it. Inside you will find its tasks, documents, contacts, sources and team.',
+      'Use the same menu to create a project, or to open My Tasks and Activity.',
       'The three dots at the top right open Settings, which apply to all of Team HQ. A single project has its own settings, in its menu under Project settings.',
       'To leave Settings, press Back to workspace at the top left.',
     ],
@@ -14112,7 +14111,6 @@ const bcContext = {
   },
 }
 bc.mount(bcContext)
-bcJump.mount(bcContext)
 bcWire.mount(bcContext)
 /*
   WHICH MESSAGES HAVE A RECORDING, learned once.

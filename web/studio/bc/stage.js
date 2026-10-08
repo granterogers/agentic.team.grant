@@ -59,7 +59,9 @@ export const wireStage = (root, ctx) => {
   if (stageEl === null) return
   const stacked = () => globalThis.matchMedia?.(PHONE)?.matches === true
 
-  let zoomLive = grid.zoomOf(slug)
+  /* The view: zoom, and where the world origin sits on screen. Painted live, stored late. */
+  let view = grid.viewOf(slug)
+  let zoomLive = view.zoom
   let zoomTimer = null
 
   /* ------------------------------------------------------------- painting */
@@ -100,6 +102,34 @@ export const wireStage = (root, ctx) => {
     }
   }
 
+  /* One place writes the transform and the grid, so a pan, a zoom and a drag cannot disagree. */
+  const paintView = () => {
+    zoomLive = view.zoom
+    stageEl.style.transform = `translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})`
+    stageEl.style.setProperty('--bc-zoom', String(view.zoom))
+    board.style.setProperty('--bc-gx', `${String(view.x)}px`)
+    board.style.setProperty('--bc-gy', `${String(view.y)}px`)
+    board.style.setProperty('--bc-gz', String(view.zoom))
+    const val = dock.querySelector('.bczoomval')
+    if (val !== null) val.textContent = `${String(Math.round(view.zoom * 100))}%`
+  }
+  const commitView = () => {
+    if (zoomTimer !== null) globalThis.clearTimeout(zoomTimer)
+    zoomTimer = globalThis.setTimeout(() => {
+      grid.setView(slug, view)
+      paintAll()
+    }, 250)
+  }
+  const setView = (v) => {
+    view = v
+    paintView()
+    commitView()
+  }
+  const boardPoint = (e) => {
+    const r = board.getBoundingClientRect()
+    return { x: e.clientX - r.left, y: e.clientY - r.top }
+  }
+
   /** Let a rearrangement ease into place rather than jump. */
   const glide = () => {
     if (calm()) return
@@ -126,13 +156,13 @@ export const wireStage = (root, ctx) => {
     const top = board.getBoundingClientRect().top + (globalThis.scrollY ?? 0)
     const boxW = board.clientWidth
     const boxH = Math.max(420, Math.round((globalThis.innerHeight ?? 900) - top - RESERVE))
-    grid.setStage(boxW / zoomLive, boxH / zoomLive, true)
+    /* The stage the engine lays defaults out on is the unzoomed window: a default must not move because somebody zoomed. */
+    grid.setStage(boxW, boxH, true)
     const st = grid.stageSize()
     board.style.height = `${String(boxH)}px`
     stageEl.style.width = `${String(st.w)}px`
     stageEl.style.height = `${String(st.h)}px`
-    stageEl.style.transform = `scale(${String(zoomLive)})`
-    stageEl.style.setProperty('--bc-zoom', String(zoomLive))
+    paintView()
     paintAll()
   }
 
@@ -206,7 +236,7 @@ export const wireStage = (root, ctx) => {
     const snapped = e.altKey
       ? { rect: want, guides: [] }
       : grid.align(want, others(live.id), st, live.kind, 6 / z)
-    const rect = grid.clampRect({ ...snapped.rect, id: live.id }, st)
+    const rect = grid.clampRect({ ...snapped.rect, id: live.id })
     live.next = rect
     css(live.el, rect)
     drawGuides(snapped.guides)
@@ -369,18 +399,9 @@ export const wireStage = (root, ctx) => {
 
   /* ----------------------------------------------------------------- zoom */
 
-  const setLive = (z) => {
-    zoomLive = Math.round(Math.min(grid.ZOOM.max, Math.max(grid.ZOOM.min, z)) * 100) / 100
-    fit()
-    const val = dock.querySelector('.bczoomval')
-    if (val !== null) {
-      val.textContent = `${String(Math.round(zoomLive * 100))}%`
-    }
-    if (zoomTimer !== null) globalThis.clearTimeout(zoomTimer)
-    zoomTimer = globalThis.setTimeout(() => {
-      grid.setZoom(slug, zoomLive)
-      paintAll()
-    }, 250)
+  const centre = () => ({ x: board.clientWidth / 2, y: board.clientHeight / 2 })
+  const zoomTo = (factor, at = centre()) => {
+    setView(grid.zoomAt(view, factor, at.x, at.y))
   }
 
   for (const b of dock.querySelectorAll('[data-bc-zoom]')) {
@@ -390,26 +411,128 @@ export const wireStage = (root, ctx) => {
       globalThis.setTimeout(() => {
         stageEl.classList.remove('bcstage--zooming')
       }, 260)
-      if (how === 'reset') setLive(1)
-      else setLive(zoomLive + (how === 'in' ? grid.ZOOM.step : -grid.ZOOM.step))
+      if (how === 'reset') zoomTo(1 / view.zoom)
+      else zoomTo(how === 'in' ? 1 + grid.ZOOM.step * 1.5 : 1 / (1 + grid.ZOOM.step * 1.5))
     })
   }
 
+  /* Bring every module and note into view. */
+  dock.querySelector('[data-bc-fit]')?.addEventListener('click', () => {
+    stageEl.classList.add('bcstage--zooming')
+    globalThis.setTimeout(() => {
+      stageEl.classList.remove('bcstage--zooming')
+    }, 260)
+    setView(grid.fitView([...grid.layout(slug), ...grid.postits(slug)], board.clientWidth, board.clientHeight))
+  })
+
   /*
-    MODIFIER-WHEEL ZOOMS; A PLAIN WHEEL NEVER DOES. A trackpad pinch arrives as
-    a wheel event with ctrlKey set, and Cmd/Ctrl with a mouse wheel is the same
-    gesture, so one listener covers both. A plain wheel is left entirely alone,
-    which is what keeps Tasks, Documents, Calendar and Activity scrolling.
+    THE WHEEL BELONGS TO THE CANVAS, EXCEPT OVER CONTENT THAT SCROLLS.
+    Over empty canvas or a module that has nothing to scroll, a mouse wheel
+    zooms about the pointer. A pinch (a wheel event with ctrlKey) always zooms.
+    A trackpad's two-finger scroll (small deltas, or any horizontal delta) pans.
+    Over a list, document or conversation that can scroll, the wheel scrolls it:
+    nobody should lose their place in a conversation to a zoom.
   */
+  const scrollsHere = (t) => {
+    for (let n = t; n !== null && n !== board; n = n.parentElement) {
+      if (!(n instanceof Element)) break
+      const cs = globalThis.getComputedStyle(n)
+      if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return true
+      if (/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1) return true
+    }
+    return false
+  }
   board.addEventListener(
     'wheel',
     (e) => {
-      if (!(e.ctrlKey || e.metaKey) || stacked()) return
+      if (stacked()) return
+      const pinch = e.ctrlKey || e.metaKey
+      if (!pinch && scrollsHere(e.target)) return
       e.preventDefault()
-      setLive(zoomLive * Math.exp(-e.deltaY * 0.0022))
+      const notch = e.deltaMode !== 0 || Math.abs(e.deltaY) >= 40
+      const trackpadScroll = !pinch && !notch && e.deltaMode === 0
+      if (trackpadScroll || (e.shiftKey && !pinch)) {
+        setView(grid.panBy(view, -(e.shiftKey && e.deltaX === 0 ? e.deltaY : e.deltaX), e.shiftKey && e.deltaX === 0 ? 0 : -e.deltaY))
+        return
+      }
+      const unit = e.deltaMode === 1 ? 33 : 1
+      const rate = pinch && !notch ? 0.01 : 0.0015
+      zoomTo(Math.exp(-e.deltaY * unit * rate), boardPoint(e))
     },
     { passive: false },
   )
+
+  /*
+    PANNING: drag the empty canvas, or press the middle button anywhere, or hold
+    Space and drag. Two touches pinch-zoom and pan together. A module's own
+    header still moves the module: only a press that lands on bare canvas pans.
+  */
+  const touches = new Map()
+  let panning = null
+  let pinch = null
+  let spaceDown = false
+  const bare = (t) =>
+    t.closest('[data-mod], .bcpostit, .bcpop, button, a, input, textarea, select, label') === null
+  const startPan = (e) => {
+    panning = { id: e.pointerId, sx: e.clientX, sy: e.clientY, from: view }
+    board.setPointerCapture?.(e.pointerId)
+    board.classList.add('bcpanes--panning')
+  }
+  board.addEventListener('pointerdown', (e) => {
+    if (stacked()) return
+    if (e.pointerType === 'touch') {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touches.size === 2) {
+        const [a, b] = [...touches.values()]
+        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }
+        panning = null
+        e.preventDefault()
+        return
+      }
+    }
+    const wanted = e.button === 1 || (e.button === 0 && (bare(e.target) || spaceDown))
+    if (!wanted || panning !== null) return
+    e.preventDefault()
+    startPan(e)
+  })
+  board.addEventListener('pointermove', (e) => {
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pinch !== null && touches.size >= 2) {
+      const [a, b] = [...touches.values()]
+      const d = Math.hypot(a.x - b.x, a.y - b.y)
+      const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+      const r = board.getBoundingClientRect()
+      let v = grid.zoomAt(view, d / pinch.d, m.x - r.left, m.y - r.top)
+      v = grid.panBy(v, m.x - pinch.mx, m.y - pinch.my)
+      pinch = { d, mx: m.x, my: m.y }
+      setView(v)
+      e.preventDefault()
+      return
+    }
+    if (panning === null || e.pointerId !== panning.id) return
+    view = { ...panning.from, x: panning.from.x + (e.clientX - panning.sx), y: panning.from.y + (e.clientY - panning.sy) }
+    paintView()
+  })
+  const endPointer = (e) => {
+    touches.delete(e.pointerId)
+    if (touches.size < 2) pinch = null
+    if (panning !== null && e.pointerId === panning.id) {
+      panning = null
+      board.classList.remove('bcpanes--panning')
+      commitView()
+    }
+  }
+  board.addEventListener('pointerup', endPointer)
+  board.addEventListener('pointercancel', endPointer)
+  const spaceKey = (e) => {
+    if (e.code !== 'Space') return
+    const t = e.target
+    if (t instanceof Element && t.closest('input, textarea, select, [contenteditable], button, a')) return
+    spaceDown = e.type === 'keydown'
+    board.classList.toggle('bcpanes--grab', spaceDown)
+  }
+  document.addEventListener('keydown', spaceKey)
+  document.addEventListener('keyup', spaceKey)
 
   /* -------------------------------------------------------------- the dock */
 
@@ -421,7 +544,7 @@ export const wireStage = (root, ctx) => {
   })
   dock.querySelector('[data-bc-viewreset]')?.addEventListener('click', () => {
     grid.reset(slug)
-    zoomLive = 1
+    view = grid.viewOf(slug)
     /* A module that had been taken off comes back with the default, so the page needs drawing again. */
     if (grid.layout(slug).length !== stageEl.querySelectorAll('[data-mod]').length) {
       ctx.render()
@@ -429,8 +552,6 @@ export const wireStage = (root, ctx) => {
     }
     glide()
     fit()
-    const val = dock.querySelector('.bczoomval')
-    if (val !== null) val.textContent = '100%'
   })
 
   /* ------------------------------------------------------------ popovers */
@@ -460,6 +581,8 @@ export const wireStage = (root, ctx) => {
     if (board.isConnected) return
     document.removeEventListener('pointerdown', outside, true)
     document.removeEventListener('keydown', onKey)
+    document.removeEventListener('keydown', spaceKey)
+    document.removeEventListener('keyup', spaceKey)
     document.removeEventListener('pointerdown', gone, true)
   }
   document.addEventListener('pointerdown', gone, true)
@@ -581,7 +704,7 @@ export const wireStage = (root, ctx) => {
       b.addEventListener('click', () => {
         glide()
         grid.applyPreset(slug, b.dataset.preset)
-        zoomLive = grid.zoomOf(slug)
+        view = grid.viewOf(slug)
         ctx.render()
       })
     }
@@ -589,7 +712,7 @@ export const wireStage = (root, ctx) => {
       b.addEventListener('click', () => {
         glide()
         grid.loadLayout(slug, b.dataset.load)
-        zoomLive = grid.zoomOf(slug)
+        view = grid.viewOf(slug)
         ctx.render()
       })
     }

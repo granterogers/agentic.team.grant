@@ -43,13 +43,12 @@ import { wireStage } from './stage.js'
 import * as contacts from './contacts.js'
 import * as todos from './todos.js'
 import * as docorder from './docorder.js'
-import * as jump from './jump.js'
+import * as menu from './menu.js'
 import * as account from './account.js'
 
 let ctx = null
 export const mount = (c) => {
   ctx = c
-  c.jumpRefresh = jump.refresh
   /*
     ONE key listener for the whole experience, on the document, attached once.
 
@@ -59,9 +58,19 @@ export const mount = (c) => {
     The document survives every render, and the handler asks the experience
     flag rather than assuming.
   */
+  document.addEventListener('pointerdown', (e) => {
+    if (ctx.state.experience !== 'basecamp' || !menu.isOpen()) return
+    if (e.target instanceof Element && e.target.closest('.bcmenupanel, [data-bc-menu], [data-bc-menu-open]')) return
+    menu.setOpen(false)
+    c.render()
+  })
   document.addEventListener('keydown', (e) => {
     if (ctx.state.experience !== 'basecamp') return
-    jump.onKey(e)
+    if (e.key === 'Escape' && menu.isOpen()) {
+      menu.setOpen(false)
+      c.render()
+      document.querySelector('[data-bc-menu]')?.focus()
+    }
   })
 }
 
@@ -715,9 +724,22 @@ export const wire = (root) => {
     })
   }
 
-  for (const b of root.querySelectorAll('[data-bc-jump]')) {
+  /* The project menu (hamburger). Its state is on bc/menu.js so a redraw does not lose it. */
+  for (const b of root.querySelectorAll('[data-bc-menu], [data-bc-menu-open]')) {
     b.addEventListener('click', () => {
-      jump.show(b)
+      const wasOpen = menu.isOpen()
+      menu.setOpen(b.hasAttribute('data-bc-menu-open') ? true : !wasOpen)
+      if (b.hasAttribute('data-bc-menu-open') && !canWrite()) menu.setMaking(false)
+      ctx.render()
+      if (menu.isOpen()) root.ownerDocument.querySelector('.bcmenuitem')?.focus()
+      else root.ownerDocument.querySelector('[data-bc-menu]')?.focus()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-menu-new]')) {
+    b.addEventListener('click', () => {
+      menu.setMaking(true)
+      ctx.render()
+      root.ownerDocument.querySelector('.bcmenupanel input[name=name]')?.focus()
     })
   }
 
