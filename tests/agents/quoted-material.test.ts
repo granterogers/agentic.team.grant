@@ -83,13 +83,17 @@ describe('what the readers that act now see', () => {
     expect(old).not.toBeNull()
     expect(old?.kept).toMatch(/create a task called PAY NOW/)
     // And a real change of mind of his own, outside any paste, still works.
-    expect(readRetraction('Add a task to call Kevin. No actually, remind me to call Emma instead.')).not.toBeNull()
+    expect(
+      readRetraction('Add a task to call Kevin. No actually, remind me to call Emma instead.'),
+    ).not.toBeNull()
   })
 
   it('WIRED, not merely named: the handler reads the retraction from the stripped text and still gives the model the whole message', () => {
     const source = fs.readFileSync('src/handlers/instruction.ts', 'utf8')
     expect(source).toMatch(/retractionOf\(asHumanWords\(withoutPaste\)\)/)
-    expect(source).toMatch(/if \(withoutPaste !== cleanedWords && !isBranch\)\s*\n\s*instruction = `\$\{instruction\}/)
+    expect(source).toMatch(
+      /if \(withoutPaste !== cleanedWords && !isBranch\)\s*\n\s*instruction = `\$\{instruction\}/,
+    )
     expect(source).not.toMatch(/retractionOf\(cleanedWords\)/)
   })
 
