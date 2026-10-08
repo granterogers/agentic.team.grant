@@ -1,5 +1,9 @@
 # Vercel deploy efficiency: what was built, how each guarantee is proven, and how to roll it out
 
+> **Superseded status (8 October 2026):** the "NOT DEPLOYED" and "EXPERIMENTAL" markers below describe 5 October. The `excludeFiles`
+> change, the fingerprint and the page-deploy guards were deployed to production on 7 October and the old deployments were cleaned up
+> afterwards; see `efficiency-cycle-closeout-2026-10-08.md`. The text below is otherwise left as written.
+
 Branch `claude/eff-vercel-deploy`, 5 October 2026. **Everything here is local: nothing was deployed, no Vercel or Supabase call
 was made, no deployment was deleted, no secret was read.** Every guarantee is proven by unit tests or local scripts. The
 only figures that come from Vercel are the preview-experiment ones in

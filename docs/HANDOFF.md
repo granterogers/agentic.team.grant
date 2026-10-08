@@ -1,3 +1,12 @@
+> ## 2026-10-08 - EFFICIENCY / DEV CYCLE CLOSED AND FROZEN (branch `claude/efficiency-deep-optimization`, NOT merged to `main`)
+>
+> **Operational freeze.** The Supabase and Vercel efficiency cycle closed on 2026-10-08. **No further efficiency changes are authorised**: no
+> more Supabase efficiency migrations (only 1023 and 1027 were applied), no more Vercel retention deletions (154 done, 2.336 GiB of 10 GiB
+> used), no further optimisation. Migrations 1024, 1025, 1026, 1028, 1029, 1030 and 1031 and the other remaining candidates are **deferred, not
+> rejected**; their files exist on the branch only, so **do not merge the whole branch** (a later `npm run migrate` would apply them). Fresh
+> revalidation of production and of `origin/main` is required before any future work. Everything, the resume point and the audit artifacts:
+> `docs/performance/efficiency-cycle-closeout-2026-10-08.md`.
+>
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
 >
 > The Team HQ UX work was already in `main`; the audit found the old UX branch held one documentation commit and nothing else, so this branch is a

@@ -1,0 +1,1166 @@
+{
+  "candidates": [
+    {
+      "bundles": 2,
+      "bytes": 42975339,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1790160871372,
+      "createdUtc": "2026-09-23T10:54:31.372Z",
+      "eligibleBecause": "superseded production build of 2026-09-23, 15 days old: passed all 14 safety checks",
+      "id": "dpl_6eGrPFm5q6Tu4gLcYE2JCMqmBM7f",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 42975339,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1790160753641,
+      "createdUtc": "2026-09-23T10:52:33.641Z",
+      "eligibleBecause": "superseded production build of 2026-09-23, 15 days old: passed all 14 safety checks",
+      "id": "dpl_G24NiM3Dt6GLPYXajVMRb1RPbtfM",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 1,
+      "bytes": 16990546,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788892781085,
+      "createdUtc": "2026-09-08T18:39:41.085Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 29 days old: passed all 14 safety checks",
+      "id": "dpl_14HR2WnRYV1Z4fQJUjvyJSqYTfJj",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788889876504,
+      "createdUtc": "2026-09-08T17:51:16.504Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 29 days old: passed all 14 safety checks",
+      "id": "dpl_AANviSeAVwMne78q9tiaPL7eM8Gs",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788886208159,
+      "createdUtc": "2026-09-08T16:50:08.159Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 29 days old: passed all 14 safety checks",
+      "id": "dpl_D768YtEMmB2DQ49cm2roTHq4tDZY",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788877183389,
+      "createdUtc": "2026-09-08T14:19:43.389Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 29 days old: passed all 14 safety checks",
+      "id": "dpl_2C96oPdL3BrDJDcmQKmhKmePoH9G",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788849732612,
+      "createdUtc": "2026-09-08T06:42:12.612Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 30 days old: passed all 14 safety checks",
+      "id": "dpl_6xCETnx2jPUu1igxrMXvjPiMAiSQ",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788849219018,
+      "createdUtc": "2026-09-08T06:33:39.018Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 30 days old: passed all 14 safety checks",
+      "id": "dpl_GM2EoePGbWq4hAcfz6pP1MQ58Abu",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788848818764,
+      "createdUtc": "2026-09-08T06:26:58.764Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 30 days old: passed all 14 safety checks",
+      "id": "dpl_BzJ9wCoSZYxJ4v4xxypV3UNCrbDE",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788846469794,
+      "createdUtc": "2026-09-08T05:47:49.794Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 30 days old: passed all 14 safety checks",
+      "id": "dpl_BfB9rnSzUs8XF3x5HVVBsyAmsmUk",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788846388291,
+      "createdUtc": "2026-09-08T05:46:28.291Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 30 days old: passed all 14 safety checks",
+      "id": "dpl_7mzX1cFzzvcjishHpLRShm7rpbcS",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "checks": [
+        "not-current-production",
+        "no-alias",
+        "not-rollback-target",
+        "not-validation-preview",
+        "not-referenced-in-tracked-files",
+        "not-named-by-reviewer",
+        "older-than-7-days",
+        "not-newest-15-ready-production",
+        "not-daily-keeper",
+        "not-vercel-retention-protected",
+        "settled-READY",
+        "production-build-not-preview",
+        "metadata-is-only-vercels-own",
+        "size-known"
+      ],
+      "created": 1788845958254,
+      "createdUtc": "2026-09-08T05:39:18.254Z",
+      "eligibleBecause": "superseded production build of 2026-09-08, 30 days old: passed all 14 safety checks",
+      "id": "dpl_HoTxZuS7AdTmkszFgLT171DwzXzo",
+      "state": "READY",
+      "target": "production"
+    }
+  ],
+  "extraKeep": [],
+  "generatedAt": "2026-10-08T12:07:24.461Z",
+  "inventory": [
+    {
+      "aliases": [],
+      "created": 1788892781085,
+      "id": "dpl_14HR2WnRYV1Z4fQJUjvyJSqYTfJj",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "102b781bcf0fd41e34abb89fef984a9c64f9c49b0bc528a942fedf33c742cce1",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788877183389,
+      "id": "dpl_2C96oPdL3BrDJDcmQKmhKmePoH9G",
+      "metaKeys": [],
+      "metaSha": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790959586227,
+      "id": "dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791218178564,
+      "id": "dpl_2VgoidAKu95AcMjLieCocWr6bWxv",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791209487517,
+      "id": "dpl_2z4wvtNQSKrd2EAC3zrvRPzD7mbm",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791223080699,
+      "id": "dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791209307198,
+      "id": "dpl_3E7t94dYy15jvENez5BK5ghphtpU",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789387453663,
+      "id": "dpl_3Q1zEch382TFZeQntWp9yXChmWfm",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789237213801,
+      "id": "dpl_3Sp1XKc2GQczkAfUmwVKhysudASa",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791210102098,
+      "id": "dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791119140922,
+      "id": "dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791022281797,
+      "id": "dpl_467fqgXvKmFPvmawUEAnDawwtTFn",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791034424901,
+      "id": "dpl_4Eh6qiiX4WCiskzWnG6hpzLEQJUN",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791032824831,
+      "id": "dpl_4NC3yy3WuiDx8NaF6vs5BFKgTiGP",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790940573270,
+      "id": "dpl_4h72j3jmK4DQh18JXmiJPeSqVyhZ",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791011453352,
+      "id": "dpl_4rCCYcZaE455QaiHopaVxc1iADeY",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791216276867,
+      "id": "dpl_4tQhGkzjmUjE7YFXS2WFAnUDDTqk",
+      "metaKeys": [
+        "audit",
+        "experiment",
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "0ed80587c0994fe4460d139bbd710ab67a70195141d4a9caf5e219d40b5800a2",
+      "state": "READY",
+      "target": "preview"
+    },
+    {
+      "aliases": [],
+      "created": 1789597043132,
+      "id": "dpl_5Kys9sDinzM61bdaF8y1zJQaqZo8",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791111263317,
+      "id": "dpl_5PTmaiPmmrJjxWfteNsUoPXQce8K",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789032005905,
+      "id": "dpl_5cRZpfkaMKdpxCiocAXJsznA8Xxr",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790160871372,
+      "id": "dpl_6eGrPFm5q6Tu4gLcYE2JCMqmBM7f",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788849732612,
+      "id": "dpl_6xCETnx2jPUu1igxrMXvjPiMAiSQ",
+      "metaKeys": [],
+      "metaSha": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790843328455,
+      "id": "dpl_7BgB8pY8ZHqBhWsycky3Mz8ns9z1",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791216177638,
+      "id": "dpl_7EuiLzMixkqzRWncL8VYv8C1YR4h",
+      "metaKeys": [
+        "audit",
+        "experiment"
+      ],
+      "metaSha": "56ceeb71d3cb52bf3a3e1e465a8bef5ea848809b4bf052088456c422065eafe6",
+      "state": "ERROR",
+      "target": "preview"
+    },
+    {
+      "aliases": [],
+      "created": 1790271949147,
+      "id": "dpl_7FBUNFQqVBVVAkSdwEPWQCruActw",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789506465913,
+      "id": "dpl_7JPdi3ukLJNqETJhqceaTfwJP9GS",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788846388291,
+      "id": "dpl_7mzX1cFzzvcjishHpLRShm7rpbcS",
+      "metaKeys": [],
+      "metaSha": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791023256840,
+      "id": "dpl_82ir1MK4Mg9fcdDuFSdJnDeA5Dqn",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791200648407,
+      "id": "dpl_8QwvvES1oRridjeokGzu2MMGdEYm",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790844539074,
+      "id": "dpl_8dwyECYKJcHKwpP1bJeeWZ6EvVR5",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790764501358,
+      "id": "dpl_AALn7UrcFoMq3yJhZUBnNYCMe5ny",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788889876504,
+      "id": "dpl_AANviSeAVwMne78q9tiaPL7eM8Gs",
+      "metaKeys": [],
+      "metaSha": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791216275034,
+      "id": "dpl_AF7zeon6NzGyhGBi2aFXu7rPojfk",
+      "metaKeys": [
+        "audit",
+        "experiment",
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "41bfb28caa0b7bbfbd9be69c4bcb860f2d2c7622756e917534f7da402669114b",
+      "state": "READY",
+      "target": "preview"
+    },
+    {
+      "aliases": [],
+      "created": 1790691737629,
+      "id": "dpl_AnQWPdpGsF4vqvr1jL5ZFuGJ4rqj",
+      "metaKeys": [
+        "commit",
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "175c5875d885134b4166d5fbc6f531cbc0c992f80532a2bc873894d9047fdd2c",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790754782890,
+      "id": "dpl_B4dsLwpGdCHqqXA1ehxombNj7NxW",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788978817046,
+      "id": "dpl_BR38zcKcgHaPmGLaCmBJdFuBmyXY",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791313961228,
+      "id": "dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx",
+      "metaKeys": [
+        "deployedBy",
+        "gitCommitSha",
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "e6cb4524906e7523e23fed9fde829f382cf380d921ed5c052f3528cc6a026d8b",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789860749895,
+      "id": "dpl_BbtJ685NbnsAWnu8RDef5mHo2vEv",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788846469794,
+      "id": "dpl_BfB9rnSzUs8XF3x5HVVBsyAmsmUk",
+      "metaKeys": [],
+      "metaSha": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788848818764,
+      "id": "dpl_BzJ9wCoSZYxJ4v4xxypV3UNCrbDE",
+      "metaKeys": [],
+      "metaSha": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789336566673,
+      "id": "dpl_CM7TTk8DHnYCn51C5LNtL3sUuhPK",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791389460364,
+      "id": "dpl_CdoJAfxD4ybdVgxEykYSNyrNBMCy",
+      "metaKeys": [
+        "deployedBy",
+        "gitCommitSha",
+        "lambdaRuntimeStats",
+        "pageFingerprint"
+      ],
+      "metaSha": "2fc403a7da2ce3a094015274c091a4ed33b30d547e1736635aefef98b0a15fd7",
+      "state": "READY",
+      "target": "preview"
+    },
+    {
+      "aliases": [],
+      "created": 1790700955829,
+      "id": "dpl_CojPMBWNXjWfQ3ogNAmXx6ZyAB9e",
+      "metaKeys": [
+        "commit",
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "fcfb20a05a6c2f19c427761d7d539320c236f33254b0aee75e22ae1554a53b4a",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788886208159,
+      "id": "dpl_D768YtEMmB2DQ49cm2roTHq4tDZY",
+      "metaKeys": [],
+      "metaSha": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790698547667,
+      "id": "dpl_DKNfivsubn2WGokCY9sbU7WhRCft",
+      "metaKeys": [
+        "commit",
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "ba0c58e6c266f9143cba3dc884106ddeae4fb265548d4f0d03e749e852f5011a",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791112300405,
+      "id": "dpl_DPj4Nmnu5J3xy7afcNsUNccnCd3f",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789980242515,
+      "id": "dpl_DQoJyMJQr6NzLVuW28Y2FrPNrKBn",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [
+        "ai-team-hq-agentic-team-grant.vercel.app",
+        "ai-team-hq.vercel.app"
+      ],
+      "created": 1791398985474,
+      "id": "dpl_Dj7erfTXZYqDJhEgxQ9eTBzsnc8H",
+      "metaKeys": [
+        "deployedBy",
+        "gitCommitSha",
+        "lambdaRuntimeStats",
+        "pageFingerprint"
+      ],
+      "metaSha": "05cee6085e40f9037db114e07e90604e790c388ab296fab5acba510b92b1760b",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791208628529,
+      "id": "dpl_DrHpy8xhi4wkUEZ56hHL2Cy8Vh9L",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791017735352,
+      "id": "dpl_DttmFwAZBt1KRwcGx8qcGkxoeSTr",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790272199495,
+      "id": "dpl_DwDy6otbfEEkxncUhvoPPtdHzXnr",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791011067921,
+      "id": "dpl_E3kwyjeRHR96qCAkbJVKB45PQXwm",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789687111639,
+      "id": "dpl_E3ox2JaiR6R9SumJjosWm8BnNQBr",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791222917660,
+      "id": "dpl_E4uGawb9DT9WtyMvTK4h4YqU6SBq",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789170650810,
+      "id": "dpl_ELs19DcLLrdKtZ5ZFEBW3t9UNdmu",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790161358737,
+      "id": "dpl_EafqeJb7PHg7BriEpBpDMkYyf5Pp",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789772157631,
+      "id": "dpl_F9Z99m7RMsbkLy5pGA9Vw6W3PcWy",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791216175397,
+      "id": "dpl_FBQrt9CdDrZEZ8CmQBZuGkJBpqAA",
+      "metaKeys": [
+        "audit",
+        "experiment",
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "82b8f71dd0a93fcc76dcf906593716c2830c7d99ace25642340b4c81a4ca21b7",
+      "state": "READY",
+      "target": "preview"
+    },
+    {
+      "aliases": [],
+      "created": 1791103375097,
+      "id": "dpl_FQPrwtH8M4btdj5JZ6TuD8ubAH3a",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791216179668,
+      "id": "dpl_G1Eqbqw1rESZ9X4bkYi96ZvZ2G6R",
+      "metaKeys": [
+        "audit",
+        "experiment"
+      ],
+      "metaSha": "73a1a50d5995ea96a75df05474b019e7fdb6a0aacbd81d66403911bfc8ca9989",
+      "state": "ERROR",
+      "target": "preview"
+    },
+    {
+      "aliases": [],
+      "created": 1790160753641,
+      "id": "dpl_G24NiM3Dt6GLPYXajVMRb1RPbtfM",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788849219018,
+      "id": "dpl_GM2EoePGbWq4hAcfz6pP1MQ58Abu",
+      "metaKeys": [],
+      "metaSha": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790609817780,
+      "id": "dpl_GwmxkoNNac7MmfKia4VWVmxszdFD",
+      "metaKeys": [
+        "candidate",
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "8abed6256e7d6bd6a8dab3dd5e3f4dd74a9a249c94faad4a8c8038c7b58fb867",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1790661448096,
+      "id": "dpl_H8GvmjbPjqhhNdeP1RWSYk3rd2fq",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788905792252,
+      "id": "dpl_H8KyoWvKJ6UwTHB4uF37hC1oqRLo",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791013480955,
+      "id": "dpl_HAPFk8DoTrBKtrRTgQnL6TsbsB7k",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1788845958254,
+      "id": "dpl_HoTxZuS7AdTmkszFgLT171DwzXzo",
+      "metaKeys": [],
+      "metaSha": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1791103139002,
+      "id": "dpl_J7BKe23cng4iu9Xt9r1AiVvXKYk1",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "aliases": [],
+      "created": 1789886541282,
+      "id": "dpl_c5SSL1B91gBAi5afVCf2MVGv5yts",
+      "metaKeys": [
+        "lambdaRuntimeStats"
+      ],
+      "metaSha": "4fe5eeca032b2efe115e927caddc3a4eaccc5d2e54645ed3cff62df11884f5d2",
+      "state": "READY",
+      "target": "production"
+    }
+  ],
+  "inventoryDigest": "c0c90a4dec76cc5ed4b2de2a0c724f8ef7a336b438e3284559e2b21244b57096",
+  "keepSha256": "e678b490b83b0744a8b907e68c0da7bc30e0e3eb0156c57a3685dbdc7886b5d1",
+  "production": {
+    "aliases": [
+      {
+        "alias": "ai-team-hq-agentic-team-grant.vercel.app",
+        "deploymentId": "dpl_Dj7erfTXZYqDJhEgxQ9eTBzsnc8H"
+      },
+      {
+        "alias": "ai-team-hq.vercel.app",
+        "deploymentId": "dpl_Dj7erfTXZYqDJhEgxQ9eTBzsnc8H"
+      }
+    ],
+    "id": "dpl_Dj7erfTXZYqDJhEgxQ9eTBzsnc8H"
+  },
+  "projectId": "prj_DkYP3vx77nCsQS36RSEIEbK2mUtt",
+  "projectName": "ai-team-hq",
+  "referencedIds": [
+    "dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z",
+    "dpl_2VgoidAKu95AcMjLieCocWr6bWxv",
+    "dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x",
+    "dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3",
+    "dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M",
+    "dpl_4h72j3jmK4DQh18JXmiJPeSqVyhZ",
+    "dpl_4rCCYcZaE455QaiHopaVxc1iADeY",
+    "dpl_4tQhGkzjmUjE7YFXS2WFAnUDDTqk",
+    "dpl_5PTmaiPmmrJjxWfteNsUoPXQce8K",
+    "dpl_7BgB8pY8ZHqBhWsycky3Mz8ns9z1",
+    "dpl_7EuiLzMixkqzRWncL8VYv8C1YR4h",
+    "dpl_7FBUNFQqVBVVAkSdwEPWQCruActw",
+    "dpl_8QwvvES1oRridjeokGzu2MMGdEYm",
+    "dpl_8dwyECYKJcHKwpP1bJeeWZ6EvVR5",
+    "dpl_AALn7UrcFoMq3yJhZUBnNYCMe5ny",
+    "dpl_AF7zeon6NzGyhGBi2aFXu7rPojfk",
+    "dpl_AnQWPdpGsF4vqvr1jL5ZFuGJ4rqj",
+    "dpl_B4dsLwpGdCHqqXA1ehxombNj7NxW",
+    "dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx",
+    "dpl_CojPMBWNXjWfQ3ogNAmXx6ZyAB9e",
+    "dpl_DKNfivsubn2WGokCY9sbU7WhRCft",
+    "dpl_DPj4Nmnu5J3xy7afcNsUNccnCd3f",
+    "dpl_DwDy6otbfEEkxncUhvoPPtdHzXnr",
+    "dpl_E3kwyjeRHR96qCAkbJVKB45PQXwm",
+    "dpl_E4uGawb9DT9WtyMvTK4h4YqU6SBq",
+    "dpl_EafqeJb7PHg7BriEpBpDMkYyf5Pp",
+    "dpl_FBQrt9CdDrZEZ8CmQBZuGkJBpqAA",
+    "dpl_FQPrwtH8M4btdj5JZ6TuD8ubAH3a",
+    "dpl_G1Eqbqw1rESZ9X4bkYi96ZvZ2G6R",
+    "dpl_GUUYN8dUGpSZJmfRbkD7yG8TPyws",
+    "dpl_GwmxkoNNac7MmfKia4VWVmxszdFD",
+    "dpl_H8GvmjbPjqhhNdeP1RWSYk3rd2fq",
+    "dpl_HAPFk8DoTrBKtrRTgQnL6TsbsB7k",
+    "dpl_NAMEDINATESTFILE000001",
+    "dpl_NAMEDINPERFDOCUMENT0001",
+    "dpl_ONLYINTHEINVENTORY01",
+    "dpl_REFERENCEDINDOCS0001",
+    "dpl_fYx3iPWCKsFkNT6H2JSVhhJov2c1"
+  ],
+  "rollbackId": "dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx",
+  "rule": {
+    "dailyKeeperDays": "every UTC day in history",
+    "keepNewestReadyProduction": 15,
+    "protectedWindowDays": 7
+  },
+  "schema": "vercel-retention/1",
+  "teamId": "team_ZY2bNbs5CeXioIl7AWeb5tw5",
+  "totals": {
+    "delete": {
+      "bytes": 102941224,
+      "deployments": 12
+    },
+    "inventory": {
+      "bytes": 2508383388,
+      "deployments": 69
+    },
+    "keep": {
+      "bytes": 2405442164,
+      "deployments": 57
+    }
+  },
+  "validationIds": [
+    "dpl_CdoJAfxD4ybdVgxEykYSNyrNBMCy"
+  ]
+}

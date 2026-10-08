@@ -1,0 +1,780 @@
+{
+  "generatedAt": "2026-10-08T12:07:24.461Z",
+  "keeps": [
+    {
+      "bundles": 2,
+      "bytes": 35974773,
+      "created": 1791398985474,
+      "createdUtc": "2026-10-07T18:49:45.474Z",
+      "id": "dpl_Dj7erfTXZYqDJhEgxQ9eTBzsnc8H",
+      "reasons": [
+        "current production deployment",
+        "behind a live alias",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments",
+        "the last ready production deployment of its UTC day",
+        "protected by Vercel's own retention exceptions",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 35974709,
+      "created": 1791389460364,
+      "createdUtc": "2026-10-07T16:11:00.364Z",
+      "id": "dpl_CdoJAfxD4ybdVgxEykYSNyrNBMCy",
+      "reasons": [
+        "a validation preview",
+        "created in the last 7 days",
+        "protected by Vercel's own retention exceptions",
+        "a preview (previews are kept in this proposal)",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "preview"
+    },
+    {
+      "bundles": 2,
+      "bytes": 45077481,
+      "created": 1791313961228,
+      "createdUtc": "2026-10-06T19:12:41.228Z",
+      "id": "dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx",
+      "reasons": [
+        "the previous known-good rollback deployment",
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments",
+        "the last ready production deployment of its UTC day",
+        "protected by Vercel's own retention exceptions",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44754985,
+      "created": 1791223080699,
+      "createdUtc": "2026-10-05T17:58:00.699Z",
+      "id": "dpl_34UgA3XsdS5suXYfs8ehBREu7Z3x",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments",
+        "the last ready production deployment of its UTC day",
+        "protected by Vercel's own retention exceptions"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44754609,
+      "created": 1791222917660,
+      "createdUtc": "2026-10-05T17:55:17.660Z",
+      "id": "dpl_E4uGawb9DT9WtyMvTK4h4YqU6SBq",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44754137,
+      "created": 1791218178564,
+      "createdUtc": "2026-10-05T16:36:18.564Z",
+      "id": "dpl_2VgoidAKu95AcMjLieCocWr6bWxv",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 3,
+      "bytes": 53920845,
+      "created": 1791216276867,
+      "createdUtc": "2026-10-05T16:04:36.867Z",
+      "id": "dpl_4tQhGkzjmUjE7YFXS2WFAnUDDTqk",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "a preview (previews are kept in this proposal)",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "preview"
+    },
+    {
+      "bundles": 3,
+      "bytes": 53971164,
+      "created": 1791216275034,
+      "createdUtc": "2026-10-05T16:04:35.034Z",
+      "id": "dpl_AF7zeon6NzGyhGBi2aFXu7rPojfk",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "a preview (previews are kept in this proposal)",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "preview"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "created": 1791216179668,
+      "createdUtc": "2026-10-05T16:02:59.668Z",
+      "id": "dpl_G1Eqbqw1rESZ9X4bkYi96ZvZ2G6R",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "not a settled READY deployment (building, queued, errored or unknown: kept as possible evidence)",
+        "a preview (previews are kept in this proposal)",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "ERROR",
+      "target": "preview"
+    },
+    {
+      "bundles": 0,
+      "bytes": 0,
+      "created": 1791216177638,
+      "createdUtc": "2026-10-05T16:02:57.638Z",
+      "id": "dpl_7EuiLzMixkqzRWncL8VYv8C1YR4h",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "not a settled READY deployment (building, queued, errored or unknown: kept as possible evidence)",
+        "a preview (previews are kept in this proposal)",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "ERROR",
+      "target": "preview"
+    },
+    {
+      "bundles": 3,
+      "bytes": 67598415,
+      "created": 1791216175397,
+      "createdUtc": "2026-10-05T16:02:55.397Z",
+      "id": "dpl_FBQrt9CdDrZEZ8CmQBZuGkJBpqAA",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "a preview (previews are kept in this proposal)",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "preview"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44753017,
+      "created": 1791210102098,
+      "createdUtc": "2026-10-05T14:21:42.098Z",
+      "id": "dpl_3yZSXFhyNXjbhee7V86sUfA8Yui3",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44753013,
+      "created": 1791209487517,
+      "createdUtc": "2026-10-05T14:11:27.517Z",
+      "id": "dpl_2z4wvtNQSKrd2EAC3zrvRPzD7mbm",
+      "reasons": [
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44752825,
+      "created": 1791209307198,
+      "createdUtc": "2026-10-05T14:08:27.198Z",
+      "id": "dpl_3E7t94dYy15jvENez5BK5ghphtpU",
+      "reasons": [
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44752181,
+      "created": 1791208628529,
+      "createdUtc": "2026-10-05T13:57:08.529Z",
+      "id": "dpl_DrHpy8xhi4wkUEZ56hHL2Cy8Vh9L",
+      "reasons": [
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44739449,
+      "created": 1791200648407,
+      "createdUtc": "2026-10-05T11:44:08.407Z",
+      "id": "dpl_8QwvvES1oRridjeokGzu2MMGdEYm",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44720121,
+      "created": 1791119140922,
+      "createdUtc": "2026-10-04T13:05:40.922Z",
+      "id": "dpl_41Ts4Gd5PUAcaazN93dxofCvbK6M",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments",
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44713085,
+      "created": 1791112300405,
+      "createdUtc": "2026-10-04T11:11:40.405Z",
+      "id": "dpl_DPj4Nmnu5J3xy7afcNsUNccnCd3f",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44710013,
+      "created": 1791111263317,
+      "createdUtc": "2026-10-04T10:54:23.317Z",
+      "id": "dpl_5PTmaiPmmrJjxWfteNsUoPXQce8K",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44708005,
+      "created": 1791103375097,
+      "createdUtc": "2026-10-04T08:42:55.097Z",
+      "id": "dpl_FQPrwtH8M4btdj5JZ6TuD8ubAH3a",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44706325,
+      "created": 1791103139002,
+      "createdUtc": "2026-10-04T08:38:59.002Z",
+      "id": "dpl_J7BKe23cng4iu9Xt9r1AiVvXKYk1",
+      "reasons": [
+        "created in the last 7 days",
+        "one of the newest 15 ready production deployments"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44696657,
+      "created": 1791034424901,
+      "createdUtc": "2026-10-03T13:33:44.901Z",
+      "id": "dpl_4Eh6qiiX4WCiskzWnG6hpzLEQJUN",
+      "reasons": [
+        "created in the last 7 days",
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44686653,
+      "created": 1791032824831,
+      "createdUtc": "2026-10-03T13:07:04.831Z",
+      "id": "dpl_4NC3yy3WuiDx8NaF6vs5BFKgTiGP",
+      "reasons": [
+        "created in the last 7 days"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44682497,
+      "created": 1791023256840,
+      "createdUtc": "2026-10-03T10:27:36.840Z",
+      "id": "dpl_82ir1MK4Mg9fcdDuFSdJnDeA5Dqn",
+      "reasons": [
+        "created in the last 7 days"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44682497,
+      "created": 1791022281797,
+      "createdUtc": "2026-10-03T10:11:21.797Z",
+      "id": "dpl_467fqgXvKmFPvmawUEAnDawwtTFn",
+      "reasons": [
+        "created in the last 7 days"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44679521,
+      "created": 1791017735352,
+      "createdUtc": "2026-10-03T08:55:35.352Z",
+      "id": "dpl_DttmFwAZBt1KRwcGx8qcGkxoeSTr",
+      "reasons": [
+        "created in the last 7 days"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44645301,
+      "created": 1791013480955,
+      "createdUtc": "2026-10-03T07:44:40.955Z",
+      "id": "dpl_HAPFk8DoTrBKtrRTgQnL6TsbsB7k",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44643121,
+      "created": 1791011453352,
+      "createdUtc": "2026-10-03T07:10:53.352Z",
+      "id": "dpl_4rCCYcZaE455QaiHopaVxc1iADeY",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44641929,
+      "created": 1791011067921,
+      "createdUtc": "2026-10-03T07:04:27.921Z",
+      "id": "dpl_E3kwyjeRHR96qCAkbJVKB45PQXwm",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44615001,
+      "created": 1790959586227,
+      "createdUtc": "2026-10-02T16:46:26.227Z",
+      "id": "dpl_2PMxKBBcbv6UMZ4fU1YUnstbNs9z",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days",
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44604705,
+      "created": 1790940573270,
+      "createdUtc": "2026-10-02T11:29:33.270Z",
+      "id": "dpl_4h72j3jmK4DQh18JXmiJPeSqVyhZ",
+      "reasons": [
+        "named in a tracked repository file",
+        "created in the last 7 days"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44324117,
+      "created": 1790844539074,
+      "createdUtc": "2026-10-01T08:48:59.074Z",
+      "id": "dpl_8dwyECYKJcHKwpP1bJeeWZ6EvVR5",
+      "reasons": [
+        "named in a tracked repository file",
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44322645,
+      "created": 1790843328455,
+      "createdUtc": "2026-10-01T08:28:48.455Z",
+      "id": "dpl_7BgB8pY8ZHqBhWsycky3Mz8ns9z1",
+      "reasons": [
+        "named in a tracked repository file"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44321633,
+      "created": 1790764501358,
+      "createdUtc": "2026-09-30T10:35:01.358Z",
+      "id": "dpl_AALn7UrcFoMq3yJhZUBnNYCMe5ny",
+      "reasons": [
+        "named in a tracked repository file",
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44320881,
+      "created": 1790754782890,
+      "createdUtc": "2026-09-30T07:53:02.890Z",
+      "id": "dpl_B4dsLwpGdCHqqXA1ehxombNj7NxW",
+      "reasons": [
+        "named in a tracked repository file"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44317721,
+      "created": 1790700955829,
+      "createdUtc": "2026-09-29T16:55:55.829Z",
+      "id": "dpl_CojPMBWNXjWfQ3ogNAmXx6ZyAB9e",
+      "reasons": [
+        "named in a tracked repository file",
+        "the last ready production deployment of its UTC day",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44316313,
+      "created": 1790698547667,
+      "createdUtc": "2026-09-29T16:15:47.667Z",
+      "id": "dpl_DKNfivsubn2WGokCY9sbU7WhRCft",
+      "reasons": [
+        "named in a tracked repository file",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44272957,
+      "created": 1790691737629,
+      "createdUtc": "2026-09-29T14:22:17.629Z",
+      "id": "dpl_AnQWPdpGsF4vqvr1jL5ZFuGJ4rqj",
+      "reasons": [
+        "named in a tracked repository file",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44268385,
+      "created": 1790661448096,
+      "createdUtc": "2026-09-29T05:57:28.096Z",
+      "id": "dpl_H8GvmjbPjqhhNdeP1RWSYk3rd2fq",
+      "reasons": [
+        "named in a tracked repository file"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 44266605,
+      "created": 1790609817780,
+      "createdUtc": "2026-09-28T15:36:57.780Z",
+      "id": "dpl_GwmxkoNNac7MmfKia4VWVmxszdFD",
+      "reasons": [
+        "named in a tracked repository file",
+        "the last ready production deployment of its UTC day",
+        "carries metadata somebody recorded (release, benchmark, provenance or similar)"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 43315123,
+      "created": 1790272199495,
+      "createdUtc": "2026-09-24T17:49:59.495Z",
+      "id": "dpl_DwDy6otbfEEkxncUhvoPPtdHzXnr",
+      "reasons": [
+        "named in a tracked repository file",
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 43259403,
+      "created": 1790271949147,
+      "createdUtc": "2026-09-24T17:45:49.147Z",
+      "id": "dpl_7FBUNFQqVBVVAkSdwEPWQCruActw",
+      "reasons": [
+        "named in a tracked repository file"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 42978591,
+      "created": 1790161358737,
+      "createdUtc": "2026-09-23T11:02:38.737Z",
+      "id": "dpl_EafqeJb7PHg7BriEpBpDMkYyf5Pp",
+      "reasons": [
+        "named in a tracked repository file",
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 42155807,
+      "created": 1789980242515,
+      "createdUtc": "2026-09-21T08:44:02.515Z",
+      "id": "dpl_DQoJyMJQr6NzLVuW28Y2FrPNrKBn",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 42155063,
+      "created": 1789886541282,
+      "createdUtc": "2026-09-20T06:42:21.282Z",
+      "id": "dpl_c5SSL1B91gBAi5afVCf2MVGv5yts",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 42148007,
+      "created": 1789860749895,
+      "createdUtc": "2026-09-19T23:32:29.895Z",
+      "id": "dpl_BbtJ685NbnsAWnu8RDef5mHo2vEv",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 42106803,
+      "created": 1789772157631,
+      "createdUtc": "2026-09-18T22:55:57.631Z",
+      "id": "dpl_F9Z99m7RMsbkLy5pGA9Vw6W3PcWy",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 42024661,
+      "created": 1789687111639,
+      "createdUtc": "2026-09-17T23:18:31.639Z",
+      "id": "dpl_E3ox2JaiR6R9SumJjosWm8BnNQBr",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 41946739,
+      "created": 1789597043132,
+      "createdUtc": "2026-09-16T22:17:23.132Z",
+      "id": "dpl_5Kys9sDinzM61bdaF8y1zJQaqZo8",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 41526105,
+      "created": 1789506465913,
+      "createdUtc": "2026-09-15T21:07:45.913Z",
+      "id": "dpl_7JPdi3ukLJNqETJhqceaTfwJP9GS",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 41447485,
+      "created": 1789387453663,
+      "createdUtc": "2026-09-14T12:04:13.663Z",
+      "id": "dpl_3Q1zEch382TFZeQntWp9yXChmWfm",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 41435461,
+      "created": 1789336566673,
+      "createdUtc": "2026-09-13T21:56:06.673Z",
+      "id": "dpl_CM7TTk8DHnYCn51C5LNtL3sUuhPK",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 38345813,
+      "created": 1789237213801,
+      "createdUtc": "2026-09-12T18:20:13.801Z",
+      "id": "dpl_3Sp1XKc2GQczkAfUmwVKhysudASa",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 38142477,
+      "created": 1789170650810,
+      "createdUtc": "2026-09-11T23:50:50.810Z",
+      "id": "dpl_ELs19DcLLrdKtZ5ZFEBW3t9UNdmu",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 34980553,
+      "created": 1789032005905,
+      "createdUtc": "2026-09-10T09:20:05.905Z",
+      "id": "dpl_5cRZpfkaMKdpxCiocAXJsznA8Xxr",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 34049583,
+      "created": 1788978817046,
+      "createdUtc": "2026-09-09T18:33:37.046Z",
+      "id": "dpl_BR38zcKcgHaPmGLaCmBJdFuBmyXY",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    },
+    {
+      "bundles": 2,
+      "bytes": 34026199,
+      "created": 1788905792252,
+      "createdUtc": "2026-09-08T22:16:32.252Z",
+      "id": "dpl_H8KyoWvKJ6UwTHB4uF37hC1oqRLo",
+      "reasons": [
+        "the last ready production deployment of its UTC day"
+      ],
+      "state": "READY",
+      "target": "production"
+    }
+  ],
+  "projectId": "prj_DkYP3vx77nCsQS36RSEIEbK2mUtt",
+  "schema": "vercel-retention/1",
+  "totals": {
+    "delete": {
+      "bytes": 102941224,
+      "deployments": 12
+    },
+    "inventory": {
+      "bytes": 2508383388,
+      "deployments": 69
+    },
+    "keep": {
+      "bytes": 2405442164,
+      "deployments": 57
+    }
+  }
+}
