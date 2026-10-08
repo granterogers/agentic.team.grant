@@ -228,6 +228,43 @@ describe('the other direction: offering what nothing can perform', () => {
   it('but offering one the office holds is ordinary', () => {
     expect(capabilityLies("I'll produce a PDF for you now.", office())).toHaveLength(0)
   })
+
+  describe("an offer's object FOLLOWS the offer (the first real-model run: two false corrections in nine answers)", () => {
+    const emailOff = office({
+      cannot: [
+        {
+          tool: 'gmail.send',
+          what: 'Send an email from the mailbox',
+          verbs: [],
+          inReply: false,
+          why: 'switched off',
+        },
+      ],
+    })
+
+    it('naming a switched-off thing BEFORE the offer is not an offer of it', () => {
+      for (const said of [
+        "If you can point me to the email, meeting note or document where she said it, I'll pull the exact wording for you.",
+        "I need the venue's insurance contact (email or phone) or a place where I can find it.",
+        'If you forward the email to me I can read it and tell you what it says.',
+      ]) {
+        expect(capabilityLies(said, emailOff), said).toHaveLength(0)
+      }
+    })
+
+    it('NEGATIVE CONTROL: offering to send the email still is one, and the old shape is caught the same way', () => {
+      for (const said of [
+        "I'll email the venue and chase the certificate.",
+        'I can send an email to the insurer for you.',
+        'Shall I email them?',
+      ]) {
+        expect(
+          capabilityLies(said, emailOff).map((f) => f.verdict),
+          said,
+        ).toEqual(['false_offer'])
+      }
+    })
+  })
 })
 
 describe('the detector declines rather than guessing', () => {

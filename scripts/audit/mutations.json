@@ -373,6 +373,36 @@
       "expect": "tests/handlers/speaker.test.ts"
     },
     {
+      "id": "M30",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/agents/capability-claims.ts",
+      "old": "const scope = offerAt === null ? clause : clause.slice(offerAt.index)",
+      "new": "const scope = clause",
+      "invariant": "an offer's object follows the offer: naming email before 'I'll pull the wording' is not an offer to send email",
+      "expect": "tests/agents/a-capability-denied-is-checkable.test.ts"
+    },
+    {
+      "id": "M31",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/turn.ts",
+      "old": "return asHumanWords(withoutQuotedMaterial(afterRetraction))",
+      "new": "return asHumanWords(afterRetraction)",
+      "invariant": "what he pasted into a typed message is content, never his request: the readers that act do not read it",
+      "expect": "tests/agents/quoted-material.test.ts"
+    },
+    {
+      "id": "M31b",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "const retractionRead = retractionOf(asHumanWords(withoutPaste))",
+      "new": "const retractionRead = retractionOf(cleanedWords)",
+      "invariant": "'ignore all previous instructions' inside a pasted email is not his change of mind (it made the stranger's sentence his request)",
+      "expect": "tests/agents/quoted-material.test.ts"
+    },
+    {
       "id": "M29",
       "critical": false,
       "severity": "high",

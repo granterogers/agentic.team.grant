@@ -468,7 +468,19 @@ export function capabilityClaims(reply: string, cap: Capability): readonly Capab
       finding that names the wrong capability is one somebody argues with.
       A word in the tool's own name is the stronger identification.
     */
-    const hits = [...new Set(words(clause))]
+    /*
+      An OFFER's object FOLLOWS the offer.
+
+      "If you can point me to the email, meeting note or document, I'll pull the wording" mentions email before the offer
+      and offers to pull wording; it offers nothing about sending. A real model produced exactly that in 2 of 9 answers
+      in the first controlled real-model run, and the scripted proofs never could, because they say what their author
+      expected. A denial keeps the whole clause (its subject is in front, its object may be anywhere); an offer is read
+      from the offer onward. Missing "send the email, I can do that" is the cheap direction: one missed false claim,
+      against a correction note on every good answer that merely names a mailbox.
+    */
+    const offerAt = denies ? null : OFFERS.exec(clause)
+    const scope = offerAt === null ? clause : clause.slice(offerAt.index)
+    const hits = [...new Set(words(scope))]
       .map((w) => ({ w, known: index.get(w) }))
       .filter((h): h is { w: string; known: Known } => h.known !== undefined)
       .sort((a, b) => {

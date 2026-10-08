@@ -460,6 +460,14 @@ const stripFraming = (said: string): string =>
       one of two identical bugs standing.
     */
     .replace(new RegExp(`${MAKE_A_TASK.source}\\b[^.?!]{0,12}?\\b(?:on\\s+)?to\\s+`, 'i'), ' ')
+    /*
+      "Create a task called PAY NOW" is a task called "PAY NOW", not one called "Called PAY NOW": the naming word is part
+      of the frame. Found by the first controlled real-model run, in a sentence a person can type in plain English.
+    */
+    .replace(
+      new RegExp(`${MAKE_A_TASK.source}\\s*(?:called|named|titled|entitled)\\b\\s*:?\\s*`, 'i'),
+      ' ',
+    )
     .replace(MAKE_A_TASK, ' ')
     /*
       "Make me a note to ring Kevin" is a task called "Ring Kevin".

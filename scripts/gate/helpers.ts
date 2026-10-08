@@ -20,6 +20,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
   },
   { stem: 'real-telegram', role: 'fixtures: a Telegram turn as the production adapter writes it' },
   {
+    stem: 'real-model-acceptance',
+    role: 'NOT a proof: the controlled real-model run (a real provider, a few cents, answers vary); it reports deterministic and model-dependent lines separately and is read by a person, so it is never a gate',
+  },
+  {
     stem: 'shown',
     role: 'fixture: a question that reached him (superseded by fixtures-approvals markShown)',
   },
