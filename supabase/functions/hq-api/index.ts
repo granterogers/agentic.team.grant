@@ -38,6 +38,15 @@
  * rejects everything rather than waving requests through.
  */
 
+import {
+  BG_LIMITS,
+  backgroundKey,
+  backgroundPrefix,
+  decodeBase64,
+  projectOfKey,
+  revisionFromStamp,
+  vetBackground,
+} from './background.ts'
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
 import { fileText } from './file-text.ts'
 import { authorizeUrl, revokeToken } from './oauth.ts'
@@ -1100,6 +1109,17 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     required: ['p_contact_id', 'p_project_id'],
   },
   /*
+    A PROJECT'S OWN BACKGROUND PICTURE (#445, migration 1024). Handled below rather than dispatched, because it carries bytes;
+    listed here because the dispatcher checks this map first. The RPC named is the one the target is authorised through.
+    The page names the project by SLUG; the office and the project id are never read from the request.
+  */
+  project_background_put: {
+    fn: 'hq_upload_target',
+    office: true,
+    required: ['p_slug', 'p_base64'],
+  },
+  project_background_delete: { fn: 'hq_upload_target', office: true, required: ['p_slug'] },
+  /*
     PICKING A FILE OUT OF DRIVE.
 
     A reference, not a copy: the office records which file it is and where it
@@ -2110,10 +2130,11 @@ const json = (body: unknown, status = 200): Response =>
 */
 const uploadTarget = async (
   office: string,
-  uploadKind: 'contact_photo' | 'document_upload',
-  projectId: string,
+  uploadKind: 'contact_photo' | 'document_upload' | 'project_background',
+  projectId: string | null,
   contactId: string | null,
   by: string | null,
+  slug: string | null = null,
 ): Promise<{ projectId: string } | { error: string }> => {
   const asked = await fetch(`${DB_URL}/rest/v1/rpc/hq_upload_target`, {
     method: 'POST',
@@ -2129,6 +2150,8 @@ const uploadTarget = async (
       p_project_id: projectId,
       p_contact_id: contactId,
       p_by: by,
+      // Only the background kind names its project by slug (migration 1024); the others are unchanged.
+      ...(slug === null ? {} : { p_slug: slug }),
     }),
   }).catch(() => null)
   if (asked === null || !asked.ok) return { error: 'could not check the target' }
@@ -2140,6 +2163,82 @@ const uploadTarget = async (
   return answer.ok === true && typeof answer.project_id === 'string'
     ? { projectId: answer.project_id }
     : { error: String(answer.error ?? 'no such target') }
+}
+
+/*
+  PROJECT BACKGROUND PICTURES (#445, migration 1024): one object per project in the private `files` bucket, under
+  `<office_id>/backgrounds/<project_id>.<ext>`. These helpers only talk to storage; WHICH project and WHICH office are
+  decided by the caller from the verified session and the database, never from the request.
+*/
+type BgObject = {
+  name: string
+  updated_at?: string
+  metadata?: { size?: number; mimetype?: string }
+}
+const storageHeaders = {
+  apikey: SERVICE_KEY,
+  Authorization: `Bearer ${SERVICE_KEY}`,
+  'Content-Type': 'application/json',
+}
+/** Every picture this office holds (names are relative to the office prefix), or null when storage would not say. */
+const bgList = async (office: string): Promise<BgObject[] | null> => {
+  const prefix = backgroundPrefix(office)
+  if (prefix === null) return null
+  const r = await fetch(`${DB_URL}/storage/v1/object/list/files`, {
+    method: 'POST',
+    headers: storageHeaders,
+    body: JSON.stringify({ prefix, limit: 100, offset: 0 }),
+  }).catch(() => null)
+  if (r === null || !r.ok) return null
+  const rows = (await r.json().catch(() => null)) as BgObject[] | null
+  return Array.isArray(rows) ? rows.filter((o) => projectOfKey(office, o.name) !== null) : null
+}
+const bgRemove = async (office: string, names: string[]): Promise<boolean> => {
+  const prefix = backgroundPrefix(office)
+  if (prefix === null || names.length === 0) return prefix !== null
+  const r = await fetch(`${DB_URL}/storage/v1/object/files`, {
+    method: 'DELETE',
+    headers: storageHeaders,
+    body: JSON.stringify({ prefixes: names.map((n) => `${prefix}${n}`) }),
+  }).catch(() => null)
+  return r?.ok === true
+}
+const bgSign = async (office: string, name: string): Promise<string | null> => {
+  const prefix = backgroundPrefix(office)
+  if (prefix === null) return null
+  const r = await fetch(`${DB_URL}/storage/v1/object/sign/files/${prefix}${name}`, {
+    method: 'POST',
+    headers: storageHeaders,
+    body: JSON.stringify({ expiresIn: BG_LIMITS.linkSeconds }),
+  }).catch(() => null)
+  if (r === null || !r.ok) return null
+  const { signedURL } = (await r.json().catch(() => ({}))) as { signedURL?: string }
+  return typeof signedURL === 'string' ? `${DB_URL}/storage/v1${signedURL}` : null
+}
+/**
+ * Remove pictures whose project no longer exists in this office (a project deleted by the operator leaves its picture
+ * behind; nothing else removes bucket objects). Fails SAFE: when the project check cannot be answered, nothing is removed.
+ * Returns what is still live.
+ */
+const bgSweep = async (office: string, listed: BgObject[]): Promise<BgObject[]> => {
+  const found = listed.map((o) => projectOfKey(office, o.name))
+  const ids = [...new Set(found.filter((x): x is string => x !== null))]
+  if (ids.length === 0) return listed
+  const r = await fetch(
+    `${DB_URL}/rest/v1/projects?office_id=eq.${office}&project_id=in.(${ids.join(',')})&select=project_id`,
+    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+  ).catch(() => null)
+  if (r === null || !r.ok) return listed
+  const rows = (await r.json().catch(() => [])) as { project_id?: string }[]
+  const live = new Set(rows.map((p) => String(p.project_id).toLowerCase()))
+  const orphan = listed.filter((o) => !live.has(projectOfKey(office, o.name) ?? ''))
+  if (orphan.length === 0) return listed
+  const removed = await bgRemove(
+    office,
+    orphan.map((o) => o.name),
+  )
+  if (!removed) return listed
+  return listed.filter((o) => !orphan.includes(o))
 }
 
 /*
@@ -2603,6 +2702,87 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({
         result: recorded,
         photo: signedURL === undefined ? null : `${DB_URL}/storage/v1${signedURL}`,
+      })
+    }
+
+    if (actionName === 'project_background_put' || actionName === 'project_background_delete') {
+      if (!office) return json({ error: 'no_office' }, 403)
+      const slug = String(args.p_slug ?? '').trim()
+      if (slug === '' || slug.length > 120) return json({ error: 'which project?' }, 400)
+      /* The target is judged inside the verified office BEFORE the picture is decoded or stored. */
+      const target = await uploadTarget(
+        office,
+        'project_background',
+        null,
+        null,
+        kind === 'service' ? null : principal,
+        slug,
+      )
+      if ('error' in target) {
+        return json(
+          { error: target.error },
+          target.error === 'could not check the target' ? 503 : 404,
+        )
+      }
+      const listed = await bgList(office)
+      if (listed === null) return json({ error: 'the pictures could not be checked' }, 503)
+      const live = await bgSweep(office, listed)
+      const mine = live.filter((o) => projectOfKey(office, o.name) === target.projectId)
+      if (actionName === 'project_background_delete') {
+        const removed = await bgRemove(
+          office,
+          mine.map((o) => o.name),
+        )
+        if (!removed) return json({ error: 'the picture could not be removed' }, 502)
+        return json({ result: { ok: true, removed: mine.length } })
+      }
+      const bytes = decodeBase64(String(args.p_base64 ?? ''))
+      if (bytes === null) return json({ error: 'that image could not be read' }, 400)
+      const vetted = vetBackground(bytes)
+      if ('error' in vetted) return json({ error: vetted.error }, 400)
+      /* One picture a project; replacing one is not a new picture, so only a project with none counts against the limit. */
+      if (mine.length === 0 && live.length >= BG_LIMITS.perOffice) {
+        return json(
+          {
+            error: `an office can keep ${String(BG_LIMITS.perOffice)} background pictures - remove one first`,
+          },
+          400,
+        )
+      }
+      const key = backgroundKey(office, target.projectId, vetted.ext)
+      if (key === null) return json({ error: 'the picture could not be filed' }, 500)
+      const put = await fetch(`${DB_URL}/storage/v1/object/files/${key}`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': vetted.mime,
+          'x-upsert': 'true',
+        },
+        body: bytes as unknown as BodyInit,
+      })
+      if (!put.ok) {
+        console.error(`hq-api project_background_put: storage ${String(put.status)}`)
+        return json({ error: 'the picture could not be stored' }, 502)
+      }
+      /* A different format replaces the old one: remove the previous object when its name differs. */
+      const name = key.slice((backgroundPrefix(office) ?? '').length)
+      const stale = mine.filter((o) => o.name !== name).map((o) => o.name)
+      if (stale.length > 0) await bgRemove(office, stale)
+      const after = await bgList(office)
+      const written = after?.find((o) => o.name === name)
+      const rev = revisionFromStamp(written?.updated_at)
+      const url = await bgSign(office, name)
+      return json({
+        result: {
+          ok: true,
+          rev,
+          mime: vetted.mime,
+          w: vetted.w,
+          h: vetted.h,
+          bytes: bytes.byteLength,
+          url,
+        },
       })
     }
 
@@ -3220,6 +3400,44 @@ Deno.serve(async (request: Request): Promise<Response> => {
     language without escaping - a file named with an apostrophe is ordinary and
     would otherwise break the query it appears in.
   */
+  /*
+    A PROJECT'S BACKGROUND PICTURE (#445, 1024): `?slug=` returns `{ rev, url, mime, bytes }` where `url` is a signed link
+    (an hour), or `null` when the project has none, is not this office's, or does not exist - the same answer for all three, so
+    a probe learns nothing about another office. No link is ever minted for a key outside the verified office's prefix.
+  */
+  if (name === 'project_background') {
+    if (!office) return json({ data: null })
+    const slug = (url.searchParams.get('slug') ?? '').trim()
+    if (slug === '' || slug.length > 120) return json({ data: null })
+    const target = await uploadTarget(
+      office,
+      'project_background',
+      null,
+      null,
+      kind === 'service' ? null : principal,
+      slug,
+    )
+    if ('error' in target) {
+      return target.error === 'could not check the target'
+        ? json({ error: 'the picture could not be checked' }, 503)
+        : json({ data: null })
+    }
+    const listed = await bgList(office)
+    if (listed === null) return json({ error: 'the pictures could not be checked' }, 503)
+    const mine = listed.find((o) => projectOfKey(office, o.name) === target.projectId)
+    if (mine === undefined) return json({ data: null })
+    const link = await bgSign(office, mine.name)
+    if (link === null) return json({ error: 'the picture could not be reached' }, 502)
+    return json({
+      data: {
+        rev: revisionFromStamp(mine.updated_at),
+        url: link,
+        mime: mine.metadata?.mimetype ?? null,
+        bytes: mine.metadata?.size ?? null,
+      },
+    })
+  }
+
   if (name === 'drive') {
     /*
       THE DRIVE BEHIND THIS IS THE DEPLOYMENT'S, not the caller's (#400). The refresh token below is one

@@ -47,6 +47,8 @@ export interface Edge {
   readonly linksMinted: string[]
   /** Every object a function tried to write to storage (never forwarded anywhere). */
   readonly storageWrites: { method: string; path: string; bytes: number }[]
+  /** The background pictures kept (full key -> size, type, written-at), so a proof can read back what is stored. */
+  readonly objects: Map<string, { bytes: number; type: string; at: string }>
   outage(on: boolean, onlyFunction?: string): void
 }
 
@@ -56,6 +58,8 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
   const refusedUrls: string[] = []
   const linksMinted: string[] = []
   const storageWrites: { method: string; path: string; bytes: number }[] = []
+  const objects = new Map<string, { bytes: number; type: string; at: string }>()
+  let stamp = 0
   const env: Record<string, string> = { SUPABASE_URL: DB_URL, ...o.env }
   ;(globalThis as unknown as { Deno: unknown }).Deno = {
     env: { get: (k: string) => env[k] },
@@ -136,8 +140,16 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
         .filter((c) => /^[a-z_*]+$/.test(c))
         .join(', ')
       const where = [...q.entries()]
-        .filter(([k, v]) => /^[a-z_]+$/.test(k) && v.startsWith('eq.'))
-        .map(([k, v]) => `${k}::text = ${lit(v.slice(3))}`)
+        .filter(([k, v]) => /^[a-z_]+$/.test(k) && (v.startsWith('eq.') || /^in\.\(.*\)$/.test(v)))
+        .map(([k, v]) =>
+          v.startsWith('eq.')
+            ? `${k}::text = ${lit(v.slice(3))}`
+            : `${k}::text in (${v
+                .slice(4, -1)
+                .split(',')
+                .map((x) => lit(x))
+                .join(', ')})`,
+        )
         .join(' and ')
       const limit = Number(q.get('limit') ?? '100')
       try {
@@ -154,8 +166,44 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
       const method = init?.method ?? 'GET'
       const raw = init?.body
       const size = raw instanceof Uint8Array ? raw.byteLength : String(raw ?? '').length
+      /*
+        Objects under `<office>/backgrounds/` (#445) are KEPT, so a proof can read back what a replacement left and what a
+        sweep removed. Listing is by prefix, as storage does it; a delete names full keys. Everything else is only recorded.
+      */
+      if (method === 'POST' && path === '/storage/v1/object/list/files') {
+        const asked = JSON.parse(String(raw ?? '{}')) as { prefix?: string }
+        const prefix = String(asked.prefix ?? '')
+        return reply(
+          200,
+          [...objects]
+            .filter(([k]) => k.startsWith(prefix))
+            .map(([k, v]) => ({
+              name: k.slice(prefix.length),
+              updated_at: v.at,
+              metadata: { size: v.bytes, mimetype: v.type },
+            })),
+        )
+      }
+      if (method === 'DELETE' && path === '/storage/v1/object/files') {
+        const asked = JSON.parse(String(raw ?? '{}')) as { prefixes?: string[] }
+        for (const k of asked.prefixes ?? []) {
+          storageWrites.push({ method, path: `${path}/${k}`, bytes: 0 })
+          objects.delete(k)
+        }
+        return reply(200, [])
+      }
       if (method === 'POST' && path.includes('/object/sign/')) {
         return reply(200, { signedURL: `${path.replace('/storage/v1', '')}?token=isolated` })
+      }
+      if (method === 'POST' && path.includes('/backgrounds/')) {
+        const key = path.slice('/storage/v1/object/files/'.length)
+        const headers = (init?.headers ?? {}) as Record<string, string>
+        stamp = Math.max(stamp + 1, Date.now())
+        objects.set(key, {
+          bytes: size,
+          type: String(headers['Content-Type'] ?? ''),
+          at: new Date(stamp).toISOString(),
+        })
       }
       storageWrites.push({ method, path, bytes: size })
       return reply(200, { Key: path.replace('/storage/v1/object/', '') })
@@ -265,6 +313,7 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
     refusedUrls,
     linksMinted,
     storageWrites,
+    objects,
     outage: (on, onlyFunction) => {
       down = on ? (onlyFunction ?? true) : false
     },
