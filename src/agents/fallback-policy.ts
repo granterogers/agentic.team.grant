@@ -96,6 +96,14 @@ const ACTION_OFFER =
 const BLOCKER_FRAMING =
   /\bi (?:can['\u2019]?t|cannot|won['\u2019]?t|will not) (?:schedule|add|log|create|flag|set up|track)\b|\bto proceed,? i (?:need|would need)\b|\bi (?:would |will |['\u2019]ll )?need (?:the following|you to|to know)\b|\bonce (?:you|i) (?:provide|confirm|have)\b|\bplease provide (?:the|these|those|more)\b|\bso i can proceed\b|\b(?:log|create|schedule)(?:ged)? (?:a|the) (?:payment |deposit )?task\b|\btell me which project\b/i
 
+/**
+ * The framings no honest answer to a plain question needs even when nothing relevant was held: a precondition to proceed,
+ * a task nobody asked for, a request for something else first. "Tell me which project" is left out on purpose, because with
+ * no project in scope that is a fair clarification.
+ */
+const UNCONDITIONAL_BLOCKER =
+  /\bto proceed,? i (?:need|would need)\b|\bonce (?:you|i) (?:provide|confirm|have)\b|\bso i can proceed\b|\b(?:log|create|schedule)(?:ged)? (?:a|the) (?:payment |deposit )?task\b|\bi (?:will|['’]ll) add the task\b/i
+
 const NARRATION =
   /\bi['\u2019]?m (?:not )?(?:skipping|routing|convening|bringing in)\b|\bnot (?:convening|routing|bringing in) (?:anyone|anybody|this)\b|\bskipping the (?:team|review)\b|\bsimple (?:fact-?check|factual retriev)|\bi (?:won['\u2019]?t|will not) pull (?:anyone|anybody|the team) in\b|\bnothing (?:else )?to route\b|\bstraight (?:factual )?retriev|\b(?:i['\u2019]?m|we['\u2019]?re|i am|we are) not (?:going to )?(?:call(?:ing)?|post(?:ing)?|ping(?:ing)?|convening|raising|creating|logging|queu(?:e|ing))\b[^.!?\n]{0,70}\b(?:meeting|channel|ping|task|record|dashboard|reminder|anyone)\b|\bwe (?:won['\u2019]?t|will not) log (?:another|a) task\b|\bno further action (?:is )?needed\b|\bthe office is not going to do anything\b/i
 
@@ -184,7 +192,8 @@ export const admitFallbackAnswer = (input: AdmissionInput): Admission => {
     else reasons.push('ignores_evidence')
   }
   // Whatever else it says, a blocker raised against a plain question is not an answer to it.
-  if (held && readOnly && BLOCKER_FRAMING.test(answer)) reasons.push('offers_unasked_action')
+  if (readOnly && ((held && BLOCKER_FRAMING.test(answer)) || UNCONDITIONAL_BLOCKER.test(answer)))
+    reasons.push('offers_unasked_action')
 
   for (const s of sentences(answer)) {
     if (INFERENCE.test(s) && contentRatio(s, established) < 0.6) {

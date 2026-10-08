@@ -279,8 +279,8 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
  * exactly as it is today.
  */
 /** Words that make a sentence a request to change something, whatever its grammar (a polite question is still a request). */
-const WRITING_WORDS =
-  /\b(?:remind|add|creat|schedul|send|sent|e-?mail|book|set up|make|draft|writ|file|log|note|put|mark|cancel|delet|updat|chang|mov|renam|forward|post|confirm)\w*/i
+export const WRITING_WORDS =
+  /\b(?:remind|add|create|schedule|send|sent|e-?mail|book|set up|make|made|draft|write|wrote|written|file|log|note|put|mark|cancel|delete|update|change|move|rename|forward|post|confirm)(?:s|d|ed)?\b/i
 
 export const planAndPursue = async (
   db: SqlExecutor,

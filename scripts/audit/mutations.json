@@ -557,9 +557,19 @@
       "critical": true,
       "severity": "high",
       "file": "src/agents/fallback-policy.ts",
-      "old": "if (held && readOnly && BLOCKER_FRAMING.test(answer)) reasons.push('offers_unasked_action')",
+      "old": "(held && BLOCKER_FRAMING.test(answer)) ||",
       "new": "",
-      "invariant": "a blocker raised against a plain question is not an answer to it",
+      "invariant": "a blocker raised against a plain question over held evidence is not an answer to it",
+      "expect": "tests/agents/fallback-policy.test.ts"
+    },
+    {
+      "id": "M48",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/fallback-policy.ts",
+      "old": "|| UNCONDITIONAL_BLOCKER.test(answer)",
+      "new": "",
+      "invariant": "a precondition or an unasked task raised against a plain question is refused even when nothing relevant was held",
       "expect": "tests/agents/fallback-policy.test.ts"
     },
     {

@@ -93,6 +93,18 @@ describe('what the real fallback models said, refused', () => {
       ).ok,
     ).toBe(true)
   })
+  it('a blocker raised against a plain question when the turn held nothing relevant (the final real run)', () => {
+    const asked = 'Is there a cancellation cap in the venue contract?'
+    const said =
+      'I have no task scheduled for the insurance certificate. To proceed, I need you to provide the addendum to the contract so I can check for any cap on the cancellation fee. Once you provide the addendum, tell me which project it relates to and I will add the task to request the insurance certificate.'
+    expect(reasons(admit(said, asked, [])), 'nothing held').toContain('offers_unasked_action')
+    expect(reasons(admit(said, asked, [BUDGET])), 'held something else').toContain(
+      'offers_unasked_action',
+    )
+    // Neighbours: an honest absence, and a fair clarification with nothing in scope, are left alone.
+    expect(admit('I have nothing on that in the project.', asked, []).ok).toBe(true)
+    expect(admit('Which project do you mean? Tell me which project.', asked, []).ok).toBe(true)
+  })
   it('a denial of a document the turn held, on the very question it answers', () => {
     const a = admit('I have no venue contract on file, so I cannot say what the deposit is.')
     expect(reasons(a)).toContain('denies_held_evidence')

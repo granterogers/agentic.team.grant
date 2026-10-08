@@ -30,6 +30,31 @@ describe('the answer', () => {
   })
 })
 
+describe('what counts as asking for a change', () => {
+  it('a noun in a question about the contract is not a request (the real C2 sentence)', async () => {
+    const { WRITING_WORDS } = await import('../../src/handlers/instruction.ts')
+    for (const q of [
+      'Is there a cancellation cap in the venue contract?',
+      'What is the booking fee and when is the confirmation due?',
+      // A word that is both noun and verb ("the changes") cannot be told apart lexically; it errs towards "may be a
+      // request", which admits MORE answers, never refuses one. Only the derived nouns above are decidable.
+    ])
+      expect(WRITING_WORDS.test(q), q).toBe(false)
+  })
+  it('the verbs that do ask for one still do, in the forms a person types', async () => {
+    const { WRITING_WORDS } = await import('../../src/handlers/instruction.ts')
+    for (const q of [
+      'Remind me about the venue deposit',
+      'Can you cancel the booking?',
+      'Please add a task for the insurance certificate',
+      'Send it to Kevin',
+      'Mark the call done',
+      'Write me a summary',
+    ])
+      expect(WRITING_WORDS.test(q), q).toBe(true)
+  })
+})
+
 describe('authority', () => {
   it('asks the router trace, over the whole conversation, whether a backup served it', () => {
     expect(approval).toMatch(/await fallbackServedTurn\(db, judged\)/)
