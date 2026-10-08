@@ -123,6 +123,12 @@ check(
 await db.execute(
   `update public.jobs set state = 'cancelled', state_reason = 'isolated proof: the branch was called off' where job_id = ${lit(f.branch)}::uuid`,
 )
+// This proof is about waiting for BRANCHES. The lead's own reply (#441) is a separate wait that this stand-in parent never
+// settles, so the team is made to have finished long enough ago for that bounded wait to have run out (message-ordering.ts
+// proves the lead wait itself).
+await db.execute(
+  `update public.jobs set finished_at = app.now_utc() - interval '10 minutes' where job_id = ${lit(f.branch)}::uuid`,
+)
 const done = await cycle(f.synth)
 const end = await stateOf(f.synth)
 check(
