@@ -1198,6 +1198,13 @@ Branch `claude/deep-systems-audit-3cwbtc`. Selective delegation on Telegram, Sla
 Critical gate 61 green, extended 71 green, 65 mutations run (64 caught, 1 declared equivalent). Recommendation B (a separately authorised live smoke test). Full evidence, the fourteen answers, the
 pending migrations (1023 to 1035) and the deployment risks: `docs/audit/V1-RELEASE-CANDIDATE-2026-10-08.md`. Open: Issues #443 (worker failure path), #444 (fallback models), #440/#441 until deployed.
 
+## 8 October 2026 (later) - Version 1 final release gate (local only; nothing deployed)
+
+#443 fixed (a database blip while recording a handler failure is retried, a refusal never is) and closed; the Notion cause stays unproven. #444 mitigated: a backup-served answer is admitted on evidence,
+gets one second opinion from a different model, then a limitation composed in code; a backup-served turn asks before it writes or sends. The four mixed-version states were built and run
+(`docs/audit/V1-FINAL-RELEASE-GATE-2026-10-08.md` section 5): **migrate first**; the old worker and old hq-api run on the new schema, the new worker on the old schema degrades, the new hq-api on the old schema fails.
+Critical 63 green (3,557 assertions), extended 71 green, sabotage 16 of 16, full mutation campaign run. Recommendation **B**. The smoke-test procedure, deployment order and rollback table are in that report; none is authorised.
+
 ---
 
 ## 4 October 2026 (run 2, last stretch) - production frozen, local and replica work only

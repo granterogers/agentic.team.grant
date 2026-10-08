@@ -4809,6 +4809,14 @@ Each of these cost real time. They are here so they cost it once.
   tests the repeat detector**, correctly answered "you asked me that a moment ago"; vary the ask per trial. (5) **Fallback models answer the same routine question worse**: 3 of 7 off-target when the primary was refused; the reading was right
   (`understood_as`), the answering model drifted (Issue #444). (6) **Capture provenance for every real-model denial**, so the next occurrence is localised rather than guessed at.
 
+- **Final release gate lessons (8 October 2026, `docs/audit/V1-FINAL-RELEASE-GATE-2026-10-08.md`).** (1) **A mixed-version claim is only as good as the cell that ran it**: the previous report called the old worker on the new schema "by reading"; building the four replicas
+  (deployed schema rebuilt from the repository to 1022, plus 1023 to 1035; old `src`/`supabase` from `9310116` or the head) showed it runs, and that the real hazard was the other way round (new hq-api on the old schema). Compare the SET of reds between cells, not the counts:
+  every red in C was also red in A, which is what "the migration broke nothing" means. A function whose signature gains defaulted parameters keeps old callers working; one that loses its old overload does not. (2) **A noun is not a verb**: `cancel\w*` read "cancellation" as a request to
+  change something and switched the unasked-offer checks off for a plain question. Match verb forms, not stems. (3) **A guard gated on "held" is blind exactly when retrieval found nothing relevant**, which is when a weak model is most likely to ask for something instead; the strongest framings apply unconditionally.
+  (4) **A model can write the answer in more than one place**: the promise gate's rewrite called the router with no admission check, so a backup model's text reached him unchecked. Grep every `router.complete` when a check is meant to cover "what a backup writes". (5) **A mutation that survives after you restructure the line it targets is a missing control, not
+  a bad mutation**: M47 survived until a test needed the held-evidence branch alone. (6) **Make the gate say what it was told**: `fallback_answer_admitted` records read-only, held passages and the model, so an admitted answer can be audited; without it one admitted sentence took three runs to explain. (7) **Two proofs read "tomorrow" in UTC while the office is in Athens**, so they went red after 21:00 UTC and
+  the product was right; ask the database for the office's day. (8) **`pkill -f` matches the shell that runs it** (exit 144), a gate-sabotage run and a mutation run each exceed ten minutes, and the harness moves them to the background: run them as their own call and wait.
+
 ---
 
 ## Visual standard
