@@ -716,11 +716,11 @@
       "id": "N13",
       "critical": false,
       "severity": "medium",
-      "file": "src/notion/infra.ts",
+      "file": "src/db/link-failure.ts",
       "old": "if (LINK_TEXT.test(message) || LINK_SQLSTATE.test(message)) return true",
       "new": "if (false) return true",
       "invariant": "a database connection timeout is recognised as the link and not as one page's problem",
-      "expect": "tests/notion/infra.test.ts"
+      "expect": "tests/db/link-failure.test.ts"
     }
   ]
 }
