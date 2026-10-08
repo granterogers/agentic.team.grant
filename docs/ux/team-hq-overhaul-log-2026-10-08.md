@@ -50,10 +50,11 @@ external dependency. Counted over the 15 requirement rows below (not tests): 15 
   arrangement never read the office again, so its next save erased notes written on another device. The page now folds the office copy's notes
   in at every refresh (the pulse) and when a tab returns after 30s (`layout.js adopt` merges notes only for a project this session has changed;
   view, sizes and positions stay as the session left them). Unit-tested, and the test fails without the fix.
-- **Residual, by design.** The arrangement (view, sizes, positions) is last writer wins per person and project: it is one document. A note
-  added on device B inside the window between refreshes can still be overwritten by a save from device A; the next refresh restores it from
-  the office only if A had not yet saved over it. Two devices editing the same note at once: newest edit wins. Not fixable without a per-note
-  table; recorded here, not an isolation defect.
+- **Superseded by the third session (below): the first fix still left a window, and it is now closed except for the interleaving that needs
+  a backend revision (#442).**
+- **Residual.** The arrangement (view, sizes, positions) is last writer wins per person and project: it is one document. Two devices editing the
+  same note at once: the newest edit wins, by each device's own clock (a badly wrong clock can make an older edit win). Strict compare-and-swap
+  needs an additive backend change, filed as #442; it is NOT claimed fixed.
 - **DEFECT FOUND AND FIXED: render loop at a restored zoom.** A persisted zoom other than 100% made the calendar module measure itself at the
   wrong scale on the first paint, flip size and redraw, about 45 redraws a second at rest. `--bc-zoom` is now in the first paint
   (`compose.js`). Found by `canvas-extremes` (mutation count at rest = 0); it hangs the check without the fix.
@@ -98,8 +99,66 @@ Real touch pinch and a real iPhone were not available.
   for the starter note. Applies only where a project has no stored arrangement.
 - **Removed** `wireDockNote` and its voice-note wiring (unreferenced since dictation replaced it). `voicenote.js` stays: the Chat page uses it.
 
+## Third session (8 October, from 16:29 UTC): data integrity, dark QA, fallbacks, preview and Sample attempts
+
+Evidence classes, kept apart on purpose. **A** verified implementation (automated, in this sandbox) · **B** verified in a deployed preview ·
+**C** verified on physical devices · **D** unverified acceptance criteria · **E** known residual defects and risks.
+
+### A. Verified implementation
+- **Cross-device note loss is fixed except for one backend-bound interleaving.** `layout.js` now (1) reads the office copy before a save
+  (at most every 10s per project) and merges it note by note; (2) reads back after a save and, if the office lost anything this device holds,
+  sends the merged result; (3) takes notes it lacks and redraws, but never under a note somebody typed in within 3s; (4) a board that stays
+  open checks once a minute; (5) a refresh sends notes a failed (offline) save left only here, which the first fix did not; (6) removals are
+  tombstones, so a stale copy cannot bring a deleted note back, while an edit made after the delete wins; (7) two copies on the very same
+  instant are settled the same way on every device, which the first draft got wrong (they would have swapped for ever; found by the random runs);
+  (8) comparisons ignore order (found when the existing `layout.test.ts` went red because a move in the same millisecond lost to the stored copy).
+  Evidence: `tests/studio/canvas-sync.test.ts`, 53 cases: crossing saves, slow office, duplicate suppression, independent and same-note edits,
+  same-millisecond edits, deletes against stale devices, edit-after-delete, offline device, failing reads, hostile office document, and 40 seeded
+  random three-device runs checked against a model of the newest act per note. Sabotage: with the post-save check disabled the "no device refreshes"
+  case fails. And `scripts/verify/canvas-devices.ts`: two real Chromium contexts against a fake office server speaking the gateway contract; both
+  notes typed at the same moment with saves crossing; the office holds both, both pages show both with no reload, a reload shows each once.
+- **Navigation, restoration, isolation, extended use** (`canvas-session.ts`, 20/20): per-project view and notes, Back/Forward, reload, sign-out wipes
+  every arrangement, note and view (and fails when the wipe is sabotaged), 40 rounds of zoom, pan and drag leave the element count and heap flat,
+  92 frames per 1.5s and zero mutations at rest.
+- **Dark-theme visual QA** at 390, 768, 1440 and 1920 (every state looked at), found and fixed: the Document Style dialog's Close button broke
+  inside a word on a phone ("Clos / e", both schemes); the expanded chat dock left a 230px page at 768 (now at most 55% of a tablet-width window).
+  Dark Add Contact looked dim only because of the scroll-fade over the last row (measured: `#6ab3fd`).
+- **Dictation fallbacks** (`dictation-fallback.ts`, 13/13, and 22 unit tests): no `SpeechRecognition` (button disabled and the reason is written in
+  the status line, not only a title; typing and the separate live-voice control untouched), an engine whose `start()` throws, an engine that never
+  answers (watchdog), a service switched off, and a refusal. `verify:talk` 36/36 (simulated audio) for the live conversation.
+- Unit tests 224 in `tests/studio`; `tsc`, `biome ci` on every file touched, `check:templates`, `check:secrets` clean.
+
+### B. Verified in a deployed preview: NOTHING
+`npm run deploy:ux-review` (an isolated Vercel project `team-hq-ux-review`, static `web/studio` only, no secret, no edge function, no allow-list change)
+was run and REFUSED by the production gate: the script imports `require-production-writes`, so it needs `ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1`.
+CLAUDE.md says those flags are set only when Grant names the specific operation, and this assignment did not name one, so no flag was set and nothing was
+uploaded. The exact action, for Grant to authorise or run: `ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 npm run deploy:ux-review` from branch
+`claude/confident-cori-ql21nl` at a clean, pushed HEAD (provenance is checked by `src/safety/provenance.ts`). Afterwards: open the printed URL in Chromium
+(`npm run trust:proxy-ca` first), confirm the page footer commit against `git rev-parse HEAD`, and run `canvas-session.ts`-style checks with `--page=` where supported.
+That preview is signed out, so it shows the example projects, not a real office.
+
+### C. Verified on physical devices: NOTHING
+No microphone, iPhone, Android or touch screen was available. Nothing in this log counts as device evidence.
+
+### D. Unverified acceptance criteria
+Real-microphone dictation in Chrome and Safari (manual procedure unchanged); real touch pinch; the live public Sample Office appearance (see below); a deployed preview.
+**Public Sample:** the deployed page answers HTTP 200 from this sandbox, so it is reachable, but opening the Sample from a script is `sample:public-ui`, which also
+imports `require-production-writes` (it mints a guest session through the real `signin` function), so the same flags apply and were not set. Exact command for Grant:
+`ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 npm run sample:public-ui -- team-hq-overhaul --page=https://ai-team-hq.vercel.app` after `npm run trust:proxy-ca`;
+it writes nothing to any office and the captures land in `.out/public-team-hq-overhaul/`. The fixture proof (`verify:sample-look`) stays what it was: composition, not live data.
+
+### E. Known residual defects and risks (ranked)
+- **P1** strict compare-and-swap on the arrangement row (#442): two devices can still interleave a read-merge-write inside a few milliseconds; the loser's note is repaired by its
+  own post-save check or the next refresh, so it is a delay, not a loss, unless every device holding the note disappears first.
+- **P2** cost: each pre-read, post-save check and once-a-minute check reads the whole `studio` payload (no per-project layout read exists). Size on the real office is unmeasured; if it
+  is large, the cheap fix is a small gateway section, which is the same backend change as #442.
+- **P2** per-note clocks are the devices' own.
+- **P2** the dock cap at 55% below 1100px was chosen by looking at 768 only.
+- **P3** whole-repo `npm run lint` fails in files other workstreams own; every file this branch touches is clean.
+
 ## Next action
 
+0. Decide on the two flag-gated actions in B and D above (preview deploy; public Sample capture), then #442.
 1. Run `dictation-manual-test-2026-10-08.md` on Chrome desktop, Safari macOS, iPhone Safari and Android Chrome with a real voice (needs a person with a device).
 2. Open the real public Sample session once and look at the project page and the look sheet there (the fixture proves composition, not the live data).
 3. Pinch-zoom on a real touch screen.

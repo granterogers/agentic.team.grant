@@ -4756,6 +4756,15 @@ Each of these cost real time. They are here so they cost it once.
   deleting a control can delete the feature that shared its dialog (Jump To and the Cmd/Ctrl+K palette were one file); and 48 harness scripts
   navigated from the portfolio, so a removed screen is a harness migration, checked against the baseline commit in a worktree before
   calling any red a regression. Live dictation is `web/studio/dictation.js`, tested with a fake recogniser: it does not prove a real microphone.
+  **Second pass (8 October, #439):** a restored zoom other than 100% made the calendar measure itself at the wrong scale on the first
+  paint and redraw about 45 times a second at rest (`--bc-zoom` must be in the FIRST paint; `canvas-extremes` counts mutations at
+  rest, which no functional check does); a Post-it written on one device was erased by another device's next save because the stored
+  arrangement is ONE last-writer-wins row, so notes now merge note by note (read before write, read back after, a check once a
+  minute, `gone` tombstones) and strict compare-and-swap waits on #442; merging two copies that carry the same instant needs a
+  deterministic tie-break on EVERY device or they swap forever, but a save on this device must prefer its own newest copy; a sweep
+  helper that clears `bc.layout.` after the key became `bc.stage.` silently stopped isolating `basecamp-controls` presses; a
+  simulated recogniser that answers at once hid that the real engine in an offline browser answers NOTHING (start watchdog); a
+  `title` is not a disclosure on a phone.
 
 ---
 

@@ -5,7 +5,10 @@
 > layout. ADR-0068; ledger, evidence and next actions in `docs/ux/team-hq-overhaul-log-2026-10-08.md`. Real defects fixed on the way: notes lost between
 > two devices, an endless render loop at a restored non-100% zoom, the tablet dock, text selected while panning. Not verified (needs a person and a
 > device): dictation with a real microphone in Chrome and Safari (`docs/ux/dictation-manual-test-2026-10-08.md`), touch pinch, and the live public Sample.
-> New suites: `verify:canvas`, `verify:canvas-extremes`, `verify:chat-dock`, `verify:sample-look`, `scripts/isolated/layout-isolation.ts`.
+> New suites: `verify:canvas`, `verify:canvas-extremes`, `verify:chat-dock`, `verify:sample-look`, `verify:canvas-devices` (two real browsers),
+> `verify:canvas-session`, `verify:dictation-fallback`, `tests/studio/canvas-sync.test.ts` (53 adversarial two/three-device cases), `scripts/isolated/layout-isolation.ts`.
+> Third session: notes from two devices now merge without loss (strict compare-and-swap is #442). A preview deploy and a capture of the live public Sample are
+> BOTH refused by the production gate (they need `ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1`, which nobody named): exact commands in the log.
 >
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
 >
