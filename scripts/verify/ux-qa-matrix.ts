@@ -205,6 +205,7 @@ for (const sz of sizes) {
     isMobile: touch,
   })
   await sctx.addInitScript("try { localStorage.setItem('hq.token', 'stub') } catch {}")
+  await sctx.addInitScript(seedAppearance(SCHEME))
   const sp = await sctx.newPage()
   await sp.route('**/*', async (route) => {
     const u = route.request().url()

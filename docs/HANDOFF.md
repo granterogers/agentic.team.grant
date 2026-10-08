@@ -1,3 +1,12 @@
+> ## 2026-10-08 - TEAM HQ INFINITE-CANVAS OVERHAUL (#439, branch `claude/confident-cori-ql21nl`, NOT merged, NOT deployed, no preview)
+>
+> Hamburger menu instead of Home/Jump To, an infinite pan/zoom canvas with a dotted grid, per-project arrangement saved per person, Post-it plus, a
+> compact resizable chat dock, live dictation, light stone theme (dark by choice), simplified Document Style and Project Settings, a content-led default
+> layout. ADR-0068; ledger, evidence and next actions in `docs/ux/team-hq-overhaul-log-2026-10-08.md`. Real defects fixed on the way: notes lost between
+> two devices, an endless render loop at a restored non-100% zoom, the tablet dock, text selected while panning. Not verified (needs a person and a
+> device): dictation with a real microphone in Chrome and Safari (`docs/ux/dictation-manual-test-2026-10-08.md`), touch pinch, and the live public Sample.
+> New suites: `verify:canvas`, `verify:canvas-extremes`, `verify:chat-dock`, `verify:sample-look`, `scripts/isolated/layout-isolation.ts`.
+>
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
 >
 > The Team HQ UX work was already in `main`; the audit found the old UX branch held one documentation commit and nothing else, so this branch is a
