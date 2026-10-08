@@ -67,7 +67,8 @@ for (const sz of sizes) {
     for (let i = 0; i < 4; i += 1) await page.mouse.wheel(0, 250)
     await shot('04', 'zoomed-out')
     await page.click('[data-bc-viewreset]')
-    await page.mouse.move(b.x + b.w / 3, b.y + b.h / 3)
+    /* A bare point (the free right-hand fifth): a wheel over a scrollable module scrolls it, by design. */
+    await page.mouse.move(b.x + b.w * 0.92, b.y + b.h * 0.8)
     for (let i = 0; i < 3; i += 1) await page.mouse.wheel(0, -250)
     await shot('05', 'zoomed-in')
     await page.click('[data-bc-viewreset]')

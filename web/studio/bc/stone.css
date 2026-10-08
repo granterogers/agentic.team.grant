@@ -305,3 +305,37 @@
 @media (max-width: 760px) {
   [data-experience='basecamp'] .dock { inset: 0; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
 }
+
+/* The empty canvas (no project open) is the same dotted board as a project's, filling the window under the bar. */
+[data-experience='basecamp'] .bcmain:has(> .bcvoid) {
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--bc-3) var(--bc-3);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-experience='basecamp'] .bcvoid {
+  min-height: calc(100dvh - 150px);
+  border-radius: 14px;
+  border: 1px solid var(--bc-border-subtle);
+  background-color: color-mix(in srgb, var(--bc-canvas) 55%, transparent);
+  background-image: radial-gradient(circle at center, color-mix(in srgb, var(--bc-text) 26%, transparent) 0 1.1px, transparent 1.8px);
+  background-size: 24px 24px;
+  box-shadow: inset 0 1px 3px rgb(40 36 28 / 0.14), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+}
+[data-experience='basecamp'][data-scheme='dark'] .bcvoid { box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.5); }
+
+/* 761-860px: the studio's own rule turns the dock into a bottom sheet here, which this experience does not have; it stays a side panel like wider windows. */
+@media (min-width: 761px) and (max-width: 860px) {
+  [data-experience='basecamp'] .dock {
+    inset: 0 0 0 auto;
+    height: auto;
+    border-radius: 0;
+    border-top: 0;
+    border-bottom: 0;
+    border-left: 1px solid var(--bc-border-control);
+    box-shadow: none;
+  }
+  [data-experience='basecamp'] body.docked .shell { padding-bottom: 0; }
+}

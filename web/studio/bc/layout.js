@@ -109,14 +109,22 @@ export const tintHue = (t) => {
   module. Anybody who does not want a note can remove it and drag the modules
   wherever they like; the presets below use the whole width.
 */
-const COLW = 0.8 / 3
+/*
+  Proportions follow what each module holds (8 October 2026, brief section 12). The top row is the work itself: to-dos and the
+  card table need height and the documents need room for thumbnails, so it takes the larger share of the height. The
+  bottom row is glanceable (schedule, contacts, activity). Columns line up so the board reads as one arrangement.
+*/
+const C1 = 0.25
+const C2 = 0.29
+const C3 = 0.26
+const R1 = 0.58
 const THIRDS = {
-  tasks: [0, 0, COLW, 0.5],
-  board: [COLW, 0, COLW, 0.5],
-  documents: [2 * COLW, 0, COLW, 0.5],
-  schedule: [0, 0.5, COLW, 0.5],
-  contacts: [COLW, 0.5, COLW, 0.5],
-  activity: [2 * COLW, 0.5, COLW, 0.5],
+  tasks: [0, 0, C1, R1],
+  board: [C1, 0, C2, R1],
+  documents: [C1 + C2, 0, C3, R1],
+  schedule: [0, R1, C1, 1 - R1],
+  contacts: [C1, R1, C2, 1 - R1],
+  activity: [C1 + C2, R1, C3, 1 - R1],
 }
 
 export const PRESETS = {
@@ -657,9 +665,33 @@ if (typeof globalThis.addEventListener === 'function') {
 /** Take the office's copy, unless this session has already changed it. */
 export const adopt = (slug, panels) => {
   const s = slugOf(slug)
-  if (s === '' || mine.has(s)) return false
+  if (s === '') return false
   const theirs = fromPanels(panels)
   if (theirs === null) return false
+  if (mine.has(s)) {
+    /*
+      This session has changed the arrangement, so the view, sizes and positions stay as it left them. Notes are
+      different: another device may have written some since, and the next save would erase them. Fold in only the notes,
+      and send the result when this session holds anything the office lacks.
+    */
+    const here = doc(s)
+    const merged = mergeNotes(here, theirs)
+    const differs = JSON.stringify(merged.postits) !== JSON.stringify(here.postits)
+    if (!differs) return false
+    const d = { ...here, ...merged }
+    cache.set(s, d)
+    try {
+      globalThis.localStorage?.setItem(KEY(s), JSON.stringify(d))
+    } catch {
+      /* Cached in memory regardless. */
+    }
+    if (JSON.stringify(merged.postits) !== JSON.stringify(theirs.postits)) {
+      pending.set(s, d)
+      if (timer !== null) globalThis.clearTimeout(timer)
+      timer = globalThis.setTimeout(sendNow, 700)
+    }
+    return true
+  }
   /*
     The browser may hold notes the office never received (offline, a tab closed inside the save delay). Taking the office's
     copy whole would throw them away; fold them in, and send the result when it differs.

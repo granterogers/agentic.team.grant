@@ -15069,6 +15069,13 @@ async function refresh() {
     config.hydrateSettings(read),
     hydrateUsage(read),
   ])
+  /*
+    Notes another device wrote since this one loaded (ADR-0068, P0 persistence): the board folds them in rather than
+    keeping a copy that would erase them on its next save. Sizes, positions and the view stay as this session left them.
+  */
+  for (const p_ of PROJECTS) {
+    if (Array.isArray(p_?.layout_board)) bcGrid.adopt(p_.slug, p_.layout_board)
+  }
 
   /*
     And the conversation, when one is on screen (#199).
@@ -15536,6 +15543,17 @@ async function live() {
     the tab is hidden — both of which `pulse` already handles.
   */
   pulse.watch(API, token, refresh, () => { when.retime(document); void readThinking() })
+/*
+  Coming back to a tab or a device that has been away is when another device's notes are most likely to be waiting.
+  After a pause of half a minute or more, take them in (the same refresh the pulse runs).
+*/
+{
+  let hiddenAt = 0
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') hiddenAt = Date.now()
+    else if (hiddenAt !== 0 && Date.now() - hiddenAt > 30_000) void refresh()
+  })
+}
 }
 
 /*

@@ -173,3 +173,66 @@ describe('the dotted grid', () => {
     expect(L.gridStep(1)).toBe(24)
   })
 })
+
+describe('two devices editing one project (P0 persistence)', () => {
+  const note = (id: string, at: number, text: string) => ({
+    id,
+    at,
+    text,
+    x: 10,
+    y: 10,
+    w: 200,
+    h: 160,
+    tint: 'y',
+  })
+  const office = (postits: unknown[], gone: Record<string, number> = {}) => [
+    {
+      id: '__workspace',
+      v: 2,
+      hasMods: false,
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      layouts: {},
+      postits,
+      gone,
+      seeded: true,
+    },
+  ]
+
+  it('a note written on another device is folded in and nothing is lost on the next save', () => {
+    const sent: { slug: string; panels: { postits?: { id: string }[] }[] }[] = []
+    L.persistence({ save: (slug: string, panels: never) => sent.push({ slug, panels }) })
+    const mine = L.addPostit('p') // this device changes the arrangement, so it is "mine"
+    expect(L.adopt('p', office([note('n_other', Date.now() + 5, 'from the laptop')]))).toBe(true)
+    const ids = L.postits('p').map((n: { id: string }) => n.id)
+    expect(ids).toContain(mine.id)
+    expect(ids).toContain('n_other')
+    L.flush()
+    const last = sent.at(-1)?.panels.find((m) => m.postits !== undefined)
+    expect((last?.postits ?? []).map((n) => n.id).sort()).toEqual([mine.id, 'n_other'].sort())
+  })
+
+  it('a note removed here is not brought back by a stale office copy', () => {
+    L.persistence({ save: () => undefined })
+    const a = L.addPostit('q')
+    L.removePostit('q', a.id)
+    L.adopt('q', office([{ ...note(a.id, 1, 'old'), at: 1 }]))
+    expect(L.postits('q').map((n: { id: string }) => n.id)).not.toContain(a.id)
+  })
+
+  it("the office copy does not move this session's view or layout", () => {
+    L.persistence({ save: () => undefined })
+    L.setView('r', { zoom: 1.5, x: 40, y: 60 })
+    const panels = office([note('n_x', Date.now() + 5, 'x')])
+    ;(panels[0] as { zoom: number }).zoom = 0.5
+    L.adopt('r', panels)
+    expect(L.viewOf('r').zoom).toBe(1.5)
+  })
+
+  it('projects and browsers stay independent', () => {
+    L.persistence({ save: () => undefined })
+    const a = L.addPostit('one')
+    expect(L.postits('two').map((n: { id: string }) => n.id)).not.toContain(a.id)
+    expect(L.postits('one').map((n: { id: string }) => n.id)).toContain(a.id)
+  })
+})

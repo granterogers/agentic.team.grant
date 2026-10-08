@@ -96,8 +96,9 @@ try {
 
   /* ------------------------------------------------------------ zoom */
   const board = await rect(page, '[data-bc-board]')
-  const px = Math.round(board.x + 700)
-  const py = Math.round(board.y + 330)
+  /* A bare point: the free right-hand fifth of the default layout, below the starter note. */
+  const px = Math.round(board.x + board.w * 0.9)
+  const py = Math.round(board.y + board.h * 0.85)
   const bx0 = px - board.x
   const by0 = py - board.y
   const v0 = await view(page)
@@ -138,12 +139,13 @@ try {
   )
 
   /* wheel over scrollable content must scroll it, not zoom */
-  await page.click('[data-bc-zoom="reset"]')
+  await page.click('[data-bc-viewreset]')
   await page.waitForTimeout(300)
   const scroller = await page.evaluate(() => {
     for (const el of document.querySelectorAll('.bcmodbody')) {
-      if (el.scrollHeight > el.clientHeight + 4) {
-        const r = el.getBoundingClientRect()
+      const r = el.getBoundingClientRect()
+      /* Its centre must be on screen, or there is nothing to put a pointer on. */
+      if (el.scrollHeight > el.clientHeight + 4 && r.y + r.height / 2 < window.innerHeight - 4) {
         return { x: r.x + r.width / 2, y: r.y + r.height / 2, top: (el as any).scrollTop }
       }
     }
