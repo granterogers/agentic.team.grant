@@ -14160,6 +14160,26 @@ bcDocOrder.persistence({
   reset: (slug) => act('document_order_reset', { p_slug: slug }).catch(() => undefined),
 })
 
+/*
+  A project board that stays open learns about another device's notes about once a minute, without a reload or a pulse (a layout
+  write does not move the office's pulse). Only while the tab is visible and nobody is typing in a note.
+*/
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || Date.now() - lastNoteKey < 3000) return
+  const slug = state.project
+  if (slug && canWrite()) void bcGrid.syncNow(slug)
+}, 60_000)
+
+/* When somebody last typed in a note: another device's notes are drawn after they pause, never under their fingers. */
+let lastNoteKey = 0
+document.addEventListener(
+  'input',
+  (e) => {
+    if (e.target?.closest?.('.bcpostit')) lastNoteKey = Date.now()
+  },
+  true,
+)
+
 bcGrid.persistence({
   save: (slug, panels) =>
     act('dashboard_layout_set', { p_slug: slug, p_panels: panels, p_surface: 'basecamp' }).catch(
@@ -14167,6 +14187,27 @@ bcGrid.persistence({
     ),
   reset: (slug) =>
     act('dashboard_layout_reset', { p_slug: slug, p_surface: 'basecamp' }).catch(() => undefined),
+  /* After a save, the office's copy is read back and merged note by note, so two devices cannot erase each other's notes. */
+  fetch: async (slug) => {
+    const data = await read('studio')
+    const p_ = (data?.projects ?? []).find((x) => x?.slug === slug)
+    return Array.isArray(p_?.layout_board) ? p_.layout_board : null
+  },
+  /* Notes from another device arrived: draw them, but never under somebody who is typing in a note. */
+  changed: () => {
+    let tries = 0
+    const draw = () => {
+      if (Date.now() - lastNoteKey < 3000 && tries < 10) {
+        tries += 1
+        setTimeout(draw, 2000)
+        return
+      }
+      keepingPlace(() => {
+        render()
+      })
+    }
+    draw()
+  },
 })
 
 bcSession.adopt()

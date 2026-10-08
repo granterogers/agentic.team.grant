@@ -518,13 +518,23 @@ export const normalise = (raw) => {
  * notes the other one wrote. A note is kept when it is the newest copy of itself and nothing newer removed it. `gone`
  * records removals (id -> when) so that a stale copy cannot bring a removed note back.
  */
-export const mergeNotes = (a, b) => {
+export const mergeNotes = (a, b, mineWins = false) => {
   const gone = { ...a.gone }
   for (const [id, at] of Object.entries(b.gone ?? {})) gone[id] = Math.max(gone[id] ?? 0, at)
   const byId = new Map()
   for (const n of [...a.postits, ...b.postits]) {
     const have = byId.get(n.id)
-    if (have === undefined || n.at > have.at) byId.set(n.id, n)
+    /*
+      On the same instant two DEVICES must pick the same copy, or they would swap forever: compare the text of the copies.
+      A save on this device (`mineWins`) is different: its own newest copy beats the stored older one, because a move
+      and an edit can land in the same millisecond.
+    */
+    if (
+      have === undefined ||
+      n.at > have.at ||
+      (n.at === have.at && !mineWins && JSON.stringify(n) > JSON.stringify(have))
+    )
+      byId.set(n.id, n)
   }
   const postits = [...byId.values()].filter((n) => !((gone[n.id] ?? -1) >= n.at && n.id in gone))
   const kept = Object.fromEntries(
@@ -578,6 +588,13 @@ const isBlank = (d) =>
   Object.keys(d.layouts).length === 0 &&
   d.seeded === false
 
+/* Where the browser keeps the document. Replaceable so a test can run two "devices" side by side in one process. */
+let storage = null
+const ls = () => storage ?? globalThis.localStorage
+export const useStorage = (s) => {
+  storage = s
+}
+
 const cache = new Map()
 const mine = new Set()
 
@@ -587,7 +604,7 @@ export const doc = (slug) => {
   if (cache.has(s)) return cache.get(s)
   let d = emptyDoc()
   try {
-    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    const raw = ls()?.getItem(KEY(s)) ?? ''
     if (raw !== '') d = normalise(JSON.parse(raw))
   } catch {
     d = emptyDoc()
@@ -598,13 +615,93 @@ export const doc = (slug) => {
 
 let keep = null
 let forget = null
+let look = null
+let changed = null
 let timer = null
 const pending = new Map()
 
-/** Tell this module how to put the document in the office. */
-export const persistence = ({ save: saveAway, reset: resetAway } = {}) => {
+/**
+ * Tell this module how to put the document in the office.
+ *
+ * `fetch(slug)` reads the office's copy of one project's arrangement (the array `save` stores, or null) and `changed(slug)` is
+ * told when notes from another device were folded in, so the page can draw them. Both are optional: without them a save is
+ * not checked afterwards and nothing is announced.
+ */
+export const persistence = ({ save: saveAway, reset: resetAway, fetch: fetchAway, changed: told } = {}) => {
   keep = typeof saveAway === 'function' ? saveAway : null
   forget = typeof resetAway === 'function' ? resetAway : null
+  look = typeof fetchAway === 'function' ? fetchAway : null
+  changed = typeof told === 'function' ? told : null
+}
+
+/*
+  THE STORED DOCUMENT IS ONE ROW, so a plain save is last writer wins, and two devices that each add a note inside the same
+  few seconds would leave only one of them in the office. There is no revision column to check against (that needs a backend
+  change, recorded in #439), so the guarantee is made from what the browser CAN do: after a save, read the office's copy back
+  and merge it with ours note by note (a note is kept when it is the newest copy of itself and nothing newer removed it). If the
+  office lacks anything this device holds, send the merged result, and check again; if this device lacks something the office
+  holds, take it and say so. Both devices run the same loop and the merge is the same on both, so they converge, and a note is
+  only lost if every device that held it is gone, which the browser's own copy (localStorage) makes unlikely.
+*/
+const HEAL_AFTER_MS = 2500
+const HEAL_EVERY_MS = 10000
+const healing = new Map()
+const lastHeal = new Map()
+const canon = (postits, gone) =>
+  JSON.stringify([
+    [...postits].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    Object.entries(gone).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
+  ])
+
+const check = async (s) => {
+  if (look === null) return
+  let panels
+  try {
+    panels = await look(s)
+  } catch {
+    return
+  }
+  const there = fromPanels(panels) ?? emptyDoc()
+  const here = doc(s)
+  const merged = mergeNotes(here, there)
+  const lacksHere = canon(merged.postits, merged.gone) !== canon(here.postits, here.gone)
+  const lacksThere = canon(merged.postits, merged.gone) !== canon(there.postits, there.gone)
+  if (lacksHere) {
+    const d = { ...here, ...merged }
+    cache.set(s, d)
+    try {
+      ls()?.setItem(KEY(s), JSON.stringify(d))
+    } catch {
+      /* Cached in memory regardless. */
+    }
+    changed?.(s)
+  }
+  if (lacksThere) {
+    pending.set(s, doc(s))
+    if (timer !== null) globalThis.clearTimeout(timer)
+    timer = globalThis.setTimeout(sendNow, 700)
+  }
+}
+
+/** Compare this device's notes with the office's now (the open page asks about once a minute). */
+export const syncNow = (slug) => {
+  const s = slugOf(slug)
+  if (s === '' || look === null) return Promise.resolve()
+  lastHeal.set(s, Date.now())
+  return check(s)
+}
+
+const heal = (s) => {
+  if (look === null || healing.has(s)) return
+  const wait = Math.max(HEAL_AFTER_MS, (lastHeal.get(s) ?? 0) + HEAL_EVERY_MS - Date.now())
+  healing.set(
+    s,
+    globalThis.setTimeout(() => {
+      healing.delete(s)
+      lastHeal.set(s, Date.now())
+      void check(s)
+    }, wait),
+  )
 }
 
 const sendNow = () => {
@@ -613,10 +710,50 @@ const sendNow = () => {
     if (isBlank(d)) {
       if (forget !== null) void forget(s)
     } else if (keep !== null) {
-      void keep(s, toPanels(d))
+      void saveChecked(s)
     }
   }
   pending.clear()
+}
+
+/*
+  Read before writing, so a device that has been idle (and so is behind) does not overwrite what another device wrote since: the
+  office's copy is merged in first. At most once every ten seconds per project, because typing saves every 700ms and the read is the
+  whole studio payload; the check after the save covers the rest.
+*/
+const saveChecked = async (s) => {
+  try {
+    if (look !== null && Date.now() - (lastHeal.get(s) ?? 0) > HEAL_EVERY_MS) {
+      lastHeal.set(s, Date.now())
+      try {
+        const there = fromPanels(await look(s))
+        if (there !== null) {
+          const here = doc(s)
+          const merged = mergeNotes(here, there)
+          if (canon(merged.postits, merged.gone) !== canon(here.postits, here.gone)) {
+            cache.set(s, { ...here, ...merged })
+            try {
+              ls()?.setItem(KEY(s), JSON.stringify({ ...here, ...merged }))
+            } catch {
+              /* Cached in memory regardless. */
+            }
+            changed?.(s)
+          }
+        }
+      } catch {
+        /* Could not look: save what is here; the check afterwards tries again. */
+      }
+    }
+    const now = doc(s)
+    if (isBlank(now)) {
+      if (forget !== null) await forget(s)
+    } else {
+      await keep(s, toPanels(now))
+    }
+    heal(s)
+  } catch {
+    /* A failed save is retried by the next refresh (adopt sends what the office lacks). */
+  }
 }
 
 /** Write the document to the browser now and to the office shortly after. */
@@ -628,16 +765,16 @@ const commit = (slug, mine_) => {
   */
   let d = mine_
   try {
-    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
-    if (raw !== '') d = { ...d, ...mergeNotes(d, normalise(JSON.parse(raw))) }
+    const raw = ls()?.getItem(KEY(s)) ?? ''
+    if (raw !== '') d = { ...d, ...mergeNotes(d, normalise(JSON.parse(raw)), true) }
   } catch {
     /* Nothing readable to fold in. */
   }
   cache.set(s, d)
   mine.add(s)
   try {
-    if (isBlank(d)) globalThis.localStorage?.removeItem(KEY(s))
-    else globalThis.localStorage?.setItem(KEY(s), JSON.stringify(d))
+    if (isBlank(d)) ls()?.removeItem(KEY(s))
+    else ls()?.setItem(KEY(s), JSON.stringify(d))
   } catch {
     /* A viewer who cannot store it still has it for this session. */
   }
@@ -676,21 +813,24 @@ export const adopt = (slug, panels) => {
     */
     const here = doc(s)
     const merged = mergeNotes(here, theirs)
-    const differs = JSON.stringify(merged.postits) !== JSON.stringify(here.postits)
-    if (!differs) return false
+    const whole = canon(merged.postits, merged.gone)
+    const lacksHere = whole !== canon(here.postits, here.gone)
+    /* A save that failed (offline) leaves notes only here: a refresh must send them, not just take what the office has. */
+    const lacksThere = whole !== canon(theirs.postits, theirs.gone)
+    if (!lacksHere && !lacksThere) return false
     const d = { ...here, ...merged }
     cache.set(s, d)
     try {
-      globalThis.localStorage?.setItem(KEY(s), JSON.stringify(d))
+      ls()?.setItem(KEY(s), JSON.stringify(d))
     } catch {
       /* Cached in memory regardless. */
     }
-    if (JSON.stringify(merged.postits) !== JSON.stringify(theirs.postits)) {
+    if (lacksThere) {
       pending.set(s, d)
       if (timer !== null) globalThis.clearTimeout(timer)
       timer = globalThis.setTimeout(sendNow, 700)
     }
-    return true
+    return lacksHere
   }
   /*
     The browser may hold notes the office never received (offline, a tab closed inside the save delay). Taking the office's
@@ -699,10 +839,10 @@ export const adopt = (slug, panels) => {
   let d = theirs
   let ahead = false
   try {
-    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    const raw = ls()?.getItem(KEY(s)) ?? ''
     if (raw !== '') {
       const merged = mergeNotes(theirs, normalise(JSON.parse(raw)))
-      ahead = JSON.stringify(merged.postits) !== JSON.stringify(theirs.postits)
+      ahead = canon(merged.postits, merged.gone) !== canon(theirs.postits, theirs.gone)
       d = { ...theirs, ...merged }
     }
   } catch {
@@ -710,7 +850,7 @@ export const adopt = (slug, panels) => {
   }
   cache.set(s, d)
   try {
-    globalThis.localStorage?.setItem(KEY(s), JSON.stringify(d))
+    ls()?.setItem(KEY(s), JSON.stringify(d))
   } catch {
     /* Cached in memory regardless. */
   }
@@ -727,6 +867,9 @@ export const forgetAll = () => {
   cache.clear()
   mine.clear()
   pending.clear()
+  for (const t of healing.values()) globalThis.clearTimeout(t)
+  healing.clear()
+  lastHeal.clear()
 }
 
 /* ------------------------------------------------------------- the modules --- */
