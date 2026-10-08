@@ -309,6 +309,7 @@
     "verify:canvas-devices": "tsx scripts/verify/canvas-devices.ts",
     "verify:dictation-fallback": "tsx scripts/verify/dictation-fallback.ts",
     "verify:canvas-session": "tsx scripts/verify/canvas-session.ts",
+    "verify:preview-live": "tsx scripts/verify/preview-live.ts",
     "verify:file-text-corpus": "tsx scripts/verify/file-text-corpus.ts",
     "verify:file-text-docx": "tsx scripts/verify/file-text-docx.ts",
     "verify:slack-card": "tsx scripts/p5/slack-link-card.ts",

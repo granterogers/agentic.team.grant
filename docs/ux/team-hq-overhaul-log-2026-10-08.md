@@ -128,24 +128,27 @@ Evidence classes, kept apart on purpose. **A** verified implementation (automate
   answers (watchdog), a service switched off, and a refusal. `verify:talk` 36/36 (simulated audio) for the live conversation.
 - Unit tests 224 in `tests/studio`; `tsc`, `biome ci` on every file touched, `check:templates`, `check:secrets` clean.
 
-### B. Verified in a deployed preview: NOTHING
-`npm run deploy:ux-review` (an isolated Vercel project `team-hq-ux-review`, static `web/studio` only, no secret, no edge function, no allow-list change)
-was run and REFUSED by the production gate: the script imports `require-production-writes`, so it needs `ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1`.
-CLAUDE.md says those flags are set only when Grant names the specific operation, and this assignment did not name one, so no flag was set and nothing was
-uploaded. The exact action, for Grant to authorise or run: `ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 npm run deploy:ux-review` from branch
-`claude/confident-cori-ql21nl` at a clean, pushed HEAD (provenance is checked by `src/safety/provenance.ts`). Afterwards: open the printed URL in Chromium
-(`npm run trust:proxy-ca` first), confirm the page footer commit against `git rev-parse HEAD`, and run `canvas-session.ts`-style checks with `--page=` where supported.
-That preview is signed out, so it shows the example projects, not a real office.
+### B. Verified in a deployed preview (authorised by Grant, scoped to that one command)
+Grant named `npm run deploy:ux-review` and allowed the minimum flags once the script was shown to target only `team-hq-ux-review`. Read in full first: it calls only
+`api.vercel.com/v2/files` and `/v13/deployments` with `name: team-hq-ux-review`, ships a rewrites-only `vercel.json`, no env vars, no secret, no edge function, no allow-list.
+Run as a command prefix (`ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1`, never exported). Provenance line: `ships 0e7b49300550 (claude/confident-cori-ql21nl), tree clean, commit pushed`.
+Result: deployment `dpl_4LJ2WLryAWwity9TsrGjfiPYrWjq` READY, **https://team-hq-ux-review.vercel.app** (carries `x-vercel-id`; `bc/layout.js` served is byte-identical to the commit, md5 `a9d6dadd...`).
+What the real Chromium run (`scripts/verify/preview-live.ts`, 4 profiles) found: the page loads, no sideways overflow, no page errors, the asked-for scheme is drawn, and it shows the
+signed-out **landing page only**: the canvas is NOT reachable on this preview, because it carries no `config.js` (generated and gitignored; the page treats the 404 as "not configured") and so has no
+backend to mint a Sample session against. The script's 24 checks therefore read 12/24: the 12 that fail are "menu drawn" and "board opens" (not reachable here, by construction) plus a 404 for `config.js`
+(expected) and one 502 on `panels.js` that was the sandbox proxy (no `x-vercel-id`; a re-fetch returned 200). Shipping a `config.js` would point the preview at the real gateway, which is a configuration
+decision this approval did not cover, so it was not done. **So the preview proves deployment, provenance and the signed-out entry, and does not prove the canvas.** The canvas is verified locally (A).
 
 ### C. Verified on physical devices: NOTHING
 No microphone, iPhone, Android or touch screen was available. Nothing in this log counts as device evidence.
 
 ### D. Unverified acceptance criteria
 Real-microphone dictation in Chrome and Safari (manual procedure unchanged); real touch pinch; the live public Sample Office appearance (see below); a deployed preview.
-**Public Sample:** the deployed page answers HTTP 200 from this sandbox, so it is reachable, but opening the Sample from a script is `sample:public-ui`, which also
-imports `require-production-writes` (it mints a guest session through the real `signin` function), so the same flags apply and were not set. Exact command for Grant:
-`ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 npm run sample:public-ui -- team-hq-overhaul --page=https://ai-team-hq.vercel.app` after `npm run trust:proxy-ca`;
-it writes nothing to any office and the captures land in `.out/public-team-hq-overhaul/`. The fixture proof (`verify:sample-look`) stays what it was: composition, not live data.
+**Public Sample: NOT captured; stopped for separate approval.** Run with `ALLOW_PRODUCTION_CHECKS=1` only, it was refused (`level: 'writes'`: the script imports `require-production-writes`).
+Grant's condition for the writes flag was that the command genuinely needs it AND its effects are confined to normal guest-session creation. Reading the script: it does mint a guest session,
+but section C also presses **New project**, types "Visitor Spoil Test" and submits it to the real gateway as the guest, expecting a refusal (`sample_readonly`). That is a write attempt beyond
+session creation, so confinement cannot be demonstrated from here and the writes flag was not set. Options for Grant: approve the command as written (the product is expected to refuse the project
+create), or approve a narrowed capture with that step skipped. The fixture proof (`verify:sample-look`) stays what it was: composition, not live data.
 
 ### E. Known residual defects and risks (ranked)
 - **P1** strict compare-and-swap on the arrangement row (#442): two devices can still interleave a read-merge-write inside a few milliseconds; the loser's note is repaired by its
@@ -158,14 +161,15 @@ it writes nothing to any office and the captures land in `.out/public-team-hq-ov
 
 ## Next action
 
-0. Decide on the two flag-gated actions in B and D above (preview deploy; public Sample capture), then #442.
+0. Decide on the Sample capture in D (as written, or narrowed without the New project attempt), and whether the review preview may be given a `config.js` so the canvas is reachable on it; then #442.
 1. Run `dictation-manual-test-2026-10-08.md` on Chrome desktop, Safari macOS, iPhone Safari and Android Chrome with a real voice (needs a person with a device).
 2. Open the real public Sample session once and look at the project page and the look sheet there (the fixture proves composition, not the live data).
 3. Pinch-zoom on a real touch screen.
-4. Optional: a preview deployment of this branch (needs authorisation; none was used, nothing was deployed).
+4. The preview exists (B). Dark captures at 390, 768 and 1920 were regenerated and the previously unviewed states (hamburger, zoomed, panned, note, chat) read cleanly; overlapping modules in
+   later states are the matrix's own earlier move step, not a layout fault.
 
 ## Process slips (disclosed)
 
 Session 1: python heredocs, `cat >>` and one `sed -i` for file edits. Session 2: one Python heredoc used to edit `web/studio/app.js` (read back, then covered by
 tests), two scratch heredocs for throwaway probes (deleted), `cat >> stone.css` and `cat >> canvas-view.test.ts` appends, and two reflexive `sed -i ... /dev/null`
-commands that changed nothing. All other repository edits went through Edit or Write; formatting was applied by printing and writing, not in place.
+commands that changed nothing. Session 3 (this one) added further `cat >>` appends and scratch heredocs and a Python heredoc for a montage (no repository file; scratchpad only). All other repository edits went through Edit or Write; formatting was applied by printing and writing, not in place.

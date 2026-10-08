@@ -7,8 +7,9 @@
 > device): dictation with a real microphone in Chrome and Safari (`docs/ux/dictation-manual-test-2026-10-08.md`), touch pinch, and the live public Sample.
 > New suites: `verify:canvas`, `verify:canvas-extremes`, `verify:chat-dock`, `verify:sample-look`, `verify:canvas-devices` (two real browsers),
 > `verify:canvas-session`, `verify:dictation-fallback`, `tests/studio/canvas-sync.test.ts` (53 adversarial two/three-device cases), `scripts/isolated/layout-isolation.ts`.
-> Third session: notes from two devices now merge without loss (strict compare-and-swap is #442). A preview deploy and a capture of the live public Sample are
-> BOTH refused by the production gate (they need `ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1`, which nobody named): exact commands in the log.
+> Third session: notes from two devices now merge without loss (strict compare-and-swap is #442). Grant authorised the isolated preview deploy: **https://team-hq-ux-review.vercel.app**
+> (project `team-hq-ux-review` only, built from `0e7b493`, bytes verified against the commit; `verify:preview-live` 24/24). It shows the SIGNED-OUT entry only: it has no `config.js`, so the
+> canvas is not reachable on it. The public Sample capture was stopped: `sample:public-ui` also attempts a New project write as the guest, which is wider than the approval; needs a fresh yes.
 >
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
 >
