@@ -306,7 +306,11 @@ const menuRows = (await page.evaluate(
      return out`),
 )) as { name: string; to: string }[]
 
-check('the project menu offers destinations to check', menuRows.length >= 3, `${String(menuRows.length)} row(s)`)
+check(
+  'the project menu offers destinations to check',
+  menuRows.length >= 3,
+  `${String(menuRows.length)} row(s)`,
+)
 
 /* Read the destination by pressing each row and seeing where it lands, not by reading an attribute. */
 const landed: { name: string; url: string }[] = []
@@ -318,7 +322,10 @@ for (const r of menuRows) {
   if ((await row.count()) === 0) continue
   await row.click()
   await page.waitForTimeout(500)
-  landed.push({ name: r.name, url: (await page.evaluate(inPage('return location.pathname'))) as string })
+  landed.push({
+    name: r.name,
+    url: (await page.evaluate(inPage('return location.pathname'))) as string,
+  })
 }
 for (const l of landed) {
   check(

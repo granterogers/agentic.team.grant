@@ -101,7 +101,9 @@ check(
 await page.screenshot({ path: '.out/ux-style-02-form.png' })
 check(
   'Tone of voice, Who it is for and Standing instructions are not offered',
-  (await page.locator('input[name="tone"], input[name="audience"], textarea[name="instructions"]').count()) === 0,
+  (await page
+    .locator('input[name="tone"], input[name="audience"], textarea[name="instructions"]')
+    .count()) === 0,
 )
 await page.selectOption('select[name="ty.heading"]', 'Times')
 await page.locator('.bcstyform button[type=submit]').click()

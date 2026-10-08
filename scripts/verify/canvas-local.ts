@@ -68,7 +68,10 @@ try {
   check('Escape closes the menu', (await page.locator('.bcmenupanel').isVisible()) === false)
   await page.click('[data-bc-menu]')
   await page.mouse.click(900, 600)
-  check('pressing outside closes the menu', (await page.locator('.bcmenupanel').isVisible()) === false)
+  check(
+    'pressing outside closes the menu',
+    (await page.locator('.bcmenupanel').isVisible()) === false,
+  )
   await page.click('[data-bc-menu]')
   const first = page.locator('.bcmenulist .bcmenuitem').first()
   const firstName = (await first.innerText()).trim()

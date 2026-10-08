@@ -4749,6 +4749,14 @@ Each of these cost real time. They are here so they cost it once.
   uses (gateway sections, RPCs, handler kinds, environment variables). And a "found a secret" scan built on the log redactor's prose heuristics
   (`authorization`, `long-opaque`) fired on comments saying "bearer token": scan source for credential SHAPES only.
 
+- **Team HQ is now an infinite canvas (ADR-0068, 8 October 2026, #439).** The 4 October "not an infinite canvas" rule is superseded. Lessons:
+  a board that clips (`overflow: hidden`) clips every popover appended inside it, so popovers are `position: fixed` on the body; a sticky bar
+  must be opaque or the page scrolls under it; a redraw inside `wire()` makes the outer pass bind handlers to the NEW nodes a second time
+  (the dock toggle opened and shut in one press on a phone), so anything that can render during wiring defers with `queueMicrotask`;
+  deleting a control can delete the feature that shared its dialog (Jump To and the Cmd/Ctrl+K palette were one file); and 48 harness scripts
+  navigated from the portfolio, so a removed screen is a harness migration, checked against the baseline commit in a worktree before
+  calling any red a regression. Live dictation is `web/studio/dictation.js`, tested with a fake recogniser: it does not prove a real microphone.
+
 ---
 
 ## Visual standard

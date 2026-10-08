@@ -141,29 +141,43 @@ await page.keyboard.press('Enter')
 await page.waitForTimeout(300)
 check('Enter on the hamburger opens the menu', await page.locator('.bcmenupanel').isVisible())
 check('focus lands on the first entry', (await here()).includes('bcmenuitem'), await here())
-const firstItem = await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))
+const firstItem = await page.evaluate(
+  inPage("return document.activeElement?.textContent?.trim() ?? ''"),
+)
 await page.keyboard.press('ArrowDown')
-const secondItem = await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))
-check('ArrowDown moves to the next entry', firstItem !== secondItem, `${String(firstItem)} -> ${String(secondItem)}`)
+const secondItem = await page.evaluate(
+  inPage("return document.activeElement?.textContent?.trim() ?? ''"),
+)
+check(
+  'ArrowDown moves to the next entry',
+  firstItem !== secondItem,
+  `${String(firstItem)} -> ${String(secondItem)}`,
+)
 await page.keyboard.press('ArrowUp')
 check(
   'ArrowUp moves back',
-  (await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))) === firstItem,
+  (await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))) ===
+    firstItem,
 )
 await page.keyboard.press('End')
-const lastItem = await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))
+const lastItem = await page.evaluate(
+  inPage("return document.activeElement?.textContent?.trim() ?? ''"),
+)
 check('End jumps to the last entry', lastItem !== firstItem, String(lastItem))
 await page.keyboard.press('Home')
 check(
   'Home jumps back to the first',
-  (await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))) === firstItem,
+  (await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))) ===
+    firstItem,
 )
 await page.keyboard.press('Escape')
 await page.waitForTimeout(250)
 check('Escape closes the menu', !(await page.locator('.bcmenupanel').isVisible()))
 check(
   'and focus returns to the hamburger',
-  (await page.evaluate(inPage("return document.activeElement?.hasAttribute('data-bc-menu') === true"))) === true,
+  (await page.evaluate(
+    inPage("return document.activeElement?.hasAttribute('data-bc-menu') === true"),
+  )) === true,
   await here(),
 )
 

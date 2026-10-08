@@ -831,7 +831,15 @@ export const wire = (root) => {
         if (document.documentElement.classList.contains('bc-dragging')) return
         /* A different size is a different drawing: remember it and draw again, once. */
         sizes.set(slug, now)
-        ctx?.render?.()
+        /*
+          Deferred to the end of the current task, never run inside wire(): a redraw in the middle of the shell's own
+          wiring replaces the DOM it is still attaching handlers to, and the outer pass then binds them a second time to
+          the new nodes. The dock's toggle opened and closed in one press on a phone because of exactly that
+          (8 October 2026).
+        */
+        queueMicrotask(() => {
+          ctx?.render?.()
+        })
       }
       apply()
       if (typeof ResizeObserver === 'function') {

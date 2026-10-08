@@ -13,9 +13,15 @@ const [w = 1440, h = 900] = size.split('x').map(Number)
 await mkdir('.out/ux', { recursive: true })
 const server = await serveStudio(4656)
 const browser = await chromium.launch()
-const ctx = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: w < 600, isMobile: w < 600 })
+const ctx = await browser.newContext({
+  viewport: { width: w, height: h },
+  hasTouch: w < 600,
+  isMobile: w < 600,
+})
 if (scheme === 'dark') {
-  await ctx.addInitScript("try { localStorage.setItem('studio.appearance', JSON.stringify({ scheme: 'dark' })) } catch {}")
+  await ctx.addInitScript(
+    "try { localStorage.setItem('studio.appearance', JSON.stringify({ scheme: 'dark' })) } catch {}",
+  )
 }
 const page = await ctx.newPage()
 const errs: string[] = []

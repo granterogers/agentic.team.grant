@@ -289,3 +289,19 @@
   --stage-done: #63c295;
 }
 [data-experience='basecamp'] .bcmain h1:not(.bcvh) { font: 750 26px/1.2 var(--bc-font); margin: 6px 0 8px; }
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcnoteempty { position: static; display: inline-flex; justify-self: start; min-height: 44px; margin: 8px 0; border: 1px solid var(--bc-border-control); }
+}
+
+/* The top bar is sticky, so it must be opaque: transparent, the page scrolled under it and the two collided (phone capture, 8 October). */
+[data-experience='basecamp'] .bctop {
+  background-color: var(--bc-canvas);
+  background-image: var(--bc-stone-tex);
+  background-size: 1024px 1024px;
+  background-blend-mode: soft-light;
+  box-shadow: 0 1px 0 var(--bc-border-subtle);
+}
+/* The tray the phone dock used to clear is gone: the dock takes the whole screen. */
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .dock { inset: 0; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+}

@@ -294,7 +294,10 @@ check(
   ((await page.locator('.bcpostittext').first().inputValue()) ?? '').includes('roofer'),
 )
 await page.locator('.bcpostit').first().hover()
-await page.locator('.bcpostit [data-bc-note-add]').first().evaluate((el: { click: () => void }) => el.click())
+await page
+  .locator('.bcpostit [data-bc-note-add]')
+  .first()
+  .evaluate((el: { click: () => void }) => el.click())
 await page.waitForTimeout(400)
 check('a second note can be pulled out', (await page.locator('.bcpostit').count()) === 2)
 await page.keyboard.type('Second thought')
@@ -318,7 +321,11 @@ const nb = await page.locator('.bcpostit').first().boundingBox()
 if (nb === null) throw new Error('no note')
 await drag({ x: nb.x + nb.width / 2, y: nb.y + 8 }, { x: nb.x + nb.width / 2 - 120, y: nb.y + 120 })
 const nb2 = await page.locator('.bcpostit').first().boundingBox()
-check('a note can be dragged by its top strip', nb2 !== null && Math.abs(nb2.x - (nb.x - 120)) < 14, JSON.stringify([nb, nb2]))
+check(
+  'a note can be dragged by its top strip',
+  nb2 !== null && Math.abs(nb2.x - (nb.x - 120)) < 14,
+  JSON.stringify([nb, nb2]),
+)
 /* remove one note */
 await page.locator('.bcpostit [data-bc-note-del]').nth(1).dispatchEvent('click')
 await page.waitForTimeout(400)
@@ -558,10 +565,16 @@ await page.waitForTimeout(500)
   await tabB.waitForSelector('.bcstage [data-mod]')
   await tabB.waitForTimeout(500)
   const nA = await noteCount()
-  await page.locator('.bcpostit [data-bc-note-add]').first().evaluate((el: { click: () => void }) => el.click())
+  await page
+    .locator('.bcpostit [data-bc-note-add]')
+    .first()
+    .evaluate((el: { click: () => void }) => el.click())
   await page.locator('.bcpostit .bcpostittext').last().fill('typed in tab A')
   await page.waitForTimeout(900)
-  await tabB.locator('.bcpostit [data-bc-note-add]').first().evaluate((el: { click: () => void }) => el.click())
+  await tabB
+    .locator('.bcpostit [data-bc-note-add]')
+    .first()
+    .evaluate((el: { click: () => void }) => el.click())
   await tabB.locator('.bcpostit .bcpostittext').last().fill('typed in tab B')
   await tabB.waitForTimeout(900)
   await page.reload({ waitUntil: 'domcontentloaded' })
