@@ -89,10 +89,15 @@ const task = async (id: string) =>
 
 // The seed says "tomorrow", so the move target must be a weekday that is NOT tomorrow, whatever day the suite runs
 // (a fixed "Friday" was a no-op on every Thursday and the control read the product as broken).
-const dayAfterNext = new Date(Date.now() + 2 * 86400000).toLocaleDateString('en-GB', {
-  weekday: 'long',
-  timeZone: 'UTC',
-})
+// "Tomorrow" is the OFFICE's tomorrow (1027), so the day after next is read on the office's clock too: after 21:00 UTC the
+// Athens office is already a day ahead of UTC and a UTC weekday would name tomorrow.
+const dayAfterNext = String(
+  (
+    await one(
+      `select trim(to_char((now() at time zone app.office_timezone(app.operator_office()))::date + 2, 'Day')) as d`,
+    )
+  ).d,
+)
 
 // ---- change a task he already has ---------------------------------------------------------------------------------
 for (const [label, sentence, changed] of [

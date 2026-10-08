@@ -62,6 +62,14 @@ const proj = json(
   ).v,
 )
 const projectId = String(proj.project_id)
+// "Tomorrow" is the office's tomorrow (1027), read on the office's clock: after 21:00 UTC an Athens office is a day ahead of UTC.
+const officeTomorrow = String(
+  (
+    await one(
+      `select ((now() at time zone app.office_timezone(${lit(op)}::uuid))::date + 1)::text as d`,
+    )
+  ).d,
+)
 const unnamed = String((await one(`select app.unnamed_project(${lit(op)}::uuid)::text as p`)).p)
 const created = [projectId]
 
@@ -442,11 +450,7 @@ for (const l of landed) {
     l.task !== null && l.task.mine === true,
     JSON.stringify(l.task),
   )
-  check(
-    `${l.surface}: task due tomorrow`,
-    l.task?.due === new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-    String(l.task?.due),
-  )
+  check(`${l.surface}: task due tomorrow`, l.task?.due === officeTomorrow, String(l.task?.due))
   check(
     `${l.surface}: task is in the operator's office`,
     l.task?.office === op,
