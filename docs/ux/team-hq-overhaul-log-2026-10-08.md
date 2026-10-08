@@ -326,6 +326,14 @@ client-supplied office/owner/project id ignored, 13 bad bodies refused, path-sha
 `verify:canvas-background` 81 passed, 0 failed, 2 n/a, including the fetch/cache/replace/refuse/remove flow against an in-page stand-in office. Two defects found by that suite and fixed: Apply waited on the office before saving locally
 (a slow office froze the picker); and the old "another device" wording assertion was a wording lock.
 
+**Independent review (fresh reviewer, given the diff and attack goals, not my conclusions): no blocker; tenant isolation, authorisation order, image vetting and secrets: no finding.** Real findings, all fixed: (1) MAJOR, the advisory lock was
+taken only for compare-and-swap writers, so an unconditional save (an old tab, the plain fallback, reset) could slip between a CAS's read and write and be overwritten: the lock is now taken by every write and by `hq_dashboard_layout_reset`; (2) MAJOR, a device
+whose clock is ahead and whose skew is learned between two edits stamped the second edit older than the first, so the merge could discard it: `stamp()` is now strictly monotonic per device (new test); (3) a blank local copy used an unconditional reset (now an empty
+compare-and-swap, and an unreadable office copy is never deleted by a blank one); (4) a renamed project or empty answer switched compare-and-swap off for the session (distinct errors now; only a real unknown-section/function message does that); (5) two objects for one
+project after a racing format change: the newest is served; (6) base64 length is checked before decoding; (8) Remove is refused while a save is in flight. Not changed, recorded: (7) a single shared retry timer can delay another project's debounce by up to 60 s
+only while an office keeps refusing; (9) modules, zoom and pan remain whole-document last-writer-wins under a matching revision (as before); (10) the 12-per-office limit is check-then-write, so concurrent first puts may exceed it slightly; (11) a network failure on a save
+is repaired by the next refresh, as before.
+
 **Rollback artefacts, rehearsed:** `docs/ux/rollback/1023-rollback.sql`, `1024-rollback.sql` (arrangement row survived, old signature returned, forward re-applied). The full migration chain replays with 1023 and 1024 on a fresh replica.
 
 **Intermittent loading, diagnosed with evidence, not retried away.** `scripts/verify/load-reliability.ts` (cold context, sign-in, board, place a note, reload, check it returned). Local page: 12/12, board median 670 ms, zero page errors, zero failed

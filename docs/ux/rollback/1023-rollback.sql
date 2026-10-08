@@ -57,6 +57,27 @@ as $f$ select app.hq_dashboard_layout_set(p_office, p_slug, p_panels, p_surface)
 revoke all on function public.hq_dashboard_layout_set(uuid, text, jsonb, text) from public, anon, authenticated;
 grant execute on function public.hq_dashboard_layout_set(uuid, text, jsonb, text) to service_role;
 
+-- The reset as migration 0711 left it (1023 added only an advisory lock to it).
+create or replace function app.hq_dashboard_layout_reset(p_office uuid, p_slug text, p_surface text default 'studio')
+ returns jsonb
+ language plpgsql
+ security definer
+ set search_path to ''
+as $function$
+declare
+  v_project uuid;
+begin
+  perform app.require_office(p_office);
+  select project_id into v_project from public.projects where slug = p_slug and office_id = p_office;
+  if v_project is null then
+    return jsonb_build_object('error', format('no project called %L', p_slug));
+  end if;
+  delete from public.dashboard_layouts
+   where project_id = v_project and owner = app.office_actor(p_office) and surface = coalesce(p_surface, 'studio');
+  return jsonb_build_object('ok', true, 'reset', true);
+end;
+$function$;
+
 drop trigger if exists dashboard_layouts_rev on public.dashboard_layouts;
 drop function if exists app.dashboard_layouts_rev();
 alter table public.dashboard_layouts drop column if exists rev;

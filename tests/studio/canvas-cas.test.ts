@@ -147,6 +147,7 @@ describe('compare-and-swap saves', () => {
     const office = new Office()
     office.clockOffset = -3_600_000 // this device is an hour ahead of the office
     const a = await device(office)
+    await a.L.syncNow(SLUG) // the page's first read: learns the office clock before anything is stamped
     a.add('first')
     await settle([a])
     a.add('second')
@@ -154,6 +155,18 @@ describe('compare-and-swap saves', () => {
     const serverNow = office.now()
     expect(second).toBeDefined()
     expect(Math.abs((second?.at ?? 0) - serverNow)).toBeLessThan(5_000)
+  })
+
+  it('a later edit is never older than an earlier one, even when the office clock is learned between them', async () => {
+    const office = new Office()
+    office.clockOffset = -3_600_000 // the device is an hour ahead and has not yet learned it
+    const a = await device(office)
+    const id = a.add('draft one') // stamped in device time, skew still 0
+    await settle([a]) // the office clock is learned here: the skew moves back an hour
+    a.L.setPostit(SLUG, id, { text: 'draft two' })
+    await settle([a])
+    expect(texts(a.notes())).toEqual(['draft two'])
+    expect(texts(office.notes())).toEqual(['draft two'])
   })
 
   it('ignores an implausible office clock instead of stamping notes in 1970', async () => {

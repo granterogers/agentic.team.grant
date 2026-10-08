@@ -678,7 +678,13 @@ const backoff = new Map()
  * own (migration 1023 returns `now`). A device with a wrong clock would otherwise stamp every edit in the past or the future
  * and outrank or lose to every honest one. Zero until the office has answered, and ignored when the difference is implausible.
  */
-export const stamp = () => Date.now() + skew
+let lastStamp = 0
+/* Never goes backwards on this device, even when learning the office's clock moves the skew down: a later edit of a note must be newer than the earlier one. */
+export const stamp = () => {
+  const t = Date.now() + skew
+  lastStamp = t > lastStamp ? t : lastStamp + 1
+  return lastStamp
+}
 const noteClock = (serverNow) => {
   const n = Number(serverNow)
   if (!Number.isFinite(n) || n < 1.5e12) return
@@ -818,7 +824,7 @@ const sendNow = () => {
 */
 const MAX_SWAPS = 6
 const unsupported = (e) =>
-  /unknown section|PGRST202|could not find the function|schema cache|p_expected_rev/i.test(String(e?.message ?? e))
+  /unknown section|PGRST202|could not find the function|schema cache/i.test(String(e?.message ?? e))
 
 /** Fold the office's copy into this device's, drawing anything that arrived. */
 const foldIn = (s, panels) => {
@@ -856,14 +862,12 @@ const swapSave = async (s) => {
   for (let i = 0; i < MAX_SWAPS; i += 1) {
     foldIn(s, r.panels)
     const now = doc(s)
-    if (isBlank(now)) {
-      if (forget !== null) await forget(s)
-      revs.delete(s)
-      return true
-    }
+    const blank = isBlank(now)
+    /* A reset is compare-and-swap too (an empty list); and a copy this build cannot read is never deleted by a blank one. */
+    if (blank && r.panels !== null && r.panels !== undefined && fromPanels(r.panels) === null) return true
     let out
     try {
-      out = await keepIf(s, toPanels(now), Number(r.rev) || 0)
+      out = await keepIf(s, blank ? [] : toPanels(now), Number(r.rev) || 0)
     } catch (e) {
       if (unsupported(e)) casOff = true
       throw e

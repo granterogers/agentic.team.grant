@@ -279,6 +279,8 @@ const apply = async (root, p) => {
 }
 
 const remove = async (root, p) => {
+  /* Not while a picture is still being saved: the save would land after the removal and bring it back. */
+  if (busy) return
   const slug = p.slug
   try {
     /* This browser first, and the board returns to the default at once; the office's copy is removed after, with a bounded wait. */

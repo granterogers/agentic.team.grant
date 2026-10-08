@@ -2736,7 +2736,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
         if (!removed) return json({ error: 'the picture could not be removed' }, 502)
         return json({ result: { ok: true, removed: mine.length } })
       }
-      const bytes = decodeBase64(String(args.p_base64 ?? ''))
+      /* Refuse an oversize body BEFORE decoding it (base64 is 4/3 of the bytes). */
+      const encoded = String(args.p_base64 ?? '')
+      if (encoded.length > Math.ceil((BG_LIMITS.bytes * 4) / 3) + 200) {
+        return json({ error: 'that picture is over 3 MB - a smaller one will do' }, 400)
+      }
+      const bytes = decodeBase64(encoded)
       if (bytes === null) return json({ error: 'that image could not be read' }, 400)
       const vetted = vetBackground(bytes)
       if ('error' in vetted) return json({ error: vetted.error }, 400)
@@ -3424,7 +3429,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
     const listed = await bgList(office)
     if (listed === null) return json({ error: 'the pictures could not be checked' }, 503)
-    const mine = listed.find((o) => projectOfKey(office, o.name) === target.projectId)
+    /* Two objects can exist for one project after a racing format change: serve the newest. */
+    const held = listed
+      .filter((o) => projectOfKey(office, o.name) === target.projectId)
+      .sort((x, y) => Date.parse(y.updated_at ?? '') - Date.parse(x.updated_at ?? ''))
+    const mine = held[0]
     if (mine === undefined) return json({ data: null })
     const link = await bgSign(office, mine.name)
     if (link === null) return json({ error: 'the picture could not be reached' }, 502)

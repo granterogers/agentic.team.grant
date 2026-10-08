@@ -83,9 +83,10 @@ begin
   end if;
   v_owner := app.office_actor(p_office);
 
+  -- Serialise EVERY write of this one arrangement (conditional or not, and the reset below), whether or not its row exists yet:
+  -- otherwise an unconditional save could commit between a compare-and-swap's read and its write and be silently overwritten.
+  perform pg_advisory_xact_lock(hashtextextended(v_owner || '/' || v_project::text || '/' || p_surface, 0));
   if p_expected_rev is not null then
-    -- Serialise the saves of this one arrangement, whether or not its row exists yet.
-    perform pg_advisory_xact_lock(hashtextextended(v_owner || '/' || v_project::text || '/' || p_surface, 0));
     select l.rev, l.panels into v_rev, v_panels from public.dashboard_layouts l
      where l.owner = v_owner and l.project_id = v_project and l.surface = p_surface;
     if not found then
@@ -123,6 +124,28 @@ as $f$ select app.hq_dashboard_layout_set(p_office, p_slug, p_panels, p_surface,
 revoke all on function app.hq_dashboard_layout_set(uuid, text, jsonb, text, bigint) from public, anon, authenticated, service_role;
 revoke all on function public.hq_dashboard_layout_set(uuid, text, jsonb, text, bigint) from public, anon, authenticated;
 grant execute on function public.hq_dashboard_layout_set(uuid, text, jsonb, text, bigint) to service_role;
+
+-- The reset takes the same lock, so it cannot slip between a compare-and-swap's read and write. Otherwise unchanged (migration 0711).
+create or replace function app.hq_dashboard_layout_reset(p_office uuid, p_slug text, p_surface text default 'studio')
+ returns jsonb
+ language plpgsql
+ security definer
+ set search_path to ''
+as $function$
+declare
+  v_project uuid;
+begin
+  perform app.require_office(p_office);
+  select project_id into v_project from public.projects where slug = p_slug and office_id = p_office;
+  if v_project is null then
+    return jsonb_build_object('error', format('no project called %L', p_slug));
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(app.office_actor(p_office) || '/' || v_project::text || '/' || coalesce(p_surface, 'studio'), 0));
+  delete from public.dashboard_layouts
+   where project_id = v_project and owner = app.office_actor(p_office) and surface = coalesce(p_surface, 'studio');
+  return jsonb_build_object('ok', true, 'reset', true);
+end;
+$function$;
 
 -- The reader: one arrangement and its revision. Absent is { panels: null, rev: 0 }.
 create function app.hq_dashboard_layout_get(p_office uuid, p_slug text, p_surface text default 'basecamp')

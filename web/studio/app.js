@@ -14215,7 +14215,10 @@ bcGrid.persistence({
   */
   readRev: async (slug) => {
     const r = await read('layout', undefined, { slug, surface: 'basecamp' })
-    if (r === null || typeof r !== 'object' || typeof r.rev !== 'number') throw new Error('unknown section')
+    /* A refusal for this one project (renamed, gone) or an empty answer is a failed read, not a missing feature: it must not switch compare-and-swap off. */
+    if (r === null || typeof r !== 'object') throw new Error('the office gave no arrangement')
+    if (typeof r.error === 'string') throw new Error(r.error)
+    if (typeof r.rev !== 'number') throw new Error('the office gave no revision')
     return r
   },
   saveIf: (slug, panels, rev) =>
