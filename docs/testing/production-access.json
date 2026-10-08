@@ -19,6 +19,7 @@
     "deploy:page",
     "deploy:preview",
     "deploy:signin",
+    "deploy:signin-origin",
     "deploy:slack",
     "deploy:slack-oauth",
     "deploy:telegram",
